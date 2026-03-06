@@ -23,6 +23,9 @@ All pipeline steps (write-article, agents) check `profile.tools` before calling 
 |---------|---------|
 | `/academic-writer-init` | First-time setup: field of study, citation style, style fingerprint from past articles, source indexing |
 | `/academic-writer` | Write a new article: conversational subject → sources → thesis → outline → write → audit → .docx |
+| `/academic-writer-research` | Research a subject or answer questions using indexed sources (Candlekeep, RAG, MongoDB) — independent of article writing |
+| `/academic-writer-health` | Run a comprehensive health check on all integrations, profile, agents, and source index |
+| `/academic-writer-help` | Explain what this plugin is and how to use it |
 | `/academic-writer-update-field` | Update your field of study without re-running full initialization |
 | `/academic-writer-update-tools` | Add, remove, or reconfigure integrations (Candlekeep, RAG, MongoDB, Cognetivy) |
 
