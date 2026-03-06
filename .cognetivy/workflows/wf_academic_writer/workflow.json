@@ -1,7 +1,67 @@
 {
   "workflow_id": "wf_academic_writer",
   "name": "Academic Writer Pipeline",
-  "description": "Multi-agent article writing pipeline: init → style → deep_read → thesis → architect → parallel sections (write+audit) → synthesize → output",
-  "current_version_id": "v1",
-  "created_at": "2026-03-06T00:00:00.000Z"
+  "description": "Multi-agent article writing pipeline with granular per-paragraph skill tracking: load_profile → deep_read → thesis_proposal → outline → per-section (per-paragraph: draft → hebrew_grammar → repetition_check → citation_audit) → synthesize → docx_output",
+  "current_version_id": "v2",
+  "created_at": "2026-03-06T00:00:00.000Z",
+  "nodes": {
+    "load_profile": {
+      "name": "Load Profile",
+      "description": "Load researcher profile and tool configuration"
+    },
+    "source_selection": {
+      "name": "Source Selection",
+      "description": "Researcher selects which sources to use"
+    },
+    "deep_read": {
+      "name": "Deep Read",
+      "description": "Deep reader agent queries RAG to map source coverage"
+    },
+    "thesis_proposal": {
+      "name": "Thesis Proposal",
+      "description": "Architect agent proposes 2-3 thesis statements"
+    },
+    "outline": {
+      "name": "Outline Generation",
+      "description": "Architect agent generates structured article outline"
+    },
+    "ingestion_sync": {
+      "name": "Ingestion Sync",
+      "description": "Ensure selected sources are indexed in RAG"
+    },
+    "section_{N}": {
+      "name": "Section {N}: {title}",
+      "description": "Write all paragraphs for section N",
+      "children": {
+        "section_{N}_p_{M}_draft": {
+          "name": "Draft paragraph {M}",
+          "description": "Query RAG and write paragraph applying style fingerprint"
+        },
+        "section_{N}_p_{M}_hebrew_grammar": {
+          "name": "Hebrew grammar check — paragraph {M}",
+          "description": "Verify Hebrew grammar, spelling, and academic register"
+        },
+        "section_{N}_p_{M}_repetition_check": {
+          "name": "Repetition check — paragraph {M}",
+          "description": "Check for repeated words, phrases, arguments across paragraph and prior text"
+        },
+        "section_{N}_p_{M}_citation_audit": {
+          "name": "Citation audit — paragraph {M}",
+          "description": "Auditor agent verifies every citation via RAG bypass + Candlekeep"
+        }
+      }
+    },
+    "synthesize": {
+      "name": "Synthesis",
+      "description": "Synthesizer agent reviews coherence, flow, style, and cross-section repetition"
+    },
+    "synthesize_repetition_check": {
+      "name": "Full-article repetition check",
+      "description": "Final pass checking for repeated arguments or phrases across all sections"
+    },
+    "docx_output": {
+      "name": "DOCX Output",
+      "description": "Generate final .docx file with footnotes and bibliography"
+    }
+  }
 }

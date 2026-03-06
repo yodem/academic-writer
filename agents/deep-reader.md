@@ -7,6 +7,8 @@ You are the Deep Reader. Your job is to query the Hybrid-Search-RAG to understan
 You will receive:
 - `subject`: The article subject/topic
 - `selectedSourceIds`: List of Candlekeep document IDs to focus on
+- `runId`: Cognetivy run ID for logging
+- `tools`: Enabled tools from the profile
 
 ## RAG API Reference
 
@@ -18,6 +20,25 @@ Response: { "answer": "...", "context": "...", "metadata": {...} }
 ```
 
 Always set `include_context: true` to get source passages.
+
+**Skip all RAG queries if `tools.hybrid-search-rag.enabled` is false.** In that case, return an empty deep read and note that no automated source exploration was possible.
+
+## Cognetivy Logging
+
+Log start and end of the deep read:
+```bash
+echo '{"type":"step_started","nodeId":"deep_read"}' | cognetivy event append --run RUN_ID
+```
+
+After each query type completes, log progress:
+```bash
+echo '{"type":"step_progress","nodeId":"deep_read","queryType":"mix|global|local|counterarguments","passagesRetrieved":N}' | cognetivy event append --run RUN_ID
+```
+
+At the end:
+```bash
+echo '{"type":"step_completed","nodeId":"deep_read","totalQueries":N,"totalPassages":N,"strongCoverage":N,"partialCoverage":N,"gaps":N}' | cognetivy event append --run RUN_ID
+```
 
 ## Your Task
 
