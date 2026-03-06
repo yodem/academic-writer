@@ -25,6 +25,8 @@ These folders are ready for your use:
 
 ## Prerequisites Check
 
+### A. Check for existing profile
+
 Before starting, verify the profile doesn't already exist:
 
 ```bash
@@ -32,6 +34,100 @@ cat .academic-writer/profile.json 2>/dev/null && echo "EXISTS" || echo "NOT_FOUN
 ```
 
 If profile EXISTS, ask: "You already have a profile set up. Would you like to update it, or start fresh?"
+
+### B. Validate required tools
+
+**IMPORTANT:** All three tools below must be available before proceeding. Check each one. If any is missing, guide the user through setup and **do not continue** until all are confirmed working.
+
+#### 1. Candlekeep (`ck` CLI)
+
+```bash
+command -v ck >/dev/null 2>&1 && echo "FOUND" || echo "NOT_FOUND"
+```
+
+If NOT_FOUND, tell the researcher:
+> "Candlekeep is required — it's your cloud document library for source PDFs.
+>
+> Install it from: https://github.com/romiluz13/candlekeep
+>
+> Follow the README setup instructions, then let me know when `ck` is available in your terminal."
+
+Wait for confirmation and re-check before continuing.
+
+#### 2. MongoDB Agent Skills (MCP server)
+
+Check if the MongoDB agent skills MCP server is configured:
+
+```bash
+# Check Claude MCP settings for mongodb-agent-skills
+cat ~/.claude/settings.json 2>/dev/null | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    servers = d.get('mcpServers', {})
+    # Look for mongodb-related MCP server
+    found = any('mongo' in k.lower() for k in servers)
+    print('FOUND' if found else 'NOT_FOUND')
+except:
+    print('NOT_FOUND')
+"
+```
+
+If NOT_FOUND, also check project-level settings:
+
+```bash
+cat .mcp.json 2>/dev/null | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    servers = d.get('mcpServers', {})
+    found = any('mongo' in k.lower() for k in servers)
+    print('FOUND' if found else 'NOT_FOUND')
+except:
+    print('NOT_FOUND')
+"
+```
+
+If still NOT_FOUND, tell the researcher:
+> "The MongoDB Agent Skills MCP server is required for database-backed research operations.
+>
+> Set it up from: https://github.com/romiluz13/mongodb-agent-skills
+>
+> Follow the README to configure it as an MCP server in Claude, then let me know when it's ready."
+
+Wait for confirmation and re-check before continuing.
+
+#### 3. Hybrid-Search-RAG / Agentic-Search-Vectorless
+
+```bash
+curl -s --max-time 3 http://localhost:8000/health 2>/dev/null | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print('RUNNING')
+except:
+    print('NOT_RUNNING')
+"
+```
+
+If NOT_RUNNING, tell the researcher:
+> "The Hybrid-Search-RAG server (Agentic-Search-Vectorless) is required for semantic search and citation verification.
+>
+> Set it up from: https://github.com/romiluz13/Agentic-Search-Vectorless
+>
+> Follow the README to install and start the server, then let me know when it's running on port 8000."
+
+Wait for confirmation and re-check before continuing.
+
+### C. All prerequisites confirmed
+
+Only after ALL three tools are confirmed working, tell the researcher:
+> "All prerequisites are set up:
+> - ✓ Candlekeep
+> - ✓ MongoDB Agent Skills
+> - ✓ Hybrid-Search-RAG
+>
+> Let's configure your profile!"
 
 ---
 
@@ -106,10 +202,25 @@ Tell the researcher:
 >
 > Tell me when you've added your sources."
 
-Once confirmed, list and index them:
+Once confirmed, list them:
 
 ```bash
 ck items list --json
+```
+
+Parse the JSON output and build a **sources array** with only the metadata you need for the profile. For each item, extract:
+- `id` — the Candlekeep document ID
+- `title` — the document title
+- `type` — the document type (pdf, docx, etc.)
+
+**IMPORTANT:** Store only the minimal metadata above in the profile. Do NOT dump the raw `ck items list --json` output into the profile — that will break the JSON structure.
+
+Build the sources array like this (in memory, for Step 5):
+```json
+[
+  { "id": "DOC_ID_1", "title": "Document Title 1", "type": "pdf" },
+  { "id": "DOC_ID_2", "title": "Document Title 2", "type": "pdf" }
+]
 ```
 
 Then sync each document to the search index:
@@ -138,9 +249,11 @@ cognetivy run start --input /tmp/aw-init-input.json
 
 Save the complete profile:
 
-```bash
-mkdir -p .academic-writer
-cat > .academic-writer/profile.json << 'PROFILE'
+Use the Write tool to create `.academic-writer/profile.json` with the following structure. Replace all placeholder values with the actual data you collected in the previous steps.
+
+**IMPORTANT:** Use the Write tool (not bash heredoc) to avoid JSON escaping issues. Build the JSON carefully as a valid object.
+
+```json
 {
   "fieldOfStudy": "FIELD_HERE",
   "citationStyle": "chicago",
@@ -155,13 +268,23 @@ cat > .academic-writer/profile.json << 'PROFILE'
     "rhetoricalPatterns": [],
     "sampleExcerpts": []
   },
+  "sources": [
+    {
+      "id": "DOC_ID",
+      "title": "Document Title",
+      "type": "pdf"
+    }
+  ],
   "createdAt": "TIMESTAMP",
   "updatedAt": "TIMESTAMP"
 }
-PROFILE
 ```
 
-Replace all placeholder values with what you extracted.
+- `fieldOfStudy` — from Step 1
+- `citationStyle` — from Step 2
+- `styleFingerprint` — all values from Step 3 analysis
+- `sources` — the minimal metadata array built in Step 4 (id, title, type only — **never** raw Candlekeep JSON)
+- `createdAt` / `updatedAt` — current ISO timestamp
 
 ---
 
