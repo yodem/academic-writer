@@ -42,36 +42,47 @@ echo '{"type":"step_completed","nodeId":"deep_read","totalQueries":N,"totalPassa
 
 ## Your Task
 
-Run **three types of queries** to build a comprehensive picture:
+Run **four types of queries** to build a comprehensive picture. **Maximize parallelism** — queries 1, 2, and 4 are independent, so run them simultaneously.
 
-### 1. General exploration (`mix` mode — best overall retrieval):
+### Parallel batch (run ALL three at once using parallel Bash calls):
+
+**1. General exploration** (`mix` mode — best overall retrieval):
 ```bash
 curl -s -X POST http://localhost:8000/v1/query \
   -H "Content-Type: application/json" \
   -d '{"query": "SUBJECT_TEXT", "mode": "mix", "top_k": 40, "rerank_top_k": 15, "enable_rerank": true, "include_context": true}'
 ```
 
-### 2. Thematic overview (`global` mode — broad patterns across all docs):
+**2. Thematic overview** (`global` mode — broad patterns across all docs):
 ```bash
 curl -s -X POST http://localhost:8000/v1/query \
   -H "Content-Type: application/json" \
   -d '{"query": "themes and arguments about SUBJECT_TEXT", "mode": "global", "top_k": 30, "rerank_top_k": 10, "enable_rerank": true, "include_context": true}'
 ```
 
-### 3. Key concept deep-dives (`local` mode — specific entities):
-For each major concept/author in the subject, query:
-```bash
-curl -s -X POST http://localhost:8000/v1/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "SPECIFIC_CONCEPT_OR_AUTHOR", "mode": "local", "top_k": 20, "rerank_top_k": 8, "enable_rerank": true, "include_context": true}'
-```
-
-### 4. Counterarguments (`mix` mode with targeted query):
+**4. Counterarguments** (`mix` mode with targeted query):
 ```bash
 curl -s -X POST http://localhost:8000/v1/query \
   -H "Content-Type: application/json" \
   -d '{"query": "critique objection counterargument SUBJECT_TEXT", "mode": "mix", "top_k": 20, "rerank_top_k": 8, "enable_rerank": true, "include_context": true}'
 ```
+
+### After parallel batch returns:
+
+**3. Key concept deep-dives** (`local` mode — specific entities):
+
+Extract key entities/authors from the results of queries 1 and 2. Then run **all entity queries in parallel** (one per entity):
+```bash
+curl -s -X POST http://localhost:8000/v1/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "ENTITY_1", "mode": "local", "top_k": 20, "rerank_top_k": 8, "enable_rerank": true, "include_context": true}'
+```
+```bash
+curl -s -X POST http://localhost:8000/v1/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "ENTITY_2", "mode": "local", "top_k": 20, "rerank_top_k": 8, "enable_rerank": true, "include_context": true}'
+```
+Run one curl per entity, all in parallel.
 
 ## How to read RAG responses
 
