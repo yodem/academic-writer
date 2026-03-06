@@ -26,14 +26,14 @@ Choose which tools you want to use during `/academic-writer-init`.
 
 ### 2. Install the Plugin
 
-```bash
-# Add as marketplace source (once per machine)
-claude plugin marketplace add yodem/academic-writer
+Navigate to the folder where you do your research work, then:
 
-# Install into your project
-cd your-project
-claude plugin install academic-writer --scope project
+```bash
+cd your-research-folder
+claude plugin add github:yodem/academic-writer
 ```
+
+When prompted for scope, choose **project** — this activates the plugin only in this folder, not globally.
 
 ### 3. Initialize Your Profile
 
@@ -43,7 +43,7 @@ claude plugin install academic-writer --scope project
 
 This is a one-time setup. You'll be asked to provide:
 - Your field of study
-- Citation style (Chicago/MLA/APA)
+- Citation style (Inline Parenthetical / Chicago / MLA / APA)
 - 5–10 past articles for style analysis (placed in `past-articles/` folder)
 - Which integrations to enable (Candlekeep, RAG, MongoDB, Cognetivy)
 - Your research sources (if using Candlekeep)
@@ -230,7 +230,7 @@ This is a Claude Code plugin. To modify:
 
 1. Edit `.md` files in `skills/`, `agents/`, `hooks/`
 2. Commit and push to GitHub
-3. Reinstall: `claude plugin install academic-writer --scope project --force`
+3. Reinstall: `claude plugin add github:yodem/academic-writer` (choose project scope)
 
 ## License
 
