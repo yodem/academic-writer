@@ -2,12 +2,20 @@
 
 AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as .docx files.
 
-## Integrations
+## Integrations (Tool Registry)
 
-- **Candlekeep** (`ck` CLI): Cloud document library — source PDFs and research materials
-- **Hybrid-Search-RAG** (`curl http://localhost:8000`): Deep semantic + keyword retrieval. Full API reference in `references/hybridrag-api.md`
-- **Cognetivy** (`cognetivy` CLI): Workflow tracking and audit trail
+All integrations are **optional**. During `/academic-writer-init`, the researcher selects which tools to enable. Enabled tools are stored in `profile.tools`. Use `/academic-writer-update-tools` to change them later.
+
+| Tool ID | CLI / Type | What it does | Setup |
+|---------|-----------|-------------|-------|
+| `candlekeep` | `ck` CLI | Cloud document library — source PDFs and research materials | https://github.com/romiluz13/candlekeep |
+| `hybrid-search-rag` | HTTP service (`:8000`) | Deep semantic + keyword retrieval (Agentic-Search-Vectorless). Full API reference in `references/hybridrag-api.md` | https://github.com/romiluz13/Agentic-Search-Vectorless |
+| `mongodb-agent-skills` | MCP server | Database-backed research operations | https://github.com/romiluz13/mongodb-agent-skills |
+| `cognetivy` | `cognetivy` CLI | Workflow tracking and audit trail | Built-in (`.cognetivy/`) |
+
 - **Past articles**: `./past-articles/` folder — researcher's past work for style analysis (local only, never uploaded)
+
+All pipeline steps (write-article, agents) check `profile.tools` before calling any integration. If a tool is disabled, its steps are skipped gracefully.
 
 ## Slash Commands
 
@@ -15,7 +23,13 @@ AI-first academic writing assistant for Humanities researchers. Produces rigorou
 |---------|---------|
 | `/academic-writer-init` | First-time setup: field of study, citation style, style fingerprint from past articles, source indexing |
 | `/academic-writer` | Write a new article: conversational subject → sources → thesis → outline → write → audit → .docx |
+| `/academic-writer-research` | Research a subject or answer questions using indexed sources (Candlekeep, RAG, MongoDB) — spawns parallel subagents for speed |
+| `/academic-writer-edit` | Edit a previously written article — revise sections, fix citations, adjust tone, restructure, strengthen arguments |
+| `/academic-writer-edit-section` | Quick edit of a single section — faster than full article edit |
+| `/academic-writer-health` | Run a comprehensive health check on all integrations, profile, agents, and source index |
+| `/academic-writer-help` | Explain what this plugin is and how to use it |
 | `/academic-writer-update-field` | Update your field of study without re-running full initialization |
+| `/academic-writer-update-tools` | Add, remove, or reconfigure integrations (Candlekeep, RAG, MongoDB, Cognetivy) |
 
 ## RAG Query Modes (use the right one for each task)
 
@@ -29,15 +43,25 @@ AI-first academic writing assistant for Humanities researchers. Produces rigorou
 
 ## Agent Architecture
 
-Agents are spawned as subagents. Each reads its own prompt from `agents/`:
+Agents are spawned as subagents. Each reads its own prompt from `agents/`. **Agents are spawned in parallel whenever possible** for speed — e.g., all section-writers run simultaneously, research queries across RAG + Candlekeep run in parallel.
 
 | Agent | File | Spawned by | Purpose |
 |-------|------|-----------|---------|
-| Deep Reader | `agents/deep-reader.md` | write-article skill | Explores source material before thesis |
-| Architect | `agents/architect.md` | write-article skill | Proposes thesis + generates outline |
-| Section Writer | `agents/section-writer.md` | write-article skill | Writes one section (parallel) |
-| Auditor | `agents/auditor.md` | section-writer | Verifies citations (hard gate) |
-| Synthesizer | `agents/synthesizer.md` | write-article skill | Final coherence + style review |
+| Deep Reader | `agents/deep-reader.md` | write-article | Explores source material before thesis (parallel RAG queries) |
+| Architect | `agents/architect.md` | write-article | Proposes thesis + generates outline |
+| Section Writer | `agents/section-writer.md` | write-article, edit, edit-section | Writes one section with full skill pipeline (parallel per section) |
+| Auditor | `agents/auditor.md` | section-writer, edit | Verifies citations (hard gate) |
+| Synthesizer | `agents/synthesizer.md` | write-article, edit | Final coherence + style review |
+
+### Parallelism Strategy
+
+| Operation | Parallelism |
+|-----------|------------|
+| Deep read queries (mix, global, counterargs) | All 3 in parallel, then entity queries in parallel |
+| Section writing | All sections spawn simultaneously |
+| Research skill (RAG + Candlekeep) | Separate subagent per tool, all in parallel |
+| Edit (multiple sections) | One section-writer subagent per section, all in parallel |
+| Citation audit (edit mode) | One auditor per section, all in parallel |
 
 ## Profile Location
 

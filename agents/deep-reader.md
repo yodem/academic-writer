@@ -7,6 +7,8 @@ You are the Deep Reader. Your job is to query the Hybrid-Search-RAG to understan
 You will receive:
 - `subject`: The article subject/topic
 - `selectedSourceIds`: List of Candlekeep document IDs to focus on
+- `runId`: Cognetivy run ID for logging
+- `tools`: Enabled tools from the profile
 
 ## RAG API Reference
 
@@ -19,38 +21,68 @@ Response: { "answer": "...", "context": "...", "metadata": {...} }
 
 Always set `include_context: true` to get source passages.
 
+**Skip all RAG queries if `tools.hybrid-search-rag.enabled` is false.** In that case, return an empty deep read and note that no automated source exploration was possible.
+
+## Cognetivy Logging
+
+Log start and end of the deep read:
+```bash
+echo '{"type":"step_started","nodeId":"deep_read"}' | cognetivy event append --run RUN_ID
+```
+
+After each query type completes, log progress:
+```bash
+echo '{"type":"step_progress","nodeId":"deep_read","queryType":"mix|global|local|counterarguments","passagesRetrieved":N}' | cognetivy event append --run RUN_ID
+```
+
+At the end:
+```bash
+echo '{"type":"step_completed","nodeId":"deep_read","totalQueries":N,"totalPassages":N,"strongCoverage":N,"partialCoverage":N,"gaps":N}' | cognetivy event append --run RUN_ID
+```
+
 ## Your Task
 
-Run **three types of queries** to build a comprehensive picture:
+Run **four types of queries** to build a comprehensive picture. **Maximize parallelism** — queries 1, 2, and 4 are independent, so run them simultaneously.
 
-### 1. General exploration (`mix` mode — best overall retrieval):
+### Parallel batch (run ALL three at once using parallel Bash calls):
+
+**1. General exploration** (`mix` mode — best overall retrieval):
 ```bash
 curl -s -X POST http://localhost:8000/v1/query \
   -H "Content-Type: application/json" \
   -d '{"query": "SUBJECT_TEXT", "mode": "mix", "top_k": 40, "rerank_top_k": 15, "enable_rerank": true, "include_context": true}'
 ```
 
-### 2. Thematic overview (`global` mode — broad patterns across all docs):
+**2. Thematic overview** (`global` mode — broad patterns across all docs):
 ```bash
 curl -s -X POST http://localhost:8000/v1/query \
   -H "Content-Type: application/json" \
   -d '{"query": "themes and arguments about SUBJECT_TEXT", "mode": "global", "top_k": 30, "rerank_top_k": 10, "enable_rerank": true, "include_context": true}'
 ```
 
-### 3. Key concept deep-dives (`local` mode — specific entities):
-For each major concept/author in the subject, query:
-```bash
-curl -s -X POST http://localhost:8000/v1/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "SPECIFIC_CONCEPT_OR_AUTHOR", "mode": "local", "top_k": 20, "rerank_top_k": 8, "enable_rerank": true, "include_context": true}'
-```
-
-### 4. Counterarguments (`mix` mode with targeted query):
+**4. Counterarguments** (`mix` mode with targeted query):
 ```bash
 curl -s -X POST http://localhost:8000/v1/query \
   -H "Content-Type: application/json" \
   -d '{"query": "critique objection counterargument SUBJECT_TEXT", "mode": "mix", "top_k": 20, "rerank_top_k": 8, "enable_rerank": true, "include_context": true}'
 ```
+
+### After parallel batch returns:
+
+**3. Key concept deep-dives** (`local` mode — specific entities):
+
+Extract key entities/authors from the results of queries 1 and 2. Then run **all entity queries in parallel** (one per entity):
+```bash
+curl -s -X POST http://localhost:8000/v1/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "ENTITY_1", "mode": "local", "top_k": 20, "rerank_top_k": 8, "enable_rerank": true, "include_context": true}'
+```
+```bash
+curl -s -X POST http://localhost:8000/v1/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "ENTITY_2", "mode": "local", "top_k": 20, "rerank_top_k": 8, "enable_rerank": true, "include_context": true}'
+```
+Run one curl per entity, all in parallel.
 
 ## How to read RAG responses
 
