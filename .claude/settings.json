@@ -1,0 +1,6 @@
+{
+  "enabledPlugins": {
+    "orkl@orchestkit": true,
+    "cc10x@cc10x": true
+  }
+}

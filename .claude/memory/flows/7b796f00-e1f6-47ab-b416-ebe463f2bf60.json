@@ -1,0 +1,59 @@
+{
+  "session_id": "7b796f00-e1f6-47ab-b416-ebe463f2bf60",
+  "actions": [
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T19:25:54.536Z",
+      "summary": "✓ ck items list",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T19:26:28.464Z",
+      "summary": "✓ ck auth logout",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T19:27:21.929Z",
+      "summary": "✓ ck items list",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Write",
+      "file": "/Users/yotamfromm/.claude/CLAUDE.md",
+      "timestamp": "2026-03-05T19:52:34.560Z",
+      "summary": "✓ Write CLAUDE.md",
+      "result": "success",
+      "exit_code": 0,
+      "category": "modification"
+    },
+    {
+      "tool": "Edit",
+      "file": "/Users/yotamfromm/.claude/settings.json",
+      "timestamp": "2026-03-05T19:52:39.858Z",
+      "summary": "✓ Edit settings.json",
+      "result": "success",
+      "exit_code": 0,
+      "category": "modification"
+    }
+  ],
+  "started_at": "2026-03-05T19:25:54.536Z",
+  "last_action_at": "2026-03-05T19:52:39.858Z",
+  "stats": {
+    "total_actions": 5,
+    "reads": 0,
+    "writes": 2,
+    "tests": 0,
+    "builds": 0,
+    "agent_spawns": 0,
+    "success_rate": 1
+  },
+  "inferred_pattern": "mixed"
+}

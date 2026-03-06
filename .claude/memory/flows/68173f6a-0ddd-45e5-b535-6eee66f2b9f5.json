@@ -1,0 +1,537 @@
+{
+  "session_id": "68173f6a-0ddd-45e5-b535-6eee66f2b9f5",
+  "actions": [
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:21:48.429Z",
+      "summary": "✓ ck auth whoami && ck items list",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:22:28.986Z",
+      "summary": "✓ ls -la /Users/yotamfromm/dev/Academic\\ Helper",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:22:28.987Z",
+      "summary": "✓ ls -la /Users/yotamfromm/dev/Academic\\ Helper",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:22:47.614Z",
+      "summary": "✓ cc10x-router \"Enrich 3 books in CandleKeep library...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "building"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:22:50.083Z",
+      "summary": "✓ ck items list --json --no-session",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:22:54.398Z",
+      "summary": "✓ ck items read \"cmljg1ebo000pmn0zgxkxg3vk:1-10\" --n...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:22:57.545Z",
+      "summary": "✓ ck items toc \"cmljg1ebo000pmn0zgxkxg3vk\" --no-sess...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:23:00.456Z",
+      "summary": "✓ ck items read \"cmljdcdjx0007p90zj50hbajf:1-10\" --n...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:23:03.379Z",
+      "summary": "✓ ck items toc \"cmljdcdjx0007p90zj50hbajf\" --no-sess...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:23:03.382Z",
+      "summary": "✓ ck items toc \"cmljdcdjx0007p90zj50hbajf\" --no-sess...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:23:06.433Z",
+      "summary": "✓ ck items read \"cmljdcdjx0007p90zj50hbajf:11-16\" --...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:23:06.434Z",
+      "summary": "✓ ck items read \"cmljdcdjx0007p90zj50hbajf:11-16\" --...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:23:09.714Z",
+      "summary": "✓ ck items read \"cmljdcdjx0007p90zj50hbajf:2-3\" --no...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:23:09.716Z",
+      "summary": "✓ ck items read \"cmljdcdjx0007p90zj50hbajf:2-3\" --no...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:23:22.107Z",
+      "summary": "✓ ck items list --json --no-session | grep -A3 \"Buil...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:23:22.110Z",
+      "summary": "✓ ck items list --json --no-session | grep -A3 \"Buil...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:23:27.737Z",
+      "summary": "✓ ck items read \"cmljg1ebo000pmn0zgxkxg3vk:1-1\" --no...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:23:27.739Z",
+      "summary": "✓ ck items read \"cmljg1ebo000pmn0zgxkxg3vk:1-1\" --no...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:23:29.320Z",
+      "summary": "✓ ck items enrich --help 2>&1",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:25:46.651Z",
+      "summary": "✓ ck --help 2>&1 | grep -A5 \"items\"",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:25:47.979Z",
+      "summary": "✓ ck items --help 2>&1",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:25:55.513Z",
+      "summary": "✓ ck items list --json --no-session | jq '.items[] |...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:25:59.971Z",
+      "summary": "✓ ck items list --json --no-session | jq '.items[] |...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:26:02.597Z",
+      "summary": "✓ ck items get \"cmljg1ebo000pmn0zgxkxg3vk\" --no-sess...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:26:15.599Z",
+      "summary": "✓ echo $CANDLEKEEP_API_KEY",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:26:15.601Z",
+      "summary": "✓ echo $CANDLEKEEP_API_KEY",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:26:19.519Z",
+      "summary": "✓ ck items list --json --no-session 2>&1 | jq '.item...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:29:05.888Z",
+      "summary": "✓ ck items toc \"cmljg1ebo000pmn0zgxkxg3vk\" --no-sess...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:29:10.931Z",
+      "summary": "✓ ck items create test-doc --no-session 2>&1 | head ...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:29:12.843Z",
+      "summary": "✓ ck items enrich cmmdx56jc02xvp10zr039swl6 --title ...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:29:16.246Z",
+      "summary": "✓ ck items enrich cmmdx56jc02xvp10zr039swl6 \\...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:29:18.289Z",
+      "summary": "✓ ck items remove cmmdx56jc02xvp10zr039swl6 --no-ses...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:29:26.111Z",
+      "summary": "✓ ck items get \"cmljg1ebo000pmn0zgxkxg3vk\" --no-sess...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:29:28.441Z",
+      "summary": "✓ ck --version 2>&1",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:29:28.441Z",
+      "summary": "✓ ck --version 2>&1",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Agent",
+      "timestamp": "2026-03-05T20:29:36.827Z",
+      "summary": "✓ Agent",
+      "result": "success",
+      "exit_code": 0,
+      "category": "other"
+    },
+    {
+      "tool": "Agent",
+      "timestamp": "2026-03-05T20:29:36.842Z",
+      "summary": "✓ Agent",
+      "result": "success",
+      "exit_code": 0,
+      "category": "other"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:29:51.386Z",
+      "summary": "✓ ck items --help 2>&1 | head -40",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:29:55.128Z",
+      "summary": "✓ ck items flag --help 2>&1",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:29:55.128Z",
+      "summary": "✓ ck items flag --help 2>&1",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:29:58.868Z",
+      "summary": "✓ ck items list --json 2>&1",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:29:58.872Z",
+      "summary": "✓ ck items list --json 2>&1",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:30:14.626Z",
+      "summary": "✓ ck items enrich --help 2>&1",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:30:14.630Z",
+      "summary": "✓ ck items enrich --help 2>&1",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:30:28.973Z",
+      "summary": "✓ ck items enrich cmmdx56jc02xvp10zr039swl6 --author...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:30:48.680Z",
+      "summary": "✓ ck items flag cmmdx56jc02xvp10zr039swl6 2>&1",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:35:52.908Z",
+      "summary": "✓ ck items get cmljg1ebo000pmn0zgxkxg3vk > /tmp/buil...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:35:58.189Z",
+      "summary": "✓ ck items remove cmljg1ebo000pmn0zgxkxg3vk --yes 2>...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:35:58.191Z",
+      "summary": "✓ ck items remove cmljg1ebo000pmn0zgxkxg3vk --yes 2>...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:36:02.332Z",
+      "summary": "✓ ck items remove --help 2>&1",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:36:05.900Z",
+      "summary": "✓ ck items remove \"cmljg1ebo000pmn0zgxkxg3vk\" --yes ...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:36:05.901Z",
+      "summary": "✓ ck items remove \"cmljg1ebo000pmn0zgxkxg3vk\" --yes ...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:36:17.446Z",
+      "summary": "✓ ck items add /tmp/building-effective-agents.md 2>&...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:36:36.594Z",
+      "summary": "✓ sleep 5 && ck items list --json 2>&1 | python3 -c ...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:36:49.297Z",
+      "summary": "✓ ck items read \"cmmdxeaqg02ytp10za3nglxy5:1-10\" --n...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:36:49.301Z",
+      "summary": "✓ ck items read \"cmmdxeaqg02ytp10za3nglxy5:1-10\" --n...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:36:49.967Z",
+      "summary": "✓ ck items toc \"cmmdxeaqg02ytp10za3nglxy5\" --no-sess...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:36:49.968Z",
+      "summary": "✓ ck items toc \"cmmdxeaqg02ytp10za3nglxy5\" --no-sess...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:37:09.597Z",
+      "summary": "✓ ck items enrich cmmdxeaqg02ytp10za3nglxy5 \\...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:37:09.601Z",
+      "summary": "✓ ck items enrich cmmdxeaqg02ytp10za3nglxy5 \\...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:37:13.509Z",
+      "summary": "✓ ck items read \"cmmdxeaqg02ytp10za3nglxy5:1-1\" --no...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Agent",
+      "timestamp": "2026-03-05T20:37:19.117Z",
+      "summary": "✓ Agent",
+      "result": "success",
+      "exit_code": 0,
+      "category": "other"
+    },
+    {
+      "tool": "Agent",
+      "timestamp": "2026-03-05T20:37:19.118Z",
+      "summary": "✓ Agent",
+      "result": "success",
+      "exit_code": 0,
+      "category": "other"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:37:28.161Z",
+      "summary": "✓ ck items remove cmmdx56jc02xvp10zr039swl6 --yes 2>...",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    },
+    {
+      "tool": "Bash",
+      "timestamp": "2026-03-05T20:37:32.364Z",
+      "summary": "✓ ck items list 2>&1",
+      "result": "success",
+      "exit_code": 0,
+      "category": "execution"
+    }
+  ],
+  "started_at": "2026-03-05T20:21:48.429Z",
+  "last_action_at": "2026-03-05T20:37:32.364Z",
+  "stats": {
+    "total_actions": 65,
+    "reads": 0,
+    "writes": 0,
+    "tests": 0,
+    "builds": 1,
+    "agent_spawns": 0,
+    "success_rate": 1
+  },
+  "inferred_pattern": "mixed"
+}

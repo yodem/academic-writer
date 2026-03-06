@@ -1,0 +1,11 @@
+{
+  "schema_version": "2.0.0",
+  "decisions": {
+    "unknown": {
+      "timestamp": "2026-03-06T07:10:05.109Z",
+      "agent": "unknown",
+      "summary": "",
+      "status": "completed"
+    }
+  }
+}

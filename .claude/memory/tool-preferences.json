@@ -1,0 +1,62 @@
+{
+  "usage": {
+    "file_search": {
+      "Bash:ls": 20,
+      "Bash:find": 7
+    },
+    "content_search": {},
+    "code_reading": {
+      "Bash:cat": 8
+    },
+    "code_writing": {
+      "Write": 35,
+      "Edit": 2
+    },
+    "testing": {
+      "Bash:vitest": 1
+    },
+    "building": {},
+    "git_operations": {
+      "Bash:git": 4,
+      "Bash:gh": 2
+    },
+    "agent_spawn": {},
+    "other": {}
+  },
+  "preferences": {
+    "file_search": {
+      "category": "file_search",
+      "preferred_tool": "Bash:ls",
+      "confidence": 0.8444444444444444,
+      "sample_count": 20,
+      "updated_at": "2026-03-06T07:19:59.553Z"
+    },
+    "content_search": null,
+    "code_reading": {
+      "category": "code_reading",
+      "preferred_tool": "Bash:cat",
+      "confidence": 0.92,
+      "sample_count": 8,
+      "updated_at": "2026-03-06T07:19:59.553Z"
+    },
+    "code_writing": {
+      "category": "code_writing",
+      "preferred_tool": "Write",
+      "confidence": 0.9675675675675676,
+      "sample_count": 35,
+      "updated_at": "2026-03-06T07:19:59.553Z"
+    },
+    "testing": null,
+    "building": null,
+    "git_operations": {
+      "category": "git_operations",
+      "preferred_tool": "Bash:git",
+      "confidence": 0.56,
+      "sample_count": 4,
+      "updated_at": "2026-03-06T07:19:59.553Z"
+    },
+    "agent_spawn": null,
+    "other": null
+  },
+  "updated_at": "2026-03-06T07:19:59.553Z"
+}

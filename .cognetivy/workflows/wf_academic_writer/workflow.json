@@ -1,0 +1,7 @@
+{
+  "workflow_id": "wf_academic_writer",
+  "name": "Academic Writer Pipeline",
+  "description": "Multi-agent article writing pipeline: init → style → deep_read → thesis → architect → parallel sections (write+audit) → synthesize → output",
+  "current_version_id": "v1",
+  "created_at": "2026-03-06T00:00:00.000Z"
+}

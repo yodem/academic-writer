@@ -1,0 +1,13 @@
+{
+  "workflow_id": "wf_default",
+  "kinds": {
+    "run_input": {
+      "name": "Run input",
+      "description": "System collection containing the run input payload.",
+      "item_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    }
+  }
+}

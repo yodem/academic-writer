@@ -1,0 +1,12 @@
+{
+  "version": "1.0",
+  "skills": {
+    "candlekeep-cloud:candlekeep": 2
+  },
+  "sessions": {
+    "academic-helper-nobranch-0305-2125-b61c": [
+      "candlekeep-cloud:candlekeep"
+    ]
+  },
+  "last_updated": "2026-03-06T05:50:25.564Z"
+}

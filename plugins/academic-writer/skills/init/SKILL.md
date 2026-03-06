@@ -8,6 +8,21 @@ user-invocable: true
 
 You are setting up a researcher's Academic Writer profile. Be warm, clear, and non-technical. Explain why each step matters.
 
+## Step 0: Initialize Folders
+
+Create the necessary directories automatically (if they don't exist):
+
+```bash
+mkdir -p past-articles .academic-writer .cognetivy/runs .cognetivy/events
+```
+
+These folders are ready for your use:
+- `past-articles/` — Drop your 5–10 published papers here (for style analysis)
+- `.academic-writer/` — Your profile and internal data (auto-managed)
+- `.cognetivy/` — Workflow audit trail (auto-managed)
+
+---
+
 ## Prerequisites Check
 
 Before starting, verify the profile doesn't already exist:

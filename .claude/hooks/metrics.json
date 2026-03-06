@@ -1,0 +1,53 @@
+{
+  "hooks": {
+    "lifecycle/unified-dispatcher": {
+      "totalRuns": 8,
+      "successCount": 8,
+      "errorCount": 0,
+      "avgDurationMs": 91,
+      "lastRun": "2026-03-06T07:10:05.176Z",
+      "lastError": null
+    },
+    "prompt/capture-user-intent": {
+      "totalRuns": 52,
+      "successCount": 52,
+      "errorCount": 0,
+      "avgDurationMs": 24,
+      "lastRun": "2026-03-06T07:19:41.164Z",
+      "lastError": null
+    },
+    "posttool/unified-dispatcher": {
+      "totalRuns": 319,
+      "successCount": 319,
+      "errorCount": 0,
+      "avgDurationMs": 51,
+      "lastRun": "2026-03-06T07:19:59.554Z",
+      "lastError": null
+    },
+    "notification/sound": {
+      "totalRuns": 28,
+      "successCount": 28,
+      "errorCount": 0,
+      "avgDurationMs": 8,
+      "lastRun": "2026-03-06T07:11:52.678Z",
+      "lastError": null
+    },
+    "notification/unified-dispatcher": {
+      "totalRuns": 39,
+      "successCount": 39,
+      "errorCount": 0,
+      "avgDurationMs": 141,
+      "lastRun": "2026-03-06T07:11:52.810Z",
+      "lastError": null
+    },
+    "subagent-stop/unified-dispatcher": {
+      "totalRuns": 16,
+      "successCount": 16,
+      "errorCount": 0,
+      "avgDurationMs": 70,
+      "lastRun": "2026-03-06T07:10:05.112Z",
+      "lastError": null
+    }
+  },
+  "lastUpdated": "2026-03-06T07:19:59.554Z"
+}
