@@ -1,0 +1,17 @@
+{
+  "name": "academic-writer",
+  "owner": {
+    "name": "Yotam Fromm"
+  },
+  "metadata": {
+    "description": "AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as .docx files.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "academic-writer",
+      "source": "./plugins/academic-writer",
+      "description": "Write rigorously cited Humanities articles with style matching, deep RAG retrieval, and citation verification."
+    }
+  ]
+}

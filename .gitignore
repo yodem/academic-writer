@@ -1,0 +1,9 @@
+past-articles/
+.academic-writer/
+logs/
+
+# cognetivy - ignore runtime data; commit workflow definitions
+.cognetivy/runs/
+.cognetivy/events/
+.cognetivy/collections/
+.cognetivy/node-results/
