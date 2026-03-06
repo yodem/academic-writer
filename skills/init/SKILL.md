@@ -177,18 +177,69 @@ For each file, extract text:
 - PDF: `python3 -c "import sys; import pdfplumber; [print(p.extract_text()) for p in pdfplumber.open(sys.argv[1]).pages]" past-articles/FILENAME 2>/dev/null || strings past-articles/FILENAME | head -500`
 - DOCX: `python3 -c "import docx; d=docx.Document('past-articles/FILENAME'); [print(p.text) for p in d.paragraphs]" 2>/dev/null`
 
-Analyze the combined text to create a **Style Fingerprint**:
+Analyze the combined text to create a **detailed Style Fingerprint**. This fingerprint is the single most important artifact in the profile — it is loaded and checked against **every paragraph** and the **entire article** during writing. Be thorough.
 
-Look for:
-1. Average sentence length (word count)
-2. Vocabulary complexity (simple / moderate / complex / highly-complex)
-3. Tone descriptors (3–5 adjectives: e.g., "measured", "polemical", "discursive", "analytical")
-4. Common transition phrases (list the most frequent)
-5. Paragraph structure pattern (e.g., "topic sentence → evidence → analysis → forward link")
-6. Citation density (sparse / moderate / dense)
-7. Passive voice (rare / occasional / frequent)
-8. Rhetorical patterns (e.g., "close reading", "comparative analysis", "thesis-antithesis-synthesis")
-9. Three representative excerpts (1–2 sentences each) that best capture their voice
+### A. Sentence-Level Analysis
+
+1. **Average sentence length** — Count words per sentence across all articles. Give the mean and range (e.g., "22 words average, range 8–45").
+2. **Sentence structure variety** — Does the writer favor simple/compound/complex sentences? What's the rough ratio? (e.g., "60% complex, 25% compound, 15% simple")
+3. **Sentence openers** — What patterns do they use to start sentences? (e.g., "Often leads with subordinate clauses: 'Although X, Y...'", "Frequently uses participial phrases: 'Drawing on X, the author...'")
+4. **Passive voice frequency** — rare / occasional / frequent. Give examples from their writing.
+
+### B. Vocabulary & Register
+
+5. **Vocabulary complexity** — simple / moderate / complex / highly-complex. Note any distinctive word choices or preferences.
+6. **Academic register level** — How formal? Do they ever use informal constructions? Do they use first person ("I argue") or impersonal ("it can be argued")?
+7. **Field-specific jargon** — List the specialized terms they use regularly and how they introduce them (with or without definition, in quotes, italicized, etc.)
+8. **Hebrew academic conventions** (if applicable) — Note any Hebrew terms, transliteration style, use of Hebrew quotes, direction of Hebrew insertions in English text or vice versa.
+
+### C. Paragraph & Argument Structure
+
+9. **Paragraph structure pattern** — Describe in detail. (e.g., "topic sentence → evidence quote → close reading of quote → theoretical framing → forward link")
+10. **Paragraph length** — Average word count per paragraph. Range.
+11. **Argument progression** — How does the writer build arguments across paragraphs? (e.g., "inductive: examples first, then generalization" or "deductive: claim, then evidence")
+12. **How they introduce evidence** — Do they quote extensively, paraphrase, or summarize? How do they set up quotes? (e.g., "As X argues, '...'" vs. "X's claim that '...' reveals...")
+13. **How they analyze evidence** — What does the writer do AFTER quoting? (e.g., "always follows quotes with close reading", "draws connection to thesis within same paragraph")
+
+### D. Tone & Voice
+
+14. **Tone descriptors** — 5–7 adjectives that capture their voice. (e.g., "measured, precise, cautiously argumentative, occasionally polemical, deeply engaged")
+15. **Authorial stance** — How present is the author? Do they assert confidently ("This demonstrates...") or hedge ("This appears to suggest...")? List their common hedging/asserting phrases.
+16. **Engagement with other scholars** — How do they treat opposing views? (e.g., "generous restatement before critique", "direct refutation", "strategic concession then pivot")
+
+### E. Transitions & Flow
+
+17. **Preferred transition phrases** — List the 10–15 most frequent transitions. Group by function:
+    - Addition: (e.g., "moreover", "furthermore", "יתרה מכך")
+    - Contrast: (e.g., "however", "nevertheless", "אולם")
+    - Causation: (e.g., "consequently", "thus", "לפיכך")
+    - Exemplification: (e.g., "for instance", "notably", "למשל")
+    - Conclusion: (e.g., "ultimately", "in sum", "לסיכום")
+18. **Section-level transitions** — How do they bridge between major sections? (e.g., "ends section with a question that the next section answers", "uses a transitional paragraph")
+
+### F. Citation Style & Density
+
+19. **Citation density** — sparse / moderate / dense. How many footnotes per paragraph on average?
+20. **Citation integration** — How are citations woven into prose? (e.g., "citations appear mid-sentence as evidence", "citations cluster at end of analytical passages")
+21. **Quote length preference** — Does the writer prefer short embedded quotes, block quotes, or paraphrases?
+
+### G. Rhetorical Patterns
+
+22. **Rhetorical patterns** — List the 3–5 most common. (e.g., "close reading", "comparative analysis", "historicization", "thesis-antithesis-synthesis", "genealogical tracing")
+23. **Opening moves** — How do they typically open articles? (e.g., "starts with an anecdote", "opens with a puzzle or contradiction", "begins with historiographic review")
+24. **Closing moves** — How do they typically close? (e.g., "returns to opening image", "widens implications", "poses open question")
+
+### H. Representative Excerpts
+
+25. **5 representative excerpts** (2–3 sentences each) that best capture the writer's voice. Choose excerpts that demonstrate:
+    - Their typical analytical move
+    - Their strongest argumentative voice
+    - Their handling of evidence
+    - Their transition style
+    - Their most distinctive stylistic trait
+
+**Show the full fingerprint to the researcher** and ask for corrections before saving:
+> "Here's the writing style I extracted from your articles. Please review — is this accurate? Anything you'd like me to adjust?"
 
 ---
 
@@ -276,15 +327,55 @@ Use the Write tool to create `.academic-writer/profile.json` with the following 
   "fieldOfStudy": "FIELD_HERE",
   "citationStyle": "chicago",
   "styleFingerprint": {
-    "averageSentenceLength": 0,
-    "vocabularyComplexity": "complex",
-    "toneDescriptors": [],
-    "preferredTransitions": [],
-    "paragraphStructure": "",
-    "citationDensity": "moderate",
-    "passiveVoiceFrequency": "occasional",
-    "rhetoricalPatterns": [],
-    "sampleExcerpts": []
+    "sentenceLevel": {
+      "averageLength": "22 words, range 8-45",
+      "structureVariety": "60% complex, 25% compound, 15% simple",
+      "commonOpeners": ["subordinate clause", "participial phrase"],
+      "passiveVoice": "occasional",
+      "passiveVoiceExamples": []
+    },
+    "vocabularyAndRegister": {
+      "complexity": "complex",
+      "registerLevel": "formal, impersonal (avoids first person)",
+      "fieldJargon": [],
+      "hebrewConventions": ""
+    },
+    "paragraphStructure": {
+      "pattern": "topic sentence → evidence quote → close reading → theoretical framing → forward link",
+      "averageLength": "150 words, range 100-220",
+      "argumentProgression": "deductive",
+      "evidenceIntroduction": "sets up with 'As X argues' then quotes",
+      "evidenceAnalysis": "close reading immediately after quote"
+    },
+    "toneAndVoice": {
+      "descriptors": [],
+      "authorStance": "cautiously assertive with hedging",
+      "commonHedges": [],
+      "commonAssertions": [],
+      "engagementWithScholars": "generous restatement before critique"
+    },
+    "transitions": {
+      "preferred": {
+        "addition": [],
+        "contrast": [],
+        "causation": [],
+        "exemplification": [],
+        "conclusion": []
+      },
+      "sectionBridging": "ends with question answered by next section"
+    },
+    "citations": {
+      "density": "moderate",
+      "footnotesPerParagraph": 2,
+      "integrationStyle": "mid-sentence as evidence",
+      "quoteLengthPreference": "short embedded quotes"
+    },
+    "rhetoricalPatterns": {
+      "common": [],
+      "openingMoves": "",
+      "closingMoves": ""
+    },
+    "representativeExcerpts": []
   },
   "tools": {
     "candlekeep": { "enabled": true, "version": "detected" },

@@ -1,13 +1,13 @@
 {
   "workflow_id": "wf_academic_writer",
   "name": "Academic Writer Pipeline",
-  "description": "Multi-agent article writing pipeline with granular per-paragraph skill tracking: load_profile → deep_read → thesis_proposal → outline → per-section (per-paragraph: draft → hebrew_grammar → repetition_check → citation_audit) → synthesize → docx_output",
-  "current_version_id": "v2",
+  "description": "Multi-agent article writing pipeline with granular per-paragraph skill tracking: load_profile → deep_read → thesis_proposal → outline → per-section (per-paragraph: draft → style_compliance → hebrew_grammar → repetition_check → citation_audit) → synthesize (incl. fingerprint compliance) → docx_output",
+  "current_version_id": "v3",
   "created_at": "2026-03-06T00:00:00.000Z",
   "nodes": {
     "load_profile": {
-      "name": "Load Profile",
-      "description": "Load researcher profile and tool configuration"
+      "name": "Load Profile & Fingerprint",
+      "description": "Load researcher profile, tool configuration, and style fingerprint. Fingerprint is displayed and kept in context for all subsequent steps."
     },
     "source_selection": {
       "name": "Source Selection",
@@ -37,6 +37,10 @@
           "name": "Draft paragraph {M}",
           "description": "Query RAG and write paragraph applying style fingerprint"
         },
+        "section_{N}_p_{M}_style_compliance": {
+          "name": "Style fingerprint compliance — paragraph {M}",
+          "description": "Re-read full fingerprint, score paragraph on 10 dimensions (sentence patterns, vocabulary, tone, evidence handling, transitions, citations), fix deviations. Uses representative excerpts as style targets."
+        },
         "section_{N}_p_{M}_hebrew_grammar": {
           "name": "Hebrew grammar check — paragraph {M}",
           "description": "Verify Hebrew grammar, spelling, and academic register"
@@ -52,8 +56,8 @@
       }
     },
     "synthesize": {
-      "name": "Synthesis",
-      "description": "Synthesizer agent reviews coherence, flow, style, and cross-section repetition"
+      "name": "Synthesis + Style Compliance",
+      "description": "Synthesizer agent reviews coherence, flow, full-article fingerprint compliance, and cross-section repetition. Re-reads complete fingerprint and checks entire article against all dimensions."
     },
     "synthesize_repetition_check": {
       "name": "Full-article repetition check",

@@ -24,6 +24,23 @@ If the profile doesn't exist, tell them: "Please run `/academic-writer-init` fir
 
 Store the profile values — you'll use them throughout.
 
+### Style Fingerprint — Always Loaded
+
+**The `styleFingerprint` is the most critical part of the profile.** Read it carefully and keep it in context throughout the entire pipeline. Every paragraph and every review step checks against it.
+
+Print a summary of the fingerprint to confirm it's loaded:
+> "Loaded your style fingerprint:
+> - Tone: [toneAndVoice.descriptors]
+> - Sentence style: [sentenceLevel.averageLength], [sentenceLevel.structureVariety]
+> - Paragraph pattern: [paragraphStructure.pattern]
+> - Evidence handling: [paragraphStructure.evidenceIntroduction] → [paragraphStructure.evidenceAnalysis]
+> - Author stance: [toneAndVoice.authorStance]
+> - Citation density: [citations.density] (~[citations.footnotesPerParagraph]/paragraph)
+>
+> Every paragraph will be checked against this fingerprint."
+
+Pass the full `styleFingerprint` object to every agent that writes or reviews text (section-writer, synthesizer). It must be available at every stage — not summarized, but the complete object.
+
 ### Tool Awareness
 
 Read the `tools` object from the profile. Throughout this workflow, **only use tools that are enabled**:
@@ -198,17 +215,21 @@ For each section in approved outline:
 
 Each section-writer handles a **per-paragraph skill pipeline** internally:
 
-| Skill | What it does | Cognetivy node |
-|-------|-------------|---------------|
-| **Draft** | Query RAG + write paragraph with style fingerprint | `section_N_p_M_draft` |
-| **Hebrew Grammar** | Check grammar, spelling, academic register | `section_N_p_M_hebrew_grammar` |
-| **Repetition Check** | Check words, phrases, arguments vs. prior text | `section_N_p_M_repetition_check` |
-| **Citation Audit** | Auditor agent verifies every footnote (hard gate) | `section_N_p_M_citation_audit` |
+| # | Skill | What it does | Cognetivy node |
+|---|-------|-------------|---------------|
+| 1 | **Draft** | Query RAG + write paragraph applying style fingerprint | `section_N_p_M_draft` |
+| 2 | **Style Compliance** | Re-read fingerprint, score paragraph on 10 dimensions, fix deviations | `section_N_p_M_style_compliance` |
+| 3 | **Hebrew Grammar** | Check grammar, spelling, academic register | `section_N_p_M_hebrew_grammar` |
+| 4 | **Repetition Check** | Check words, phrases, arguments vs. prior text | `section_N_p_M_repetition_check` |
+| 5 | **Citation Audit** | Auditor agent verifies every footnote (hard gate) | `section_N_p_M_citation_audit` |
+
+**The style compliance skill is critical** — it re-reads the full `styleFingerprint` object and scores the paragraph against sentence patterns, vocabulary, tone, evidence handling, transitions, and citation integration. It uses the `representativeExcerpts` as concrete style targets.
 
 Every skill for every paragraph is logged as a separate Cognetivy event. The researcher sees:
 - Which paragraph is being written
 - Which skill is currently running
 - Pass/fail/fixed status for each check
+- Style compliance score (1–5 per dimension)
 - Audit verdicts with claim counts
 
 The auditor is a HARD GATE:
@@ -234,7 +255,7 @@ The synthesizer runs TWO phases, each logged to Cognetivy:
 - Argument coherence — does each section prove the thesis?
 - Logical flow — can the reader follow?
 - Transitions — sections connected with fingerprint phrases?
-- Style consistency — tone matches fingerprint throughout?
+- **Full-article style fingerprint compliance** — re-reads the complete fingerprint and checks every section against all dimensions (sentence patterns, vocabulary, tone, evidence handling, authorial stance). Uses `representativeExcerpts` as benchmark. Fixes any drift.
 - Redundancies & gaps
 
 **Phase B — Full-article repetition check** (`synthesize_repetition_check` node):
@@ -299,6 +320,7 @@ Report to researcher:
 > Sections: [N]
 >
 > Quality checks applied per paragraph:
+> - Style fingerprint compliance: avg [N]/5 score, [N] adjustments
 > - Hebrew grammar: [N] issues fixed
 > - Repetition: [N] instances fixed
 > - Citation audits: [N] claims verified

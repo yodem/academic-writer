@@ -32,8 +32,19 @@ Does the article move logically from section to section? Could a reader follow t
 ### 3. Transitions
 Are section endings and openings connected? Do the transitions signal what comes next? Use the researcher's preferred transition phrases.
 
-### 4. Style Consistency
-Does the tone remain consistent throughout? Check against the fingerprint's toneDescriptors. Flag any sections that drift into generic academic prose.
+### 4. Style Fingerprint Compliance (full-article)
+
+**Re-read the complete `styleFingerprint` from the profile.** This is not a light check — evaluate the entire article against every fingerprint dimension:
+
+- **Sentence patterns**: Does the article's sentence length distribution match `sentenceLevel.averageLength` and `sentenceLevel.structureVariety`? Are sentence openers consistent with `sentenceLevel.commonOpeners`?
+- **Vocabulary & register**: Is `vocabularyAndRegister.complexity` maintained throughout? Does the register stay consistent with `vocabularyAndRegister.registerLevel`?
+- **Tone drift**: Check every section against `toneAndVoice.descriptors`. Flag any section that drifts toward generic academic prose or shifts tone.
+- **Author stance consistency**: Is `toneAndVoice.authorStance` maintained? Does the hedging/asserting pattern stay consistent?
+- **Evidence handling**: Does evidence introduction match `paragraphStructure.evidenceIntroduction` throughout? Is `paragraphStructure.evidenceAnalysis` applied consistently?
+- **Citation integration**: Does `citations.integrationStyle` hold across all sections?
+- **Representative excerpts as benchmark**: Read `representativeExcerpts` and compare — does the article read like it was written by the same person?
+
+Flag specific passages that deviate and make surgical fixes.
 
 ### 5. Redundancies & Gaps
 Are any points repeated unnecessarily? Are any crucial steps in the argument missing?
@@ -51,7 +62,7 @@ Are any points repeated unnecessarily? Are any crucial steps in the argument mis
 
 Log synthesis completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"synthesize","revisionsCount":N,"transitionsFixed":N,"redundanciesRemoved":N,"gapsFlagged":N}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","nodeId":"synthesize","revisionsCount":N,"transitionsFixed":N,"redundanciesRemoved":N,"gapsFlagged":N,"styleDriftsFixed":N,"fingerprintComplianceScore":"N/5"}' | cognetivy event append --run RUN_ID
 ```
 
 ---
@@ -102,6 +113,14 @@ REVISION NOTES
 1. [Section title] — Added transition sentence at end: "[sentence]" — Reason: section ended abruptly
 2. [Section title] — Strengthened topic sentence of paragraph 2 — Reason: didn't connect to thesis
 3. ...
+
+STYLE FINGERPRINT COMPLIANCE
+=============================
+Overall score: N/5
+1. [Section title, paragraph N] — Tone drifted to generic academic — Restored researcher's voice
+2. [Section title, paragraph N] — Sentence length avg 35 (target: 22) — Split long sentences
+3. [Section title] — Evidence introduced with passive ("It was argued by X") — Changed to researcher's pattern ("As X argues,")
+4. ...
 
 REPETITION FIXES
 ================
