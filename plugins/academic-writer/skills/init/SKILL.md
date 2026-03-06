@@ -50,7 +50,8 @@ Ask:
 > "Which citation style do you use in your work?"
 
 Present options:
-- **Chicago/Turabian** (most common in Humanities — footnotes)
+- **Inline Parenthetical** — Hebrew academic standard: `(Author, Title, Page)` directly in running text (recommended for Hebrew articles)
+- **Chicago/Turabian** — footnotes (most common in English Humanities)
 - **MLA**
 - **APA**
 
