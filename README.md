@@ -26,14 +26,15 @@ Choose which tools you want to use during `/academic-writer-init`.
 
 ### 2. Install the Plugin
 
-Navigate to the folder where you do your research work, then:
+Navigate to the folder where you do your research work, then run both commands:
 
 ```bash
 cd your-research-folder
-claude plugin add github:yodem/academic-writer
+claude plugin marketplace add yodem/academic-writer
+claude plugin install academic-writer --scope project
 ```
 
-When prompted for scope, choose **project** — this activates the plugin only in this folder, not globally.
+The `--scope project` flag activates the plugin only in this folder, not globally.
 
 ### 3. Initialize Your Profile
 
@@ -230,7 +231,7 @@ This is a Claude Code plugin. To modify:
 
 1. Edit `.md` files in `skills/`, `agents/`, `hooks/`
 2. Commit and push to GitHub
-3. Reinstall: `claude plugin add github:yodem/academic-writer` (choose project scope)
+3. Update: `claude plugin update academic-writer` (restart Claude Code to apply)
 
 ## License
 
