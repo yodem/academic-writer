@@ -93,3 +93,7 @@ II. [Section Title] ...
 
 ...
 ```
+
+## Output
+
+Return the formatted thesis options (Mode A) or the formatted outline (Mode B) as shown above. The write-article skill presents these directly to the researcher for approval.

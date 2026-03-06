@@ -3,7 +3,7 @@ name: academic-writer
 description: "Write a new academic article. Conversational pipeline: subject → sources → deep read → thesis → outline → write → audit → .docx"
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
-agents: [style-analyzer, deep-reader, architect, section-writer, auditor, synthesizer]
+agents: [deep-reader, architect, section-writer, auditor, synthesizer]
 ---
 
 # Academic Writer — Write Article
