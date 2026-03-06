@@ -2,12 +2,20 @@
 
 AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as .docx files.
 
-## Integrations
+## Integrations (Tool Registry)
 
-- **Candlekeep** (`ck` CLI): Cloud document library — source PDFs and research materials
-- **Hybrid-Search-RAG** (`curl http://localhost:8000`): Deep semantic + keyword retrieval. Full API reference in `references/hybridrag-api.md`
-- **Cognetivy** (`cognetivy` CLI): Workflow tracking and audit trail
+All integrations are **optional**. During `/academic-writer-init`, the researcher selects which tools to enable. Enabled tools are stored in `profile.tools`. Use `/academic-writer-update-tools` to change them later.
+
+| Tool ID | CLI / Type | What it does | Setup |
+|---------|-----------|-------------|-------|
+| `candlekeep` | `ck` CLI | Cloud document library — source PDFs and research materials | https://github.com/romiluz13/candlekeep |
+| `hybrid-search-rag` | HTTP service (`:8000`) | Deep semantic + keyword retrieval (Agentic-Search-Vectorless). Full API reference in `references/hybridrag-api.md` | https://github.com/romiluz13/Agentic-Search-Vectorless |
+| `mongodb-agent-skills` | MCP server | Database-backed research operations | https://github.com/romiluz13/mongodb-agent-skills |
+| `cognetivy` | `cognetivy` CLI | Workflow tracking and audit trail | Built-in (`.cognetivy/`) |
+
 - **Past articles**: `./past-articles/` folder — researcher's past work for style analysis (local only, never uploaded)
+
+All pipeline steps (write-article, agents) check `profile.tools` before calling any integration. If a tool is disabled, its steps are skipped gracefully.
 
 ## Slash Commands
 
@@ -16,6 +24,7 @@ AI-first academic writing assistant for Humanities researchers. Produces rigorou
 | `/academic-writer-init` | First-time setup: field of study, citation style, style fingerprint from past articles, source indexing |
 | `/academic-writer` | Write a new article: conversational subject → sources → thesis → outline → write → audit → .docx |
 | `/academic-writer-update-field` | Update your field of study without re-running full initialization |
+| `/academic-writer-update-tools` | Add, remove, or reconfigure integrations (Candlekeep, RAG, MongoDB, Cognetivy) |
 
 ## RAG Query Modes (use the right one for each task)
 

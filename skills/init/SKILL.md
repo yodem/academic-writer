@@ -35,99 +35,101 @@ cat .academic-writer/profile.json 2>/dev/null && echo "EXISTS" || echo "NOT_FOUN
 
 If profile EXISTS, ask: "You already have a profile set up. Would you like to update it, or start fresh?"
 
-### B. Validate required tools
+### B. Tool Registry — detect and select integrations
 
-**IMPORTANT:** All three tools below must be available before proceeding. Check each one. If any is missing, guide the user through setup and **do not continue** until all are confirmed working.
+Academic Writer supports several external tools. Not all are required — the researcher picks the ones they use. Present the **Available Tools Registry** and auto-detect which are already installed.
 
-#### 1. Candlekeep (`ck` CLI)
+#### Tool Registry
 
+The following is the master list of supported tools. For each tool, run the detection command. Then present the results to the user as a checklist.
+
+**1. Candlekeep** (`candlekeep`)
+- *What it does:* Cloud document library for source PDFs and research materials
+- *Type:* CLI
+- *Setup:* https://github.com/romiluz13/candlekeep
+- *Detection:*
 ```bash
-command -v ck >/dev/null 2>&1 && echo "FOUND" || echo "NOT_FOUND"
+command -v ck >/dev/null 2>&1 && echo "DETECTED" || echo "NOT_DETECTED"
 ```
 
-If NOT_FOUND, tell the researcher:
-> "Candlekeep is required — it's your cloud document library for source PDFs.
->
-> Install it from: https://github.com/romiluz13/candlekeep
->
-> Follow the README setup instructions, then let me know when `ck` is available in your terminal."
-
-Wait for confirmation and re-check before continuing.
-
-#### 2. MongoDB Agent Skills (MCP server)
-
-Check if the MongoDB agent skills MCP server is configured:
-
+**2. Hybrid-Search-RAG / Agentic-Search-Vectorless** (`hybrid-search-rag`)
+- *What it does:* Deep semantic + keyword retrieval for citation search and verification
+- *Type:* Local service (HTTP)
+- *Setup:* https://github.com/romiluz13/Agentic-Search-Vectorless
+- *Detection:*
 ```bash
-# Check Claude MCP settings for mongodb-agent-skills
-cat ~/.claude/settings.json 2>/dev/null | python3 -c "
+curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo "DETECTED" || echo "NOT_DETECTED"
+```
+
+**3. MongoDB Agent Skills** (`mongodb-agent-skills`)
+- *What it does:* Database-backed research operations via MCP server
+- *Type:* MCP server
+- *Setup:* https://github.com/romiluz13/mongodb-agent-skills
+- *Detection:*
+```bash
+# Check both user-level and project-level MCP settings
+(cat ~/.claude/settings.json 2>/dev/null; cat .mcp.json 2>/dev/null) | python3 -c "
 import sys, json
-try:
-    d = json.load(sys.stdin)
-    servers = d.get('mcpServers', {})
-    # Look for mongodb-related MCP server
-    found = any('mongo' in k.lower() for k in servers)
-    print('FOUND' if found else 'NOT_FOUND')
-except:
-    print('NOT_FOUND')
+found = False
+for line in sys.stdin.read().split('}{'):
+    try:
+        d = json.loads('{' + line.strip('{}') + '}')
+        servers = d.get('mcpServers', {})
+        if any('mongo' in k.lower() for k in servers):
+            found = True
+    except: pass
+print('DETECTED' if found else 'NOT_DETECTED')
 "
 ```
 
-If NOT_FOUND, also check project-level settings:
-
+**4. Cognetivy** (`cognetivy`)
+- *What it does:* Workflow tracking and audit trail for pipeline steps
+- *Type:* CLI
+- *Setup:* Built-in with this plugin (see `.cognetivy/` directory)
+- *Detection:*
 ```bash
-cat .mcp.json 2>/dev/null | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    servers = d.get('mcpServers', {})
-    found = any('mongo' in k.lower() for k in servers)
-    print('FOUND' if found else 'NOT_FOUND')
-except:
-    print('NOT_FOUND')
-"
+command -v cognetivy >/dev/null 2>&1 && echo "DETECTED" || echo "NOT_DETECTED"
 ```
 
-If still NOT_FOUND, tell the researcher:
-> "The MongoDB Agent Skills MCP server is required for database-backed research operations.
+#### Present results and let the user choose
+
+After running all detection commands, present the results:
+
+> "Here are the integrations Academic Writer supports. I've auto-detected what you have installed:
 >
-> Set it up from: https://github.com/romiluz13/mongodb-agent-skills
+> | # | Tool | Status | What it does |
+> |---|------|--------|-------------|
+> | 1 | Candlekeep | ✓ Detected / ✗ Not found | Cloud document library |
+> | 2 | Hybrid-Search-RAG | ✓ Detected / ✗ Not found | Semantic search & citation verification |
+> | 3 | MongoDB Agent Skills | ✓ Detected / ✗ Not found | Database-backed research ops |
+> | 4 | Cognetivy | ✓ Detected / ✗ Not found | Workflow audit trail |
 >
-> Follow the README to configure it as an MCP server in Claude, then let me know when it's ready."
+> Which tools would you like to enable? You can pick by number, name, or say 'all detected'.
+>
+> For any tool marked ✗ that you'd like to use, I'll help you set it up."
 
-Wait for confirmation and re-check before continuing.
+**Rules:**
+- The user does NOT have to enable all tools. Any combination is valid.
+- If a user wants a tool that's not detected, show them the setup URL and walk them through installation. Re-run detection after they confirm setup.
+- Only proceed once the user has confirmed their final tool selection.
+- You can update enabled tools later with `/academic-writer-update-tools`.
 
-#### 3. Hybrid-Search-RAG / Agentic-Search-Vectorless
+#### Store the selection
 
-```bash
-curl -s --max-time 3 http://localhost:8000/health 2>/dev/null | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    print('RUNNING')
-except:
-    print('NOT_RUNNING')
-"
+Build a `tools` object for the profile (used in Step 5). For each tool, store:
+
+```json
+{
+  "tools": {
+    "candlekeep": { "enabled": true, "version": "detected" },
+    "hybrid-search-rag": { "enabled": true, "version": "detected" },
+    "mongodb-agent-skills": { "enabled": false },
+    "cognetivy": { "enabled": true, "version": "detected" }
+  }
+}
 ```
 
-If NOT_RUNNING, tell the researcher:
-> "The Hybrid-Search-RAG server (Agentic-Search-Vectorless) is required for semantic search and citation verification.
->
-> Set it up from: https://github.com/romiluz13/Agentic-Search-Vectorless
->
-> Follow the README to install and start the server, then let me know when it's running on port 8000."
-
-Wait for confirmation and re-check before continuing.
-
-### C. All prerequisites confirmed
-
-Only after ALL three tools are confirmed working, tell the researcher:
-> "All prerequisites are set up:
-> - ✓ Candlekeep
-> - ✓ MongoDB Agent Skills
-> - ✓ Hybrid-Search-RAG
->
-> Let's configure your profile!"
+Only include `"version": "detected"` for tools that were successfully detected. Omit the version key for disabled tools.
 
 ---
 
@@ -190,7 +192,11 @@ Look for:
 
 ---
 
-## Step 4: Research Sources in Candlekeep
+## Step 4: Research Sources
+
+**This step adapts based on which tools the researcher enabled in the Prerequisites Check.**
+
+### If Candlekeep is enabled:
 
 Tell the researcher:
 > "Now let's set up your research library. These are the books, articles, and primary sources you cite in your work.
@@ -223,13 +229,22 @@ Build the sources array like this (in memory, for Step 5):
 ]
 ```
 
-Then sync each document to the search index:
+### If Candlekeep is NOT enabled:
+
+Tell the researcher:
+> "Since Candlekeep is not enabled, you can provide source files directly in the `past-articles/` folder or manage sources manually.
+>
+> If you'd like to add Candlekeep later, run `/academic-writer-update-tools`."
+
+Set the sources array to `[]` for the profile.
+
+### If Hybrid-Search-RAG is enabled — sync sources to search index:
 
 ```bash
 curl -s http://localhost:8000/v1/status | python3 -c "import sys,json; d=json.load(sys.stdin); print('RAG ready' if d.get('initialized') else 'RAG not ready')"
 ```
 
-If RAG is ready, for each document get its full text and ingest it:
+If RAG is ready and Candlekeep is also enabled, for each document ingest it:
 
 ```bash
 # For each document ID from ck items list:
@@ -238,10 +253,13 @@ ck items get DOCUMENT_ID | curl -s -X POST http://localhost:8000/v1/ingest \
   -d "{\"documents\": [$(python3 -c \"import sys,json; print(json.dumps(sys.stdin.read()))\" <<<$(ck items get DOCUMENT_ID))], \"ids\": [\"DOCUMENT_ID\"]}"
 ```
 
-Track the sync in Cognetivy:
+### If Cognetivy is enabled — track the sync:
+
 ```bash
 cognetivy run start --input /tmp/aw-init-input.json
 ```
+
+If Cognetivy is NOT enabled, skip this logging step silently.
 
 ---
 
@@ -268,6 +286,12 @@ Use the Write tool to create `.academic-writer/profile.json` with the following 
     "rhetoricalPatterns": [],
     "sampleExcerpts": []
   },
+  "tools": {
+    "candlekeep": { "enabled": true, "version": "detected" },
+    "hybrid-search-rag": { "enabled": true, "version": "detected" },
+    "mongodb-agent-skills": { "enabled": false },
+    "cognetivy": { "enabled": true, "version": "detected" }
+  },
   "sources": [
     {
       "id": "DOC_ID",
@@ -283,7 +307,8 @@ Use the Write tool to create `.academic-writer/profile.json` with the following 
 - `fieldOfStudy` — from Step 1
 - `citationStyle` — from Step 2
 - `styleFingerprint` — all values from Step 3 analysis
-- `sources` — the minimal metadata array built in Step 4 (id, title, type only — **never** raw Candlekeep JSON)
+- `tools` — the tool registry from Prerequisites Check step B (only enabled/version for each tool)
+- `sources` — the minimal metadata array built in Step 4 (id, title, type only — **never** raw Candlekeep JSON). Empty `[]` if Candlekeep is not enabled.
 - `createdAt` / `updatedAt` — current ISO timestamp
 
 ---
@@ -296,6 +321,8 @@ Summarize:
 > - **Field**: [field]
 > - **Citation style**: [style]
 > - **Writing style**: [2-3 sentence summary of fingerprint]
-> - **Sources indexed**: [count] documents
+> - **Enabled tools**: [list enabled tool names]
+> - **Sources indexed**: [count] documents (or 'none — Candlekeep not enabled')
 >
-> Run `/academic-writer` anytime to start writing an article."
+> Run `/academic-writer` anytime to start writing an article.
+> Run `/academic-writer-update-tools` to add or remove integrations later."

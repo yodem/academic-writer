@@ -22,6 +22,17 @@ If the profile doesn't exist, tell them: "Please run `/academic-writer-init` fir
 
 Store the profile values — you'll use them throughout.
 
+### Tool Awareness
+
+Read the `tools` object from the profile. Throughout this workflow, **only use tools that are enabled**:
+
+- **Candlekeep** (`tools.candlekeep.enabled`) — If disabled, skip `ck` commands. Source listing/selection steps should use any available sources from the profile's `sources` array instead.
+- **Hybrid-Search-RAG** (`tools.hybrid-search-rag.enabled`) — If disabled, skip all RAG queries (`curl http://localhost:8000/...`). The deep-reader and auditor agents cannot run without RAG — warn the researcher and write without automated citation verification.
+- **MongoDB Agent Skills** (`tools.mongodb-agent-skills.enabled`) — If disabled, skip any MongoDB MCP operations.
+- **Cognetivy** (`tools.cognetivy.enabled`) — If disabled, skip all `cognetivy` logging commands. The pipeline still works, just without audit trail.
+
+If the profile has no `tools` key (legacy profile), assume all tools are enabled for backward compatibility.
+
 ---
 
 ## PHASE 1: CONVERSATIONAL (Steps 1–5, human-in-the-loop)
@@ -37,11 +48,13 @@ Let them speak freely. Ask follow-up questions until you deeply understand the i
 
 ### Step 2: Source Selection
 
-List available Candlekeep sources:
+**If Candlekeep is enabled**, list available sources live:
 
 ```bash
 ck items list --json
 ```
+
+**If Candlekeep is NOT enabled**, use the `sources` array from the profile (indexed during init) to present available sources. If the sources array is empty, ask the researcher to describe their sources manually.
 
 Present them clearly and ask:
 > "Which of these sources should I focus on? You can name them by number, by title, or say 'all'."
@@ -92,20 +105,22 @@ Iterate until the researcher says something like "go", "looks good", or "start w
 
 ## PHASE 2: AUTONOMOUS (Steps 6–9, fully automatic)
 
-Start a Cognetivy run:
+If Cognetivy is enabled, start a run:
 
 ```bash
 echo '{"subject": "SUBJECT", "thesis": "THESIS"}' > /tmp/aw-run-input.json
 cognetivy run start --input /tmp/aw-run-input.json
 ```
 
-Record the run ID for logging all subsequent steps.
+Record the run ID for logging all subsequent steps. If Cognetivy is disabled, skip all `cognetivy` commands throughout Phase 2.
 
 ---
 
 ### Step 6: Ingestion Sync
 
-Ensure selected sources are indexed in RAG:
+**Skip this step if both Candlekeep and Hybrid-Search-RAG are disabled.**
+
+If both are enabled, ensure selected sources are indexed in RAG:
 
 ```bash
 # Check each source and ingest if missing
@@ -116,7 +131,7 @@ for DOC_ID in SELECTED_IDS; do
 done
 ```
 
-Log to Cognetivy:
+If Cognetivy is enabled, log:
 ```bash
 echo '{"type":"step_started","nodeId":"ingestion_sync"}' | cognetivy event append --run RUN_ID
 ```
@@ -196,7 +211,7 @@ doc.save("OUTPUT_PATH")
 EOF
 ```
 
-Complete the Cognetivy run:
+If Cognetivy is enabled, complete the run:
 ```bash
 echo '{"type":"run_completed","status":"completed"}' | cognetivy event append --run RUN_ID
 ```
