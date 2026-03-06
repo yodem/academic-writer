@@ -9,35 +9,35 @@
       "lastError": null
     },
     "prompt/capture-user-intent": {
-      "totalRuns": 52,
-      "successCount": 52,
+      "totalRuns": 54,
+      "successCount": 54,
       "errorCount": 0,
       "avgDurationMs": 24,
-      "lastRun": "2026-03-06T07:19:41.164Z",
+      "lastRun": "2026-03-06T07:20:22.275Z",
       "lastError": null
     },
     "posttool/unified-dispatcher": {
-      "totalRuns": 319,
-      "successCount": 319,
+      "totalRuns": 327,
+      "successCount": 327,
       "errorCount": 0,
       "avgDurationMs": 51,
-      "lastRun": "2026-03-06T07:19:59.554Z",
+      "lastRun": "2026-03-06T07:20:42.415Z",
       "lastError": null
     },
     "notification/sound": {
-      "totalRuns": 28,
-      "successCount": 28,
+      "totalRuns": 29,
+      "successCount": 29,
       "errorCount": 0,
       "avgDurationMs": 8,
-      "lastRun": "2026-03-06T07:11:52.678Z",
+      "lastRun": "2026-03-06T07:20:51.181Z",
       "lastError": null
     },
     "notification/unified-dispatcher": {
-      "totalRuns": 39,
-      "successCount": 39,
+      "totalRuns": 41,
+      "successCount": 41,
       "errorCount": 0,
       "avgDurationMs": 141,
-      "lastRun": "2026-03-06T07:11:52.810Z",
+      "lastRun": "2026-03-06T07:20:51.318Z",
       "lastError": null
     },
     "subagent-stop/unified-dispatcher": {
@@ -49,5 +49,5 @@
       "lastError": null
     }
   },
-  "lastUpdated": "2026-03-06T07:19:59.554Z"
+  "lastUpdated": "2026-03-06T07:20:51.318Z"
 }

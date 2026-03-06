@@ -15,6 +15,7 @@ AI-first academic writing assistant for Humanities researchers. Produces rigorou
 |---------|---------|
 | `/academic-writer-init` | First-time setup: field of study, citation style, style fingerprint from past articles, source indexing |
 | `/academic-writer` | Write a new article: conversational subject → sources → thesis → outline → write → audit → .docx |
+| `/academic-writer-update-field` | Update your field of study without re-running full initialization |
 
 ## RAG Query Modes (use the right one for each task)
 
