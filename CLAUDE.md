@@ -2,6 +2,14 @@
 
 AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as .docx files.
 
+## Critical Enforcement Rules
+
+- **Language purity**: Every article section is checked for embedded foreign-language text. ALL body prose must be in the article's `targetLanguage`. Foreign terms must be transliterated or footnoted — never inline.
+- **Citations**: Default format is `inline-parenthetical` for Hebrew articles: `(Author, Hebrew Title, עמ' N)` in running text. No footnote-only citations.
+- **DOCX output**: Every article is saved as a properly formatted `.docx` file with the researcher's font (default: David), 11pt body, 1.5 line spacing, justified, 1" margins, page numbers.
+- **Cognetivy**: All pipeline steps are logged. Cognetivy run starts at the beginning of Phase 1 (before conversational steps) and completes only after the .docx is saved.
+- **RAG is mandatory**: Section-writers MUST query RAG before writing any paragraph. No paragraph may cite a source that was not retrieved from RAG context.
+
 ## Integrations (Tool Registry)
 
 All integrations are **optional**. During `/academic-writer-init`, the researcher selects which tools to enable. Enabled tools are stored in `profile.tools`. Use `/academic-writer-update-tools` to change them later.

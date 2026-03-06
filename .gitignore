@@ -9,3 +9,13 @@ __pycache__/
 .cognetivy/events/
 .cognetivy/collections/
 .cognetivy/node-results/
+
+# .claude - ignore runtime/session state; commit hooks, skills, and config
+.claude/.comm-style-counter
+.claude/.satisfaction-counter
+.claude/feedback/
+.claude/hooks/metrics.json
+.claude/memory/flows/
+.claude/memory/open-problems.jsonl
+.claude/memory/sessions/
+.claude/memory/tool-preferences.json

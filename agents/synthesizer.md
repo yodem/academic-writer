@@ -49,6 +49,20 @@ Flag specific passages that deviate and make surgical fixes.
 ### 5. Redundancies & Gaps
 Are any points repeated unnecessarily? Are any crucial steps in the argument missing?
 
+### 6. Language Purity (Final Sweep)
+
+Scan the entire article for **embedded foreign language text** that survived per-paragraph checks. This is a full-article final sweep.
+
+For each violation found:
+- Replace with the target-language equivalent, transliteration, or move to a footnote (first mention only)
+- Log what was fixed
+
+Common violations to catch:
+- German philosophical terms inline (Kategorischer Imperativ, Würde, höchstes Gut, Freiheit, Gott)
+- Greek terms inline (κατηγοριακή, ἀρετή)
+- English explanatory text embedded in Hebrew paragraphs
+- Mixed-language section headings
+
 ## Process
 
 1. Read all sections in order
@@ -62,7 +76,7 @@ Are any points repeated unnecessarily? Are any crucial steps in the argument mis
 
 Log synthesis completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"synthesize","revisionsCount":N,"transitionsFixed":N,"redundanciesRemoved":N,"gapsFlagged":N,"styleDriftsFixed":N,"fingerprintComplianceScore":"N/5"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","nodeId":"synthesize","revisionsCount":N,"transitionsFixed":N,"redundanciesRemoved":N,"gapsFlagged":N,"styleDriftsFixed":N,"languagePurityFixes":N,"fingerprintComplianceScore":"N/5"}' | cognetivy event append --run RUN_ID
 ```
 
 ---
@@ -128,6 +142,11 @@ REPETITION FIXES
 2. Phrase "[repeated phrase]" appeared in sections 2 and 4 — Rephrased in section 4
 3. Transition "moreover" used 4 times — Replaced 2 with "furthermore" and "in addition"
 4. ...
+
+LANGUAGE PURITY FIXES
+=====================
+1. [Section, paragraph N] — "[foreign term]" replaced with "[target-language term]"
+2. ...
 
 GAPS (require researcher attention):
 - [Section]: [what argument step is missing and what kind of source would fill it]

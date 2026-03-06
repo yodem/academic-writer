@@ -70,12 +70,17 @@ Log profile load:
 echo '{"type":"step_completed","nodeId":"load_profile","tools":TOOLS_JSON}' | cognetivy event append --run RUN_ID
 ```
 
-### Step 1: Subject
+### Step 1: Subject & Language
 
 Ask:
 > "What should this article be about? Describe your topic, any specific angle you want to take, and any ideas you already have."
 
 Let them speak freely. Ask follow-up questions until you deeply understand the intent.
+
+Then ask:
+> "What language will this article be written in? (Hebrew, English, other?)"
+
+Store as `targetLanguage`. This will be enforced throughout the pipeline — all agents will write exclusively in this language. Pass it to every agent from this point forward.
 
 ---
 
@@ -210,20 +215,23 @@ echo '{"type":"step_completed","nodeId":"ingestion_sync","documentsIngested":N}'
 ```
 For each section in approved outline:
   Agent: section-writer
-  Input: { section, sectionIndex, thesis, styleFingerprint, citationStyle, runId, tools, priorSectionTexts }
+  Input: { section, sectionIndex, thesis, styleFingerprint, citationStyle, targetLanguage, runId, tools, priorSectionTexts }
 ```
 
 Each section-writer handles a **per-paragraph skill pipeline** internally:
 
 | # | Skill | What it does | Cognetivy node |
 |---|-------|-------------|---------------|
-| 1 | **Draft** | Query RAG + write paragraph applying style fingerprint | `section_N_p_M_draft` |
-| 2 | **Style Compliance** | Re-read fingerprint, score paragraph on 10 dimensions, fix deviations | `section_N_p_M_style_compliance` |
+| 1 | **Draft** | Query RAG (mandatory) + write paragraph using ONLY retrieved context | `section_N_p_M_draft` |
+| 2 | **Style Compliance** | Re-read fingerprint + `representativeExcerpts`, score 10 dimensions, fix deviations | `section_N_p_M_style_compliance` |
 | 3 | **Hebrew Grammar** | Check grammar, spelling, academic register | `section_N_p_M_hebrew_grammar` |
-| 4 | **Repetition Check** | Check words, phrases, arguments vs. prior text | `section_N_p_M_repetition_check` |
-| 5 | **Citation Audit** | Auditor agent verifies every footnote (hard gate) | `section_N_p_M_citation_audit` |
+| 4 | **Language Purity** | Detect and fix ALL embedded foreign-language terms in running text | `section_N_p_M_language_purity` |
+| 5 | **Repetition Check** | Check words, phrases, arguments vs. prior text | `section_N_p_M_repetition_check` |
+| 6 | **Citation Audit** | Auditor agent verifies every citation against RAG (hard gate) | `section_N_p_M_citation_audit` |
 
-**The style compliance skill is critical** — it re-reads the full `styleFingerprint` object and scores the paragraph against sentence patterns, vocabulary, tone, evidence handling, transitions, and citation integration. It uses the `representativeExcerpts` as concrete style targets.
+**The style compliance skill is critical** — it re-reads the full `styleFingerprint` object (including the actual `representativeExcerpts` text samples from the researcher's past work) and scores the paragraph against sentence patterns, vocabulary, tone, evidence handling, transitions, and citation integration.
+
+**The language purity skill is non-negotiable** — it removes ALL embedded foreign-language text from running prose (German, Greek, Latin, English in a Hebrew article). No foreign words may appear inline in the body text.
 
 Every skill for every paragraph is logged as a separate Cognetivy event. The researcher sees:
 - Which paragraph is being written
@@ -284,31 +292,122 @@ FILENAME="$(echo 'SUBJECT' | tr ' ' '-' | tr '[:upper:]' '[:lower:]' | head -c 5
 OUTPUT_PATH="$HOME/Desktop/$FILENAME"
 ```
 
-Use Python to generate the .docx with proper Chicago footnotes:
+Use Python to generate the .docx. Read the outputFormatPreferences from the profile (font, size, spacing, margins) and apply them. If not set, use these defaults: David font (or Times New Roman if David unavailable), 11pt, 1.5 line spacing, justified alignment, 1-inch margins.
 
 ```bash
-python3 << 'EOF'
+python3 << 'DOCX_SCRIPT'
 from docx import Document
-from docx.shared import Pt, Inches
+from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-import json
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+import json, re, sys
 
+# --- Config (from profile.outputFormatPreferences or defaults) ---
+FONT_NAME = "David"          # Hebrew font; fallback: "Times New Roman"
+BODY_SIZE = 11
+TITLE_SIZE = 16
+HEADING_SIZE = 13
+FOOTNOTE_SIZE = 10
+LINE_SPACING = 1.5           # Multiple
+MARGIN_INCHES = 1.0
+IS_RTL = True                # Set to False for non-Hebrew articles
+
+# --- Article data (replace these with actual values from synthesizer output) ---
+ARTICLE_TITLE = "TITLE_HERE"
+ARTICLE_THESIS = "THESIS_HERE"
+SECTIONS = []   # List of { "title": str, "paragraphs": [str] }
+# Each paragraph string may contain inline (Author, Work, Page) citations — leave as-is
+OUTPUT_PATH = "OUTPUT_PATH_HERE"
+
+# --- Build document ---
 doc = Document()
-# Set Times New Roman, 12pt, 1-inch margins
-# Title, sections, footnotes, bibliography
-# ... (assembled from synthesizer output)
-doc.save("OUTPUT_PATH")
-EOF
+
+# Set page margins
+for section in doc.sections:
+    section.top_margin    = Inches(MARGIN_INCHES)
+    section.bottom_margin = Inches(MARGIN_INCHES)
+    section.left_margin   = Inches(MARGIN_INCHES)
+    section.right_margin  = Inches(MARGIN_INCHES)
+
+def set_rtl_para(para):
+    """Enable RTL layout for a paragraph."""
+    if IS_RTL:
+        pPr = para._p.get_or_add_pPr()
+        bidi = OxmlElement("w:bidi")
+        pPr.append(bidi)
+
+def add_para(doc, text, font_name, font_size, bold=False, italic=False,
+             align=WD_ALIGN_PARAGRAPH.JUSTIFY, space_before=0, space_after=6,
+             line_spacing=LINE_SPACING):
+    para = doc.add_paragraph()
+    para.alignment = align
+    para.paragraph_format.space_before = Pt(space_before)
+    para.paragraph_format.space_after  = Pt(space_after)
+    para.paragraph_format.line_spacing = line_spacing
+    set_rtl_para(para)
+    run = para.add_run(text)
+    run.font.name  = font_name
+    run.font.size  = Pt(font_size)
+    run.bold       = bold
+    run.italic     = italic
+    if IS_RTL:
+        run._element.rPr.rFonts.set(qn("w:cs"), font_name)
+    return para
+
+def add_page_numbers(doc):
+    """Add page number in footer (centered)."""
+    section = doc.sections[0]
+    footer  = section.footer
+    para    = footer.paragraphs[0]
+    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = para.add_run()
+    fldChar1 = OxmlElement("w:fldChar")
+    fldChar1.set(qn("w:fldCharType"), "begin")
+    instrText = OxmlElement("w:instrText")
+    instrText.text = "PAGE"
+    fldChar2 = OxmlElement("w:fldChar")
+    fldChar2.set(qn("w:fldCharType"), "end")
+    run._r.append(fldChar1)
+    run._r.append(instrText)
+    run._r.append(fldChar2)
+
+# Title (bold, centered)
+add_para(doc, ARTICLE_TITLE, FONT_NAME, TITLE_SIZE,
+         bold=True, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=6)
+
+# Thesis subtitle (italic, centered)
+if ARTICLE_THESIS:
+    add_para(doc, ARTICLE_THESIS, FONT_NAME, BODY_SIZE,
+             italic=True, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=12)
+
+# Body sections
+for sec in SECTIONS:
+    # Section heading
+    add_para(doc, sec["title"], FONT_NAME, HEADING_SIZE,
+             bold=True, align=WD_ALIGN_PARAGRAPH.RIGHT if IS_RTL else WD_ALIGN_PARAGRAPH.LEFT,
+             space_before=12, space_after=6)
+    # Section paragraphs
+    for para_text in sec["paragraphs"]:
+        add_para(doc, para_text, FONT_NAME, BODY_SIZE,
+                 align=WD_ALIGN_PARAGRAPH.JUSTIFY, space_after=6)
+
+add_page_numbers(doc)
+doc.save(OUTPUT_PATH)
+print(f"Saved: {OUTPUT_PATH}")
+DOCX_SCRIPT
 ```
+
+**Before running:** Replace `TITLE_HERE`, `THESIS_HERE`, `SECTIONS`, and `OUTPUT_PATH_HERE` with the actual article data from the synthesizer output. Read the profile's `outputFormatPreferences` if present and override `FONT_NAME`, `BODY_SIZE`, etc. accordingly.
 
 Log DOCX completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"docx_output","filePath":"OUTPUT_PATH","wordCount":N,"footnotes":N,"sections":N}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","nodeId":"docx_output","filePath":"OUTPUT_PATH","wordCount":N,"citations":N,"citationStyle":"CITATION_STYLE","sections":N,"font":"FONT_NAME","language":"TARGET_LANGUAGE"}' | cognetivy event append --run RUN_ID
 ```
 
 Complete the Cognetivy run:
 ```bash
-echo '{"type":"run_completed","status":"completed","output":{"filePath":"OUTPUT_PATH","wordCount":N,"footnotes":N,"sections":N,"hebrewGrammarFixes":N,"repetitionFixes":N,"auditRewrites":N}}' | cognetivy event append --run RUN_ID
+echo '{"type":"run_completed","status":"completed","output":{"filePath":"OUTPUT_PATH","wordCount":N,"citations":N,"citationStyle":"CITATION_STYLE","sections":N,"hebrewGrammarFixes":N,"languagePurityFixes":N,"repetitionFixes":N,"auditRewrites":N}}' | cognetivy event append --run RUN_ID
 ```
 
 Report to researcher:
@@ -316,13 +415,15 @@ Report to researcher:
 > `~/Desktop/FILENAME.docx`
 >
 > Word count: [N] words
-> Citations: [N] footnotes
+> Citations: [N] ([citationStyle] format)
 > Sections: [N]
+> Language: [targetLanguage]
 >
 > Quality checks applied per paragraph:
 > - Style fingerprint compliance: avg [N]/5 score, [N] adjustments
 > - Hebrew grammar: [N] issues fixed
+> - Language purity: [N] foreign-term violations fixed
 > - Repetition: [N] instances fixed
-> - Citation audits: [N] claims verified
+> - Citation audits: [N] claims verified, [N] rejections resolved
 >
 > Full pipeline audit trail is available in Cognetivy (run ID: [RUN_ID])."

@@ -142,13 +142,23 @@ Prompt for specificity — "Early Modern History" is more useful than "History."
 
 ---
 
+## Step 1.5: Article Language
+
+Ask:
+> "What language will you write your articles in? (Hebrew, English, other?)"
+
+Store as `targetLanguage`. This is enforced throughout the pipeline — all agents write exclusively in this language, and the language purity check rejects any embedded foreign-language text in the body prose.
+
+---
+
 ## Step 2: Citation Style
 
 Ask:
 > "Which citation style do you use in your work?"
 
 Present options:
-- **Chicago/Turabian** (most common in Humanities — footnotes)
+- **Inline Parenthetical** — Hebrew academic standard: `(Author, Title, Page)` directly in running text (recommended for Hebrew articles)
+- **Chicago/Turabian** — footnotes (most common in English Humanities)
 - **MLA**
 - **APA**
 
@@ -325,7 +335,18 @@ Use the Write tool to create `.academic-writer/profile.json` with the following 
 ```json
 {
   "fieldOfStudy": "FIELD_HERE",
-  "citationStyle": "chicago",
+  "targetLanguage": "Hebrew",
+  "citationStyle": "inline-parenthetical",
+  "outputFormatPreferences": {
+    "font": "David",
+    "bodySize": 11,
+    "titleSize": 16,
+    "headingSize": 13,
+    "lineSpacing": 1.5,
+    "marginInches": 1.0,
+    "alignment": "justify",
+    "rtl": true
+  },
   "styleFingerprint": {
     "sentenceLevel": {
       "averageLength": "22 words, range 8-45",
@@ -396,8 +417,10 @@ Use the Write tool to create `.academic-writer/profile.json` with the following 
 ```
 
 - `fieldOfStudy` — from Step 1
-- `citationStyle` — from Step 2
-- `styleFingerprint` — all values from Step 3 analysis
+- `targetLanguage` — from Step 1.5
+- `citationStyle` — from Step 2 (`inline-parenthetical` / `chicago` / `mla` / `apa`)
+- `outputFormatPreferences` — font, size, spacing settings (ask the researcher if they want to customize; otherwise use defaults: David, 11pt, 1.5 spacing, 1" margins, justified, RTL for Hebrew)
+- `styleFingerprint` — all values from Step 3 analysis. **`representativeExcerpts` must contain actual verbatim text passages from the researcher's past work** (2–3 sentences each), not just descriptions — these are the style targets used by every section-writer.
 - `tools` — the tool registry from Prerequisites Check step B (only enabled/version for each tool)
 - `sources` — the minimal metadata array built in Step 4 (id, title, type only — **never** raw Candlekeep JSON). Empty `[]` if Candlekeep is not enabled.
 - `createdAt` / `updatedAt` — current ISO timestamp
