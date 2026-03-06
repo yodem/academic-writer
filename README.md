@@ -231,7 +231,17 @@ This is a Claude Code plugin. To modify:
 
 1. Edit `.md` files in `skills/`, `agents/`, `hooks/`
 2. Commit and push to GitHub
-3. Update: `claude plugin update academic-writer` (restart Claude Code to apply)
+3. In your research folder, pull the latest:
+   ```bash
+   claude plugin marketplace update academic-writer
+   claude plugin update academic-writer@academic-writer --scope project
+   ```
+   If that fails, reinstall:
+   ```bash
+   claude plugin uninstall academic-writer --scope project
+   claude plugin install academic-writer --scope project
+   ```
+4. Restart Claude Code to apply changes
 
 ## License
 
