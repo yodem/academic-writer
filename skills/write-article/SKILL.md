@@ -90,7 +90,12 @@ If Cognetivy is enabled, log:
 echo '{"type":"step_started","nodeId":"source_selection"}' | cognetivy event append --run RUN_ID
 ```
 
-**If Candlekeep is enabled**, list available sources live:
+**If Candlekeep is enabled**, enrich all items then list them:
+
+```bash
+# Enrich all items first (extracts title, author, description, TOC)
+ck items list --json | python3 -c "import sys,json; [print(i['id']) for i in json.load(sys.stdin)]" | while read id; do ck items enrich "$id"; done
+```
 
 ```bash
 ck items list --json

@@ -290,7 +290,23 @@ Tell the researcher:
 >
 > Tell me when you've added your sources."
 
-Once confirmed, list them:
+Once confirmed, list them and **enrich all items**:
+
+```bash
+ck items list --json
+```
+
+**Run `ck items enrich` on every item** — this extracts title, author, description, and table of contents from each document so the writing pipeline can use accurate metadata:
+
+```bash
+# For each item ID returned above:
+ck items enrich ITEM_ID
+```
+
+Tell the researcher while enrichment runs:
+> "Enriching your sources — extracting titles, authors, and table of contents from each document. This may take a moment..."
+
+After enrichment, re-list to get updated metadata:
 
 ```bash
 ck items list --json

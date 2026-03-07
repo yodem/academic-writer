@@ -44,6 +44,28 @@ If no, stop. If yes, continue.
 
 ---
 
+## Step 1.5: Enrich Candlekeep Sources (if enabled)
+
+**Skip if `tools.candlekeep.enabled` is false.**
+
+```bash
+ck items list --json
+```
+
+For every item returned, run enrichment to extract title, author, description, and table of contents:
+
+```bash
+# For each item ID:
+ck items enrich ITEM_ID
+```
+
+Tell the researcher:
+> "Enriching your Candlekeep sources — extracting titles, authors, and table of contents. This ensures the writing pipeline has accurate metadata..."
+
+After enrichment completes, continue.
+
+---
+
 ## Step 2: Writing Style Analysis
 
 Tell the researcher:
