@@ -46,7 +46,21 @@ Report:
 
 ---
 
-## 3. Candlekeep
+## 3. Agentic-Search-Vectorless
+
+**Skip if `tools.agentic-search-vectorless.enabled` is false.** Report as "Disabled (enable with `/academic-writer-update-tools`)".
+
+```bash
+ls ../Agentic-Search-Vectorless/src 2>/dev/null && echo "REPO_FOUND" || echo "REPO_NOT_FOUND"
+```
+
+Report:
+- Local repo found at `../Agentic-Search-Vectorless/`? ✓/✗
+- If not found: "Clone the repo to `../Agentic-Search-Vectorless/` to enable semantic search."
+
+---
+
+## 4. Candlekeep
 
 **Skip if `tools.candlekeep.enabled` is false.** Report as "Disabled (enable with `/academic-writer-update-tools`)".
 
@@ -64,34 +78,6 @@ Report:
 - Can connect? ✓/✗
 - Number of items in library
 - If error: show the error message
-
----
-
-
-
-```bash
-```
-
-If healthy, also check:
-```bash
-```
-
-Report:
-- Server running? ✓/✗
-- Health status: healthy/degraded/error
-- Component status (if available from health response)
-- Number of indexed documents (if available from status)
-- If not running: show start command:
-  ```
-  ```
-
-**Test a query** (only if server is healthy):
-```bash
-  -H "Content-Type: application/json" \
-  -d '{"query": "test", "mode": "mix", "top_k": 1, "rerank_top_k": 1, "enable_rerank": false, "include_context": false}'
-```
-
-Report: Query endpoint responsive? ✓/✗
 
 ---
 
@@ -134,7 +120,7 @@ command -v cognetivy >/dev/null 2>&1 && echo "CLI: INSTALLED" || echo "CLI: NOT_
 
 If installed:
 ```bash
-ls .cognetivy/ 2>/dev/null
+ls .cognetivy/ 2>/dev/null && echo "DIR_EXISTS" || echo "DIR_MISSING"
 ```
 
 ```bash
@@ -148,8 +134,18 @@ cognetivy run list --workflow wf_academic_writer 2>&1 | head -10
 Report:
 - CLI installed? ✓/✗
 - `.cognetivy/` directory exists? ✓/✗
+  - If missing: "Run `cognetivy init` in this directory to initialize the workspace."
+- Workspace initialized? ✓/✗
+  - If `cognetivy workflow list` errors or shows nothing: "Run `cognetivy init` to initialize."
 - Workflow `wf_academic_writer` registered? ✓/✗
 - Number of past runs
+
+**Fix instruction** (if not initialized):
+> "Cognetivy is not initialized in this directory. Run:
+> ```
+> cognetivy init
+> ```
+> Then re-run `/academic-writer-health`."
 
 ---
 
@@ -179,9 +175,10 @@ Show a clean summary table:
 > | Profile | ✓ OK / ✗ MISSING | Field: [field], Citation: [style], Sources: [N] |
 > | Style Fingerprint | ✓ Expanded / ⚠ Legacy / ✗ Missing | [N] dimensions |
 > | Past Articles | ✓ [N] files / ✗ Empty | PDF: [n], DOCX: [n] |
+> | Agentic-Search-Vectorless | ✓ Found / ✗ Missing / — Disabled | ../Agentic-Search-Vectorless/ |
 > | Candlekeep | ✓ Connected / ✗ Error / — Disabled | [N] items |
 > | MongoDB Agent Skills | ✓ Configured / ✗ Missing / — Disabled | Server: [name] |
-> | Cognetivy | ✓ Ready / ✗ Error / — Disabled | [N] past runs |
+> | Cognetivy | ✓ Ready / ✗ Not initialized / — Disabled | Run `cognetivy init` if not initialized |
 > | Agent Files | ✓ All present / ✗ Missing [list] | 5/5 |
 >
 > **Overall: [N]/[total] checks passed**
