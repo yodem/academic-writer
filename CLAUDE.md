@@ -50,22 +50,24 @@ All pipeline steps (write-article, agents) check `profile.tools` before calling 
 
 ## Agent Architecture
 
-Agents are spawned as subagents. Each reads its own prompt from `agents/`. **Agents are spawned in parallel whenever possible** for speed — e.g., all section-writers run simultaneously, research queries across RAG + Candlekeep run in parallel.
+Agents are defined in `.claude/agents/` with YAML frontmatter (name, description, tools, model). They are spawned as subagents using the **Agent tool**. Skills must explicitly invoke the Agent tool to spawn subagents — use "Use the Agent tool to spawn the X subagent" language in skill instructions.
+
+**Agents are spawned in parallel whenever possible** for speed — e.g., all section-writers run simultaneously via multiple Agent tool calls in a single response.
 
 | Agent | File | Spawned by | Purpose |
 |-------|------|-----------|---------|
-| Deep Reader | `agents/deep-reader.md` | write-article | Explores source material before thesis (parallel search queries) |
-| Architect | `agents/architect.md` | write-article | Proposes thesis + generates outline |
-| Section Writer | `agents/section-writer.md` | write-article, edit, edit-section | Writes one section with full skill pipeline (parallel per section) |
-| Auditor | `agents/auditor.md` | section-writer, edit | Verifies citations (hard gate) |
-| Synthesizer | `agents/synthesizer.md` | write-article, edit | Final coherence + style review |
+| Deep Reader | `.claude/agents/deep-reader.md` | write-article | Explores source material before thesis (parallel search queries) |
+| Architect | `.claude/agents/architect.md` | write-article | Proposes thesis + generates outline |
+| Section Writer | `.claude/agents/section-writer.md` | write-article, edit, edit-section | Writes one section with full skill pipeline (parallel per section) |
+| Auditor | `.claude/agents/auditor.md` | section-writer, edit | Verifies citations (hard gate) |
+| Synthesizer | `.claude/agents/synthesizer.md` | write-article, edit | Final coherence + style review |
 
 ### Parallelism Strategy
 
 | Operation | Parallelism |
 |-----------|------------|
 | Deep read queries | All in parallel |
-| Section writing | All sections spawn simultaneously |
+| Section writing | All sections spawn simultaneously (multiple Agent tool calls in one response) |
 | Research skill (Vectorless + Candlekeep) | Separate subagent per tool, all in parallel |
 | Edit (multiple sections) | One section-writer subagent per section, all in parallel |
 | Citation audit (edit mode) | One auditor per section, all in parallel |
