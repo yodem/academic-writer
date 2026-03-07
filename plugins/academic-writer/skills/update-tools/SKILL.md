@@ -1,6 +1,5 @@
 ---
 name: academic-writer-update-tools
-description: "Add, remove, or reconfigure integrations (Candlekeep, Hybrid-Search-RAG, MongoDB Agent Skills, Cognetivy) in your Academic Writer profile."
 user-invocable: true
 ---
 
@@ -30,9 +29,7 @@ Run detection for every tool in the registry, regardless of current status:
 command -v ck >/dev/null 2>&1 && echo "DETECTED" || echo "NOT_DETECTED"
 ```
 
-**2. Hybrid-Search-RAG / Agentic-Search-Vectorless** (`hybrid-search-rag`)
 ```bash
-curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo "DETECTED" || echo "NOT_DETECTED"
 ```
 
 **3. MongoDB Agent Skills** (`mongodb-agent-skills`)
@@ -65,7 +62,6 @@ Show a table with current status and detection:
 > | # | Tool | Currently | Detected | Setup |
 > |---|------|-----------|----------|-------|
 > | 1 | Candlekeep | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/romiluz13/candlekeep |
-> | 2 | Hybrid-Search-RAG | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/romiluz13/Agentic-Search-Vectorless |
 > | 3 | MongoDB Agent Skills | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/romiluz13/mongodb-agent-skills |
 > | 4 | Cognetivy | ✓ Enabled / ✗ Disabled | ✓ / ✗ | Built-in (.cognetivy/) |
 >
@@ -112,7 +108,6 @@ Replace `TOOL_CONFIG` with the actual tools dict, e.g.:
 ```json
 {
   "candlekeep": { "enabled": true, "version": "detected" },
-  "hybrid-search-rag": { "enabled": false },
   "mongodb-agent-skills": { "enabled": true, "version": "detected" },
   "cognetivy": { "enabled": true, "version": "detected" }
 }

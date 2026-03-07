@@ -46,7 +46,6 @@ Pass the full `styleFingerprint` object to every agent that writes or reviews te
 Read the `tools` object from the profile. Throughout this workflow, **only use tools that are enabled**:
 
 - **Candlekeep** (`tools.candlekeep.enabled`) — If disabled, skip `ck` commands. Source listing/selection steps should use any available sources from the profile's `sources` array instead.
-- **Hybrid-Search-RAG** (`tools.hybrid-search-rag.enabled`) — If disabled, skip all RAG queries (`curl http://localhost:8000/...`). The deep-reader and auditor agents cannot run without RAG — warn the researcher and write without automated citation verification.
 - **MongoDB Agent Skills** (`tools.mongodb-agent-skills.enabled`) — If disabled, skip any MongoDB MCP operations.
 - **Cognetivy** (`tools.cognetivy.enabled`) — If disabled, skip all `cognetivy` logging commands. The pipeline still works, just without audit trail.
 
@@ -183,7 +182,6 @@ echo '{"type":"phase_started","phase":"autonomous","nodeId":"phase_2"}' | cognet
 
 ### Step 6: Ingestion Sync
 
-**Skip this step if both Candlekeep and Hybrid-Search-RAG are disabled.**
 
 If Cognetivy is enabled, log:
 ```bash
@@ -195,7 +193,6 @@ If both are enabled, ensure selected sources are indexed in RAG:
 ```bash
 # Check each source and ingest if missing
 for DOC_ID in SELECTED_IDS; do
-  ck items get $DOC_ID | curl -s -X POST http://localhost:8000/v1/ingest \
     -H "Content-Type: application/json" \
     -d "{\"documents\": [\"$(ck items get $DOC_ID | head -c 50000)\"], \"ids\": [\"$DOC_ID\"]}"
 done

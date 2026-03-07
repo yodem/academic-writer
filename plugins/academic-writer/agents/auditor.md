@@ -25,7 +25,6 @@ For each cited claim, run TWO checks:
 
 **Check A — RAG exact quote retrieval** (use `bypass` mode for precise matching):
 ```bash
-curl -s -X POST http://localhost:8000/v1/query \
   -H "Content-Type: application/json" \
   -d '{"query": "EXACT_CLAIM_TEXT from AUTHOR_NAME WORK_TITLE", "mode": "bypass", "top_k": 20, "rerank_top_k": 5, "enable_rerank": true, "include_context": true}'
 ```

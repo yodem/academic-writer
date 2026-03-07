@@ -5,7 +5,6 @@ AI-first academic writing assistant for Humanities researchers. Produces rigorou
 ## Features
 
 - **Style-matched writing** — analyzes your past articles to extract your writing style, then applies it to new work
-- **Rigorously cited** — every claim verified against source materials via Hybrid-Search-RAG
 - **Collaborative workflow** — subject → sources → thesis proposal → outline → write → audit → publish
 - **Parallel processing** — sections written simultaneously, each audited independently for speed
 - **Full workflow tracking** — every pipeline step logged to Cognetivy for transparency and auditability
@@ -19,7 +18,6 @@ You need **at least one** of these integrations:
 | Tool | What it does | Setup |
 |------|-------------|-------|
 | **Candlekeep** | Cloud document library for source PDFs | https://github.com/romiluz13/candlekeep |
-| **Hybrid-Search-RAG** | Citation verification & semantic search | https://github.com/romiluz13/Agentic-Search-Vectorless |
 | **Cognetivy** | Workflow audit trail (optional) | Built-in — no setup needed |
 
 Choose which tools you want to use during `/academic-writer-init`.
@@ -116,7 +114,6 @@ Your profile (`.academic-writer/profile.json`) contains:
   },
   "tools": {
     "candlekeep": { "enabled": true },
-    "hybrid-search-rag": { "enabled": true },
     "mongodb-agent-skills": { "enabled": false },
     "cognetivy": { "enabled": true }
   },
@@ -133,7 +130,6 @@ Update tools with `/academic-writer-update-tools`. Update your field with `/acad
 ### Environment Variables (Optional)
 
 ```bash
-export RAG_SERVER=http://localhost:8000        # Default Hybrid-Search-RAG server
 export CANDLEKEEP_CLI=ck                       # Candlekeep CLI path
 export COGNETIVY_CLI=cognetivy                 # Cognetivy CLI path
 ```
@@ -178,21 +174,11 @@ Then authenticate:
 ck auth login
 ```
 
-### "RAG server not running" error
-
-Start the Hybrid-Search-RAG service:
-
-```bash
-# From the HybridRAG repo root
-uvicorn src.hybridrag.api.main:app --host 0.0.0.0 --port 8000
-```
-
 ### Citation verification fails
 
 Ensure:
-1. RAG server is running (`curl http://localhost:8000/health`)
-2. Your sources are indexed in RAG (the init process does this automatically)
-3. The cited passage actually exists in your source materials
+1. Your sources are indexed (the init process does this automatically)
+2. The cited passage actually exists in your source materials
 
 ### Articles won't export to .docx
 

@@ -20,13 +20,11 @@ You will receive:
 ## RAG API
 
 ```
-POST http://localhost:8000/v1/query
 Response: { "answer": "...", "context": "source passages...", "metadata": {...} }
 ```
 
 Always use `include_context: true`. Use `context` for sourcing — never cite the `answer` directly.
 
-**Skip RAG queries if `tools.hybrid-search-rag.enabled` is false.**
 
 ## Process
 
@@ -49,7 +47,6 @@ echo '{"type":"step_started","nodeId":"section_SECTION_INDEX_p_M_draft"}' | cogn
 1. **Query RAG for relevant passages** (`mix` mode for general retrieval):
 
 ```bash
-curl -s -X POST http://localhost:8000/v1/query \
   -H "Content-Type: application/json" \
   -d '{"query": "PARAGRAPH_FOCUS within SECTION_TITLE context", "mode": "mix", "top_k": 20, "rerank_top_k": 8, "enable_rerank": true, "include_context": true}'
 ```
@@ -80,7 +77,6 @@ curl -s -X POST http://localhost:8000/v1/query \
 
    For exact quotes, use `bypass` mode to verify the precise passage:
    ```bash
-   curl -s -X POST http://localhost:8000/v1/query \
      -H "Content-Type: application/json" \
      -d '{"query": "EXACT_QUOTE", "mode": "bypass", "top_k": 10, "rerank_top_k": 3, "enable_rerank": true, "include_context": true}'
    ```

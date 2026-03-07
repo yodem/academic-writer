@@ -67,17 +67,13 @@ Report:
 
 ---
 
-## 4. Hybrid-Search-RAG
 
-**Skip if `tools.hybrid-search-rag.enabled` is false.** Report as "Disabled".
 
 ```bash
-curl -s --max-time 5 http://localhost:8000/health 2>/dev/null
 ```
 
 If healthy, also check:
 ```bash
-curl -s --max-time 5 http://localhost:8000/v1/status 2>/dev/null
 ```
 
 Report:
@@ -87,12 +83,10 @@ Report:
 - Number of indexed documents (if available from status)
 - If not running: show start command:
   ```
-  cd ~/dev/Hybrid-Search-RAG && uvicorn hybridrag.api.main:app --port 8000
   ```
 
 **Test a query** (only if server is healthy):
 ```bash
-curl -s -X POST http://localhost:8000/v1/query \
   -H "Content-Type: application/json" \
   -d '{"query": "test", "mode": "mix", "top_k": 1, "rerank_top_k": 1, "enable_rerank": false, "include_context": false}'
 ```
@@ -186,7 +180,6 @@ Show a clean summary table:
 > | Style Fingerprint | ✓ Expanded / ⚠ Legacy / ✗ Missing | [N] dimensions |
 > | Past Articles | ✓ [N] files / ✗ Empty | PDF: [n], DOCX: [n] |
 > | Candlekeep | ✓ Connected / ✗ Error / — Disabled | [N] items |
-> | Hybrid-Search-RAG | ✓ Healthy / ✗ Down / — Disabled | [N] docs indexed |
 > | MongoDB Agent Skills | ✓ Configured / ✗ Missing / — Disabled | Server: [name] |
 > | Cognetivy | ✓ Ready / ✗ Error / — Disabled | [N] past runs |
 > | Agent Files | ✓ All present / ✗ Missing [list] | 5/5 |

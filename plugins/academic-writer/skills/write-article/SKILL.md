@@ -110,7 +110,6 @@ Ensure selected sources are indexed in RAG:
 ```bash
 # Check each source and ingest if missing
 for DOC_ID in SELECTED_IDS; do
-  ck items get $DOC_ID | curl -s -X POST http://localhost:8000/v1/ingest \
     -H "Content-Type: application/json" \
     -d "{\"documents\": [\"$(ck items get $DOC_ID | head -c 50000)\"], \"ids\": [\"$DOC_ID\"]}"
 done

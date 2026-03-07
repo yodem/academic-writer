@@ -10,16 +10,20 @@ You are setting up a researcher's Academic Writer profile. Be warm, clear, and n
 
 ## Step 0: Initialize Folders
 
-Create the necessary directories automatically (if they don't exist):
+Run this silently before saying anything to the user:
 
 ```bash
 mkdir -p past-articles .academic-writer .cognetivy/runs .cognetivy/events
 ```
 
-These folders are ready for your use:
-- `past-articles/` — Drop your 5–10 published papers here (for style analysis)
-- `.academic-writer/` — Your profile and internal data (auto-managed)
-- `.cognetivy/` — Workflow audit trail (auto-managed)
+Then greet the user:
+> "Welcome to Academic Writer setup! I'll walk you through 4 quick steps.
+>
+> I've created your workspace folders:
+> - **`past-articles/`** — drop 5–10 of your published papers here (PDF or DOCX) so I can learn your writing style
+> - `.academic-writer/` — your profile (auto-managed)
+>
+> Let's get started."
 
 ---
 
@@ -52,16 +56,22 @@ The following is the master list of supported tools. For each tool, run the dete
 command -v ck >/dev/null 2>&1 && echo "DETECTED" || echo "NOT_DETECTED"
 ```
 
-**2. Hybrid-Search-RAG / Agentic-Search-Vectorless** (`hybrid-search-rag`)
-- *What it does:* Deep semantic + keyword retrieval for citation search and verification
-- *Type:* Local service (HTTP)
-- *Setup:* https://github.com/romiluz13/Agentic-Search-Vectorless
+**2. Agentic-Search-Vectorless** (`agentic-search-vectorless`)
+- *What it does:* Vectorless semantic search — fast relevance scoring without embeddings
+- *Type:* Local service (HTTP) or local repo
+- *Repo:* `../Agentic-Search-Vectorless/`
 - *Detection:*
 ```bash
-curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo "DETECTED" || echo "NOT_DETECTED"
+(ls ../Agentic-Search-Vectorless/src 2>/dev/null && echo "REPO_DETECTED") || echo "NOT_DETECTED"
 ```
 
-**3. MongoDB Agent Skills** (`mongodb-agent-skills`)
+- *What it does:* Deep semantic + keyword retrieval (BM25 + vector) for citation search and verification
+- *Type:* Local service (HTTP) or local repo
+- *Detection:*
+```bash
+```
+
+**4. MongoDB Agent Skills** (`mongodb-agent-skills`)
 - *What it does:* Database-backed research operations via MCP server
 - *Type:* MCP server
 - *Setup:* https://github.com/romiluz13/mongodb-agent-skills
@@ -82,7 +92,7 @@ print('DETECTED' if found else 'NOT_DETECTED')
 "
 ```
 
-**4. Cognetivy** (`cognetivy`)
+**5. Cognetivy** (`cognetivy`)
 - *What it does:* Workflow tracking and audit trail for pipeline steps
 - *Type:* CLI
 - *Setup:* Built-in with this plugin (see `.cognetivy/` directory)
@@ -100,9 +110,9 @@ After running all detection commands, present the results:
 > | # | Tool | Status | What it does |
 > |---|------|--------|-------------|
 > | 1 | Candlekeep | ✓ Detected / ✗ Not found | Cloud document library |
-> | 2 | Hybrid-Search-RAG | ✓ Detected / ✗ Not found | Semantic search & citation verification |
-> | 3 | MongoDB Agent Skills | ✓ Detected / ✗ Not found | Database-backed research ops |
-> | 4 | Cognetivy | ✓ Detected / ✗ Not found | Workflow audit trail |
+> | 2 | Agentic-Search-Vectorless | ✓ Detected / ✗ Not found | Vectorless semantic search |
+> | 4 | MongoDB Agent Skills | ✓ Detected / ✗ Not found | Database-backed research ops |
+> | 5 | Cognetivy | ✓ Detected / ✗ Not found | Workflow audit trail |
 >
 > Which tools would you like to enable? You can pick by number, name, or say 'all detected'.
 >
@@ -122,7 +132,7 @@ Build a `tools` object for the profile (used in Step 5). For each tool, store:
 {
   "tools": {
     "candlekeep": { "enabled": true, "version": "detected" },
-    "hybrid-search-rag": { "enabled": true, "version": "detected" },
+    "agentic-search-vectorless": { "enabled": true, "path": "../Agentic-Search-Vectorless" },
     "mongodb-agent-skills": { "enabled": false },
     "cognetivy": { "enabled": true, "version": "detected" }
   }
@@ -136,16 +146,26 @@ Only include `"version": "detected"` for tools that were successfully detected. 
 ## Step 1: Field of Study
 
 Ask:
-> "What is your field of study and area of specialization?"
+> "**Step 1 of 4 — Field of Study**
+> What is your field of study and area of specialization?
+>
+> The more specific, the better — for example, *'Early Modern Jewish Philosophy'* is more useful than *'Philosophy'*."
 
-Prompt for specificity — "Early Modern History" is more useful than "History." Record their answer.
+Record their answer.
 
 ---
 
 ## Step 1.5: Article Language
 
-Ask:
-> "What language will you write your articles in? (Hebrew, English, other?)"
+Present as a numbered menu:
+> "**Step 2 of 4 — Article Language**
+> What language will you write your articles in?
+>
+> 1. Hebrew
+> 2. English
+> 3. Other (you'll specify)
+>
+> Type a number:"
 
 Store as `targetLanguage`. This is enforced throughout the pipeline — all agents write exclusively in this language, and the language purity check rejects any embedded foreign-language text in the body prose.
 
@@ -153,29 +173,30 @@ Store as `targetLanguage`. This is enforced throughout the pipeline — all agen
 
 ## Step 2: Citation Style
 
-Ask:
-> "Which citation style do you use in your work?"
+Present as a numbered menu:
+> "**Step 3 of 4 — Citation Style**
+> Which citation style do you use in your work?
+>
+> 1. Inline Parenthetical — `(Author, Title, Page)` in running text *(recommended for Hebrew)*
+> 2. Chicago/Turabian — footnotes *(most common in English Humanities)*
+> 3. MLA
+> 4. APA
+>
+> Type a number (1–4):"
 
-Present options:
-- **Inline Parenthetical** — Hebrew academic standard: `(Author, Title, Page)` directly in running text (recommended for Hebrew articles)
-- **Chicago/Turabian** — footnotes (most common in English Humanities)
-- **MLA**
-- **APA**
+Map selection to value: 1 → `inline-parenthetical`, 2 → `chicago`, 3 → `mla`, 4 → `apa`
 
 ---
 
 ## Step 3: Past Articles for Style Analysis
 
 Tell the researcher:
-> "I need to learn your writing style so the articles I help produce sound like *you*, not like a generic AI.
+> "**Step 4 of 4 — Writing Style**
+> I need to learn your writing style so articles I produce sound like *you*, not a generic AI.
 >
-> Please place 5–10 of your previously published articles or papers in this folder:
-> `past-articles/`
+> Place 5–10 of your published papers in the **`past-articles/`** folder I created for you (PDF or DOCX). These files are used only to analyze your style — never uploaded anywhere.
 >
-> Supported formats: PDF, DOCX
->
-> These files are used **only** to analyze your style — they are never uploaded anywhere.
-> Tell me when you're ready."
+> Tell me when you've added your files."
 
 Once they confirm, analyze their writing style by reading the files:
 
@@ -299,21 +320,6 @@ Tell the researcher:
 
 Set the sources array to `[]` for the profile.
 
-### If Hybrid-Search-RAG is enabled — sync sources to search index:
-
-```bash
-curl -s http://localhost:8000/v1/status | python3 -c "import sys,json; d=json.load(sys.stdin); print('RAG ready' if d.get('initialized') else 'RAG not ready')"
-```
-
-If RAG is ready and Candlekeep is also enabled, for each document ingest it:
-
-```bash
-# For each document ID from ck items list:
-ck items get DOCUMENT_ID | curl -s -X POST http://localhost:8000/v1/ingest \
-  -H "Content-Type: application/json" \
-  -d "{\"documents\": [$(python3 -c \"import sys,json; print(json.dumps(sys.stdin.read()))\" <<<$(ck items get DOCUMENT_ID))], \"ids\": [\"DOCUMENT_ID\"]}"
-```
-
 ### If Cognetivy is enabled — track the sync:
 
 ```bash
@@ -400,7 +406,6 @@ Use the Write tool to create `.academic-writer/profile.json` with the following 
   },
   "tools": {
     "candlekeep": { "enabled": true, "version": "detected" },
-    "hybrid-search-rag": { "enabled": true, "version": "detected" },
     "mongodb-agent-skills": { "enabled": false },
     "cognetivy": { "enabled": true, "version": "detected" }
   },

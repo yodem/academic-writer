@@ -121,7 +121,6 @@ Input: { allSections, thesis, styleFingerprint, runId, tools }
 
 2. **Spawn research subagents in parallel** (from `/academic-writer-research`) to find additional evidence:
    ```
-   If tools.hybrid-search-rag.enabled:
      Agent (subagent_type: general-purpose): RAG queries for supporting evidence
    If tools.candlekeep.enabled:
      Agent (subagent_type: general-purpose): Candlekeep document reads

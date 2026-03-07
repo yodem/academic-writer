@@ -50,7 +50,6 @@ Based on the question and enabled tools, spawn ALL applicable agents **at the sa
 ```
 PARALLEL SPAWN:
 
-If tools.hybrid-search-rag.enabled:
   Agent: research-rag
   subagent_type: general-purpose
   Input: { question, questionType, sourceIds }

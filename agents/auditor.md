@@ -26,11 +26,9 @@ Flag any factual claim with NO footnote as an immediate rejection.
 
 For each cited claim, run checks based on which tools are enabled:
 
-**Check A — RAG exact quote retrieval** (skip if `tools.hybrid-search-rag.enabled` is false):
 
 Use `bypass` mode for precise matching:
 ```bash
-curl -s -X POST http://localhost:8000/v1/query \
   -H "Content-Type: application/json" \
   -d '{"query": "EXACT_CLAIM_TEXT from AUTHOR_NAME WORK_TITLE", "mode": "bypass", "top_k": 20, "rerank_top_k": 5, "enable_rerank": true, "include_context": true}'
 ```

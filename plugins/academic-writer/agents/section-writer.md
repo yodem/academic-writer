@@ -14,7 +14,6 @@ You will receive:
 ## RAG API
 
 ```
-POST http://localhost:8000/v1/query
 Response: { "answer": "...", "context": "source passages...", "metadata": {...} }
 ```
 
@@ -29,7 +28,6 @@ Write paragraphs **sequentially** (each builds on the previous):
 1. **Query RAG for relevant passages** (`mix` mode for general retrieval):
 
 ```bash
-curl -s -X POST http://localhost:8000/v1/query \
   -H "Content-Type: application/json" \
   -d '{"query": "PARAGRAPH_FOCUS within SECTION_TITLE context", "mode": "mix", "top_k": 20, "rerank_top_k": 8, "enable_rerank": true, "include_context": true}'
 ```
@@ -46,7 +44,6 @@ curl -s -X POST http://localhost:8000/v1/query \
    - Only cite sources found in `context` — NEVER make up citations
    - For exact quotes, use `bypass` mode to find the precise passage:
      ```bash
-     curl -s -X POST http://localhost:8000/v1/query \
        -H "Content-Type: application/json" \
        -d '{"query": "EXACT_QUOTE", "mode": "bypass", "top_k": 10, "rerank_top_k": 3, "enable_rerank": true, "include_context": true}'
      ```

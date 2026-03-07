@@ -6,71 +6,129 @@ user-invocable: true
 
 # Academic Writer — Initialization
 
-You are setting up a researcher's Academic Writer profile. Be warm, clear, and non-technical. Explain why each step matters.
+You are setting up a researcher's Academic Writer profile. Be warm, clear, and non-technical.
 
-## Step 0: Initialize Folders
+## Step 0: Create Folders (silent)
 
-Create the necessary directories automatically (if they don't exist):
+Run this before saying anything:
 
 ```bash
 mkdir -p past-articles .academic-writer .cognetivy/runs .cognetivy/events
-```
-
-These folders are ready for your use:
-- `past-articles/` — Drop your 5–10 published papers here (for style analysis)
-- `.academic-writer/` — Your profile and internal data (auto-managed)
-- `.cognetivy/` — Workflow audit trail (auto-managed)
-
----
-
-## Prerequisites Check
-
-Before starting, verify the profile doesn't already exist:
-
-```bash
 cat .academic-writer/profile.json 2>/dev/null && echo "EXISTS" || echo "NOT_FOUND"
 ```
 
-If profile EXISTS, ask: "You already have a profile set up. Would you like to update it, or start fresh?"
+If profile EXISTS, ask: "You already have a profile. Would you like to update it or start fresh?"
+
+Then greet the user:
+> "Welcome to Academic Writer setup! I'll walk you through 5 quick steps.
+>
+> I've created your workspace folders:
+> - **`past-articles/`** — drop 5–10 of your published papers here (PDF or DOCX) so I can learn your writing style
+> - `.academic-writer/` — your profile (auto-managed)
+>
+> Let's get started."
 
 ---
 
-## Step 1: Field of Study
+## Step 1 of 5: Field of Study
 
 Ask:
-> "What is your field of study and area of specialization?"
+> "**Step 1 of 5 — Field of Study**
+> What is your field of study and area of specialization?
+>
+> The more specific the better — for example, *'Early Modern Jewish Philosophy'* is more useful than *'Philosophy'*."
 
-Prompt for specificity — "Early Modern History" is more useful than "History." Record their answer.
-
----
-
-## Step 2: Citation Style
-
-Ask:
-> "Which citation style do you use in your work?"
-
-Present options:
-- **Inline Parenthetical** — Hebrew academic standard: `(Author, Title, Page)` directly in running text (recommended for Hebrew articles)
-- **Chicago/Turabian** — footnotes (most common in English Humanities)
-- **MLA**
-- **APA**
+Record their answer.
 
 ---
 
-## Step 3: Past Articles for Style Analysis
+## Step 2 of 5: Article Language
+
+Present as a numbered menu:
+> "**Step 2 of 5 — Article Language**
+> What language will you write your articles in?
+>
+> 1. Hebrew
+> 2. English
+> 3. Other (you'll specify)
+>
+> Type a number:"
+
+Store as `targetLanguage`. All agents write exclusively in this language — foreign terms must be transliterated or footnoted, never inline.
+
+---
+
+## Step 3 of 5: Citation Style
+
+Present as a numbered menu:
+> "**Step 3 of 5 — Citation Style**
+> Which citation style do you use in your work?
+>
+> 1. Inline Parenthetical — `(Author, Title, Page)` in running text *(recommended for Hebrew)*
+> 2. Chicago/Turabian — footnotes *(most common in English Humanities)*
+> 3. MLA
+> 4. APA
+>
+> Type a number (1–4):"
+
+Map selection: 1 → `inline-parenthetical`, 2 → `chicago`, 3 → `mla`, 4 → `apa`
+
+---
+
+## Step 4 of 5: Data Services
+
+Run all detection commands in parallel:
+
+```bash
+# 1. Candlekeep
+command -v ck >/dev/null 2>&1 && echo "CK_DETECTED" || echo "CK_NOT_DETECTED"
+
+# 2. Agentic-Search-Vectorless (local repo)
+ls ../Agentic-Search-Vectorless/src 2>/dev/null && echo "VECTORLESS_DETECTED" || echo "VECTORLESS_NOT_DETECTED"
+
+
+# 4. Cognetivy
+command -v cognetivy >/dev/null 2>&1 && echo "COGNETIVY_DETECTED" || echo "COGNETIVY_NOT_DETECTED"
+```
+
+Present results as a numbered interactive menu:
+> "**Step 4 of 5 — Data Services**
+> I've detected which research tools are available. Toggle on/off with numbers:
+>
+> | # | Tool | Status | What it does |
+> |---|------|--------|-------------|
+> | 1 | Candlekeep | ✓/✗ | Cloud document library for source PDFs |
+> | 2 | Agentic-Search-Vectorless | ✓/✗ | Fast vectorless semantic search |
+> | 4 | Cognetivy | ✓/✗ | Workflow audit trail |
+>
+> Type numbers to enable/disable, or press Enter to accept. Type 'all' to enable everything detected."
+
+**Rules:**
+- User can enable any combination. No tool is required.
+- Store the final selection in `tools` for the profile.
+
+Store results:
+```json
+{
+  "candlekeep": { "enabled": true },
+  "agentic-search-vectorless": { "enabled": true, "path": "../Agentic-Search-Vectorless" },
+  "cognetivy": { "enabled": false }
+}
+```
+
+---
+
+## Step 5 of 5: Writing Style
 
 Tell the researcher:
-> "I need to learn your writing style so the articles I help produce sound like *you*, not like a generic AI.
+> "**Step 5 of 5 — Writing Style**
+> I need to learn your writing style so articles I produce sound like *you*, not a generic AI.
 >
-> Please place 5–10 of your previously published articles or papers in this folder:
-> `past-articles/`
+> Place 5–10 of your published papers in the **`past-articles/`** folder I created for you (PDF or DOCX). These files are used only to analyze your style — never uploaded anywhere.
 >
-> Supported formats: PDF, DOCX
->
-> These files are used **only** to analyze your style — they are never uploaded anywhere.
-> Tell me when you're ready."
+> Tell me when you've added your files."
 
-Once they confirm, analyze their writing style by reading the files:
+Once they confirm:
 
 ```bash
 ls past-articles/
@@ -80,100 +138,123 @@ For each file, extract text:
 - PDF: `python3 -c "import sys; import pdfplumber; [print(p.extract_text()) for p in pdfplumber.open(sys.argv[1]).pages]" past-articles/FILENAME 2>/dev/null || strings past-articles/FILENAME | head -500`
 - DOCX: `python3 -c "import docx; d=docx.Document('past-articles/FILENAME'); [print(p.text) for p in d.paragraphs]" 2>/dev/null`
 
-Analyze the combined text to create a **Style Fingerprint**:
+Analyze the combined text to produce a **Style Fingerprint**. Extract:
+1. Average sentence length (words), range
+2. Sentence structure variety (% complex / compound / simple)
+3. Common sentence openers
+4. Passive voice frequency + examples
+5. Vocabulary complexity and register (formal/informal, first person or not)
+6. Field-specific jargon and how it's introduced
+7. Paragraph structure pattern (e.g., "topic sentence → evidence → close reading → forward link")
+8. Average paragraph length (words), range
+9. Argument progression style (inductive or deductive)
+10. How evidence is introduced and analyzed
+11. Tone descriptors (5–7 adjectives)
+12. Common hedging and asserting phrases
+13. Preferred transitions grouped by function (addition / contrast / causation / exemplification / conclusion)
+14. Citation density and integration style
+15. Rhetorical patterns (close reading, comparative analysis, etc.)
+16. Opening and closing moves
+17. 5 verbatim representative excerpts (2–3 sentences each) capturing: analytical voice, argument style, evidence handling, transitions, most distinctive trait
 
-Look for:
-1. Average sentence length (word count)
-2. Vocabulary complexity (simple / moderate / complex / highly-complex)
-3. Tone descriptors (3–5 adjectives: e.g., "measured", "polemical", "discursive", "analytical")
-4. Common transition phrases (list the most frequent)
-5. Paragraph structure pattern (e.g., "topic sentence → evidence → analysis → forward link")
-6. Citation density (sparse / moderate / dense)
-7. Passive voice (rare / occasional / frequent)
-8. Rhetorical patterns (e.g., "close reading", "comparative analysis", "thesis-antithesis-synthesis")
-9. Three representative excerpts (1–2 sentences each) that best capture their voice
-
----
-
-## Step 4: Research Sources in Candlekeep
-
-Tell the researcher:
-> "Now let's set up your research library. These are the books, articles, and primary sources you cite in your work.
->
-> Add them to Candlekeep using:
-> ```
-> ck items add your-source.pdf
-> ```
->
-> Tell me when you've added your sources."
-
-Once confirmed, list and index them:
-
-```bash
-ck items list --json
-```
-
-Then sync each document to the search index:
-
-```bash
-curl -s http://localhost:8000/v1/status | python3 -c "import sys,json; d=json.load(sys.stdin); print('RAG ready' if d.get('initialized') else 'RAG not ready')"
-```
-
-If RAG is ready, for each document get its full text and ingest it:
-
-```bash
-# For each document ID from ck items list:
-ck items get DOCUMENT_ID | curl -s -X POST http://localhost:8000/v1/ingest \
-  -H "Content-Type: application/json" \
-  -d "{\"documents\": [$(python3 -c \"import sys,json; print(json.dumps(sys.stdin.read()))\" <<<$(ck items get DOCUMENT_ID))], \"ids\": [\"DOCUMENT_ID\"]}"
-```
-
-Track the sync in Cognetivy:
-```bash
-cognetivy run start --input /tmp/aw-init-input.json
-```
+Show the fingerprint to the researcher:
+> "Here's the writing style I extracted from your articles. Does this look accurate? Anything to adjust?"
 
 ---
 
-## Step 5: Save Profile
+## Save Profile
 
-Save the complete profile:
+Use the Write tool to create `.academic-writer/profile.json`:
 
-```bash
-mkdir -p .academic-writer
-cat > .academic-writer/profile.json << 'PROFILE'
+```json
 {
-  "fieldOfStudy": "FIELD_HERE",
-  "citationStyle": "chicago",
-  "styleFingerprint": {
-    "averageSentenceLength": 0,
-    "vocabularyComplexity": "complex",
-    "toneDescriptors": [],
-    "preferredTransitions": [],
-    "paragraphStructure": "",
-    "citationDensity": "moderate",
-    "passiveVoiceFrequency": "occasional",
-    "rhetoricalPatterns": [],
-    "sampleExcerpts": []
+  "fieldOfStudy": "FIELD_FROM_STEP_1",
+  "targetLanguage": "Hebrew",
+  "citationStyle": "inline-parenthetical",
+  "outputFormatPreferences": {
+    "font": "David",
+    "bodySize": 11,
+    "titleSize": 16,
+    "headingSize": 13,
+    "lineSpacing": 1.5,
+    "marginInches": 1.0,
+    "alignment": "justify",
+    "rtl": true
   },
+  "styleFingerprint": {
+    "sentenceLevel": {
+      "averageLength": "",
+      "structureVariety": "",
+      "commonOpeners": [],
+      "passiveVoice": "",
+      "passiveVoiceExamples": []
+    },
+    "vocabularyAndRegister": {
+      "complexity": "",
+      "registerLevel": "",
+      "fieldJargon": [],
+      "hebrewConventions": ""
+    },
+    "paragraphStructure": {
+      "pattern": "",
+      "averageLength": "",
+      "argumentProgression": "",
+      "evidenceIntroduction": "",
+      "evidenceAnalysis": ""
+    },
+    "toneAndVoice": {
+      "descriptors": [],
+      "authorStance": "",
+      "commonHedges": [],
+      "commonAssertions": [],
+      "engagementWithScholars": ""
+    },
+    "transitions": {
+      "preferred": {
+        "addition": [],
+        "contrast": [],
+        "causation": [],
+        "exemplification": [],
+        "conclusion": []
+      },
+      "sectionBridging": ""
+    },
+    "citations": {
+      "density": "",
+      "integrationStyle": "",
+      "quoteLengthPreference": ""
+    },
+    "rhetoricalPatterns": {
+      "common": [],
+      "openingMoves": "",
+      "closingMoves": ""
+    },
+    "representativeExcerpts": []
+  },
+  "tools": {
+    "candlekeep": { "enabled": false },
+    "agentic-search-vectorless": { "enabled": false, "path": "../Agentic-Search-Vectorless" },
+    "mongodb-agent-skills": { "enabled": false },
+    "cognetivy": { "enabled": false }
+  },
+  "sources": [],
   "createdAt": "TIMESTAMP",
   "updatedAt": "TIMESTAMP"
 }
-PROFILE
 ```
 
-Replace all placeholder values with what you extracted.
+Replace all placeholder values with what you collected. `representativeExcerpts` must contain actual verbatim text from the researcher's work.
 
 ---
 
 ## Confirmation
 
-Summarize:
 > "You're all set! Here's your profile:
 >
 > - **Field**: [field]
+> - **Language**: [language]
 > - **Citation style**: [style]
-> - **Writing style**: [2-3 sentence summary of fingerprint]
-> - **Sources indexed**: [count] documents
+> - **Data services**: [list enabled tools]
+> - **Writing style**: [2–3 sentence summary of fingerprint]
 >
 > Run `/academic-writer` anytime to start writing an article."
