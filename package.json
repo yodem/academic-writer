@@ -1,0 +1,20 @@
+{
+  "name": "academic-writer-setup",
+  "version": "0.1.0",
+  "description": "Interactive setup CLI for the Academic Writer Claude Code plugin",
+  "type": "module",
+  "bin": {
+    "academic-writer-setup": "./setup.mjs"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.7.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yodem/academic-writer"
+  },
+  "license": "MIT"
+}

@@ -1,144 +1,73 @@
 ---
 name: academic-writer-init
-description: "First-time setup for the Academic Writer. Configures researcher profile, analyzes writing style from past articles, and indexes research sources."
+description: "Analyze the researcher's writing style from past articles and complete the Academic Writer profile."
 user-invocable: true
 ---
 
-# Academic Writer — Initialization
+# Academic Writer — Init
 
-You are setting up a researcher's Academic Writer profile. Be warm, clear, and non-technical.
-
-## Step 0: Create Folders (silent)
-
-Run this before saying anything:
+## Step 0: Check Profile
 
 ```bash
-mkdir -p past-articles .academic-writer .cognetivy/runs .cognetivy/events
 cat .academic-writer/profile.json 2>/dev/null && echo "EXISTS" || echo "NOT_FOUND"
 ```
 
-If profile EXISTS, ask: "You already have a profile. Would you like to update it or start fresh?"
+**If NOT_FOUND:**
+> "No profile found. Please run the setup first:
+>
+> ```
+> npx github:yodem/academic-writer
+> ```
+>
+> This will configure your language, citation style, and tools interactively. Then come back and run `/academic-writer-init` again."
 
-Then greet the user:
-> "Welcome to Academic Writer setup! I'll walk you through 5 quick steps.
->
-> I've created your workspace folders:
-> - **`past-articles/`** — drop 5–10 of your published papers here (PDF or DOCX) so I can learn your writing style
-> - `.academic-writer/` — your profile (auto-managed)
->
-> Let's get started."
+Stop here if no profile.
+
+**If EXISTS:** Load the profile, then continue.
 
 ---
 
-## Step 1 of 5: Field of Study
+## Step 1: Confirm Settings
 
-Ask:
-> "**Step 1 of 5 — Field of Study**
-> What is your field of study and area of specialization?
+Read `.academic-writer/profile.json` and confirm the loaded settings with the researcher:
+
+> "I loaded your profile:
 >
-> The more specific the better — for example, *'Early Modern Jewish Philosophy'* is more useful than *'Philosophy'*."
+> - **Field**: [fieldOfStudy]
+> - **Language**: [targetLanguage]
+> - **Citation style**: [citationStyle]
+> - **Tools enabled**: [list enabled tools]
+>
+> Does this look right? (yes / no — if no, run `npx github:yodem/academic-writer` to update)"
 
-Record their answer.
+If no, stop. If yes, continue.
 
 ---
 
-## Step 2 of 5: Article Language
-
-Present as a numbered menu:
-> "**Step 2 of 5 — Article Language**
-> What language will you write your articles in?
->
-> 1. Hebrew
-> 2. English
-> 3. Other (you'll specify)
->
-> Type a number:"
-
-Store as `targetLanguage`. All agents write exclusively in this language — foreign terms must be transliterated or footnoted, never inline.
-
----
-
-## Step 3 of 5: Citation Style
-
-Present as a numbered menu:
-> "**Step 3 of 5 — Citation Style**
-> Which citation style do you use in your work?
->
-> 1. Inline Parenthetical — `(Author, Title, Page)` in running text *(recommended for Hebrew)*
-> 2. Chicago/Turabian — footnotes *(most common in English Humanities)*
-> 3. MLA
-> 4. APA
->
-> Type a number (1–4):"
-
-Map selection: 1 → `inline-parenthetical`, 2 → `chicago`, 3 → `mla`, 4 → `apa`
-
----
-
-## Step 4 of 5: Data Services
-
-Run all detection commands in parallel:
-
-```bash
-# 1. Candlekeep
-command -v ck >/dev/null 2>&1 && echo "CK_DETECTED" || echo "CK_NOT_DETECTED"
-
-# 2. Agentic-Search-Vectorless (local repo)
-ls ../Agentic-Search-Vectorless/src 2>/dev/null && echo "VECTORLESS_DETECTED" || echo "VECTORLESS_NOT_DETECTED"
-
-
-# 4. Cognetivy
-command -v cognetivy >/dev/null 2>&1 && echo "COGNETIVY_DETECTED" || echo "COGNETIVY_NOT_DETECTED"
-```
-
-Present results as a numbered interactive menu:
-> "**Step 4 of 5 — Data Services**
-> I've detected which research tools are available. Toggle on/off with numbers:
->
-> | # | Tool | Status | What it does |
-> |---|------|--------|-------------|
-> | 1 | Candlekeep | ✓/✗ | Cloud document library for source PDFs |
-> | 2 | Agentic-Search-Vectorless | ✓/✗ | Fast vectorless semantic search |
-> | 4 | Cognetivy | ✓/✗ | Workflow audit trail |
->
-> Type numbers to enable/disable, or press Enter to accept. Type 'all' to enable everything detected."
-
-**Rules:**
-- User can enable any combination. No tool is required.
-- Store the final selection in `tools` for the profile.
-
-Store results:
-```json
-{
-  "candlekeep": { "enabled": true },
-  "agentic-search-vectorless": { "enabled": true, "path": "../Agentic-Search-Vectorless" },
-  "cognetivy": { "enabled": false }
-}
-```
-
----
-
-## Step 5 of 5: Writing Style
+## Step 2: Writing Style Analysis
 
 Tell the researcher:
-> "**Step 5 of 5 — Writing Style**
-> I need to learn your writing style so articles I produce sound like *you*, not a generic AI.
+> "Now I'll analyze your writing style from your past articles.
 >
-> Place 5–10 of your published papers in the **`past-articles/`** folder I created for you (PDF or DOCX). These files are used only to analyze your style — never uploaded anywhere.
+> Make sure your published papers are in the **`past-articles/`** folder (PDF or DOCX). These files are used only locally — never uploaded anywhere.
 >
-> Tell me when you've added your files."
+> Tell me when you're ready, or if the folder is already populated."
 
-Once they confirm:
+Once confirmed:
 
 ```bash
 ls past-articles/
 ```
+
+If the folder is empty, prompt:
+> "The `past-articles/` folder is empty. Please add 5–10 of your published papers (PDF or DOCX) and let me know when done."
 
 For each file, extract text:
 - PDF: `python3 -c "import sys; import pdfplumber; [print(p.extract_text()) for p in pdfplumber.open(sys.argv[1]).pages]" past-articles/FILENAME 2>/dev/null || strings past-articles/FILENAME | head -500`
 - DOCX: `python3 -c "import docx; d=docx.Document('past-articles/FILENAME'); [print(p.text) for p in d.paragraphs]" 2>/dev/null`
 
 Analyze the combined text to produce a **Style Fingerprint**. Extract:
+
 1. Average sentence length (words), range
 2. Sentence structure variety (% complex / compound / simple)
 3. Common sentence openers
@@ -147,8 +76,8 @@ Analyze the combined text to produce a **Style Fingerprint**. Extract:
 6. Field-specific jargon and how it's introduced
 7. Paragraph structure pattern (e.g., "topic sentence → evidence → close reading → forward link")
 8. Average paragraph length (words), range
-9. Argument progression style (inductive or deductive)
-10. How evidence is introduced and analyzed
+9. Argument progression (inductive or deductive)
+10. How evidence is introduced and analyzed after quoting
 11. Tone descriptors (5–7 adjectives)
 12. Common hedging and asserting phrases
 13. Preferred transitions grouped by function (addition / contrast / causation / exemplification / conclusion)
@@ -162,25 +91,12 @@ Show the fingerprint to the researcher:
 
 ---
 
-## Save Profile
+## Step 3: Save Fingerprint
 
-Use the Write tool to create `.academic-writer/profile.json`:
+After researcher approval, update `.academic-writer/profile.json` using the Write tool — merge the `styleFingerprint` field into the existing profile. Do NOT overwrite the other fields.
 
 ```json
 {
-  "fieldOfStudy": "FIELD_FROM_STEP_1",
-  "targetLanguage": "Hebrew",
-  "citationStyle": "inline-parenthetical",
-  "outputFormatPreferences": {
-    "font": "David",
-    "bodySize": 11,
-    "titleSize": 16,
-    "headingSize": 13,
-    "lineSpacing": 1.5,
-    "marginInches": 1.0,
-    "alignment": "justify",
-    "rtl": true
-  },
   "styleFingerprint": {
     "sentenceLevel": {
       "averageLength": "",
@@ -230,31 +146,16 @@ Use the Write tool to create `.academic-writer/profile.json`:
       "closingMoves": ""
     },
     "representativeExcerpts": []
-  },
-  "tools": {
-    "candlekeep": { "enabled": false },
-    "agentic-search-vectorless": { "enabled": false, "path": "../Agentic-Search-Vectorless" },
-    "mongodb-agent-skills": { "enabled": false },
-    "cognetivy": { "enabled": false }
-  },
-  "sources": [],
-  "createdAt": "TIMESTAMP",
-  "updatedAt": "TIMESTAMP"
+  }
 }
 ```
 
-Replace all placeholder values with what you collected. `representativeExcerpts` must contain actual verbatim text from the researcher's work.
+`representativeExcerpts` must contain actual verbatim text from the researcher's work — not descriptions.
 
 ---
 
 ## Confirmation
 
-> "You're all set! Here's your profile:
->
-> - **Field**: [field]
-> - **Language**: [language]
-> - **Citation style**: [style]
-> - **Data services**: [list enabled tools]
-> - **Writing style**: [2–3 sentence summary of fingerprint]
+> "You're all set! Your writing style has been captured and saved.
 >
 > Run `/academic-writer` anytime to start writing an article."
