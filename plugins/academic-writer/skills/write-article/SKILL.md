@@ -81,6 +81,11 @@ Then ask:
 
 Store as `targetLanguage`. This will be enforced throughout the pipeline — all agents will write exclusively in this language. Pass it to every agent from this point forward.
 
+If Cognetivy is enabled, log:
+```bash
+echo '{"type":"step_completed","nodeId":"subject_selection","subject":"SUBJECT","language":"TARGET_LANGUAGE"}' | cognetivy event append --run RUN_ID
+```
+
 ---
 
 ### Step 2: Source Selection
@@ -193,15 +198,25 @@ If Cognetivy is enabled, log:
 echo '{"type":"step_started","nodeId":"ingestion_sync"}' | cognetivy event append --run RUN_ID
 ```
 
-If both are enabled, ensure selected sources are indexed in RAG:
+If both Candlekeep and Agentic-Search-Vectorless are enabled, ensure selected sources are ingested. First check what's already there, then ingest any missing ones:
 
 ```bash
-# Check each source and ingest if missing
-for DOC_ID in SELECTED_IDS; do
-    -H "Content-Type: application/json" \
-    -d "{\"documents\": [\"$(ck items get $DOC_ID | head -c 50000)\"], \"ids\": [\"$DOC_ID\"]}"
-done
+# List already-ingested documents
+curl -s http://localhost:8000/documents | python3 -c "import sys,json; docs=json.load(sys.stdin).get('documents',[]); [print(d['document_id'], d['name']) for d in docs]"
 ```
+
+For each selected source not yet ingested, read from Candlekeep and POST to vectorless:
+
+```bash
+# For each DOC_ID in selected sources:
+CONTENT=$(ck items read "DOC_ID:all")
+TITLE=$(ck items list --json | python3 -c "import sys,json; items=json.load(sys.stdin); [print(i.get('title','DOC_ID')) for i in items if i['id']=='DOC_ID']")
+curl -s -X POST http://localhost:8000/documents \
+  -H "Content-Type: application/json" \
+  -d "{\"name\": \"$TITLE\", \"content\": \"$CONTENT\", \"docType\": \"text\"}"
+```
+
+**If Agentic-Search-Vectorless is not enabled**, skip this step — the deep-reader already read the sources via Candlekeep.
 
 Log completion:
 ```bash

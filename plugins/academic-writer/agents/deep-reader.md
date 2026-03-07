@@ -1,91 +1,142 @@
 # Deep Reader Agent
 
-
 ## Input
 
 You will receive:
 - `subject`: The article subject/topic
 - `selectedSourceIds`: List of Candlekeep document IDs to focus on
+- `runId`: Cognetivy run ID for logging
+- `tools`: Enabled tools from the profile
 
-## RAG API Reference
+## Cognetivy Logging
 
+If `tools.cognetivy.enabled`, log start immediately:
+```bash
+echo '{"type":"step_started","nodeId":"deep_read","sourcesCount":N}' | cognetivy event append --run RUN_ID
 ```
-Content-Type: application/json
-
-Response: { "answer": "...", "context": "...", "metadata": {...} }
-```
-
-Always set `include_context: true` to get source passages.
 
 ## Your Task
 
-Run **three types of queries** to build a comprehensive picture:
+Read each selected source deeply and query it for the article subject. The goal is to understand what arguments, quotes, and evidence are actually available before proposing a thesis.
 
-### 1. General exploration (`mix` mode — best overall retrieval):
+---
+
+### Step 1: Get Source Content from Candlekeep
+
+For each selected source ID, read its full content. **Run all reads in parallel:**
+
 ```bash
-  -H "Content-Type: application/json" \
-  -d '{"query": "SUBJECT_TEXT", "mode": "mix", "top_k": 40, "rerank_top_k": 15, "enable_rerank": true, "include_context": true}'
+ck items read "DOC_ID_1:all"
+```
+```bash
+ck items read "DOC_ID_2:all"
+```
+```bash
+ck items toc DOC_ID_1,DOC_ID_2
 ```
 
-### 2. Thematic overview (`global` mode — broad patterns across all docs):
+---
+
+### Step 2: Ingest into Agentic-Search-Vectorless (if enabled)
+
+**Skip this step if `tools.agentic-search-vectorless.enabled` is false** — use only the Candlekeep text from Step 1.
+
+For each source, ingest its content into the vectorless service. **Run all ingests in parallel:**
+
 ```bash
+curl -s -X POST http://localhost:8000/documents \
   -H "Content-Type: application/json" \
-  -d '{"query": "themes and arguments about SUBJECT_TEXT", "mode": "global", "top_k": 30, "rerank_top_k": 10, "enable_rerank": true, "include_context": true}'
+  -d '{"name": "ITEM_TITLE", "content": "FULL_TEXT_FROM_CK_READ", "docType": "text"}'
 ```
 
-### 3. Key concept deep-dives (`local` mode — specific entities):
-For each major concept/author in the subject, query:
+Each response returns a `documentId` — store these for Step 3.
+
+Check if already ingested:
 ```bash
-  -H "Content-Type: application/json" \
-  -d '{"query": "SPECIFIC_CONCEPT_OR_AUTHOR", "mode": "local", "top_k": 20, "rerank_top_k": 8, "enable_rerank": true, "include_context": true}'
+curl -s http://localhost:8000/documents | python3 -c "import sys,json; docs=json.load(sys.stdin).get('documents',[]); [print(d['document_id'],d['name']) for d in docs]"
 ```
 
-### 4. Counterarguments (`mix` mode with targeted query):
+---
+
+### Step 3: Query Each Document (if Agentic-Search-Vectorless enabled)
+
+Run these queries **in parallel** across all ingested documentIds:
+
+**Query 1 — Main subject exploration:**
 ```bash
+curl -s -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "critique objection counterargument SUBJECT_TEXT", "mode": "mix", "top_k": 20, "rerank_top_k": 8, "enable_rerank": true, "include_context": true}'
+  -d '{"query": "SUBJECT_TEXT", "documentId": "VECTORLESS_DOC_ID"}'
 ```
 
-## How to read RAG responses
+**Query 2 — Key arguments and theses:**
+```bash
+curl -s -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "main arguments and philosophical positions about SUBJECT_TEXT", "documentId": "VECTORLESS_DOC_ID"}'
+```
 
-The response has:
-- `answer`: A synthesized answer from the RAG (useful but may hallucinate — do not cite this directly)
-- `context`: The actual retrieved source passages (USE THIS — these are grounded)
-- `metadata`: Query metadata
+**Query 3 — Counterarguments:**
+```bash
+curl -s -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "critique objection counterargument SUBJECT_TEXT", "documentId": "VECTORLESS_DOC_ID"}'
+```
 
-Always base your analysis on `context`, not `answer`.
+Run all three queries for each document, all in parallel. Each response has:
+- `answer`: synthesized answer (useful but do not cite directly)
+- `confidence`: reliability score
+
+**If Agentic-Search-Vectorless is NOT enabled:** use the Candlekeep full text from Step 1 directly — read and analyze it yourself.
+
+---
+
+### Step 4: Log Progress
+
+```bash
+echo '{"type":"step_progress","nodeId":"deep_read","sourcesRead":N,"vectorlessQueries":N}' | cognetivy event append --run RUN_ID
+```
+
+---
 
 ## Organize Results
 
-From the `context` passages, identify:
-- What arguments the sources can strongly support (multiple passages)
-- What arguments have only partial support (1–2 passages)
-- Key authors and their stated positions (with passage references)
-- Tensions or debates visible in the material
-- Gaps — topics with no source coverage
+From the retrieved content, identify:
+- What arguments the sources can **strongly support** (multiple passages / high confidence)
+- What arguments have **partial support** (1–2 passages / lower confidence)
+- **Key authors** and their stated positions (with source references)
+- **Tensions or debates** visible in the material
+- **Gaps** — topics the researcher wants to write about but sources don't cover
 
 ## Output
 
 Return a structured summary:
+
 ```
 DEEP READ RESULTS
 =================
 Subject: [subject]
-Queries run: [N]
-Total passages retrieved: [N]
+Sources read: [N]
+Vectorless queries: [N] (or "Candlekeep only")
 
-STRONG COVERAGE (multiple passages support):
-- [theme]: [key passages with author/work references from context]
+STRONG COVERAGE (well-supported by sources):
+- [theme]: [key evidence with author/work references]
 
-PARTIAL COVERAGE (1-2 passages only):
+PARTIAL COVERAGE (limited support):
 - [theme]: [what's available and what's missing]
 
 GAPS (no source support found):
 - [topic]: searched but not found in sources
 
 KEY AUTHORS & POSITIONS:
-- [Author, Work]: [their main argument as found in context]
+- [Author, Work]: [their main argument]
 
 TENSIONS IN SOURCES:
 - [Author A] argues X while [Author B] argues Y on [topic]
+```
+
+## Final Cognetivy Log
+
+```bash
+echo '{"type":"step_completed","nodeId":"deep_read","sourcesRead":N,"vectorlessQueries":N,"strongCoverage":N,"partialCoverage":N,"gaps":N}' | cognetivy event append --run RUN_ID
 ```
