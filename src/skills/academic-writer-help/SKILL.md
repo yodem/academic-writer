@@ -59,6 +59,7 @@ This walks you through:
 | `/academic-writer-health` | **System check** — verify all integrations are working |
 | `/academic-writer-update-field` | **Change your field** without re-running full init |
 | `/academic-writer-update-tools` | **Add/remove integrations** |
+| `/academic-writer-setup` | **Quick setup** — creates profile, detects integrations |
 | `/academic-writer-help` | **This help page** |
 
 ---

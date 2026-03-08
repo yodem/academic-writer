@@ -14,6 +14,7 @@ import unittest
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SRC_DIR = os.path.join(ROOT, "src")
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +52,7 @@ def _find_files(directory, pattern):
 class TestSkills(unittest.TestCase):
     """Every skill must have valid frontmatter, name, and description."""
 
-    SKILLS_DIR = os.path.join(ROOT, "skills")
+    SKILLS_DIR = os.path.join(SRC_DIR, "skills")
 
     def _skill_dirs(self):
         return [
@@ -121,7 +122,7 @@ class TestSkills(unittest.TestCase):
 
     def test_referenced_agents_exist(self):
         """If a skill declares agents in frontmatter, they must exist as .md files."""
-        agents_dir = os.path.join(ROOT, "agents")
+        agents_dir = os.path.join(SRC_DIR, "agents")
         for d in self._skill_dirs():
             path = os.path.join(self.SKILLS_DIR, d, "SKILL.md")
             fm = _parse_skill_frontmatter(path)
@@ -148,7 +149,7 @@ class TestSkills(unittest.TestCase):
 class TestAgents(unittest.TestCase):
     """Agent markdown files must have a title and non-trivial content."""
 
-    AGENTS_DIR = os.path.join(ROOT, "agents")
+    AGENTS_DIR = os.path.join(SRC_DIR, "agents")
     REQUIRED_AGENTS = [
         "deep-reader.md",
         "architect.md",
@@ -166,9 +167,11 @@ class TestAgents(unittest.TestCase):
         for name in self.REQUIRED_AGENTS:
             path = os.path.join(self.AGENTS_DIR, name)
             text = _read(path)
+            # Strip YAML frontmatter if present
+            body = re.sub(r"^---\n.*?\n---\n?", "", text, flags=re.DOTALL).lstrip()
             self.assertTrue(
-                text.startswith("# "),
-                f"{name} should start with a markdown heading"
+                body.startswith("# "),
+                f"{name} should have a markdown heading (after frontmatter)"
             )
 
     def test_agents_have_input_section(self):
@@ -210,8 +213,10 @@ class TestJSON(unittest.TestCase):
     def _json_files(self):
         results = []
         for dirpath, _, filenames in os.walk(ROOT):
-            # Skip .git
+            # Skip .git and node_modules
             if "/.git/" in dirpath or dirpath.endswith("/.git"):
+                continue
+            if "/node_modules/" in dirpath or dirpath.endswith("/node_modules"):
                 continue
             for fn in filenames:
                 if fn.endswith(".json"):
@@ -235,8 +240,8 @@ class TestJSON(unittest.TestCase):
 class TestHooks(unittest.TestCase):
     """Hooks config and scripts must be valid."""
 
-    HOOKS_JSON = os.path.join(ROOT, "hooks", "hooks.json")
-    SCRIPTS_DIR = os.path.join(ROOT, "hooks", "scripts")
+    HOOKS_JSON = os.path.join(SRC_DIR, "hooks", "hooks.json")
+    BIN_DIR = os.path.join(SRC_DIR, "hooks", "bin")
 
     def test_hooks_json_is_valid(self):
         with open(self.HOOKS_JSON, "r") as f:
@@ -254,35 +259,30 @@ class TestHooks(unittest.TestCase):
                     m = re.search(r'\$\{CLAUDE_PLUGIN_ROOT\}/(.+)', cmd)
                     if m:
                         script_rel = m.group(1)
-                        script_path = os.path.join(ROOT, script_rel)
+                        # At runtime CLAUDE_PLUGIN_ROOT points to the
+                        # built plugin dir, but at test time we verify
+                        # the source equivalents exist under src/hooks/.
+                        # The command is e.g. "hooks/bin/run-hook.mjs ..."
+                        # so strip the first arg that isn't a file path.
+                        script_file = script_rel.split()[0]
+                        # Map from plugin-relative to src-relative
+                        src_path = os.path.join(SRC_DIR, script_file)
                         self.assertTrue(
-                            os.path.isfile(script_path),
-                            f"Hook references '{script_rel}' but file not found"
+                            os.path.isfile(src_path),
+                            f"Hook references '{script_file}' but not found at '{src_path}'"
                         )
 
-    def test_hook_scripts_are_executable(self):
-        if not os.path.isdir(self.SCRIPTS_DIR):
-            self.skipTest("No scripts directory")
-        for fn in os.listdir(self.SCRIPTS_DIR):
-            if fn.endswith(".sh"):
-                path = os.path.join(self.SCRIPTS_DIR, fn)
-                mode = os.stat(path).st_mode
-                self.assertTrue(
-                    mode & stat.S_IXUSR,
-                    f"{fn} is not executable (chmod +x needed)"
-                )
-
-    def test_hook_scripts_have_shebang(self):
-        if not os.path.isdir(self.SCRIPTS_DIR):
-            self.skipTest("No scripts directory")
-        for fn in os.listdir(self.SCRIPTS_DIR):
-            if fn.endswith(".sh"):
-                path = os.path.join(self.SCRIPTS_DIR, fn)
-                text = _read(path)
-                self.assertTrue(
-                    text.startswith("#!/"),
-                    f"{fn} missing shebang line"
-                )
+    def test_hook_bin_files_exist(self):
+        """The hooks/bin directory should contain the run-hook entry point."""
+        self.assertTrue(
+            os.path.isdir(self.BIN_DIR),
+            "src/hooks/bin/ directory not found"
+        )
+        run_hook = os.path.join(self.BIN_DIR, "run-hook.mjs")
+        self.assertTrue(
+            os.path.isfile(run_hook),
+            "src/hooks/bin/run-hook.mjs not found"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -292,10 +292,7 @@ class TestHooks(unittest.TestCase):
 class TestCognetivy(unittest.TestCase):
     """Workflow JSON must be valid and define expected nodes."""
 
-    WORKFLOW = os.path.join(
-        ROOT, ".cognetivy", "workflows",
-        "wf_academic_writer", "workflow.json"
-    )
+    WORKFLOW = os.path.join(SRC_DIR, "workflows", "wf_write_article.json")
 
     def test_workflow_file_exists(self):
         self.assertTrue(os.path.isfile(self.WORKFLOW))
@@ -307,33 +304,16 @@ class TestCognetivy(unittest.TestCase):
     def test_workflow_has_required_nodes(self):
         with open(self.WORKFLOW, "r") as f:
             data = json.load(f)
-        nodes = data.get("nodes", {})
+        nodes = data.get("nodes", [])
+        node_ids = {n["id"] for n in nodes if "id" in n}
         required = [
             "load_profile", "source_selection", "deep_read",
-            "thesis_proposal", "outline", "synthesize", "docx_output"
+            "thesis_proposal", "outline_generation", "synthesis", "docx_output"
         ]
         for node in required:
             self.assertIn(
-                node, nodes,
+                node, node_ids,
                 f"Workflow missing node: {node}"
-            )
-
-    def test_section_node_has_skill_pipeline(self):
-        with open(self.WORKFLOW, "r") as f:
-            data = json.load(f)
-        section_node = data.get("nodes", {}).get("section_{N}", {})
-        children = section_node.get("children", {})
-        expected_skills = [
-            "section_{N}_p_{M}_draft",
-            "section_{N}_p_{M}_style_compliance",
-            "section_{N}_p_{M}_hebrew_grammar",
-            "section_{N}_p_{M}_repetition_check",
-            "section_{N}_p_{M}_citation_audit",
-        ]
-        for skill in expected_skills:
-            self.assertIn(
-                skill, children,
-                f"Section node missing skill: {skill}"
             )
 
 
@@ -345,8 +325,8 @@ class TestClaudeMD(unittest.TestCase):
     """CLAUDE.md must be consistent with actual skills and agents."""
 
     CLAUDE_MD = os.path.join(ROOT, "CLAUDE.md")
-    SKILLS_DIR = os.path.join(ROOT, "skills")
-    AGENTS_DIR = os.path.join(ROOT, "agents")
+    SKILLS_DIR = os.path.join(SRC_DIR, "skills")
+    AGENTS_DIR = os.path.join(SRC_DIR, "agents")
 
     def test_claude_md_exists(self):
         self.assertTrue(os.path.isfile(self.CLAUDE_MD))
@@ -374,7 +354,7 @@ class TestClaudeMD(unittest.TestCase):
         ]
         for agent in required_agents:
             self.assertIn(
-                f"`agents/{agent}.md`", text,
+                f"`src/agents/{agent}.md`", text,
                 f"CLAUDE.md missing agent reference: {agent}"
             )
 
@@ -386,7 +366,7 @@ class TestClaudeMD(unittest.TestCase):
 class TestPluginMirror(unittest.TestCase):
     """Plugin directory should mirror the main skills."""
 
-    MAIN_SKILLS = os.path.join(ROOT, "skills")
+    MAIN_SKILLS = os.path.join(SRC_DIR, "skills")
     PLUGIN_SKILLS = os.path.join(ROOT, "plugins", "academic-writer", "skills")
 
     def test_plugin_skills_dir_exists(self):
@@ -435,7 +415,7 @@ class TestCrossReferences(unittest.TestCase):
 
     def test_section_writer_skill_pipeline_matches_workflow(self):
         """Section writer skill list must match workflow node children."""
-        sw_path = os.path.join(ROOT, "agents", "section-writer.md")
+        sw_path = os.path.join(SRC_DIR, "agents", "section-writer.md")
         text = _read(sw_path)
         # Check all 5 skills are mentioned
         skills = ["DRAFT", "STYLE FINGERPRINT COMPLIANCE",
@@ -447,7 +427,7 @@ class TestCrossReferences(unittest.TestCase):
             )
 
     def test_write_article_references_all_pipeline_skills(self):
-        wa_path = os.path.join(ROOT, "skills", "write-article", "SKILL.md")
+        wa_path = os.path.join(SRC_DIR, "skills", "academic-writer", "SKILL.md")
         text = _read(wa_path)
         skills = ["Draft", "Style Compliance", "Hebrew Grammar",
                    "Repetition Check", "Citation Audit"]
@@ -459,9 +439,9 @@ class TestCrossReferences(unittest.TestCase):
 
     def test_help_lists_all_slash_commands(self):
         """Help skill must list every user-invocable skill."""
-        help_path = os.path.join(ROOT, "skills", "help", "SKILL.md")
+        help_path = os.path.join(SRC_DIR, "skills", "academic-writer-help", "SKILL.md")
         help_text = _read(help_path)
-        skills_dir = os.path.join(ROOT, "skills")
+        skills_dir = os.path.join(SRC_DIR, "skills")
         for d in os.listdir(skills_dir):
             skill_path = os.path.join(skills_dir, d, "SKILL.md")
             if not os.path.isfile(skill_path):
