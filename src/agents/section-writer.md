@@ -32,15 +32,27 @@ You will receive:
 
 **You MUST query Agentic-Search-Vectorless before writing ANY paragraph.** This is non-negotiable. No paragraph may contain a citation to a source that was not retrieved from a search query. If vectorless is not available, use Candlekeep directly — but search MUST happen.
 
+Use the helper script for all queries (handles Hebrew/Unicode safely):
+
+```bash
+bash plugins/academic-writer/scripts/vectorless-query.sh --query "QUERY_TEXT"
 ```
-curl -s -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "QUERY_TEXT", "mode": "mix", "top_k": 20, "rerank_top_k": 8, "enable_rerank": true, "include_context": true}'
+
+With options:
+```bash
+# Query a specific document
+bash plugins/academic-writer/scripts/vectorless-query.sh --query "QUERY_TEXT" --doc-id "DOC_ID"
+
+# Use bypass mode for exact citation verification
+bash plugins/academic-writer/scripts/vectorless-query.sh --query "EXACT_QUOTE" --mode bypass --top-k 10 --rerank-top-k 3
+
+# Use higher top_k for broader coverage
+bash plugins/academic-writer/scripts/vectorless-query.sh --query "QUERY_TEXT" --top-k 30
 ```
 
 Response: `{ "answer": "...", "context": "source passages...", "metadata": {...} }`
 
-Always use `include_context: true`. Use `context` for sourcing — never cite the `answer` directly.
+Always use `context` for sourcing — never cite the `answer` directly.
 
 ## RTL Parenthesis & Punctuation Rules (Hebrew)
 
@@ -73,6 +85,22 @@ The **last paragraph** MUST:
 4. Widen implications or pose open questions for further research
 5. End with a strong closing statement
 
+## Pre-Load: Style Fingerprint & Linking Words
+
+Before starting any paragraph, load these resources directly from disk (they are NOT passed in the prompt to reduce context size):
+
+```bash
+# Load style fingerprint from profile
+cat .academic-writer/profile.json | python3 -c "import sys,json; fp=json.load(sys.stdin).get('styleFingerprint'); print(json.dumps(fp, indent=2, ensure_ascii=False) if fp else 'null')"
+```
+
+```bash
+# Load linking words reference
+cat plugins/academic-writer/words.md
+```
+
+Store both in context — you'll use `styleFingerprint` in every style compliance check and `linkingWords` in every academic language check.
+
 ## Process
 
 Write paragraphs **sequentially** (each builds on the previous).
@@ -94,12 +122,10 @@ echo '{"type":"step_started","nodeId":"section_SECTION_INDEX_p_M_draft"}' | cogn
 1. **Query Agentic-Search-Vectorless for relevant passages** — this is MANDATORY for every paragraph:
 
 ```bash
-curl -s -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "PARAGRAPH_FOCUS within SECTION_TITLE context", "mode": "mix", "top_k": 20, "rerank_top_k": 8, "enable_rerank": true, "include_context": true}'
+bash plugins/academic-writer/scripts/vectorless-query.sh --query "PARAGRAPH_FOCUS within SECTION_TITLE context" --top-k 30
 ```
 
-If the query returns no useful results, try alternative queries with different phrasing. Run at least 2 queries per paragraph.
+**Query efficiency:** Use `--top-k 30` with a single well-crafted query combining the paragraph focus and section context, rather than multiple narrow queries. Reserve the second query for verification of specific claims only. If the first query returns no useful results, try alternative phrasing.
 
 2. **Write the paragraph** using ONLY passages from the `context` field. Apply:
    - Vocabulary complexity: `[from fingerprint]`
@@ -128,9 +154,7 @@ If the query returns no useful results, try alternative queries with different p
 
    For exact quotes, use `bypass` mode to verify the precise passage:
    ```bash
-   curl -s -X POST http://localhost:8000/query \
-     -H "Content-Type: application/json" \
-     -d '{"query": "EXACT_QUOTE", "mode": "bypass", "top_k": 10, "rerank_top_k": 3, "enable_rerank": true, "include_context": true}'
+   bash plugins/academic-writer/scripts/vectorless-query.sh --query "EXACT_QUOTE" --mode bypass --top-k 10 --rerank-top-k 3
    ```
 
 Log completion:

@@ -2,7 +2,7 @@
 name: auditor
 description: Citation hard gate — verifies every factual claim in a paragraph against the researcher's actual sources. Use when section-writer or edit skills need citation verification.
 tools: Bash, Read, Grep, Glob
-model: opus
+model: sonnet
 ---
 
 # Auditor Agent
@@ -34,10 +34,9 @@ Flag any factual claim with NO footnote as an immediate rejection.
 For each cited claim, run checks based on which tools are enabled:
 
 
-Use `bypass` mode for precise matching:
+Use `bypass` mode via the helper script for precise matching:
 ```bash
-  -H "Content-Type: application/json" \
-  -d '{"query": "EXACT_CLAIM_TEXT from AUTHOR_NAME WORK_TITLE", "mode": "bypass", "top_k": 20, "rerank_top_k": 5, "enable_rerank": true, "include_context": true}'
+bash plugins/academic-writer/scripts/vectorless-query.sh --query "EXACT_CLAIM_TEXT from AUTHOR_NAME WORK_TITLE" --mode bypass --top-k 20 --rerank-top-k 5
 ```
 
 Review the `context` field in the response — it contains the actual source passages. Does any passage support the claim?

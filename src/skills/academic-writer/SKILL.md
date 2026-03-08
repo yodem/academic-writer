@@ -59,7 +59,7 @@ If Cognetivy is enabled, start a run at the beginning of Phase 1 (so conversatio
 
 ```bash
 echo '{"subject": "pending", "phase": "conversational"}' > /tmp/aw-run-input.json
-cognetivy run start --input /tmp/aw-run-input.json
+cognetivy run start --workflow wf_write_article --input /tmp/aw-run-input.json
 ```
 
 Record the run ID — use it for ALL logging from this point forward.
@@ -120,19 +120,39 @@ echo '{"type":"step_completed","nodeId":"source_selection","sourcesSelected":N,"
 
 ### Step 3: Deep Read
 
+If Cognetivy is enabled, log the spawn event:
+```bash
+echo '{"type":"subagent_spawned","nodeId":"deep_read","agent":"deep-reader","details":"Exploring source material for article subject"}' | cognetivy event append --run RUN_ID
+```
+
 **Use the Agent tool to spawn the `deep-reader` subagent.** Pass as the prompt all of the following context: the article subject, selectedSourceIds, runId, and tools configuration.
 
 The deep-reader logs its own `deep_read` start/progress/completion events to Cognetivy.
 
 Wait for the deep-reader to return retrieved passages before continuing to Step 4.
 
+After receiving the deep-reader result, log completion:
+```bash
+echo '{"type":"subagent_completed","nodeId":"deep_read","agent":"deep-reader","status":"success"}' | cognetivy event append --run RUN_ID
+```
+
 ---
 
 ### Step 4: Thesis Proposal
 
+If Cognetivy is enabled, log the spawn event:
+```bash
+echo '{"type":"subagent_spawned","nodeId":"thesis_proposal","agent":"architect","details":"Proposing thesis statements"}' | cognetivy event append --run RUN_ID
+```
+
 **Use the Agent tool to spawn the `architect` subagent.** Pass the subject, deep read results, runId, and targetLanguage as the prompt.
 
 The architect logs its own `thesis_proposal` events to Cognetivy.
+
+After receiving the architect result, log completion:
+```bash
+echo '{"type":"subagent_completed","nodeId":"thesis_proposal","agent":"architect","status":"success"}' | cognetivy event append --run RUN_ID
+```
 
 Present the architect's output to researcher:
 > "Based on your sources, here are possible arguments:
@@ -147,9 +167,19 @@ Present the architect's output to researcher:
 
 ### Step 5: Outline + Approval
 
+If Cognetivy is enabled, log the spawn event:
+```bash
+echo '{"type":"subagent_spawned","nodeId":"outline","agent":"architect","details":"Generating article outline"}' | cognetivy event append --run RUN_ID
+```
+
 **Use the Agent tool to spawn the `architect` subagent again** with the approved thesis, deep read results, and runId.
 
 The architect logs its own `outline` events to Cognetivy.
+
+After receiving the architect result, log completion:
+```bash
+echo '{"type":"subagent_completed","nodeId":"outline","agent":"architect","status":"success"}' | cognetivy event append --run RUN_ID
+```
 
 Present the outline and invite refinement:
 > "Here's my proposed structure:
@@ -187,18 +217,16 @@ If both Candlekeep and Agentic-Search-Vectorless are enabled, ensure selected so
 
 ```bash
 # List already-ingested documents
-curl -s http://localhost:8000/documents | python3 -c "import sys,json; docs=json.load(sys.stdin).get('documents',[]); [print(d['document_id'], d['name']) for d in docs]"
+bash plugins/academic-writer/scripts/vectorless-list.sh
 ```
 
-For each selected source not yet ingested, read from Candlekeep and POST to vectorless:
+For each selected source not yet ingested, read from Candlekeep and ingest:
 
 ```bash
 # For each DOC_ID in selected sources:
 CONTENT=$(ck items read "DOC_ID:all")
 TITLE=$(ck items list --json | python3 -c "import sys,json; items=json.load(sys.stdin); [print(i.get('title','DOC_ID')) for i in items if i['id']=='DOC_ID']")
-curl -s -X POST http://localhost:8000/documents \
-  -H "Content-Type: application/json" \
-  -d "{\"name\": \"$TITLE\", \"content\": \"$CONTENT\", \"docType\": \"text\"}"
+bash plugins/academic-writer/scripts/vectorless-ingest.sh --name "$TITLE" --content "$CONTENT"
 ```
 
 **If Agentic-Search-Vectorless is not enabled**, skip this step — the deep-reader already read the sources via Candlekeep.
@@ -214,20 +242,25 @@ echo '{"type":"step_completed","nodeId":"ingestion_sync","documentsIngested":N}'
 
 **CRITICAL: Use the Agent tool to spawn one `section-writer` subagent per section. Call the Agent tool multiple times in a single response — one call per section — so all sections write in parallel.**
 
+If Cognetivy is enabled, log a spawn event for EACH section-writer before spawning:
+```bash
+echo '{"type":"subagent_spawned","nodeId":"section_N","agent":"section-writer","details":"Writing section N: SECTION_TITLE"}' | cognetivy event append --run RUN_ID
+```
+
 For each section in the approved outline, the Agent tool prompt must include:
 - `section`: the section spec (title, description, argument role, suggested sources, paragraph count)
 - `sectionIndex`: the section number
 - `totalSections`: total section count
 - `thesis`: the article thesis
-- `styleFingerprint`: the complete fingerprint object (not summarized)
 - `articleStructure`: the researcher's structure conventions
 - `citationStyle`: from the profile
 - `targetLanguage`: from the profile
-- `linkingWords`: from words.txt
 - `runId`: the Cognetivy run ID
 - `tools`: the enabled tools
 - `priorSectionTexts`: text of all previously completed sections (for repetition awareness)
 - `outlineOverview`: full outline titles and roles
+
+**NOTE:** Do NOT pass `styleFingerprint` or `linkingWords` in the prompt — section-writer agents load these directly from disk to reduce context size. The agent reads `.academic-writer/profile.json` for the fingerprint and `plugins/academic-writer/words.md` for linking words.
 
 Each section-writer handles a **per-paragraph skill pipeline** internally:
 
@@ -241,6 +274,11 @@ Each section-writer handles a **per-paragraph skill pipeline** internally:
 | 6 | **Repetition Check** | Check words, phrases, arguments vs. prior text | `section_N_p_M_repetition_check` |
 | 7 | **Citation Audit** | Auditor agent verifies every citation against RAG (hard gate) | `section_N_p_M_citation_audit` |
 
+After receiving each section-writer result, log completion:
+```bash
+echo '{"type":"subagent_completed","nodeId":"section_N","agent":"section-writer","status":"success|failed"}' | cognetivy event append --run RUN_ID
+```
+
 The auditor is a HARD GATE:
 - Queries RAG for each factual claim (if enabled)
 - Verifies author + work + page via `ck items read` (if enabled)
@@ -251,7 +289,12 @@ The auditor is a HARD GATE:
 
 ### Step 8: Synthesis + Full-Article Repetition Check
 
-Once all sections are approved, **use the Agent tool to spawn the `synthesizer` subagent.** Pass the following as the prompt:
+Once all sections are approved, log the spawn event:
+```bash
+echo '{"type":"subagent_spawned","nodeId":"synthesize","agent":"synthesizer","details":"Final coherence and style review"}' | cognetivy event append --run RUN_ID
+```
+
+**Use the Agent tool to spawn the `synthesizer` subagent.** Pass the following as the prompt:
 - All completed section texts
 - The thesis statement
 - The complete styleFingerprint object
@@ -272,144 +315,122 @@ The synthesizer runs TWO phases, each logged to Cognetivy:
 
 Makes targeted revisions only — does not rewrite from scratch. Citations are locked.
 
+After receiving the synthesizer result, log completion:
+```bash
+echo '{"type":"subagent_completed","nodeId":"synthesize","agent":"synthesizer","status":"success"}' | cognetivy event append --run RUN_ID
+```
+
 ---
 
 ### Step 9: DOCX Output
 
 If Cognetivy is enabled, log:
 ```bash
-echo '{"type":"step_started","nodeId":"docx_output"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","nodeId":"article_output"}' | cognetivy event append --run RUN_ID
 ```
 
-Assemble the final article and write to .docx:
+Assemble the final article and write to both Markdown and DOCX:
 
 ```bash
-# Article title becomes filename
-FILENAME="$(echo 'SUBJECT' | tr ' ' '-' | tr '[:upper:]' '[:lower:]' | head -c 50).docx"
-OUTPUT_PATH="$HOME/Desktop/$FILENAME"
+# Output to project's articles/ directory (created if needed)
+mkdir -p articles
+FILEBASE="$(echo 'SUBJECT' | tr ' ' '-' | tr '[:upper:]' '[:lower:]' | head -c 50)"
+MD_PATH="articles/${FILEBASE}.md"
+DOCX_PATH="articles/${FILEBASE}.docx"
 ```
 
-Use Python to generate the .docx. Read the outputFormatPreferences from the profile (font, size, spacing, margins) and apply them. If not set, use these defaults: David font (or Times New Roman if David unavailable), 11pt, 1.5 line spacing, justified alignment, 1-inch margins.
+#### Step 9a: Markdown Output
 
-```bash
-python3 << 'DOCX_SCRIPT'
-from docx import Document
-from docx.shared import Pt, Inches, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
-import json, re, sys
+Use the `Write` tool to write the article as markdown to `$MD_PATH`. Structure:
 
-# --- Config (from profile.outputFormatPreferences or defaults) ---
-FONT_NAME = "David"          # Hebrew font; fallback: "Times New Roman"
-BODY_SIZE = 11
-TITLE_SIZE = 16
-HEADING_SIZE = 13
-FOOTNOTE_SIZE = 10
-LINE_SPACING = 1.5           # Multiple
-MARGIN_INCHES = 1.0
-IS_RTL = True                # Set to False for non-Hebrew articles
+```markdown
+# ARTICLE_TITLE
 
-# --- Article data (replace these with actual values from synthesizer output) ---
-ARTICLE_TITLE = "TITLE_HERE"
-ARTICLE_THESIS = "THESIS_HERE"
-SECTIONS = []   # List of { "title": str, "paragraphs": [str] }
-# Each paragraph string may contain inline (Author, Work, Page) citations — leave as-is
-OUTPUT_PATH = "OUTPUT_PATH_HERE"
+*ARTICLE_THESIS*
 
-# --- Build document ---
-doc = Document()
+## Section Title (only if totalWords > 1500)
 
-# Set page margins
-for section in doc.sections:
-    section.top_margin    = Inches(MARGIN_INCHES)
-    section.bottom_margin = Inches(MARGIN_INCHES)
-    section.left_margin   = Inches(MARGIN_INCHES)
-    section.right_margin  = Inches(MARGIN_INCHES)
+Paragraph 1 text with inline citations...
 
-def set_rtl_para(para):
-    """Enable RTL layout for a paragraph."""
-    if IS_RTL:
-        pPr = para._p.get_or_add_pPr()
-        bidi = OxmlElement("w:bidi")
-        pPr.append(bidi)
+Paragraph 2 text...
 
-def add_para(doc, text, font_name, font_size, bold=False, italic=False,
-             align=WD_ALIGN_PARAGRAPH.JUSTIFY, space_before=0, space_after=6,
-             line_spacing=LINE_SPACING):
-    para = doc.add_paragraph()
-    para.alignment = align
-    para.paragraph_format.space_before = Pt(space_before)
-    para.paragraph_format.space_after  = Pt(space_after)
-    para.paragraph_format.line_spacing = line_spacing
-    set_rtl_para(para)
-    run = para.add_run(text)
-    run.font.name  = font_name
-    run.font.size  = Pt(font_size)
-    run.bold       = bold
-    run.italic     = italic
-    if IS_RTL:
-        run._element.rPr.rFonts.set(qn("w:cs"), font_name)
-    return para
+## Next Section Title
 
-def add_page_numbers(doc):
-    """Add page number in footer (centered)."""
-    section = doc.sections[0]
-    footer  = section.footer
-    para    = footer.paragraphs[0]
-    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = para.add_run()
-    fldChar1 = OxmlElement("w:fldChar")
-    fldChar1.set(qn("w:fldCharType"), "begin")
-    instrText = OxmlElement("w:instrText")
-    instrText.text = "PAGE"
-    fldChar2 = OxmlElement("w:fldChar")
-    fldChar2.set(qn("w:fldCharType"), "end")
-    run._r.append(fldChar1)
-    run._r.append(instrText)
-    run._r.append(fldChar2)
-
-# Title (bold, centered)
-add_para(doc, ARTICLE_TITLE, FONT_NAME, TITLE_SIZE,
-         bold=True, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=6)
-
-# Thesis subtitle (italic, centered)
-if ARTICLE_THESIS:
-    add_para(doc, ARTICLE_THESIS, FONT_NAME, BODY_SIZE,
-             italic=True, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=12)
-
-# Body sections
-for sec in SECTIONS:
-    # Section heading
-    add_para(doc, sec["title"], FONT_NAME, HEADING_SIZE,
-             bold=True, align=WD_ALIGN_PARAGRAPH.RIGHT if IS_RTL else WD_ALIGN_PARAGRAPH.LEFT,
-             space_before=12, space_after=6)
-    # Section paragraphs
-    for para_text in sec["paragraphs"]:
-        add_para(doc, para_text, FONT_NAME, BODY_SIZE,
-                 align=WD_ALIGN_PARAGRAPH.JUSTIFY, space_after=6)
-
-add_page_numbers(doc)
-doc.save(OUTPUT_PATH)
-print(f"Saved: {OUTPUT_PATH}")
-DOCX_SCRIPT
+...
 ```
 
-**Before running:** Replace `TITLE_HERE`, `THESIS_HERE`, `SECTIONS`, and `OUTPUT_PATH_HERE` with the actual article data from the synthesizer output. Read the profile's `outputFormatPreferences` if present and override `FONT_NAME`, `BODY_SIZE`, etc. accordingly.
+**Rules:**
+- Title as `# H1`, thesis as italic line below it
+- Section headings as `## H2` — but only include them if `totalWords > 1500` (same rule as DOCX)
+- Paragraphs separated by blank lines
+- Keep all inline citations exactly as they appear (e.g., `(Author, Title, p. N)`)
+- No extra formatting beyond what the article text already contains
 
-Log DOCX completion:
+#### Step 9b: DOCX Output
+
+Write the article data to a JSON file, then run the standalone DOCX generator script:
+
+1. **Write the article JSON** using the Write tool to `/tmp/aw-article-data.json`. Use this exact schema — do NOT write inline Python to construct it:
+
+```json
+{
+  "title": "ARTICLE_TITLE from synthesizer",
+  "thesis": "ARTICLE_THESIS or null",
+  "sections": [
+    {
+      "title": "Section title",
+      "paragraphs": ["Paragraph 1 text with citations...", "Paragraph 2..."]
+    }
+  ],
+  "format": {
+    "font": "from profile.outputFormatPreferences.font or David",
+    "bodySize": 11,
+    "titleSize": 16,
+    "headingSize": 13,
+    "lineSpacing": 1.5,
+    "margins": 1.0,
+    "isRtl": true
+  },
+  "totalWords": 0
+}
+```
+
+**Rules:**
+- Use the `Write` tool to write this file — never use Python heredoc or `python3 -c` to construct JSON (Hebrew text causes UTF-8 encoding errors in heredocs)
+- Populate `sections` from the synthesizer output — each section's title and paragraph list
+- Read `outputFormatPreferences` from the profile and fill in the `format` object
+- Set `totalWords` to the actual word count (controls section title visibility — hidden when under 1500 words)
+- Set `isRtl` based on `targetLanguage` (true for Hebrew, false for English)
+
+2. **Generate the DOCX:**
+
 ```bash
-echo '{"type":"step_completed","nodeId":"docx_output","filePath":"OUTPUT_PATH","wordCount":N,"citations":N,"citationStyle":"CITATION_STYLE","sections":N,"font":"FONT_NAME","language":"TARGET_LANGUAGE"}' | cognetivy event append --run RUN_ID
+python3 plugins/academic-writer/scripts/generate-docx.py --input /tmp/aw-article-data.json --output "$DOCX_PATH"
+```
+
+The script handles all RTL formatting, directional marks, citation parentheses splitting, and conditional section titles deterministically.
+
+Log output completion:
+```bash
+echo '{"type":"step_completed","nodeId":"article_output","docxPath":"DOCX_PATH","mdPath":"MD_PATH","wordCount":N,"citations":N,"citationStyle":"CITATION_STYLE","sections":N,"font":"FONT_NAME","language":"TARGET_LANGUAGE"}' | cognetivy event append --run RUN_ID
 ```
 
 Complete the Cognetivy run:
 ```bash
-echo '{"type":"run_completed","status":"completed","output":{"filePath":"OUTPUT_PATH","wordCount":N,"citations":N,"citationStyle":"CITATION_STYLE","sections":N,"hebrewGrammarFixes":N,"languagePurityFixes":N,"repetitionFixes":N,"auditRewrites":N}}' | cognetivy event append --run RUN_ID
+echo '{"type":"run_completed","status":"completed","output":{"docxPath":"DOCX_PATH","mdPath":"MD_PATH","wordCount":N,"citations":N,"citationStyle":"CITATION_STYLE","sections":N,"hebrewGrammarFixes":N,"languagePurityFixes":N,"repetitionFixes":N,"auditRewrites":N}}' | cognetivy event append --run RUN_ID
+cognetivy run complete --run RUN_ID
+```
+
+**CRITICAL: Always complete the Cognetivy run.** If ANY step in the pipeline fails, still log `run_completed` with `status: failed` and call:
+```bash
+echo '{"type":"run_completed","status":"failed","error":"DESCRIPTION_OF_FAILURE"}' | cognetivy event append --run RUN_ID
+cognetivy run complete --run RUN_ID
 ```
 
 Report to researcher:
 > "Done! Your article has been saved to:
-> `~/Desktop/FILENAME.docx`
+> - `articles/FILEBASE.docx` (formatted document)
+> - `articles/FILEBASE.md` (markdown)
 >
 > Word count: [N] words
 > Citations: [N] ([citationStyle] format)

@@ -90,6 +90,11 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
     [[ -f "$SRC_DIR/hooks/package.json" ]] && cp "$SRC_DIR/hooks/package.json" "$PLUGIN_DIR/hooks/"
   fi
 
+  # Copy scripts
+  if [[ -d "$SRC_DIR/scripts" ]]; then
+    cp -R "$SRC_DIR/scripts" "$PLUGIN_DIR/"
+  fi
+
   # Copy shared resources
   if [[ -f "$SRC_DIR/words.md" ]]; then
     cp "$SRC_DIR/words.md" "$PLUGIN_DIR/"

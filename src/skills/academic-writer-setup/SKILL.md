@@ -101,9 +101,18 @@ Use AskUserQuestion (multiSelect):
 ```
 
 3. Create `past-articles/` directory if it doesn't exist
-4. Create `.cognetivy/` directories if cognetivy is enabled:
+4. Create `.cognetivy/` directories and register workflows if cognetivy is enabled:
    ```bash
    mkdir -p .cognetivy/runs .cognetivy/events
+   ```
+   Then register all Academic Writer workflows:
+   ```bash
+   cognetivy workflow set --file plugins/academic-writer/workflows/wf_write_article.json
+   cognetivy workflow set --file plugins/academic-writer/workflows/wf_edit_article.json
+   cognetivy workflow set --file plugins/academic-writer/workflows/wf_edit_section.json
+   cognetivy workflow set --file plugins/academic-writer/workflows/wf_research.json
+   cognetivy workflow set --file plugins/academic-writer/workflows/wf_setup.json
+   cognetivy collection-schema set --file plugins/academic-writer/workflows/collection-schemas.json
    ```
 
 ### Step 6: Style Fingerprint (Optional)

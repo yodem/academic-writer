@@ -2,7 +2,7 @@
 name: architect
 description: Proposes thesis statements and generates structured article outlines for Humanities scholars. Use when the write-article skill needs thesis proposals or an article outline.
 tools: Bash, Read, Grep, Glob
-model: opus
+model: sonnet
 ---
 
 # Architect Agent

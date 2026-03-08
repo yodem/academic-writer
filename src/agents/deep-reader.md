@@ -2,7 +2,7 @@
 name: deep-reader
 description: Explores source material before thesis proposal. Reads Candlekeep documents and queries Agentic-Search-Vectorless to map available evidence, arguments, and gaps. Use when the write-article skill needs to explore sources for a new article.
 tools: Bash, Read, Grep, Glob
-model: opus
+model: sonnet
 ---
 
 # Deep Reader Agent
@@ -48,46 +48,37 @@ ck items toc DOC_ID_1,DOC_ID_2
 
 **Skip this step if `tools.agentic-search-vectorless.enabled` is false** — use only the Candlekeep text from Step 1.
 
-For each source, ingest its content into the vectorless service. **Run all ingests in parallel:**
+For each source, ingest its content into the vectorless service using the helper script. **Run all ingests in parallel:**
 
 ```bash
-curl -s -X POST http://localhost:8000/documents \
-  -H "Content-Type: application/json" \
-  -d '{"name": "ITEM_TITLE", "content": "FULL_TEXT_FROM_CK_READ", "docType": "text"}'
+# Check what's already ingested
+bash plugins/academic-writer/scripts/vectorless-list.sh
+
+# For each source not yet ingested:
+bash plugins/academic-writer/scripts/vectorless-ingest.sh --name "ITEM_TITLE" --content "FULL_TEXT_FROM_CK_READ"
 ```
 
-Each response returns a `documentId` — store these for Step 3.
-
-Check if already ingested:
-```bash
-curl -s http://localhost:8000/documents | python3 -c "import sys,json; docs=json.load(sys.stdin).get('documents',[]); [print(d['document_id'],d['name']) for d in docs]"
-```
+Each response returns a `documentId` in JSON — store these for Step 3.
 
 ---
 
 ### Step 3: Query Each Document (if Agentic-Search-Vectorless enabled)
 
-Run these queries **in parallel** across all ingested documentIds:
+Run these queries **in parallel** across all ingested documentIds using the helper script:
 
 **Query 1 — Main subject exploration:**
 ```bash
-curl -s -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "SUBJECT_TEXT", "documentId": "VECTORLESS_DOC_ID"}'
+bash plugins/academic-writer/scripts/vectorless-query.sh --query "SUBJECT_TEXT" --doc-id "VECTORLESS_DOC_ID"
 ```
 
 **Query 2 — Key arguments and theses:**
 ```bash
-curl -s -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "main arguments and philosophical positions about SUBJECT_TEXT", "documentId": "VECTORLESS_DOC_ID"}'
+bash plugins/academic-writer/scripts/vectorless-query.sh --query "main arguments and philosophical positions about SUBJECT_TEXT" --doc-id "VECTORLESS_DOC_ID"
 ```
 
 **Query 3 — Counterarguments:**
 ```bash
-curl -s -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "critique objection counterargument SUBJECT_TEXT", "documentId": "VECTORLESS_DOC_ID"}'
+bash plugins/academic-writer/scripts/vectorless-query.sh --query "critique objection counterargument SUBJECT_TEXT" --doc-id "VECTORLESS_DOC_ID"
 ```
 
 Run all three queries for each document, all in parallel. Each response has:
