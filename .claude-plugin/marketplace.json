@@ -1,17 +1,26 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "academic-writer",
+  "version": "0.2.0",
+  "engine": ">=2.1.69",
+  "description": "AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as .docx files.",
   "owner": {
     "name": "Yotam Fromm"
   },
   "metadata": {
-    "description": "AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as .docx files.",
-    "version": "0.1.0"
+    "description": "Academic writing plugin with 5 agents, 11 skills, and TypeScript hooks for citation-verified article generation.",
+    "pluginRoot": "./plugins"
   },
   "plugins": [
     {
       "name": "academic-writer",
-      "source": "./plugins/academic-writer",
-      "description": "Write rigorously cited Humanities articles with style matching, deep RAG retrieval, and citation verification."
+      "description": "AI-first academic writing assistant — 5 agents, 11 skills, TypeScript hooks for Humanities researchers.",
+      "version": "0.2.0",
+      "author": {
+        "name": "Yotam Fromm"
+      },
+      "category": "writing",
+      "source": "./plugins/academic-writer"
     }
   ]
 }

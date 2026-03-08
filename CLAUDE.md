@@ -2,6 +2,40 @@
 
 AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as .docx files.
 
+## Build System
+
+**Source of truth lives in `src/`.** Run `npm run build` to assemble the plugin into `plugins/academic-writer/`.
+
+```
+src/                    <- EDIT HERE
+  agents/               <- 5 agent definitions (.md with YAML frontmatter)
+  skills/               <- 11 skill directories (SKILL.md each)
+  hooks/                <- TypeScript hooks (esbuild → dist/)
+  settings/             <- Plugin settings JSON
+  workflows/            <- Cognetivy workflow definitions
+  words.md              <- Hebrew linking words reference
+
+plugins/                <- GENERATED (never edit!)
+  academic-writer/      <- Built plugin output
+
+scripts/
+  build-plugins.sh      <- Build script
+
+manifests/
+  academic-writer.json  <- Plugin manifest
+
+.claude-plugin/
+  marketplace.json      <- Plugin marketplace registration
+```
+
+**Commands:**
+- `npm run build` — Full build (hooks + plugin assembly)
+- `npm run build:hooks` — Build TypeScript hooks only
+- `npm run typecheck` — TypeScript type checking
+- `npm run clean` — Remove built artifacts
+
+**Critical:** Always edit `src/`, never `plugins/`. After editing `src/`, run `npm run build`.
+
 ## Critical Enforcement Rules
 
 - **Language purity**: Every article section is checked for embedded foreign-language text. ALL body prose must be in the article's `targetLanguage`. Foreign terms must be transliterated or footnoted — never inline.
@@ -12,7 +46,7 @@ AI-first academic writing assistant for Humanities researchers. Produces rigorou
 
 ## Integrations (Tool Registry)
 
-All integrations are **optional**. During `/academic-writer-init`, the researcher selects which tools to enable. Enabled tools are stored in `profile.tools`. Use `/academic-writer-update-tools` to change them later.
+All integrations are **optional**. During `/academic-writer-setup` or `/academic-writer-init`, the researcher selects which tools to enable. Enabled tools are stored in `profile.tools`. Use `/academic-writer-update-tools` to change them later.
 
 | Tool ID | CLI / Type | What it does | Setup |
 |---------|-----------|-------------|-------|
@@ -29,7 +63,8 @@ All pipeline steps (write-article, agents) check `profile.tools` before calling 
 
 | Command | Purpose |
 |---------|---------|
-| `/academic-writer-init` | First-time setup: field of study, citation style, style fingerprint from past articles, source indexing |
+| `/academic-writer-setup` | First-time setup: creates profile, detects integrations, optional style fingerprinting |
+| `/academic-writer-init` | Full initialization: field of study, citation style, detailed style fingerprint from past articles, source indexing |
 | `/academic-writer` | Write a new article: conversational subject → sources → thesis → outline → write → audit → .docx |
 | `/academic-writer-research` | Research a subject or answer questions using indexed sources (Candlekeep, Vectorless, MongoDB) — spawns parallel subagents for speed |
 | `/academic-writer-edit` | Edit a previously written article — revise sections, fix citations, adjust tone, restructure, strengthen arguments |
@@ -38,6 +73,20 @@ All pipeline steps (write-article, agents) check `profile.tools` before calling 
 | `/academic-writer-help` | Explain what this plugin is and how to use it |
 | `/academic-writer-update-field` | Update your field of study without re-running full initialization |
 | `/academic-writer-update-tools` | Add, remove, or reconfigure integrations (Candlekeep, Vectorless, MongoDB, Cognetivy) |
+
+## Cognetivy Workflows
+
+Workflow definitions are in `src/workflows/`. Each major pipeline has its own workflow:
+
+| Workflow | File | Triggered by |
+|----------|------|-------------|
+| `wf_setup` | `src/workflows/wf_setup.json` | `/academic-writer-setup` |
+| `wf_write_article` | `src/workflows/wf_write_article.json` | `/academic-writer` |
+| `wf_edit_article` | `src/workflows/wf_edit_article.json` | `/academic-writer-edit` |
+| `wf_edit_section` | `src/workflows/wf_edit_section.json` | `/academic-writer-edit-section` |
+| `wf_research` | `src/workflows/wf_research.json` | `/academic-writer-research` |
+
+Collection schemas: `src/workflows/collection-schemas.json`
 
 ## Search Query Modes (Agentic-Search-Vectorless)
 
@@ -50,17 +99,17 @@ All pipeline steps (write-article, agents) check `profile.tools` before calling 
 
 ## Agent Architecture
 
-Agents are defined in `.claude/agents/` with YAML frontmatter (name, description, tools, model). They are spawned as subagents using the **Agent tool**. Skills must explicitly invoke the Agent tool to spawn subagents — use "Use the Agent tool to spawn the X subagent" language in skill instructions.
+Agents are defined in `src/agents/` (source) and built to `plugins/academic-writer/agents/`. Each has YAML frontmatter (name, description, tools, model). They are spawned as subagents using the **Agent tool**. Skills must explicitly invoke the Agent tool to spawn subagents — use "Use the Agent tool to spawn the X subagent" language in skill instructions.
 
 **Agents are spawned in parallel whenever possible** for speed — e.g., all section-writers run simultaneously via multiple Agent tool calls in a single response.
 
-| Agent | File | Spawned by | Purpose |
-|-------|------|-----------|---------|
-| Deep Reader | `.claude/agents/deep-reader.md` | write-article | Explores source material before thesis (parallel search queries) |
-| Architect | `.claude/agents/architect.md` | write-article | Proposes thesis + generates outline |
-| Section Writer | `.claude/agents/section-writer.md` | write-article, edit, edit-section | Writes one section with full skill pipeline (parallel per section) |
-| Auditor | `.claude/agents/auditor.md` | section-writer, edit | Verifies citations (hard gate) |
-| Synthesizer | `.claude/agents/synthesizer.md` | write-article, edit | Final coherence + style review |
+| Agent | Source File | Spawned by | Purpose |
+|-------|------------|-----------|---------|
+| Deep Reader | `src/agents/deep-reader.md` | write-article | Explores source material before thesis (parallel search queries) |
+| Architect | `src/agents/architect.md` | write-article | Proposes thesis + generates outline |
+| Section Writer | `src/agents/section-writer.md` | write-article, edit, edit-section | Writes one section with full skill pipeline (parallel per section) |
+| Auditor | `src/agents/auditor.md` | section-writer, edit | Verifies citations (hard gate) |
+| Synthesizer | `src/agents/synthesizer.md` | write-article, edit | Final coherence + style review |
 
 ### Parallelism Strategy
 

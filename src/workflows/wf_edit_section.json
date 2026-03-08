@@ -1,0 +1,25 @@
+{
+  "workflow_id": "wf_edit_section",
+  "version_id": "v1",
+  "name": "Edit Single Section",
+  "description": "Quick edit of a single section: load section text, apply edits, run 7-skill pipeline, output revised section.",
+  "created_at": "2026-03-08T00:00:00.000Z",
+  "nodes": [
+    {
+      "id": "load_section",
+      "type": "HUMAN_IN_THE_LOOP",
+      "input_collections": ["run_input"],
+      "output_collections": ["section_text"],
+      "prompt": "Ask the researcher to provide the section text and what edits they want: rewrite, expand, cut, fix citations, adjust style, or other changes."
+    },
+    {
+      "id": "rewrite_section",
+      "type": "PROMPT",
+      "input_collections": ["section_text"],
+      "output_collections": ["revised_section"],
+      "prompt": "Spawn section-writer agent for this section. Apply full 7-skill pipeline: draft with vectorless search, style fingerprint compliance, Hebrew grammar, academic language & linking words, language purity, repetition check, citation audit.",
+      "minimum_rows": 1,
+      "required_skills": ["cognetivy"]
+    }
+  ]
+}

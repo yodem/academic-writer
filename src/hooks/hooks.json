@@ -1,0 +1,23 @@
+{
+  "description": "Academic Writer hooks -- profile and fingerprint checks (TypeScript/ESM)",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs lifecycle/check-profile",
+            "timeout": 10,
+            "statusMessage": "Checking researcher profile..."
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs lifecycle/load-fingerprint",
+            "timeout": 10,
+            "statusMessage": "Loading style fingerprint..."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,15 +1,31 @@
-node_modules/
-past-articles/
-.academic-writer/
-logs/
-__pycache__/
-*.pyc
+# Generated plugin output (never edit)
+plugins/
 
-# cognetivy - ignore runtime data; commit workflow definitions
+# Hook build artifacts
+src/hooks/dist/
+src/hooks/node_modules/
+
+# Runtime directories
+.academic-writer/
 .cognetivy/runs/
 .cognetivy/events/
 .cognetivy/collections/
 .cognetivy/node-results/
+.cognetivy/workflows/
+past-articles/
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs
+logs/
 
 # .claude - ignore runtime/session state; commit hooks, skills, and config
 .claude/.comm-style-counter

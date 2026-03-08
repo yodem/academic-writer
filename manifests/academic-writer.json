@@ -1,0 +1,24 @@
+{
+  "name": "academic-writer",
+  "version": "0.2.0",
+  "description": "AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as .docx files.",
+  "author": {
+    "name": "Yotam Fromm",
+    "url": "https://github.com/yodem/academic-writer"
+  },
+  "homepage": "https://github.com/yodem/academic-writer",
+  "repository": "https://github.com/yodem/academic-writer",
+  "license": "MIT",
+  "keywords": [
+    "academic-writing",
+    "humanities",
+    "citations",
+    "docx",
+    "hebrew",
+    "claude-code",
+    "plugin"
+  ],
+  "skills": "all",
+  "agents": "all",
+  "hooks": "all"
+}

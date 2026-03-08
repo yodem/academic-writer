@@ -1,0 +1,48 @@
+{
+  "workflow_id": "wf_edit_article",
+  "version_id": "v1",
+  "name": "Edit Academic Article",
+  "description": "Edit a previously written article: load existing text, identify sections to revise, parallel section rewriting, synthesis, DOCX output.",
+  "created_at": "2026-03-08T00:00:00.000Z",
+  "nodes": [
+    {
+      "id": "load_article",
+      "type": "HUMAN_IN_THE_LOOP",
+      "input_collections": ["run_input"],
+      "output_collections": ["existing_article"],
+      "prompt": "Ask the researcher to provide the article to edit (paste text, provide file path, or reference a previous run). Parse into sections."
+    },
+    {
+      "id": "identify_edits",
+      "type": "HUMAN_IN_THE_LOOP",
+      "input_collections": ["existing_article"],
+      "output_collections": ["edit_instructions"],
+      "prompt": "Ask the researcher what to edit: which sections to revise, specific issues to fix (citations, tone, argument strength, structure), style concerns. Store edit instructions per section."
+    },
+    {
+      "id": "section_rewriting",
+      "type": "PROMPT",
+      "input_collections": ["existing_article", "edit_instructions"],
+      "output_collections": ["revised_sections"],
+      "prompt": "Spawn one section-writer agent PER EDITED SECTION (all in parallel). Each applies the full 7-skill pipeline on all paragraphs: draft with vectorless search, style compliance, grammar, academic language, purity, repetition, citation audit. Unchanged sections pass through as-is.",
+      "minimum_rows": 1,
+      "required_skills": ["cognetivy"]
+    },
+    {
+      "id": "synthesis",
+      "type": "PROMPT",
+      "input_collections": ["revised_sections", "existing_article"],
+      "output_collections": ["reviewed_article"],
+      "prompt": "Spawn synthesizer agent. Review full article coherence after edits: argument flow across edited and unedited sections, transition consistency, intro/conclusion alignment with revised content, cross-section repetition check.",
+      "required_skills": ["cognetivy"]
+    },
+    {
+      "id": "docx_output",
+      "type": "PROMPT",
+      "input_collections": ["reviewed_article"],
+      "output_collections": ["final_document"],
+      "prompt": "Generate updated .docx file with researcher's format preferences. Save to project directory.",
+      "required_skills": ["cognetivy"]
+    }
+  ]
+}

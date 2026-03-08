@@ -1,20 +1,27 @@
 {
-  "name": "academic-writer-setup",
-  "version": "0.1.0",
-  "description": "Interactive setup CLI for the Academic Writer Claude Code plugin",
+  "name": "academic-writer",
+  "version": "0.2.0",
+  "description": "AI-first academic writing assistant for Humanities researchers — Claude Code plugin",
   "type": "module",
-  "bin": {
-    "academic-writer-setup": "./setup.mjs"
-  },
-  "dependencies": {
-    "@clack/prompts": "^0.7.0"
-  },
-  "engines": {
-    "node": ">=18"
+  "scripts": {
+    "build": "bash scripts/build-plugins.sh",
+    "build:hooks": "cd src/hooks && npm run build",
+    "typecheck": "cd src/hooks && npx tsc --noEmit",
+    "clean": "rm -rf plugins/ src/hooks/dist/"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/yodem/academic-writer"
   },
-  "license": "MIT"
+  "keywords": [
+    "claude-code",
+    "plugin",
+    "academic-writing",
+    "humanities"
+  ],
+  "author": "Yotam Fromm",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  }
 }
