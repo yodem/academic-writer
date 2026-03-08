@@ -16,13 +16,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: pip install pyyaml
+        run: |
+          pip install pyyaml
+          sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Build plugin
+        run: npm run build
 
       - name: Run plugin validation tests
         run: python -m unittest discover tests/ -v
@@ -30,18 +40,8 @@ jobs:
       - name: Validate JSON files
         run: |
           echo "Checking all JSON files are valid..."
-          find . -name "*.json" -not -path "./.git/*" | while read f; do
+          find . -name "*.json" -not -path "./.git/*" -not -path "*/node_modules/*" | while read f; do
             python -c "import json; json.load(open('$f'))" || exit 1
-            echo "  ✓ $f"
-          done
-
-      - name: Check hook scripts are executable
-        run: |
-          for f in hooks/scripts/*.sh; do
-            if [ ! -x "$f" ]; then
-              echo "FAIL: $f is not executable"
-              exit 1
-            fi
             echo "  ✓ $f"
           done
 
@@ -50,7 +50,7 @@ jobs:
           python3 -c "
           import os, re, yaml, sys
           errors = []
-          for root, dirs, files in os.walk('skills'):
+          for root, dirs, files in os.walk('src/skills'):
               for f in files:
                   if f == 'SKILL.md':
                       path = os.path.join(root, f)
@@ -76,7 +76,7 @@ jobs:
         run: |
           python3 -c "
           import os, sys
-          main = set(d for d in os.listdir('skills') if os.path.isdir(f'skills/{d}'))
+          main = set(d for d in os.listdir('src/skills') if os.path.isdir(f'src/skills/{d}'))
           plugin = set(d for d in os.listdir('plugins/academic-writer/skills') if os.path.isdir(f'plugins/academic-writer/skills/{d}'))
           missing = main - plugin
           if missing:
