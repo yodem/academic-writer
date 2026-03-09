@@ -17,7 +17,7 @@ You need **at least one** of these integrations:
 
 | Tool | What it does | Setup |
 |------|-------------|-------|
-| **Candlekeep** | Cloud document library for source PDFs | [https://github.com/romiluz13/candlekeep](https://github.com/CandleKeepAgents/candlekeep-cli) |
+| **Candlekeep** | Cloud document library for source PDFs | [https://github.com/CandleKeepAgents/candlekeep-cli](https://github.com/CandleKeepAgents/candlekeep-cli) |
 | **Cognetivy** | Workflow audit trail (optional) | Built-in — no setup needed |
 
 Choose which tools you want to use during `/academic-writer-init`.
