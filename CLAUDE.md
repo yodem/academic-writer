@@ -36,6 +36,38 @@ manifests/
 
 **Critical:** Always edit `src/`, never `plugins/`. After editing `src/`, run `npm run build`.
 
+## Build → Install Sequence
+
+After any source change, always follow this exact sequence:
+
+```bash
+# 1. From the marketplace repo root:
+npm run build
+
+# 2. Install into a project (run from that project's directory, or pass --scope user for global):
+cd ~/path/to/research-project
+claude plugin install academic-writer --scope project
+
+# 3. Restart Claude Code
+```
+
+### Reinstall with cache clear
+
+If install fails or plugin behaves strangely:
+
+```bash
+rm -rf ~/.claude/plugins/cache/academic-writer
+npm run build   # from marketplace root
+claude plugin install academic-writer --scope project
+```
+
+### plugin.json validation rules
+
+Claude Code validates `plugins/academic-writer/.claude-plugin/plugin.json` strictly:
+- No unknown keys (e.g. `stats` is **not** allowed)
+- No trailing commas
+- The `build-plugins.sh` script has been fixed to not emit these — do not re-add them
+
 ## Critical Enforcement Rules
 
 - **Language purity**: Every article section is checked for embedded foreign-language text. ALL body prose must be in the article's `targetLanguage`. Foreign terms must be transliterated or footnoted — never inline.

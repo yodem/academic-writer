@@ -24,15 +24,19 @@ Choose which tools you want to use during `/academic-writer-init`.
 
 ### 2. Install the Plugin
 
-Navigate to the folder where you do your research work, then run both commands:
+Navigate to the folder where you do your research work, then run:
 
 ```bash
 cd your-research-folder
-claude plugin marketplace add yodem/academic-writer
 claude plugin install academic-writer --scope project
 ```
 
 The `--scope project` flag activates the plugin only in this folder, not globally.
+
+> **Note:** The plugin marketplace must already be registered. If you get "marketplace not found", add it first:
+> ```bash
+> claude plugin marketplace add ~/.claude/plugins/marketplaces/academic-writer
+> ```
 
 ### 3. Initialize Your Profile
 
@@ -211,23 +215,46 @@ The plugin uses different RAG query modes for different tasks:
 | `local` | Deep dive on a specific entity |
 | `global` | Thematic overview across all sources |
 
+## Updating / Reinstalling
+
+After pulling changes from GitHub, rebuild and reinstall the plugin from the **marketplace directory**:
+
+```bash
+cd ~/.claude/plugins/marketplaces/academic-writer
+npm run build
+claude plugin install academic-writer --scope project
+```
+
+Then **restart Claude Code** to apply the changes.
+
+### Full reinstall (clears cache)
+
+If you see stale behaviour or install errors, delete the cache first:
+
+```bash
+rm -rf ~/.claude/plugins/cache/academic-writer
+cd ~/.claude/plugins/marketplaces/academic-writer
+npm run build
+claude plugin install academic-writer --scope project
+```
+
+### Install in a specific project
+
+The install command must be run from the project folder you want the plugin active in:
+
+```bash
+cd ~/your-research-folder
+claude plugin install academic-writer --scope project
+```
+
 ## Contributing
 
-This is a Claude Code plugin. To modify:
+This is a Claude Code plugin. Source files live in `src/` — never edit `plugins/` directly (it is generated).
 
-1. Edit `.md` files in `skills/`, `agents/`, `hooks/`
-2. Commit and push to GitHub
-3. In your research folder, pull the latest:
-   ```bash
-   claude plugin marketplace update academic-writer
-   claude plugin update academic-writer@academic-writer --scope project
-   ```
-   If that fails, reinstall:
-   ```bash
-   claude plugin uninstall academic-writer --scope project
-   claude plugin install academic-writer --scope project
-   ```
-4. Restart Claude Code to apply changes
+1. Edit source files in `src/skills/`, `src/agents/`, `src/hooks/`
+2. Build: `npm run build`
+3. Test locally: `claude plugin install academic-writer --scope project` (from your research folder)
+4. Commit and push to GitHub
 
 ## License
 

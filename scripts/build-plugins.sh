@@ -110,8 +110,6 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
     --arg name "$PLUGIN_NAME" \
     --arg version "$PLUGIN_VERSION" \
     --arg desc "$PLUGIN_DESC" \
-    --arg skills "$skill_count" \
-    --arg agents "$agent_count" \
     '{
       name: $name,
       version: $version,
@@ -123,11 +121,7 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
       homepage: "https://github.com/yodem/academic-writer",
       repository: "https://github.com/yodem/academic-writer",
       license: "MIT",
-      keywords: ["academic-writing","humanities","citations","claude-code","plugin"],
-      stats: {
-        skills: ($skills | tonumber),
-        agents: ($agents | tonumber)
-      }
+      keywords: ["academic-writing","humanities","citations","claude-code","plugin"]
     }' > "$PLUGIN_DIR/.claude-plugin/plugin.json"
 
   # Generate commands from user-invocable skills
