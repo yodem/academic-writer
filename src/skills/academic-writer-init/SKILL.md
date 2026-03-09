@@ -2,203 +2,249 @@
 name: academic-writer-init
 description: "First-time setup for the Academic Writer. Configures researcher profile, analyzes writing style from past articles, and indexes research sources."
 user-invocable: true
+allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
 ---
 
-# Academic Writer — Initialization
+# Academic Writer — Initialization Wizard
 
-You are setting up a researcher's Academic Writer profile. Be warm, clear, and non-technical. Explain why each step matters.
+Personalized onboarding that creates your researcher profile, detects available integrations, analyzes your writing style, and indexes your research sources.
 
-## Step 0: Initialize Folders
+## The Five Phases
 
-Run this silently before saying anything to the user:
+| Phase | What | Output |
+|-------|------|--------|
+| 0. Preflight | Create folders, detect existing profile | Workspace ready |
+| 1. Integrations | Auto-detect tools, let you choose | `tools` config |
+| 2. Profile | Field, language, citation style | Core profile |
+| 3. Style Analysis | Read past articles, build fingerprint | `styleFingerprint` + `articleStructure` |
+| 4. Sources | Index Candlekeep library | `sources` array |
+
+---
+
+## Phase 0: Preflight
+
+Run silently before saying anything:
 
 ```bash
 mkdir -p past-articles .academic-writer .cognetivy/runs .cognetivy/events
 ```
 
-Then greet the user:
-> "Welcome to Academic Writer setup! I'll walk you through 4 quick steps.
->
-> I've created your workspace folders:
-> - **`past-articles/`** — drop 5–10 of your published papers here (PDF or DOCX) so I can learn your writing style
-> - `.academic-writer/` — your profile (auto-managed)
->
-> Let's get started."
-
----
-
-## Prerequisites Check
-
-### A. Check for existing profile
-
-Before starting, verify the profile doesn't already exist:
+Check for existing profile:
 
 ```bash
 cat .academic-writer/profile.json 2>/dev/null && echo "EXISTS" || echo "NOT_FOUND"
 ```
 
-If profile EXISTS, ask: "You already have a profile set up. Would you like to update it, or start fresh?"
+**If EXISTS**: Use `AskUserQuestion`:
 
-### B. Tool Registry — detect and select integrations
-
-Academic Writer supports several external tools. Not all are required — the researcher picks the ones they use. Present the **Available Tools Registry** and auto-detect which are already installed.
-
-#### Tool Registry
-
-The following is the master list of supported tools. For each tool, run the detection command. Then present the results to the user as a checklist.
-
-**1. Candlekeep** (`candlekeep`)
-- *What it does:* Cloud document library for source PDFs and research materials
-- *Type:* CLI
-- *Setup:* https://github.com/romiluz13/candlekeep
-- *Detection:*
-```bash
-command -v ck >/dev/null 2>&1 && echo "DETECTED" || echo "NOT_DETECTED"
+```python
+AskUserQuestion(questions=[{
+  "question": "You already have an Academic Writer profile. What would you like to do?",
+  "header": "Existing profile detected",
+  "options": [
+    {
+      "label": "Update my profile",
+      "description": "Keep existing data, modify selected fields only.",
+      "markdown": "```\nUpdate Mode\n───────────\n✓ Field of study preserved\n✓ Style fingerprint preserved\n✓ Sources preserved\n→ Re-run only the steps you choose\n```"
+    },
+    {
+      "label": "Start fresh",
+      "description": "Delete the current profile and rebuild from scratch.",
+      "markdown": "```\nFresh Start\n───────────\n⚠ Existing profile will be replaced\n⚠ Style fingerprint will be cleared\n⚠ Sources will be cleared\n→ Walk through all 4 phases again\n```"
+    }
+  ],
+  "multiSelect": false
+}])
 ```
 
-**2. Agentic-Search-Vectorless** (`agentic-search-vectorless`)
-- *What it does:* Vectorless semantic search — fast relevance scoring without embeddings
-- *Type:* Local service (HTTP) or local repo
-- *Repo:* `../Agentic-Search-Vectorless/`
-- *Detection:*
-```bash
-(ls ../Agentic-Search-Vectorless/src 2>/dev/null && echo "REPO_DETECTED") || echo "NOT_DETECTED"
-```
+If **Update**, ask which phases to re-run (multiSelect: true) with options: "Integrations", "Profile (field/language/citation)", "Style Analysis", "Sources". Run only selected phases, then save.
 
-- *What it does:* Deep semantic + keyword retrieval (BM25 + vector) for citation search and verification
-- *Type:* Local service (HTTP) or local repo
-- *Detection:*
-```bash
-```
-
-**4. MongoDB Agent Skills** (`mongodb-agent-skills`)
-- *What it does:* Database-backed research operations via MCP server
-- *Type:* MCP server
-- *Setup:* https://github.com/romiluz13/mongodb-agent-skills
-- *Detection:*
-```bash
-# Check both user-level and project-level MCP settings
-(cat ~/.claude/settings.json 2>/dev/null; cat .mcp.json 2>/dev/null) | python3 -c "
-import sys, json
-found = False
-for line in sys.stdin.read().split('}{'):
-    try:
-        d = json.loads('{' + line.strip('{}') + '}')
-        servers = d.get('mcpServers', {})
-        if any('mongo' in k.lower() for k in servers):
-            found = True
-    except: pass
-print('DETECTED' if found else 'NOT_DETECTED')
-"
-```
-
-**5. Cognetivy** (`cognetivy`)
-- *What it does:* Workflow tracking and audit trail for pipeline steps
-- *Type:* CLI
-- *Setup:* Built-in with this plugin (see `.cognetivy/` directory)
-- *Detection:*
-```bash
-command -v cognetivy >/dev/null 2>&1 && echo "DETECTED" || echo "NOT_DETECTED"
-```
-
-#### Present results and let the user choose
-
-After running all detection commands, present the results:
-
-> "Here are the integrations Academic Writer supports. I've auto-detected what you have installed:
+Then greet the user:
+> "Welcome to Academic Writer! I'll walk you through setup in a few steps.
 >
-> | # | Tool | Status | What it does |
-> |---|------|--------|-------------|
-> | 1 | Candlekeep | ✓ Detected / ✗ Not found | Cloud document library |
-> | 2 | Agentic-Search-Vectorless | ✓ Detected / ✗ Not found | Vectorless semantic search |
-> | 4 | MongoDB Agent Skills | ✓ Detected / ✗ Not found | Database-backed research ops |
-> | 5 | Cognetivy | ✓ Detected / ✗ Not found | Workflow audit trail |
+> Your workspace folders are ready:
+> - **`past-articles/`** — drop 5–10 of your published papers here (PDF or DOCX) so I can learn your writing style
+> - `.academic-writer/` — your profile (auto-managed)
 >
-> Which tools would you like to enable? You can pick by number, name, or say 'all detected'.
->
-> For any tool marked ✗ that you'd like to use, I'll help you set it up."
+> Let's start."
+
+---
+
+## Phase 1: Integration Detection
+
+Run ALL detection commands in **one parallel batch**:
+
+```python
+# PARALLEL — launch all at once
+Bash(command="command -v ck >/dev/null 2>&1 && echo 'DETECTED' || echo 'NOT_DETECTED'")
+Bash(command="curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo 'DETECTED' || echo 'NOT_DETECTED'")
+Bash(command="command -v cognetivy >/dev/null 2>&1 && echo 'DETECTED' || echo 'NOT_DETECTED'")
+```
+
+**Vectorless port fallback**: if port 8000 returns `NOT_DETECTED`, ask:
+
+```python
+AskUserQuestion(questions=[{
+  "question": "Agentic-Search-Vectorless didn't respond on port 8000. What port is it running on?",
+  "header": "Vectorless port",
+  "options": [
+    {"label": "Skip for now", "description": "You can enable it later with /academic-writer-update-tools."}
+  ],
+  "multiSelect": false
+}])
+```
+
+If the researcher provides a port number, retry `curl http://localhost:<PORT>/health`. Save the port to `tools.agentic-search-vectorless.port`.
+
+**MongoDB Agent Skills** is auto-configured silently — do not show it to the user.
+
+### Present Results
+
+```python
+AskUserQuestion(questions=[{
+  "question": "Here are the tools I found. Which would you like to enable?",
+  "header": "Integration setup",
+  "options": [
+    {
+      "label": "Candlekeep",
+      "description": "✓ Detected  (or ✗ Not found — install from github.com/romiluz13/candlekeep)",
+      "markdown": "```\nCandlekeep\n──────────\nType:    CLI (ck)\nWhat:    Cloud document library\nBest for: Storing and searching your source PDFs\nStatus:  ✓ Detected\n```"
+    },
+    {
+      "label": "Agentic-Search-Vectorless",
+      "description": "✓ Running on port 8000  (or ✗ Not running)",
+      "markdown": "```\nAgentic-Search-Vectorless\n─────────────────────────\nType:    Local HTTP service\nWhat:    Fast semantic search for citations\nBest for: Finding exact page numbers and passages\nStatus:  ✓ Running on :8000\n```"
+    },
+    {
+      "label": "Cognetivy",
+      "description": "✓ Detected  (or ✗ Not found — run: npm install -g cognetivy)",
+      "markdown": "```\nCognetivy\n─────────\nType:    CLI\nWhat:    Workflow tracking and audit trail\nBest for: Logging every pipeline step for review\nStatus:  ✓ Detected\n\nSetup (if not installed):\n  npm install -g cognetivy\n  cognetivy init\n```"
+    }
+  ],
+  "multiSelect": true
+}])
+```
 
 **Rules:**
-- The user does NOT have to enable all tools. Any combination is valid.
-- If a user wants a tool that's not detected, show them the setup URL and walk them through installation. Re-run detection after they confirm setup.
-- Only proceed once the user has confirmed their final tool selection.
-- You can update enabled tools later with `/academic-writer-update-tools`.
+- Pre-check options that were detected.
+- If a tool is not detected and the researcher selects it, show the setup URL and walk them through installation. Re-run detection after they confirm, before proceeding.
+- Store final selection as the `tools` object (used in Phase 4).
 
-#### Store the selection
+---
 
-Build a `tools` object for the profile (used in Step 5). For each tool, store:
+## Phase 2: Researcher Profile
 
-```json
-{
-  "tools": {
-    "candlekeep": { "enabled": true, "version": "detected" },
-    "agentic-search-vectorless": { "enabled": true, "path": "../Agentic-Search-Vectorless" },
-    "mongodb-agent-skills": { "enabled": false },
-    "cognetivy": { "enabled": true, "version": "detected" }
-  }
-}
+### Step 1 of 4 — Field of Study
+
+```python
+AskUserQuestion(questions=[{
+  "question": "What is your field of study and area of specialization?",
+  "header": "Step 1 of 4 — Field of Study",
+  "options": []
+}])
 ```
 
-Only include `"version": "detected"` for tools that were successfully detected. Omit the version key for disabled tools.
+Show examples below the question:
+> "The more specific, the better. Examples:
+> - *Early Modern Jewish Philosophy*
+> - *Talmudic Literature and Rabbinic Thought*
+> - *Medieval Hebrew Poetry*
+> - *Biblical Studies — Pentateuch*"
+
+Record the free-text answer as `fieldOfStudy`.
 
 ---
 
-## Step 1: Field of Study
+### Step 2 of 4 — Article Language
 
-Ask:
-> "**Step 1 of 4 — Field of Study**
-> What is your field of study and area of specialization?
->
-> The more specific, the better — for example, *'Early Modern Jewish Philosophy'* is more useful than *'Philosophy'*."
+```python
+AskUserQuestion(questions=[{
+  "question": "What language will you write your articles in?",
+  "header": "Step 2 of 4 — Article Language",
+  "options": [
+    {
+      "label": "Hebrew",
+      "description": "Right-to-left, David font, inline-parenthetical citations recommended.",
+      "markdown": "```\nHebrew Mode\n───────────\nDirection:  RTL\nFont:       David 11pt\nCitations:  (מחבר, כותרת, עמ' N) in running text\nPurity:     Foreign terms must be transliterated\n```"
+    },
+    {
+      "label": "English",
+      "description": "Left-to-right, Times New Roman, Chicago/MLA/APA supported.",
+      "markdown": "```\nEnglish Mode\n────────────\nDirection:  LTR\nFont:       Times New Roman 12pt\nCitations:  Chicago, MLA, or APA\n```"
+    },
+    {
+      "label": "Other",
+      "description": "You'll specify the language name.",
+      "markdown": "```\nOther Language\n──────────────\n→ You'll type the language name\n→ RTL/LTR detected from language\n→ Citation style: your choice\n```"
+    }
+  ],
+  "multiSelect": false
+}])
+```
 
-Record their answer.
-
----
-
-## Step 1.5: Article Language
-
-Present as a numbered menu:
-> "**Step 2 of 4 — Article Language**
-> What language will you write your articles in?
->
-> 1. Hebrew
-> 2. English
-> 3. Other (you'll specify)
->
-> Type a number:"
-
-Store as `targetLanguage`. This is enforced throughout the pipeline — all agents write exclusively in this language, and the language purity check rejects any embedded foreign-language text in the body prose.
-
----
-
-## Step 2: Citation Style
-
-Present as a numbered menu:
-> "**Step 3 of 4 — Citation Style**
-> Which citation style do you use in your work?
->
-> 1. Inline Parenthetical — `(Author, Title, Page)` in running text *(recommended for Hebrew)*
-> 2. Chicago/Turabian — footnotes *(most common in English Humanities)*
-> 3. MLA
-> 4. APA
->
-> Type a number (1–4):"
-
-Map selection to value: 1 → `inline-parenthetical`, 2 → `chicago`, 3 → `mla`, 4 → `apa`
+Store as `targetLanguage`. If "Other", ask for the language name with a follow-up `AskUserQuestion`.
 
 ---
 
-## Step 3: Past Articles for Style Analysis
+### Step 3 of 4 — Citation Style
 
-Tell the researcher:
-> "**Step 4 of 4 — Writing Style**
-> I need to learn your writing style so articles I produce sound like *you*, not a generic AI.
->
-> Place 5–10 of your published papers in the **`past-articles/`** folder I created for you (PDF or DOCX). These files are used only to analyze your style — never uploaded anywhere.
->
-> Tell me when you've added your files."
+```python
+AskUserQuestion(questions=[{
+  "question": "Which citation style do you use in your academic work?",
+  "header": "Step 3 of 4 — Citation Style",
+  "options": [
+    {
+      "label": "Inline Parenthetical (Recommended for Hebrew)",
+      "description": "(Author, Title, Page) in running text — no footnotes required.",
+      "markdown": "```\nInline Parenthetical\n────────────────────\nExample:\n  כפי שטוען לוי (לוי, משנת הנפש, עמ' 42), הרעיון\n  המרכזי הוא...\n\nWhen to use:\n  ✓ Hebrew articles\n  ✓ Short citation format\n  ✓ Dense citation density\n```"
+    },
+    {
+      "label": "Chicago / Turabian",
+      "description": "Footnotes with full bibliography — most common in English Humanities.",
+      "markdown": "```\nChicago / Turabian\n──────────────────\nExample footnote:\n  ¹ Levy, The Soul's Teaching, 42.\n\nWhen to use:\n  ✓ English Humanities articles\n  ✓ History, Philosophy, Literature\n  ✓ Requires bibliography section\n```"
+    },
+    {
+      "label": "MLA",
+      "description": "Parenthetical with Works Cited page.",
+      "markdown": "```\nMLA\n───\nExample: (Levy 42)\n\nWhen to use:\n  ✓ Literature and language studies\n  ✓ Humanities with Works Cited\n```"
+    },
+    {
+      "label": "APA",
+      "description": "(Author, Year) style — more common in social sciences.",
+      "markdown": "```\nAPA\n───\nExample: (Levy, 2019, p. 42)\n\nWhen to use:\n  ✓ Social sciences\n  ✓ Psychology, Education, Linguistics\n```"
+    }
+  ],
+  "multiSelect": false
+}])
+```
 
-Once they confirm, analyze their writing style by reading the files:
+Map selection: Inline → `inline-parenthetical`, Chicago → `chicago`, MLA → `mla`, APA → `apa`.
+
+---
+
+### Step 4 of 4 — Writing Style
+
+```python
+AskUserQuestion(questions=[{
+  "question": "To write articles that sound like you, I need to analyze your past work. Have you added papers to the past-articles/ folder?",
+  "header": "Step 4 of 4 — Writing Style",
+  "options": [
+    {
+      "label": "Yes, my papers are ready",
+      "description": "Analyze them now to extract your writing fingerprint.",
+      "markdown": "```\nStyle Analysis\n──────────────\n→ Reads PDF and DOCX files in past-articles/\n→ Analyzes 25 style dimensions:\n   sentence length, structure, vocabulary,\n   paragraph patterns, transitions, citations,\n   rhetorical moves, tone, intro/conclusion style\n→ Shows you the fingerprint before saving\n→ You can correct anything before it's stored\n```"
+    },
+    {
+      "label": "Skip for now",
+      "description": "Profile will be saved without a style fingerprint. Articles will use generic academic style.",
+      "markdown": "```\nSkip Style Analysis\n───────────────────\n⚠ Articles won't match your voice yet\n→ Add papers to past-articles/ anytime\n→ Re-run: /academic-writer-init\n   (choose 'Update' → 'Style Analysis')\n```"
+    }
+  ],
+  "multiSelect": false
+}])
+```
+
+**If "Yes, my papers are ready"**, run:
 
 ```bash
 ls past-articles/
@@ -208,192 +254,118 @@ For each file, extract text:
 - PDF: `python3 -c "import sys; import pdfplumber; [print(p.extract_text()) for p in pdfplumber.open(sys.argv[1]).pages]" past-articles/FILENAME 2>/dev/null || strings past-articles/FILENAME | head -500`
 - DOCX: `python3 -c "import docx; d=docx.Document('past-articles/FILENAME'); [print(p.text) for p in d.paragraphs]" 2>/dev/null`
 
-Analyze the combined text to create a **detailed Style Fingerprint** AND **Article Structure Profile**. These are the two most important artifacts in the profile. Be thorough.
+Analyze across all 25 dimensions (A–H + Article Structure I below). Show the fingerprint summary and confirm before saving:
 
-### A. Sentence-Level Analysis
+```python
+AskUserQuestion(questions=[{
+  "question": "Here's the writing fingerprint I extracted. Is this accurate?",
+  "header": "Style fingerprint review",
+  "options": [
+    {"label": "Looks good — save it", "description": "Profile will be saved with this fingerprint."},
+    {"label": "I'd like to adjust some things", "description": "Tell me what to change and I'll update before saving."}
+  ],
+  "multiSelect": false
+}])
+```
 
-1. **Average sentence length** — Count words per sentence across all articles. Give the mean and range (e.g., "22 words average, range 8–45").
-2. **Sentence structure variety** — Does the writer favor simple/compound/complex sentences? What's the rough ratio? (e.g., "60% complex, 25% compound, 15% simple")
-3. **Sentence openers** — What patterns do they use to start sentences? (e.g., "Often leads with subordinate clauses: 'Although X, Y...'", "Frequently uses participial phrases: 'Drawing on X, the author...'")
-4. **Passive voice frequency** — rare / occasional / frequent. Give examples from their writing.
+### 25-Dimension Style Analysis
 
-### B. Vocabulary & Register
+#### A. Sentence-Level
+1. Average sentence length (mean + range in words)
+2. Sentence structure variety (% complex/compound/simple)
+3. Common sentence openers (patterns)
+4. Passive voice frequency + examples
 
-5. **Vocabulary complexity** — simple / moderate / complex / highly-complex. Note any distinctive word choices or preferences.
-6. **Academic register level** — How formal? Do they ever use informal constructions? Do they use first person ("I argue") or impersonal ("it can be argued")?
-7. **Field-specific jargon** — List the specialized terms they use regularly and how they introduce them (with or without definition, in quotes, italicized, etc.)
-8. **Hebrew academic conventions** (if applicable) — Note any Hebrew terms, transliteration style, use of Hebrew quotes, direction of Hebrew insertions in English text or vice versa.
+#### B. Vocabulary & Register
+5. Vocabulary complexity (simple/moderate/complex/highly-complex)
+6. Academic register level + first vs. impersonal person
+7. Field-specific jargon (list + how introduced)
+8. Hebrew academic conventions (if applicable)
 
-### C. Paragraph & Argument Structure
+#### C. Paragraph & Argument Structure
+9. Paragraph structure pattern (detailed step-by-step)
+10. Average paragraph length (words + range)
+11. Argument progression (inductive/deductive/other)
+12. How evidence is introduced
+13. How evidence is analyzed after quoting
 
-9. **Paragraph structure pattern** — Describe in detail. (e.g., "topic sentence → evidence quote → close reading of quote → theoretical framing → forward link")
-10. **Paragraph length** — Average word count per paragraph. Range.
-11. **Argument progression** — How does the writer build arguments across paragraphs? (e.g., "inductive: examples first, then generalization" or "deductive: claim, then evidence")
-12. **How they introduce evidence** — Do they quote extensively, paraphrase, or summarize? How do they set up quotes? (e.g., "As X argues, '...'" vs. "X's claim that '...' reveals...")
-13. **How they analyze evidence** — What does the writer do AFTER quoting? (e.g., "always follows quotes with close reading", "draws connection to thesis within same paragraph")
+#### D. Tone & Voice
+14. Tone descriptors (5–7 adjectives)
+15. Authorial stance + common hedging/asserting phrases
+16. Engagement with other scholars
 
-### D. Tone & Voice
+#### E. Transitions & Flow
+17. Preferred transition phrases (grouped by function: addition, contrast, causation, exemplification, conclusion)
+18. Section-level transition patterns
 
-14. **Tone descriptors** — 5–7 adjectives that capture their voice. (e.g., "measured, precise, cautiously argumentative, occasionally polemical, deeply engaged")
-15. **Authorial stance** — How present is the author? Do they assert confidently ("This demonstrates...") or hedge ("This appears to suggest...")? List their common hedging/asserting phrases.
-16. **Engagement with other scholars** — How do they treat opposing views? (e.g., "generous restatement before critique", "direct refutation", "strategic concession then pivot")
+#### F. Citation Style & Density
+19. Citation density (sparse/moderate/dense + footnotes/paragraph average)
+20. Citation integration style
+21. Quote length preference
 
-### E. Transitions & Flow
+#### G. Rhetorical Patterns
+22. Rhetorical patterns (3–5 most common)
+23. Opening moves (how they start articles)
+24. Closing moves (how they end articles)
 
-17. **Preferred transition phrases** — List the 10–15 most frequent transitions. Group by function:
-    - Addition: (e.g., "moreover", "furthermore", "יתרה מכך")
-    - Contrast: (e.g., "however", "nevertheless", "אולם")
-    - Causation: (e.g., "consequently", "thus", "לפיכך")
-    - Exemplification: (e.g., "for instance", "notably", "למשל")
-    - Conclusion: (e.g., "ultimately", "in sum", "לסיכום")
-18. **Section-level transitions** — How do they bridge between major sections? (e.g., "ends section with a question that the next section answers", "uses a transitional paragraph")
+#### H. Representative Excerpts
+25. 5 verbatim excerpts (2–3 sentences each) showing: analytical move, argumentative voice, evidence handling, transition style, most distinctive trait
 
-### F. Citation Style & Density
-
-19. **Citation density** — sparse / moderate / dense. How many footnotes per paragraph on average?
-20. **Citation integration** — How are citations woven into prose? (e.g., "citations appear mid-sentence as evidence", "citations cluster at end of analytical passages")
-21. **Quote length preference** — Does the writer prefer short embedded quotes, block quotes, or paraphrases?
-
-### G. Rhetorical Patterns
-
-22. **Rhetorical patterns** — List the 3–5 most common. (e.g., "close reading", "comparative analysis", "historicization", "thesis-antithesis-synthesis", "genealogical tracing")
-23. **Opening moves** — How do they typically open articles? (e.g., "starts with an anecdote", "opens with a puzzle or contradiction", "begins with historiographic review")
-24. **Closing moves** — How do they typically close? (e.g., "returns to opening image", "widens implications", "poses open question")
-
-### H. Representative Excerpts
-
-25. **5 representative excerpts** (2–3 sentences each) that best capture the writer's voice. Choose excerpts that demonstrate:
-    - Their typical analytical move
-    - Their strongest argumentative voice
-    - Their handling of evidence
-    - Their transition style
-    - Their most distinctive stylistic trait
-
-### I. Article Structure Analysis (NEW — Critical)
-
-Analyze the researcher's articles to understand their structural conventions. This informs how the architect builds outlines and how section-writers handle intro/conclusion.
-
-26. **Article sections inventory** — What sections do their articles typically contain? List all recurring sections in order. Examples:
-    - Introduction
-    - Literature Review / State of Research
-    - Theoretical Framework
-    - Historical Background
-    - Analysis sections (how many? what types?)
-    - Discussion
-    - Conclusion
-    - Bibliography
-
-27. **Introduction conventions** — Analyze how they write introductions:
-    - What is the opening sentence/phrase pattern? (e.g., "במאמר זה נבחן את...", "בעבודה זו אבקש להראות כי...")
-    - Do they include an article roadmap (describing what each section covers)?
-    - How long is the typical introduction (words/paragraphs)?
-    - What elements appear: problem statement, thesis, methodology, roadmap, context?
-    - In what order do these elements appear?
-
-28. **Conclusion conventions** — Analyze how they write conclusions:
-    - What is the opening sentence/phrase pattern? (e.g., "לסיכום", "מכל האמור עולה כי")
-    - Do they recap each section's argument?
-    - Do they restate the thesis?
-    - Do they widen to implications or further research?
-    - How long is the typical conclusion?
-    - What is the closing sentence pattern?
-
-29. **Paragraph parts** — Analyze what components make up their typical paragraphs:
-    - **Topic sentence**: How do they open paragraphs? (claim-first? context-first? question?)
-    - **Evidence presentation**: How do they present evidence? (direct quote → analysis? paraphrase → comment? multiple sources compared?)
-    - **Analysis**: What kind of analysis follows evidence? (close reading? theoretical application? comparison?)
-    - **Transition/bridge**: How do they close paragraphs? (forward link? summary? rhetorical question?)
-    - **Typical paragraph formula**: Describe the most common pattern as a sequence (e.g., "claim → source introduction → quote → close reading → theoretical implication → bridge to next paragraph")
-
-30. **Section transition patterns** — How do they move between major sections?
-    - Last paragraph of section N → First paragraph of section N+1: what's the pattern?
-    - Do they use transitional paragraphs?
-    - Do they use explicit signposting ("We now turn to...")?
-
-**Show the full fingerprint AND article structure to the researcher** and ask for corrections before saving:
-> "Here's the writing style and article structure I extracted from your articles. Please review — is this accurate? Anything you'd like me to adjust?"
+#### I. Article Structure Analysis
+26. Typical section inventory (in order)
+27. Introduction conventions (opening pattern, elements, element order, roadmap?, typical length)
+28. Conclusion conventions (opening pattern, elements, restatement?, implications?, closing pattern, typical length)
+29. Paragraph formula (topic sentence style, evidence presentation, analysis type, closing move, full sequence)
+30. Section transition patterns (bridging style, transitional paragraphs?, explicit signposting?)
 
 ---
 
-## Step 4: Research Sources
+## Phase 3: Research Sources
 
-**This step adapts based on which tools the researcher enabled in the Prerequisites Check.**
+**If Candlekeep is enabled:**
 
-### If Candlekeep is enabled:
+```python
+AskUserQuestion(questions=[{
+  "question": "Let's index your research library. Have you added sources to Candlekeep yet?",
+  "header": "Research sources",
+  "options": [
+    {
+      "label": "Yes, index my sources now",
+      "description": "I'll enrich and index everything in your Candlekeep library.",
+      "markdown": "```\nSource Indexing\n───────────────\n→ Lists all items in your library\n→ Runs ck items enrich on each\n   (extracts title, author, TOC)\n→ Saves minimal metadata to profile\n   (id, title, type only)\n```"
+    },
+    {
+      "label": "Skip — I'll add sources later",
+      "description": "Run /academic-writer-init again (choose Update → Sources) after adding items.",
+      "markdown": "```\nSkip Sources\n────────────\n⚠ Articles won't have source metadata yet\n→ Add sources with: ck items add file.pdf\n→ Then re-run this step\n```"
+    }
+  ],
+  "multiSelect": false
+}])
+```
 
-Tell the researcher:
-> "Now let's set up your research library. These are the books, articles, and primary sources you cite in your work.
->
-> Add them to Candlekeep using:
-> ```
-> ck items add your-source.pdf
-> ```
->
-> Tell me when you've added your sources."
-
-Once confirmed, list them and **enrich all items**:
+If **"Yes"**: list and enrich all items:
 
 ```bash
 ck items list --json
 ```
 
-**Run `ck items enrich` on every item** — this extracts title, author, description, and table of contents from each document so the writing pipeline can use accurate metadata:
-
+For each item ID:
 ```bash
-# For each item ID returned above:
 ck items enrich ITEM_ID
 ```
 
-Tell the researcher while enrichment runs:
-> "Enriching your sources — extracting titles, authors, and table of contents from each document. This may take a moment..."
+Tell the researcher: "Enriching your sources — extracting titles, authors, and table of contents from each document. This may take a moment..."
 
-After enrichment, re-list to get updated metadata:
+After enrichment, re-list and build the sources array (id + title + type only — never raw JSON).
 
-```bash
-ck items list --json
-```
-
-Parse the JSON output and build a **sources array** with only the metadata you need for the profile. For each item, extract:
-- `id` — the Candlekeep document ID
-- `title` — the document title
-- `type` — the document type (pdf, docx, etc.)
-
-**IMPORTANT:** Store only the minimal metadata above in the profile. Do NOT dump the raw `ck items list --json` output into the profile — that will break the JSON structure.
-
-Build the sources array like this (in memory, for Step 5):
-```json
-[
-  { "id": "DOC_ID_1", "title": "Document Title 1", "type": "pdf" },
-  { "id": "DOC_ID_2", "title": "Document Title 2", "type": "pdf" }
-]
-```
-
-### If Candlekeep is NOT enabled:
-
-Tell the researcher:
-> "Since Candlekeep is not enabled, you can provide source files directly in the `past-articles/` folder or manage sources manually.
->
-> If you'd like to add Candlekeep later, run `/academic-writer-update-tools`."
-
-Set the sources array to `[]` for the profile.
-
-### If Cognetivy is enabled — track the sync:
-
-```bash
-cognetivy run start --input /tmp/aw-init-input.json
-```
-
-If Cognetivy is NOT enabled, skip this logging step silently.
+**If Candlekeep is NOT enabled**: set sources to `[]`.
 
 ---
 
-## Step 5: Save Profile
+## Phase 4: Save Profile + Register Workflows
 
-Save the complete profile:
-
-Use the Write tool to create `.academic-writer/profile.json` with the following structure. Replace all placeholder values with the actual data you collected in the previous steps.
-
-**IMPORTANT:** Use the Write tool (not bash heredoc) to avoid JSON escaping issues. Build the JSON carefully as a valid object.
+Use the Write tool to save `.academic-writer/profile.json`:
 
 ```json
 {
@@ -410,132 +382,67 @@ Use the Write tool to create `.academic-writer/profile.json` with the following 
     "alignment": "justify",
     "rtl": true
   },
-  "styleFingerprint": {
-    "sentenceLevel": {
-      "averageLength": "22 words, range 8-45",
-      "structureVariety": "60% complex, 25% compound, 15% simple",
-      "commonOpeners": ["subordinate clause", "participial phrase"],
-      "passiveVoice": "occasional",
-      "passiveVoiceExamples": []
-    },
-    "vocabularyAndRegister": {
-      "complexity": "complex",
-      "registerLevel": "formal, impersonal (avoids first person)",
-      "fieldJargon": [],
-      "hebrewConventions": ""
-    },
-    "paragraphStructure": {
-      "pattern": "topic sentence → evidence quote → close reading → theoretical framing → forward link",
-      "averageLength": "150 words, range 100-220",
-      "argumentProgression": "deductive",
-      "evidenceIntroduction": "sets up with 'As X argues' then quotes",
-      "evidenceAnalysis": "close reading immediately after quote"
-    },
-    "toneAndVoice": {
-      "descriptors": [],
-      "authorStance": "cautiously assertive with hedging",
-      "commonHedges": [],
-      "commonAssertions": [],
-      "engagementWithScholars": "generous restatement before critique"
-    },
-    "transitions": {
-      "preferred": {
-        "addition": [],
-        "contrast": [],
-        "causation": [],
-        "exemplification": [],
-        "conclusion": []
-      },
-      "sectionBridging": "ends with question answered by next section"
-    },
-    "citations": {
-      "density": "moderate",
-      "footnotesPerParagraph": 2,
-      "integrationStyle": "mid-sentence as evidence",
-      "quoteLengthPreference": "short embedded quotes"
-    },
-    "rhetoricalPatterns": {
-      "common": [],
-      "openingMoves": "",
-      "closingMoves": ""
-    },
-    "representativeExcerpts": []
-  },
-  "articleStructure": {
-    "typicalSections": [
-      "Introduction",
-      "Body Section 1",
-      "Body Section 2",
-      "Conclusion"
-    ],
-    "introduction": {
-      "openingPattern": "במאמר זה נבחן את...",
-      "elements": ["problem statement", "thesis", "article roadmap", "context"],
-      "elementOrder": "context → problem → thesis → roadmap",
-      "includesRoadmap": true,
-      "typicalLength": "200-300 words, 2 paragraphs"
-    },
-    "conclusion": {
-      "openingPattern": "לסיכום...",
-      "elements": ["summary phrase", "section recap", "thesis reaffirmation", "implications", "closing statement"],
-      "elementOrder": "summary → recap → thesis → implications → closing",
-      "typicalLength": "200-300 words, 2 paragraphs",
-      "closingPattern": ""
-    },
-    "paragraphParts": {
-      "typicalFormula": "claim → source introduction → quote → close reading → theoretical implication → bridge",
-      "topicSentence": "claim-first",
-      "evidencePresentation": "direct quote with setup phrase",
-      "analysisType": "close reading + theoretical application",
-      "closingMove": "forward link to next paragraph"
-    },
-    "sectionTransitions": {
-      "pattern": "last paragraph bridges to next section's topic",
-      "usesTransitionalParagraphs": false,
-      "usesExplicitSignposting": true
-    }
-  },
+  "styleFingerprint": { ... },
+  "articleStructure": { ... },
   "tools": {
-    "candlekeep": { "enabled": true, "version": "detected" },
-    "agentic-search-vectorless": { "enabled": true, "path": "../Agentic-Search-Vectorless" },
-    "mongodb-agent-skills": { "enabled": false },
-    "cognetivy": { "enabled": true, "version": "detected" }
+    "candlekeep": { "enabled": true },
+    "agentic-search-vectorless": { "enabled": true, "port": 8000 },
+    "mongodb-agent-skills": { "enabled": true },
+    "cognetivy": { "enabled": true }
   },
-  "sources": [
-    {
-      "id": "DOC_ID",
-      "title": "Document Title",
-      "type": "pdf"
-    }
-  ],
-  "createdAt": "TIMESTAMP",
-  "updatedAt": "TIMESTAMP"
+  "sources": [],
+  "createdAt": "ISO_TIMESTAMP",
+  "updatedAt": "ISO_TIMESTAMP"
 }
 ```
 
-- `fieldOfStudy` — from Step 1
-- `targetLanguage` — from Step 1.5
-- `citationStyle` — from Step 2 (`inline-parenthetical` / `chicago` / `mla` / `apa`)
-- `outputFormatPreferences` — font, size, spacing settings (ask the researcher if they want to customize; otherwise use defaults: David, 11pt, 1.5 spacing, 1" margins, justified, RTL for Hebrew)
-- `styleFingerprint` — all values from Step 3 analysis sections A–H. **`representativeExcerpts` must contain actual verbatim text passages from the researcher's past work** (2–3 sentences each), not just descriptions — these are the style targets used by every section-writer.
-- `articleStructure` — all values from Step 3 analysis section I. This is critical for intro/conclusion conventions and paragraph structure.
-- `tools` — the tool registry from Prerequisites Check step B (only enabled/version for each tool)
-- `sources` — the minimal metadata array built in Step 4 (id, title, type only — **never** raw Candlekeep JSON). Empty `[]` if Candlekeep is not enabled.
-- `createdAt` / `updatedAt` — current ISO timestamp
+**If Cognetivy is enabled**, register all workflows:
+
+```bash
+cognetivy workflow set --file plugins/academic-writer/workflows/wf_write_article.json
+cognetivy workflow set --file plugins/academic-writer/workflows/wf_edit_article.json
+cognetivy workflow set --file plugins/academic-writer/workflows/wf_edit_section.json
+cognetivy workflow set --file plugins/academic-writer/workflows/wf_research.json
+cognetivy workflow set --file plugins/academic-writer/workflows/wf_setup.json
+cognetivy collection-schema set --file plugins/academic-writer/workflows/collection-schemas.json
+```
 
 ---
 
-## Confirmation
+## Completion
 
-Summarize:
-> "You're all set! Here's your profile:
->
-> - **Field**: [field]
-> - **Citation style**: [style]
-> - **Writing style**: [2-3 sentence summary of fingerprint]
-> - **Article structure**: [summary — typical sections, intro pattern, conclusion pattern, paragraph formula]
-> - **Enabled tools**: [list enabled tool names]
-> - **Sources indexed**: [count] documents (or 'none — Candlekeep not enabled')
->
-> Run `/academic-writer` anytime to start writing an article.
-> Run `/academic-writer-update-tools` to add or remove integrations later."
+```python
+AskUserQuestion(questions=[{
+  "question": "Setup is complete. What would you like to do next?",
+  "header": "You're all set!",
+  "options": [
+    {
+      "label": "Write my first article",
+      "description": "Launch /academic-writer to start writing.",
+      "markdown": "```\nWrite Article\n─────────────\n→ /academic-writer\n→ Conversational pipeline:\n   subject → sources → thesis\n   → outline → write → .docx\n```"
+    },
+    {
+      "label": "Check system health",
+      "description": "Run /academic-writer-health to verify everything is working.",
+      "markdown": "```\nHealth Check\n────────────\n→ /academic-writer-health\n→ Verifies: profile, tools,\n   agents, Cognetivy, sources\n```"
+    },
+    {
+      "label": "I'm done for now",
+      "description": "Profile saved. Run /academic-writer anytime to start writing.",
+      "markdown": "```\nProfile saved to:\n  .academic-writer/profile.json\n\nKey commands:\n  /academic-writer         ← write an article\n  /academic-writer-health  ← check everything\n  /academic-writer-update-tools ← change integrations\n```"
+    }
+  ],
+  "multiSelect": false
+}])
+```
+
+Show a summary table:
+
+> | Setting | Value |
+> |---------|-------|
+> | Field | [field] |
+> | Language | [language] |
+> | Citation style | [style] |
+> | Style fingerprint | ✓ Analyzed / — Skipped |
+> | Sources indexed | [N] documents |
+> | Tools enabled | [list] |

@@ -7,150 +7,303 @@ allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
 
 # Academic Writer Setup
 
-Interactive first-time setup that replaces the old npx installer. Creates the researcher profile, detects available integrations, and optionally analyzes past articles for style fingerprinting.
+Quick onboarding wizard. Creates the researcher profile, detects integrations, and optionally fingerprints writing style. For deeper initialization (full 25-dimension style analysis, source indexing), run `/academic-writer-init`.
 
-## Cognetivy Workflow
+## Phase 0: Preflight
 
-If cognetivy is available, start a run for the `wf_setup` workflow:
+Run silently before anything else:
+
+```bash
+mkdir -p past-articles .academic-writer .cognetivy/runs .cognetivy/events
+```
+
+If cognetivy is available, start a setup run:
 ```bash
 echo '{"phase": "setup"}' > /tmp/aw-setup-input.json
 cognetivy run start --input /tmp/aw-setup-input.json --name "Academic Writer Setup"
 ```
-Capture the `run_id` and log events at each step below.
+Capture the `run_id` for logging at each step.
 
-## Setup Steps
-
-### Step 1: Check for Existing Profile
-
-1. Check if `.academic-writer/profile.json` exists
-2. If it exists:
-   - Load and display current settings (field, language, citation style, enabled tools)
-   - Use AskUserQuestion: "A profile already exists. What would you like to do?"
-     - "Update existing profile" — keep existing data, modify selected fields
-     - "Start fresh" — delete and recreate from scratch
-3. If it doesn't exist, proceed to Step 2
-
-### Step 2: Detect Available Integrations
-
-Auto-detect which tools are available on this machine:
-
+Check for existing profile:
 ```bash
-# Candlekeep CLI
-which ck 2>/dev/null && echo "ck: available" || echo "ck: not found"
-
-# Agentic-Search-Vectorless
-curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo "vectorless: running" || echo "vectorless: not running"
-
-# Cognetivy CLI
-which cognetivy 2>/dev/null && echo "cognetivy: available" || echo "cognetivy: not found"
+cat .academic-writer/profile.json 2>/dev/null && echo "EXISTS" || echo "NOT_FOUND"
 ```
 
-Display results to the researcher.
+If EXISTS, load and show current settings, then:
 
-### Step 3: Collect Profile Information
+```python
+AskUserQuestion(questions=[{
+  "question": "A profile already exists. What would you like to do?",
+  "header": "Existing profile detected",
+  "options": [
+    {
+      "label": "Update existing profile",
+      "description": "Keep existing data, modify only selected fields.",
+      "markdown": "```\nUpdate Mode\n───────────\n✓ Existing settings preserved\n→ Only re-run steps you choose\n```"
+    },
+    {
+      "label": "Start fresh",
+      "description": "Delete and recreate from scratch.",
+      "markdown": "```\nFresh Start\n───────────\n⚠ Current profile will be replaced\n→ Walk through all steps again\n```"
+    }
+  ],
+  "multiSelect": false
+}])
+```
 
-Use AskUserQuestion for each field:
+---
 
-1. **Field of Study** — Free text. Example: "Jewish Philosophy", "Biblical Studies", "Hebrew Literature"
-2. **Target Language** — Options: "Hebrew (Recommended)", "English", "Other (specify)"
-3. **Citation Style** — Options:
-   - "Inline-parenthetical (Recommended for Hebrew)" — `(Author, Title, עמ' N)` in running text
-   - "Chicago" — footnotes with full bibliography
-   - "MLA" — parenthetical with Works Cited
-   - "APA" — (Author, Year) style
+## Phase 1: Detect Integrations
 
-### Step 4: Tool Selection
+Run ALL detection commands in **one parallel batch**:
 
-Present detected tools and let researcher enable/disable:
+```python
+# PARALLEL
+Bash(command="command -v ck >/dev/null 2>&1 && echo 'ck: DETECTED' || echo 'ck: NOT_FOUND'")
+Bash(command="curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo 'vectorless: RUNNING' || echo 'vectorless: NOT_RUNNING'")
+Bash(command="command -v cognetivy >/dev/null 2>&1 && echo 'cognetivy: DETECTED' || echo 'cognetivy: NOT_FOUND'")
+```
 
-Use AskUserQuestion (multiSelect):
-- "Candlekeep — Cloud document library for source PDFs" (pre-checked if detected)
-- "Agentic-Search-Vectorless — Semantic search for citations" (pre-checked if detected)
-- "Cognetivy — Workflow tracking and audit trail" (pre-checked if detected)
-- "MongoDB Agent Skills — Database-backed research" (unchecked by default)
+**If vectorless NOT_RUNNING on port 8000:**
 
-### Step 5: Create Profile
+```python
+AskUserQuestion(questions=[{
+  "question": "Agentic-Search-Vectorless didn't respond on port 8000. What port is it running on?",
+  "header": "Vectorless port",
+  "options": [
+    {"label": "Skip — not running right now", "description": "You can enable it later with /academic-writer-update-tools."}
+  ],
+  "multiSelect": false
+}])
+```
 
-1. Create `.academic-writer/` directory if needed
-2. Write `.academic-writer/profile.json`:
+Retry with the provided port; save to `tools.agentic-search-vectorless.port`.
+
+MongoDB Agent Skills is auto-configured silently — do not show it to the user.
+
+---
+
+## Phase 2: Profile Setup
+
+### Field of Study
+
+```python
+AskUserQuestion(questions=[{
+  "question": "What is your field of study and area of specialization?",
+  "header": "Step 1 — Field of Study",
+  "options": []
+}])
+```
+
+> "The more specific, the better. Examples: *Early Modern Jewish Philosophy*, *Talmudic Literature*, *Biblical Studies — Pentateuch*"
+
+### Article Language
+
+```python
+AskUserQuestion(questions=[{
+  "question": "What language will you write your articles in?",
+  "header": "Step 2 — Article Language",
+  "options": [
+    {
+      "label": "Hebrew",
+      "description": "RTL, David font, inline-parenthetical citations.",
+      "markdown": "```\nHebrew Mode\n───────────\nDirection:  RTL\nFont:       David 11pt\nCitations:  (מחבר, כותרת, עמ' N)\n```"
+    },
+    {
+      "label": "English",
+      "description": "LTR, Times New Roman, Chicago/MLA/APA.",
+      "markdown": "```\nEnglish Mode\n────────────\nDirection:  LTR\nFont:       Times New Roman 12pt\n```"
+    },
+    {
+      "label": "Other",
+      "description": "You'll type the language name in the next prompt.",
+      "markdown": "```\nOther\n─────\n→ Type the language name\n→ RTL/LTR auto-detected\n```"
+    }
+  ],
+  "multiSelect": false
+}])
+```
+
+### Citation Style
+
+```python
+AskUserQuestion(questions=[{
+  "question": "Which citation style do you use?",
+  "header": "Step 3 — Citation Style",
+  "options": [
+    {
+      "label": "Inline Parenthetical (Recommended for Hebrew)",
+      "description": "(Author, Title, Page) in running text.",
+      "markdown": "```\nExample: (לוי, משנת הנפש, עמ' 42)\n```"
+    },
+    {
+      "label": "Chicago / Turabian",
+      "description": "Footnotes with full bibliography.",
+      "markdown": "```\nExample footnote: ¹ Levy, Soul's Teaching, 42.\n```"
+    },
+    {
+      "label": "MLA",
+      "description": "Parenthetical with Works Cited.",
+      "markdown": "```\nExample: (Levy 42)\n```"
+    },
+    {
+      "label": "APA",
+      "description": "(Author, Year) — more common in social sciences.",
+      "markdown": "```\nExample: (Levy, 2019, p. 42)\n```"
+    }
+  ],
+  "multiSelect": false
+}])
+```
+
+### Tool Selection
+
+```python
+AskUserQuestion(questions=[{
+  "question": "Which integrations would you like to enable?",
+  "header": "Step 4 — Tools",
+  "options": [
+    {
+      "label": "Candlekeep",
+      "description": "✓ Detected  /  ✗ Not found",
+      "markdown": "```\nCandlekeep\n──────────\nType:  CLI (ck)\nWhat:  Cloud document library\n```"
+    },
+    {
+      "label": "Agentic-Search-Vectorless",
+      "description": "✓ Running  /  ✗ Not running",
+      "markdown": "```\nAgentic-Search-Vectorless\n─────────────────────────\nType:  Local HTTP service\nWhat:  Fast semantic citation search\n```"
+    },
+    {
+      "label": "Cognetivy",
+      "description": "✓ Detected  /  ✗ Not found",
+      "markdown": "```\nCognetivy\n─────────\nType:  CLI\nWhat:  Workflow audit trail\n\nInstall: npm install -g cognetivy\nInit:    cognetivy init\n```"
+    }
+  ],
+  "multiSelect": true
+}])
+```
+
+Pre-check tools that were detected. MongoDB Agent Skills is silently included always.
+
+---
+
+## Phase 3: Style Fingerprint (Optional)
+
+Check for past articles:
+
+```bash
+ls past-articles/ 2>/dev/null | wc -l
+```
+
+```python
+AskUserQuestion(questions=[{
+  "question": "Found N papers in past-articles/. Analyze them for style fingerprinting?",
+  "header": "Writing style (optional)",
+  "options": [
+    {
+      "label": "Yes, analyze my writing style (Recommended)",
+      "description": "Extracts your voice across 25 dimensions so articles sound like you.",
+      "markdown": "```\nStyle Analysis\n──────────────\n→ Reads PDF and DOCX in past-articles/\n→ Analyzes 25 dimensions:\n   sentence patterns, vocabulary,\n   paragraph structure, transitions,\n   citation density, rhetorical moves\n→ Shows fingerprint before saving\n→ You can correct anything\n```"
+    },
+    {
+      "label": "Skip for now",
+      "description": "Articles will use generic academic style until you run this.",
+      "markdown": "```\nSkip\n────\n⚠ No style fingerprint yet\n→ Add papers to past-articles/ anytime\n→ Re-run: /academic-writer-init\n```"
+    }
+  ],
+  "multiSelect": false
+}])
+```
+
+If no files found, show only the "Skip" option with instructions to add papers.
+
+If "Yes": analyze across all 25 dimensions (sentence level, vocabulary, paragraph structure, tone, transitions, citation style, rhetorical patterns, representative excerpts, article structure). Show fingerprint summary and confirm before saving.
+
+---
+
+## Phase 4: Save Profile
+
+Use the Write tool to create `.academic-writer/profile.json`:
 
 ```json
 {
-  "fieldOfStudy": "<from Step 3>",
-  "targetLanguage": "<from Step 3>",
-  "citationStyle": "<from Step 3>",
+  "fieldOfStudy": "FIELD",
+  "targetLanguage": "Hebrew",
+  "citationStyle": "inline-parenthetical",
   "outputFormatPreferences": {
     "font": "David",
     "bodySize": 11,
-    "titleSize": 14,
+    "titleSize": 16,
+    "headingSize": 13,
     "lineSpacing": 1.5,
-    "margins": "1in",
+    "marginInches": 1.0,
+    "alignment": "justify",
     "rtl": true
   },
   "styleFingerprint": null,
   "tools": {
-    "candlekeep": { "enabled": "<from Step 4>" },
-    "agentic-search-vectorless": { "enabled": "<from Step 4>", "path": "../Agentic-Search-Vectorless" },
-    "mongodb-agent-skills": { "enabled": "<from Step 4>" },
-    "cognetivy": { "enabled": "<from Step 4>" }
+    "candlekeep": { "enabled": true },
+    "agentic-search-vectorless": { "enabled": true, "port": 8000 },
+    "mongodb-agent-skills": { "enabled": true },
+    "cognetivy": { "enabled": true }
   },
   "sources": [],
-  "createdAt": "<ISO timestamp>",
-  "updatedAt": "<ISO timestamp>"
+  "createdAt": "ISO_TIMESTAMP",
+  "updatedAt": "ISO_TIMESTAMP"
 }
 ```
 
-3. Create `past-articles/` directory if it doesn't exist
-4. Create `.cognetivy/` directories and register workflows if cognetivy is enabled:
-   ```bash
-   mkdir -p .cognetivy/runs .cognetivy/events
-   ```
-   Then register all Academic Writer workflows:
-   ```bash
-   cognetivy workflow set --file plugins/academic-writer/workflows/wf_write_article.json
-   cognetivy workflow set --file plugins/academic-writer/workflows/wf_edit_article.json
-   cognetivy workflow set --file plugins/academic-writer/workflows/wf_edit_section.json
-   cognetivy workflow set --file plugins/academic-writer/workflows/wf_research.json
-   cognetivy workflow set --file plugins/academic-writer/workflows/wf_setup.json
-   cognetivy collection-schema set --file plugins/academic-writer/workflows/collection-schemas.json
-   ```
+If Cognetivy is enabled, register workflows:
 
-### Step 6: Style Fingerprint (Optional)
-
-1. Check if `past-articles/` has any files (PDF, DOCX, TXT)
-2. If files exist:
-   - Use AskUserQuestion: "Found N past articles. Analyze them for style fingerprinting? This helps match your writing voice."
-     - "Yes, analyze (Recommended)" — proceed to analysis
-     - "Skip for now" — leave styleFingerprint as null
-3. If "Yes":
-   - Read each file in `past-articles/`
-   - Analyze across 25 dimensions (sentence length, structure variety, vocabulary complexity, register, paragraph structure, argument progression, evidence handling, tone, transitions, citation integration, rhetorical patterns, etc.)
-   - Extract representative excerpts
-   - Present summary to researcher and ask for adjustments
-   - Save to `profile.styleFingerprint`
-
-### Step 7: Source Indexing (Optional)
-
-If Candlekeep is enabled:
-1. Run `ck items list` to get available sources
-2. Present the list and let researcher select which to include
-3. Save selected sources to `profile.sources`
-
-### Completion
-
-Display summary:
-- Profile saved to `.academic-writer/profile.json`
-- Field: [field]
-- Language: [language]
-- Citation style: [style]
-- Tools enabled: [list]
-- Style fingerprint: [yes/no]
-- Sources indexed: [count]
-
-Remind: "Run `/academic-writer` to write your first article, or `/academic-writer-init` for more detailed style analysis."
-
-If cognetivy run was started, complete it:
 ```bash
-echo '{"type":"run_completed","data":{}}' | cognetivy event append --run <run_id>
+cognetivy workflow set --file plugins/academic-writer/workflows/wf_write_article.json
+cognetivy workflow set --file plugins/academic-writer/workflows/wf_edit_article.json
+cognetivy workflow set --file plugins/academic-writer/workflows/wf_edit_section.json
+cognetivy workflow set --file plugins/academic-writer/workflows/wf_research.json
+cognetivy workflow set --file plugins/academic-writer/workflows/wf_setup.json
+cognetivy collection-schema set --file plugins/academic-writer/workflows/collection-schemas.json
+```
+
+Complete the Cognetivy run:
+```bash
 cognetivy run complete --run <run_id>
 ```
+
+---
+
+## Completion
+
+```python
+AskUserQuestion(questions=[{
+  "question": "Setup complete. What would you like to do next?",
+  "header": "You're all set!",
+  "options": [
+    {
+      "label": "Write my first article → /academic-writer",
+      "description": "Start the writing pipeline now.",
+      "markdown": "```\n/academic-writer\n────────────────\nConversational pipeline:\nsubject → sources → thesis\n→ outline → write → .docx\n```"
+    },
+    {
+      "label": "Run deeper initialization → /academic-writer-init",
+      "description": "Full style analysis (25 dimensions) and source indexing.",
+      "markdown": "```\n/academic-writer-init\n─────────────────────\n→ Deep 25-dimension fingerprint\n→ Article structure analysis\n→ Candlekeep source indexing\n```"
+    },
+    {
+      "label": "Done for now",
+      "description": "Profile saved. Run /academic-writer anytime.",
+      "markdown": "```\nKey commands:\n  /academic-writer         ← write\n  /academic-writer-health  ← check\n  /academic-writer-update-tools ← change tools\n```"
+    }
+  ],
+  "multiSelect": false
+}])
+```
+
+Show summary table:
+
+> | Setting | Value |
+> |---------|-------|
+> | Field | [field] |
+> | Language | [language] |
+> | Citation style | [style] |
+> | Tools enabled | [list] |
+> | Style fingerprint | ✓ Analyzed / — Skipped |

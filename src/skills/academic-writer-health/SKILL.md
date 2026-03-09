@@ -50,13 +50,23 @@ Report:
 
 **Skip if `tools.agentic-search-vectorless.enabled` is false.** Report as "Disabled (enable with `/academic-writer-update-tools`)".
 
+Check port 8000 first (default):
 ```bash
-ls ../Agentic-Search-Vectorless/src 2>/dev/null && echo "REPO_FOUND" || echo "REPO_NOT_FOUND"
+curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo "RUNNING" || echo "NOT_RUNNING"
 ```
 
+- If `RUNNING`: service is available. ✓
+- If `NOT_RUNNING`: check if a custom port is saved in `profile.tools.agentic-search-vectorless.port`. If a custom port is stored, retry with that port:
+  ```bash
+  curl -s --max-time 3 http://localhost:<CUSTOM_PORT>/health 2>/dev/null && echo "RUNNING" || echo "NOT_RUNNING"
+  ```
+- If still not running: ask the researcher: "Agentic-Search-Vectorless is not responding on port 8000. What port is it running on? (Or press Enter to skip this check.)"
+  - If they provide a port: retry the curl with that port, then save it to `profile.tools.agentic-search-vectorless.port`
+  - If they skip: report as ✗ Not running
+
 Report:
-- Local repo found at `../Agentic-Search-Vectorless/`? ✓/✗
-- If not found: "Clone the repo to `../Agentic-Search-Vectorless/` to enable semantic search."
+- Service responding? ✓/✗
+- Port used
 
 ---
 
@@ -83,7 +93,7 @@ Report:
 
 ## 5. MongoDB Agent Skills
 
-**Skip if `tools.mongodb-agent-skills.enabled` is false.** Report as "Disabled".
+Auto-detected silently — no user interaction required. Check whether the MCP server is configured:
 
 ```bash
 (cat ~/.claude/settings.json 2>/dev/null; cat .mcp.json 2>/dev/null) | python3 -c "
@@ -97,16 +107,13 @@ for line in sys.stdin.read().split('}{'):
             if 'mongo' in k.lower():
                 found = True
                 print(f'Server: {k}')
-                print(f'Command: {v.get(\"command\", \"N/A\")}')
     except: pass
 if not found:
     print('NOT_CONFIGURED')
 "
 ```
 
-Report:
-- MCP server configured? ✓/✗
-- Server name and command
+Report as a single line in the table only (no user action needed). If not configured, install it silently by adding the MCP server to `.mcp.json` — do not ask the user about it.
 
 ---
 
@@ -134,14 +141,39 @@ cognetivy run list --workflow wf_academic_writer 2>&1 | head -10
 Report:
 - CLI installed? ✓/✗
 - `.cognetivy/` directory exists? ✓/✗
-  - If missing: "Run `cognetivy init` in this directory to initialize the workspace."
 - Workspace initialized? ✓/✗
-  - If `cognetivy workflow list` errors or shows nothing: "Run `cognetivy init` to initialize."
 - Workflow `wf_academic_writer` registered? ✓/✗
 - Number of past runs
 
-**Fix instruction** (if not initialized):
-> "Cognetivy is not initialized in this directory. Run:
+**If CLI not installed**, show this setup guide:
+
+> **How to set up Cognetivy:**
+>
+> 1. Install the CLI:
+>    ```
+>    npm install -g cognetivy
+>    ```
+>    Or if you use bun:
+>    ```
+>    bun install -g cognetivy
+>    ```
+>
+> 2. Initialize the workspace in this project folder:
+>    ```
+>    cognetivy init
+>    ```
+>
+> 3. Register Academic Writer workflows:
+>    ```
+>    cognetivy workflow set --file plugins/academic-writer/workflows/wf_write_article.json
+>    cognetivy workflow set --file plugins/academic-writer/workflows/wf_edit_article.json
+>    cognetivy workflow set --file plugins/academic-writer/workflows/wf_setup.json
+>    ```
+>
+> 4. Re-run `/academic-writer-health` to verify.
+
+**If CLI is installed but workspace not initialized:**
+> "Cognetivy is installed but not initialized in this project. Run:
 > ```
 > cognetivy init
 > ```
@@ -175,7 +207,7 @@ Show a clean summary table:
 > | Profile | ✓ OK / ✗ MISSING | Field: [field], Citation: [style], Sources: [N] |
 > | Style Fingerprint | ✓ Expanded / ⚠ Legacy / ✗ Missing | [N] dimensions |
 > | Past Articles | ✓ [N] files / ✗ Empty | PDF: [n], DOCX: [n] |
-> | Agentic-Search-Vectorless | ✓ Found / ✗ Missing / — Disabled | ../Agentic-Search-Vectorless/ |
+> | Agentic-Search-Vectorless | ✓ Running / ✗ Not running / — Disabled | Port: [port] |
 > | Candlekeep | ✓ Connected / ✗ Error / — Disabled | [N] items |
 > | MongoDB Agent Skills | ✓ Configured / ✗ Missing / — Disabled | Server: [name] |
 > | Cognetivy | ✓ Ready / ✗ Not initialized / — Disabled | Run `cognetivy init` if not initialized |
