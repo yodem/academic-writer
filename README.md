@@ -273,6 +273,13 @@ This is a Claude Code plugin. Source files live in `src/` — never edit `plugin
 3. Test locally: `claude plugin install academic-writer --scope project` (from your research folder)
 4. Commit and push to GitHub
 
+**Versioning is automatic.** Every push to `main` triggers a GitHub Actions workflow (`.github/workflows/release.yml`) that:
+- Bumps the patch version in `package.json` and `manifests/academic-writer.json`
+- Rebuilds the plugin
+- Commits the bump, tags the release (`v0.2.1`, etc.), and creates a GitHub Release
+
+Do not bump versions manually — the CI does it for every merge to `main`.
+
 ## License
 
 MIT
