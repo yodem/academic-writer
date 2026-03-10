@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "academic-writer",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "engine": ">=2.1.69",
   "description": "AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as .docx files.",
   "owner": {
@@ -15,7 +15,7 @@
     {
       "name": "academic-writer",
       "description": "AI-first academic writing assistant — 6 agents, 15 skills, TypeScript hooks for Humanities researchers.",
-      "version": "0.2.0",
+      "version": "0.2.2",
       "author": {
         "name": "Yotam Fromm"
       },
