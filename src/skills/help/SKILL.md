@@ -1,5 +1,5 @@
 ---
-name: academic-writer-help
+name: help
 description: "Learn what the Academic Writer plugin does and how to use it."
 user-invocable: true
 ---
@@ -59,6 +59,10 @@ This walks you through:
 | `/academic-writer:health` | **System check** — verify all integrations are working |
 | `/academic-writer:update-field` | **Change your field** without re-running full init |
 | `/academic-writer:update-tools` | **Add/remove integrations** |
+| `/academic-writer:review` | **Self-review** — score a completed article on 6 quality dimensions |
+| `/academic-writer:ideate` | **Brainstorm ideas** — 5W1H framework, gap analysis, research question formulation |
+| `/academic-writer:learn` | **Update style** — scan new past articles and refresh your style fingerprint |
+| `/academic-writer:present` | **Post-article deliverables** — conference outlines, journal abstracts, book chapter proposals |
 | `/academic-writer:setup` | **Quick setup** — creates profile, detects integrations |
 | `/academic-writer:help` | **This help page** |
 

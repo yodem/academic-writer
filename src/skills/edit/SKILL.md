@@ -1,5 +1,5 @@
 ---
-name: academic-writer-edit
+name: edit
 description: "Edit a previously written article — revise sections, fix citations, adjust tone, restructure arguments, or rewrite passages."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]

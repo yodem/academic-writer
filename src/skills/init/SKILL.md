@@ -1,5 +1,5 @@
 ---
-name: academic-writer-init
+name: init
 description: "First-time setup for the Academic Writer. Configures researcher profile, analyzes writing style from past articles, and indexes research sources."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]

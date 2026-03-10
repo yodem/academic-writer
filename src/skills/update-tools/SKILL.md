@@ -1,5 +1,5 @@
 ---
-name: academic-writer-update-tools
+name: update-tools
 description: "Add, remove, or reconfigure integrations (Candlekeep, Vectorless, MongoDB, Cognetivy)"
 user-invocable: true
 allowedTools: [Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion]

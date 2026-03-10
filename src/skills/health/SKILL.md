@@ -1,5 +1,5 @@
 ---
-name: academic-writer-health
+name: health
 description: "Check the health of all Academic Writer integrations — profile, Candlekeep, RAG, MongoDB, Cognetivy, past articles, and source index."
 user-invocable: true
 ---

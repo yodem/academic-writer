@@ -1,5 +1,5 @@
 ---
-name: academic-writer-research
+name: research
 description: "Research a subject or answer questions using your indexed sources — Candlekeep, RAG, and MongoDB. Spawns parallel subagents for speed."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]

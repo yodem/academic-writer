@@ -1,5 +1,5 @@
 ---
-name: academic-writer-edit-section
+name: edit-section
 description: "Quick edit of a single section — rewrite, expand, cut, fix citations, or adjust style. Faster than full article edit."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]

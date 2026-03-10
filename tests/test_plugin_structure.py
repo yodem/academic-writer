@@ -89,15 +89,15 @@ class TestSkills(unittest.TestCase):
                 f"{d}/SKILL.md frontmatter missing: {missing}"
             )
 
-    def test_user_invocable_skills_have_name_prefix(self):
-        """User-invocable skills must start with 'academic-writer'."""
+    def test_user_invocable_skills_have_valid_name(self):
+        """User-invocable skill names must match their directory name."""
         for d in self._skill_dirs():
             path = os.path.join(self.SKILLS_DIR, d, "SKILL.md")
             fm = _parse_skill_frontmatter(path)
             if fm and fm.get("user-invocable"):
-                self.assertTrue(
-                    fm["name"].startswith("academic-writer"),
-                    f"{d}: name '{fm['name']}' must start with 'academic-writer'"
+                self.assertEqual(
+                    fm["name"], d,
+                    f"{d}: name '{fm['name']}' must match directory name '{d}'"
                 )
 
     def test_skill_names_are_unique(self):
@@ -340,7 +340,8 @@ class TestClaudeMD(unittest.TestCase):
             fm = _parse_skill_frontmatter(skill_path)
             if fm and fm.get("user-invocable"):
                 name = fm["name"]
-                slash = f"/{name}"
+                # Commands use namespace format: /academic-writer:{name}
+                slash = f"/academic-writer:{name}"
                 self.assertIn(
                     slash, text,
                     f"CLAUDE.md missing slash command: {slash}"
@@ -427,7 +428,7 @@ class TestCrossReferences(unittest.TestCase):
             )
 
     def test_write_article_references_all_pipeline_skills(self):
-        wa_path = os.path.join(SRC_DIR, "skills", "academic-writer", "SKILL.md")
+        wa_path = os.path.join(SRC_DIR, "skills", "write", "SKILL.md")
         text = _read(wa_path)
         skills = ["Draft", "Style Compliance", "Hebrew Grammar",
                    "Repetition Check", "Citation Audit"]
@@ -439,7 +440,7 @@ class TestCrossReferences(unittest.TestCase):
 
     def test_help_lists_all_slash_commands(self):
         """Help skill must list every user-invocable skill."""
-        help_path = os.path.join(SRC_DIR, "skills", "academic-writer-help", "SKILL.md")
+        help_path = os.path.join(SRC_DIR, "skills", "help", "SKILL.md")
         help_text = _read(help_path)
         skills_dir = os.path.join(SRC_DIR, "skills")
         for d in os.listdir(skills_dir):
@@ -448,7 +449,8 @@ class TestCrossReferences(unittest.TestCase):
                 continue
             fm = _parse_skill_frontmatter(skill_path)
             if fm and fm.get("user-invocable"):
-                slash = f"/{fm['name']}"
+                # Commands use namespace format: /academic-writer:{name}
+                slash = f"/academic-writer:{fm['name']}"
                 self.assertIn(
                     slash, help_text,
                     f"Help skill missing command: {slash}"

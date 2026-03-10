@@ -1,5 +1,5 @@
 ---
-name: academic-writer-present
+name: present
 description: "Post-article deliverables — generate conference presentation outlines, journal submission summaries, and book chapter proposals from a completed article."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]

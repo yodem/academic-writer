@@ -1,5 +1,5 @@
 ---
-name: academic-writer-ideate
+name: ideate
 description: "Guided research ideation — brainstorm research questions using 5W1H, gap analysis, and structured framing. Outputs a research brief that feeds into /academic-writer:write."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]

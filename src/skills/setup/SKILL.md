@@ -1,5 +1,5 @@
 ---
-name: academic-writer-setup
+name: setup
 description: "First-time setup for Academic Writer — creates researcher profile, detects integrations, analyzes writing style from past articles"
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]

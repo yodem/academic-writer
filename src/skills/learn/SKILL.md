@@ -1,5 +1,5 @@
 ---
-name: academic-writer-learn
+name: learn
 description: "Style learning — scans past-articles/ for new files, extracts style patterns, and merges them into the existing style fingerprint. Shows a diff report."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
