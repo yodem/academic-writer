@@ -13,6 +13,7 @@ AI-first academic writing assistant for Humanities researchers. Produces rigorou
 - **Self-review gate** — before export, the article is scored on 6 dimensions (60-point scale); score < 40 triggers researcher review
 - **Style learning** — run `/academic-writer:learn` to scan new past articles and update your style fingerprint automatically
 - **Research ideation** — `/academic-writer:ideate` guides you through 5W1H brainstorming, gap analysis, and structured research question formulation
+- **NotebookLM integration** — AI-powered source Q&A, audio overviews of articles, and study guide generation via NotebookLM MCP
 - **Session dashboard** — profile summary, article count, tool status, and pending style-learning notifications shown at session start
 
 ## Installation
@@ -25,6 +26,7 @@ You need **at least one** of these integrations:
 |------|-------------|-------|
 | **Candlekeep** | Cloud document library for source PDFs | [https://github.com/CandleKeepAgents/candlekeep-cli](https://github.com/CandleKeepAgents/candlekeep-cli) |
 | **Cognetivy** | Workflow audit trail (optional) | Built-in — no setup needed |
+| **NotebookLM** | AI-powered source Q&A, audio overviews, study guides (optional) | [https://github.com/jacob-bd/notebooklm-mcp-cli](https://github.com/jacob-bd/notebooklm-mcp-cli) |
 
 Choose which tools you want to use during `/academic-writer:init`.
 
@@ -135,7 +137,8 @@ Your profile (`.academic-writer/profile.json`) contains:
   "tools": {
     "candlekeep": { "enabled": true },
     "mongodb-agent-skills": { "enabled": false },
-    "cognetivy": { "enabled": true }
+    "cognetivy": { "enabled": true },
+    "notebooklm": { "enabled": false }
   },
   "sources": [
     { "id": "...", "title": "...", "type": "pdf" }

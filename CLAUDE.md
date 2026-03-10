@@ -99,6 +99,7 @@ All integrations are **optional**. During `/academic-writer:setup` or `/academic
 | `agentic-search-vectorless` | Local service | Vectorless semantic search for citation retrieval | `../Agentic-Search-Vectorless/` |
 | `mongodb-agent-skills` | MCP server | Database-backed research operations | https://github.com/romiluz13/mongodb-agent-skills |
 | `cognetivy` | `cognetivy` CLI | Workflow tracking and audit trail | Built-in (`.cognetivy/`) |
+| `notebooklm` | MCP server | AI-powered source Q&A, audio overviews, study guides, research discovery | https://github.com/jacob-bd/notebooklm-mcp-cli |
 
 - **Past articles**: `./past-articles/` folder — researcher's past work for style analysis (local only, never uploaded)
 

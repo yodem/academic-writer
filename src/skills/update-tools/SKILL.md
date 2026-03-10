@@ -55,6 +55,11 @@ print('DETECTED' if found else 'NOT_DETECTED')
 command -v cognetivy >/dev/null 2>&1 && echo "DETECTED" || echo "NOT_DETECTED"
 ```
 
+**5. NotebookLM** (`notebooklm`)
+```bash
+command -v nlm >/dev/null 2>&1 && nlm login --check 2>/dev/null && echo "DETECTED" || echo "NOT_DETECTED"
+```
+
 ## Present Current State
 
 Show a table with current status and detection:
@@ -66,6 +71,7 @@ Show a table with current status and detection:
 > | 1 | Candlekeep | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/romiluz13/candlekeep |
 > | 3 | MongoDB Agent Skills | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/romiluz13/mongodb-agent-skills |
 > | 4 | Cognetivy | ✓ Enabled / ✗ Disabled | ✓ / ✗ | Built-in (.cognetivy/) |
+> | 5 | NotebookLM | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/jacob-bd/notebooklm-mcp-cli |
 >
 > What would you like to change? You can:
 > - **Enable** a tool by number or name (I'll help install if not detected)

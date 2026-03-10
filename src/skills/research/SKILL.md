@@ -55,6 +55,8 @@ Based on the question and enabled tools, spawn ALL applicable agents **at the sa
 
 3. **MongoDB** (if `tools.mongodb-agent-skills.enabled`): Query MongoDB directly inline — lightweight, no subagent needed.
 
+4. **NotebookLM subagent** (if `tools.notebooklm.enabled`): Query existing notebooks or create a temporary research notebook. Use the `notebook_query` MCP tool for AI-powered Q&A against indexed sources. NotebookLM excels at synthesizing across multiple sources and identifying connections that keyword search may miss.
+
 Each subagent runs independently and returns its findings.
 
 ### RAG Subagent Instructions
@@ -83,6 +85,17 @@ The Candlekeep subagent should:
 2. **Read relevant documents** for full passages: `ck items read DOC_ID`
 3. **Verify page numbers** when exact citations are needed: `ck items read "DOC_ID:PAGE-PAGE"`
 4. **Return full text passages** with document ID, title, and page numbers
+
+### NotebookLM Subagent Instructions
+
+The NotebookLM subagent should:
+
+1. **List existing notebooks**: Use `notebook_list` MCP tool to find relevant notebooks
+2. **Query notebooks**: Use `notebook_query` MCP tool with the research question for AI-powered Q&A
+3. **Cross-reference**: NotebookLM answers are AI-synthesized — always cross-reference key claims against Candlekeep/RAG results for citation accuracy
+4. **Return findings** with notebook name and any source references NotebookLM provides
+
+**Important:** NotebookLM answers are supplementary context. Never cite NotebookLM output as a primary source — always verify claims against Candlekeep or RAG results.
 
 ### MongoDB Queries (inline, no subagent)
 
@@ -179,4 +192,5 @@ After presenting findings, ask:
 - **NEVER invent page numbers.** Use `bypass` mode + `ck items read` to verify.
 - If a question can't be answered from available sources, say so clearly: "Your indexed sources don't contain information about this. You may need to add more sources via Candlekeep."
 - Always show which tool provided each piece of information.
+- **NotebookLM is supplementary** — its AI-synthesized answers must be verified against Candlekeep/RAG before citing.
 - If a tool is disabled, skip it and note: "I searched [available tools]. Enable [disabled tool] with `/academic-writer:update-tools` for broader coverage."
