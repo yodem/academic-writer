@@ -91,7 +91,7 @@ Claude Code validates `plugins/academic-writer/.claude-plugin/plugin.json` stric
 
 ## Integrations (Tool Registry)
 
-All integrations are **optional**. During `/academic-writer-setup` or `/academic-writer-init`, the researcher selects which tools to enable. Enabled tools are stored in `profile.tools`. Use `/academic-writer-update-tools` to change them later.
+All integrations are **optional**. During `/academic-writer:setup` or `/academic-writer:init`, the researcher selects which tools to enable. Enabled tools are stored in `profile.tools`. Use `/academic-writer:update-tools` to change them later.
 
 | Tool ID | CLI / Type | What it does | Setup |
 |---------|-----------|-------------|-------|
@@ -108,20 +108,20 @@ All pipeline steps (write-article, agents) check `profile.tools` before calling 
 
 | Command | Purpose |
 |---------|---------|
-| `/academic-writer-setup` | First-time setup: creates profile, detects integrations, optional style fingerprinting |
-| `/academic-writer-init` | Full initialization: field of study, citation style, detailed style fingerprint from past articles, source indexing |
-| `/academic-writer` | Write a new article: conversational subject → sources → thesis → outline → write → audit → .docx |
-| `/academic-writer-research` | Research a subject or answer questions using indexed sources (Candlekeep, Vectorless, MongoDB) — spawns parallel subagents for speed |
-| `/academic-writer-edit` | Edit a previously written article — revise sections, fix citations, adjust tone, restructure, strengthen arguments |
-| `/academic-writer-edit-section` | Quick edit of a single section — faster than full article edit |
-| `/academic-writer-health` | Run a comprehensive health check on all integrations, profile, agents, and source index |
-| `/academic-writer-help` | Explain what this plugin is and how to use it |
-| `/academic-writer-update-field` | Update your field of study without re-running full initialization |
-| `/academic-writer-update-tools` | Add, remove, or reconfigure integrations (Candlekeep, Vectorless, MongoDB, Cognetivy) |
-| `/academic-writer-review` | Self-review quality gate — scores a completed article on 6 dimensions and presents a scorecard |
-| `/academic-writer-ideate` | Guided research ideation — brainstorm research questions using 5W1H, gap analysis, and structured framing |
-| `/academic-writer-learn` | Style learning — scans past-articles/ for new files and updates the style fingerprint |
-| `/academic-writer-present` | Post-article deliverables — conference presentations, journal abstracts, book chapter proposals |
+| `/academic-writer:setup` | First-time setup: creates profile, detects integrations, optional style fingerprinting |
+| `/academic-writer:init` | Full initialization: field of study, citation style, detailed style fingerprint from past articles, source indexing |
+| `/academic-writer:write` | Write a new article: conversational subject → sources → thesis → outline → write → audit → .docx |
+| `/academic-writer:research` | Research a subject or answer questions using indexed sources (Candlekeep, Vectorless, MongoDB) — spawns parallel subagents for speed |
+| `/academic-writer:edit` | Edit a previously written article — revise sections, fix citations, adjust tone, restructure, strengthen arguments |
+| `/academic-writer:edit-section` | Quick edit of a single section — faster than full article edit |
+| `/academic-writer:health` | Run a comprehensive health check on all integrations, profile, agents, and source index |
+| `/academic-writer:help` | Explain what this plugin is and how to use it |
+| `/academic-writer:update-field` | Update your field of study without re-running full initialization |
+| `/academic-writer:update-tools` | Add, remove, or reconfigure integrations (Candlekeep, Vectorless, MongoDB, Cognetivy) |
+| `/academic-writer:review` | Self-review quality gate — scores a completed article on 6 dimensions and presents a scorecard |
+| `/academic-writer:ideate` | Guided research ideation — brainstorm research questions using 5W1H, gap analysis, and structured framing |
+| `/academic-writer:learn` | Style learning — scans past-articles/ for new files and updates the style fingerprint |
+| `/academic-writer:present` | Post-article deliverables — conference presentations, journal abstracts, book chapter proposals |
 
 ## Cognetivy Workflows
 
@@ -129,13 +129,13 @@ Workflow definitions are in `src/workflows/`. Each major pipeline has its own wo
 
 | Workflow | File | Triggered by |
 |----------|------|-------------|
-| `wf_setup` | `src/workflows/wf_setup.json` | `/academic-writer-setup` |
-| `wf_write_article` | `src/workflows/wf_write_article.json` | `/academic-writer` |
-| `wf_edit_article` | `src/workflows/wf_edit_article.json` | `/academic-writer-edit` |
-| `wf_edit_section` | `src/workflows/wf_edit_section.json` | `/academic-writer-edit-section` |
-| `wf_research` | `src/workflows/wf_research.json` | `/academic-writer-research` |
-| `wf_ideate` | `src/workflows/wf_ideate.json` | `/academic-writer-ideate` |
-| `wf_learn` | `src/workflows/wf_learn.json` | `/academic-writer-learn` |
+| `wf_setup` | `src/workflows/wf_setup.json` | `/academic-writer:setup` |
+| `wf_write_article` | `src/workflows/wf_write_article.json` | `/academic-writer:write` |
+| `wf_edit_article` | `src/workflows/wf_edit_article.json` | `/academic-writer:edit` |
+| `wf_edit_section` | `src/workflows/wf_edit_section.json` | `/academic-writer:edit-section` |
+| `wf_research` | `src/workflows/wf_research.json` | `/academic-writer:research` |
+| `wf_ideate` | `src/workflows/wf_ideate.json` | `/academic-writer:ideate` |
+| `wf_learn` | `src/workflows/wf_learn.json` | `/academic-writer:learn` |
 
 Collection schemas: `src/workflows/collection-schemas.json`
 
@@ -177,7 +177,7 @@ Agents are defined in `src/agents/` (source) and built to `plugins/academic-writ
 ## Profile Location
 
 Researcher profile: `.academic-writer/profile.json`
-Always load at the start of `/academic-writer`.
+Always load at the start of `/academic-writer:write`.
 
 ## Critical Rules
 

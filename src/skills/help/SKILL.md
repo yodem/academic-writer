@@ -30,7 +30,7 @@ What makes it different:
 ### 1. Initialize your profile
 
 ```
-/academic-writer-init
+/academic-writer:init
 ```
 
 This walks you through:
@@ -51,22 +51,22 @@ This walks you through:
 
 | Command | What it does |
 |---------|-------------|
-| `/academic-writer` | **Write a new article** — the full pipeline from subject to .docx |
-| `/academic-writer-edit` | **Edit an article** — revise sections, fix citations, adjust tone, restructure |
-| `/academic-writer-edit-section` | **Edit one section** — fast, focused single-section edit |
-| `/academic-writer-research` | **Research a topic** — query your sources, get answers with citations |
-| `/academic-writer-init` | **First-time setup** — profile, style analysis, source indexing |
-| `/academic-writer-health` | **System check** — verify all integrations are working |
-| `/academic-writer-update-field` | **Change your field** without re-running full init |
-| `/academic-writer-update-tools` | **Add/remove integrations** |
-| `/academic-writer-setup` | **Quick setup** — creates profile, detects integrations |
-| `/academic-writer-help` | **This help page** |
+| `/academic-writer:write` | **Write a new article** — the full pipeline from subject to .docx |
+| `/academic-writer:edit` | **Edit an article** — revise sections, fix citations, adjust tone, restructure |
+| `/academic-writer:edit-section` | **Edit one section** — fast, focused single-section edit |
+| `/academic-writer:research` | **Research a topic** — query your sources, get answers with citations |
+| `/academic-writer:init` | **First-time setup** — profile, style analysis, source indexing |
+| `/academic-writer:health` | **System check** — verify all integrations are working |
+| `/academic-writer:update-field` | **Change your field** without re-running full init |
+| `/academic-writer:update-tools` | **Add/remove integrations** |
+| `/academic-writer:setup` | **Quick setup** — creates profile, detects integrations |
+| `/academic-writer:help` | **This help page** |
 
 ---
 
 ## How Article Writing Works
 
-When you run `/academic-writer`, you go through a conversational pipeline:
+When you run `/academic-writer:write`, you go through a conversational pipeline:
 
 ### Phase 1: Planning (you + AI together)
 1. **Subject** — Tell me what you want to write about
@@ -90,7 +90,7 @@ When you run `/academic-writer`, you go through a conversational pipeline:
 
 ## How Editing Works
 
-When you run `/academic-writer-edit`, you can:
+When you run `/academic-writer:edit`, you can:
 - **Revise sections** — rewrite or restructure any section (full skill pipeline: draft → style → grammar → repetition → audit)
 - **Fix citations** — re-audit all footnotes, correct page numbers, add missing citations
 - **Adjust tone** — make sections more/less formal, assertive, cautious — checked against your fingerprint
@@ -99,7 +99,7 @@ When you run `/academic-writer-edit`, you can:
 - **Cut or expand** — shorten or lengthen specific sections
 - **Full review** — run the complete synthesis + style compliance pass
 
-For quick, single-section work, use `/academic-writer-edit-section` instead — it's faster because it only processes one section.
+For quick, single-section work, use `/academic-writer:edit-section` instead — it's faster because it only processes one section.
 
 Both edit skills spawn **parallel subagents** for speed — multiple sections are edited simultaneously, and research queries (for finding new evidence) run in parallel across RAG and Candlekeep.
 
@@ -107,7 +107,7 @@ Both edit skills spawn **parallel subagents** for speed — multiple sections ar
 
 ## How Research Works
 
-When you run `/academic-writer-research`, you can:
+When you run `/academic-writer:research`, you can:
 - Ask questions about your sources ("What does X say about Y?")
 - Explore topics across all your documents
 - Compare how different authors treat a concept
@@ -120,7 +120,7 @@ This is independent of the article pipeline — use it anytime you want to query
 
 ## Your Style Fingerprint
 
-The fingerprint is extracted from your past articles during `/academic-writer-init`. It captures 25 dimensions of your writing across 8 categories:
+The fingerprint is extracted from your past articles during `/academic-writer:init`. It captures 25 dimensions of your writing across 8 categories:
 
 | Category | What it tracks |
 |----------|---------------|
@@ -165,10 +165,10 @@ The plugin is designed for speed. Wherever possible, work is parallelized:
 
 ## Troubleshooting
 
-- **Something not working?** → Run `/academic-writer-health` to check all components
-- **Want to change your field?** → `/academic-writer-update-field`
-- **Want to add/remove tools?** → `/academic-writer-update-tools`
-- **Style not matching?** → Add more past articles to `past-articles/` and re-run `/academic-writer-init`
+- **Something not working?** → Run `/academic-writer:health` to check all components
+- **Want to change your field?** → `/academic-writer:update-field`
+- **Want to add/remove tools?** → `/academic-writer:update-tools`
+- **Style not matching?** → Add more past articles to `past-articles/` and re-run `/academic-writer:init`
 - **Vectorless search not working?** → Ensure `../Agentic-Search-Vectorless/` repo exists and the service is running
 
 ---

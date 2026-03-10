@@ -18,7 +18,7 @@ if [ -f .academic-writer/profile.json ]; then
   CURRENT_FIELD=$(echo "$PROFILE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('fieldOfStudy', 'Not set'))")
   echo "Current field: $CURRENT_FIELD"
 else
-  echo "No profile found. Run /academic-writer-init first."
+  echo "No profile found. Run /academic-writer:init first."
   exit 1
 fi
 ```
@@ -63,4 +63,4 @@ Show the updated profile:
 > "Done! Your field is now: **[new field]**
 >
 > Your citation style and writing style remain unchanged.
-> Run `/academic-writer` anytime to start writing."
+> Run `/academic-writer:write` anytime to start writing."

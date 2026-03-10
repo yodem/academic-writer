@@ -88,7 +88,7 @@ AskUserQuestion(questions=[{
   "question": "Agentic-Search-Vectorless didn't respond on port 8000. What port is it running on?",
   "header": "Vectorless port",
   "options": [
-    {"label": "Skip for now", "description": "You can enable it later with /academic-writer-update-tools."}
+    {"label": "Skip for now", "description": "You can enable it later with /academic-writer:update-tools."}
   ],
   "multiSelect": false
 }])
@@ -242,7 +242,7 @@ AskUserQuestion(questions=[{
     {
       "label": "No abstract needed",
       "description": "Skip abstract generation.",
-      "markdown": "```\nNo Abstract\n───────────\nAbstracts will not be generated.\nYou can enable later with\n/academic-writer-init (Update)\n```"
+      "markdown": "```\nNo Abstract\n───────────\nAbstracts will not be generated.\nYou can enable later with\n/academic-writer:init (Update)\n```"
     }
   ],
   "multiSelect": false
@@ -271,7 +271,7 @@ AskUserQuestion(questions=[{
     {
       "label": "Skip for now",
       "description": "Profile will be saved without a style fingerprint. Articles will use generic academic style.",
-      "markdown": "```\nSkip Style Analysis\n───────────────────\n⚠ Articles won't match your voice yet\n→ Add papers to past-articles/ anytime\n→ Re-run: /academic-writer-init\n   (choose 'Update' → 'Style Analysis')\n```"
+      "markdown": "```\nSkip Style Analysis\n───────────────────\n⚠ Articles won't match your voice yet\n→ Add papers to past-articles/ anytime\n→ Re-run: /academic-writer:init\n   (choose 'Update' → 'Style Analysis')\n```"
     }
   ],
   "multiSelect": false
@@ -370,7 +370,7 @@ AskUserQuestion(questions=[{
     },
     {
       "label": "Skip — I'll add sources later",
-      "description": "Run /academic-writer-init again (choose Update → Sources) after adding items.",
+      "description": "Run /academic-writer:init again (choose Update → Sources) after adding items.",
       "markdown": "```\nSkip Sources\n────────────\n⚠ Articles won't have source metadata yet\n→ Add sources with: ck items add file.pdf\n→ Then re-run this step\n```"
     }
   ],
@@ -453,18 +453,18 @@ AskUserQuestion(questions=[{
   "options": [
     {
       "label": "Write my first article",
-      "description": "Launch /academic-writer to start writing.",
-      "markdown": "```\nWrite Article\n─────────────\n→ /academic-writer\n→ Conversational pipeline:\n   subject → sources → thesis\n   → outline → write → .docx\n```"
+      "description": "Launch /academic-writer:write to start writing.",
+      "markdown": "```\nWrite Article\n─────────────\n→ /academic-writer:write\n→ Conversational pipeline:\n   subject → sources → thesis\n   → outline → write → .docx\n```"
     },
     {
       "label": "Check system health",
-      "description": "Run /academic-writer-health to verify everything is working.",
-      "markdown": "```\nHealth Check\n────────────\n→ /academic-writer-health\n→ Verifies: profile, tools,\n   agents, Cognetivy, sources\n```"
+      "description": "Run /academic-writer:health to verify everything is working.",
+      "markdown": "```\nHealth Check\n────────────\n→ /academic-writer:health\n→ Verifies: profile, tools,\n   agents, Cognetivy, sources\n```"
     },
     {
       "label": "I'm done for now",
-      "description": "Profile saved. Run /academic-writer anytime to start writing.",
-      "markdown": "```\nProfile saved to:\n  .academic-writer/profile.json\n\nKey commands:\n  /academic-writer         ← write an article\n  /academic-writer-health  ← check everything\n  /academic-writer-update-tools ← change integrations\n```"
+      "description": "Profile saved. Run /academic-writer:write anytime to start writing.",
+      "markdown": "```\nProfile saved to:\n  .academic-writer/profile.json\n\nKey commands:\n  /academic-writer:write         ← write an article\n  /academic-writer:health  ← check everything\n  /academic-writer:update-tools ← change integrations\n```"
     }
   ],
   "multiSelect": false

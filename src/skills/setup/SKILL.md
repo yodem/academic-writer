@@ -7,7 +7,7 @@ allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
 
 # Academic Writer Setup
 
-Quick onboarding wizard. Creates the researcher profile, detects integrations, and optionally fingerprints writing style. For deeper initialization (full 25-dimension style analysis, source indexing), run `/academic-writer-init`.
+Quick onboarding wizard. Creates the researcher profile, detects integrations, and optionally fingerprints writing style. For deeper initialization (full 25-dimension style analysis, source indexing), run `/academic-writer:init`.
 
 ## Phase 0: Preflight
 
@@ -71,7 +71,7 @@ AskUserQuestion(questions=[{
   "question": "Agentic-Search-Vectorless didn't respond on port 8000. What port is it running on?",
   "header": "Vectorless port",
   "options": [
-    {"label": "Skip — not running right now", "description": "You can enable it later with /academic-writer-update-tools."}
+    {"label": "Skip — not running right now", "description": "You can enable it later with /academic-writer:update-tools."}
   ],
   "multiSelect": false
 }])
@@ -208,7 +208,7 @@ AskUserQuestion(questions=[{
     {
       "label": "Skip for now",
       "description": "Articles will use generic academic style until you run this.",
-      "markdown": "```\nSkip\n────\n⚠ No style fingerprint yet\n→ Add papers to past-articles/ anytime\n→ Re-run: /academic-writer-init\n```"
+      "markdown": "```\nSkip\n────\n⚠ No style fingerprint yet\n→ Add papers to past-articles/ anytime\n→ Re-run: /academic-writer:init\n```"
     }
   ],
   "multiSelect": false
@@ -279,19 +279,19 @@ AskUserQuestion(questions=[{
   "header": "You're all set!",
   "options": [
     {
-      "label": "Write my first article → /academic-writer",
+      "label": "Write my first article → /academic-writer:write",
       "description": "Start the writing pipeline now.",
-      "markdown": "```\n/academic-writer\n────────────────\nConversational pipeline:\nsubject → sources → thesis\n→ outline → write → .docx\n```"
+      "markdown": "```\n/academic-writer:write\n────────────────\nConversational pipeline:\nsubject → sources → thesis\n→ outline → write → .docx\n```"
     },
     {
-      "label": "Run deeper initialization → /academic-writer-init",
+      "label": "Run deeper initialization → /academic-writer:init",
       "description": "Full style analysis (25 dimensions) and source indexing.",
-      "markdown": "```\n/academic-writer-init\n─────────────────────\n→ Deep 25-dimension fingerprint\n→ Article structure analysis\n→ Candlekeep source indexing\n```"
+      "markdown": "```\n/academic-writer:init\n─────────────────────\n→ Deep 25-dimension fingerprint\n→ Article structure analysis\n→ Candlekeep source indexing\n```"
     },
     {
       "label": "Done for now",
-      "description": "Profile saved. Run /academic-writer anytime.",
-      "markdown": "```\nKey commands:\n  /academic-writer         ← write\n  /academic-writer-health  ← check\n  /academic-writer-update-tools ← change tools\n```"
+      "description": "Profile saved. Run /academic-writer:write anytime.",
+      "markdown": "```\nKey commands:\n  /academic-writer:write         ← write\n  /academic-writer:health  ← check\n  /academic-writer:update-tools ← change tools\n```"
     }
   ],
   "multiSelect": false

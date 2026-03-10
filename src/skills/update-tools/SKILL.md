@@ -15,7 +15,7 @@ Modify which integrations are enabled without re-running the full initialization
 if [ -f .academic-writer/profile.json ]; then
   cat .academic-writer/profile.json
 else
-  echo "No profile found. Run /academic-writer-init first."
+  echo "No profile found. Run /academic-writer:init first."
   exit 1
 fi
 ```
@@ -121,5 +121,5 @@ Replace `TOOL_CONFIG` with the actual tools dict, e.g.:
 >
 > [list each tool with ✓/✗ status]
 >
-> These changes take effect immediately for `/academic-writer`.
-> If you enabled Candlekeep and haven't indexed sources yet, run `/academic-writer-init` to add them."
+> These changes take effect immediately for `/academic-writer:write`.
+> If you enabled Candlekeep and haven't indexed sources yet, run `/academic-writer:init` to add them."

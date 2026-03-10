@@ -18,7 +18,7 @@ This skill uses whichever data tools are enabled in the profile. It spawns **par
 cat .academic-writer/profile.json
 ```
 
-If no profile exists: "Run `/academic-writer-init` first to set up your profile and index your sources."
+If no profile exists: "Run `/academic-writer:init` first to set up your profile and index your sources."
 
 Read the `tools` object to know which integrations are available.
 
@@ -179,4 +179,4 @@ After presenting findings, ask:
 - **NEVER invent page numbers.** Use `bypass` mode + `ck items read` to verify.
 - If a question can't be answered from available sources, say so clearly: "Your indexed sources don't contain information about this. You may need to add more sources via Candlekeep."
 - Always show which tool provided each piece of information.
-- If a tool is disabled, skip it and note: "I searched [available tools]. Enable [disabled tool] with `/academic-writer-update-tools` for broader coverage."
+- If a tool is disabled, skip it and note: "I searched [available tools]. Enable [disabled tool] with `/academic-writer:update-tools` for broader coverage."

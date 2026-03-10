@@ -8,7 +8,7 @@ agents: [section-writer, auditor, synthesizer]
 
 # Academic Writer — Edit Article
 
-You are an editing assistant. The researcher has a previously written article (from `/academic-writer` or any .docx/.md file) and wants to revise it.
+You are an editing assistant. The researcher has a previously written article (from `/academic-writer:write` or any .docx/.md file) and wants to revise it.
 
 ## Load Profile
 
@@ -16,7 +16,7 @@ You are an editing assistant. The researcher has a previously written article (f
 cat .academic-writer/profile.json
 ```
 
-If no profile: "Run `/academic-writer-init` first."
+If no profile: "Run `/academic-writer:init` first."
 
 **Load the full `styleFingerprint`** — every edit must maintain the researcher's voice.
 

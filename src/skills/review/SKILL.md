@@ -12,7 +12,7 @@ A structured quality gate that scores a completed article on 6 dimensions and pr
 ## When to Use
 
 - Automatically invoked as Step 8.7 in the write-article pipeline (between Synthesis and DOCX Output)
-- Can be run standalone on any article: `/academic-writer-review`
+- Can be run standalone on any article: `/academic-writer:review`
 
 ## Load Profile
 
@@ -20,7 +20,7 @@ A structured quality gate that scores a completed article on 6 dimensions and pr
 cat .academic-writer/profile.json
 ```
 
-If no profile, tell the researcher to run `/academic-writer-init` first.
+If no profile, tell the researcher to run `/academic-writer:init` first.
 
 ## Input
 

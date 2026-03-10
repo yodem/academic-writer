@@ -20,7 +20,7 @@ Start by loading the researcher's profile:
 cat .academic-writer/profile.json
 ```
 
-If the profile doesn't exist, tell them: "Please run `/academic-writer-init` first to set up your profile."
+If the profile doesn't exist, tell them: "Please run `/academic-writer:init` first to set up your profile."
 
 Store the profile values — you'll use them throughout.
 
@@ -358,7 +358,7 @@ If Cognetivy is enabled, log:
 echo '{"type":"step_started","nodeId":"self_review"}' | cognetivy event append --run RUN_ID
 ```
 
-Run the self-review checklist from `/academic-writer-review`. Score the article on 6 dimensions (each 1–10):
+Run the self-review checklist from `/academic-writer:review`. Score the article on 6 dimensions (each 1–10):
 
 1. **Structure** — Intro/conclusion conventions, logical section order
 2. **Argument Logic** — Each section advances thesis, no gaps

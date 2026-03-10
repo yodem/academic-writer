@@ -314,7 +314,7 @@ echo '{"type":"step_started","nodeId":"section_SECTION_INDEX_p_M_anti_ai"}' | co
 **Detect and fix AI-generated writing patterns.** Load the Hebrew AI pattern reference:
 
 ```bash
-cat plugins/academic-writer/skills/academic-writer/references/anti-ai-patterns-hebrew.md
+cat plugins/academic-writer/skills/write/references/anti-ai-patterns-hebrew.md
 ```
 
 Score the paragraph on 5 dimensions (each 1–10):

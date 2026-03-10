@@ -11,8 +11,8 @@ AI-first academic writing assistant for Humanities researchers. Produces rigorou
 - **Anti-AI check** — every paragraph is scored on 5 dimensions (Directness, Rhythm, Trust, Authenticity, Density) to detect and eliminate AI writing patterns (threshold: 35/50)
 - **Structured abstract** — automatic תקציר generation with dual-language support (e.g., Hebrew + English)
 - **Self-review gate** — before export, the article is scored on 6 dimensions (60-point scale); score < 40 triggers researcher review
-- **Style learning** — run `/academic-writer-learn` to scan new past articles and update your style fingerprint automatically
-- **Research ideation** — `/academic-writer-ideate` guides you through 5W1H brainstorming, gap analysis, and structured research question formulation
+- **Style learning** — run `/academic-writer:learn` to scan new past articles and update your style fingerprint automatically
+- **Research ideation** — `/academic-writer:ideate` guides you through 5W1H brainstorming, gap analysis, and structured research question formulation
 - **Session dashboard** — profile summary, article count, tool status, and pending style-learning notifications shown at session start
 
 ## Installation
@@ -26,7 +26,7 @@ You need **at least one** of these integrations:
 | **Candlekeep** | Cloud document library for source PDFs | [https://github.com/CandleKeepAgents/candlekeep-cli](https://github.com/CandleKeepAgents/candlekeep-cli) |
 | **Cognetivy** | Workflow audit trail (optional) | Built-in — no setup needed |
 
-Choose which tools you want to use during `/academic-writer-init`.
+Choose which tools you want to use during `/academic-writer:init`.
 
 ### 2. Install the Plugin
 
@@ -47,7 +47,7 @@ The `--scope project` flag activates the plugin only in this folder, not globall
 ### 3. Initialize Your Profile
 
 ```bash
-/academic-writer-init
+/academic-writer:init
 ```
 
 This is a one-time setup. You'll be asked to provide:
@@ -64,7 +64,7 @@ Your profile is saved to `.academic-writer/profile.json` and automatically loade
 ### Write an Article
 
 ```bash
-/academic-writer
+/academic-writer:write
 ```
 
 **Workflow:**
@@ -84,19 +84,19 @@ Your profile is saved to `.academic-writer/profile.json` and automatically loade
 
 | Command | What it does |
 |---------|-------------|
-| `/academic-writer` | Write a new article |
-| `/academic-writer-init` | First-time setup (profile, citation style, abstract languages, style fingerprint) |
-| `/academic-writer-ideate` | Brainstorm research questions with 5W1H and gap analysis |
-| `/academic-writer-learn` | Scan new past articles and update style fingerprint |
-| `/academic-writer-review` | Score a completed article on 6 quality dimensions |
-| `/academic-writer-present` | Generate conference outlines, journal abstracts, book chapter proposals |
-| `/academic-writer-research` | Research a topic using your sources |
-| `/academic-writer-edit` | Edit a previously written article |
-| `/academic-writer-edit-section` | Quick edit of a single section |
-| `/academic-writer-update-field` | Change your field of study |
-| `/academic-writer-update-tools` | Add/remove integrations (Candlekeep, RAG, etc.) |
-| `/academic-writer-health` | Check all integrations & profile status |
-| `/academic-writer-help` | Show plugin info |
+| `/academic-writer:write` | Write a new article |
+| `/academic-writer:init` | First-time setup (profile, citation style, abstract languages, style fingerprint) |
+| `/academic-writer:ideate` | Brainstorm research questions with 5W1H and gap analysis |
+| `/academic-writer:learn` | Scan new past articles and update style fingerprint |
+| `/academic-writer:review` | Score a completed article on 6 quality dimensions |
+| `/academic-writer:present` | Generate conference outlines, journal abstracts, book chapter proposals |
+| `/academic-writer:research` | Research a topic using your sources |
+| `/academic-writer:edit` | Edit a previously written article |
+| `/academic-writer:edit-section` | Quick edit of a single section |
+| `/academic-writer:update-field` | Change your field of study |
+| `/academic-writer:update-tools` | Add/remove integrations (Candlekeep, RAG, etc.) |
+| `/academic-writer:health` | Check all integrations & profile status |
+| `/academic-writer:help` | Show plugin info |
 
 ## File Structure
 
@@ -105,7 +105,7 @@ your-project/
 ├── past-articles/              ← Drop your published papers here (5–10 PDFs/DOCXs)
 ├── .academic-writer/
 │   ├── profile.json           ← Your profile (auto-created, never edit manually)
-│   ├── research-brief.md      ← Research brief from /academic-writer-ideate (optional)
+│   ├── research-brief.md      ← Research brief from /academic-writer:ideate (optional)
 │   └── logs/                  ← Session logs (auto-managed)
 ├── .cognetivy/                ← Workflow audit trail (auto-managed)
 ├── articles/                  ← Output .docx files go here
@@ -143,7 +143,7 @@ Your profile (`.academic-writer/profile.json`) contains:
 }
 ```
 
-Update tools with `/academic-writer-update-tools`. Update your field with `/academic-writer-update-field`.
+Update tools with `/academic-writer:update-tools`. Update your field with `/academic-writer:update-field`.
 
 ## Configuration
 
@@ -176,7 +176,7 @@ If you enable **MongoDB Agent Skills**, add to `.mcp.json`:
 
 ### "No profile found" error
 
-Run `/academic-writer-init` first to set up your profile.
+Run `/academic-writer:init` first to set up your profile.
 
 ### "Candlekeep not detected" error
 
@@ -286,6 +286,6 @@ MIT
 
 ## Support
 
-- **Plugin issues:** Open an issue on [yodem/academic-writer](https://github.com/yodem/academic-writer)
+- **Plugin issues:** Open an issue on [yodem/academic-writer:write](https://github.com/yodem/academic-writer)
 - **Candlekeep help:** https://github.com/CandleKeepAgents/candlekeep-cli
 - **RAG help:** https://github.com/romiluz13/Agentic-Search-Vectorless

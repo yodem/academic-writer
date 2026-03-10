@@ -16,7 +16,7 @@ Trigger the style miner to analyze new articles in `past-articles/` and update t
 cat .academic-writer/profile.json
 ```
 
-If no profile, tell the researcher to run `/academic-writer-init` first.
+If no profile, tell the researcher to run `/academic-writer:init` first.
 
 Extract the current `styleFingerprint` and `analyzedArticles` list (if present).
 
@@ -37,7 +37,7 @@ ls past-articles/
 Compare against `profile.analyzedArticles` (array of filenames already analyzed). Identify new files not yet processed.
 
 If no new files found:
-> "No new articles found in `past-articles/`. Add new papers (PDF or DOCX) and run `/academic-writer-learn` again."
+> "No new articles found in `past-articles/`. Add new papers (PDF or DOCX) and run `/academic-writer:learn` again."
 
 If new files found, show them:
 > "Found [N] new article(s) to analyze:

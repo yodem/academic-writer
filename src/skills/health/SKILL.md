@@ -18,14 +18,14 @@ else
 fi
 ```
 
-If missing: report `FAIL` and suggest `/academic-writer-init`.
+If missing: report `FAIL` and suggest `/academic-writer:init`.
 
 If found, validate:
 - Has `fieldOfStudy`? ✓/✗
 - Has `citationStyle`? ✓/✗
 - Has `styleFingerprint`? ✓/✗
 - Fingerprint format: is it the expanded (nested) format or the old flat format?
-  - If flat format: suggest re-running `/academic-writer-init` to get the expanded 25-dimension fingerprint
+  - If flat format: suggest re-running `/academic-writer:init` to get the expanded 25-dimension fingerprint
 - Has `tools` object? ✓/✗
 - Has `sources` array? ✓/✗ (and count)
 - `createdAt` / `updatedAt` timestamps
@@ -42,13 +42,13 @@ Report:
 - Folder exists? ✓/✗
 - Number of files found
 - File types (PDF, DOCX, other)
-- If empty: "Add 5–10 published articles for style analysis, then re-run `/academic-writer-init`."
+- If empty: "Add 5–10 published articles for style analysis, then re-run `/academic-writer:init`."
 
 ---
 
 ## 3. Agentic-Search-Vectorless
 
-**Skip if `tools.agentic-search-vectorless.enabled` is false.** Report as "Disabled (enable with `/academic-writer-update-tools`)".
+**Skip if `tools.agentic-search-vectorless.enabled` is false.** Report as "Disabled (enable with `/academic-writer:update-tools`)".
 
 Check port 8000 first (default):
 ```bash
@@ -72,7 +72,7 @@ Report:
 
 ## 4. Candlekeep
 
-**Skip if `tools.candlekeep.enabled` is false.** Report as "Disabled (enable with `/academic-writer-update-tools`)".
+**Skip if `tools.candlekeep.enabled` is false.** Report as "Disabled (enable with `/academic-writer:update-tools`)".
 
 ```bash
 command -v ck >/dev/null 2>&1 && echo "CLI: INSTALLED" || echo "CLI: NOT_FOUND"
@@ -170,14 +170,14 @@ Report:
 >    cognetivy workflow set --file plugins/academic-writer/workflows/wf_setup.json
 >    ```
 >
-> 4. Re-run `/academic-writer-health` to verify.
+> 4. Re-run `/academic-writer:health` to verify.
 
 **If CLI is installed but workspace not initialized:**
 > "Cognetivy is installed but not initialized in this project. Run:
 > ```
 > cognetivy init
 > ```
-> Then re-run `/academic-writer-health`."
+> Then re-run `/academic-writer:health`."
 
 ---
 

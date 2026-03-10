@@ -8,7 +8,7 @@ agents: [section-writer, auditor]
 
 # Academic Writer — Edit Section
 
-A fast, focused edit for a single section of an article. Use this instead of `/academic-writer-edit` when you know exactly which section needs work.
+A fast, focused edit for a single section of an article. Use this instead of `/academic-writer:edit` when you know exactly which section needs work.
 
 ## Load Profile
 
