@@ -57,8 +57,18 @@ AskUserQuestion(questions=[{
       "markdown": "```\nBook Chapter Proposal\n─────────────────────\nOutput: 1-2 page proposal\nParts:  Chapter summary, fit with volume,\n        expanded scope, bibliography\nFormat: Markdown\n```"
     },
     {
+      "label": "Audio Overview (NotebookLM)",
+      "description": "AI-generated audio summary / podcast of the article",
+      "markdown": "```\nAudio Overview\n──────────────\nOutput: Audio podcast discussing the article\nFormat: AI-generated conversational audio\nNeeds:  NotebookLM enabled in profile\n```"
+    },
+    {
+      "label": "Study Guide (NotebookLM)",
+      "description": "Structured study guide from article content",
+      "markdown": "```\nStudy Guide\n───────────\nOutput: Key concepts, questions, summaries\nFormat: Markdown study guide\nNeeds:  NotebookLM enabled in profile\n```"
+    },
+    {
       "label": "All of the above",
-      "description": "Generate all three deliverables"
+      "description": "Generate all deliverables (NotebookLM items only if enabled)"
     }
   ],
   "multiSelect": true
@@ -147,6 +157,28 @@ Generate in `targetLanguage`:
 ```
 
 Save to `articles/[article-name]-chapter-proposal.md`.
+
+## Audio Overview (NotebookLM)
+
+**Skip if `tools.notebooklm.enabled` is false.** Tell the researcher: "Enable NotebookLM with `/academic-writer:update-tools` to generate audio overviews."
+
+1. **Create a notebook** for this article using the `notebook_create` MCP tool with the article title
+2. **Add the article** as a source using the `source_add` MCP tool (paste the article markdown content)
+3. **Generate audio overview** using the `studio_create` MCP tool with type "audio"
+4. **Check status** using the `studio_status` MCP tool — audio generation may take a few minutes
+5. **Download** the audio file using the `download_artifact` MCP tool when ready
+
+Save notification: "Audio overview is being generated. Check status with `nlm studio status`."
+
+## Study Guide (NotebookLM)
+
+**Skip if `tools.notebooklm.enabled` is false.** Tell the researcher: "Enable NotebookLM with `/academic-writer:update-tools` to generate study guides."
+
+1. **Reuse the notebook** created for Audio Overview, or create one if it doesn't exist
+2. **Generate study guide** using the `studio_create` MCP tool with type "study guide"
+3. **Check status** and **download** when ready using the `studio_status` and `download_artifact` MCP tools
+
+Save the study guide content to `articles/[article-name]-study-guide.md`.
 
 ## Completion
 

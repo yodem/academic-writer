@@ -48,6 +48,7 @@ Read the `tools` object from the profile. Throughout this workflow, **only use t
 - **Candlekeep** (`tools.candlekeep.enabled`) — If disabled, skip `ck` commands. Source listing/selection steps should use any available sources from the profile's `sources` array instead.
 - **MongoDB Agent Skills** (`tools.mongodb-agent-skills.enabled`) — If disabled, skip any MongoDB MCP operations.
 - **Cognetivy** (`tools.cognetivy.enabled`) — If disabled, skip all `cognetivy` logging commands. The pipeline still works, just without audit trail.
+- **NotebookLM** (`tools.notebooklm.enabled`) — If disabled, skip notebook queries and AI summaries. NotebookLM is supplementary — it does not replace Vectorless/Candlekeep for citation verification.
 
 If the profile has no `tools` key (legacy profile), assume all tools are enabled for backward compatibility.
 

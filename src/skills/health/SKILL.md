@@ -181,7 +181,48 @@ Report:
 
 ---
 
-## 7. Agent Files
+## 7. NotebookLM
+
+**Skip if `tools.notebooklm.enabled` is false.** Report as "Disabled (enable with `/academic-writer:update-tools`)".
+
+```bash
+command -v nlm >/dev/null 2>&1 && echo "CLI: INSTALLED" || echo "CLI: NOT_FOUND"
+```
+
+If installed:
+```bash
+nlm login --check 2>&1
+```
+
+```bash
+nlm notebook list 2>&1 | head -5
+```
+
+Report:
+- CLI installed? ✓/✗
+- Authenticated? ✓/✗
+- Can list notebooks? ✓/✗ (and count)
+- If error: show the error message
+
+**If CLI not installed**, show this setup guide:
+
+> **How to set up NotebookLM:**
+>
+> 1. Install the CLI:
+>    ```
+>    npm install -g notebooklm-mcp-cli
+>    ```
+>
+> 2. Authenticate:
+>    ```
+>    nlm login
+>    ```
+>
+> 3. Re-run `/academic-writer:health` to verify.
+
+---
+
+## 8. Agent Files
 
 ```bash
 ls .claude/agents/*.md 2>/dev/null
@@ -211,6 +252,7 @@ Show a clean summary table:
 > | Candlekeep | ✓ Connected / ✗ Error / — Disabled | [N] items |
 > | MongoDB Agent Skills | ✓ Configured / ✗ Missing / — Disabled | Server: [name] |
 > | Cognetivy | ✓ Ready / ✗ Not initialized / — Disabled | Run `cognetivy init` if not initialized |
+> | NotebookLM | ✓ Connected / ✗ Not found / — Disabled | [N] notebooks |
 > | Agent Files | ✓ All present / ✗ Missing [list] | 5/5 |
 >
 > **Overall: [N]/[total] checks passed**

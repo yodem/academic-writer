@@ -79,6 +79,7 @@ Run ALL detection commands in **one parallel batch**:
 Bash(command="command -v ck >/dev/null 2>&1 && echo 'DETECTED' || echo 'NOT_DETECTED'")
 Bash(command="curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo 'DETECTED' || echo 'NOT_DETECTED'")
 Bash(command="command -v cognetivy >/dev/null 2>&1 && echo 'DETECTED' || echo 'NOT_DETECTED'")
+Bash(command="command -v nlm >/dev/null 2>&1 && nlm login --check 2>/dev/null && echo 'DETECTED' || echo 'NOT_DETECTED'")
 ```
 
 **Vectorless port fallback**: if port 8000 returns `NOT_DETECTED`, ask:
@@ -119,6 +120,11 @@ AskUserQuestion(questions=[{
       "label": "Cognetivy",
       "description": "✓ Detected  (or ✗ Not found — run: npm install -g cognetivy)",
       "markdown": "```\nCognetivy\n─────────\nType:    CLI\nWhat:    Workflow tracking and audit trail\nBest for: Logging every pipeline step for review\nStatus:  ✓ Detected\n\nSetup (if not installed):\n  npm install -g cognetivy\n  cognetivy init\n```"
+    },
+    {
+      "label": "NotebookLM",
+      "description": "✓ Detected  (or ✗ Not found — run: npm install -g notebooklm-mcp-cli)",
+      "markdown": "```\nNotebookLM\n──────────\nType:    MCP server (nlm CLI)\nWhat:    AI-powered source Q&A, audio overviews,\n         study guides, research discovery\nBest for: Querying indexed sources with AI,\n          generating audio summaries\nStatus:  ✓ Detected\n\nSetup (if not installed):\n  npm install -g notebooklm-mcp-cli\n  nlm login\n```"
     }
   ],
   "multiSelect": true
@@ -423,7 +429,8 @@ Use the Write tool to save `.academic-writer/profile.json`:
     "candlekeep": { "enabled": true },
     "agentic-search-vectorless": { "enabled": true, "port": 8000 },
     "mongodb-agent-skills": { "enabled": true },
-    "cognetivy": { "enabled": true }
+    "cognetivy": { "enabled": true },
+    "notebooklm": { "enabled": false }
   },
   "sources": [],
   "createdAt": "ISO_TIMESTAMP",

@@ -89,6 +89,20 @@ Run all three queries for each document, all in parallel. Each response has:
 
 ---
 
+### Step 3b: Query NotebookLM Notebooks (if enabled)
+
+**Skip if `tools.notebooklm.enabled` is false.**
+
+If the researcher has existing NotebookLM notebooks with relevant sources, query them for thematic context:
+
+1. **List notebooks** using the `notebook_list` MCP tool
+2. **Query relevant notebooks** using the `notebook_query` MCP tool with subject-related questions
+3. **Incorporate findings** — NotebookLM can surface connections across sources that keyword search misses
+
+**Important:** NotebookLM answers are AI-synthesized context. Use them to guide exploration, not as citable evidence. All citations must come from Candlekeep or Agentic-Search-Vectorless results.
+
+---
+
 ### Step 4: Log Progress
 
 ```bash

@@ -62,6 +62,7 @@ Run ALL detection commands in **one parallel batch**:
 Bash(command="command -v ck >/dev/null 2>&1 && echo 'ck: DETECTED' || echo 'ck: NOT_FOUND'")
 Bash(command="curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo 'vectorless: RUNNING' || echo 'vectorless: NOT_RUNNING'")
 Bash(command="command -v cognetivy >/dev/null 2>&1 && echo 'cognetivy: DETECTED' || echo 'cognetivy: NOT_FOUND'")
+Bash(command="command -v nlm >/dev/null 2>&1 && nlm login --check 2>/dev/null && echo 'notebooklm: DETECTED' || echo 'notebooklm: NOT_FOUND'")
 ```
 
 **If vectorless NOT_RUNNING on port 8000:**
@@ -177,6 +178,11 @@ AskUserQuestion(questions=[{
       "label": "Cognetivy",
       "description": "✓ Detected  /  ✗ Not found",
       "markdown": "```\nCognetivy\n─────────\nType:  CLI\nWhat:  Workflow audit trail\n\nInstall: npm install -g cognetivy\nInit:    cognetivy init\n```"
+    },
+    {
+      "label": "NotebookLM",
+      "description": "✓ Detected  /  ✗ Not found",
+      "markdown": "```\nNotebookLM\n──────────\nType:  MCP server (nlm CLI)\nWhat:  AI-powered source Q&A,\n       audio overviews, study guides\n\nInstall: npm install -g notebooklm-mcp-cli\nAuth:    nlm login\n```"
     }
   ],
   "multiSelect": true
@@ -245,7 +251,8 @@ Use the Write tool to create `.academic-writer/profile.json`:
     "candlekeep": { "enabled": true },
     "agentic-search-vectorless": { "enabled": true, "port": 8000 },
     "mongodb-agent-skills": { "enabled": true },
-    "cognetivy": { "enabled": true }
+    "cognetivy": { "enabled": true },
+    "notebooklm": { "enabled": false }
   },
   "sources": [],
   "createdAt": "ISO_TIMESTAMP",
