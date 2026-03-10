@@ -36,9 +36,11 @@ manifests/
 
 ## Versioning
 
-Version is stored in **two places** (must always match):
+Version is stored in **four places** (must always match):
 - `package.json` → `"version"`
 - `manifests/academic-writer.json` → `"version"`
+- `.claude-plugin/marketplace.json` → `"version"` (top-level)
+- `.claude-plugin/marketplace.json` → `"plugins[0].version"`
 
 **Automatic on every push to `main`:** `.github/workflows/release.yml` bumps the patch version, rebuilds, commits (`chore: bump version to vX.Y.Z [skip ci]`), pushes a tag, and creates a GitHub Release. Never bump versions manually in PRs — the CI handles it.
 
