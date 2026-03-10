@@ -1,6 +1,6 @@
 {
   "name": "academic-writer",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "AI-first academic writing assistant for Humanities researchers — Claude Code plugin",
   "type": "module",
   "scripts": {
