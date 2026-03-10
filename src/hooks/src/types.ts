@@ -36,6 +36,9 @@ export interface ProfileData {
   tools?: Record<string, ToolConfig>;
   articleStructure?: ArticleStructure;
   outputFormatPreferences?: OutputFormatPreferences;
+  sources?: Array<{ id: string; title?: string; type?: string }>;
+  abstractLanguages?: string[];
+  analyzedArticles?: string[];
 }
 
 export interface ToolConfig {

@@ -1,0 +1,58 @@
+{
+  "workflow_id": "wf_ideate",
+  "version_id": "v1",
+  "name": "Research Ideation",
+  "description": "Guided research ideation: 5W1H brainstorming, gap analysis, approach framing, research question formulation, research brief generation.",
+  "created_at": "2026-03-10T00:00:00.000Z",
+  "nodes": [
+    {
+      "id": "topic_exploration",
+      "type": "HUMAN_IN_THE_LOOP",
+      "input_collections": ["run_input"],
+      "output_collections": ["topic"],
+      "prompt": "Ask the researcher what topic they want to explore."
+    },
+    {
+      "id": "brainstorm_5w1h",
+      "type": "PROMPT",
+      "input_collections": ["topic"],
+      "output_collections": ["brainstorm_results"],
+      "prompt": "Apply 5W1H framework (What, Who, When, Where, Why, How) to the topic."
+    },
+    {
+      "id": "gap_analysis",
+      "type": "PROMPT",
+      "input_collections": ["topic", "brainstorm_results"],
+      "output_collections": ["gaps"],
+      "prompt": "Scan Candlekeep library and vectorless for existing coverage. Identify gaps in scholarship."
+    },
+    {
+      "id": "approach_framing",
+      "type": "HUMAN_IN_THE_LOOP",
+      "input_collections": ["gaps"],
+      "output_collections": ["approach"],
+      "prompt": "Present research approaches (textual analysis, comparative study, historical survey, conceptual analysis, reception history) and let researcher choose."
+    },
+    {
+      "id": "question_formulation",
+      "type": "PROMPT",
+      "input_collections": ["topic", "gaps", "approach"],
+      "output_collections": ["research_questions"],
+      "prompt": "Formulate 3 structured research questions with thesis directions, key sources, and feasibility assessment."
+    },
+    {
+      "id": "question_approval",
+      "type": "HUMAN_IN_THE_LOOP",
+      "input_collections": ["research_questions"],
+      "output_collections": ["approved_question"],
+      "prompt": "Present research questions to the researcher. They choose one or refine."
+    },
+    {
+      "id": "research_brief",
+      "type": "PROMPT",
+      "input_collections": ["approved_question", "approach", "gaps"],
+      "output_collections": ["brief"],
+      "prompt": "Generate research-brief.md with question, thesis direction, approach, key sources, gap addressed, scope, and 5W1H summary."
+    }
+  ]
+}

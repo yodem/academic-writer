@@ -210,6 +210,40 @@ def generate_docx(data: dict, output_path: str):
                  italic=True, align=title_align, space_after=12,
                  line_spacing=line_spacing)
 
+    # Abstract(s)
+    abstract_data = data.get("abstract", None)
+    if abstract_data:
+        primary_abstract = abstract_data.get("primary", None)
+        secondary_abstract = abstract_data.get("secondary", None)
+
+        if primary_abstract:
+            # Abstract heading
+            abstract_heading = "תקציר" if is_rtl else "Abstract"
+            add_para(doc, abstract_heading, font_name, heading_size,
+                     is_rtl=is_rtl, bold=True,
+                     align=(WD_ALIGN_PARAGRAPH.RIGHT if is_rtl
+                            else WD_ALIGN_PARAGRAPH.LEFT),
+                     space_before=12, space_after=6,
+                     line_spacing=line_spacing)
+            # Abstract body
+            add_para(doc, primary_abstract, font_name, body_size,
+                     is_rtl=is_rtl, align=WD_ALIGN_PARAGRAPH.JUSTIFY,
+                     space_after=6, line_spacing=line_spacing)
+
+        if secondary_abstract:
+            # Secondary abstract (e.g., English abstract for Hebrew article)
+            secondary_is_rtl = not is_rtl  # opposite direction
+            add_para(doc, "Abstract", font_name, heading_size,
+                     is_rtl=secondary_is_rtl, bold=True,
+                     align=(WD_ALIGN_PARAGRAPH.RIGHT if secondary_is_rtl
+                            else WD_ALIGN_PARAGRAPH.LEFT),
+                     space_before=12, space_after=6,
+                     line_spacing=line_spacing)
+            add_para(doc, secondary_abstract, font_name, body_size,
+                     is_rtl=secondary_is_rtl,
+                     align=WD_ALIGN_PARAGRAPH.JUSTIFY,
+                     space_after=12, line_spacing=line_spacing)
+
     # Body sections
     for sec in sections:
         # Conditional section titles

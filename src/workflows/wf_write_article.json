@@ -80,7 +80,7 @@
       "type": "PROMPT",
       "input_collections": ["approved_outline", "approved_thesis", "profile_data", "deep_read_results"],
       "output_collections": ["article_sections"],
-      "prompt": "Spawn one section-writer agent PER SECTION (all in parallel). Each section-writer applies the 7-skill pipeline per paragraph: (1) Draft with mandatory vectorless search, (2) Style fingerprint compliance, (3) Hebrew grammar check, (4) Academic language & linking words, (5) Language purity, (6) Repetition check, (7) Citation audit via auditor subagent. Pass full styleFingerprint, linkingWords, thesis, and priorSectionTexts.",
+      "prompt": "Spawn one section-writer agent PER SECTION (all in parallel). Each section-writer applies the 8-skill pipeline per paragraph: (1) Draft with mandatory vectorless search, (2) Style fingerprint compliance, (3) Hebrew grammar check, (4) Academic language & linking words, (5) Language purity, (6) Anti-AI check (score 5 dimensions, threshold 35/50), (7) Repetition check, (8) Citation audit via auditor subagent. Pass full styleFingerprint, linkingWords, thesis, and priorSectionTexts.",
       "minimum_rows": 3,
       "required_skills": ["cognetivy"]
     },
@@ -93,11 +93,27 @@
       "required_skills": ["cognetivy"]
     },
     {
+      "id": "generate_abstract",
+      "type": "PROMPT",
+      "input_collections": ["reviewed_article", "approved_thesis", "profile_data"],
+      "output_collections": ["article_with_abstract"],
+      "prompt": "Generate structured abstract (תקציר): (1) topic & research question, (2) methodology & sources, (3) main findings & contribution. 150-300 words. If profile.abstractLanguages includes multiple languages, generate one abstract per language.",
+      "required_skills": ["cognetivy"]
+    },
+    {
+      "id": "self_review",
+      "type": "PROMPT",
+      "input_collections": ["article_with_abstract", "profile_data"],
+      "output_collections": ["review_scorecard"],
+      "prompt": "Score article on 6 dimensions (1-10 each): structure, argument logic, citation completeness, source coverage, writing quality, academic conventions. Present scorecard. If score < 40/60, ask researcher whether to proceed or address issues.",
+      "required_skills": ["cognetivy"]
+    },
+    {
       "id": "docx_output",
       "type": "PROMPT",
-      "input_collections": ["reviewed_article", "profile_data"],
+      "input_collections": ["article_with_abstract", "review_scorecard", "profile_data"],
       "output_collections": ["final_document"],
-      "prompt": "Generate .docx file with researcher's format preferences: font (default David), 11pt body, 1.5 line spacing, justified alignment, 1\" margins, page numbers, RTL layout. Save to project directory.",
+      "prompt": "Generate .docx file with abstract section, researcher's format preferences: font (default David), 11pt body, 1.5 line spacing, justified alignment, 1\" margins, page numbers, RTL layout. Save to project directory.",
       "required_skills": ["cognetivy"]
     }
   ]

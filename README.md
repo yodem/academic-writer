@@ -8,6 +8,12 @@ AI-first academic writing assistant for Humanities researchers. Produces rigorou
 - **Collaborative workflow** — subject → sources → thesis proposal → outline → write → audit → publish
 - **Parallel processing** — sections written simultaneously, each audited independently for speed
 - **Full workflow tracking** — every pipeline step logged to Cognetivy for transparency and auditability
+- **Anti-AI check** — every paragraph is scored on 5 dimensions (Directness, Rhythm, Trust, Authenticity, Density) to detect and eliminate AI writing patterns (threshold: 35/50)
+- **Structured abstract** — automatic תקציר generation with dual-language support (e.g., Hebrew + English)
+- **Self-review gate** — before export, the article is scored on 6 dimensions (60-point scale); score < 40 triggers researcher review
+- **Style learning** — run `/academic-writer-learn` to scan new past articles and update your style fingerprint automatically
+- **Research ideation** — `/academic-writer-ideate` guides you through 5W1H brainstorming, gap analysis, and structured research question formulation
+- **Session dashboard** — profile summary, article count, tool status, and pending style-learning notifications shown at session start
 
 ## Installation
 
@@ -68,21 +74,27 @@ Your profile is saved to `.academic-writer/profile.json` and automatically loade
 4. Propose thesis statements (2–3 options to choose from)
 5. Outline the article together (back-and-forth refinement)
 6. Approve the outline
-7. **Automated:** Sections written in parallel, each audited for citations
+7. **Automated:** Sections written in parallel, each paragraph through 8-skill pipeline (draft → style → grammar → academic language → language purity → anti-AI check → repetition → citation audit)
 8. **Automated:** Final synthesis for coherence and style
-9. Export as `.docx` with Chicago footnotes
+9. **Automated:** Abstract generation (תקציר), with dual-language if configured
+10. **Automated:** Self-review scorecard (6 dimensions, 60-point scale)
+11. Export as `.docx` with your format preferences
 
 ### Quick Commands
 
 | Command | What it does |
 |---------|-------------|
 | `/academic-writer` | Write a new article |
-| `/academic-writer-init` | First-time setup |
-| `/academic-writer-update-field` | Change your field of study |
-| `/academic-writer-update-tools` | Add/remove integrations (Candlekeep, RAG, etc.) |
+| `/academic-writer-init` | First-time setup (profile, citation style, abstract languages, style fingerprint) |
+| `/academic-writer-ideate` | Brainstorm research questions with 5W1H and gap analysis |
+| `/academic-writer-learn` | Scan new past articles and update style fingerprint |
+| `/academic-writer-review` | Score a completed article on 6 quality dimensions |
+| `/academic-writer-present` | Generate conference outlines, journal abstracts, book chapter proposals |
 | `/academic-writer-research` | Research a topic using your sources |
 | `/academic-writer-edit` | Edit a previously written article |
 | `/academic-writer-edit-section` | Quick edit of a single section |
+| `/academic-writer-update-field` | Change your field of study |
+| `/academic-writer-update-tools` | Add/remove integrations (Candlekeep, RAG, etc.) |
 | `/academic-writer-health` | Check all integrations & profile status |
 | `/academic-writer-help` | Show plugin info |
 
@@ -92,7 +104,9 @@ Your profile is saved to `.academic-writer/profile.json` and automatically loade
 your-project/
 ├── past-articles/              ← Drop your published papers here (5–10 PDFs/DOCXs)
 ├── .academic-writer/
-│   └── profile.json           ← Your profile (auto-created, never edit manually)
+│   ├── profile.json           ← Your profile (auto-created, never edit manually)
+│   ├── research-brief.md      ← Research brief from /academic-writer-ideate (optional)
+│   └── logs/                  ← Session logs (auto-managed)
 ├── .cognetivy/                ← Workflow audit trail (auto-managed)
 ├── articles/                  ← Output .docx files go here
 └── .claude-plugin/            ← Claude Code plugin cache (auto-managed)
@@ -105,7 +119,9 @@ Your profile (`.academic-writer/profile.json`) contains:
 ```json
 {
   "fieldOfStudy": "Your field",
-  "citationStyle": "chicago",
+  "targetLanguage": "Hebrew",
+  "citationStyle": "inline-parenthetical",
+  "abstractLanguages": ["Hebrew", "English"],
   "styleFingerprint": {
     "sentenceLevel": { ... },
     "vocabularyAndRegister": { ... },
@@ -200,9 +216,10 @@ Each agent is a specialized prompt that runs as a subagent:
 
 - **Deep Reader** — Explores source material before writing to understand coverage
 - **Architect** — Proposes thesis statements and generates article outline
-- **Section Writer** — Writes one complete section with citations (runs in parallel)
-- **Auditor** — Hard gate: verifies every citation against source material
+- **Section Writer** — Writes one complete section, applying the 8-skill pipeline per paragraph (runs in parallel)
+- **Auditor** — Hard gate: verifies every citation against source material (optional external check via WebSearch)
 - **Synthesizer** — Final review for coherence, transitions, and style consistency
+- **Style Miner** — Analyzes new articles in `past-articles/` to extract writing patterns and update the style fingerprint
 
 ### RAG Query Modes
 

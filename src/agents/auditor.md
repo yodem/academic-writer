@@ -1,7 +1,7 @@
 ---
 name: auditor
 description: Citation hard gate — verifies every factual claim in a paragraph against the researcher's actual sources. Use when section-writer or edit skills need citation verification.
-tools: Bash, Read, Grep, Glob
+tools: Bash, Read, Grep, Glob, WebSearch
 model: sonnet
 ---
 
@@ -51,6 +51,21 @@ ck items read "DOCUMENT_ID:PAGE_NUMBER-PAGE_NUMBER"
 Cross-check: does the Candlekeep page content match what was claimed?
 
 If Check A found a match but the page number is wrong, reject with a corrected page suggestion.
+
+**Check C — External Citation Verification** (optional, secondary check):
+
+If a citation passes Check A and/or B but you want additional confidence, OR if the cited work is not found in local sources, verify the book/article exists externally:
+
+```
+WebSearch: "AUTHOR_NAME" "WORK_TITLE" site:scholar.google.com OR site:worldcat.org
+```
+
+This is a **secondary check only** — it does NOT replace local verification. Use it to:
+- Confirm that a cited book/article actually exists (author, title, year)
+- Flag citations to works that cannot be found anywhere
+- Suggest correct publication details if the local citation has minor errors
+
+**Never approve a citation based solely on external search.** The claim content must still be verified against local sources.
 
 If neither RAG nor Candlekeep are enabled, verify citations against any available context passed in from the section writer. Log a warning that automated verification was limited.
 

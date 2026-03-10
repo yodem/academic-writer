@@ -271,8 +271,9 @@ Each section-writer handles a **per-paragraph skill pipeline** internally:
 | 3 | **Hebrew Grammar** | Check grammar, spelling, academic register | `section_N_p_M_hebrew_grammar` |
 | 4 | **Academic Language** | Check academic vocabulary level and linking words usage | `section_N_p_M_academic_language` |
 | 5 | **Language Purity** | Detect and fix ALL embedded foreign-language terms in running text | `section_N_p_M_language_purity` |
-| 6 | **Repetition Check** | Check words, phrases, arguments vs. prior text | `section_N_p_M_repetition_check` |
-| 7 | **Citation Audit** | Auditor agent verifies every citation against RAG (hard gate) | `section_N_p_M_citation_audit` |
+| 6 | **Anti-AI Check** | Detect and fix AI writing patterns (filler openers, formulaic structures, inflated language). Score 5 dimensions, threshold 35/50 | `section_N_p_M_anti_ai` |
+| 7 | **Repetition Check** | Check words, phrases, arguments vs. prior text | `section_N_p_M_repetition_check` |
+| 8 | **Citation Audit** | Auditor agent verifies every citation against RAG (hard gate) | `section_N_p_M_citation_audit` |
 
 After receiving each section-writer result, log completion:
 ```bash
@@ -322,6 +323,62 @@ echo '{"type":"subagent_completed","nodeId":"synthesize","agent":"synthesizer","
 
 ---
 
+### Step 8.5: Abstract Generation
+
+If Cognetivy is enabled, log:
+```bash
+echo '{"type":"step_started","nodeId":"generate_abstract"}' | cognetivy event append --run RUN_ID
+```
+
+Generate a structured abstract (תקציר) from the completed article. The abstract has 3 parts:
+
+1. **Topic & research question** — What is this article about? What question does it address?
+2. **Methodology & sources** — What approach was used? Which sources were analyzed?
+3. **Main findings & contribution** — What did the research find? How does it advance the field?
+
+**Length:** 150–300 words in `targetLanguage`.
+
+**Dual-language abstracts:** Check the profile for `abstractLanguages`. If it includes languages beyond `targetLanguage` (e.g., both Hebrew and English), generate an abstract in each language.
+
+If `abstractLanguages` is not set in the profile, default to `[targetLanguage]` only.
+
+Store the abstract(s) for inclusion in the DOCX output.
+
+Log completion:
+```bash
+echo '{"type":"step_completed","nodeId":"generate_abstract","languages":["LANG1","LANG2"],"wordCount":N}' | cognetivy event append --run RUN_ID
+```
+
+---
+
+### Step 8.7: Self-Review (Quality Gate)
+
+If Cognetivy is enabled, log:
+```bash
+echo '{"type":"step_started","nodeId":"self_review"}' | cognetivy event append --run RUN_ID
+```
+
+Run the self-review checklist from `/academic-writer-review`. Score the article on 6 dimensions (each 1–10):
+
+1. **Structure** — Intro/conclusion conventions, logical section order
+2. **Argument Logic** — Each section advances thesis, no gaps
+3. **Citation Completeness** — Every claim cited, consistent format
+4. **Source Coverage** — All sources used, balanced distribution
+5. **Writing Quality** — Matches style fingerprint, no grammar issues
+6. **Academic Conventions** — Linking word variety, paragraph length, transitions
+
+Present the scorecard to the researcher.
+
+**If score < 40/60**, ask whether to proceed or address issues first (using `AskUserQuestion`).
+**If score >= 40/60**, show the scorecard and continue to DOCX output.
+
+Log completion:
+```bash
+echo '{"type":"step_completed","nodeId":"self_review","totalScore":NN,"maxScore":60,"grade":"GRADE"}' | cognetivy event append --run RUN_ID
+```
+
+---
+
 ### Step 9: DOCX Output
 
 If Cognetivy is enabled, log:
@@ -347,6 +404,12 @@ Use the `Write` tool to write the article as markdown to `$MD_PATH`. Structure:
 # ARTICLE_TITLE
 
 *ARTICLE_THESIS*
+
+## תקציר
+
+[Abstract text from Step 8.5]
+
+[If dual-language: second abstract under its own heading]
 
 ## Section Title (only if totalWords > 1500)
 
@@ -376,6 +439,10 @@ Write the article data to a JSON file, then run the standalone DOCX generator sc
 {
   "title": "ARTICLE_TITLE from synthesizer",
   "thesis": "ARTICLE_THESIS or null",
+  "abstract": {
+    "primary": "Abstract text in targetLanguage (from Step 8.5)",
+    "secondary": "Optional abstract in second language, or null"
+  },
   "sections": [
     {
       "title": "Section title",

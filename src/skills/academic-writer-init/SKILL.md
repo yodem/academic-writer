@@ -222,6 +222,40 @@ Map selection: Inline → `inline-parenthetical`, Chicago → `chicago`, MLA →
 
 ---
 
+### Step 3b of 4 — Abstract Languages
+
+```python
+AskUserQuestion(questions=[{
+  "question": "Do your articles need abstracts? Some journals require dual-language abstracts.",
+  "header": "Abstract Languages",
+  "options": [
+    {
+      "label": "Primary language only",
+      "description": "Abstract in the article's language only.",
+      "markdown": "```\nSingle Abstract\n───────────────\nAbstract in: [targetLanguage]\nCommon for: Most journals\n```"
+    },
+    {
+      "label": "Hebrew + English",
+      "description": "Dual-language abstracts — common for Israeli journals.",
+      "markdown": "```\nDual Abstract\n─────────────\nAbstracts in: Hebrew + English\nCommon for: Israeli journals,\n            academic theses\n```"
+    },
+    {
+      "label": "No abstract needed",
+      "description": "Skip abstract generation.",
+      "markdown": "```\nNo Abstract\n───────────\nAbstracts will not be generated.\nYou can enable later with\n/academic-writer-init (Update)\n```"
+    }
+  ],
+  "multiSelect": false
+}])
+```
+
+Store as `abstractLanguages` array:
+- Primary only → `["Hebrew"]` (or whatever `targetLanguage` is)
+- Hebrew + English → `["Hebrew", "English"]`
+- No abstract → `[]`
+
+---
+
 ### Step 4 of 4 — Writing Style
 
 ```python
@@ -372,6 +406,7 @@ Use the Write tool to save `.academic-writer/profile.json`:
   "fieldOfStudy": "FIELD_HERE",
   "targetLanguage": "Hebrew",
   "citationStyle": "inline-parenthetical",
+  "abstractLanguages": ["Hebrew"],
   "outputFormatPreferences": {
     "font": "David",
     "bodySize": 11,
