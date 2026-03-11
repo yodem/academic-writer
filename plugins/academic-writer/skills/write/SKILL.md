@@ -59,6 +59,12 @@ If the profile has no `tools` key (legacy profile), assume all tools are enabled
 If Cognetivy is enabled, start a run at the beginning of Phase 1 (so conversational steps are also tracked):
 
 ```bash
+# Validate wf_write_article has nodes — if empty, re-register from plugin cache
+_AW_NODES=$(cognetivy workflow get --workflow wf_write_article 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('nodes',[])))" 2>/dev/null || echo "0")
+if [ "$_AW_NODES" -eq 0 ]; then
+  _AW_DIR=$(find ~/.claude/plugins/cache -name "wf_write_article.json" -path "*/workflows/*" 2>/dev/null | head -1 | xargs dirname 2>/dev/null)
+  [ -n "$_AW_DIR" ] && cognetivy workflow set --file "$_AW_DIR/wf_write_article.json" && cognetivy collection-schema set --file "$_AW_DIR/collection-schemas.json"
+fi
 echo '{"subject": "pending", "phase": "conversational"}' > /tmp/aw-run-input.json
 cognetivy run start --workflow wf_write_article --input /tmp/aw-run-input.json
 ```
@@ -67,7 +73,7 @@ Record the run ID — use it for ALL logging from this point forward.
 
 Log profile load:
 ```bash
-echo '{"type":"step_completed","nodeId":"load_profile","tools":TOOLS_JSON}' | cognetivy event append --run RUN_ID
+echo '{"fieldOfStudy":"FIELD","targetLanguage":"LANG","citationStyle":"STYLE","tools":TOOLS_JSON}' | cognetivy node complete --run RUN_ID --node load_profile --status completed --collection-kind profile_data
 ```
 
 ### Step 1: Subject & Language
@@ -84,7 +90,7 @@ Store as `targetLanguage`. This will be enforced throughout the pipeline — all
 
 If Cognetivy is enabled, log:
 ```bash
-echo '{"type":"step_completed","nodeId":"subject_selection","subject":"SUBJECT","language":"TARGET_LANGUAGE"}' | cognetivy event append --run RUN_ID
+echo '{"text":"SUBJECT","targetLanguage":"TARGET_LANGUAGE"}' | cognetivy node complete --run RUN_ID --node subject_selection --status completed --collection-kind subject
 ```
 
 ---
@@ -93,7 +99,7 @@ echo '{"type":"step_completed","nodeId":"subject_selection","subject":"SUBJECT",
 
 If Cognetivy is enabled, log:
 ```bash
-echo '{"type":"step_started","nodeId":"source_selection"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"source_selection"}}' | cognetivy event append --run RUN_ID
 ```
 
 **If Candlekeep is enabled**, enrich all items then list them:
@@ -114,7 +120,7 @@ Present them clearly and ask:
 
 After researcher confirms selection, log:
 ```bash
-echo '{"type":"step_completed","nodeId":"source_selection","sourcesSelected":N,"sourceIds":["ID1","ID2"]}' | cognetivy event append --run RUN_ID
+echo '[{"sourceId":"ID","title":"TITLE","type":"candlekeep"}]' | cognetivy node complete --run RUN_ID --node source_selection --status completed --collection-kind selected_sources
 ```
 
 ---
@@ -123,7 +129,7 @@ echo '{"type":"step_completed","nodeId":"source_selection","sourcesSelected":N,"
 
 If Cognetivy is enabled, log the spawn event:
 ```bash
-echo '{"type":"subagent_spawned","nodeId":"deep_read","agent":"deep-reader","details":"Exploring source material for article subject"}' | cognetivy event append --run RUN_ID
+echo '{"type":"subagent_spawned","data":{"nodeId":"deep_read","agent":"deep-reader","details":"Exploring source material for article subject"}}' | cognetivy event append --run RUN_ID
 ```
 
 **Use the Agent tool to spawn the `deep-reader` subagent.** Pass as the prompt all of the following context: the article subject, selectedSourceIds, runId, and tools configuration.
@@ -132,9 +138,9 @@ The deep-reader logs its own `deep_read` start/progress/completion events to Cog
 
 Wait for the deep-reader to return retrieved passages before continuing to Step 4.
 
-After receiving the deep-reader result, log completion:
+After receiving the deep-reader result, mark node complete:
 ```bash
-echo '{"type":"subagent_completed","nodeId":"deep_read","agent":"deep-reader","status":"success"}' | cognetivy event append --run RUN_ID
+cognetivy node complete --run RUN_ID --node deep_read --status completed
 ```
 
 ---
@@ -143,16 +149,16 @@ echo '{"type":"subagent_completed","nodeId":"deep_read","agent":"deep-reader","s
 
 If Cognetivy is enabled, log the spawn event:
 ```bash
-echo '{"type":"subagent_spawned","nodeId":"thesis_proposal","agent":"architect","details":"Proposing thesis statements"}' | cognetivy event append --run RUN_ID
+echo '{"type":"subagent_spawned","data":{"nodeId":"thesis_proposal","agent":"architect","details":"Proposing thesis statements"}}' | cognetivy event append --run RUN_ID
 ```
 
 **Use the Agent tool to spawn the `architect` subagent.** Pass the subject, deep read results, runId, and targetLanguage as the prompt.
 
 The architect logs its own `thesis_proposal` events to Cognetivy.
 
-After receiving the architect result, log completion:
+After receiving the architect result, mark node complete:
 ```bash
-echo '{"type":"subagent_completed","nodeId":"thesis_proposal","agent":"architect","status":"success"}' | cognetivy event append --run RUN_ID
+cognetivy node complete --run RUN_ID --node thesis_proposal --status completed
 ```
 
 Present the architect's output to researcher:
@@ -164,22 +170,27 @@ Present the architect's output to researcher:
 >
 > Which resonates? Pick one, modify it, or tell me your own thesis."
 
+After the researcher picks a thesis, log thesis approval:
+```bash
+echo '{"statement":"CHOSEN_THESIS_STATEMENT","modifications":"any changes the researcher made or null"}' | cognetivy node complete --run RUN_ID --node thesis_approval --status completed --collection-kind approved_thesis
+```
+
 ---
 
 ### Step 5: Outline + Approval
 
 If Cognetivy is enabled, log the spawn event:
 ```bash
-echo '{"type":"subagent_spawned","nodeId":"outline","agent":"architect","details":"Generating article outline"}' | cognetivy event append --run RUN_ID
+echo '{"type":"subagent_spawned","data":{"nodeId":"outline","agent":"architect","details":"Generating article outline"}}' | cognetivy event append --run RUN_ID
 ```
 
 **Use the Agent tool to spawn the `architect` subagent again** with the approved thesis, deep read results, and runId.
 
 The architect logs its own `outline` events to Cognetivy.
 
-After receiving the architect result, log completion:
+After receiving the architect result, mark node complete:
 ```bash
-echo '{"type":"subagent_completed","nodeId":"outline","agent":"architect","status":"success"}' | cognetivy event append --run RUN_ID
+cognetivy node complete --run RUN_ID --node outline_generation --status completed
 ```
 
 Present the outline and invite refinement:
@@ -190,9 +201,9 @@ Present the outline and invite refinement:
 
 Iterate until the researcher says something like "go", "looks good", or "start writing".
 
-If Cognetivy is enabled, update the run input with final subject and thesis:
+If Cognetivy is enabled, log outline approval:
 ```bash
-echo '{"type":"step_completed","nodeId":"outline","subject":"FINAL_SUBJECT","thesis":"FINAL_THESIS","sections":N}' | cognetivy event append --run RUN_ID
+echo '[{"sectionIndex":1,"title":"SECTION_TITLE","argumentRole":"ROLE"}]' | cognetivy node complete --run RUN_ID --node outline_approval --status completed --collection-kind approved_outline
 ```
 
 ---
@@ -201,7 +212,7 @@ echo '{"type":"step_completed","nodeId":"outline","subject":"FINAL_SUBJECT","the
 
 If Cognetivy is enabled, log phase transition:
 ```bash
-echo '{"type":"phase_started","phase":"autonomous","nodeId":"phase_2"}' | cognetivy event append --run RUN_ID
+echo '{"type":"phase_started","data":{"phase":"autonomous","nodeId":"phase_2"}}' | cognetivy event append --run RUN_ID
 ```
 
 ---
@@ -211,7 +222,7 @@ echo '{"type":"phase_started","phase":"autonomous","nodeId":"phase_2"}' | cognet
 
 If Cognetivy is enabled, log:
 ```bash
-echo '{"type":"step_started","nodeId":"ingestion_sync"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"ingestion_sync"}}' | cognetivy event append --run RUN_ID
 ```
 
 If both Candlekeep and Agentic-Search-Vectorless are enabled, ensure selected sources are ingested. First check what's already there, then ingest any missing ones:
@@ -234,7 +245,7 @@ bash plugins/academic-writer/scripts/vectorless-ingest.sh --name "$TITLE" --cont
 
 Log completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"ingestion_sync","documentsIngested":N}' | cognetivy event append --run RUN_ID
+echo '{"documentsIngested":N,"documentsSkipped":M}' | cognetivy node complete --run RUN_ID --node ingestion_sync --status completed --collection-kind sync_status
 ```
 
 ---
@@ -245,7 +256,7 @@ echo '{"type":"step_completed","nodeId":"ingestion_sync","documentsIngested":N}'
 
 If Cognetivy is enabled, log a spawn event for EACH section-writer before spawning:
 ```bash
-echo '{"type":"subagent_spawned","nodeId":"section_N","agent":"section-writer","details":"Writing section N: SECTION_TITLE"}' | cognetivy event append --run RUN_ID
+echo '{"type":"subagent_spawned","data":{"nodeId":"section_N","agent":"section-writer","details":"Writing section N: SECTION_TITLE"}}' | cognetivy event append --run RUN_ID
 ```
 
 For each section in the approved outline, the Agent tool prompt must include:
@@ -276,9 +287,9 @@ Each section-writer handles a **per-paragraph skill pipeline** internally:
 | 7 | **Repetition Check** | Check words, phrases, arguments vs. prior text | `section_N_p_M_repetition_check` |
 | 8 | **Citation Audit** | Auditor agent verifies every citation against RAG (hard gate) | `section_N_p_M_citation_audit` |
 
-After receiving each section-writer result, log completion:
+After receiving each section-writer result, mark node complete:
 ```bash
-echo '{"type":"subagent_completed","nodeId":"section_N","agent":"section-writer","status":"success|failed"}' | cognetivy event append --run RUN_ID
+cognetivy node complete --run RUN_ID --node section_writing --status completed
 ```
 
 The auditor is a HARD GATE:
@@ -293,7 +304,7 @@ The auditor is a HARD GATE:
 
 Once all sections are approved, log the spawn event:
 ```bash
-echo '{"type":"subagent_spawned","nodeId":"synthesize","agent":"synthesizer","details":"Final coherence and style review"}' | cognetivy event append --run RUN_ID
+echo '{"type":"subagent_spawned","data":{"nodeId":"synthesize","agent":"synthesizer","details":"Final coherence and style review"}}' | cognetivy event append --run RUN_ID
 ```
 
 **Use the Agent tool to spawn the `synthesizer` subagent.** Pass the following as the prompt:
@@ -317,9 +328,9 @@ The synthesizer runs TWO phases, each logged to Cognetivy:
 
 Makes targeted revisions only — does not rewrite from scratch. Citations are locked.
 
-After receiving the synthesizer result, log completion:
+After receiving the synthesizer result, mark node complete:
 ```bash
-echo '{"type":"subagent_completed","nodeId":"synthesize","agent":"synthesizer","status":"success"}' | cognetivy event append --run RUN_ID
+cognetivy node complete --run RUN_ID --node synthesis --status completed
 ```
 
 ---
@@ -328,7 +339,7 @@ echo '{"type":"subagent_completed","nodeId":"synthesize","agent":"synthesizer","
 
 If Cognetivy is enabled, log:
 ```bash
-echo '{"type":"step_started","nodeId":"generate_abstract"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"generate_abstract"}}' | cognetivy event append --run RUN_ID
 ```
 
 Generate a structured abstract (תקציר) from the completed article. The abstract has 3 parts:
@@ -347,7 +358,7 @@ Store the abstract(s) for inclusion in the DOCX output.
 
 Log completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"generate_abstract","languages":["LANG1","LANG2"],"wordCount":N}' | cognetivy event append --run RUN_ID
+echo '{"fullText":"FULL_ARTICLE_TEXT","abstract":{"primary":"ABSTRACT_TEXT"},"wordCount":N}' | cognetivy node complete --run RUN_ID --node generate_abstract --status completed --collection-kind article_with_abstract
 ```
 
 ---
@@ -356,7 +367,7 @@ echo '{"type":"step_completed","nodeId":"generate_abstract","languages":["LANG1"
 
 If Cognetivy is enabled, log:
 ```bash
-echo '{"type":"step_started","nodeId":"self_review"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"self_review"}}' | cognetivy event append --run RUN_ID
 ```
 
 Run the self-review checklist from `/academic-writer:review`. Score the article on 6 dimensions (each 1–10):
@@ -375,7 +386,7 @@ Present the scorecard to the researcher.
 
 Log completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"self_review","totalScore":NN,"maxScore":60,"grade":"GRADE"}' | cognetivy event append --run RUN_ID
+echo '{"totalScore":NN,"maxScore":60,"grade":"GRADE","dimensions":{}}' | cognetivy node complete --run RUN_ID --node self_review --status completed --collection-kind review_scorecard
 ```
 
 ---
@@ -384,7 +395,7 @@ echo '{"type":"step_completed","nodeId":"self_review","totalScore":NN,"maxScore"
 
 If Cognetivy is enabled, log:
 ```bash
-echo '{"type":"step_started","nodeId":"article_output"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"docx_output"}}' | cognetivy event append --run RUN_ID
 ```
 
 Assemble the final article and write to both Markdown and DOCX:
@@ -480,18 +491,18 @@ The script handles all RTL formatting, directional marks, citation parentheses s
 
 Log output completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"article_output","docxPath":"DOCX_PATH","mdPath":"MD_PATH","wordCount":N,"citations":N,"citationStyle":"CITATION_STYLE","sections":N,"font":"FONT_NAME","language":"TARGET_LANGUAGE"}' | cognetivy event append --run RUN_ID
+echo '{"filePath":"DOCX_PATH","format":"docx","wordCount":N}' | cognetivy node complete --run RUN_ID --node docx_output --status completed --collection-kind final_document
 ```
 
 Complete the Cognetivy run:
 ```bash
-echo '{"type":"run_completed","status":"completed","output":{"docxPath":"DOCX_PATH","mdPath":"MD_PATH","wordCount":N,"citations":N,"citationStyle":"CITATION_STYLE","sections":N,"hebrewGrammarFixes":N,"languagePurityFixes":N,"repetitionFixes":N,"auditRewrites":N}}' | cognetivy event append --run RUN_ID
+echo '{"type":"run_completed","data":{"status":"completed","output":{"docxPath":"DOCX_PATH","mdPath":"MD_PATH","wordCount":N,"citations":N,"citationStyle":"CITATION_STYLE","sections":N,"hebrewGrammarFixes":N,"languagePurityFixes":N,"repetitionFixes":N,"auditRewrites":N}}}' | cognetivy event append --run RUN_ID
 cognetivy run complete --run RUN_ID
 ```
 
 **CRITICAL: Always complete the Cognetivy run.** If ANY step in the pipeline fails, still log `run_completed` with `status: failed` and call:
 ```bash
-echo '{"type":"run_completed","status":"failed","error":"DESCRIPTION_OF_FAILURE"}' | cognetivy event append --run RUN_ID
+echo '{"type":"run_completed","data":{"status":"failed","error":"DESCRIPTION_OF_FAILURE"}}' | cognetivy event append --run RUN_ID
 cognetivy run complete --run RUN_ID
 ```
 

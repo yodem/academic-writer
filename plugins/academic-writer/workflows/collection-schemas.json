@@ -5,9 +5,19 @@
       "item_schema": {
         "type": "object",
         "properties": {
-          "subject": { "type": "string" },
-          "phase": { "type": "string", "enum": ["conversational", "autonomous"] },
-          "targetLanguage": { "type": "string" }
+          "subject": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "conversational",
+              "autonomous"
+            ]
+          },
+          "targetLanguage": {
+            "type": "string"
+          }
         }
       }
     },
@@ -15,190 +25,482 @@
       "item_schema": {
         "type": "object",
         "properties": {
-          "fieldOfStudy": { "type": "string" },
-          "targetLanguage": { "type": "string" },
-          "citationStyle": { "type": "string" },
-          "styleFingerprint": { "type": "object" },
-          "tools": { "type": "object" }
+          "fieldOfStudy": {
+            "type": "string"
+          },
+          "targetLanguage": {
+            "type": "string"
+          },
+          "citationStyle": {
+            "type": "string"
+          },
+          "styleFingerprint": {
+            "type": "object"
+          },
+          "tools": {
+            "type": "object"
+          }
         },
-        "required": ["fieldOfStudy", "targetLanguage", "citationStyle"]
+        "required": [
+          "fieldOfStudy",
+          "targetLanguage",
+          "citationStyle"
+        ]
       }
     },
     "detected_tools": {
       "item_schema": {
         "type": "object",
         "properties": {
-          "toolId": { "type": "string" },
-          "enabled": { "type": "boolean" },
-          "path": { "type": "string" },
-          "version": { "type": "string" }
+          "toolId": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
         },
-        "required": ["toolId", "enabled"]
+        "required": [
+          "toolId",
+          "enabled"
+        ]
       }
     },
     "subject": {
       "item_schema": {
         "type": "object",
         "properties": {
-          "text": { "type": "string" },
-          "targetLanguage": { "type": "string" }
+          "text": {
+            "type": "string"
+          },
+          "targetLanguage": {
+            "type": "string"
+          }
         },
-        "required": ["text"]
+        "required": [
+          "text"
+        ]
       }
     },
     "selected_sources": {
       "item_schema": {
         "type": "object",
         "properties": {
-          "sourceId": { "type": "string" },
-          "title": { "type": "string" },
-          "author": { "type": "string" },
-          "type": { "type": "string", "enum": ["candlekeep", "manual", "url"] },
-          "path": { "type": "string" }
+          "sourceId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "candlekeep",
+              "manual",
+              "url"
+            ]
+          },
+          "path": {
+            "type": "string"
+          }
         },
-        "required": ["sourceId", "title"]
+        "required": [
+          "sourceId",
+          "title"
+        ]
       }
     },
     "deep_read_results": {
       "item_schema": {
         "type": "object",
         "properties": {
-          "sourceId": { "type": "string" },
-          "coverage": { "type": "string", "enum": ["strong", "partial", "gap"] },
-          "keyArguments": { "type": "array", "items": { "type": "string" } },
-          "counterArguments": { "type": "array", "items": { "type": "string" } },
-          "keyAuthors": { "type": "array", "items": { "type": "string" } },
-          "tensions": { "type": "array", "items": { "type": "string" } }
+          "sourceId": {
+            "type": "string"
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "strong",
+              "partial",
+              "gap"
+            ]
+          },
+          "keyArguments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "counterArguments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "keyAuthors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         },
-        "required": ["sourceId", "coverage"]
+        "required": [
+          "sourceId",
+          "coverage"
+        ]
       }
     },
     "thesis_options": {
       "item_schema": {
         "type": "object",
         "properties": {
-          "statement": { "type": "string" },
-          "rationale": { "type": "string" },
-          "keySources": { "type": "array", "items": { "type": "string" } },
-          "riskAssessment": { "type": "string" }
+          "statement": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "keySources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "riskAssessment": {
+            "type": "string"
+          }
         },
-        "required": ["statement", "rationale"]
+        "required": [
+          "statement",
+          "rationale"
+        ]
       }
     },
     "approved_thesis": {
       "item_schema": {
         "type": "object",
         "properties": {
-          "statement": { "type": "string" },
-          "modifications": { "type": "string" }
+          "statement": {
+            "type": "string"
+          },
+          "modifications": {
+            "type": "string"
+          }
         },
-        "required": ["statement"]
+        "required": [
+          "statement"
+        ]
       }
     },
     "outline": {
       "item_schema": {
         "type": "object",
         "properties": {
-          "sectionIndex": { "type": "number" },
-          "title": { "type": "string" },
-          "description": { "type": "string" },
-          "argumentRole": { "type": "string" },
-          "suggestedSources": { "type": "array", "items": { "type": "string" } },
-          "wordCount": { "type": "number" },
-          "paragraphCount": { "type": "number" }
+          "sectionIndex": {
+            "type": "number"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "argumentRole": {
+            "type": "string"
+          },
+          "suggestedSources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "wordCount": {
+            "type": "number"
+          },
+          "paragraphCount": {
+            "type": "number"
+          }
         },
-        "required": ["sectionIndex", "title", "argumentRole"]
+        "required": [
+          "sectionIndex",
+          "title",
+          "argumentRole"
+        ]
       }
     },
     "approved_outline": {
       "item_schema": {
         "type": "object",
         "properties": {
-          "sectionIndex": { "type": "number" },
-          "title": { "type": "string" },
-          "description": { "type": "string" },
-          "argumentRole": { "type": "string" },
-          "suggestedSources": { "type": "array", "items": { "type": "string" } },
-          "wordCount": { "type": "number" },
-          "paragraphCount": { "type": "number" },
-          "modifications": { "type": "string" }
+          "sectionIndex": {
+            "type": "number"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "argumentRole": {
+            "type": "string"
+          },
+          "suggestedSources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "wordCount": {
+            "type": "number"
+          },
+          "paragraphCount": {
+            "type": "number"
+          },
+          "modifications": {
+            "type": "string"
+          }
         },
-        "required": ["sectionIndex", "title", "argumentRole"]
+        "required": [
+          "sectionIndex",
+          "title",
+          "argumentRole"
+        ]
       }
     },
     "article_sections": {
       "item_schema": {
         "type": "object",
         "properties": {
-          "sectionIndex": { "type": "number" },
-          "title": { "type": "string" },
+          "sectionIndex": {
+            "type": "number"
+          },
+          "title": {
+            "type": "string"
+          },
           "paragraphs": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "content": { "type": "string" },
-                "citations": { "type": "array", "items": { "type": "string" } },
-                "auditStatus": { "type": "string", "enum": ["approved", "rejected"] }
+                "content": {
+                  "type": "string"
+                },
+                "citations": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "auditStatus": {
+                  "type": "string",
+                  "enum": [
+                    "approved",
+                    "rejected"
+                  ]
+                }
               }
             }
           }
         },
-        "required": ["sectionIndex", "title", "paragraphs"]
+        "required": [
+          "sectionIndex",
+          "title",
+          "paragraphs"
+        ]
       }
     },
     "reviewed_article": {
       "item_schema": {
         "type": "object",
         "properties": {
-          "fullText": { "type": "string" },
-          "revisionNotes": { "type": "array", "items": { "type": "string" } },
-          "repetitionFindings": { "type": "array", "items": { "type": "string" } }
+          "fullText": {
+            "type": "string"
+          },
+          "revisionNotes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "repetitionFindings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         },
-        "required": ["fullText"]
+        "required": [
+          "fullText"
+        ]
       }
     },
     "final_document": {
       "item_schema": {
         "type": "object",
         "properties": {
-          "filePath": { "type": "string" },
-          "format": { "type": "string", "enum": ["docx"] },
-          "wordCount": { "type": "number" }
+          "filePath": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "docx"
+            ]
+          },
+          "wordCount": {
+            "type": "number"
+          }
         },
-        "required": ["filePath", "format"]
+        "required": [
+          "filePath",
+          "format"
+        ]
       }
     },
     "research_question": {
       "item_schema": {
         "type": "object",
         "properties": {
-          "question": { "type": "string" },
-          "type": { "type": "string", "enum": ["direct", "exploration", "comparison", "quote_search", "concept_analysis"] }
+          "question": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "exploration",
+              "comparison",
+              "quote_search",
+              "concept_analysis"
+            ]
+          }
         },
-        "required": ["question", "type"]
+        "required": [
+          "question",
+          "type"
+        ]
       }
     },
     "search_results": {
       "item_schema": {
         "type": "object",
         "properties": {
-          "source": { "type": "string", "enum": ["vectorless", "candlekeep", "mongodb"] },
-          "query": { "type": "string" },
-          "results": { "type": "array", "items": { "type": "object" } }
+          "source": {
+            "type": "string",
+            "enum": [
+              "vectorless",
+              "candlekeep",
+              "mongodb"
+            ]
+          },
+          "query": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
         },
-        "required": ["source", "query"]
+        "required": [
+          "source",
+          "query"
+        ]
       }
     },
     "research_answer": {
       "item_schema": {
         "type": "object",
         "properties": {
-          "answer": { "type": "string" },
-          "citations": { "type": "array", "items": { "type": "string" } },
-          "gaps": { "type": "array", "items": { "type": "string" } }
+          "answer": {
+            "type": "string"
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         },
-        "required": ["answer"]
+        "required": [
+          "answer"
+        ]
+      }
+    },
+    "sync_status": {
+      "item_schema": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "documentsIngested": {
+            "type": "number"
+          },
+          "documentsSkipped": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "article_with_abstract": {
+      "item_schema": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "fullText": {
+            "type": "string"
+          },
+          "abstract": {
+            "type": "object"
+          },
+          "wordCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "fullText"
+        ]
+      }
+    },
+    "review_scorecard": {
+      "item_schema": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "totalScore": {
+            "type": "number"
+          },
+          "maxScore": {
+            "type": "number"
+          },
+          "grade": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "totalScore",
+          "maxScore"
+        ]
       }
     }
   }

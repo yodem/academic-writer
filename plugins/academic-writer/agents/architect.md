@@ -31,20 +31,20 @@ For Hebrew articles: Write theses, section titles, roles, and descriptions in He
 
 **Mode A** — Log thesis proposal:
 ```bash
-echo '{"type":"step_started","nodeId":"thesis_proposal"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"thesis_proposal"}}' | cognetivy event append --run RUN_ID
 ```
 On completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"thesis_proposal","thesesProposed":N}' | cognetivy event append --run RUN_ID
+echo '[{"statement":"THESIS_1","rationale":"...","keySources":[],"riskAssessment":"..."},...]' | cognetivy node complete --run RUN_ID --node thesis_proposal --status completed --collection-kind thesis_options
 ```
 
 **Mode B** — Log outline generation:
 ```bash
-echo '{"type":"step_started","nodeId":"outline"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"outline"}}' | cognetivy event append --run RUN_ID
 ```
 On completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"outline","sections":N,"totalWords":N,"totalParagraphs":N}' | cognetivy event append --run RUN_ID
+echo '[{"sectionIndex":1,"title":"TITLE","argumentRole":"ROLE","suggestedSources":[],"wordCount":N,"paragraphCount":N},...]' | cognetivy node complete --run RUN_ID --node outline_generation --status completed --collection-kind outline
 ```
 
 ## Mode A: Thesis Proposal

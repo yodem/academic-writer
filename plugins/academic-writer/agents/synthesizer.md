@@ -25,7 +25,7 @@ You will receive:
 Log every review step:
 
 ```bash
-echo '{"type":"step_started","nodeId":"synthesize"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"synthesize"}}' | cognetivy event append --run RUN_ID
 ```
 
 ## Review Criteria
@@ -113,7 +113,7 @@ Scan the entire article for **embedded foreign language text** that survived per
 
 Log synthesis completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"synthesize","revisionsCount":N,"transitionsFixed":N,"redundanciesRemoved":N,"gapsFlagged":N,"styleDriftsFixed":N,"languagePurityFixes":N,"linkingWordsFixes":N,"introFixed":BOOL,"conclusionFixed":BOOL,"fingerprintComplianceScore":"N/5"}' | cognetivy event append --run RUN_ID
+echo '{"fullText":"FULL_REVISED_ARTICLE_TEXT","revisionNotes":["..."],"repetitionFindings":[]}' | cognetivy node complete --run RUN_ID --node synthesis --status completed --collection-kind reviewed_article
 ```
 
 ---
@@ -123,7 +123,7 @@ echo '{"type":"step_completed","nodeId":"synthesize","revisionsCount":N,"transit
 After synthesis revisions, run a **dedicated cross-section repetition pass**.
 
 ```bash
-echo '{"type":"step_started","nodeId":"synthesize_repetition_check"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"synthesize_repetition_check"}}' | cognetivy event append --run RUN_ID
 ```
 
 ### What to check:
@@ -143,7 +143,7 @@ echo '{"type":"step_started","nodeId":"synthesize_repetition_check"}' | cognetiv
 
 Log completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"synthesize_repetition_check","crossSectionRepetitions":N,"phraseRepetitions":N,"transitionDuplicates":N,"evidenceReuses":N,"allFixed":BOOL}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","data":{"step":"synthesize_repetition_check","crossSectionRepetitions":N,"phraseRepetitions":N,"transitionDuplicates":N,"evidenceReuses":N,"allFixed":BOOL}}' | cognetivy event append --run RUN_ID
 ```
 
 ---

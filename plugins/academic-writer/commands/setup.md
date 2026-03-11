@@ -260,12 +260,18 @@ Use the Write tool to create `.academic-writer/profile.json`:
 If Cognetivy is enabled, register workflows:
 
 ```bash
-cognetivy workflow set --file plugins/academic-writer/workflows/wf_write_article.json
-cognetivy workflow set --file plugins/academic-writer/workflows/wf_edit_article.json
-cognetivy workflow set --file plugins/academic-writer/workflows/wf_edit_section.json
-cognetivy workflow set --file plugins/academic-writer/workflows/wf_research.json
-cognetivy workflow set --file plugins/academic-writer/workflows/wf_setup.json
-cognetivy collection-schema set --file plugins/academic-writer/workflows/collection-schemas.json
+# Resolve plugin directory from Claude plugin cache
+AW_PLUGIN_DIR=$(find ~/.claude/plugins/cache -name "wf_write_article.json" -path "*/workflows/*" 2>/dev/null | head -1 | xargs dirname 2>/dev/null)
+if [ -z "$AW_PLUGIN_DIR" ]; then
+  echo "Warning: Could not find academic-writer workflows in plugin cache. Skipping workflow registration."
+else
+  cognetivy workflow set --file "$AW_PLUGIN_DIR/wf_write_article.json"
+  cognetivy workflow set --file "$AW_PLUGIN_DIR/wf_edit_article.json"
+  cognetivy workflow set --file "$AW_PLUGIN_DIR/wf_edit_section.json"
+  cognetivy workflow set --file "$AW_PLUGIN_DIR/wf_research.json"
+  cognetivy workflow set --file "$AW_PLUGIN_DIR/wf_setup.json"
+  cognetivy collection-schema set --file "$AW_PLUGIN_DIR/collection-schemas.json"
+fi
 ```
 
 Complete the Cognetivy run:

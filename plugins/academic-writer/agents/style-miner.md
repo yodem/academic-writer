@@ -97,12 +97,12 @@ For each fingerprint dimension, report:
 
 If `runId` is provided:
 ```bash
-echo '{"type":"step_started","nodeId":"style_mining"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"style_mining"}}' | cognetivy event append --run RUN_ID
 ```
 
 After analysis:
 ```bash
-echo '{"type":"step_completed","nodeId":"style_mining","articlesAnalyzed":N,"dimensionsChanged":N}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","data":{"step":"style_mining","articlesAnalyzed":N,"dimensionsChanged":N}}' | cognetivy event append --run RUN_ID
 ```
 
 ## Output
