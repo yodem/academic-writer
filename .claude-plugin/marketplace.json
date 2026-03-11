@@ -1,6 +1,6 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "academic-writer",
+  "name": "yodem",
   "version": "0.2.5",
   "engine": ">=2.1.69",
   "description": "AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as .docx files.",
