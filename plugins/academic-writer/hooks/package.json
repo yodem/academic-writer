@@ -1,0 +1,24 @@
+{
+  "name": "@academic-writer/hooks",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "TypeScript hooks for Academic Writer Claude Plugin",
+  "main": "./dist/hooks.mjs",
+  "bin": {
+    "run-hook": "./bin/run-hook.mjs"
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.6.0"
+  },
+  "license": "MIT"
+}

@@ -1,287 +1,162 @@
 # Academic Writer — Claude Code Plugin
 
-AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as `.docx` files.
+AI-first academic writing assistant for Humanities researchers. Writes rigorously cited, style-matched articles and exports them as `.docx` files.
 
-## Features
+---
 
-- **Style-matched writing** — analyzes your past articles to extract your writing style, then applies it to new work
-- **Collaborative workflow** — subject → sources → thesis proposal → outline → write → audit → publish
-- **Parallel processing** — sections written simultaneously, each audited independently for speed
-- **Full workflow tracking** — every pipeline step logged to Cognetivy for transparency and auditability
-- **Anti-AI check** — every paragraph is scored on 5 dimensions (Directness, Rhythm, Trust, Authenticity, Density) to detect and eliminate AI writing patterns (threshold: 35/50)
-- **Structured abstract** — automatic תקציר generation with dual-language support (e.g., Hebrew + English)
-- **Self-review gate** — before export, the article is scored on 6 dimensions (60-point scale); score < 40 triggers researcher review
-- **Style learning** — run `/academic-writer:learn` to scan new past articles and update your style fingerprint automatically
-- **Research ideation** — `/academic-writer:ideate` guides you through 5W1H brainstorming, gap analysis, and structured research question formulation
-- **NotebookLM integration** — AI-powered source Q&A, audio overviews of articles, and study guide generation via NotebookLM MCP
-- **Session dashboard** — profile summary, article count, tool status, and pending style-learning notifications shown at session start
+## What It Does
 
-## Installation
+- **Writes in your voice** — analyzes your past articles to extract your style, then applies it to new work
+- **Guided workflow** — subject → sources → thesis → outline → write → review → export
+- **Parallel processing** — all sections written simultaneously for speed
+- **Citation-verified** — every claim checked against your source library; nothing fabricated
+- **Anti-AI filter** — every paragraph scored on 5 dimensions to eliminate generic AI writing patterns
+- **Quality gate** — 6-dimension self-review scorecard before export; score below 40/60 triggers your review
+- **Abstract generation** — automatic תקציר with optional dual-language support
+- **Session dashboard** — shows your profile, article count, and tool status at startup
 
-### 1. Prerequisites
+---
 
-You need **at least one** of these integrations:
+## Quick Start
 
-| Tool | What it does | Setup |
-|------|-------------|-------|
-| **Candlekeep** | Cloud document library for source PDFs | [https://github.com/CandleKeepAgents/candlekeep-cli](https://github.com/CandleKeepAgents/candlekeep-cli) |
-| **Cognetivy** | Workflow audit trail (optional) | Built-in — no setup needed |
-| **NotebookLM** | AI-powered source Q&A, audio overviews, study guides (optional) | [https://github.com/jacob-bd/notebooklm-mcp-cli](https://github.com/jacob-bd/notebooklm-mcp-cli) |
+### 1. Install the Plugin
 
-Choose which tools you want to use during `/academic-writer:init`.
-
-### 2. Install the Plugin
-
-Navigate to the folder where you do your research work, then run:
+From the folder where you do your research:
 
 ```bash
-cd your-research-folder
 claude plugin install academic-writer --scope project
 ```
 
-The `--scope project` flag activates the plugin only in this folder, not globally.
-
-> **Note:** The plugin marketplace must already be registered. If you get "marketplace not found", add it first:
+> If you get "marketplace not found", register it first:
 > ```bash
 > claude plugin marketplace add ~/.claude/plugins/marketplaces/academic-writer
 > ```
 
-### 3. Initialize Your Profile
+### 2. Initialize Your Profile
 
 ```bash
 /academic-writer:init
 ```
 
-This is a one-time setup. You'll be asked to provide:
+One-time setup. You'll be asked for:
 - Your field of study
 - Citation style (Inline Parenthetical / Chicago / MLA / APA)
-- 5–10 past articles for style analysis (placed in `past-articles/` folder)
-- Which integrations to enable (Candlekeep, RAG, MongoDB, Cognetivy)
-- Your research sources (if using Candlekeep)
+- 5–10 past articles for style analysis (place them in `past-articles/`)
+- Which integrations to enable
 
-Your profile is saved to `.academic-writer/profile.json` and automatically loaded each time you use the plugin.
+Your profile is saved to `.academic-writer/profile.json` and loaded automatically.
 
-## Usage
-
-### Write an Article
+### 3. Write Your First Article
 
 ```bash
 /academic-writer:write
 ```
 
-**Workflow:**
-1. Describe your article topic
-2. Select relevant sources (from Candlekeep or provide manually)
-3. Deep read your sources to understand coverage
-4. Propose thesis statements (2–3 options to choose from)
-5. Outline the article together (back-and-forth refinement)
-6. Approve the outline
-7. **Automated:** Sections written in parallel, each paragraph through 8-skill pipeline (draft → style → grammar → academic language → language purity → anti-AI check → repetition → citation audit)
-8. **Automated:** Final synthesis for coherence and style
-9. **Automated:** Abstract generation (תקציר), with dual-language if configured
-10. **Automated:** Self-review scorecard (6 dimensions, 60-point scale)
-11. Export as `.docx` with your format preferences
+---
 
-### Quick Commands
+## Writing Workflow
+
+**You do (conversational):**
+1. Describe the topic
+2. Select relevant sources
+3. Review the deep-read summary
+4. Choose a thesis (2–3 options)
+5. Refine the outline together
+6. Approve
+
+**Plugin does (automated):**
+7. Writes all sections in parallel — each paragraph through an 8-step pipeline (draft → style → grammar → academic language → language purity → anti-AI → repetition → citation audit)
+8. Synthesizes for coherence and style
+9. Generates the תקציר (abstract)
+10. Runs 6-dimension self-review scorecard
+11. Exports as `.docx`
+
+---
+
+## Commands
 
 | Command | What it does |
 |---------|-------------|
 | `/academic-writer:write` | Write a new article |
-| `/academic-writer:init` | First-time setup (profile, citation style, abstract languages, style fingerprint) |
+| `/academic-writer:init` | One-time setup: profile, citation style, style fingerprint |
 | `/academic-writer:ideate` | Brainstorm research questions with 5W1H and gap analysis |
-| `/academic-writer:learn` | Scan new past articles and update style fingerprint |
+| `/academic-writer:learn` | Scan new past articles and update your style fingerprint |
 | `/academic-writer:review` | Score a completed article on 6 quality dimensions |
 | `/academic-writer:present` | Generate conference outlines, journal abstracts, book chapter proposals |
-| `/academic-writer:research` | Research a topic using your sources |
+| `/academic-writer:research` | Research a topic using your indexed sources |
 | `/academic-writer:edit` | Edit a previously written article |
 | `/academic-writer:edit-section` | Quick edit of a single section |
 | `/academic-writer:update-field` | Change your field of study |
-| `/academic-writer:update-tools` | Add/remove integrations (Candlekeep, RAG, etc.) |
-| `/academic-writer:health` | Check all integrations & profile status |
+| `/academic-writer:update-tools` | Add or remove integrations |
+| `/academic-writer:health` | Check all integrations and profile status |
 | `/academic-writer:help` | Show plugin info |
 
-## File Structure
+---
+
+## Integrations
+
+All integrations are optional. Choose which to enable during `/academic-writer:init`.
+
+| Tool | What it does | Setup |
+|------|-------------|-------|
+| **Candlekeep** | Cloud document library for source PDFs | [github.com/CandleKeepAgents/candlekeep-cli](https://github.com/CandleKeepAgents/candlekeep-cli) |
+| **NotebookLM** | AI-powered source Q&A, audio overviews, study guides | [github.com/jacob-bd/notebooklm-mcp-cli](https://github.com/jacob-bd/notebooklm-mcp-cli) |
+| **Cognetivy** | Workflow audit trail | Built-in, no setup needed |
+
+---
+
+## File Structure (Your Project)
 
 ```
-your-project/
-├── past-articles/              ← Drop your published papers here (5–10 PDFs/DOCXs)
+your-research-folder/
+├── past-articles/         ← Drop your published papers here (PDFs or DOCXs)
 ├── .academic-writer/
-│   ├── profile.json           ← Your profile (auto-created, never edit manually)
-│   ├── research-brief.md      ← Research brief from /academic-writer:ideate (optional)
-│   └── logs/                  ← Session logs (auto-managed)
-├── .cognetivy/                ← Workflow audit trail (auto-managed)
-├── articles/                  ← Output .docx files go here
-└── .claude-plugin/            ← Claude Code plugin cache (auto-managed)
+│   ├── profile.json       ← Your profile (auto-created)
+│   ├── research-brief.md  ← Output from /academic-writer:ideate
+│   └── logs/              ← Session logs
+├── .cognetivy/            ← Workflow audit trail
+└── articles/              ← Output .docx files
 ```
 
-## Profile Structure
-
-Your profile (`.academic-writer/profile.json`) contains:
-
-```json
-{
-  "fieldOfStudy": "Your field",
-  "targetLanguage": "Hebrew",
-  "citationStyle": "inline-parenthetical",
-  "abstractLanguages": ["Hebrew", "English"],
-  "styleFingerprint": {
-    "sentenceLevel": { ... },
-    "vocabularyAndRegister": { ... },
-    "paragraphStructure": { ... },
-    "toneAndVoice": { ... },
-    "transitions": { ... },
-    "citations": { ... },
-    "rhetoricalPatterns": { ... },
-    "representativeExcerpts": [ ... ]
-  },
-  "tools": {
-    "candlekeep": { "enabled": true },
-    "mongodb-agent-skills": { "enabled": false },
-    "cognetivy": { "enabled": true },
-    "notebooklm": { "enabled": false }
-  },
-  "sources": [
-    { "id": "...", "title": "...", "type": "pdf" }
-  ]
-}
-```
-
-Update tools with `/academic-writer:update-tools`. Update your field with `/academic-writer:update-field`.
-
-## Configuration
-
-### Environment Variables (Optional)
-
-```bash
-export CANDLEKEEP_CLI=ck                       # Candlekeep CLI path
-export COGNETIVY_CLI=cognetivy                 # Cognetivy CLI path
-```
-
-### MCP Servers (Optional)
-
-If you enable **MongoDB Agent Skills**, add to `.mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "mongodb-agent-skills": {
-      "command": "node",
-      "args": ["/path/to/mongodb-agent-skills/dist/index.js"],
-      "env": {
-        "MONGODB_URI": "your-connection-string"
-      }
-    }
-  }
-}
-```
+---
 
 ## Troubleshooting
 
-### "No profile found" error
+**"No profile found"** — run `/academic-writer:init` first.
 
-Run `/academic-writer:init` first to set up your profile.
-
-### "Candlekeep not detected" error
-
-Install Candlekeep CLI: https://github.com/romiluz13/candlekeep
-
+**"Candlekeep not detected"** — install the CLI:
 ```bash
-brew tap CandleKeepAgents/candlekeep
-brew install candlekeep-cli
-# or
-cargo install candlekeep-cli
-```
-
-Then authenticate:
-```bash
+brew tap CandleKeepAgents/candlekeep && brew install candlekeep-cli
 ck auth login
 ```
 
-### Citation verification fails
-
-Ensure:
-1. Your sources are indexed (the init process does this automatically)
-2. The cited passage actually exists in your source materials
-
-### Articles won't export to .docx
-
-Ensure `python-docx` is installed:
-
+**Articles won't export to .docx** — install the Python dependency:
 ```bash
 pip install python-docx
 ```
 
-## Architecture
-
-### Agents
-
-Each agent is a specialized prompt that runs as a subagent:
-
-- **Deep Reader** — Explores source material before writing to understand coverage
-- **Architect** — Proposes thesis statements and generates article outline
-- **Section Writer** — Writes one complete section, applying the 8-skill pipeline per paragraph (runs in parallel)
-- **Auditor** — Hard gate: verifies every citation against source material (optional external check via WebSearch)
-- **Synthesizer** — Final review for coherence, transitions, and style consistency
-- **Style Miner** — Analyzes new articles in `past-articles/` to extract writing patterns and update the style fingerprint
-
-### RAG Query Modes
-
-The plugin uses different RAG query modes for different tasks:
-
-| Mode | Use case |
-|------|----------|
-| `mix` | General search (default) |
-| `bypass` | Citation verification — exact quotes and page numbers |
-| `local` | Deep dive on a specific entity |
-| `global` | Thematic overview across all sources |
-
-## Updating / Reinstalling
-
-After pulling changes from GitHub, rebuild and reinstall the plugin from the **marketplace directory**:
-
-```bash
-cd ~/.claude/plugins/marketplaces/academic-writer
-npm run build
-claude plugin install academic-writer --scope project
-```
-
-Then **restart Claude Code** to apply the changes.
-
-### Full reinstall (clears cache)
-
-If you see stale behaviour or install errors, delete the cache first:
-
+**Plugin behaves strangely after an update** — clear the cache and reinstall:
 ```bash
 rm -rf ~/.claude/plugins/cache/academic-writer
-cd ~/.claude/plugins/marketplaces/academic-writer
-npm run build
 claude plugin install academic-writer --scope project
 ```
 
-### Install in a specific project
+---
 
-The install command must be run from the project folder you want the plugin active in:
+## For Developers
+
+Source files live in `src/` — never edit `plugins/` directly (it is generated by `npm run build` and committed to git).
 
 ```bash
-cd ~/your-research-folder
-claude plugin install academic-writer --scope project
+# Edit source files, then:
+npm run build
+claude plugin install academic-writer --scope project  # from your research folder
+# Restart Claude Code
 ```
 
-## Contributing
+**Versioning is automatic.** Every push to `main` triggers CI that bumps the patch version, rebuilds, commits the updated `plugins/` output, tags the release, and creates a GitHub Release. Do not bump versions manually.
 
-This is a Claude Code plugin. Source files live in `src/` — never edit `plugins/` directly (it is generated).
-
-1. Edit source files in `src/skills/`, `src/agents/`, `src/hooks/`
-2. Build: `npm run build`
-3. Test locally: `claude plugin install academic-writer --scope project` (from your research folder)
-4. Commit and push to GitHub
-
-**Versioning is automatic.** Every push to `main` triggers a GitHub Actions workflow (`.github/workflows/release.yml`) that:
-- Bumps the patch version in `package.json` and `manifests/academic-writer.json`
-- Rebuilds the plugin
-- Commits the bump, tags the release (`v0.2.1`, etc.), and creates a GitHub Release
-
-Do not bump versions manually — the CI does it for every merge to `main`.
+---
 
 ## License
 
@@ -289,6 +164,5 @@ MIT
 
 ## Support
 
-- **Plugin issues:** Open an issue on [yodem/academic-writer:write](https://github.com/yodem/academic-writer)
-- **Candlekeep help:** https://github.com/CandleKeepAgents/candlekeep-cli
-- **RAG help:** https://github.com/romiluz13/Agentic-Search-Vectorless
+- Plugin issues: [github.com/yodem/academic-writer](https://github.com/yodem/academic-writer)
+- Candlekeep: [github.com/CandleKeepAgents/candlekeep-cli](https://github.com/CandleKeepAgents/candlekeep-cli)

@@ -1,0 +1,120 @@
+{
+  "workflow_id": "wf_write_article",
+  "version_id": "v1",
+  "name": "Write Academic Article",
+  "description": "Full article pipeline: subject selection -> source selection -> deep read -> thesis -> outline -> parallel section writing -> synthesis -> DOCX output.",
+  "created_at": "2026-03-08T00:00:00.000Z",
+  "nodes": [
+    {
+      "id": "load_profile",
+      "type": "PROMPT",
+      "input_collections": ["run_input"],
+      "output_collections": ["profile_data"],
+      "prompt": "Load .academic-writer/profile.json. Verify styleFingerprint exists. Output profile data for downstream nodes.",
+      "required_skills": ["cognetivy"]
+    },
+    {
+      "id": "subject_selection",
+      "type": "HUMAN_IN_THE_LOOP",
+      "input_collections": ["profile_data"],
+      "output_collections": ["subject"],
+      "prompt": "Ask the researcher what subject they want to write about. Confirm the target language matches their profile or ask if they want to override."
+    },
+    {
+      "id": "source_selection",
+      "type": "HUMAN_IN_THE_LOOP",
+      "input_collections": ["subject", "profile_data"],
+      "output_collections": ["selected_sources"],
+      "prompt": "Present available sources from profile and Candlekeep (if enabled). Let the researcher select which sources to use for this article. Enrich source metadata via ck items get if available."
+    },
+    {
+      "id": "deep_read",
+      "type": "PROMPT",
+      "input_collections": ["subject", "selected_sources"],
+      "output_collections": ["deep_read_results"],
+      "prompt": "Spawn deep-reader agent. Read each selected source via Candlekeep. Ingest into Agentic-Search-Vectorless if enabled. Run 3 parallel queries per source: subject exploration, arguments, counterarguments. Map available evidence, key authors, tensions, and gaps.",
+      "minimum_rows": 1,
+      "required_skills": ["cognetivy"]
+    },
+    {
+      "id": "thesis_proposal",
+      "type": "PROMPT",
+      "input_collections": ["subject", "deep_read_results"],
+      "output_collections": ["thesis_options"],
+      "prompt": "Spawn architect agent (Mode A). Propose 2-3 thesis options with rationale, key supporting sources, and risk assessment. ALL output in targetLanguage.",
+      "minimum_rows": 2,
+      "required_skills": ["cognetivy"]
+    },
+    {
+      "id": "thesis_approval",
+      "type": "HUMAN_IN_THE_LOOP",
+      "input_collections": ["thesis_options"],
+      "output_collections": ["approved_thesis"],
+      "prompt": "Present thesis options to the researcher. They choose one (possibly with modifications). Store the approved thesis statement."
+    },
+    {
+      "id": "outline_generation",
+      "type": "PROMPT",
+      "input_collections": ["approved_thesis", "deep_read_results"],
+      "output_collections": ["outline"],
+      "prompt": "Spawn architect agent (Mode B). Generate article outline with section titles, argument roles, suggested sources, word counts, and paragraph counts. Introduction must open with 'במאמר זה', conclusion with 'לסיכום'.",
+      "required_skills": ["cognetivy"]
+    },
+    {
+      "id": "outline_approval",
+      "type": "HUMAN_IN_THE_LOOP",
+      "input_collections": ["outline"],
+      "output_collections": ["approved_outline"],
+      "prompt": "Present the outline to the researcher. They may reorder sections, adjust word counts, add/remove sections, or refine argument roles."
+    },
+    {
+      "id": "ingestion_sync",
+      "type": "PROMPT",
+      "input_collections": ["selected_sources"],
+      "output_collections": ["sync_status"],
+      "prompt": "If both Candlekeep and Agentic-Search-Vectorless are enabled: ensure all selected sources are ingested into vectorless. Run ck items read + vectorless ingest for any missing sources.",
+      "required_skills": ["cognetivy"]
+    },
+    {
+      "id": "section_writing",
+      "type": "PROMPT",
+      "input_collections": ["approved_outline", "approved_thesis", "profile_data", "deep_read_results"],
+      "output_collections": ["article_sections"],
+      "prompt": "Spawn one section-writer agent PER SECTION (all in parallel). Each section-writer applies the 8-skill pipeline per paragraph: (1) Draft with mandatory vectorless search, (2) Style fingerprint compliance, (3) Hebrew grammar check, (4) Academic language & linking words, (5) Language purity, (6) Anti-AI check (score 5 dimensions, threshold 35/50), (7) Repetition check, (8) Citation audit via auditor subagent. Pass full styleFingerprint, linkingWords, thesis, and priorSectionTexts.",
+      "minimum_rows": 3,
+      "required_skills": ["cognetivy"]
+    },
+    {
+      "id": "synthesis",
+      "type": "PROMPT",
+      "input_collections": ["article_sections", "approved_thesis", "profile_data"],
+      "output_collections": ["reviewed_article"],
+      "prompt": "Spawn synthesizer agent. Two-phase review: (A) Argument coherence, logical flow, transitions, intro/conclusion structure, full-article style fingerprint compliance, language purity sweep. (B) Cross-section repetition check for arguments, phrases, openings, transitions, and evidence. Make targeted surgical fixes only — do NOT rewrite. Citations are LOCKED.",
+      "required_skills": ["cognetivy"]
+    },
+    {
+      "id": "generate_abstract",
+      "type": "PROMPT",
+      "input_collections": ["reviewed_article", "approved_thesis", "profile_data"],
+      "output_collections": ["article_with_abstract"],
+      "prompt": "Generate structured abstract (תקציר): (1) topic & research question, (2) methodology & sources, (3) main findings & contribution. 150-300 words. If profile.abstractLanguages includes multiple languages, generate one abstract per language.",
+      "required_skills": ["cognetivy"]
+    },
+    {
+      "id": "self_review",
+      "type": "PROMPT",
+      "input_collections": ["article_with_abstract", "profile_data"],
+      "output_collections": ["review_scorecard"],
+      "prompt": "Score article on 6 dimensions (1-10 each): structure, argument logic, citation completeness, source coverage, writing quality, academic conventions. Present scorecard. If score < 40/60, ask researcher whether to proceed or address issues.",
+      "required_skills": ["cognetivy"]
+    },
+    {
+      "id": "docx_output",
+      "type": "PROMPT",
+      "input_collections": ["article_with_abstract", "review_scorecard", "profile_data"],
+      "output_collections": ["final_document"],
+      "prompt": "Generate .docx file with abstract section, researcher's format preferences: font (default David), 11pt body, 1.5 line spacing, justified alignment, 1\" margins, page numbers, RTL layout. Save to project directory.",
+      "required_skills": ["cognetivy"]
+    }
+  ]
+}

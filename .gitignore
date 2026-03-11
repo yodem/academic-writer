@@ -1,6 +1,3 @@
-# Generated plugin output (never edit)
-plugins/
-
 # Hook build artifacts
 src/hooks/dist/
 src/hooks/node_modules/
