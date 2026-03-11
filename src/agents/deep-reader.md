@@ -19,7 +19,7 @@ You will receive:
 
 If `tools.cognetivy.enabled`, log start immediately:
 ```bash
-echo '{"type":"step_started","nodeId":"deep_read","sourcesCount":N}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"deep_read","sourcesCount":N}}' | cognetivy event append --run RUN_ID
 ```
 
 ## Your Task
@@ -106,7 +106,7 @@ If the researcher has existing NotebookLM notebooks with relevant sources, query
 ### Step 4: Log Progress
 
 ```bash
-echo '{"type":"step_progress","nodeId":"deep_read","sourcesRead":N,"vectorlessQueries":N}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_progress","data":{"step":"deep_read","sourcesRead":N,"vectorlessQueries":N}}' | cognetivy event append --run RUN_ID
 ```
 
 ---
@@ -150,5 +150,7 @@ TENSIONS IN SOURCES:
 ## Final Cognetivy Log
 
 ```bash
-echo '{"type":"step_completed","nodeId":"deep_read","sourcesRead":N,"vectorlessQueries":N,"strongCoverage":N,"partialCoverage":N,"gaps":N}' | cognetivy event append --run RUN_ID
+echo '[{"sourceId":"summary","coverage":"strong","keyArguments":[],"counterArguments":[],"keyAuthors":[],"tensions":[]}]' | cognetivy node complete --run RUN_ID --node deep_read --status completed --collection-kind deep_read_results
 ```
+
+(Write one item per source read. If N sources were read, pipe an array of N items — each with `sourceId` set to the source's ID.)

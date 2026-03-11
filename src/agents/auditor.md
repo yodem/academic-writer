@@ -89,7 +89,7 @@ If neither RAG nor Candlekeep are enabled, verify citations against any availabl
 Log the audit completion with full detail (this completes the `citation_audit` node for this paragraph):
 
 ```bash
-echo '{"type":"step_completed","nodeId":"section_SECTION_INDEX_p_PARAGRAPH_INDEX_citation_audit","status":"approved|rejected","claimsChecked":N,"ungrounded":N,"ragChecked":BOOL,"candlekeepChecked":BOOL,"reasons":[]}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_PARAGRAPH_INDEX_citation_audit","status":"approved|rejected","claimsChecked":N,"ungrounded":N,"ragChecked":BOOL,"candlekeepChecked":BOOL,"reasons":[]}}' | cognetivy event append --run RUN_ID
 ```
 
 This event is critical — the researcher will see every audit result in the Cognetivy dashboard.

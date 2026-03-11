@@ -107,7 +107,7 @@ Write paragraphs **sequentially** (each builds on the previous).
 
 Log the section start:
 ```bash
-echo '{"type":"step_started","nodeId":"section_SECTION_INDEX"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX"}}' | cognetivy event append --run RUN_ID
 ```
 
 ### For each paragraph (M = paragraph number):
@@ -116,7 +116,7 @@ echo '{"type":"step_started","nodeId":"section_SECTION_INDEX"}' | cognetivy even
 
 Log start:
 ```bash
-echo '{"type":"step_started","nodeId":"section_SECTION_INDEX_p_M_draft"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_draft"}}' | cognetivy event append --run RUN_ID
 ```
 
 1. **Query Agentic-Search-Vectorless for relevant passages** — this is MANDATORY for every paragraph:
@@ -159,7 +159,7 @@ bash plugins/academic-writer/scripts/vectorless-query.sh --query "PARAGRAPH_FOCU
 
 Log completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"section_SECTION_INDEX_p_M_draft","wordCount":N}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_draft","wordCount":N}}' | cognetivy event append --run RUN_ID
 ```
 
 ---
@@ -168,7 +168,7 @@ echo '{"type":"step_completed","nodeId":"section_SECTION_INDEX_p_M_draft","wordC
 
 Log start:
 ```bash
-echo '{"type":"step_started","nodeId":"section_SECTION_INDEX_p_M_style_compliance"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_style_compliance"}}' | cognetivy event append --run RUN_ID
 ```
 
 **Re-read the full `styleFingerprint` from the profile before every check.** This is the researcher's voice — never skip this step.
@@ -194,7 +194,7 @@ If changes are made, log what was adjusted:
 
 Log completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"section_SECTION_INDEX_p_M_style_compliance","status":"pass|adjusted","overallScore":N,"dimensionsAdjusted":N,"details":"BRIEF_DESCRIPTION"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_style_compliance","status":"pass|adjusted","overallScore":N,"dimensionsAdjusted":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
 ```
 
 ---
@@ -203,7 +203,7 @@ echo '{"type":"step_completed","nodeId":"section_SECTION_INDEX_p_M_style_complia
 
 Log start:
 ```bash
-echo '{"type":"step_started","nodeId":"section_SECTION_INDEX_p_M_hebrew_grammar"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_hebrew_grammar"}}' | cognetivy event append --run RUN_ID
 ```
 
 Review the drafted paragraph for **Hebrew-language quality** (relevant when the article is in Hebrew or contains Hebrew terms/quotes):
@@ -231,7 +231,7 @@ If issues are found:
 
 Log completion with results:
 ```bash
-echo '{"type":"step_completed","nodeId":"section_SECTION_INDEX_p_M_hebrew_grammar","status":"pass|fixed","issuesFound":N,"issuesFixed":N,"details":"BRIEF_DESCRIPTION"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_hebrew_grammar","status":"pass|fixed","issuesFound":N,"issuesFixed":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
 ```
 
 ---
@@ -240,7 +240,7 @@ echo '{"type":"step_completed","nodeId":"section_SECTION_INDEX_p_M_hebrew_gramma
 
 Log start:
 ```bash
-echo '{"type":"step_started","nodeId":"section_SECTION_INDEX_p_M_academic_language"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_academic_language"}}' | cognetivy event append --run RUN_ID
 ```
 
 **This skill ensures the paragraph reads at a proper academic level and uses appropriate Hebrew linking words.**
@@ -267,7 +267,7 @@ Check that the paragraph uses **appropriate linking words** from the researcher'
 
 Log completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"section_SECTION_INDEX_p_M_academic_language","status":"pass|fixed","languageLevelIssues":N,"linkingWordsAdded":N,"linkingWordsFixed":N,"details":"BRIEF_DESCRIPTION"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_academic_language","status":"pass|fixed","languageLevelIssues":N,"linkingWordsAdded":N,"linkingWordsFixed":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
 ```
 
 ---
@@ -276,7 +276,7 @@ echo '{"type":"step_completed","nodeId":"section_SECTION_INDEX_p_M_academic_lang
 
 Log start:
 ```bash
-echo '{"type":"step_started","nodeId":"section_SECTION_INDEX_p_M_language_purity"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_language_purity"}}' | cognetivy event append --run RUN_ID
 ```
 
 **Enforce monolingual output.** The article must be written entirely in `targetLanguage`. Zero tolerance for embedded foreign text in running prose.
@@ -299,7 +299,7 @@ echo '{"type":"step_started","nodeId":"section_SECTION_INDEX_p_M_language_purity
 
 Log completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"section_SECTION_INDEX_p_M_language_purity","status":"pass|fixed","violationsFound":N,"violationsFixed":N,"details":"BRIEF_DESCRIPTION"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_language_purity","status":"pass|fixed","violationsFound":N,"violationsFixed":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
 ```
 
 ---
@@ -308,7 +308,7 @@ echo '{"type":"step_completed","nodeId":"section_SECTION_INDEX_p_M_language_puri
 
 Log start:
 ```bash
-echo '{"type":"step_started","nodeId":"section_SECTION_INDEX_p_M_anti_ai"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_anti_ai"}}' | cognetivy event append --run RUN_ID
 ```
 
 **Detect and fix AI-generated writing patterns.** Load the Hebrew AI pattern reference:
@@ -338,7 +338,7 @@ Score the paragraph on 5 dimensions (each 1–10):
 
 Log completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"section_SECTION_INDEX_p_M_anti_ai","status":"pass|fixed","score":N,"directness":N,"rhythm":N,"trust":N,"authenticity":N,"density":N,"patternsFixed":N,"details":"BRIEF_DESCRIPTION"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_anti_ai","status":"pass|fixed","score":N,"directness":N,"rhythm":N,"trust":N,"authenticity":N,"density":N,"patternsFixed":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
 ```
 
 ---
@@ -347,7 +347,7 @@ echo '{"type":"step_completed","nodeId":"section_SECTION_INDEX_p_M_anti_ai","sta
 
 Log start:
 ```bash
-echo '{"type":"step_started","nodeId":"section_SECTION_INDEX_p_M_repetition_check"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_repetition_check"}}' | cognetivy event append --run RUN_ID
 ```
 
 Check the paragraph against ALL prior text (previous paragraphs in this section + `priorSectionTexts`):
@@ -359,7 +359,7 @@ Check the paragraph against ALL prior text (previous paragraphs in this section 
 
 Log completion with results:
 ```bash
-echo '{"type":"step_completed","nodeId":"section_SECTION_INDEX_p_M_repetition_check","status":"pass|fixed","repetitionsFound":N,"repetitionsFixed":N,"details":"BRIEF_DESCRIPTION"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_repetition_check","status":"pass|fixed","repetitionsFound":N,"repetitionsFixed":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
 ```
 
 ---
@@ -377,7 +377,7 @@ If rejected, rewrite using the Auditor's feedback and re-run the full skill pipe
 
 Log the audit handoff:
 ```bash
-echo '{"type":"step_started","nodeId":"section_SECTION_INDEX_p_M_citation_audit"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_citation_audit"}}' | cognetivy event append --run RUN_ID
 ```
 
 (The Auditor logs its own completion event.)
@@ -388,7 +388,7 @@ echo '{"type":"step_started","nodeId":"section_SECTION_INDEX_p_M_citation_audit"
 
 Log section completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"section_SECTION_INDEX","paragraphs":N,"totalWords":N,"skills":["draft","style_compliance","hebrew_grammar","academic_language","language_purity","anti_ai","repetition_check","citation_audit"]}' | cognetivy event append --run RUN_ID
+echo '{"sectionIndex":SECTION_INDEX,"title":"SECTION_TITLE","paragraphs":[{"content":"PARAGRAPH_TEXT","citations":["..."],"auditStatus":"approved"},...]}' | cognetivy node complete --run RUN_ID --node section_SECTION_INDEX --status completed --collection-kind article_sections
 ```
 
 ## Style Rules
