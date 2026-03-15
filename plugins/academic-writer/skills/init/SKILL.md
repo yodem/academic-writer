@@ -119,7 +119,7 @@ AskUserQuestion(questions=[{
     {
       "label": "Cognetivy",
       "description": "✓ Detected  (or ✗ Not found — run: npm install -g cognetivy)",
-      "markdown": "```\nCognetivy\n─────────\nType:    CLI\nWhat:    Workflow tracking and audit trail\nBest for: Logging every pipeline step for review\nStatus:  ✓ Detected\n\nSetup (if not installed):\n  npm install -g cognetivy\n  cognetivy init\n```"
+      "markdown": "```\nCognetivy\n─────────\nType:    CLI\nWhat:    Workflow tracking and audit trail\nBest for: Logging every pipeline step for review\nStatus:  ✓ Detected\n\nSetup (if not installed):\n  npm install -g cognetivy\n  timeout 5 cognetivy init --workspace-only\n```"
     },
     {
       "label": "NotebookLM",

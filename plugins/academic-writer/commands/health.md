@@ -157,8 +157,9 @@ Report:
 >
 > 2. Initialize the workspace in this project folder:
 >    ```
->    cognetivy init
+>    timeout 5 cognetivy init --workspace-only
 >    ```
+>    (The `timeout` is needed because `cognetivy init` starts a studio server that blocks.)
 >
 > 3. Register Academic Writer workflows:
 >    ```
@@ -172,7 +173,7 @@ Report:
 **If CLI is installed but workspace not initialized:**
 > "Cognetivy is installed but not initialized in this project. Run:
 > ```
-> cognetivy init
+> timeout 5 cognetivy init --workspace-only
 > ```
 > Then re-run `/academic-writer:health`."
 
@@ -245,7 +246,7 @@ Show a clean summary table:
 > | Agentic-Search-Vectorless | ✓ Running / ✗ Not running / — Disabled | Port: [port] |
 > | Candlekeep | ✓ Connected / ✗ Error / — Disabled | [N] items |
 > | MongoDB Agent Skills | ✓ Configured / ✗ Missing / — Disabled | Server: [name] |
-> | Cognetivy | ✓ Ready / ✗ Not initialized / — Disabled | Run `cognetivy init` if not initialized |
+> | Cognetivy | ✓ Ready / ✗ Not initialized / — Disabled | Run `timeout 5 cognetivy init --workspace-only` if not initialized |
 > | NotebookLM | ✓ Connected / ✗ Not found / — Disabled | [N] notebooks |
 > | Agent Files | ✓ All present / ✗ Missing [list] | 5/5 |
 >

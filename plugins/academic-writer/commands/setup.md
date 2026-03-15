@@ -176,7 +176,7 @@ AskUserQuestion(questions=[{
     {
       "label": "Cognetivy",
       "description": "✓ Detected  /  ✗ Not found",
-      "markdown": "```\nCognetivy\n─────────\nType:  CLI\nWhat:  Workflow audit trail\n\nInstall: npm install -g cognetivy\nInit:    cognetivy init\n```"
+      "markdown": "```\nCognetivy\n─────────\nType:  CLI\nWhat:  Workflow audit trail\n\nInstall: npm install -g cognetivy\nInit:    timeout 5 cognetivy init --workspace-only\n```"
     },
     {
       "label": "NotebookLM",

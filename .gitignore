@@ -35,3 +35,10 @@ logs/
 .claude/memory/open-problems.jsonl
 .claude/memory/sessions/
 .claude/memory/tool-preferences.json
+
+
+# cognetivy - ignore runtime data; commit workflows/*/versions/
+.cognetivy/runs/
+.cognetivy/events/
+.cognetivy/collections/
+.cognetivy/node-results/
