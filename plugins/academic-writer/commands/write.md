@@ -86,9 +86,34 @@ Then ask:
 
 Store as `targetLanguage`. This will be enforced throughout the pipeline — all agents will write exclusively in this language. Pass it to every agent from this point forward.
 
+### Article Length
+
+After confirming topic and language, ask (using AskUserQuestion):
+> "How long should this article be? (e.g., 1 page / ~400 words, 2 pages / ~800 words, 1,500 words, etc.)"
+
+Record as `targetWordCount`. Use this number when:
+- Instructing the architect how to size sections in Step 5
+- Deciding whether to include section headings in DOCX output (> 1,500 words = headings shown)
+- No default — always ask explicitly.
+
+### User-Provided Draft
+
+After the researcher describes their topic, check: did they paste a draft, pre-written paragraphs, or a structured outline along with their message?
+
+Signs of a user draft: the message contains paragraph-length Hebrew or English text, bullet points with argument content, or phrases like "יש לי כבר בסיס" / "here's what I have" / "I already wrote..."
+
+If a draft is detected, ask (AskUserQuestion):
+- Header: "Draft detected"
+- Question: "I see you've shared a draft/outline. How would you like to proceed?"
+- Options:
+  - "Expand my draft using sources" — use their structure as the approved outline; skip the architect's outline generation (Step 5); pass their draft text to each section-writer as the starting point to expand and anchor in sources
+  - "Use my draft as context, propose a new structure" — treat their draft as research input for the architect; run the full thesis+outline flow normally
+
+Store the draft text as `userDraftText` regardless of which option is chosen. If the researcher chose "Expand my draft", set `userDraftAsOutline = true`.
+
 If Cognetivy is enabled, log:
 ```bash
-echo '{"text":"SUBJECT","targetLanguage":"TARGET_LANGUAGE"}' | cognetivy node complete --run RUN_ID --node subject_selection --status completed --collection-kind subject
+echo '{"text":"SUBJECT","targetLanguage":"TARGET_LANGUAGE","targetWordCount":N}' | cognetivy node complete --run RUN_ID --node subject_selection --status completed --collection-kind subject
 ```
 
 
@@ -119,6 +144,27 @@ After researcher confirms selection, log:
 ```bash
 echo '[{"sourceId":"ID","title":"TITLE","type":"candlekeep"}]' | cognetivy node complete --run RUN_ID --node source_selection --status completed --collection-kind selected_sources
 ```
+
+
+### Step 2b: NotebookLM Source Query (if enabled)
+
+**Skip this entire step if `tools.notebooklm.enabled` is false.**
+
+Before spawning the deep-reader, directly query NotebookLM for the article subject using MCP tools:
+
+1. **List available notebooks** using the `notebook_list` MCP tool (no parameters needed).
+
+2. **Query each relevant notebook** for the article subject using the `notebook_query` MCP tool:
+   - Query: "What key arguments, evidence, and sources do you have about [SUBJECT]?"
+
+3. **Show a brief summary** to the researcher:
+   > "Your NotebookLM has [N] notebook(s). Key findings about your topic:
+   > [bullet list of relevant results]
+   > These will be passed to the deep-reader for source verification."
+
+Pass the NotebookLM summary as additional context to the deep-reader agent prompt in Step 3.
+
+**Important:** NotebookLM answers are AI-synthesized context. All citations must still be verified via Candlekeep or RAG — never cite NotebookLM output directly.
 
 
 ### Step 3: Deep Read
@@ -173,12 +219,29 @@ echo '{"statement":"CHOSEN_THESIS_STATEMENT","modifications":"any changes the re
 
 ### Step 5: Outline + Approval
 
+**If the researcher chose "Expand my draft" in the draft detection step (`userDraftAsOutline = true`):**
+
+- Skip the architect agent call entirely
+- Parse `userDraftText` into sections: use the user's existing section headings and paragraph structure as the outline
+- Present the extracted outline to the researcher:
+  > "Using your draft structure:
+  > [list extracted sections]
+  > Each section-writer will expand these using source material. Confirm or adjust."
+- Get approval, then proceed directly to Step 6 (ingestion sync) and Step 7 (section-writers)
+- Pass `userDraftText` sections as `userDraftParagraphs` in each section-writer's prompt, so agents expand existing content rather than writing from scratch
+- Log outline approval:
+  ```bash
+  echo '[{"sectionIndex":1,"title":"SECTION_TITLE","argumentRole":"from_user_draft"}]' | cognetivy node complete --run RUN_ID --node outline_approval --status completed --collection-kind approved_outline
+  ```
+
+**If no draft (normal flow):**
+
 If Cognetivy is enabled, log the spawn event:
 ```bash
 echo '{"type":"subagent_spawned","data":{"nodeId":"outline","agent":"architect","details":"Generating article outline"}}' | cognetivy event append --run RUN_ID
 ```
 
-**Use the Agent tool to spawn the `architect` subagent again** with the approved thesis, deep read results, and runId.
+**Use the Agent tool to spawn the `architect` subagent again** with the approved thesis, deep read results, targetWordCount, and runId.
 
 The architect logs its own `outline` events to Cognetivy.
 
@@ -199,6 +262,21 @@ If Cognetivy is enabled, log outline approval:
 ```bash
 echo '[{"sectionIndex":1,"title":"SECTION_TITLE","argumentRole":"ROLE"}]' | cognetivy node complete --run RUN_ID --node outline_approval --status completed --collection-kind approved_outline
 ```
+
+
+
+## ⛔ MANDATORY: NO DIRECT WRITING
+
+**You (the write-article skill) MUST NEVER write article paragraphs or sections yourself.**
+
+This means:
+- NEVER use the `Write` tool for article body text during Phase 2
+- NEVER produce paragraph content inline in your response
+- ALL article content MUST come exclusively from `section-writer` subagents
+
+The 8-skill quality pipeline (style fingerprint compliance, grammar, anti-AI, citation audit, etc.) only runs inside section-writer agents. Writing directly bypasses every quality gate and produces unchecked output that does not match the researcher's voice.
+
+**If you are tempted to write the article yourself because the user provided a detailed draft or the sources seem clear — DO NOT. Spawn the section-writers.**
 
 
 ## PHASE 2: AUTONOMOUS (Steps 6–9, fully automatic)
@@ -258,10 +336,12 @@ For each section in the approved outline, the Agent tool prompt must include:
 - `articleStructure`: the researcher's structure conventions
 - `citationStyle`: from the profile
 - `targetLanguage`: from the profile
+- `targetWordCount`: the requested article length (so each section is sized proportionally)
 - `runId`: the Cognetivy run ID
 - `tools`: the enabled tools
 - `priorSectionTexts`: text of all previously completed sections (for repetition awareness)
 - `outlineOverview`: full outline titles and roles
+- `userDraftParagraphs`: (if `userDraftAsOutline = true`) the user's draft text for this section — agents expand this rather than writing from scratch
 
 **NOTE:** Do NOT pass `styleFingerprint` or `linkingWords` in the prompt — section-writer agents load these directly from disk to reduce context size. The agent reads `.academic-helper/profile.md` for the fingerprint and `plugins/academic-writer/words.md` for linking words.
 
