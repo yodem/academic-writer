@@ -1,6 +1,6 @@
 ---
 name: update-tools
-description: "Add, remove, or reconfigure integrations (Candlekeep, Vectorless, MongoDB, Cognetivy)"
+description: "Add, remove, or reconfigure integrations (Candlekeep, Vectorless, Cognetivy, NotebookLM)"
 user-invocable: true
 allowedTools: [Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion]
 ---
@@ -12,8 +12,8 @@ Modify which integrations are enabled without re-running the full initialization
 ## Load Current Profile
 
 ```bash
-if [ -f .academic-writer/profile.json ]; then
-  cat .academic-writer/profile.json
+if [ -f .academic-helper/profile.md ]; then
+  cat .academic-helper/profile.md
 else
   echo "No profile found. Run /academic-writer:init first."
   exit 1
@@ -31,31 +31,17 @@ Run detection for every tool in the registry, regardless of current status:
 command -v ck >/dev/null 2>&1 && echo "DETECTED" || echo "NOT_DETECTED"
 ```
 
+**2. Agentic-Search-Vectorless** (`agentic-search-vectorless`)
 ```bash
+curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo "DETECTED" || echo "NOT_DETECTED"
 ```
 
-**3. MongoDB Agent Skills** (`mongodb-agent-skills`)
-```bash
-(cat ~/.claude/settings.json 2>/dev/null; cat .mcp.json 2>/dev/null) | python3 -c "
-import sys, json
-found = False
-for line in sys.stdin.read().split('}{'):
-    try:
-        d = json.loads('{' + line.strip('{}') + '}')
-        servers = d.get('mcpServers', {})
-        if any('mongo' in k.lower() for k in servers):
-            found = True
-    except: pass
-print('DETECTED' if found else 'NOT_DETECTED')
-"
-```
-
-**4. Cognetivy** (`cognetivy`)
+**3. Cognetivy** (`cognetivy`)
 ```bash
 command -v cognetivy >/dev/null 2>&1 && echo "DETECTED" || echo "NOT_DETECTED"
 ```
 
-**5. NotebookLM** (`notebooklm`)
+**4. NotebookLM** (`notebooklm`)
 ```bash
 command -v nlm >/dev/null 2>&1 && nlm login --check 2>/dev/null && echo "DETECTED" || echo "NOT_DETECTED"
 ```
@@ -69,9 +55,9 @@ Show a table with current status and detection:
 > | # | Tool | Currently | Detected | Setup |
 > |---|------|-----------|----------|-------|
 > | 1 | Candlekeep | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/romiluz13/candlekeep |
-> | 3 | MongoDB Agent Skills | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/romiluz13/mongodb-agent-skills |
-> | 4 | Cognetivy | ✓ Enabled / ✗ Disabled | ✓ / ✗ | Built-in (.cognetivy/) |
-> | 5 | NotebookLM | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/jacob-bd/notebooklm-mcp-cli |
+> | 2 | Agentic-Search-Vectorless | ✓ Running / ✗ Not running | ✓ / ✗ | localhost:8000 |
+> | 3 | Cognetivy | ✓ Enabled / ✗ Disabled | ✓ / ✗ | Built-in (.cognetivy/) |
+> | 4 | NotebookLM | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/jacob-bd/notebooklm-mcp-cli |
 >
 > What would you like to change? You can:
 > - **Enable** a tool by number or name (I'll help install if not detected)
@@ -95,18 +81,84 @@ Update ONLY the `tools` key and `updatedAt` in the profile. Preserve all other f
 
 ```bash
 python3 << 'PYTHON'
-import json
+import re, json
 from datetime import datetime
 
-with open('.academic-writer/profile.json', 'r') as f:
-    profile = json.load(f)
+PROFILE_PATH = '.academic-helper/profile.md'
+
+with open(PROFILE_PATH) as f:
+    content = f.read()
+
+# Parse frontmatter scalars and lists
+profile = {}
+fm_match = re.match(r'^---\n(.*?)\n---', content, re.DOTALL)
+if fm_match:
+    fm_text = fm_match.group(1)
+    i, fm_lines = 0, fm_text.split('\n')
+    while i < len(fm_lines):
+        line = fm_lines[i]
+        kv = re.match(r'^([\w-]+): (.+)$', line)
+        ko = re.match(r'^([\w-]+):\s*$', line)
+        if kv:
+            k, v = kv.group(1), kv.group(2).strip()
+            profile[k] = None if v == 'null' else ([] if v == '[]' else v)
+            i += 1
+        elif ko and i + 1 < len(fm_lines) and fm_lines[i + 1].startswith('  - '):
+            k = ko.group(1)
+            items = []
+            i += 1
+            while i < len(fm_lines) and fm_lines[i].startswith('  - '):
+                items.append(fm_lines[i][4:])
+                i += 1
+            profile[k] = items
+        else:
+            i += 1
+
+# Parse JSON sections
+for m in re.finditer(r'^## (.+?)\n+```json\n(.*?)\n```', content, re.MULTILINE | re.DOTALL):
+    heading = m.group(1).strip().lower().replace(' ', '')
+    try:
+        parsed = json.loads(m.group(2))
+        mapping = {'tools': 'tools', 'stylefingerprint': 'styleFingerprint',
+                   'sources': 'sources', 'articlestructure': 'articleStructure',
+                   'outputformatpreferences': 'outputFormatPreferences'}
+        if heading in mapping:
+            profile[mapping[heading]] = parsed
+    except Exception:
+        pass
 
 # Update tools — replace TOOL_CONFIG with actual selections
 profile['tools'] = TOOL_CONFIG
 profile['updatedAt'] = datetime.now().isoformat()
 
-with open('.academic-writer/profile.json', 'w') as f:
-    json.dump(profile, f, indent=2)
+# Write profile.md
+scalar_keys = ['fieldOfStudy', 'citationStyle', 'targetLanguage', 'updatedAt', 'createdAt']
+list_keys = ['abstractLanguages', 'analyzedArticles']
+json_sections = [
+    ('tools', 'Tools'), ('outputFormatPreferences', 'Output Format Preferences'),
+    ('styleFingerprint', 'Style Fingerprint'), ('articleStructure', 'Article Structure'),
+    ('sources', 'Sources'),
+]
+lines = ['# Academic Writer Profile', '', '---']
+for k in scalar_keys:
+    if k in profile and profile[k] is not None:
+        lines.append(f'{k}: {profile[k]}')
+for k in list_keys:
+    v = profile.get(k) or []
+    if not v:
+        lines.append(f'{k}: []')
+    else:
+        lines.append(f'{k}:')
+        for item in v:
+            lines.append(f'  - {item}')
+lines.extend(['---', ''])
+for k, heading in json_sections:
+    if k in profile and profile[k] is not None:
+        lines.extend([f'## {heading}', '', '```json',
+                      json.dumps(profile[k], indent=2, ensure_ascii=False), '```', ''])
+
+with open(PROFILE_PATH, 'w') as f:
+    f.write('\n'.join(lines))
 
 print("Tools updated successfully.")
 PYTHON
@@ -116,8 +168,9 @@ Replace `TOOL_CONFIG` with the actual tools dict, e.g.:
 ```json
 {
   "candlekeep": { "enabled": true, "version": "detected" },
-  "mongodb-agent-skills": { "enabled": true, "version": "detected" },
-  "cognetivy": { "enabled": true, "version": "detected" }
+  "agentic-search-vectorless": { "enabled": true, "port": 8000 },
+  "cognetivy": { "enabled": true, "version": "detected" },
+  "notebooklm": { "enabled": true, "version": "detected" }
 }
 ```
 

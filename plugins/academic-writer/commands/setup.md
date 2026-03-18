@@ -15,7 +15,7 @@ Quick onboarding wizard. Creates the researcher profile, detects integrations, a
 Run silently before anything else:
 
 ```bash
-mkdir -p past-articles .academic-writer .cognetivy/runs .cognetivy/events
+mkdir -p past-articles .academic-helper .cognetivy/runs .cognetivy/events
 ```
 
 If cognetivy is available, start a setup run:
@@ -25,9 +25,53 @@ cognetivy run start --input /tmp/aw-setup-input.json --name "Academic Writer Set
 ```
 Capture the `run_id` for logging at each step.
 
+Migrate any legacy profile from `.academic-writer/profile.json` → `.academic-helper/profile.md`:
+
+```bash
+python3 << 'PYTHON'
+import os, json, re
+from datetime import datetime
+
+old_path = '.academic-writer/profile.json'
+new_path = '.academic-helper/profile.md'
+if os.path.exists(old_path) and not os.path.exists(new_path):
+    with open(old_path) as f:
+        p = json.load(f)
+    scalar_keys = ['fieldOfStudy', 'citationStyle', 'targetLanguage', 'updatedAt', 'createdAt']
+    list_keys = ['abstractLanguages', 'analyzedArticles']
+    json_sections = [
+        ('tools', 'Tools'), ('outputFormatPreferences', 'Output Format Preferences'),
+        ('styleFingerprint', 'Style Fingerprint'), ('articleStructure', 'Article Structure'),
+        ('sources', 'Sources'),
+    ]
+    lines = ['# Academic Writer Profile', '', '---']
+    for k in scalar_keys:
+        if k in p and p[k] is not None:
+            lines.append(f'{k}: {p[k]}')
+    for k in list_keys:
+        v = p.get(k) or []
+        if not v:
+            lines.append(f'{k}: []')
+        else:
+            lines.append(f'{k}:')
+            for item in v:
+                lines.append(f'  - {item}')
+    lines.append('---')
+    lines.append('')
+    for k, heading in json_sections:
+        if k in p and p[k] is not None:
+            lines.extend([f'## {heading}', '', '```json',
+                          json.dumps(p[k], indent=2, ensure_ascii=False), '```', ''])
+    os.makedirs('.academic-helper', exist_ok=True)
+    with open(new_path, 'w') as f:
+        f.write('\n'.join(lines))
+    print(f"Migrated profile to {new_path}")
+PYTHON
+```
+
 Check for existing profile:
 ```bash
-cat .academic-writer/profile.json 2>/dev/null && echo "EXISTS" || echo "NOT_FOUND"
+cat .academic-helper/profile.md 2>/dev/null && echo "EXISTS" || echo "NOT_FOUND"
 ```
 
 If EXISTS, load and show current settings, then:
@@ -226,36 +270,60 @@ If "Yes": analyze across all 25 dimensions (sentence level, vocabulary, paragrap
 
 ## Phase 4: Save Profile
 
-Use the Write tool to create `.academic-writer/profile.json`:
+Use the Write tool to create `.academic-helper/profile.md`:
+
+```markdown
+# Academic Writer Profile
+
+fieldOfStudy: FIELD
+citationStyle: inline-parenthetical
+targetLanguage: Hebrew
+abstractLanguages:
+  - Hebrew
+analyzedArticles: []
+createdAt: ISO_TIMESTAMP
+updatedAt: ISO_TIMESTAMP
+
+## Tools
 
 ```json
 {
-  "fieldOfStudy": "FIELD",
-  "targetLanguage": "Hebrew",
-  "citationStyle": "inline-parenthetical",
-  "outputFormatPreferences": {
-    "font": "David",
-    "bodySize": 11,
-    "titleSize": 16,
-    "headingSize": 13,
-    "lineSpacing": 1.5,
-    "marginInches": 1.0,
-    "alignment": "justify",
-    "rtl": true
-  },
-  "styleFingerprint": null,
-  "tools": {
-    "candlekeep": { "enabled": true },
-    "agentic-search-vectorless": { "enabled": true, "port": 8000 },
-    "mongodb-agent-skills": { "enabled": true },
-    "cognetivy": { "enabled": true },
-    "notebooklm": { "enabled": false }
-  },
-  "sources": [],
-  "createdAt": "ISO_TIMESTAMP",
-  "updatedAt": "ISO_TIMESTAMP"
+  "candlekeep": { "enabled": true },
+  "agentic-search-vectorless": { "enabled": true, "port": 8000 },
+  "cognetivy": { "enabled": true },
+  "notebooklm": { "enabled": false }
 }
+` ` `
+
+## Output Format Preferences
+
+```json
+{
+  "font": "David",
+  "bodySize": 11,
+  "titleSize": 16,
+  "headingSize": 13,
+  "lineSpacing": 1.5,
+  "marginInches": 1.0,
+  "alignment": "justify",
+  "rtl": true
+}
+` ` `
+
+## Style Fingerprint
+
+```json
+null
+` ` `
+
+## Sources
+
+```json
+[]
+` ` `
 ```
+
+(Replace backtick triplets with actual ` ``` ` when writing the file.)
 
 If Cognetivy is enabled, register workflows:
 

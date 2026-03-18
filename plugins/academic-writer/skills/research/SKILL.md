@@ -1,6 +1,6 @@
 ---
 name: research
-description: "Research a subject or answer questions using your indexed sources — Candlekeep, RAG, and MongoDB. Spawns parallel subagents for speed."
+description: "Research a subject or answer questions using your indexed sources — Candlekeep and RAG. Spawns parallel subagents for speed."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 agents: [research-rag, research-candlekeep]
@@ -15,7 +15,7 @@ This skill uses whichever data tools are enabled in the profile. It spawns **par
 ## Load Profile & Tools
 
 ```bash
-cat .academic-writer/profile.json
+cat .academic-helper/profile.md
 ```
 
 If no profile exists: "Run `/academic-writer:init` first to set up your profile and index your sources."
@@ -53,9 +53,7 @@ Based on the question and enabled tools, spawn ALL applicable agents **at the sa
 
 2. **Candlekeep subagent** (if `tools.candlekeep.enabled`): Pass as prompt the question, questionType, sourceIds. This subagent searches and reads Candlekeep documents directly.
 
-3. **MongoDB** (if `tools.mongodb-agent-skills.enabled`): Query MongoDB directly inline — lightweight, no subagent needed.
-
-4. **NotebookLM subagent** (if `tools.notebooklm.enabled`): Query existing notebooks or create a temporary research notebook. Use the `notebook_query` MCP tool for AI-powered Q&A against indexed sources. NotebookLM excels at synthesizing across multiple sources and identifying connections that keyword search may miss.
+3. **NotebookLM subagent** (if `tools.notebooklm.enabled`): Query existing notebooks or create a temporary research notebook. Use the `notebook_query` MCP tool for AI-powered Q&A against indexed sources. NotebookLM excels at synthesizing across multiple sources and identifying connections that keyword search may miss.
 
 Each subagent runs independently and returns its findings.
 
@@ -96,13 +94,6 @@ The NotebookLM subagent should:
 4. **Return findings** with notebook name and any source references NotebookLM provides
 
 **Important:** NotebookLM answers are supplementary context. Never cite NotebookLM output as a primary source — always verify claims against Candlekeep or RAG results.
-
-### MongoDB Queries (inline, no subagent)
-
-If MongoDB is enabled, run directly:
-- Search research collections for annotations/notes
-- Look up metadata about sources
-- Retrieve any stored research data
 
 ---
 
@@ -170,7 +161,7 @@ cognetivy run start --workflow wf_academic_writer --input /tmp/aw-research-input
 
 Log query results:
 ```bash
-echo '{"type":"step_completed","nodeId":"research","ragQueries":N,"candlekeepReads":N,"totalPassages":N,"toolsUsed":["rag","candlekeep","mongodb"]}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","nodeId":"research","ragQueries":N,"candlekeepReads":N,"totalPassages":N,"toolsUsed":["rag","candlekeep"]}' | cognetivy event append --run RUN_ID
 ```
 
 ---

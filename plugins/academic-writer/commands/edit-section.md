@@ -13,7 +13,7 @@ A fast, focused edit for a single section of an article. Use this instead of `/a
 ## Load Profile
 
 ```bash
-cat .academic-writer/profile.json
+cat .academic-helper/profile.md
 ```
 
 **Load the full `styleFingerprint`** — edits must maintain the researcher's voice.

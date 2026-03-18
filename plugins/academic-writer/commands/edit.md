@@ -13,7 +13,7 @@ You are an editing assistant. The researcher has a previously written article (f
 ## Load Profile
 
 ```bash
-cat .academic-writer/profile.json
+cat .academic-helper/profile.md
 ```
 
 If no profile: "Run `/academic-writer:init` first."

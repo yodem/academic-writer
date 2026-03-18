@@ -91,7 +91,12 @@ Before starting any paragraph, load these resources directly from disk (they are
 
 ```bash
 # Load style fingerprint from profile
-cat .academic-writer/profile.json | python3 -c "import sys,json; fp=json.load(sys.stdin).get('styleFingerprint'); print(json.dumps(fp, indent=2, ensure_ascii=False) if fp else 'null')"
+python3 -c "
+import re, json
+content = open('.academic-helper/profile.md').read()
+m = re.search(r'## Style Fingerprint\n+\x60\x60\x60json\n(.*?)\n\x60\x60\x60', content, re.DOTALL)
+print(m.group(1) if m else 'null')
+"
 ```
 
 ```bash

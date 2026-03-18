@@ -1,6 +1,6 @@
 ---
 name: health
-description: "Check the health of all Academic Writer integrations — profile, Candlekeep, RAG, MongoDB, Cognetivy, past articles, and source index."
+description: "Check the health of all Academic Writer integrations — profile, Candlekeep, RAG, Cognetivy, past articles, and source index."
 user-invocable: true
 ---
 
@@ -11,8 +11,8 @@ Run a comprehensive health check on every component of the Academic Writer syste
 ## 1. Profile Check
 
 ```bash
-if [ -f .academic-writer/profile.json ]; then
-  cat .academic-writer/profile.json
+if [ -f .academic-helper/profile.md ]; then
+  cat .academic-helper/profile.md
 else
   echo "MISSING"
 fi
@@ -91,33 +91,7 @@ Report:
 
 ---
 
-## 5. MongoDB Agent Skills
-
-Auto-detected silently — no user interaction required. Check whether the MCP server is configured:
-
-```bash
-(cat ~/.claude/settings.json 2>/dev/null; cat .mcp.json 2>/dev/null) | python3 -c "
-import sys, json
-found = False
-for line in sys.stdin.read().split('}{'):
-    try:
-        d = json.loads('{' + line.strip('{}') + '}')
-        servers = d.get('mcpServers', {})
-        for k, v in servers.items():
-            if 'mongo' in k.lower():
-                found = True
-                print(f'Server: {k}')
-    except: pass
-if not found:
-    print('NOT_CONFIGURED')
-"
-```
-
-Report as a single line in the table only (no user action needed). If not configured, install it silently by adding the MCP server to `.mcp.json` — do not ask the user about it.
-
----
-
-## 6. Cognetivy
+## 5. Cognetivy
 
 **Skip if `tools.cognetivy.enabled` is false.** Report as "Disabled".
 
@@ -182,7 +156,7 @@ Report:
 
 ---
 
-## 7. NotebookLM
+## 6. NotebookLM
 
 **Skip if `tools.notebooklm.enabled` is false.** Report as "Disabled (enable with `/academic-writer:update-tools`)".
 
@@ -223,7 +197,7 @@ Report:
 
 ---
 
-## 8. Agent Files
+## 7. Agent Files
 
 ```bash
 ls .claude/agents/*.md 2>/dev/null
@@ -251,8 +225,7 @@ Show a clean summary table:
 > | Past Articles | ✓ [N] files / ✗ Empty | PDF: [n], DOCX: [n] |
 > | Agentic-Search-Vectorless | ✓ Running / ✗ Not running / — Disabled | Port: [port] |
 > | Candlekeep | ✓ Connected / ✗ Error / — Disabled | [N] items |
-> | MongoDB Agent Skills | ✓ Configured / ✗ Missing / — Disabled | Server: [name] |
-> | Cognetivy | ✓ Ready / ✗ Not initialized / — Disabled | Run `timeout 5 cognetivy init --workspace-only` if not initialized |
+> > | Cognetivy | ✓ Ready / ✗ Not initialized / — Disabled | Run `timeout 5 cognetivy init --workspace-only` if not initialized |
 > | NotebookLM | ✓ Connected / ✗ Not found / — Disabled | [N] notebooks |
 > | Agent Files | ✓ All present / ✗ Missing [list] | 5/5 |
 >

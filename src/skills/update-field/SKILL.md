@@ -13,9 +13,13 @@ Quick update to your research field without re-running the full initialization.
 First, check if a profile exists and load it:
 
 ```bash
-if [ -f .academic-writer/profile.json ]; then
-  PROFILE=$(cat .academic-writer/profile.json)
-  CURRENT_FIELD=$(echo "$PROFILE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('fieldOfStudy', 'Not set'))")
+if [ -f .academic-helper/profile.md ]; then
+  CURRENT_FIELD=$(python3 -c "
+import re
+content = open('.academic-helper/profile.md').read()
+m = re.search(r'^fieldOfStudy: (.+)$', content, re.MULTILINE)
+print(m.group(1).strip() if m else 'Not set')
+")
   echo "Current field: $CURRENT_FIELD"
 else
   echo "No profile found. Run /academic-writer:init first."
@@ -38,22 +42,34 @@ Update the profile JSON with the new field while keeping all other settings inta
 
 ```bash
 python3 << 'PYTHON'
-import json
+import re, json
 from datetime import datetime
 
-# Load existing profile
-with open('.academic-writer/profile.json', 'r') as f:
-    profile = json.load(f)
+PROFILE_PATH = '.academic-helper/profile.md'
 
-# Update field
-profile['fieldOfStudy'] = 'NEW_FIELD_HERE'
-profile['updatedAt'] = datetime.now().isoformat()
+with open(PROFILE_PATH) as f:
+    content = f.read()
 
-# Save
-with open('.academic-writer/profile.json', 'w') as f:
-    json.dump(profile, f, indent=2)
+# Update fieldOfStudy and updatedAt in frontmatter
+new_field = 'NEW_FIELD_HERE'
+now = datetime.now().isoformat()
 
-print(f"✓ Field updated to: {profile['fieldOfStudy']}")
+# Replace fieldOfStudy in frontmatter
+if re.search(r'^fieldOfStudy: .+$', content, re.MULTILINE):
+    content = re.sub(r'^fieldOfStudy: .+$', f'fieldOfStudy: {new_field}', content, flags=re.MULTILINE)
+else:
+    # Insert after first ---
+    content = content.replace('---\n', f'---\nfieldOfStudy: {new_field}\n', 1)
+
+if re.search(r'^updatedAt: .+$', content, re.MULTILINE):
+    content = re.sub(r'^updatedAt: .+$', f'updatedAt: {now}', content, flags=re.MULTILINE)
+else:
+    content = content.replace('---\n', f'---\nupdatedAt: {now}\n', 1)
+
+with open(PROFILE_PATH, 'w') as f:
+    f.write(content)
+
+print(f"✓ Field updated to: {new_field}")
 PYTHON
 ```
 

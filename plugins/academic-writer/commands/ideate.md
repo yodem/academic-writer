@@ -13,7 +13,7 @@ Guided ideation flow that helps researchers formulate strong research questions 
 ## Load Profile
 
 ```bash
-cat .academic-writer/profile.json
+cat .academic-helper/profile.md
 ```
 
 If no profile, tell the researcher to run `/academic-writer:init` first.
@@ -199,10 +199,10 @@ AskUserQuestion(questions=[{
 Write a `research-brief.md` file that feeds directly into `/academic-writer:write`:
 
 ```bash
-mkdir -p .academic-writer
+mkdir -p .academic-helper
 ```
 
-Use the `Write` tool to create `.academic-writer/research-brief.md`:
+Use the `Write` tool to create `.academic-helper/research-brief.md`:
 
 ```markdown
 # Research Brief
@@ -243,13 +243,13 @@ Use the `Write` tool to create `.academic-writer/research-brief.md`:
 
 Log completion:
 ```bash
-echo '{"type":"step_completed","nodeId":"research_brief","outputPath":".academic-writer/research-brief.md"}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","nodeId":"research_brief","outputPath":".academic-helper/research-brief.md"}' | cognetivy event append --run RUN_ID
 cognetivy run complete --run RUN_ID
 ```
 
 ## Completion
 
-> "Your research brief has been saved to `.academic-writer/research-brief.md`.
+> "Your research brief has been saved to `.academic-helper/research-brief.md`.
 >
 > **Research question:** [question]
 > **Approach:** [approach]

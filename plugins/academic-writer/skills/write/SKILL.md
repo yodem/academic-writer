@@ -17,7 +17,7 @@ You are an academic writing assistant for a Humanities researcher.
 Start by loading the researcher's profile:
 
 ```bash
-cat .academic-writer/profile.json
+cat .academic-helper/profile.md
 ```
 
 If the profile doesn't exist, tell them: "Please run `/academic-writer:init` first to set up your profile."
@@ -46,7 +46,6 @@ Pass the full `styleFingerprint` object to every agent that writes or reviews te
 Read the `tools` object from the profile. Throughout this workflow, **only use tools that are enabled**:
 
 - **Candlekeep** (`tools.candlekeep.enabled`) — If disabled, skip `ck` commands. Source listing/selection steps should use any available sources from the profile's `sources` array instead.
-- **MongoDB Agent Skills** (`tools.mongodb-agent-skills.enabled`) — If disabled, skip any MongoDB MCP operations.
 - **Cognetivy** (`tools.cognetivy.enabled`) — If disabled, skip all `cognetivy` logging commands. The pipeline still works, just without audit trail.
 - **NotebookLM** (`tools.notebooklm.enabled`) — If disabled, skip notebook queries and AI summaries. NotebookLM is supplementary — it does not replace Vectorless/Candlekeep for citation verification.
 
@@ -272,7 +271,7 @@ For each section in the approved outline, the Agent tool prompt must include:
 - `priorSectionTexts`: text of all previously completed sections (for repetition awareness)
 - `outlineOverview`: full outline titles and roles
 
-**NOTE:** Do NOT pass `styleFingerprint` or `linkingWords` in the prompt — section-writer agents load these directly from disk to reduce context size. The agent reads `.academic-writer/profile.json` for the fingerprint and `plugins/academic-writer/words.md` for linking words.
+**NOTE:** Do NOT pass `styleFingerprint` or `linkingWords` in the prompt — section-writer agents load these directly from disk to reduce context size. The agent reads `.academic-helper/profile.md` for the fingerprint and `plugins/academic-writer/words.md` for linking words.
 
 Each section-writer handles a **per-paragraph skill pipeline** internally:
 

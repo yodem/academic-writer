@@ -12,7 +12,7 @@ Generate presentation materials and submission documents from a completed articl
 ## Load Profile
 
 ```bash
-cat .academic-writer/profile.json
+cat .academic-helper/profile.md
 ```
 
 Extract `targetLanguage` and `fieldOfStudy`.

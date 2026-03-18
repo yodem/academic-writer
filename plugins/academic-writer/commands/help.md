@@ -151,7 +151,7 @@ The plugin is designed for speed. Wherever possible, work is parallelized:
 
 | Path | Purpose |
 |------|---------|
-| `.academic-writer/profile.json` | Your researcher profile (field, style, tools, sources) |
+| `.academic-helper/profile.md` | Your researcher profile (field, style, tools, sources) |
 | `past-articles/` | Your published papers for style analysis (never uploaded) |
 | `.claude/agents/` | AI agent prompts (deep-reader, architect, section-writer, auditor, synthesizer) |
 | `.cognetivy/` | Workflow tracking data |

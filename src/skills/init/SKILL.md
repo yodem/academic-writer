@@ -26,13 +26,57 @@ Personalized onboarding that creates your researcher profile, detects available 
 Run silently before saying anything:
 
 ```bash
-mkdir -p past-articles .academic-writer .cognetivy/runs .cognetivy/events
+mkdir -p past-articles .academic-helper .cognetivy/runs .cognetivy/events
+```
+
+Migrate any legacy profile from `.academic-writer/profile.json` → `.academic-helper/profile.md`:
+
+```bash
+python3 << 'PYTHON'
+import os, json
+from datetime import datetime
+
+old_path = '.academic-writer/profile.json'
+new_path = '.academic-helper/profile.md'
+if os.path.exists(old_path) and not os.path.exists(new_path):
+    with open(old_path) as f:
+        p = json.load(f)
+    scalar_keys = ['fieldOfStudy', 'citationStyle', 'targetLanguage', 'updatedAt', 'createdAt']
+    list_keys = ['abstractLanguages', 'analyzedArticles']
+    json_sections = [
+        ('tools', 'Tools'), ('outputFormatPreferences', 'Output Format Preferences'),
+        ('styleFingerprint', 'Style Fingerprint'), ('articleStructure', 'Article Structure'),
+        ('sources', 'Sources'),
+    ]
+    lines = ['# Academic Writer Profile', '', '---']
+    for k in scalar_keys:
+        if k in p and p[k] is not None:
+            lines.append(f'{k}: {p[k]}')
+    for k in list_keys:
+        v = p.get(k) or []
+        if not v:
+            lines.append(f'{k}: []')
+        else:
+            lines.append(f'{k}:')
+            for item in v:
+                lines.append(f'  - {item}')
+    lines.append('---')
+    lines.append('')
+    for k, heading in json_sections:
+        if k in p and p[k] is not None:
+            lines.extend([f'## {heading}', '', '```json',
+                          json.dumps(p[k], indent=2, ensure_ascii=False), '```', ''])
+    os.makedirs('.academic-helper', exist_ok=True)
+    with open(new_path, 'w') as f:
+        f.write('\n'.join(lines))
+    print(f"Migrated profile to {new_path}")
+PYTHON
 ```
 
 Check for existing profile:
 
 ```bash
-cat .academic-writer/profile.json 2>/dev/null && echo "EXISTS" || echo "NOT_FOUND"
+cat .academic-helper/profile.md 2>/dev/null && echo "EXISTS" || echo "NOT_FOUND"
 ```
 
 **If EXISTS**: Use `AskUserQuestion`:
@@ -64,7 +108,7 @@ Then greet the user:
 >
 > Your workspace folders are ready:
 > - **`past-articles/`** — drop 5–10 of your published papers here (PDF or DOCX) so I can learn your writing style
-> - `.academic-writer/` — your profile (auto-managed)
+> - `.academic-helper/` — your profile (auto-managed)
 >
 > Let's start."
 
@@ -96,8 +140,6 @@ AskUserQuestion(questions=[{
 ```
 
 If the researcher provides a port number, retry `curl http://localhost:<PORT>/health`. Save the port to `tools.agentic-search-vectorless.port`.
-
-**MongoDB Agent Skills** is auto-configured silently — do not show it to the user.
 
 ### Present Results
 
@@ -405,38 +447,68 @@ After enrichment, re-list and build the sources array (id + title + type only �
 
 ## Phase 4: Save Profile + Register Workflows
 
-Use the Write tool to save `.academic-writer/profile.json`:
+Use the Write tool to save `.academic-helper/profile.md`:
+
+```markdown
+# Academic Writer Profile
+
+---
+fieldOfStudy: FIELD_HERE
+citationStyle: inline-parenthetical
+targetLanguage: Hebrew
+abstractLanguages:
+  - Hebrew
+analyzedArticles: []
+createdAt: ISO_TIMESTAMP
+updatedAt: ISO_TIMESTAMP
+---
+
+## Tools
 
 ```json
 {
-  "fieldOfStudy": "FIELD_HERE",
-  "targetLanguage": "Hebrew",
-  "citationStyle": "inline-parenthetical",
-  "abstractLanguages": ["Hebrew"],
-  "outputFormatPreferences": {
-    "font": "David",
-    "bodySize": 11,
-    "titleSize": 16,
-    "headingSize": 13,
-    "lineSpacing": 1.5,
-    "marginInches": 1.0,
-    "alignment": "justify",
-    "rtl": true
-  },
-  "styleFingerprint": { ... },
-  "articleStructure": { ... },
-  "tools": {
-    "candlekeep": { "enabled": true },
-    "agentic-search-vectorless": { "enabled": true, "port": 8000 },
-    "mongodb-agent-skills": { "enabled": true },
-    "cognetivy": { "enabled": true },
-    "notebooklm": { "enabled": false }
-  },
-  "sources": [],
-  "createdAt": "ISO_TIMESTAMP",
-  "updatedAt": "ISO_TIMESTAMP"
+  "candlekeep": { "enabled": true },
+  "agentic-search-vectorless": { "enabled": true, "port": 8000 },
+  "cognetivy": { "enabled": true },
+  "notebooklm": { "enabled": false }
 }
+` ` `
+
+## Output Format Preferences
+
+```json
+{
+  "font": "David",
+  "bodySize": 11,
+  "titleSize": 16,
+  "headingSize": 13,
+  "lineSpacing": 1.5,
+  "marginInches": 1.0,
+  "alignment": "justify",
+  "rtl": true
+}
+` ` `
+
+## Style Fingerprint
+
+```json
+{ ... full 25-dimension fingerprint object ... }
+` ` `
+
+## Article Structure
+
+```json
+{ ... article structure object ... }
+` ` `
+
+## Sources
+
+```json
+[]
+` ` `
 ```
+
+(Replace ` ` ` with actual backtick triplets when writing the file.)
 
 **If Cognetivy is enabled**, register all workflows:
 
@@ -471,7 +543,7 @@ AskUserQuestion(questions=[{
     {
       "label": "I'm done for now",
       "description": "Profile saved. Run /academic-writer:write anytime to start writing.",
-      "markdown": "```\nProfile saved to:\n  .academic-writer/profile.json\n\nKey commands:\n  /academic-writer:write         ← write an article\n  /academic-writer:health  ← check everything\n  /academic-writer:update-tools ← change integrations\n```"
+      "markdown": "```\nProfile saved to:\n  .academic-helper/profile.md\n\nKey commands:\n  /academic-writer:write         ← write an article\n  /academic-writer:health  ← check everything\n  /academic-writer:update-tools ← change integrations\n```"
     }
   ],
   "multiSelect": false

@@ -17,7 +17,7 @@ A structured quality gate that scores a completed article on 6 dimensions and pr
 ## Load Profile
 
 ```bash
-cat .academic-writer/profile.json
+cat .academic-helper/profile.md
 ```
 
 If no profile, tell the researcher to run `/academic-writer:init` first.
@@ -89,7 +89,12 @@ Score each dimension **1–10**. Present detailed findings for each.
 Check against the researcher's style fingerprint:
 
 ```bash
-cat .academic-writer/profile.json | python3 -c "import sys,json; fp=json.load(sys.stdin).get('styleFingerprint'); print(json.dumps(fp, indent=2, ensure_ascii=False) if fp else 'null')"
+python3 -c "
+import re, json
+content = open('.academic-helper/profile.md').read()
+m = re.search(r'## Style Fingerprint\n+\x60\x60\x60json\n(.*?)\n\x60\x60\x60', content, re.DOTALL)
+print(m.group(1) if m else 'null')
+"
 ```
 
 - Does the writing match the researcher's voice?

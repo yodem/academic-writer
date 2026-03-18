@@ -13,7 +13,7 @@ Trigger the style miner to analyze new articles in `past-articles/` and update t
 ## Load Profile
 
 ```bash
-cat .academic-writer/profile.json
+cat .academic-helper/profile.md
 ```
 
 If no profile, tell the researcher to run `/academic-writer:init` first.
@@ -99,7 +99,7 @@ AskUserQuestion(questions=[{
 ```
 
 If **Save**, update the profile:
-1. Merge the updated `styleFingerprint` into `.academic-writer/profile.json`
+1. Merge the updated `styleFingerprint` into `.academic-helper/profile.md`
 2. Add the new filenames to `analyzedArticles` array
 3. Update `updatedAt` timestamp
 

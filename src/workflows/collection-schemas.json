@@ -403,8 +403,7 @@
             "type": "string",
             "enum": [
               "vectorless",
-              "candlekeep",
-              "mongodb"
+              "candlekeep"
             ]
           },
           "query": {

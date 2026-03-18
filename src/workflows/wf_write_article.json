@@ -10,7 +10,7 @@
       "type": "PROMPT",
       "input_collections": ["run_input"],
       "output_collections": ["profile_data"],
-      "prompt": "Load .academic-writer/profile.json. Verify styleFingerprint exists. Output profile data for downstream nodes.",
+      "prompt": "Load .academic-helper/profile.md. Verify styleFingerprint exists. Output profile data for downstream nodes.",
       "required_skills": ["cognetivy"]
     },
     {

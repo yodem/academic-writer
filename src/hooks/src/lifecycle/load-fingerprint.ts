@@ -36,7 +36,7 @@ export function loadFingerprint(input: HookInput): HookResult {
   lines.push('');
   lines.push('='.repeat(60));
   lines.push('This fingerprint is checked against every paragraph during writing.');
-  lines.push('Update with /academic-writer-init (full) or edit .academic-writer/profile.json directly.');
+  lines.push('Update with /academic-writer-init (full) or edit .academic-helper/profile.md directly.');
   lines.push('='.repeat(60));
 
   return {

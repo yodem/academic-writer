@@ -2,7 +2,7 @@
   "workflow_id": "wf_research",
   "version_id": "v1",
   "name": "Research Subject",
-  "description": "Research a topic or answer questions using indexed sources (Candlekeep, Vectorless, MongoDB) without writing an article.",
+  "description": "Research a topic or answer questions using indexed sources (Candlekeep, Vectorless) without writing an article.",
   "created_at": "2026-03-08T00:00:00.000Z",
   "nodes": [
     {
@@ -17,7 +17,7 @@
       "type": "PROMPT",
       "input_collections": ["research_question"],
       "output_collections": ["search_results"],
-      "prompt": "Spawn parallel search subagents: (1) research-rag: query Agentic-Search-Vectorless with mix/local/global modes as appropriate, (2) research-candlekeep: browse and read relevant Candlekeep items, (3) research-mongodb: query database if enabled. Collect all results.",
+      "prompt": "Spawn parallel search subagents: (1) research-rag: query Agentic-Search-Vectorless with mix/local/global modes as appropriate, (2) research-candlekeep: browse and read relevant Candlekeep items. Collect all results.",
       "minimum_rows": 1,
       "required_skills": ["cognetivy"]
     },

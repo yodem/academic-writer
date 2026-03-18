@@ -51,7 +51,7 @@ export function sessionDashboard(input: HookInput): HookResult {
   lines.push(`║  Tools: ${(enabledTools.length > 0 ? enabledTools.join(', ') : 'None').substring(0, 38).padEnd(38)}║`);
 
   // Research brief
-  const briefPath = join(projectDir, '.academic-writer', 'research-brief.md');
+  const briefPath = join(projectDir, '.academic-helper', 'research-brief.md');
   if (existsSync(briefPath)) {
     lines.push(`║  Research brief: Available                       ║`);
   }

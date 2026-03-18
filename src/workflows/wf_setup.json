@@ -41,7 +41,7 @@
       "type": "PROMPT",
       "input_collections": ["profile_input", "style_refinement", "detected_tools"],
       "output_collections": ["profile"],
-      "prompt": "Combine all inputs into the final profile.json: fieldOfStudy, targetLanguage, citationStyle, outputFormatPreferences, styleFingerprint (25 dimensions + representativeExcerpts), tools config, articleStructure conventions. Write to .academic-writer/profile.json.",
+      "prompt": "Combine all inputs into the final profile.md: fieldOfStudy, targetLanguage, citationStyle, outputFormatPreferences, styleFingerprint (25 dimensions + representativeExcerpts), tools config, articleStructure conventions. Write to .academic-helper/profile.md in Markdown frontmatter + JSON sections format.",
       "required_skills": ["cognetivy"]
     },
     {

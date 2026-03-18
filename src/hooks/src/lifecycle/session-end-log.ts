@@ -4,7 +4,7 @@ import type { HookInput, HookResult } from '../types.js';
 
 export function sessionEndLog(input: HookInput): HookResult {
   const projectDir = input.project_dir ?? process.env['CLAUDE_PROJECT_DIR'] ?? '.';
-  const logsDir = join(projectDir, '.academic-writer', 'logs');
+  const logsDir = join(projectDir, '.academic-helper', 'logs');
 
   try {
     if (!existsSync(logsDir)) {
