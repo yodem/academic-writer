@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: academic-falkordb
+    ports:
+      - "6379:6379"
+      - "3000:3000"
+    environment:
+      - REDIS_ARGS=--requirepass ${FALKORDB_PASSWORD:-academic}
+      - FALKORDB_ARGS=THREAD_COUNT 4 CACHE_SIZE 25
+    volumes:
+      - falkordb_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${FALKORDB_PASSWORD:-academic}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  falkordb_data:
+    driver: local

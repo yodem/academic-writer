@@ -50,6 +50,14 @@ if (!hookName) {
   process.exit(0);
 }
 
+// Guard: skip all hooks if .academic-helper/ doesn't exist in the project dir
+const projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+const academicHelperDir = join(projectDir, '.academic-helper');
+if (!existsSync(academicHelperDir)) {
+  console.log('{"continue":true,"suppressOutput":true}');
+  process.exit(0);
+}
+
 let hooks;
 try {
   hooks = await loadBundle(hookName);

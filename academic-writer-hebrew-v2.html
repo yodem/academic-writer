@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Academic Writer — Hebrew Version</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #3fb950;
+    --accent3: #d29922;
+    --accent4: #f47067;
+    --accent5: #bc8cff;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { direction: rtl; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, 'David', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.8;
+  }
+
+  .hero {
+    text-align: center;
+    padding: 3rem 2rem 2rem;
+    background: linear-gradient(180deg, rgba(88,166,255,0.08) 0%, transparent 100%);
+    border-bottom: 1px solid var(--border);
+  }
+  .hero h1 {
+    font-size: 2.4rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent5));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+  .hero .subtitle {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+
+  .nav {
+    display: flex;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 1rem 2rem 0;
+    flex-wrap: wrap;
+  }
+  .nav button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 0.5rem 1.2rem;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .nav button:hover { color: var(--text); background: var(--surface); }
+  .nav button.active {
+    background: var(--surface);
+    color: var(--accent);
+    border-bottom-color: var(--surface);
+    font-weight: 600;
+  }
+
+  .content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.25rem;
+    margin-top: 1.5rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+  }
+  .card:hover { border-color: var(--accent); box-shadow: 0 0 20px rgba(88,166,255,0.15); }
+  .badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+  }
+  .badge-agent { background: rgba(88,166,255,0.15); color: var(--accent); }
+  .badge-skill { background: rgba(63,185,80,0.15); color: var(--accent2); }
+  .badge-critical { background: rgba(244,112,103,0.15); color: var(--accent4); }
+  .badge-phase { background: rgba(188,140,255,0.15); color: var(--accent5); }
+
+  .card h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+  .card p { color: var(--text-muted); font-size: 0.9rem; line-height: 1.7; }
+
+  .section-header { margin-bottom: 1rem; }
+  .section-header h2 { font-size: 1.4rem; margin-bottom: 0.5rem; }
+  .section-header h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem 0; }
+  .section-header p { color: var(--text-muted); font-size: 0.9rem; }
+
+  .concept-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .concept-box h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.75rem;
+    color: var(--accent);
+  }
+  .concept-box p {
+    color: var(--text-muted);
+    line-height: 1.8;
+    margin-bottom: 0.75rem;
+  }
+  .highlight-box {
+    background: rgba(88,166,255,0.06);
+    border-right: 3px solid var(--accent);
+    padding: 1rem 1.25rem;
+    border-radius: 0 8px 8px 0;
+    margin: 1rem 0;
+    font-size: 0.95rem;
+  }
+
+  .stats {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    padding: 1.5rem 2rem;
+    flex-wrap: wrap;
+  }
+  .stat { text-align: center; }
+  .stat .num { font-size: 2rem; font-weight: 700; color: var(--accent); }
+  .stat .label { font-size: 0.8rem; color: var(--text-muted); }
+
+  .chart-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-top: 1.5rem;
+    overflow-x: auto;
+  }
+
+  .pipeline {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+  }
+  .pipeline-step {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    border-right: 3px solid var(--accent);
+    background: rgba(88,166,255,0.04);
+    border-radius: 8px;
+  }
+  .step-num {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    flex-shrink: 0;
+    border: 2px solid;
+  }
+  .step-num.c1 { border-color: var(--accent); color: var(--accent); }
+  .step-num.c2 { border-color: var(--accent5); color: var(--accent5); }
+  .step-num.c3 { border-color: var(--accent2); color: var(--accent2); }
+  .step-num.c4 { border-color: var(--accent3); color: var(--accent3); }
+  .step-num.c5 { border-color: #f778ba; color: #f778ba; }
+  .step-num.c6 { border-color: var(--accent4); color: var(--accent4); }
+  .step-num.c7 { border-color: #79c0ff; color: #79c0ff; }
+  .step-num.c8 { border-color: #ffa657; color: #ffa657; }
+
+  .step-info h4 { font-size: 0.95rem; margin-bottom: 0.3rem; }
+  .step-info p { color: var(--text-muted); font-size: 0.85rem; }
+
+  .prompt-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 1rem 2rem;
+    display: flex;
+    gap: 1rem;
+    z-index: 100;
+  }
+  .prompt-text {
+    flex: 1;
+    font-family: monospace;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .copy-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 0.45rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .copy-btn:hover { opacity: 0.85; }
+  .copy-btn.copied { background: var(--accent2); }
+
+  .bottom-spacer { height: 80px; }
+
+  @media (max-width: 768px) {
+    .hero h1 { font-size: 1.6rem; }
+    .card-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Academic Writer</h1>
+  <p class="subtitle">עוזר כתיבה אקדמית מונע AI לחוקרים בהומניסטיקה. מאמרים מחוקרים ברוח, מצוטטים בדיוק, ומעוצבים בסגנון שלך</p>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="num">6</div><div class="label">עובדים</div></div>
+  <div class="stat"><div class="num">15</div><div class="label">ריצים</div></div>
+  <div class="stat"><div class="num">8</div><div class="label">בדיקות</div></div>
+  <div class="stat"><div class="num">3</div><div class="label">מקורות</div></div>
+  <div class="stat"><div class="num">100%</div><div class="label">אמינות</div></div>
+</div>
+
+<nav class="nav">
+  <button class="active" data-tab="overview">מהי?</button>
+  <button data-tab="concepts">מושגים בסיסיים</button>
+  <button data-tab="agents">6 העובדים</button>
+  <button data-tab="datasources">מקורות וודאות</button>
+  <button data-tab="pipeline">8 בדיקות</button>
+  <button data-tab="usage">איך משתמשים</button>
+  <button data-tab="flowchart">זרימה מלאה</button>
+</nav>
+
+<div class="content">
+
+  <!-- OVERVIEW -->
+  <div class="panel active" id="panel-overview">
+    <div class="section-header">
+      <h2>Academic Writer — מהו?</h2>
+      <p>כלי שמסייע לך לכתוב מאמרים אקדמיים בעברית עם דיוק וסגנון</p>
+    </div>
+
+    <div class="card-grid">
+      <div class="card">
+        <span class="badge badge-critical">הבעיה</span>
+        <h3>😫 כתיבה אקדמית לוקחת וקת רבה</h3>
+        <p>שבועות של חיפוש מקורות, כתיבה, בדיקת כל ציטוט שוב ושוב, עריכה, וטעות־מתקנית. תהליך שעתי וקשה.</p>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-accent2">הפתרון</span>
+        <h3>🤖 AI שכותב כמוך</h3>
+        <p>Academic Writer למד מהמאמרים הישנים שלך. הוא חופש במקורות שלך, כותב בסגנון שלך, ובודק כל ציטוט בפועל. כל זה בדקות, לא שבועות.</p>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-agent">וודאות מלאה</span>
+        <h3>✓ אין ציטוטים מומצאים</h3>
+        <p>כל ציטוט בדוק מול הספרים שלך בפועל. אף מספר עמוד לא מומצא. סוכן "בוחן" מוודא כל טענה בעמוד הנכון.</p>
+      </div>
+
+      <div class="card">
+        <span class="badge badge-skill">הסגנון שלך</span>
+        <h3>🎨 זה כמו שלך כתבת אותו</h3>
+        <p>AI למד מ־25 מימדים של הקול שלך — אורך משפטים, בחירת מילים, טון, דרך הטיעון. כל פסקה תהיה בסגנון שלך בדיוק.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONCEPTS -->
+  <div class="panel" id="panel-concepts">
+    <div class="section-header">
+      <h2>מושגים בסיסיים</h2>
+      <p>שלושה מילים שחשוב להבין: פלאגין, ריץ, עובד</p>
+    </div>
+
+    <div class="concept-box">
+      <h3>🔌 מה זה פלאגין (Plugin)?</h3>
+      <p>חשוב על זה כמו אפליקציה. כשאתה מתקין אפליקציה בטלפון, היא נותנת לך יכולות חדשות שלא היו לך קודם.</p>
+      <div class="highlight-box">
+        <strong>Academic Writer הוא פלאגין</strong> שנותן ל־Claude (ה־AI) את היכולת לכתוב מאמרים אקדמיים בעברית, לחפש במקורות שלך, ולבדוק ציטוטים בפועל.
+      </div>
+      <p>לאחר ההתקנה, אתה פשוט כותב פקודה כמו <code>/academic-writer:write</code> ותחילת תהליך הכתיבה.</p>
+    </div>
+
+    <div class="concept-box">
+      <h3>▶️ מה זה ריץ (Skill)?</h3>
+      <p>ריץ הוא פקודה שאתה מקליד. כמו ללחוץ על כפתור בטלפון — אתה מגיד למערכת מה אתה רוצה, והיא עושה את העבודה.</p>
+      <div class="highlight-box">
+        <strong>דוגמא:</strong> כשאתה כותב <code>/academic-writer:write</code>, אתה אומר "כתוב לי מאמר". כשאתה כותב <code>/academic-writer:research</code>, אתה אומר "חפש לי מידע בנושא".
+      </div>
+      <p>יש 15 ריצים שונים — אחד לכתיבה, אחד לעריכה, אחד ללימוד הסגנון שלך, וכו׳.</p>
+    </div>
+
+    <div class="concept-box">
+      <h3>🤖 מה זה עובד (Agent)?</h3>
+      <p>עובד הוא AI בעל תפקיד מוגדר. בדיוק כמו שקוראים שונים עושים עבודות שונות בחברה, כל עובד בAI עושה דבר אחד בטוב.</p>
+      <div class="highlight-box">
+        <strong>דוגמא:</strong> העובד "בוחן" הוא כמו עורך בגרות שבודק כל ציטוט. הוא לא כותב — הוא רק בודק. אם משהו לא מדויק, הוא אומר "זה לא בסדר, כתוב את זה שוב".
+      </div>
+      <p>יש 6 עובדים בסך הכל. אתה לא רואה אותם — הם עובדים מאחורי הקלעים. אתה רואה רק את התוצאה.</p>
+    </div>
+
+    <div class="concept-box">
+      <h3>👥 Cowork — התערובת בינך לבין AI</h3>
+      <p>אתה לא מתחיל בדף ריק ו־AI כותב הכל. בחלק הראשון של התהליך, <strong>אתה עושה החלטות</strong>.</p>
+      <div class="highlight-box">
+        <strong>זה ככה:</strong> אתה בוחר את הנושא → אתה בוחר את המקורות → אתה רואה הצעות תזות ובוחר אחת → אתה מאשר את המתאר. רק אז ה־AI מתחיל לכתוב.
+      </div>
+      <p>בחלק השני, ה־AI כותב את כל הפסקות בהקביל (בעת ובעונה אחת). כל פסקה עוברת 8 בדיקות לפני שהיא מאושרת.</p>
+    </div>
+  </div>
+
+  <!-- AGENTS -->
+  <div class="panel" id="panel-agents">
+    <div class="section-header">
+      <h2>6 העובדים — מי עושה מה</h2>
+      <p>כל עובד בעל תפקיד מיוחד ברור</p>
+    </div>
+    <div class="card-grid" id="agents-grid"></div>
+  </div>
+
+  <!-- DATA SOURCES -->
+  <div class="panel" id="panel-datasources">
+    <div class="section-header">
+      <h2>מקורות וודאות — מאיפה המאמר יודע שהוא נכון</h2>
+      <p>כל אומץ בא ממקור שאתה בעצמך העלית ואישרת</p>
+    </div>
+    <div id="datasources-grid" class="card-grid"></div>
+
+    <div class="section-header">
+      <h3>איך זה עובד: תהליך וודאות הציטוט</h3>
+    </div>
+    <div class="chart-container">
+      <svg width="100%" height="150" viewBox="0 0 900 150" style="min-width: 900px;">
+        <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><polygon points="0 0, 10 3, 0 6" fill="#8b949e"/></marker></defs>
+        
+        <text x="450" y="30" text-anchor="middle" font-size="12" fill="#8b949e" font-weight="bold">תהליך בדיקת הציטוט</text>
+
+        <rect x="20" y="45" width="120" height="50" rx="5" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="2"/><text x="80" y="75" text-anchor="middle" font-size="11" fill="#e6edf3">פסקה שנכתבה</text>
+        <line x1="145" y1="70" x2="180" y2="70" stroke="#8b949e" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="180" y="45" width="120" height="50" rx="5" fill="rgba(63,185,80,0.1)" stroke="#3fb950" stroke-width="2"/><text x="240" y="75" text-anchor="middle" font-size="11" fill="#e6edf3">חיפוש בספרים</text>
+        <line x1="305" y1="70" x2="340" y2="70" stroke="#8b949e" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="340" y="45" width="120" height="50" rx="5" fill="rgba(210,153,34,0.1)" stroke="#d29922" stroke-width="2"/><text x="400" y="70" text-anchor="middle" font-size="11" fill="#e6edf3">מצא את</text><text x="400" y="85" text-anchor="middle" font-size="11" fill="#e6edf3">המקור</text>
+        <line x1="465" y1="70" x2="500" y2="70" stroke="#8b949e" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="500" y="45" width="120" height="50" rx="5" fill="rgba(244,112,103,0.1)" stroke="#f47067" stroke-width="2"/><text x="560" y="75" text-anchor="middle" font-size="11" fill="#e6edf3">בדוק עמוד</text>
+        <line x1="625" y1="70" x2="660" y2="70" stroke="#8b949e" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <circle cx="720" cy="70" r="30" fill="rgba(63,185,80,0.2)" stroke="#3fb950" stroke-width="2"/><text x="720" y="75" text-anchor="middle" font-size="12" fill="#3fb950" font-weight="bold">✓</text>
+
+        <text x="450" y="130" text-anchor="middle" font-size="10" fill="#8b949e">אם משהו לא תואם? תחזור לשלב 1 וכתוב שוב (עד 3 פעמים)</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- PIPELINE -->
+  <div class="panel" id="panel-pipeline">
+    <div class="section-header">
+      <h2>8 בדיקות — כל פסקה צריכה להיות מושלמת</h2>
+      <p>אף פסקה לא נוצאת הלאה בלי להצליח בכל 8. זה מה שמחזיק את האיכות גבוה.</p>
+    </div>
+    <div class="pipeline" id="pipeline-container"></div>
+  </div>
+
+  <!-- USAGE -->
+  <div class="panel" id="panel-usage">
+    <div class="section-header">
+      <h2>איך משתמשים — Cowork (עבודה משותפת)</h2>
+      <p>הכל עובד דרך קונברסציה בינך לבין ה־AI. לא צריך CLI או טכנולוגיה.</p>
+    </div>
+
+    <div class="concept-box">
+      <h3>שלב 1: בחירת הנושא</h3>
+      <p>אתה כותב פקודה פשוטה:</p>
+      <div class="highlight-box">
+        <code>/academic-writer:write</code><br><br>
+        ה־AI שואל אותך: "על איזה נושא אתה רוצה לכתוב?"<br>
+        אתה: "על תפקידה של המסורה בתקופת התנאים"<br>
+      </div>
+    </div>
+
+    <div class="concept-box">
+      <h3>שלב 2: בחירת המקורות</h3>
+      <p>ה־AI מראה לך רשימה של הספרים שלך שעלויים ל־Candlekeep. אתה בוחר אילו ספרים להשתמש.</p>
+      <div class="highlight-box">
+        ה־AI: "בחרת את Jaffee (2001) ו־Fraade (1991) ו־Lieberman. בסדר?"<br>
+        אתה: "כן, בדיוק"
+      </div>
+    </div>
+
+    <div class="concept-box">
+      <h3>שלב 3: העובד "קורא עמוק" חוקר</h3>
+      <p>ה־AI שולח עובד שקוראה את כל הספרים שבחרת בעת ובעונה אחת. הוא מוצא:</p>
+      <ul style="margin: 0.75rem 0; color: var(--text-muted); padding-right: 1.5rem;">
+        <li>💡 אלו מחברים הם החזקים ביותר בנושא שלך</li>
+        <li>⚖️ אלו הם המחלוקות החשובות</li>
+        <li>❌ אלו הם הפערים (נושאים שלא יש עליהם ראיות)</li>
+      </ul>
+      <div class="highlight-box">
+        <strong>דוגמא:</strong> "קורא עמוק מוצא שיש ראיות חזקות לדעה שהמסורה הייתה קשר רטורי יותר מדקדוקי. פערים: אין ראיות ארכיאולוגיות."
+      </div>
+    </div>
+
+    <div class="concept-box">
+      <h3>שלב 4: הצעות תזות — אתה בוחר</h3>
+      <p>ה־AI שולח עובד "אדריכל" שמציע לך 2-3 תזות אפשריות. אתה בוחר איזה תזה אתה הכי אוהב.</p>
+      <div class="highlight-box">
+        <strong>תזה 1:</strong> "המסורה הייתה כלי רטורי שעדיפת על כתיבה למרות שכתיבה הייתה קיימת"<br><br>
+        <strong>תזה 2:</strong> "המסורה כמושג מדיוק התפתחה משלב אחד לשני"<br><br>
+        אתה: "אני בוחר תזה 1"
+      </div>
+    </div>
+
+    <div class="concept-box">
+      <h3>שלב 5: המתאר — אתה מאשר</h3>
+      <p>ה־AI בונה מתאר מפורט של המאמר:</p>
+      <div class="highlight-box">
+        — מבוא (500 מילים): הקדמה לבעיה<br>
+        — קטע ראשון (800 מילים): הראיות מהמקורות<br>
+        — קטע שני (800 מילים): ניתוח מחלוקת<br>
+        — קטע שלישי (600 מילים): טיעונים נגדיים<br>
+        — סיכום (400 מילים): סיכום וגרירות<br><br>
+        אתה: "סדר, יאללה לכתיבה"
+      </div>
+    </div>
+
+    <div class="concept-box">
+      <h3>שלב 6: הכתיבה — ה־AI עובד (לבד)</h3>
+      <p>עכשיו ה־AI כותב כל קטע בזמן קצר מאוד. כל פסקה:</p>
+      <ul style="margin: 0.75rem 0; color: var(--text-muted); padding-right: 1.5rem;">
+        <li>✓ חוקרת את הספרים שלך (Candlekeep)</li>
+        <li>✓ כתובה בסגנון שלך בדיוק</li>
+        <li>✓ כוללת ציטוטים בדוקים</li>
+        <li>✓ בדוקה על דקדוק ושפה אקדמית</li>
+        <li>✓ בדוקה שהציטוטים בעמודים הנכונים</li>
+      </ul>
+    </div>
+
+    <div class="concept-box">
+      <h3>שלב 7: הוצאת .docx</h3>
+      <p>כשהכל מוגמר, ה־AI נותן לך קובץ Word מעוצב:</p>
+      <div class="highlight-box">
+        — טופוס David עברית (כמו אמור)<br>
+        — גודל טקסט וריווח כמו שצריך<br>
+        — ציטוטים בדיוק כמו שצריך<br>
+        — עמודים ממוספרים<br>
+      </div>
+      <p>אתה פשוט מוריד את הקובץ וזהו. מאמר מוכן.</p>
+    </div>
+  </div>
+
+  <!-- FLOWCHART -->
+  <div class="panel" id="panel-flowchart">
+    <div class="section-header">
+      <h2>זרימה מלאה — מרעיון ל־מאמר</h2>
+    </div>
+    <div class="chart-container">
+      <svg width="100%" height="700" viewBox="0 0 600 700" style="min-width: 600px;">
+        <defs><marker id="arrowf" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#8b949e"/></marker></defs>
+        
+        <text x="300" y="30" text-anchor="middle" font-size="14" font-weight="bold" fill="#bc8cff">שלב 1: אתה בשליטה (Cowork)</text>
+
+        <rect x="50" y="50" width="90" height="45" rx="5" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="2"/><text x="95" y="78" text-anchor="middle" font-size="10" fill="#e6edf3">בחר נושא</text>
+        <line x1="145" y1="72" x2="180" y2="72" stroke="#8b949e" stroke-width="2" marker-end="url(#arrowf)"/>
+
+        <rect x="180" y="50" width="90" height="45" rx="5" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="2"/><text x="225" y="78" text-anchor="middle" font-size="10" fill="#e6edf3">ספרים</text>
+        <line x1="275" y1="72" x2="310" y2="72" stroke="#8b949e" stroke-width="2" marker-end="url(#arrowf)"/>
+
+        <rect x="310" y="50" width="90" height="45" rx="5" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="2"/><text x="355" y="78" text-anchor="middle" font-size="10" fill="#e6edf3">קריאה</text>
+        <line x1="405" y1="72" x2="440" y2="72" stroke="#8b949e" stroke-width="2" marker-end="url(#arrowf)"/>
+
+        <rect x="440" y="50" width="110" height="45" rx="5" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="2"/><text x="495" y="78" text-anchor="middle" font-size="10" fill="#e6edf3">בחר תזה</text>
+        <line x1="300" y1="105" x2="300" y2="135" stroke="#8b949e" stroke-width="2" marker-end="url(#arrowf)"/>
+
+        <rect x="180" y="135" width="240" height="45" rx="5" fill="rgba(188,140,255,0.1)" stroke="#bc8cff" stroke-width="2"/><text x="300" y="163" text-anchor="middle" font-size="11" fill="#e6edf3">אישור מתאר</text>
+        <line x1="300" y1="190" x2="300" y2="220" stroke="#8b949e" stroke-width="2" marker-end="url(#arrowf)"/>
+
+        <text x="300" y="240" text-anchor="middle" font-size="14" font-weight="bold" fill="#3fb950">שלב 2: ה־AI עובד (לבד)</text>
+
+        <rect x="40" y="290" width="130" height="55" rx="5" fill="rgba(63,185,80,0.1)" stroke="#3fb950" stroke-width="2"/><text x="105" y="315" text-anchor="middle" font-size="10" fill="#e6edf3">קטע 1</text><text x="105" y="330" text-anchor="middle" font-size="9" fill="#8b949e">בהקביל</text>
+        <rect x="235" y="290" width="130" height="55" rx="5" fill="rgba(63,185,80,0.1)" stroke="#3fb950" stroke-width="2"/><text x="300" y="315" text-anchor="middle" font-size="10" fill="#e6edf3">קטע 2</text><text x="300" y="330" text-anchor="middle" font-size="9" fill="#8b949e">בהקביל</text>
+        <rect x="430" y="290" width="130" height="55" rx="5" fill="rgba(63,185,80,0.1)" stroke="#3fb950" stroke-width="2"/><text x="495" y="315" text-anchor="middle" font-size="10" fill="#e6edf3">קטע 3</text><text x="495" y="330" text-anchor="middle" font-size="9" fill="#8b949e">בהקביל</text>
+        
+        <text x="300" y="370" text-anchor="middle" font-size="9" fill="#8b949e">כל פסקה: חיפוש ספרים → טיוטה → סגנון → דקדוק → שפה → בדיקה AI → בדיקת חזרה → בדיקת ציטוטים</text>
+
+        <line x1="105" y1="355" x2="200" y2="380" stroke="#8b949e" stroke-width="2" marker-end="url(#arrowf)"/><line x1="300" y1="355" x2="300" y2="380" stroke="#8b949e" stroke-width="2" marker-end="url(#arrowf)"/><line x1="495" y1="355" x2="400" y2="380" stroke="#8b949e" stroke-width="2" marker-end="url(#arrowf)"/>
+
+        <rect x="150" y="380" width="300" height="45" rx="5" fill="rgba(188,140,255,0.1)" stroke="#bc8cff" stroke-width="2"/><text x="300" y="408" text-anchor="middle" font-size="11" fill="#e6edf3">סינתזה וקוהרנטיות</text>
+        <line x1="300" y1="435" x2="300" y2="465" stroke="#8b949e" stroke-width="2" marker-end="url(#arrowf)"/>
+
+        <rect x="50" y="465" width="110" height="40" rx="5" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="2"/><text x="105" y="488" text-anchor="middle" font-size="10" fill="#e6edf3">תקציר</text>
+        <rect x="245" y="465" width="110" height="40" rx="5" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="2"/><text x="300" y="488" text-anchor="middle" font-size="10" fill="#e6edf3">בדיקה</text>
+        <rect x="440" y="465" width="110" height="40" rx="5" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="2"/><text x="495" y="488" text-anchor="middle" font-size="10" fill="#e6edf3">.docx</text>
+        <line x1="300" y1="515" x2="300" y2="545" stroke="#8b949e" stroke-width="2" marker-end="url(#arrowf)"/>
+
+        <rect x="150" y="545" width="300" height="50" rx="5" fill="rgba(63,185,80,0.1)" stroke="#3fb950" stroke-width="2"/><text x="300" y="570" text-anchor="middle" font-size="12" fill="#3fb950" font-weight="bold">✓ מאמר מוגמר</text>
+        <line x1="300" y1="605" x2="300" y2="630" stroke="#8b949e" stroke-width="2" marker-end="url(#arrowf)"/>
+        <text x="300" y="650" text-anchor="middle" font-size="10" fill="#8b949e">אופציוני: כנס, מגזין, פרק בספר</text>
+      </svg>
+    </div>
+  </div>
+
+</div>
+
+<div class="bottom-spacer"></div>
+
+<div class="prompt-bar">
+  <div class="prompt-text" id="prompt-output">Academic Writer: כתיבה אקדמית מחוקרת בדיוק, בסגנון שלך, מהמקורות שלך.</div>
+  <button class="copy-btn" id="copy-btn">העתק</button>
+</div>
+
+<script>
+  const agentsData = [
+    { icon: '📖', title: 'קורא עמוק', desc: 'חוקר את כל הספרים שלך בעת ובעונה אחת. מוצא את המחברים החזקים, המחלוקות, והפערים בראיות.' },
+    { icon: '🏗️', title: 'אדריכל', desc: 'מציע לך 2-3 תזות חדישות שאתה יכול לבחור. בונה מתאר מפורט עם כל הקטעים.' },
+    { icon: '✍️', title: 'כותב קטע', desc: 'כותב קטע שלם דרך 8 בדיקות כדי לוודא שכל פסקה מושלמת. כמה כותבים עובדים בעת ובעונה אחת.' },
+    { icon: '🔎', title: 'בוחן ציטוטים', desc: 'בודק כל ציטוט אם הוא באמת בספר של כמו שצריך בעמוד הנכון. אם לא — שולח אחורה לכתיבה מחדש.' },
+    { icon: '🔗', title: 'סינתזה סופית', desc: 'עורך סופי. בודק שהמאמר הגיוני, שכל הטיעונים זורמים טוב, ושהסגנון עקבי לכל אורך.' },
+    { icon: '🎓', title: 'כורה סגנון', desc: 'לומד מהמאמרים הישנים שלך. מוצא איך בדיוק אתה כותב (משפטים, מילים, טון) וזוכר אתה לעבודה.' },
+  ];
+
+  const datasourcesData = [
+    { title: 'Candlekeep', icon: '📚', req: true, desc: 'הספרים שלך בענן. כל ספר שאתה העלית שם אפשר להוסיף למאמר. זה המקור הרשמי לכל ציטוט.' },
+    { title: 'Vectorless', icon: '🔍', req: false, desc: 'חיפוש חכם בספרים שלך. לא צריך לזכור את השם המדויק — הוא מוצא אוטומטית קטעים רלוונטיים.' },
+    { title: 'NotebookLM', icon: '💬', req: false, desc: 'כלי Q&A על הספרים שלך. אפשר לשאול שאלות ו־AI יענה. (לא מצוטט — רק לעזור בחיפוש).' },
+  ];
+
+  const pipelineData = [
+    { num: 1, cls: 'c1', title: 'חיפוש חובה בספרים', desc: 'לפני כתיבה: חיפוש בספרים שלך (Candlekeep). הפסקה כתובה רק מתוך מה שנמצא בספרים.' },
+    { num: 2, cls: 'c2', title: 'סגנון — זה צריך להיות כמוך', desc: 'הפסקה בדוקה מול 25 מימדים של הקול שלך. אם זה לא נשמע כמוך — כתוב שוב.' },
+    { num: 3, cls: 'c3', title: 'דקדוק עברי', desc: 'בדיקת דקדוק, כתיב, פיסוק. עברית טהורה ותקינה.' },
+    { num: 4, cls: 'c4', title: 'שפה אקדמית + מילות חיבור', desc: 'שדרוג לשפה אקדמית. ודא שיש מילות חיבור מגוונות (לפחות 2 מתוכן שונות בפסקה).' },
+    { num: 5, cls: 'c5', title: 'טהרת שפה', desc: 'הסר כל טקסט זר מהטקסט. מילה באנגלית? תרגם או הערה בתחתית־עמוד.' },
+    { num: 6, cls: 'c6', title: 'גילוי דפוסי AI', desc: 'בדוק אם הפסקה נשמעת טבעית או כמו שנכתבה על ידי מחשב. ניקוד 35/50 מינימום.' },
+    { num: 7, cls: 'c7', title: 'אל תחזור על עצמך', desc: 'בדוק אם הטענה הזאת כבר הופיעה בפסקה אחרת. כל טענה פעם אחת בלבד.' },
+    { num: 8, cls: 'c8', title: 'בדיקת ציטוטים — שער קשה', desc: 'בוחן מוציא כל טענה, בודק שהיא בספר בעמוד הנכון. אם לא? שוב לכתיבה (עד 3 פעמים).' },
+  ];
+
+  const prompts = {
+    overview: 'Academic Writer: כתיבה אקדמית מחוקרת בדיוק, בסגנון שלך, מהמקורות שלך.',
+    concepts: 'פלאגין, ריץ, עובד — 3 מילים שצריך להבין. Cowork = אתה בוחר, ה־AI כותב.',
+    agents: '6 עובדים: קורא עמוק, אדריכל, כותב קטע, בוחן, סינתזה, כורה סגנון.',
+    datasources: '3 מקורות: Candlekeep (חובה), Vectorless (חיפוש), NotebookLM (Q&A). כל ציטוט מבוקר בפועל.',
+    pipeline: '8 בדיקות: חיפוש → סגנון → דקדוק → שפה אקדמית → טהרה → AI → אל תחזור → ציטוטים.',
+    usage: 'Cowork: אתה בוחר נושא, ספרים, תזה. ה־AI כותב בהקביל, כל פסקה עוברת 8 בדיקות. תוך דקות, לא שבועות.',
+    flowchart: 'שלב 1: בחר נושא → ספרים → קריאה → תזה → מתאר. שלב 2: כתיבה בהקביל → סינתזה → .docx.'
+  };
+
+  function renderAgents() {
+    const grid = document.getElementById('agents-grid');
+    agentsData.forEach((agent, i) => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `<span class="badge badge-agent">עובד ${i + 1}</span><h3>${agent.icon} ${agent.title}</h3><p>${agent.desc}</p>`;
+      grid.appendChild(card);
+    });
+  }
+
+  function renderDatasources() {
+    const grid = document.getElementById('datasources-grid');
+    datasourcesData.forEach(ds => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      const req = ds.req ? '<span style="color: var(--accent2);">חובה</span>' : '<span style="color: var(--text-muted);">אופציוני</span>';
+      card.innerHTML = `<span class="badge ${ds.req ? 'badge-skill' : 'badge-phase'}">${req}</span><h3>${ds.icon} ${ds.title}</h3><p>${ds.desc}</p>`;
+      grid.appendChild(card);
+    });
+  }
+
+  function renderPipeline() {
+    const container = document.getElementById('pipeline-container');
+    pipelineData.forEach(step => {
+      const div = document.createElement('div');
+      div.className = 'pipeline-step';
+      div.innerHTML = `<div class="step-num ${step.cls}">${step.num}</div><div class="step-info"><h4>${step.title}</h4><p>${step.desc}</p></div>`;
+      container.appendChild(div);
+    });
+  }
+
+  document.querySelectorAll('.nav button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+      document.getElementById('prompt-output').textContent = prompts[btn.dataset.tab] || prompts.overview;
+    });
+  });
+
+  document.getElementById('copy-btn').addEventListener('click', () => {
+    const text = document.getElementById('prompt-output').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.getElementById('copy-btn');
+      btn.textContent = 'הועתק!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'העתק'; btn.classList.remove('copied'); }, 1500);
+    });
+  });
+
+  renderAgents();
+  renderDatasources();
+  renderPipeline();
+</script>
+</body>
+</html>

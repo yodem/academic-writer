@@ -1,6 +1,6 @@
 {
   "enabledPlugins": {
-    "orkl@orchestkit": true,
-    "cc10x@cc10x": true
+    "cc10x@cc10x": true,
+    "academic-writer@academic-writer": true
   }
 }

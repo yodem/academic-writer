@@ -316,13 +316,55 @@ Log start:
 echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_anti_ai"}}' | cognetivy event append --run RUN_ID
 ```
 
-**Detect and fix AI-generated writing patterns.** Load the Hebrew AI pattern reference:
+**Detect and fix AI-generated writing patterns.**
+
+##### Tier 1: Typography Gating (Auto-fix)
+
+**FIRST:** Run the typography detector to catch em-dashes, straight quotes, and directional mark artifacts:
+
+```bash
+# Run the typography detection and fix script
+python3 plugins/academic-writer/scripts/detect-ai-typography.py \
+  --text "$PARAGRAPH_TEXT" \
+  --json > /tmp/typo-report.json
+
+# Parse the results
+TYPO_FIXES=$(python3 -c "
+import json
+with open('/tmp/typo-report.json') as f:
+    data = json.load(f)
+    # If fixes were applied, use the cleaned text
+    if data.get('fixes_applied'):
+        print(data['fixed_text'])
+    else:
+        print('$PARAGRAPH_TEXT')
+")
+
+# If changes were made, update the paragraph and log
+if [ "$TYPO_FIXES" != "$PARAGRAPH_TEXT" ]; then
+  PARAGRAPH_TEXT="$TYPO_FIXES"
+  echo '{"type":"step_detail","data":{"step":"anti_ai_typo_tier","fixes":'$(python3 -c "import json; d=json.load(open('/tmp/typo-report.json')); print(json.dumps(d.get('fixes_applied', [])))"),'}}' \
+    | cognetivy event append --run RUN_ID
+fi
+```
+
+**Checks in Tier 1 (auto-fixed):**
+- ✅ Em-dashes (`—`) → replaced with ` - `
+- ✅ Straight quotes (`"`) → replaced with gereshayim (`״`)
+- ✅ Unnecessary directional marks → removed
+- ✅ Orphan punctuation at paragraph start → flagged for Tier 2
+
+**If any typography issues were found, log them and re-run Tier 1 on the fixed text to verify all issues are resolved.**
+
+##### Tier 2: Content Scoring
+
+Load the Hebrew AI pattern reference:
 
 ```bash
 cat plugins/academic-writer/skills/write/references/anti-ai-patterns-hebrew.md
 ```
 
-Score the paragraph on 5 dimensions (each 1–10):
+Score the **cleaned paragraph** on 5 dimensions (each 1–10):
 
 1. **Directness** (ישירות) — Does the text state things directly, or use filler openers like `חשוב לציין כי`, `אין ספק כי`, `ראוי להדגיש כי`? Remove all throat-clearing phrases.
 2. **Rhythm** (קצב) — Is sentence length varied? Flag if 3+ consecutive sentences have similar length. Mix short (8-10 words) with long (30+).
@@ -343,7 +385,7 @@ Score the paragraph on 5 dimensions (each 1–10):
 
 Log completion:
 ```bash
-echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_anti_ai","status":"pass|fixed","score":N,"directness":N,"rhythm":N,"trust":N,"authenticity":N,"density":N,"patternsFixed":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_anti_ai","status":"pass|fixed","tier1_typography_fixes":N,"tier2_score":N,"directness":N,"rhythm":N,"trust":N,"authenticity":N,"density":N,"patternsFixed":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
 ```
 
 ---
