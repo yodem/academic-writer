@@ -1,4 +1,4 @@
-name: Version Bump
+name: Version Bump & Release
 
 on:
   push:
@@ -41,10 +41,12 @@ jobs:
 
       - name: Bump patch version
         if: steps.guard.outputs.skip == 'false'
+        id: bump
         run: |
           CURRENT=$(jq -r '.version' package.json)
           IFS='.' read -ra PARTS <<< "$CURRENT"
           NEW="${PARTS[0]}.${PARTS[1]}.$((${PARTS[2]} + 1))"
+          echo "new=$NEW" >> "$GITHUB_OUTPUT"
 
           jq --arg v "$NEW" '.version = $v' package.json > _tmp.json && mv _tmp.json package.json
           jq --arg v "$NEW" '.version = $v' manifests/academic-writer.json > _tmp.json && mv _tmp.json manifests/academic-writer.json
@@ -52,4 +54,14 @@ jobs:
 
           git add package.json manifests/academic-writer.json .claude-plugin/marketplace.json
           git commit -m "chore: bump version to v${NEW}"
+          git tag "v${NEW}"
           git push origin main
+          git push origin "v${NEW}"
+
+      - name: Create GitHub Release
+        if: steps.guard.outputs.skip == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.bump.outputs.new }}"
+          name: "v${{ steps.bump.outputs.new }}"
+          generate_release_notes: true
