@@ -104,7 +104,8 @@ def extract_text_from_file(filepath: str) -> str:
         try:
             from docx import Document
             d = Document(filepath)
-            return '\n'.join(p.text for p in d.paragraphs if p.text.strip())
+            # Use double newline between paragraphs so split_paragraphs() works
+            return '\n\n'.join(p.text for p in d.paragraphs if p.text.strip())
         except ImportError:
             print("Warning: python-docx not installed, skipping DOCX file", file=sys.stderr)
             return ""
