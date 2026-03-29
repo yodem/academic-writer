@@ -418,11 +418,11 @@ def aggregate_metrics(metrics_list: list[dict]) -> dict:
     n = len(metrics_list)
 
     def safe_mean(values):
-        valid = [v for v in values if v is not None and v != 0]
+        valid = [v for v in values if v is not None]
         return round(mean(valid), 2) if valid else 0
 
     def safe_stdev(values):
-        valid = [v for v in values if v is not None and v != 0]
+        valid = [v for v in values if v is not None]
         return round(stdev(valid), 2) if len(valid) > 1 else 0
 
     # Aggregate sentence metrics

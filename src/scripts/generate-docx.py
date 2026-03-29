@@ -67,7 +67,7 @@ def validate_hebrew_text(text: str) -> str:
     
     # 2. Replace straight quotes with gereshayim (Hebrew quotation marks)
     # English straight quotes are wrong in Hebrew academic writing
-    text = re.sub(r'"([^"]*)"', r'״\1״', text)
+    text = re.sub(r'"([^"]{0,200})"', r'״\1״', text)
     
     # 3. Remove unnecessary directional marks that break rendering
     # DOCX handles bidirectionality automatically; manual marks cause issues

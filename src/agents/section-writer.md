@@ -364,28 +364,21 @@ echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_anti_ai"}
 
 ```bash
 # Run the typography detection and fix script
-python3 plugins/academic-writer/scripts/detect-ai-typography.py \
-  --text "$PARAGRAPH_TEXT" \
-  --json > /tmp/typo-report.json
+TYPO_REPORT=$(mktemp)
+echo "$PARAGRAPH_TEXT" | python3 plugins/academic-writer/scripts/detect-ai-typography.py \
+  --fix-and-output \
+  --json > "$TYPO_REPORT"
 
-# Parse the results
-TYPO_FIXES=$(python3 -c "
-import json
-with open('/tmp/typo-report.json') as f:
-    data = json.load(f)
-    # If fixes were applied, use the cleaned text
-    if data.get('fixes_applied'):
-        print(data['fixed_text'])
-    else:
-        print('$PARAGRAPH_TEXT')
-")
+# Extract fixed text and check if changes were made
+FIXED_TEXT=$(python3 -c "import json,sys; d=json.load(open('$TYPO_REPORT')); print(d.get('fixed_text', ''))")
 
 # If changes were made, update the paragraph and log
-if [ "$TYPO_FIXES" != "$PARAGRAPH_TEXT" ]; then
-  PARAGRAPH_TEXT="$TYPO_FIXES"
-  echo '{"type":"step_detail","data":{"step":"anti_ai_typo_tier","fixes":'$(python3 -c "import json; d=json.load(open('/tmp/typo-report.json')); print(json.dumps(d.get('fixes_applied', [])))"),'}}' \
+if [ -n "$FIXED_TEXT" ] && [ "$FIXED_TEXT" != "$PARAGRAPH_TEXT" ]; then
+  PARAGRAPH_TEXT="$FIXED_TEXT"
+  echo '{"type":"step_detail","data":{"step":"anti_ai_typo_tier","fixes":'$(python3 -c "import json; d=json.load(open('$TYPO_REPORT')); print(json.dumps(d.get('fixes_applied', [])))"),'}}' \
     | cognetivy event append --run RUN_ID
 fi
+rm -f "$TYPO_REPORT"
 ```
 
 **Checks in Tier 1 (auto-fixed):**
