@@ -9,29 +9,60 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+# Explicit workflow-level permissions so the GITHUB_TOKEN has write access
+# regardless of the organisation's default read-only setting.
+permissions:
+  contents: write
+
 jobs:
   bump-and-release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          # Explicitly persist credentials so git push can use the token.
+          # actions/checkout stores it in the remote URL; without this flag
+          # the token is wiped after checkout and push will fail with 403.
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Skip if this is a version-bump commit
         id: guard
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          if echo "$COMMIT_MSG" | grep -q "^chore: bump version"; then
+          if echo "$COMMIT_MSG" | grep -qE "^chore: bump version"; then
+            echo "Skipping: this is an auto-bump commit, nothing to do."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # Preflight: verify that the GITHUB_TOKEN can push to main.
+      # Branch protection rules that require PRs or status checks will block
+      # a direct push from Actions. If this check fails, go to:
+      #   Settings > Branches (or Rulesets) and enable
+      #   "Allow specified actors to bypass required pull request" for
+      #   "github-actions[bot]", then re-run the workflow.
+      - name: Preflight — verify push access
+        if: steps.guard.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Checking token scope and repository permissions..."
+          # gh api returns the authenticated user's permission on this repo.
+          PERM=$(gh api repos/${{ github.repository }} --jq '.permissions.push' 2>/dev/null || echo "false")
+          if [[ "$PERM" != "true" ]]; then
+            echo "::error::GITHUB_TOKEN does not have push permission on this repository."
+            echo "::error::Ensure the workflow has 'permissions: contents: write' (already set) AND"
+            echo "::error::that branch protection / rulesets allow GitHub Actions to push directly to main."
+            echo "::error::Go to: Settings > Branches (or Rules) > allow 'github-actions[bot]' to bypass."
+            exit 1
+          fi
+          echo "Push access confirmed."
 
       - name: Setup Node.js
         if: steps.guard.outputs.skip == 'false'
@@ -77,8 +108,21 @@ jobs:
           git add package.json manifests/academic-writer.json .claude-plugin/marketplace.json plugins/
           git commit -m "chore: bump version to v${NEW_VERSION} [skip ci]"
           git tag "v${NEW_VERSION}"
-          git push origin main
-          git push origin "v${NEW_VERSION}"
+
+          echo "Pushing commit to main..."
+          if ! git push origin main; then
+            echo "::error::Push to main failed."
+            echo "::error::If branch protection is enabled, go to Settings > Branches (or Rulesets)"
+            echo "::error::and allow 'github-actions[bot]' to bypass required pull request reviews."
+            exit 1
+          fi
+
+          echo "Pushing tag v${NEW_VERSION}..."
+          if ! git push origin "v${NEW_VERSION}"; then
+            echo "::error::Push of tag v${NEW_VERSION} failed."
+            echo "::error::Check that tag protection rules (if any) allow the Actions bot to create tags."
+            exit 1
+          fi
 
       - name: Create GitHub Release
         if: steps.guard.outputs.skip == 'false'
