@@ -26,18 +26,19 @@ You will receive:
 **Run the metrics extraction script on all articles at once:**
 
 ```bash
+STYLE_METRICS=$(mktemp)
 python3 plugins/academic-writer/scripts/extract-style-metrics.py \
   --input past-articles/ \
   --aggregate \
   --baseline plugins/academic-writer/references/hebrew-academic-baseline.json \
   --contrastive \
   --json \
-  --output /tmp/style-metrics.json
+  --output "$STYLE_METRICS"
 ```
 
 Read the results:
 ```bash
-cat /tmp/style-metrics.json
+cat "$STYLE_METRICS"
 ```
 
 This gives you **30+ numerical metrics** including:
