@@ -24,6 +24,10 @@ __pycache__/
 # Logs
 logs/
 
+# Local-only docs and HTML playgrounds (not part of plugin distribution)
+CLAUDE.md
+*.html
+
 # .claude - ignore runtime/session state; commit hooks, skills, and config
 .claude/.comm-style-counter
 .claude/.satisfaction-counter
