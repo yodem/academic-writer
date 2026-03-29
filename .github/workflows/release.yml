@@ -1,26 +1,26 @@
-name: Version Bump & Release
+name: Version Bump
 
 on:
   push:
     branches: [main]
 
-# Prevent concurrent runs from piling up
 concurrency:
   group: release
   cancel-in-progress: false
 
+permissions:
+  contents: write
+
 jobs:
-  bump-and-release:
+  bump:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Skip if this is a version-bump commit
         id: guard
@@ -33,12 +33,6 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Setup Node.js
-        if: steps.guard.outputs.skip == 'false'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
       - name: Configure git
         if: steps.guard.outputs.skip == 'false'
         run: |
@@ -47,43 +41,15 @@ jobs:
 
       - name: Bump patch version
         if: steps.guard.outputs.skip == 'false'
-        id: bump
         run: |
           CURRENT=$(jq -r '.version' package.json)
           IFS='.' read -ra PARTS <<< "$CURRENT"
           NEW="${PARTS[0]}.${PARTS[1]}.$((${PARTS[2]} + 1))"
-          echo "old=$CURRENT" >> "$GITHUB_OUTPUT"
-          echo "new=$NEW"     >> "$GITHUB_OUTPUT"
 
           jq --arg v "$NEW" '.version = $v' package.json > _tmp.json && mv _tmp.json package.json
           jq --arg v "$NEW" '.version = $v' manifests/academic-writer.json > _tmp.json && mv _tmp.json manifests/academic-writer.json
-          # marketplace.json has version at top level AND inside plugins[]
           jq --arg v "$NEW" '.version = $v | .plugins[0].version = $v' .claude-plugin/marketplace.json > _tmp.json && mv _tmp.json .claude-plugin/marketplace.json
-          echo "Bumped $CURRENT → $NEW"
 
-      - name: Install hook dependencies
-        if: steps.guard.outputs.skip == 'false'
-        run: cd src/hooks && npm install --silent
-
-      - name: Build plugin
-        if: steps.guard.outputs.skip == 'false'
-        run: npm run build
-
-      - name: Commit, tag, and push
-        if: steps.guard.outputs.skip == 'false'
-        env:
-          NEW_VERSION: ${{ steps.bump.outputs.new }}
-        run: |
-          git add package.json manifests/academic-writer.json .claude-plugin/marketplace.json plugins/
-          git commit -m "chore: bump version to v${NEW_VERSION} [skip ci]"
-          git tag "v${NEW_VERSION}"
+          git add package.json manifests/academic-writer.json .claude-plugin/marketplace.json
+          git commit -m "chore: bump version to v${NEW}"
           git push origin main
-          git push origin "v${NEW_VERSION}"
-
-      - name: Create GitHub Release
-        if: steps.guard.outputs.skip == 'false'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: "v${{ steps.bump.outputs.new }}"
-          name: "v${{ steps.bump.outputs.new }}"
-          generate_release_notes: true

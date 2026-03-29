@@ -332,11 +332,32 @@ AskUserQuestion(questions=[{
 ls past-articles/
 ```
 
-For each file, extract text:
+**Step 1: Computational extraction** — Run the metrics extraction script to get hard numbers:
+
+```bash
+python3 plugins/academic-writer/scripts/extract-style-metrics.py \
+  --input past-articles/ \
+  --aggregate \
+  --baseline plugins/academic-writer/references/hebrew-academic-baseline.json \
+  --contrastive \
+  --json \
+  --output /tmp/style-metrics.json
+```
+
+Read the results:
+```bash
+cat /tmp/style-metrics.json
+```
+
+This gives you 30+ numerical metrics (sentence length, passive voice, transitions, etc.) and contrastive scores showing what's distinctive about this researcher vs. baseline academic Hebrew.
+
+**Step 2: Text extraction for qualitative analysis** — For each file, extract text:
 - PDF: `python3 -c "import sys; import pdfplumber; [print(p.extract_text()) for p in pdfplumber.open(sys.argv[1]).pages]" past-articles/FILENAME 2>/dev/null || strings past-articles/FILENAME | head -500`
 - DOCX: `python3 -c "import docx; d=docx.Document('past-articles/FILENAME'); [print(p.text) for p in d.paragraphs]" 2>/dev/null`
 
-Analyze across all 25 dimensions (A–H + Article Structure I below). Show the fingerprint summary and confirm before saving:
+**Step 3: Qualitative analysis** — Read the text and computational metrics. Analyze across the qualitative dimensions (C–I below) that the script cannot compute: paragraph formula, tone, rhetorical patterns, templates, representative excerpts.
+
+Show the combined fingerprint summary (computational + qualitative) and confirm before saving:
 
 ```python
 AskUserQuestion(questions=[{

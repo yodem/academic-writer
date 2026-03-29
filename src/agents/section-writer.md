@@ -178,28 +178,68 @@ echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_style_com
 
 **Re-read the full `styleFingerprint` from the profile before every check.** This is the researcher's voice — never skip this step.
 
-Score the paragraph against each fingerprint dimension:
+The fingerprint now contains two layers:
+1. **Computational metrics** (`computationalMetrics`) — hard numbers from the extraction script
+2. **Qualitative analysis** (`qualitativeAnalysis`) — LLM-interpreted patterns and templates
 
-1. **Sentence length** — Compare average sentence length in this paragraph vs. `sentenceLevel.averageLength`. If off by >30%, flag and adjust.
-2. **Sentence structure** — Check that the sentence variety ratio roughly matches `sentenceLevel.structureVariety`. Too many simple sentences? Too many complex?
-3. **Sentence openers** — Verify openers match `sentenceLevel.commonOpeners`. Does this paragraph start sentences the way the researcher does?
-4. **Passive voice** — Does usage match `sentenceLevel.passiveVoice`? If the researcher rarely uses passive and the paragraph is full of passive constructions, fix.
-5. **Vocabulary & register** — Does complexity match `vocabularyAndRegister.complexity`? Is the register consistent with `vocabularyAndRegister.registerLevel`? Check first-person usage.
-6. **Paragraph structure** — Does the paragraph follow `paragraphStructure.pattern`? Is the argument progression matching `paragraphStructure.argumentProgression`?
-7. **Evidence handling** — Does evidence introduction match `paragraphStructure.evidenceIntroduction`? Does the analysis after quotes match `paragraphStructure.evidenceAnalysis`?
-8. **Tone** — Does the tone match `toneAndVoice.descriptors`? Is the authorial stance consistent with `toneAndVoice.authorStance`? Are hedges/assertions used appropriately?
-9. **Transitions** — Are transition phrases drawn from `transitions.preferred`? Are they used in the right category (addition/contrast/causation/etc.)?
-10. **Citation integration** — Does citation placement match `citations.integrationStyle`? Does quote length match `citations.quoteLengthPreference`?
+Use BOTH layers for compliance checking.
 
-**Scoring:** Rate compliance 1–5 per dimension. If any dimension scores ≤2, rewrite that aspect of the paragraph to match the fingerprint.
+##### Numerical Compliance (Computational Metrics)
+
+For the drafted paragraph, **count** the following and compare against the fingerprint's `computationalMetrics`:
+
+1. **Sentence length** — Count words per sentence in this paragraph. Compare the mean against `computationalMetrics.sentenceLevel.length.mean`. Tolerance: ±1 stdev (`computationalMetrics.sentenceLevel.length.stdev`). If outside tolerance, restructure sentences.
+
+2. **Sentence length variation** — Check that sentence lengths vary. Compare the distribution of lengths against `computationalMetrics.sentenceLevel.distribution`. If all sentences are the same length (±3 words), flag as AI-like and add variety.
+
+3. **Passive voice** — Count passive constructions (nif'al/pu'al/huf'al patterns). Compare frequency against `computationalMetrics.sentenceLevel.passiveVoiceFrequency`. If the researcher uses 19% passive and the paragraph has 50%, rewrite active.
+
+4. **First-person usage** — Count first-person markers (אני, לדעתי, אסביר, etc.). Compare against `computationalMetrics.sentenceLevel.firstPersonFrequency`. If the researcher uses 11% first-person and the paragraph has 0%, add a personal assertion. If it has 40%, reduce.
+
+5. **Transitions** — Count transition phrases per category. Compare total against `computationalMetrics.transitions.frequencyPerParagraph`. Check that phrases come from the researcher's actual vocabulary (`computationalMetrics.transitions.byCategory`). **Do not use transitions the researcher doesn't use.**
+
+6. **Paragraph length** — Count total words. Compare against `computationalMetrics.paragraphStructure.length.mean`. Tolerance: ±1 stdev.
+
+##### Qualitative Compliance (LLM Analysis)
+
+7. **Paragraph formula** — Does the paragraph follow `qualitativeAnalysis.paragraphFormula`? (e.g., "claim → textual quotation with source → analytical interpretation → thesis connection")
+
+8. **Evidence handling** — Does evidence introduction match `qualitativeAnalysis.evidenceHandling`? (e.g., "direct quotation → interpretation via כלומר → connection to thesis")
+
+9. **Tone & stance** — Does the tone match `qualitativeAnalysis.toneDescriptors`? Is the authorial stance consistent with `qualitativeAnalysis.authorStance`? Use hedging/asserting phrases from `qualitativeAnalysis.hedgingPhrases` and `qualitativeAnalysis.assertingPhrases`.
+
+10. **Templates** — Does the paragraph's rhetorical structure match one of the `templates`? When writing claims, follow `templates.assertiveClaim`. When arguing against a scholar, follow `templates.dialecticalArgument`. When analyzing a text, follow `templates.textualAnalysis`.
+
+##### Scoring
+
+**Numerical dimensions (1-6):** Each scores PASS (within tolerance) or FAIL (outside). Compute:
+```
+numerical_compliance = (# PASS dimensions) / 6
+```
+
+**Qualitative dimensions (7-10):** Rate each 1-5. Compute:
+```
+qualitative_score = sum(dimensions) / 20
+```
+
+**Overall compliance:**
+```
+compliance = (numerical_compliance * 0.5) + (qualitative_score * 0.5)
+```
+
+**Threshold: compliance ≥ 0.70 to pass.** If below 0.70, rewrite the failing dimensions.
 
 **Always refer to the `representativeExcerpts`** as concrete style models. When rewriting, the excerpts are your target — the paragraph should read like those excerpts in voice and construction.
+
+##### Contrastive Awareness
+
+Check the `contrastive` section of the fingerprint. Any dimension marked `distinctively_high` or `distinctively_low` is what makes this researcher's writing UNIQUE. **These are the most important dimensions to get right.** If the researcher is "distinctively high" on transition frequency, the paragraph MUST have transitions. If "distinctively low" on passive voice, avoid passive constructions aggressively.
 
 If changes are made, log what was adjusted:
 
 Log completion:
 ```bash
-echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_style_compliance","status":"pass|adjusted","overallScore":N,"dimensionsAdjusted":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_style_compliance","status":"pass|adjusted","numericalCompliance":N,"qualitativeScore":N,"overallCompliance":N,"dimensionsAdjusted":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
 ```
 
 ---
@@ -316,13 +356,48 @@ Log start:
 echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_anti_ai"}}' | cognetivy event append --run RUN_ID
 ```
 
-**Detect and fix AI-generated writing patterns.** Load the Hebrew AI pattern reference:
+**Detect and fix AI-generated writing patterns.**
+
+##### Tier 1: Typography Gating (Auto-fix)
+
+**FIRST:** Run the typography detector to catch em-dashes, straight quotes, and directional mark artifacts:
+
+```bash
+# Run the typography detection and fix script
+TYPO_REPORT=$(mktemp)
+echo "$PARAGRAPH_TEXT" | python3 plugins/academic-writer/scripts/detect-ai-typography.py \
+  --fix-and-output \
+  --json > "$TYPO_REPORT"
+
+# Extract fixed text and check if changes were made
+FIXED_TEXT=$(python3 -c "import json,sys; d=json.load(open('$TYPO_REPORT')); print(d.get('fixed_text', ''))")
+
+# If changes were made, update the paragraph and log
+if [ -n "$FIXED_TEXT" ] && [ "$FIXED_TEXT" != "$PARAGRAPH_TEXT" ]; then
+  PARAGRAPH_TEXT="$FIXED_TEXT"
+  echo '{"type":"step_detail","data":{"step":"anti_ai_typo_tier","fixes":'$(python3 -c "import json; d=json.load(open('$TYPO_REPORT')); print(json.dumps(d.get('fixes_applied', [])))"),'}}' \
+    | cognetivy event append --run RUN_ID
+fi
+rm -f "$TYPO_REPORT"
+```
+
+**Checks in Tier 1 (auto-fixed):**
+- ✅ Em-dashes (`—`) → replaced with ` - `
+- ✅ Straight quotes (`"`) → replaced with gereshayim (`״`)
+- ✅ Unnecessary directional marks → removed
+- ✅ Orphan punctuation at paragraph start → flagged for Tier 2
+
+**If any typography issues were found, log them and re-run Tier 1 on the fixed text to verify all issues are resolved.**
+
+##### Tier 2: Content Scoring
+
+Load the Hebrew AI pattern reference:
 
 ```bash
 cat plugins/academic-writer/skills/write/references/anti-ai-patterns-hebrew.md
 ```
 
-Score the paragraph on 5 dimensions (each 1–10):
+Score the **cleaned paragraph** on 5 dimensions (each 1–10):
 
 1. **Directness** (ישירות) — Does the text state things directly, or use filler openers like `חשוב לציין כי`, `אין ספק כי`, `ראוי להדגיש כי`? Remove all throat-clearing phrases.
 2. **Rhythm** (קצב) — Is sentence length varied? Flag if 3+ consecutive sentences have similar length. Mix short (8-10 words) with long (30+).
@@ -343,7 +418,7 @@ Score the paragraph on 5 dimensions (each 1–10):
 
 Log completion:
 ```bash
-echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_anti_ai","status":"pass|fixed","score":N,"directness":N,"rhythm":N,"trust":N,"authenticity":N,"density":N,"patternsFixed":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
+echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_anti_ai","status":"pass|fixed","tier1_typography_fixes":N,"tier2_score":N,"directness":N,"rhythm":N,"trust":N,"authenticity":N,"density":N,"patternsFixed":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
 ```
 
 ---
