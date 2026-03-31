@@ -1,30 +1,6 @@
 {
   "description": "Academic Writer hooks -- profile checks, fingerprint, session dashboard, and session logging (TypeScript/ESM)",
   "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs lifecycle/check-profile",
-            "timeout": 10,
-            "statusMessage": "Checking researcher profile..."
-          },
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs lifecycle/load-fingerprint",
-            "timeout": 10,
-            "statusMessage": "Loading style fingerprint..."
-          },
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs lifecycle/session-dashboard",
-            "timeout": 10,
-            "statusMessage": "Loading session dashboard..."
-          }
-        ]
-      }
-    ],
     "SessionEnd": [
       {
         "hooks": [
