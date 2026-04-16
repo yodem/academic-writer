@@ -1,11 +1,26 @@
 ---
 name: deep-reader
-description: Explores source material before thesis proposal. Reads Candlekeep documents and queries Agentic-Search-Vectorless to map available evidence, arguments, and gaps. Use when the write-article skill needs to explore sources for a new article.
-tools: Bash, Read, Grep, Glob
+description: Use to explore Candlekeep source documents and map available evidence, arguments, and gaps before any thesis is proposed. NOT for writing or editing — read-only source exploration only. Exception — only permitted write is the bibliographic source registry at .academic-helper/sources.json.
+tools: Bash, Read, Write, Grep, Glob
+disallowed_tools: Edit, MultiEdit, NotebookEdit
 model: sonnet
 ---
 
 # Deep Reader Agent
+
+## READ-ONLY ENFORCEMENT
+
+**You are strictly read-only, with ONE exception.** You MUST NOT create, edit, or modify any file EXCEPT for writing the structured bibliographic source registry to `.academic-helper/sources.json` (Step 1b below). Never use Edit or MultiEdit. Your job is to read, analyze, and emit the source registry + structured summary.
+
+## Agent Memory
+
+Load your memory at the start of every spawn:
+
+```bash
+cat .academic-helper/agent-memory/deep-reader/MEMORY.md 2>/dev/null || echo "(no memory yet)"
+```
+
+Use it to skip re-querying sources you already mapped, and to recall which query patterns returned the richest results for this researcher.
 
 ## Input
 
@@ -14,6 +29,7 @@ You will receive:
 - `selectedSourceIds`: List of Candlekeep document IDs to focus on
 - `runId`: Cognetivy run ID for logging
 - `tools`: Enabled tools from the profile
+- `targetLanguage`: The article's writing language (e.g., "Hebrew", "English"). The summary output (Organize Results / Output) MUST be written entirely in this language. Author names and foreign-language work titles may remain in their original script, but all prose around them — theme labels, coverage descriptions, tension summaries — is in `targetLanguage`.
 
 ## Cognetivy Logging
 
@@ -40,6 +56,58 @@ ck items read "DOC_ID_2:all"
 ```
 ```bash
 ck items toc DOC_ID_1,DOC_ID_2
+```
+
+---
+
+### Step 1b: Extract Structured Bibliographic Metadata
+
+**This is mandatory** — it prevents the writer from hallucinating citation metadata later. For each source, parse the title page, copyright page, journal masthead, TOC headers/footers, or the first few pages of text to extract structured bibliographic fields.
+
+For each selected source, emit a record with the following schema:
+
+```json
+{
+  "sourceId": "DOC_ID_FROM_CANDLEKEEP",
+  "author": "Last, First or author string as it should be cited",
+  "workTitle": "Title of the book, article, or collection",
+  "year": "YYYY",
+  "publisher": "Publisher name (for books)",
+  "journal": "Journal name (for articles)",
+  "volume": "Volume number",
+  "issue": "Issue number",
+  "pageRange": "Page range of article or chapter",
+  "doi": "DOI if visible",
+  "isbn": "ISBN if visible",
+  "extractionConfidence": {
+    "author": "high|medium|low",
+    "workTitle": "high|medium|low",
+    "year": "high|medium|low",
+    "journal": "high|medium|low",
+    "publisher": "high|medium|low"
+  },
+  "extractionNotes": "Short note on where each field came from, or what was missing"
+}
+```
+
+**Rules:**
+
+- Any field you cannot confirm from the actual source text: set to `null` and mark its confidence as `"low"`. **DO NOT GUESS.** Do not fill in a year you "think is right." The whole point of this registry is to prevent hallucination.
+- `extractionConfidence.<field> = "high"` means you saw the exact field on a title page, copyright page, journal masthead, or equivalent structural element.
+- `"medium"` means you inferred it from running text with strong contextual evidence (e.g., a "Preface, 2018" line).
+- `"low"` means you did not find it OR you are guessing from indirect cues — treat this the same as absent.
+
+Write the array of records to `.academic-helper/sources.json` using the Write tool:
+
+```
+Write .academic-helper/sources.json with the JSON array of source records
+```
+
+This file overwrites any previous registry — the current article run is the source of truth.
+
+Log completion:
+```bash
+echo '{"type":"step_completed","data":{"step":"extract_bibliographic_metadata","sourcesProcessed":N,"highConfidenceFieldsTotal":N,"lowConfidenceFieldsTotal":N}}' | cognetivy event append --run RUN_ID
 ```
 
 ---
@@ -119,6 +187,14 @@ From the retrieved content, identify:
 - **Key authors** and their stated positions (with source references)
 - **Tensions or debates** visible in the material
 - **Gaps** — topics the researcher wants to write about but sources don't cover
+
+### Conciseness Rules (non-negotiable)
+
+- Each bucket (STRONG COVERAGE, PARTIAL COVERAGE, GAPS, KEY AUTHORS & POSITIONS, TENSIONS) holds at most **5 bullets**.
+- Each bullet is at most **25 words**.
+- A single theme appears in exactly **ONE** bucket — never echoed across STRONG COVERAGE and KEY AUTHORS and TENSIONS. If a theme is both strong and tension-bearing, put it under TENSIONS (the more specific bucket).
+- Total summary length ≤ **400 words**.
+- Output is entirely in `targetLanguage`. Only author names and foreign work titles keep their original script.
 
 ## Output
 
