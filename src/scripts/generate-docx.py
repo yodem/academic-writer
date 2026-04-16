@@ -30,13 +30,20 @@ Input JSON schema:
 
 import argparse
 import json
+import os
 import re
+import sys
 
 from docx import Document
 from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
+from footnote_adder import FootnoteAdder  # noqa: E402
+
+TEMPLATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib", "footnote_template.docx")
 
 
 # --- Threshold for showing section titles ---
@@ -104,11 +111,22 @@ def set_rtl_run(run):
     rPr.append(rtl_elem)
 
 
+def _style_run(run, font_name, font_size, bold, italic, is_rtl):
+    run.font.name = font_name
+    run.font.size = Pt(font_size)
+    run.bold = bold
+    run.italic = italic
+    if is_rtl:
+        run._element.rPr.rFonts.set(qn("w:cs"), font_name)
+        set_rtl_run(run)
+
+
 def add_para(doc, text, font_name, font_size, is_rtl=True,
              bold=False, italic=False,
              align=WD_ALIGN_PARAGRAPH.JUSTIFY,
              space_before=0, space_after=6,
-             line_spacing=1.5):
+             line_spacing=1.5,
+             footnotes=None, footnote_adder=None):
     """
     Add a paragraph with proper RTL handling for Hebrew text.
     
@@ -140,27 +158,30 @@ def add_para(doc, text, font_name, font_size, is_rtl=True,
     para.paragraph_format.line_spacing = line_spacing
 
     if is_rtl:
-        # Enable RTL context on paragraph
         set_rtl_para(para)
-        
-        # Add a single run with the full text
-        # (no splitting into mixed-direction runs)
-        run = para.add_run(text)
-        run.font.name = font_name
-        run.font.size = Pt(font_size)
-        run.bold = bold
-        run.italic = italic
-        # Set complex script font
-        run._element.rPr.rFonts.set(qn("w:cs"), font_name)
-        # Enable RTL on run
-        set_rtl_run(run)
+
+    if footnotes and footnote_adder:
+        cursor = 0
+        for fn in footnotes:
+            marker = fn.get("after", "")
+            fn_text = validate_hebrew_text(fn.get("text", ""))
+            idx = text.find(marker, cursor) if marker else -1
+            if idx < 0:
+                continue
+            end = idx + len(marker)
+            segment = text[cursor:end]
+            if segment:
+                run = para.add_run(segment)
+                _style_run(run, font_name, font_size, bold, italic, is_rtl)
+            footnote_adder.add_footnote(para, "", fn_text)
+            cursor = end
+        tail = text[cursor:]
+        if tail:
+            run = para.add_run(tail)
+            _style_run(run, font_name, font_size, bold, italic, is_rtl)
     else:
-        # LTR text (English)
         run = para.add_run(text)
-        run.font.name = font_name
-        run.font.size = Pt(font_size)
-        run.bold = bold
-        run.italic = italic
+        _style_run(run, font_name, font_size, bold, italic, is_rtl)
 
     return para
 
@@ -202,7 +223,9 @@ def generate_docx(data: dict, output_path: str):
     thesis = data.get("thesis", None)
     sections = data.get("sections", [])
 
-    doc = Document()
+    doc = Document(TEMPLATE_PATH)
+    doc._body.clear_content()
+    footnote_adder = FootnoteAdder()
 
     # Set page margins
     for section in doc.sections:
@@ -269,13 +292,21 @@ def generate_docx(data: dict, output_path: str):
                      line_spacing=line_spacing)
 
         # Section paragraphs
-        for para_text in sec.get("paragraphs", []):
-            add_para(doc, para_text, font_name, body_size, is_rtl=is_rtl,
+        for para_item in sec.get("paragraphs", []):
+            if isinstance(para_item, dict):
+                p_text = para_item.get("text", "")
+                p_fns = para_item.get("footnotes", [])
+            else:
+                p_text = para_item
+                p_fns = []
+            add_para(doc, p_text, font_name, body_size, is_rtl=is_rtl,
                      align=WD_ALIGN_PARAGRAPH.JUSTIFY, space_after=6,
-                     line_spacing=line_spacing)
+                     line_spacing=line_spacing,
+                     footnotes=p_fns, footnote_adder=footnote_adder)
 
     add_page_numbers(doc)
     doc.save(output_path)
+    footnote_adder.finalize_footnotes(output_path)
     print(f"Saved: {output_path}")
     print(f"Words: {total_words}")
     print(f"Sections: {len(sections)}")

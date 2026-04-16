@@ -39,6 +39,11 @@ CLAUDE.md
 .claude/memory/open-problems.jsonl
 .claude/memory/sessions/
 .claude/memory/tool-preferences.json
+.claude/scheduled_tasks.lock
+
+# Agent memory — runtime state per agent spawn, not part of plugin distribution
+src/agents/memory/
+plugins/academic-writer/agents/memory/
 
 
 # cognetivy - ignore runtime data; commit workflows/*/versions/

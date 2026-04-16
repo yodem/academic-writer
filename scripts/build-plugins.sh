@@ -72,7 +72,7 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
   if [[ -d "$SRC_DIR/agents" ]]; then
     cp -R "$SRC_DIR/agents" "$PLUGIN_DIR/"
   fi
-  agent_count=$(find "$PLUGIN_DIR/agents" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+  agent_count=$(find "$PLUGIN_DIR/agents" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
 
   # Copy settings
   SETTINGS_FILE="$SRC_DIR/settings/${PLUGIN_NAME}.settings.json"
@@ -193,6 +193,6 @@ for plugin_dir in "$PLUGINS_DIR"/*; do
   plugin_name=$(basename "$plugin_dir")
   echo -e "  Plugin: ${GREEN}$plugin_name${NC}"
   echo -e "    Skills:   $(find "$plugin_dir/skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
-  echo -e "    Agents:   $(find "$plugin_dir/agents" -name '*.md' 2>/dev/null | wc -l | tr -d ' ')"
+  echo -e "    Agents:   $(find "$plugin_dir/agents" -maxdepth 1 -name '*.md' 2>/dev/null | wc -l | tr -d ' ')"
   echo -e "    Commands: $(find "$plugin_dir/commands" -name '*.md' 2>/dev/null | wc -l | tr -d ' ')"
 done

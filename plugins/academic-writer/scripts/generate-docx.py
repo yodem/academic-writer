@@ -3,7 +3,9 @@
 Academic Writer — DOCX Generator
 
 Generates a properly formatted .docx file from article JSON data.
-Handles RTL (Hebrew) text, citation parentheses, and conditional section titles.
+Handles RTL (Hebrew) text correctly, with proper punctuation and citation formatting.
+
+Uses the Hebrew Punctuation Rules reference to ensure typography is human-like, not AI-like.
 
 Usage:
     python3 generate-docx.py --input article.json --output path.docx
@@ -28,7 +30,9 @@ Input JSON schema:
 
 import argparse
 import json
+import os
 import re
+import sys
 
 from docx import Document
 from docx.shared import Pt, Inches
@@ -36,89 +40,117 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
+from footnote_adder import FootnoteAdder  # noqa: E402
+
+TEMPLATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib", "footnote_template.docx")
+
 
 # --- Threshold for showing section titles ---
 SECTION_TITLE_WORD_THRESHOLD = 1500
 
 
-def fix_rtl_punctuation(text: str) -> str:
-    """Fix RTL punctuation issues in Hebrew text.
-
-    1. Insert RLM before '(' and LRM after ')' in citation contexts
-    2. Fix punctuation at wrong position (start of word instead of end)
+def validate_hebrew_text(text: str) -> str:
     """
-    RLM = "\u200F"
-    LRM = "\u200E"
-
-    # Insert directional marks around all parentheses
-    text = re.sub(r"\(", lambda m: RLM + "(", text)
-    text = re.sub(r"\)", lambda m: ")" + LRM, text)
-
-    # Fix punctuation at start of word (common RTL rendering issue)
-    # Pattern: period or comma followed by a space then a word char at start
-    text = re.sub(r"([.,;:])(\s+)(\S)", r"\2\3\1", text)
-
+    Fix common Hebrew typographic errors that betray AI origin.
+    
+    Fixes:
+    - Em-dashes (—) → replaced with space-hyphen-space
+    - Straight quotes (") → replaced with gereshayim (״)
+    - Unnecessary directional marks (RLM/LRM) → removed
+    
+    Args:
+        text: Hebrew or mixed text string
+    
+    Returns:
+        Cleaned text with AI typography tells removed
+    """
+    if not text:
+        return text
+    
+    # 1. Replace em-dashes with space-hyphen-space
+    # Em-dashes are a signature AI pattern; humans don't use them in Hebrew
+    text = re.sub(r'[—\u2014]', ' - ', text)
+    
+    # 2. Replace straight quotes with gereshayim (Hebrew quotation marks)
+    # English straight quotes are wrong in Hebrew academic writing
+    text = re.sub(r'"([^"]{0,200})"', r'״\1״', text)
+    
+    # 3. Remove unnecessary directional marks that break rendering
+    # DOCX handles bidirectionality automatically; manual marks cause issues
+    
+    # RLM (U+200F) before punctuation/closing brackets is usually wrong
+    text = re.sub(r'\u200F+(?=[.,;:\)\]\"])', '', text)
+    
+    # LRM (U+200E) after opening parenthesis/bracket is usually wrong
+    text = re.sub(r'(?<=[(\[])\u200E+', '', text)
+    
+    # Multiple consecutive directional marks should be removed
+    text = re.sub(r'[\u200E\u200F]{2,}', '', text)
+    
+    # 4. Flag (but don't auto-fix) orphan punctuation at paragraph start
+    # This would require understanding sentence structure, so we just warn
+    if re.match(r'^\s*[.,;:]', text):
+        # Remove the orphan punctuation
+        text = re.sub(r'^\s*([.,;:])', '', text).strip()
+    
     return text
 
 
-def split_mixed_direction_runs(text: str):
-    """Split text into runs with explicit directionality.
-
-    Detects citation parentheses and creates separate segments
-    for RTL text and citation content.
-
-    Returns list of (text, is_citation) tuples.
-    """
-    # Match citation parenthetical patterns: (content with author, title, page)
-    citation_pattern = r"\([^)]+\)"
-    parts = []
-    last_end = 0
-
-    for match in re.finditer(citation_pattern, text):
-        # Text before citation
-        if match.start() > last_end:
-            parts.append((text[last_end:match.start()], False))
-        # Citation itself
-        parts.append((match.group(), True))
-        last_end = match.end()
-
-    # Remaining text after last citation
-    if last_end < len(text):
-        parts.append((text[last_end:], False))
-
-    if not parts:
-        parts = [(text, False)]
-
-    return parts
-
-
 def set_rtl_para(para):
-    """Enable RTL layout for a paragraph via w:bidi."""
+    """Enable RTL layout for a paragraph via w:bidi element."""
     pPr = para._p.get_or_add_pPr()
     bidi = OxmlElement("w:bidi")
     pPr.append(bidi)
 
 
 def set_rtl_run(run):
-    """Enable RTL on a specific run via w:rtl in rPr."""
+    """Enable RTL on a specific run via w:rtl in rPr element."""
     rPr = run._element.get_or_add_rPr()
     rtl_elem = OxmlElement("w:rtl")
     rPr.append(rtl_elem)
+
+
+def _style_run(run, font_name, font_size, bold, italic, is_rtl):
+    run.font.name = font_name
+    run.font.size = Pt(font_size)
+    run.bold = bold
+    run.italic = italic
+    if is_rtl:
+        run._element.rPr.rFonts.set(qn("w:cs"), font_name)
+        set_rtl_run(run)
 
 
 def add_para(doc, text, font_name, font_size, is_rtl=True,
              bold=False, italic=False,
              align=WD_ALIGN_PARAGRAPH.JUSTIFY,
              space_before=0, space_after=6,
-             line_spacing=1.5):
-    """Add a paragraph with proper RTL handling.
-
-    For RTL text:
-    - Sets w:bidi on paragraph
-    - Sets w:rtl on every run's rPr
-    - Splits mixed-direction content (citations vs prose) into separate runs
-    - Inserts Unicode directional marks around parentheses
+             line_spacing=1.5,
+             footnotes=None, footnote_adder=None):
     """
+    Add a paragraph with proper RTL handling for Hebrew text.
+    
+    Key principle: Write text naturally, let DOCX handle bidirectional rendering.
+    No manual insertion of directional marks.
+    
+    Args:
+        doc: python-docx Document
+        text: Paragraph text (Hebrew or mixed)
+        font_name: Font name (e.g., "David")
+        font_size: Font size in points
+        is_rtl: Whether text is right-to-left
+        bold, italic: Text formatting
+        align: Paragraph alignment
+        space_before, space_after: Spacing in points
+        line_spacing: Line spacing multiplier (e.g., 1.5)
+    
+    Returns:
+        The Paragraph object
+    """
+    # Validate and clean text (remove AI typography tells)
+    text = validate_hebrew_text(text)
+    
+    # Create paragraph
     para = doc.add_paragraph()
     para.alignment = align
     para.paragraph_format.space_before = Pt(space_before)
@@ -127,27 +159,29 @@ def add_para(doc, text, font_name, font_size, is_rtl=True,
 
     if is_rtl:
         set_rtl_para(para)
-        # Split into runs for mixed-direction content
-        segments = split_mixed_direction_runs(text)
-        for segment_text, is_citation in segments:
-            if is_citation:
-                # Fix RTL punctuation in citations
-                segment_text = fix_rtl_punctuation(segment_text)
-            run = para.add_run(segment_text)
-            run.font.name = font_name
-            run.font.size = Pt(font_size)
-            run.bold = bold
-            run.italic = italic
-            # Set complex script font
-            run._element.rPr.rFonts.set(qn("w:cs"), font_name)
-            # Set RTL on every run
-            set_rtl_run(run)
+
+    if footnotes and footnote_adder:
+        cursor = 0
+        for fn in footnotes:
+            marker = fn.get("after", "")
+            fn_text = validate_hebrew_text(fn.get("text", ""))
+            idx = text.find(marker, cursor) if marker else -1
+            if idx < 0:
+                continue
+            end = idx + len(marker)
+            segment = text[cursor:end]
+            if segment:
+                run = para.add_run(segment)
+                _style_run(run, font_name, font_size, bold, italic, is_rtl)
+            footnote_adder.add_footnote(para, "", fn_text)
+            cursor = end
+        tail = text[cursor:]
+        if tail:
+            run = para.add_run(tail)
+            _style_run(run, font_name, font_size, bold, italic, is_rtl)
     else:
         run = para.add_run(text)
-        run.font.name = font_name
-        run.font.size = Pt(font_size)
-        run.bold = bold
-        run.italic = italic
+        _style_run(run, font_name, font_size, bold, italic, is_rtl)
 
     return para
 
@@ -189,7 +223,9 @@ def generate_docx(data: dict, output_path: str):
     thesis = data.get("thesis", None)
     sections = data.get("sections", [])
 
-    doc = Document()
+    doc = Document(TEMPLATE_PATH)
+    doc._body.clear_content()
+    footnote_adder = FootnoteAdder()
 
     # Set page margins
     for section in doc.sections:
@@ -256,13 +292,21 @@ def generate_docx(data: dict, output_path: str):
                      line_spacing=line_spacing)
 
         # Section paragraphs
-        for para_text in sec.get("paragraphs", []):
-            add_para(doc, para_text, font_name, body_size, is_rtl=is_rtl,
+        for para_item in sec.get("paragraphs", []):
+            if isinstance(para_item, dict):
+                p_text = para_item.get("text", "")
+                p_fns = para_item.get("footnotes", [])
+            else:
+                p_text = para_item
+                p_fns = []
+            add_para(doc, p_text, font_name, body_size, is_rtl=is_rtl,
                      align=WD_ALIGN_PARAGRAPH.JUSTIFY, space_after=6,
-                     line_spacing=line_spacing)
+                     line_spacing=line_spacing,
+                     footnotes=p_fns, footnote_adder=footnote_adder)
 
     add_page_numbers(doc)
     doc.save(output_path)
+    footnote_adder.finalize_footnotes(output_path)
     print(f"Saved: {output_path}")
     print(f"Words: {total_words}")
     print(f"Sections: {len(sections)}")

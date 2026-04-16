@@ -174,11 +174,17 @@ If Cognetivy is enabled, log the spawn event:
 echo '{"type":"subagent_spawned","data":{"nodeId":"deep_read","agent":"deep-reader","details":"Exploring source material for article subject"}}' | cognetivy event append --run RUN_ID
 ```
 
-**Use the Agent tool to spawn the `deep-reader` subagent.** Pass as the prompt all of the following context: the article subject, selectedSourceIds, runId, and tools configuration.
+**Use the Agent tool to spawn the `deep-reader` subagent.** Pass as the prompt: the article subject, selectedSourceIds, runId, tools configuration, AND `targetLanguage` (so the deep-reader emits its structured summary in the right language).
 
-The deep-reader logs its own `deep_read` start/progress/completion events to Cognetivy.
+The deep-reader runs:
+- **Step 1**: Read source content from Candlekeep
+- **Step 1b**: Extract structured bibliographic metadata per source and write `.academic-helper/sources.json`. This registry is the ONLY trusted source for citation metadata in Step 7. Fields the deep-reader cannot confirm are marked `null` with `extractionConfidence: "low"` — never guessed.
+- **Step 2**: Ingest into vectorless (if enabled)
+- **Step 3**: Query each document for subject coverage and arguments
 
-Wait for the deep-reader to return retrieved passages before continuing to Step 4.
+The deep-reader logs its own `deep_read` start/progress/completion events to Cognetivy, including `extract_bibliographic_metadata`.
+
+Wait for the deep-reader to return retrieved passages before continuing to Step 4. Confirm `.academic-helper/sources.json` exists.
 
 After receiving the deep-reader result, mark node complete:
 ```bash
@@ -241,9 +247,14 @@ If Cognetivy is enabled, log the spawn event:
 echo '{"type":"subagent_spawned","data":{"nodeId":"outline","agent":"architect","details":"Generating article outline"}}' | cognetivy event append --run RUN_ID
 ```
 
-**Use the Agent tool to spawn the `architect` subagent again** with the approved thesis, deep read results, targetWordCount, and runId.
+**Use the Agent tool to spawn the `architect` subagent again** with the approved thesis, deep read results, targetWordCount, targetLanguage, and runId.
 
-The architect logs its own `outline` events to Cognetivy.
+The architect runs in Mode B:
+- Produces the outline (titles, roles, suggested sources, word counts, paragraph counts) in `targetLanguage`
+- Writes `.academic-helper/evidence-ownership.json` — for every evidence anchor (source, passage, dataset) appearing in more than one section, assigns exactly ONE section as the owner of the full description. Other sections must back-reference.
+- Enforces a conciseness budget: body-section descriptions ≤ 2 sentences, intro/conclusion ≤ 3 sentences, no 5+ word phrase repeated across descriptions.
+
+The architect logs its own `outline` and `evidence_ownership_map` events to Cognetivy. Confirm `.academic-helper/evidence-ownership.json` exists before proceeding.
 
 After receiving the architect result, mark node complete:
 ```bash
@@ -343,20 +354,24 @@ For each section in the approved outline, the Agent tool prompt must include:
 - `outlineOverview`: full outline titles and roles
 - `userDraftParagraphs`: (if `userDraftAsOutline = true`) the user's draft text for this section — agents expand this rather than writing from scratch
 
-**NOTE:** Do NOT pass `styleFingerprint` or `linkingWords` in the prompt — section-writer agents load these directly from disk to reduce context size. The agent reads `.academic-helper/profile.md` for the fingerprint and `plugins/academic-writer/words.md` for linking words.
+**NOTE:** Do NOT pass `styleFingerprint`, `linkingWords`, `sourcesRegistry`, or `evidenceOwnership` in the prompt — section-writer agents load all four directly from disk to reduce context size:
+- Fingerprint from `.academic-helper/profile.md`
+- Linking words from `plugins/academic-writer/words.md`
+- Source registry from `.academic-helper/sources.json` (deep-reader output)
+- Evidence ownership map from `.academic-helper/evidence-ownership.json` (architect output)
 
 Each section-writer handles a **per-paragraph skill pipeline** internally:
 
 | # | Skill | What it does | Cognetivy node |
 |---|-------|-------------|---------------|
-| 1 | **Draft** | Query RAG (mandatory) + write paragraph using ONLY retrieved context | `section_N_p_M_draft` |
+| 1 | **Draft** | Query RAG (mandatory) + write paragraph using ONLY retrieved context. Enforce paragraph word ceiling (fingerprint mean+stdev, capped at 220 words). Back-reference any evidence not owned by this section. Metadata for citations MUST come from `sources.json` — never infer; mark `[?]` if absent or low-confidence. | `section_N_p_M_draft` |
 | 2 | **Style Compliance** | Re-read fingerprint + `representativeExcerpts`, score 10 dimensions, fix deviations | `section_N_p_M_style_compliance` |
 | 3 | **Hebrew Grammar** | Check grammar, spelling, academic register | `section_N_p_M_hebrew_grammar` |
 | 4 | **Academic Language** | Check academic vocabulary level and linking words usage | `section_N_p_M_academic_language` |
 | 5 | **Language Purity** | Detect and fix ALL embedded foreign-language terms in running text | `section_N_p_M_language_purity` |
-| 6 | **Anti-AI Check** | Detect and fix AI writing patterns (filler openers, formulaic structures, inflated language). Score 5 dimensions, threshold 35/50 | `section_N_p_M_anti_ai` |
-| 7 | **Repetition Check** | Check words, phrases, arguments vs. prior text | `section_N_p_M_repetition_check` |
-| 8 | **Citation Audit** | Auditor agent verifies every citation against RAG (hard gate) | `section_N_p_M_citation_audit` |
+| 6 | **Anti-AI Check** | Load `anti-ai-patterns-${targetLanguage_lower}.md` and detect/fix AI writing patterns. Score 5 dimensions, threshold 35/50. | `section_N_p_M_anti_ai` |
+| 7 | **Repetition Check** | Check words, phrases, arguments vs. prior text + formulaic-pattern cap sweep against the language blacklist + evidence re-description guard via ownership map | `section_N_p_M_repetition_check` |
+| 8 | **Citation Audit** | Auditor agent verifies every citation against RAG + page + Check D metadata integrity (hard gate for high-confidence mismatches; `[NEEDS REVIEW: <field>]` tag for low-confidence) | `section_N_p_M_citation_audit` |
 
 After receiving each section-writer result, mark node complete:
 ```bash
@@ -366,8 +381,13 @@ cognetivy node complete --run RUN_ID --node section_writing --status completed
 The auditor is a HARD GATE:
 - Queries RAG for each factual claim (if enabled)
 - Verifies author + work + page via `ck items read` (if enabled)
+- Runs Check D: compares every citation field (year, journal, publisher, title spelling) against `.academic-helper/sources.json`
+  - High-confidence registry field mismatches citation → REJECT (`metadata_mismatch: <field>`)
+  - Low-confidence / absent registry field → APPROVE with `[NEEDS REVIEW: <field>]` tag inline
 - If unverified → REJECT → section-writer rewrites and re-runs all skills (max 3 attempts)
 - If still failing after 3 → flag for researcher review
+
+The `[NEEDS REVIEW: <field>]` marker persists into the final article output so the researcher can see exactly which fields need manual verification. It appears inline in citations, e.g., `(Cohen, Title, 2019 [NEEDS REVIEW: year], p. 45)`.
 
 
 ### Step 8: Synthesis + Full-Article Repetition Check
@@ -383,6 +403,7 @@ echo '{"type":"subagent_spawned","data":{"nodeId":"synthesize","agent":"synthesi
 - The complete styleFingerprint object
 - The articleStructure conventions
 - The linkingWords reference
+- The `targetLanguage` (so the synthesizer loads the correct anti-AI patterns reference)
 - The runId
 - The tools configuration
 
@@ -525,7 +546,14 @@ Write the article data to a JSON file, then run the standalone DOCX generator sc
   "sections": [
     {
       "title": "Section title",
-      "paragraphs": ["Paragraph 1 text with citations...", "Paragraph 2..."]
+      "paragraphs": [
+        {
+          "text": "Paragraph body with NO inline parenthetical citations.",
+          "footnotes": [
+            { "after": "substring in text to anchor the superscript marker", "text": "Author, Title (Pub, 2024), p. 42." }
+          ]
+        }
+      ]
     }
   ],
   "format": {
@@ -544,6 +572,8 @@ Write the article data to a JSON file, then run the standalone DOCX generator sc
 **Rules:**
 - Use the `Write` tool to write this file — never use Python heredoc or `python3 -c` to construct JSON (Hebrew text causes UTF-8 encoding errors in heredocs)
 - Populate `sections` from the synthesizer output — each section's title and paragraph list
+- Paragraphs use the structured form `{text, footnotes[]}`. Strip the parenthetical citations out of `text` and move each citation into `footnotes[]` with `after` set to a unique substring in `text` where the marker should appear. The DOCX generator renders them as native Word footnotes (superscript in body, text at page bottom). Plain strings are still accepted for backward compatibility (no footnotes)
+- Dependency: requires `lxml` (`pip install lxml`) in addition to `python-docx`
 - Read `outputFormatPreferences` from the profile and fill in the `format` object
 - Set `totalWords` to the actual word count (controls section title visibility — hidden when under 1500 words)
 - Set `isRtl` based on `targetLanguage` (true for Hebrew, false for English)
