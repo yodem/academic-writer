@@ -1,6 +1,6 @@
 ---
 name: setup
-description: "First-time setup for Academic Writer — creates researcher profile, detects integrations, analyzes writing style from past articles"
+description: "First-time setup for Academic Writer — creates researcher profile, detects integrations, analyzes writing style from past articles. Use for a quick onboarding (faster than init); does not include source indexing."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
 ---

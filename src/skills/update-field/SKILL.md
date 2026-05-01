@@ -1,6 +1,6 @@
 ---
 name: update-field
-description: "Update your field of study in the Academic Writer profile."
+description: "Update your field of study in the Academic Writer profile. Use when changing your research field without redoing full setup."
 user-invocable: true
 allowedTools: [Read, Write, Edit, AskUserQuestion]
 ---

@@ -1,6 +1,6 @@
 ---
 name: learn
-description: "Style learning — scans past-articles/ for new files, extracts style patterns, and merges them into the existing style fingerprint. Shows a diff report."
+description: "Style learning — scans past-articles/ for new files, extracts style patterns, and merges them into the existing style fingerprint. Shows a diff report. Use after adding new past articles to past-articles/ — rebuilds the style fingerprint."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
 agents: [style-miner]

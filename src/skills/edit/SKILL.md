@@ -1,6 +1,6 @@
 ---
 name: edit
-description: "Edit a previously written article — revise sections, fix citations, adjust tone, restructure arguments, or rewrite passages."
+description: "Edit a previously written article — revise sections, fix citations, adjust tone, restructure arguments, or rewrite passages. Use when revising an article that's already drafted — multiple sections, restructuring, or major changes."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 agents: [section-writer, auditor, synthesizer]

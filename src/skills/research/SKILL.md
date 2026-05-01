@@ -1,6 +1,6 @@
 ---
 name: research
-description: "Research a subject or answer questions using your indexed sources — Candlekeep and RAG. Spawns parallel subagents for speed."
+description: "Research a subject or answer questions using your indexed sources — Candlekeep and RAG. Spawns parallel subagents for speed. Use when investigating a topic or fact-checking before writing."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 agents: [research-rag, research-candlekeep]

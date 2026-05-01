@@ -1,6 +1,6 @@
 ---
 name: update-tools
-description: "Add, remove, or reconfigure integrations (Candlekeep, Vectorless, NotebookLM)"
+description: "Add, remove, or reconfigure integrations (Candlekeep, Vectorless, NotebookLM). Use when adding/removing integrations after initial setup."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion]
 ---

@@ -1,6 +1,6 @@
 ---
 name: present
-description: "Post-article deliverables — generate conference presentation outlines, journal submission summaries, and book chapter proposals from a completed article."
+description: "Post-article deliverables — generate conference presentation outlines, journal submission summaries, and book chapter proposals from a completed article. Use after publishing an article when you need conference/journal/proposal deliverables."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
 ---

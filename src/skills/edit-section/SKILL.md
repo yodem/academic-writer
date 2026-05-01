@@ -1,6 +1,6 @@
 ---
 name: edit-section
-description: "Quick edit of a single section — rewrite, expand, cut, fix citations, or adjust style. Faster than full article edit."
+description: "Quick edit of a single section — rewrite, expand, cut, fix citations, or adjust style. Faster than full article edit. Use when changing one specific section only — faster than full edit."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 agents: [section-writer, auditor]

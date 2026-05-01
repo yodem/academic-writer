@@ -1,6 +1,6 @@
 ---
 name: review
-description: "Self-review quality gate — scores a completed article on 6 dimensions (structure, argument logic, citation completeness, source coverage, writing quality, academic conventions) and presents a scorecard before final output."
+description: "Self-review quality gate — scores a completed article on 6 dimensions (structure, argument logic, citation completeness, source coverage, writing quality, academic conventions) and presents a scorecard before final output. Use after writing to score the article on quality dimensions before publication."
 user-invocable: true
 allowedTools: [Bash, Read, Glob, Grep, AskUserQuestion]
 ---
