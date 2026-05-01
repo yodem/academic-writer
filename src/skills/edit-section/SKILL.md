@@ -56,7 +56,7 @@ Common edit types:
 
 **Use the Agent tool to spawn a `section-writer` subagent** with the full pipeline (draft → style compliance → Hebrew grammar → repetition check → citation audit).
 
-Pass as prompt: the section (title, current text, edit instructions, suggested sources), sectionIndex, thesis, styleFingerprint, citationStyle, runId, tools, priorSectionTexts (text of adjacent sections for repetition awareness).
+Pass as prompt: the section (title, current text, edit instructions, suggested sources), sectionIndex, thesis, styleFingerprint, citationStyle, tools, priorSectionTexts (text of adjacent sections for repetition awareness).
 
 If the researcher wants to expand with new evidence, **first use the Agent tool to spawn research subagents in parallel** — call the Agent tool multiple times in a single response:
 - One subagent for RAG queries on the expansion topic
@@ -66,7 +66,7 @@ Then feed results to the section-writer.
 
 ### For citation fixes:
 
-**Use the Agent tool to spawn an `auditor` subagent** for each paragraph. Pass as prompt: the paragraph text, runId, sectionIndex, paragraphIndex, tools.
+**Use the Agent tool to spawn an `auditor` subagent** for each paragraph. Pass as prompt: the paragraph text, sectionIndex, paragraphIndex, tools.
 
 Apply fixes, re-audit until all pass.
 

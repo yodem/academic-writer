@@ -151,7 +151,7 @@ Pass the NotebookLM summary as additional context to the deep-reader agent promp
 ### Step 3: Deep Read
 
 
-**Use the Agent tool to spawn the `deep-reader` subagent.** Pass as the prompt: the article subject, selectedSourceIds, runId, tools configuration, AND `targetLanguage` (so the deep-reader emits its structured summary in the right language).
+**Use the Agent tool to spawn the `deep-reader` subagent.** Pass as the prompt: the article subject, selectedSourceIds, tools configuration, AND `targetLanguage` (so the deep-reader emits its structured summary in the right language).
 
 The deep-reader runs:
 - **Step 1**: Read source content from Candlekeep
@@ -169,7 +169,7 @@ After receiving the deep-reader result, mark node complete:
 ### Step 4: Thesis Proposal
 
 
-**Use the Agent tool to spawn the `architect` subagent.** Pass the subject, deep read results, runId, and targetLanguage as the prompt.
+**Use the Agent tool to spawn the `architect` subagent.** Pass the subject, deep read results, and targetLanguage as the prompt.
 
 
 After receiving the architect result, mark node complete:
@@ -204,7 +204,7 @@ After the researcher picks a thesis, log thesis approval:
 **If no draft (normal flow):**
 
 
-**Use the Agent tool to spawn the `architect` subagent again** with the approved thesis, deep read results, targetWordCount, targetLanguage, and runId.
+**Use the Agent tool to spawn the `architect` subagent again** with the approved thesis, deep read results, targetWordCount, and targetLanguage.
 
 The architect runs in Mode B:
 - Produces the outline (titles, roles, suggested sources, word counts, paragraph counts) in `targetLanguage`
@@ -335,7 +335,6 @@ Once all sections are approved, log the spawn event:
 - The articleStructure conventions
 - The linkingWords reference
 - The `targetLanguage` (so the synthesizer loads the correct anti-AI patterns reference)
-- The runId
 - The tools configuration
 
 

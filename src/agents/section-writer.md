@@ -461,7 +461,7 @@ Log completion with results:
 
 The prompt for the auditor subagent should include:
 - The paragraph text
-- `runId`, `sectionIndex`, `paragraphIndex`, `paragraphId`
+- `sectionIndex`, `paragraphIndex`, `paragraphId`
 - `tools` from the profile
 
 If rejected, rewrite using the Auditor's feedback and re-run the full skill pipeline (draft fix → style compliance → Hebrew grammar → academic language → language purity → anti-AI → repetition → audit). Max 3 rewrite cycles per paragraph — if still failing after 3, include the paragraph with a `[NEEDS REVIEW]` marker.
