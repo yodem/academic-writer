@@ -151,21 +151,6 @@ Once all subagents return, **merge results** by deduplicating and cross-referenc
 
 ---
 
-## Cognetivy Logging (if enabled)
-
-Log the research session:
-```bash
-echo '{"subject": "RESEARCH_TOPIC", "type": "research"}' > /tmp/aw-research-input.json
-cognetivy run start --workflow wf_academic_writer --input /tmp/aw-research-input.json
-```
-
-Log query results:
-```bash
-echo '{"type":"step_completed","nodeId":"research","ragQueries":N,"candlekeepReads":N,"totalPassages":N,"toolsUsed":["rag","candlekeep"]}' | cognetivy event append --run RUN_ID
-```
-
----
-
 ## Follow-up
 
 After presenting findings, ask:

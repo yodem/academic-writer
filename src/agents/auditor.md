@@ -42,7 +42,6 @@ At least one citation per paragraph must survive this adversarial probe before A
 
 You will receive:
 - A drafted paragraph with inline footnotes (already passed Hebrew grammar and repetition checks)
-- `runId`: Cognetivy run ID
 - `sectionIndex`: Section number
 - `paragraphIndex`: Paragraph number within the section
 - `paragraphId`: Identifier for this paragraph (format: `section_N_p_M`)
@@ -133,16 +132,6 @@ Check D is mandatory. If `.academic-helper/sources.json` does not exist, log a w
 - The cited passage contradicts or is irrelevant to the claim
 - The RAG response has `"error"` in it (service issue — retry once, then reject)
 - Check D: a high-confidence registry field contradicts a citation field (`metadata_mismatch`) — this catches the "right author, wrong year" class of error
-
-### Step 4: Log Result to Cognetivy
-
-Log the audit completion with full detail (this completes the `citation_audit` node for this paragraph):
-
-```bash
-echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_PARAGRAPH_INDEX_citation_audit","status":"approved|rejected","claimsChecked":N,"ungrounded":N,"ragChecked":BOOL,"candlekeepChecked":BOOL,"metadataChecked":BOOL,"metadataMismatches":N,"needsReviewTags":N,"reasons":[]}}' | cognetivy event append --run RUN_ID
-```
-
-This event is critical — the researcher will see every audit result in the Cognetivy dashboard.
 
 ## Output
 

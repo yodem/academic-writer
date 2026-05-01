@@ -26,7 +26,7 @@ Personalized onboarding that creates your researcher profile, detects available 
 Run silently before saying anything:
 
 ```bash
-mkdir -p past-articles .academic-helper .cognetivy/runs .cognetivy/events
+mkdir -p past-articles .academic-helper .academic-helper/logs
 ```
 
 Migrate any legacy profile from `.academic-writer/profile.json` → `.academic-helper/profile.md`:
@@ -122,7 +122,6 @@ Run ALL detection commands in **one parallel batch**:
 # PARALLEL — launch all at once
 Bash(command="command -v ck >/dev/null 2>&1 && echo 'DETECTED' || echo 'NOT_DETECTED'")
 Bash(command="curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo 'DETECTED' || echo 'NOT_DETECTED'")
-Bash(command="command -v cognetivy >/dev/null 2>&1 && echo 'DETECTED' || echo 'NOT_DETECTED'")
 Bash(command="command -v nlm >/dev/null 2>&1 && nlm login --check 2>/dev/null && echo 'DETECTED' || echo 'NOT_DETECTED'")
 ```
 
@@ -159,9 +158,6 @@ AskUserQuestion(questions=[{
       "markdown": "```\nAgentic-Search-Vectorless\n─────────────────────────\nType:    Local HTTP service\nWhat:    Fast semantic search for citations\nBest for: Finding exact page numbers and passages\nStatus:  ✓ Running on :8000\n```"
     },
     {
-      "label": "Cognetivy",
-      "description": "✓ Detected  (or ✗ Not found — run: npm install -g cognetivy)",
-      "markdown": "```\nCognetivy\n─────────\nType:    CLI\nWhat:    Workflow tracking and audit trail\nBest for: Logging every pipeline step for review\nStatus:  ✓ Detected\n\nSetup (if not installed):\n  npm install -g cognetivy\n  timeout 5 cognetivy init --workspace-only\n```"
     },
     {
       "label": "NotebookLM",
@@ -501,7 +497,6 @@ updatedAt: ISO_TIMESTAMP
 {
   "candlekeep": { "enabled": true },
   "agentic-search-vectorless": { "enabled": true, "port": 8000 },
-  "cognetivy": { "enabled": true },
   "notebooklm": { "enabled": false }
 }
 ` ` `
@@ -509,16 +504,6 @@ updatedAt: ISO_TIMESTAMP
 ## Output Format Preferences
 
 ```json
-{
-  "font": "David",
-  "bodySize": 11,
-  "titleSize": 16,
-  "headingSize": 13,
-  "lineSpacing": 1.5,
-  "marginInches": 1.0,
-  "alignment": "justify",
-  "rtl": true
-}
 ` ` `
 
 ## Style Fingerprint
@@ -542,16 +527,6 @@ updatedAt: ISO_TIMESTAMP
 
 (Replace ` ` ` with actual backtick triplets when writing the file.)
 
-**If Cognetivy is enabled**, register all workflows:
-
-```bash
-cognetivy workflow set --file plugins/academic-writer/workflows/wf_write_article.json
-cognetivy workflow set --file plugins/academic-writer/workflows/wf_edit_article.json
-cognetivy workflow set --file plugins/academic-writer/workflows/wf_edit_section.json
-cognetivy workflow set --file plugins/academic-writer/workflows/wf_research.json
-cognetivy workflow set --file plugins/academic-writer/workflows/wf_setup.json
-cognetivy collection-schema set --file plugins/academic-writer/workflows/collection-schemas.json
-```
 
 ---
 
@@ -570,7 +545,6 @@ AskUserQuestion(questions=[{
     {
       "label": "Check system health",
       "description": "Run /academic-writer:health to verify everything is working.",
-      "markdown": "```\nHealth Check\n────────────\n→ /academic-writer:health\n→ Verifies: profile, tools,\n   agents, Cognetivy, sources\n```"
     },
     {
       "label": "I'm done for now",

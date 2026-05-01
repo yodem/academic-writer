@@ -20,17 +20,6 @@ If no profile, tell the researcher to run `/academic-writer:init` first.
 
 Extract `fieldOfStudy`, `targetLanguage`, and `tools` configuration.
 
-## Cognetivy Tracking
-
-If Cognetivy is enabled, start a run:
-```bash
-echo '{"phase": "ideation"}' > /tmp/aw-ideate-input.json
-cognetivy run start --workflow wf_ideate --input /tmp/aw-ideate-input.json
-```
-
-Record the run ID for all logging below.
-
-
 ## Step 1: Topic Exploration
 
 Ask the researcher:
@@ -76,10 +65,6 @@ Present the brainstorm:
 >
 > Which angles interest you most?"
 
-Log to Cognetivy:
-```bash
-echo '{"type":"step_completed","nodeId":"brainstorm_5w1h"}' | cognetivy event append --run RUN_ID
-```
 
 
 ## Step 3: Gap Analysis
@@ -116,9 +101,6 @@ Present the gap analysis:
 > These gaps could be fertile ground for a research question."
 
 Log:
-```bash
-echo '{"type":"step_completed","nodeId":"gap_analysis","sourcesScanned":N,"gapsFound":N}' | cognetivy event append --run RUN_ID
-```
 
 
 ## Step 4: Approach Framing
@@ -242,10 +224,6 @@ Use the `Write` tool to create `.academic-helper/research-brief.md`:
 ```
 
 Log completion:
-```bash
-echo '{"type":"step_completed","nodeId":"research_brief","outputPath":".academic-helper/research-brief.md"}' | cognetivy event append --run RUN_ID
-cognetivy run complete --run RUN_ID
-```
 
 ## Completion
 

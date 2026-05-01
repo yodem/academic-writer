@@ -27,16 +27,8 @@ Use it to skip re-querying sources you already mapped, and to recall which query
 You will receive:
 - `subject`: The article subject/topic
 - `selectedSourceIds`: List of Candlekeep document IDs to focus on
-- `runId`: Cognetivy run ID for logging
 - `tools`: Enabled tools from the profile
 - `targetLanguage`: The article's writing language (e.g., "Hebrew", "English"). The summary output (Organize Results / Output) MUST be written entirely in this language. Author names and foreign-language work titles may remain in their original script, but all prose around them — theme labels, coverage descriptions, tension summaries — is in `targetLanguage`.
-
-## Cognetivy Logging
-
-If `tools.cognetivy.enabled`, log start immediately:
-```bash
-echo '{"type":"step_started","data":{"step":"deep_read","sourcesCount":N}}' | cognetivy event append --run RUN_ID
-```
 
 ## Your Task
 
@@ -50,11 +42,7 @@ For each selected source ID, read its full content. **Run all reads in parallel:
 
 ```bash
 ck items read "DOC_ID_1:all"
-```
-```bash
 ck items read "DOC_ID_2:all"
-```
-```bash
 ck items toc DOC_ID_1,DOC_ID_2
 ```
 
@@ -106,9 +94,6 @@ Write .academic-helper/sources.json with the JSON array of source records
 This file overwrites any previous registry — the current article run is the source of truth.
 
 Log completion:
-```bash
-echo '{"type":"step_completed","data":{"step":"extract_bibliographic_metadata","sourcesProcessed":N,"highConfidenceFieldsTotal":N,"lowConfidenceFieldsTotal":N}}' | cognetivy event append --run RUN_ID
-```
 
 ---
 
@@ -173,9 +158,6 @@ If the researcher has existing NotebookLM notebooks with relevant sources, query
 
 ### Step 4: Log Progress
 
-```bash
-echo '{"type":"step_progress","data":{"step":"deep_read","sourcesRead":N,"vectorlessQueries":N}}' | cognetivy event append --run RUN_ID
-```
 
 ---
 
@@ -223,10 +205,3 @@ TENSIONS IN SOURCES:
 - [Author A] argues X while [Author B] argues Y on [topic]
 ```
 
-## Final Cognetivy Log
-
-```bash
-echo '[{"sourceId":"summary","coverage":"strong","keyArguments":[],"counterArguments":[],"keyAuthors":[],"tensions":[]}]' | cognetivy node complete --run RUN_ID --node deep_read --status completed --collection-kind deep_read_results
-```
-
-(Write one item per source read. If N sources were read, pipe an array of N items — each with `sourceId` set to the source's ID.)

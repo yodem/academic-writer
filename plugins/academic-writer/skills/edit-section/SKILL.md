@@ -111,13 +111,3 @@ Show the revised section with a change summary:
 
 ---
 
-## Cognetivy Logging (if enabled)
-
-```bash
-echo '{"type":"step_started","nodeId":"edit_section_N"}' | cognetivy event append --run RUN_ID
-```
-
-On completion:
-```bash
-echo '{"type":"step_completed","nodeId":"edit_section_N","paragraphsEdited":N,"citationsVerified":N,"styleScore":"N/5"}' | cognetivy event append --run RUN_ID
-```

@@ -101,7 +101,6 @@ All integrations are optional. Choose which to enable during `/academic-writer:i
 |------|-------------|-------|
 | **Candlekeep** | Cloud document library for source PDFs | [github.com/CandleKeepAgents/candlekeep-cli](https://github.com/CandleKeepAgents/candlekeep-cli) |
 | **NotebookLM** | AI-powered source Q&A, audio overviews, study guides | [github.com/jacob-bd/notebooklm-mcp-cli](https://github.com/jacob-bd/notebooklm-mcp-cli) |
-| **Cognetivy** | Workflow audit trail | Built-in, no setup needed |
 
 ---
 
@@ -114,7 +113,6 @@ your-research-folder/
 │   ├── profile.json       ← Your profile (auto-created)
 │   ├── research-brief.md  ← Output from /academic-writer:ideate
 │   └── logs/              ← Session logs
-├── .cognetivy/            ← Workflow audit trail
 └── articles/              ← Output .docx files
 ```
 

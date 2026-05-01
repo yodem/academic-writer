@@ -192,14 +192,3 @@ AskUserQuestion(questions=[{
 
 If score is 40+, show the scorecard and continue to DOCX output automatically.
 
-## Cognetivy Logging
-
-If Cognetivy is enabled:
-```bash
-echo '{"type":"step_started","nodeId":"self_review"}' | cognetivy event append --run RUN_ID
-```
-
-After scoring:
-```bash
-echo '{"type":"step_completed","nodeId":"self_review","totalScore":NN,"maxScore":60,"grade":"GRADE","dimensions":{"structure":N,"argumentLogic":N,"citationCompleteness":N,"sourceCoverage":N,"writingQuality":N,"academicConventions":N}}' | cognetivy event append --run RUN_ID
-```

@@ -100,11 +100,6 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
     cp "$SRC_DIR/words.md" "$PLUGIN_DIR/"
   fi
 
-  # Copy workflow definitions
-  if [[ -d "$SRC_DIR/workflows" ]]; then
-    cp -R "$SRC_DIR/workflows" "$PLUGIN_DIR/"
-  fi
-
   # Generate plugin.json
   jq -n \
     --arg name "$PLUGIN_NAME" \

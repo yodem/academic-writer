@@ -22,7 +22,6 @@ Use it to recall thesis styles the researcher has approved before, and article s
 ## Input
 
 You will also receive:
-- `runId`: Cognetivy run ID for logging
 - `targetLanguage`: The article's writing language (e.g., "Hebrew", "English")
 - `articleStructure`: The researcher's article structure conventions (from profile, if available)
 
@@ -36,26 +35,6 @@ You will also receive:
 - **Source references** in the outline: May name foreign-language works (e.g., "Critique of Practical Reason"), but all prose around them must be in the target language
 
 For Hebrew articles: Write theses, section titles, roles, and descriptions in Hebrew. If referencing a German or English work, use its Hebrew title if one exists (e.g., "ביקורת התבונה הטהורה" for *Critique of Pure Reason*).
-
-## Cognetivy Logging
-
-**Mode A** — Log thesis proposal:
-```bash
-echo '{"type":"step_started","data":{"step":"thesis_proposal"}}' | cognetivy event append --run RUN_ID
-```
-On completion:
-```bash
-echo '[{"statement":"THESIS_1","rationale":"...","keySources":[],"riskAssessment":"..."},...]' | cognetivy node complete --run RUN_ID --node thesis_proposal --status completed --collection-kind thesis_options
-```
-
-**Mode B** — Log outline generation:
-```bash
-echo '{"type":"step_started","data":{"step":"outline"}}' | cognetivy event append --run RUN_ID
-```
-On completion:
-```bash
-echo '[{"sectionIndex":1,"title":"TITLE","argumentRole":"ROLE","suggestedSources":[],"wordCount":N,"paragraphCount":N},...]' | cognetivy node complete --run RUN_ID --node outline_generation --status completed --collection-kind outline
-```
 
 ## Mode A: Thesis Proposal
 
@@ -193,11 +172,6 @@ Assignment rules:
 Write the file with the Write tool:
 ```
 Write .academic-helper/evidence-ownership.json with the JSON above
-```
-
-Log the ownership-map creation to cognetivy if enabled:
-```bash
-echo '{"type":"step_completed","data":{"step":"evidence_ownership_map","ownersCount":N}}' | cognetivy event append --run RUN_ID
 ```
 
 ## Output

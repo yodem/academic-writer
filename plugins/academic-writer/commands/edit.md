@@ -148,19 +148,6 @@ After edits are applied:
 3. If exporting to .docx, use the same DOCX generation as write-article Step 9.
 
 
-## Cognetivy Logging (if enabled)
-
-```bash
-echo '{"subject": "EDIT: ARTICLE_TITLE", "type": "edit"}' > /tmp/aw-edit-input.json
-cognetivy run start --workflow wf_academic_writer --input /tmp/aw-edit-input.json
-```
-
-Log each edit operation:
-```bash
-echo '{"type":"step_completed","nodeId":"edit_MODE","sectionsEdited":N,"paragraphsChanged":N,"citationsVerified":N}' | cognetivy event append --run RUN_ID
-```
-
-
 ## Critical Rules
 
 - **NEVER remove citations** without the researcher's explicit approval

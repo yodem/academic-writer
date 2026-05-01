@@ -27,7 +27,6 @@ You will receive:
 - `newArticles`: List of filenames in `past-articles/` to analyze
 - `currentFingerprint`: The existing style fingerprint from the profile (may be null for first run)
 - `targetLanguage`: The article language
-- `runId`: Cognetivy run ID (optional)
 
 ## Process
 
@@ -244,18 +243,6 @@ For each fingerprint dimension, report:
 - Previous value → New value
 - Whether it changed significantly
 - Why (more articles, different patterns in new work, etc.)
-
-## Cognetivy Logging
-
-If `runId` is provided:
-```bash
-echo '{"type":"step_started","data":{"step":"style_mining"}}' | cognetivy event append --run RUN_ID
-```
-
-After analysis:
-```bash
-echo '{"type":"step_completed","data":{"step":"style_mining","articlesAnalyzed":N,"dimensionsChanged":N,"distinctiveTraits":["trait1","trait2"]}}' | cognetivy event append --run RUN_ID
-```
 
 ## Output
 

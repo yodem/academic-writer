@@ -20,14 +20,6 @@ If no profile, tell the researcher to run `/academic-writer:init` first.
 
 Extract the current `styleFingerprint` and `analyzedArticles` list (if present).
 
-## Cognetivy Tracking
-
-If Cognetivy is enabled:
-```bash
-echo '{"phase": "style_learning"}' > /tmp/aw-learn-input.json
-cognetivy run start --workflow wf_learn --input /tmp/aw-learn-input.json
-```
-
 ## Step 1: Scan for New Articles
 
 ```bash
@@ -52,7 +44,6 @@ If new files found, show them:
 - List of new article filenames
 - Current `styleFingerprint` from the profile
 - `targetLanguage`
-- `runId` (if Cognetivy enabled)
 
 The style miner returns:
 - Updated fingerprint dimensions
@@ -109,11 +100,6 @@ If **Review details**, show the full before/after for each dimension, then ask a
 
 ## Completion
 
-Log to Cognetivy:
-```bash
-echo '{"type":"step_completed","nodeId":"style_learning","newArticles":N,"dimensionsUpdated":N}' | cognetivy event append --run RUN_ID
-cognetivy run complete --run RUN_ID
-```
 
 > "Style fingerprint updated! [N] new article(s) analyzed, [M] dimensions adjusted.
 >

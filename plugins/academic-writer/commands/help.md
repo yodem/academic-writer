@@ -42,7 +42,6 @@ This walks you through:
 |------|-------------|
 | **Candlekeep** | Cloud document library — your source PDFs and research materials |
 | **Agentic-Search-Vectorless** | Vectorless semantic search across all your sources |
-| **Cognetivy** | Workflow tracking and audit trail |
 
 
 ## Slash Commands
@@ -62,6 +61,7 @@ This walks you through:
 | `/academic-writer:learn` | **Update style** — scan new past articles and refresh your style fingerprint |
 | `/academic-writer:present` | **Post-article deliverables** — conference outlines, journal abstracts, book chapter proposals |
 | `/academic-writer:setup` | **Quick setup** — creates profile, detects integrations |
+| `/academic-writer:feedback` | **Capture feedback** — turn researcher feedback on a finished article into concrete edits and profile updates |
 | `/academic-writer:help` | **This help page** |
 
 
@@ -154,7 +154,6 @@ The plugin is designed for speed. Wherever possible, work is parallelized:
 | `.academic-helper/profile.md` | Your researcher profile (field, style, tools, sources) |
 | `past-articles/` | Your published papers for style analysis (never uploaded) |
 | `.claude/agents/` | AI agent prompts (deep-reader, architect, section-writer, auditor, synthesizer) |
-| `.cognetivy/` | Workflow tracking data |
 | `references/` | API documentation for integrations |
 
 
@@ -172,5 +171,4 @@ The plugin is designed for speed. Wherever possible, work is parallelized:
 1. **No fabricated citations** — Every claim verified against your sources
 2. **No invented page numbers** — Exact quotes confirmed via RAG bypass + Candlekeep
 3. **Your voice** — Every paragraph checked against your style fingerprint
-4. **Full transparency** — Every step logged to Cognetivy audit trail
 5. **Your data stays local** — Past articles are never uploaded anywhere

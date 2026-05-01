@@ -59,24 +59,12 @@ Once chosen, load the artifacts:
 ```bash
 # The article text
 cat articles/<slug>.md
-```
-
-```bash
 # The bibliographic registry for this run
 cat .academic-helper/sources.json 2>/dev/null || echo "[]"
-```
-
-```bash
 # The evidence ownership map for this run
 cat .academic-helper/evidence-ownership.json 2>/dev/null || echo "{}"
 ```
 
-```bash
-# The most recent Cognetivy run for this article, if available
-cognetivy run list --limit 5 2>/dev/null
-```
-
-If Cognetivy is enabled and a matching run is found, pull its events — they show what each pipeline gate flagged and fixed, which is useful context when the researcher says "why did it keep using X?"
 
 ## Phase 2 — Structured Interview
 
@@ -243,10 +231,6 @@ Then show a summary to the researcher:
 >
 > Next runs of `/academic-writer` will pick up all profile and pattern changes automatically. For the article itself, the edits have been written to `articles/<slug>.md` — you may want to regenerate the .docx by running the last step of `/academic-writer` or edit and re-export manually."
 
-If Cognetivy is enabled, log the feedback session:
-```bash
-echo '{"type":"feedback_session","data":{"article":"<slug>","itemsTotal":N,"itemsApplied":N,"byCategory":{"A":N,"B":N,"C":N,"D":N,"E":N}}}' | cognetivy event append
-```
 
 (No dedicated workflow is required — this is a freestyle event.)
 

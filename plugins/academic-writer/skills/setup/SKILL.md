@@ -14,13 +14,8 @@ Quick onboarding wizard. Creates the researcher profile, detects integrations, a
 Run silently before anything else:
 
 ```bash
-mkdir -p past-articles .academic-helper .cognetivy/runs .cognetivy/events
-```
-
-If cognetivy is available, start a setup run:
-```bash
+mkdir -p past-articles .academic-helper .academic-helper/logs
 echo '{"phase": "setup"}' > /tmp/aw-setup-input.json
-cognetivy run start --input /tmp/aw-setup-input.json --name "Academic Writer Setup"
 ```
 Capture the `run_id` for logging at each step.
 
@@ -105,7 +100,6 @@ Run ALL detection commands in **one parallel batch**:
 # PARALLEL
 Bash(command="command -v ck >/dev/null 2>&1 && echo 'ck: DETECTED' || echo 'ck: NOT_FOUND'")
 Bash(command="curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo 'vectorless: RUNNING' || echo 'vectorless: NOT_RUNNING'")
-Bash(command="command -v cognetivy >/dev/null 2>&1 && echo 'cognetivy: DETECTED' || echo 'cognetivy: NOT_FOUND'")
 Bash(command="command -v nlm >/dev/null 2>&1 && nlm login --check 2>/dev/null && echo 'notebooklm: DETECTED' || echo 'notebooklm: NOT_FOUND'")
 ```
 
@@ -219,11 +213,6 @@ AskUserQuestion(questions=[{
       "markdown": "```\nAgentic-Search-Vectorless\n─────────────────────────\nType:  Local HTTP service\nWhat:  Fast semantic citation search\n```"
     },
     {
-      "label": "Cognetivy",
-      "description": "✓ Detected  /  ✗ Not found",
-      "markdown": "```\nCognetivy\n─────────\nType:  CLI\nWhat:  Workflow audit trail\n\nInstall: npm install -g cognetivy\nInit:    timeout 5 cognetivy init --workspace-only\n```"
-    },
-    {
       "label": "NotebookLM",
       "description": "✓ Detected  /  ✗ Not found",
       "markdown": "```\nNotebookLM\n──────────\nType:  MCP server (nlm CLI)\nWhat:  AI-powered source Q&A,\n       audio overviews, study guides\n\nInstall: npm install -g notebooklm-mcp-cli\nAuth:    nlm login\n```"
@@ -243,9 +232,6 @@ Check for past articles:
 
 ```bash
 ls past-articles/ 2>/dev/null | wc -l
-```
-
-```python
 AskUserQuestion(questions=[{
   "question": "Found N papers in past-articles/. Analyze them for style fingerprinting?",
   "header": "Writing style (optional)",
@@ -295,7 +281,6 @@ updatedAt: ISO_TIMESTAMP
 {
   "candlekeep": { "enabled": true },
   "agentic-search-vectorless": { "enabled": true, "port": 8000 },
-  "cognetivy": { "enabled": true },
   "notebooklm": { "enabled": false }
 }
 ` ` `
@@ -303,16 +288,6 @@ updatedAt: ISO_TIMESTAMP
 ## Output Format Preferences
 
 ```json
-{
-  "font": "David",
-  "bodySize": 11,
-  "titleSize": 16,
-  "headingSize": 13,
-  "lineSpacing": 1.5,
-  "marginInches": 1.0,
-  "alignment": "justify",
-  "rtl": true
-}
 ` ` `
 
 ## Style Fingerprint
@@ -330,7 +305,6 @@ null
 
 (Replace backtick triplets with actual ` ``` ` when writing the file.)
 
-If Cognetivy is enabled, register workflows:
 
 ```bash
 # Resolve plugin directory from Claude plugin cache
@@ -338,18 +312,7 @@ AW_PLUGIN_DIR=$(find ~/.claude/plugins/cache -name "wf_write_article.json" -path
 if [ -z "$AW_PLUGIN_DIR" ]; then
   echo "Warning: Could not find academic-writer workflows in plugin cache. Skipping workflow registration."
 else
-  cognetivy workflow set --file "$AW_PLUGIN_DIR/wf_write_article.json"
-  cognetivy workflow set --file "$AW_PLUGIN_DIR/wf_edit_article.json"
-  cognetivy workflow set --file "$AW_PLUGIN_DIR/wf_edit_section.json"
-  cognetivy workflow set --file "$AW_PLUGIN_DIR/wf_research.json"
-  cognetivy workflow set --file "$AW_PLUGIN_DIR/wf_setup.json"
-  cognetivy collection-schema set --file "$AW_PLUGIN_DIR/collection-schemas.json"
 fi
-```
-
-Complete the Cognetivy run:
-```bash
-cognetivy run complete --run <run_id>
 ```
 
 ---

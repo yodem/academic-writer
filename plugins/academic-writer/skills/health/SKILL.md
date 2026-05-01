@@ -1,6 +1,6 @@
 ---
 name: health
-description: "Check the health of all Academic Writer integrations — profile, Candlekeep, RAG, Cognetivy, past articles, and source index."
+description: "Check the health of all Academic Writer integrations — profile, Candlekeep, RAG, past articles, and source index."
 user-invocable: true
 ---
 
@@ -91,71 +91,6 @@ Report:
 
 ---
 
-## 5. Cognetivy
-
-**Skip if `tools.cognetivy.enabled` is false.** Report as "Disabled".
-
-```bash
-command -v cognetivy >/dev/null 2>&1 && echo "CLI: INSTALLED" || echo "CLI: NOT_FOUND"
-```
-
-If installed:
-```bash
-ls .cognetivy/ 2>/dev/null && echo "DIR_EXISTS" || echo "DIR_MISSING"
-```
-
-```bash
-cognetivy workflow list 2>&1 | head -10
-```
-
-```bash
-cognetivy run list --workflow wf_academic_writer 2>&1 | head -10
-```
-
-Report:
-- CLI installed? ✓/✗
-- `.cognetivy/` directory exists? ✓/✗
-- Workspace initialized? ✓/✗
-- Workflow `wf_academic_writer` registered? ✓/✗
-- Number of past runs
-
-**If CLI not installed**, show this setup guide:
-
-> **How to set up Cognetivy:**
->
-> 1. Install the CLI:
->    ```
->    npm install -g cognetivy
->    ```
->    Or if you use bun:
->    ```
->    bun install -g cognetivy
->    ```
->
-> 2. Initialize the workspace in this project folder:
->    ```
->    timeout 5 cognetivy init --workspace-only
->    ```
->    (The `timeout` is needed because `cognetivy init` starts a studio server that blocks.)
->
-> 3. Register Academic Writer workflows:
->    ```
->    cognetivy workflow set --file plugins/academic-writer/workflows/wf_write_article.json
->    cognetivy workflow set --file plugins/academic-writer/workflows/wf_edit_article.json
->    cognetivy workflow set --file plugins/academic-writer/workflows/wf_setup.json
->    ```
->
-> 4. Re-run `/academic-writer:health` to verify.
-
-**If CLI is installed but workspace not initialized:**
-> "Cognetivy is installed but not initialized in this project. Run:
-> ```
-> timeout 5 cognetivy init --workspace-only
-> ```
-> Then re-run `/academic-writer:health`."
-
----
-
 ## 6. NotebookLM
 
 **Skip if `tools.notebooklm.enabled` is false.** Report as "Disabled (enable with `/academic-writer:update-tools`)".
@@ -167,9 +102,6 @@ command -v nlm >/dev/null 2>&1 && echo "CLI: INSTALLED" || echo "CLI: NOT_FOUND"
 If installed:
 ```bash
 nlm login --check 2>&1
-```
-
-```bash
 nlm notebook list 2>&1 | head -5
 ```
 
@@ -225,7 +157,6 @@ Show a clean summary table:
 > | Past Articles | ✓ [N] files / ✗ Empty | PDF: [n], DOCX: [n] |
 > | Agentic-Search-Vectorless | ✓ Running / ✗ Not running / — Disabled | Port: [port] |
 > | Candlekeep | ✓ Connected / ✗ Error / — Disabled | [N] items |
-> > | Cognetivy | ✓ Ready / ✗ Not initialized / — Disabled | Run `timeout 5 cognetivy init --workspace-only` if not initialized |
 > | NotebookLM | ✓ Connected / ✗ Not found / — Disabled | [N] notebooks |
 > | Agent Files | ✓ All present / ✗ Missing [list] | 5/5 |
 >

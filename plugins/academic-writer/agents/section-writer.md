@@ -44,7 +44,6 @@ You coordinate the auditor subagent. Follow these rules:
 | Previous auditor returned VERDICT: FAIL and you rewrote | **Spawn fresh** auditor (the previous agent is anchored to the old paragraph) |
 | Previous auditor attempt used wrong source documents | **Spawn fresh** auditor (wrong-context anchoring causes retries to repeat the mistake) |
 
-Every paragraph goes through a **skill pipeline**: draft → **style fingerprint compliance** → Hebrew grammar check → **academic language & linking words check** → **language purity check** → **anti-AI check** → repetition check → citation audit. Each step is logged to Cognetivy.
 
 ## Input
 
@@ -58,7 +57,6 @@ You will receive:
 - `citationStyle`: chicago / mla / apa / inline-parenthetical
 - `targetLanguage`: The article's writing language (e.g., "Hebrew", "English") — **ALL text must be in this language**
 - `linkingWords`: Hebrew linking word categories (from words.txt) — used in the linking words check
-- `runId`: Cognetivy run ID for logging
 - `tools`: The enabled tools from the profile (check before using any integration)
 - `priorSectionTexts`: Text of all previously completed sections (for cross-section repetition awareness)
 - `outlineOverview`: Full outline titles and roles (so intro can describe the article flow)
@@ -132,19 +130,10 @@ content = open('.academic-helper/profile.md').read()
 m = re.search(r'## Style Fingerprint\n+\x60\x60\x60json\n(.*?)\n\x60\x60\x60', content, re.DOTALL)
 print(m.group(1) if m else 'null')
 "
-```
-
-```bash
 # Load linking words reference
 cat plugins/academic-writer/words.md
-```
-
-```bash
 # Load bibliographic source registry (written by deep-reader)
 cat .academic-helper/sources.json 2>/dev/null || echo "[]"
-```
-
-```bash
 # Load evidence ownership map (written by architect)
 cat .academic-helper/evidence-ownership.json 2>/dev/null || echo "{}"
 ```
@@ -156,27 +145,18 @@ Store all four in context:
 - `evidenceOwnership` — tells you which sections own the full description of each evidence anchor. If this section is NOT the owner of an evidence anchor, you must back-reference rather than re-describe.
 
 **Re-read `evidenceOwnership.thesisAnchor` at the start of every paragraph draft.** This prevents thesis-drift. Log the re-read:
-```bash
-echo '{"type":"step_detail","data":{"step":"thesis_anchor_reread","paragraphId":"PARAGRAPH_ID"}}' | cognetivy event append --run RUN_ID
-```
 
 ## Process
 
 Write paragraphs **sequentially** (each builds on the previous).
 
 Log the section start:
-```bash
-echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX"}}' | cognetivy event append --run RUN_ID
-```
 
 ### For each paragraph (M = paragraph number):
 
 #### Skill 1: DRAFT
 
 Log start:
-```bash
-echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_draft"}}' | cognetivy event append --run RUN_ID
-```
 
 1. **Query Agentic-Search-Vectorless for relevant passages** — this is MANDATORY for every paragraph:
 
@@ -229,18 +209,12 @@ bash plugins/academic-writer/scripts/vectorless-query.sh --query "PARAGRAPH_FOCU
    ```
 
 Log completion:
-```bash
-echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_draft","wordCount":N}}' | cognetivy event append --run RUN_ID
-```
 
 ---
 
 #### Skill 2: STYLE FINGERPRINT COMPLIANCE
 
 Log start:
-```bash
-echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_style_compliance"}}' | cognetivy event append --run RUN_ID
-```
 
 **Re-read the full `styleFingerprint` from the profile before every check.** This is the researcher's voice — never skip this step.
 
@@ -304,18 +278,12 @@ Check the `contrastive` section of the fingerprint. Any dimension marked `distin
 If changes are made, log what was adjusted:
 
 Log completion:
-```bash
-echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_style_compliance","status":"pass|adjusted","numericalCompliance":N,"qualitativeScore":N,"overallCompliance":N,"dimensionsAdjusted":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
-```
 
 ---
 
 #### Skill 3: HEBREW GRAMMAR CHECK
 
 Log start:
-```bash
-echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_hebrew_grammar"}}' | cognetivy event append --run RUN_ID
-```
 
 Review the drafted paragraph for **Hebrew-language quality** (relevant when the article is in Hebrew or contains Hebrew terms/quotes):
 
@@ -341,18 +309,12 @@ If issues are found:
 - Log what was fixed
 
 Log completion with results:
-```bash
-echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_hebrew_grammar","status":"pass|fixed","issuesFound":N,"issuesFixed":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
-```
 
 ---
 
 #### Skill 4: ACADEMIC LANGUAGE & LINKING WORDS CHECK
 
 Log start:
-```bash
-echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_academic_language"}}' | cognetivy event append --run RUN_ID
-```
 
 **This skill ensures the paragraph reads at a proper academic level and uses appropriate Hebrew linking words.**
 
@@ -377,18 +339,12 @@ Check that the paragraph uses **appropriate linking words** from the researcher'
 5. Check that the linking word is the RIGHT CATEGORY for the logical relationship
 
 Log completion:
-```bash
-echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_academic_language","status":"pass|fixed","languageLevelIssues":N,"linkingWordsAdded":N,"linkingWordsFixed":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
-```
 
 ---
 
 #### Skill 5: LANGUAGE PURITY CHECK
 
 Log start:
-```bash
-echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_language_purity"}}' | cognetivy event append --run RUN_ID
-```
 
 **Enforce monolingual output.** The article must be written entirely in `targetLanguage`. Zero tolerance for embedded foreign text in running prose.
 
@@ -409,18 +365,12 @@ echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_language_
 **NEVER leave a foreign word in the running text of a body paragraph.**
 
 Log completion:
-```bash
-echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_language_purity","status":"pass|fixed","violationsFound":N,"violationsFixed":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
-```
 
 ---
 
 #### Skill 6: ANTI-AI CHECK
 
 Log start:
-```bash
-echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_anti_ai"}}' | cognetivy event append --run RUN_ID
-```
 
 **Detect and fix AI-generated writing patterns.**
 
@@ -442,7 +392,6 @@ FIXED_TEXT=$(python3 -c "import json,sys; d=json.load(open('$TYPO_REPORT')); pri
 if [ -n "$FIXED_TEXT" ] && [ "$FIXED_TEXT" != "$PARAGRAPH_TEXT" ]; then
   PARAGRAPH_TEXT="$FIXED_TEXT"
   echo '{"type":"step_detail","data":{"step":"anti_ai_typo_tier","fixes":'$(python3 -c "import json; d=json.load(open('$TYPO_REPORT')); print(json.dumps(d.get('fixes_applied', [])))"),'}}' \
-    | cognetivy event append --run RUN_ID
 fi
 rm -f "$TYPO_REPORT"
 ```
@@ -486,18 +435,12 @@ Score the **cleaned paragraph** on 5 dimensions (each 1–10):
 **Important:** Do NOT inject personality, humor, or first-person opinions. The researcher's style fingerprint (from Skill 2) is the voice standard — this skill only removes AI tells, not adds new voice.
 
 Log completion:
-```bash
-echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_anti_ai","status":"pass|fixed","tier1_typography_fixes":N,"tier2_score":N,"directness":N,"rhythm":N,"trust":N,"authenticity":N,"density":N,"patternsFixed":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
-```
 
 ---
 
 #### Skill 7: REPETITION CHECK
 
 Log start:
-```bash
-echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_repetition_check"}}' | cognetivy event append --run RUN_ID
-```
 
 Check the paragraph against ALL prior text (previous paragraphs in this section + `priorSectionTexts`):
 
@@ -509,9 +452,6 @@ Check the paragraph against ALL prior text (previous paragraphs in this section 
 6. **Evidence re-description check** — If this paragraph describes a piece of evidence whose `evidenceOwnership.ownerSectionIndex` is not this section, the paragraph must use a back-reference form ("as discussed in Section II above") rather than a fresh full description. Rewrite if violated.
 
 Log completion with results:
-```bash
-echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_repetition_check","status":"pass|fixed","repetitionsFound":N,"repetitionsFixed":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
-```
 
 ---
 
@@ -527,9 +467,6 @@ The prompt for the auditor subagent should include:
 If rejected, rewrite using the Auditor's feedback and re-run the full skill pipeline (draft fix → style compliance → Hebrew grammar → academic language → language purity → anti-AI → repetition → audit). Max 3 rewrite cycles per paragraph — if still failing after 3, include the paragraph with a `[NEEDS REVIEW]` marker.
 
 Log the audit handoff:
-```bash
-echo '{"type":"step_started","data":{"step":"section_SECTION_INDEX_p_M_citation_audit"}}' | cognetivy event append --run RUN_ID
-```
 
 (The Auditor logs its own completion event.)
 
@@ -561,9 +498,6 @@ PY
 ### After all paragraphs are done:
 
 Log section completion:
-```bash
-echo '{"sectionIndex":SECTION_INDEX,"title":"SECTION_TITLE","paragraphs":[{"content":"PARAGRAPH_TEXT","citations":["..."],"auditStatus":"approved"},...]}' | cognetivy node complete --run RUN_ID --node section_SECTION_INDEX --status completed --collection-kind article_sections
-```
 
 ## Style Rules
 
