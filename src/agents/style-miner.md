@@ -33,6 +33,21 @@ You will receive:
 
 ### Step 1: Computational Extraction (Hard Numbers)
 
+**Fetch the shared Hebrew baseline from CandleKeep first:**
+
+```bash
+mkdir -p .ctx
+ck items get cmomjonvy0fdmk30zwef79c48 > .ctx/hebrew-linguistic-reference.md
+```
+
+The book *Hebrew Linguistic Reference* is mirrored on GitHub at
+[yodem/hebrew-linguistics-data](https://github.com/yodem/hebrew-linguistics-data).
+The fingerprint baseline lives in chapter `08-style-fingerprint-baseline`
+(field name `version: "0.3.0"`); the metrics extractor reads the JSON
+code block from that chapter at runtime — no separate
+`hebrew-academic-baseline.json` file. The same book is also loaded by
+the `hebrew-book-producer` plugin so both share one source of truth.
+
 **Run the metrics extraction script on all articles at once:**
 
 ```bash
@@ -40,11 +55,17 @@ STYLE_METRICS=$(mktemp)
 python3 plugins/academic-writer/scripts/extract-style-metrics.py \
   --input past-articles/ \
   --aggregate \
-  --baseline plugins/academic-writer/references/hebrew-academic-baseline.json \
+  --baseline .ctx/hebrew-linguistic-reference.md \
   --contrastive \
   --json \
   --output "$STYLE_METRICS"
 ```
+
+The extractor parses the baseline JSON code block out of the markdown
+chapter. If `extract-style-metrics.py` does not yet exist in this
+plugin, the equivalent extractor in `hebrew-book-producer/scripts/extract-voice-fingerprint.py`
+implements the same schema and may be referenced or copied — both
+plugins use the same field names.
 
 Read the results:
 ```bash
