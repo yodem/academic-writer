@@ -4,6 +4,7 @@ description: "Write a new academic article. Conversational pipeline: subject →
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 agents: [deep-reader, architect, section-writer, auditor, synthesizer]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Write Article

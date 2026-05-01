@@ -4,6 +4,7 @@ description: "Quick edit of a single section — rewrite, expand, cut, fix citat
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 agents: [section-writer, auditor]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Edit Section

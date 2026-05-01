@@ -4,6 +4,7 @@ description: "Research a subject or answer questions using your indexed sources 
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 agents: [research-rag, research-candlekeep]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Research

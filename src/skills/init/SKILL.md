@@ -3,6 +3,7 @@ name: init
 description: "First-time setup for the Academic Writer. Configures researcher profile, analyzes writing style from past articles, and indexes research sources. Use on first install or when redoing onboarding from scratch."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Initialization Wizard

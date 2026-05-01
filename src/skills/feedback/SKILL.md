@@ -4,6 +4,7 @@ description: "Capture researcher feedback on a completed article and turn it int
 user-invocable: true
 allowedTools: [Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion, Agent]
 agents: [style-miner]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Feedback

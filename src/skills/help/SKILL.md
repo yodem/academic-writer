@@ -3,6 +3,7 @@ name: help
 description: "Learn what the Academic Writer plugin does and how to use it. Use when you don't know which command to run."
 user-invocable: true
 allowedTools: [Read]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Help

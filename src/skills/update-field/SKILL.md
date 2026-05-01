@@ -3,6 +3,7 @@ name: update-field
 description: "Update your field of study in the Academic Writer profile. Use when changing your research field without redoing full setup."
 user-invocable: true
 allowedTools: [Read, Write, Edit, AskUserQuestion]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Update Field of Study

@@ -4,6 +4,7 @@ description: "Edit a previously written article — revise sections, fix citatio
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 agents: [section-writer, auditor, synthesizer]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Edit Article
