@@ -16,9 +16,7 @@ Run silently before anything else:
 
 ```bash
 mkdir -p past-articles .academic-helper .academic-helper/logs
-echo '{"phase": "setup"}' > /tmp/aw-setup-input.json
 ```
-Capture the `run_id` for logging at each step.
 
 Migrate any legacy profile from `.academic-writer/profile.json` → `.academic-helper/profile.md`:
 

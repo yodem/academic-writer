@@ -63,7 +63,7 @@ Ask:
 
 **Use the Agent tool to spawn a `section-writer` subagent** for each section being revised. The section-writer runs the full skill pipeline (draft revision → style compliance → Hebrew grammar → repetition check → citation audit).
 
-Pass as prompt: the section (with current text + edit instructions), sectionIndex, thesis, styleFingerprint, citationStyle, runId, tools, priorSectionTexts.
+Pass as prompt: the section (with current text + edit instructions), sectionIndex, thesis, styleFingerprint, citationStyle, tools, priorSectionTexts.
 
 For multiple sections being edited, **call the Agent tool multiple times in a single response — one call per section — so all section-writers run in parallel**.
 
@@ -71,7 +71,7 @@ For multiple sections being edited, **call the Agent tool multiple times in a si
 
 **Use the Agent tool to spawn `auditor` subagents in parallel** — one per section that needs citation work. Call the Agent tool multiple times in a single response.
 
-Pass as prompt: the paragraph text, runId, sectionIndex, paragraphIndex, tools.
+Pass as prompt: the paragraph text, sectionIndex, paragraphIndex, tools.
 
 The auditor verifies every footnote and returns specific fix instructions. Apply fixes, then re-audit.
 
@@ -96,7 +96,7 @@ If the researcher wants tone that differs from their fingerprint (e.g., "make th
 2. Let the researcher reorder, split, merge, add, or remove sections
 3. For new sections, **spawn a section-writer subagent** with full pipeline
 4. For merged sections, combine text and run synthesis on the merged result
-5. After restructuring, **use the Agent tool to spawn the `synthesizer` subagent** to fix transitions. Pass as prompt: allSections, thesis, styleFingerprint, runId, tools.
+5. After restructuring, **use the Agent tool to spawn the `synthesizer` subagent** to fix transitions. Pass as prompt: allSections, thesis, styleFingerprint, tools.
 
 ### Mode E: Strengthen Argument
 
@@ -120,7 +120,7 @@ If the researcher wants tone that differs from their fingerprint (e.g., "make th
 
 ### Mode G: Full Review
 
-**Use the Agent tool to spawn the `synthesizer` subagent** on the complete article. Pass as prompt: allSections, thesis, styleFingerprint, runId, tools.
+**Use the Agent tool to spawn the `synthesizer` subagent** on the complete article. Pass as prompt: allSections, thesis, styleFingerprint, tools.
 
 This runs:
 1. Argument coherence review
