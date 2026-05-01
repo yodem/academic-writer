@@ -100,6 +100,11 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
     cp "$SRC_DIR/words.md" "$PLUGIN_DIR/"
   fi
 
+  # Copy thresholds
+  if [[ -f "$SRC_DIR/thresholds.json" ]]; then
+    cp "$SRC_DIR/thresholds.json" "$PLUGIN_DIR/"
+  fi
+
   # Generate plugin.json
   jq -n \
     --arg name "$PLUGIN_NAME" \
