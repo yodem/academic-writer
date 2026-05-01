@@ -305,7 +305,7 @@ Each section-writer handles a **per-paragraph skill pipeline** internally:
 | 3 | **Hebrew Grammar** | Check grammar, spelling, academic register | `section_N_p_M_hebrew_grammar` |
 | 4 | **Academic Language** | Check academic vocabulary level and linking words usage | `section_N_p_M_academic_language` |
 | 5 | **Language Purity** | Detect and fix ALL embedded foreign-language terms in running text | `section_N_p_M_language_purity` |
-| 6 | **Anti-AI Check** | Load `anti-ai-patterns-${targetLanguage_lower}.md` and detect/fix AI writing patterns. Score 5 dimensions, threshold 35/50. | `section_N_p_M_anti_ai` |
+| 6 | **Anti-AI Check** | Load `anti-ai-patterns-${targetLanguage_lower}.md` and detect/fix AI writing patterns. Score 5 dimensions, threshold defined in `thresholds.json` (default 35/50). | `section_N_p_M_anti_ai` |
 | 7 | **Repetition Check** | Check words, phrases, arguments vs. prior text + formulaic-pattern cap sweep against the language blacklist + evidence re-description guard via ownership map | `section_N_p_M_repetition_check` |
 | 8 | **Citation Audit** | Auditor agent verifies every citation against RAG + page + Check D metadata integrity (hard gate for high-confidence mismatches; `[NEEDS REVIEW: <field>]` tag for low-confidence) | `section_N_p_M_citation_audit` |
 
@@ -387,8 +387,8 @@ Run the self-review checklist from `/academic-writer:review`. Score the article 
 
 Present the scorecard to the researcher.
 
-**If score < 40/60**, ask whether to proceed or address issues first (using `AskUserQuestion`).
-**If score >= 40/60**, show the scorecard and continue to DOCX output.
+**If score is below the self-review threshold defined in `thresholds.json` (default 40/60)**, ask whether to proceed or address issues first (using `AskUserQuestion`).
+**If score meets or exceeds the threshold (default 40/60)**, show the scorecard and continue to DOCX output.
 
 Log completion:
 

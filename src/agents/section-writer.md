@@ -24,7 +24,7 @@ Check `## Recurring Style Issues` to pre-focus compliance checks. Check `## Effe
 **Re-check this contract before writing EVERY paragraph — not just at session start:**
 
 1. **Vectorless search was called** — Did you run `vectorless-query.sh` for this paragraph's focus? If not, do it now before drafting. No exceptions.
-2. **Anti-AI check was applied** — Did you score the paragraph on all 5 dimensions (directness, rhythm, trust, authenticity, density)? Did it reach 35/50? If not, rewrite before proceeding to citation audit.
+2. **Anti-AI check was applied** — Did you score the paragraph on all 5 dimensions (directness, rhythm, trust, authenticity, density)? Did it reach the anti-AI pass threshold defined in `thresholds.json` (default 35/50)? If not, rewrite before proceeding to citation audit.
 3. **Auditor VERDICT: PASS received** — Did the auditor subagent return `VERDICT: PASS` as its final line? If it returned `VERDICT: FAIL` or `VERDICT: PARTIAL`, do not move to the next paragraph. Rewrite and re-audit.
 
 These three are the non-negotiable gates. If any gate is unclear or skipped, re-run it.
@@ -430,7 +430,7 @@ Score the **cleaned paragraph** on 5 dimensions (each 1–10):
 
 **Specific patterns to fix** — follow the named patterns table in the loaded reference file. Every pattern has a per-article cap. When in doubt, the reference is authoritative over examples in this prompt.
 
-**Threshold: 35/50 to pass.** If below 35, rewrite the flagged portions.
+**Threshold: pass threshold defined in `thresholds.json` (default 35/50).** If below the threshold, rewrite the flagged portions.
 
 **Important:** Do NOT inject personality, humor, or first-person opinions. The researcher's style fingerprint (from Skill 2) is the voice standard — this skill only removes AI tells, not adds new voice.
 
@@ -464,7 +464,7 @@ The prompt for the auditor subagent should include:
 - `sectionIndex`, `paragraphIndex`, `paragraphId`
 - `tools` from the profile
 
-If rejected, rewrite using the Auditor's feedback and re-run the full skill pipeline (draft fix → style compliance → Hebrew grammar → academic language → language purity → anti-AI → repetition → audit). Max 3 rewrite cycles per paragraph — if still failing after 3, include the paragraph with a `[NEEDS REVIEW]` marker.
+If rejected, rewrite using the Auditor's feedback and re-run the full skill pipeline (draft fix → style compliance → Hebrew grammar → academic language → language purity → anti-AI → repetition → audit). Max rewrite cycles per paragraph is defined in `thresholds.json` (default 3) — if still failing after the max, include the paragraph with a `[NEEDS REVIEW]` marker.
 
 Log the audit handoff:
 
