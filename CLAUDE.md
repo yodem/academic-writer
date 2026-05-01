@@ -49,11 +49,6 @@ Slash commands are auto-generated from skills with `user-invocable: true`. To ad
 | `/academic-writer:review` | review | Score an article before submission |
 | `/academic-writer:health` | health | Check integration health |
 | `/academic-writer:help` | help | List available commands |
-| `/academic-writer:learn` | learn | Rebuild style fingerprint from past articles |
-| `/academic-writer:present` | present | Generate conference/journal deliverables from a finished article |
-| `/academic-writer:update-field` | update-field | Change research field without redoing full setup |
-| `/academic-writer:update-tools` | update-tools | Add or remove integrations after initial setup |
-| `/academic-writer:feedback` | feedback | Record researcher feedback on a delivered article |
 
 ## Agents
 

@@ -58,15 +58,19 @@ This walks you through:
 | `/academic-writer:research` | **Research a topic** — query your sources, get answers with citations |
 | `/academic-writer:init` | **First-time setup** — profile, style analysis, source indexing |
 | `/academic-writer:health` | **System check** — verify all integrations are working |
-| `/academic-writer:update-field` | **Change your field** without re-running full init |
-| `/academic-writer:update-tools` | **Add/remove integrations** |
 | `/academic-writer:review` | **Self-review** — score a completed article on 6 quality dimensions |
 | `/academic-writer:ideate` | **Brainstorm ideas** — 5W1H framework, gap analysis, research question formulation |
-| `/academic-writer:learn` | **Update style** — scan new past articles and refresh your style fingerprint |
-| `/academic-writer:present` | **Post-article deliverables** — conference outlines, journal abstracts, book chapter proposals |
 | `/academic-writer:setup` | **Quick setup** — creates profile, detects integrations |
-| `/academic-writer:feedback` | **Capture feedback** — turn researcher feedback on a finished article into concrete edits and profile updates |
 | `/academic-writer:help` | **This help page** |
+
+### Internal skills (invoked from other skills)
+
+These don't have their own slash command; they run as sub-workflows:
+
+- `learn` — run after dropping new files in `past-articles/` (auto-invoked by the dashboard hint)
+- `update-tools` / `update-field` — invoked from within `init` or `setup`
+- `present` — invoked from `edit` or `write` after a final article ships
+- `feedback` — invoked from `edit` after researcher review
 
 ---
 
