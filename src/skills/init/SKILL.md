@@ -27,7 +27,7 @@ Personalized onboarding that creates your researcher profile, detects available 
 Run silently before saying anything:
 
 ```bash
-mkdir -p past-articles .academic-helper .academic-helper/logs
+mkdir -p past-articles .academic-helper .academic-helper/logs && cp -n "${CLAUDE_PLUGIN_ROOT}/thresholds.json" .academic-helper/ 2>/dev/null || true
 ```
 
 Migrate any legacy profile from `.academic-writer/profile.json` → `.academic-helper/profile.md`:

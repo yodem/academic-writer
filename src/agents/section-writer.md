@@ -461,7 +461,7 @@ Log completion with results:
 
 **Use the Agent tool to spawn an auditor subagent.** Pass the paragraph (after grammar, language purity, anti-AI, and repetition fixes) to the Auditor. Wait for approval before writing the next paragraph.
 
-The prompt for the auditor subagent should include:
+The auditor's full rule set is injected automatically via `SubagentStart` hook (`src/hooks/src/lifecycle/subagent-start.ts`). Spawn it with subagent_type "auditor" and a per-paragraph payload:
 - The paragraph text
 - `sectionIndex`, `paragraphIndex`, `paragraphId`
 - `tools` from the profile
