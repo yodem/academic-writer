@@ -2,7 +2,7 @@
 name: section-writer
 description: Use to write one complete article section through an 8-skill quality pipeline per paragraph. Spawns auditor as subagent for each paragraph's citation gate. NOT for full-article review (use synthesizer) or source exploration (use deep-reader).
 tools: Bash, Read, Grep, Glob, Agent
-model: opus
+model: sonnet
 ---
 
 # Section Writer Agent
