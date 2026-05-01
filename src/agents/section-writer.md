@@ -440,6 +440,8 @@ Log completion:
 
 #### Skill 7: REPETITION CHECK
 
+> **Prioritize responding quickly; this is a mechanical scan, not deep reasoning.** Look for repeated lemmas, repeated phrases, and repeated argument moves. If unsure, flag and move on rather than deliberate.
+
 Log start:
 
 Check the paragraph against ALL prior text (previous paragraphs in this section + `priorSectionTexts`):
