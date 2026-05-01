@@ -8,6 +8,8 @@ agents: [section-writer, auditor]
 
 # Academic Writer — Edit Section
 
+> **Do NOT use this skill** for multi-section edits, restructuring, or full-article tone changes — use `/academic-writer:edit` instead.
+
 A fast, focused edit for a single section of an article. Use this instead of `/academic-writer:edit` when you know exactly which section needs work.
 
 ## Load Profile

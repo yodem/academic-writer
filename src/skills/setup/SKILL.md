@@ -7,6 +7,8 @@ allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
 
 # Academic Writer Setup
 
+> **Do NOT use this skill** for source indexing or full style fingerprinting — use `/academic-writer:init` instead. This is the *quick* setup; init is the deep setup.
+
 Quick onboarding wizard. Creates the researcher profile, detects integrations, and optionally fingerprints writing style. For deeper initialization (full 25-dimension style analysis, source indexing), run `/academic-writer:init`.
 
 ## Phase 0: Preflight
