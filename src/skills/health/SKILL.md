@@ -2,6 +2,7 @@
 name: health
 description: "Check the health of all Academic Writer integrations — profile, Candlekeep, RAG, past articles, and source index."
 user-invocable: true
+allowedTools: [Bash, Read]
 ---
 
 # Academic Writer — Health Check

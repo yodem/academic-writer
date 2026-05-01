@@ -1,6 +1,6 @@
 ---
 description: Check the health of all Academic Writer integrations — profile, Candlekeep, RAG, past articles, and source index.
-allowed-tools: [Bash, Read, Write, Edit, Glob, Grep]
+allowed-tools: [Bash, Read]
 ---
 
 # Auto-generated from skills/health/SKILL.md

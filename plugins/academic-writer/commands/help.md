@@ -1,6 +1,6 @@
 ---
 description: Learn what the Academic Writer plugin does and how to use it.
-allowed-tools: [Bash, Read, Write, Edit, Glob, Grep]
+allowed-tools: [Read]
 ---
 
 # Auto-generated from skills/help/SKILL.md

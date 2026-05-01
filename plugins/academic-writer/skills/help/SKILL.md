@@ -2,6 +2,7 @@
 name: help
 description: "Learn what the Academic Writer plugin does and how to use it."
 user-invocable: true
+allowedTools: [Read]
 ---
 
 # Academic Writer — Help

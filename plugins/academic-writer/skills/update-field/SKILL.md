@@ -2,6 +2,7 @@
 name: update-field
 description: "Update your field of study in the Academic Writer profile."
 user-invocable: true
+allowedTools: [Read, Write, Edit, AskUserQuestion]
 ---
 
 # Academic Writer — Update Field of Study

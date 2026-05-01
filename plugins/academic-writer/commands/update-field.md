@@ -1,6 +1,6 @@
 ---
 description: Update your field of study in the Academic Writer profile.
-allowed-tools: [Bash, Read, Write, Edit, Glob, Grep]
+allowed-tools: [Read, Write, Edit, AskUserQuestion]
 ---
 
 # Auto-generated from skills/update-field/SKILL.md
