@@ -1,3 +1,4 @@
+"""Regression tests for the 2026-05-02 mikdashim failure modes."""
 from pathlib import Path
 
 DR = Path("src/agents/deep-reader.md")
