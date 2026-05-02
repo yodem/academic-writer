@@ -1,5 +1,4 @@
 """Regression tests for the 2026-05-02 mikdashim failure modes."""
-import re
 from pathlib import Path
 
 REF = Path("plugins/academic-writer/skills/write/references/anti-ai-patterns-hebrew.md")
