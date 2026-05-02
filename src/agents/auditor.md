@@ -131,6 +131,24 @@ Three outcomes per field:
 
 Check D is mandatory. If `.academic-helper/sources.json` does not exist, log a warning and treat every metadata field as "unverified" — all fields get tagged `[NEEDS REVIEW]` so the researcher can verify manually.
 
+### Check E — Unsourced Factual Assertions (Section G hard rule)
+
+In addition to verifying that cited claims are accurate, scan every paragraph for **uncited factual claims** that should have a citation. The pattern reference (`anti-ai-patterns-${language}.md` Section G) declares this a per-article cap=0 rule.
+
+**Detection cues — flag any sentence that:**
+1. Asserts a **dating** ("בתקופה X", "במאה הY", "in the Nth century") without a citation.
+2. Asserts **dimensions** or material specs ("60 אמה", "three courses of stone") that aren't a direct quote from a primary text in the assignment.
+3. Asserts a **technique** is "well-known" / "characteristic of" / "typical of" / "מוכר ב..." / "מקובל ב..." without a citation.
+4. Asserts **scholarly consensus** ("most scholars", "מקובל לחשוב", "ידוע בספרות") without naming the consensus.
+5. Asserts **archaeological / material-culture** facts ("excavations show", "ממצאים מעידים") without a citation.
+
+**Action:**
+- If the claim CAN be supported from a quoted primary text in the assignment or from `sources.json`, emit a recommended citation in the audit report.
+- If it cannot, mark the paragraph **REJECTED** and tag the offending sentence with `[NEEDS REVIEW: source for "<first 8 words of claim>"]`.
+- The paragraph cannot pass the audit gate until every Section G violation is either cited or removed.
+
+**Why this is a hard gate:** The 2026-05-02 mikdashim failure (sentence "טכניקה מוכרת בארכיטקטורה של התקופה הפרסית") was a Section G violation that the citation-accuracy check could not catch — there was no citation to verify because the claim was uncited. Section G closes that gap.
+
 ### Step 3: Verdict
 
 **APPROVED** if ALL of:

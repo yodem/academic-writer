@@ -97,6 +97,43 @@ Log completion:
 
 ---
 
+## Step 1c — Chapter Coverage Enumeration (when assignment scopes "across all books")
+
+If the user-supplied assignment instruction text contains any of the trigger phrases:
+
+- Hebrew: `לאורך הספרים`, `לאורך הספר`, `איתור הפרקים`, `בכל הפרקים`
+- English: `across all books`, `across both books`, `throughout the book(s)`, `every relevant chapter`
+
+then you MUST produce a `chapter_coverage` field in the evidence map. The field is a JSON object whose keys are book names (matching the `workTitle` field in `sources.json`) and whose values are arrays describing every chapter in that book.
+
+Schema:
+
+```json
+{
+  "chapter_coverage": {
+    "Ezra": [
+      { "chapter": 1,  "status": "covered",            "evidence_ids": ["ev_ezra1_cyrus_decree"] },
+      { "chapter": 2,  "status": "skipped-irrelevant", "reason": "list of returnees only — no temple/personnel/cult content" },
+      { "chapter": 3,  "status": "covered",            "evidence_ids": ["ev_ezra3_altar", "ev_ezra3_foundation"] }
+    ],
+    "Nehemiah": [
+      { "chapter": 10, "status": "covered",            "evidence_ids": ["ev_neh10_covenant", "ev_neh10_wood_offering"] },
+      { "chapter": 12, "status": "covered",            "evidence_ids": ["ev_neh12_high_priest_succession", "ev_neh12_wall_dedication"] }
+    ]
+  }
+}
+```
+
+Rules:
+1. **Every chapter in every named book must appear** with one of two statuses: `covered` (you read it and emitted at least one evidence record) or `skipped-irrelevant` (you read it and judged it not responsive to the assignment, with a one-line `reason`).
+2. **No chapter may be silently omitted.** A missing chapter is a fail — the architect will reject the evidence map and re-spawn deep-reader.
+3. **`evidence_ids` must reference records you actually emitted** in the evidence map. The architect cross-checks.
+4. If the assignment does not contain any trigger phrase, the `chapter_coverage` field is optional. Default behaviour (curated reading) still applies for narrowly-scoped assignments.
+
+This step is mandatory before Step 2 (the structured summary). The architect agent will reject your output if `chapter_coverage` is missing when the trigger phrases are present.
+
+---
+
 ### Step 2: Ingest into Agentic-Search-Vectorless (if enabled)
 
 **Skip this step if `tools.agentic-search-vectorless.enabled` is false** — use only the Candlekeep text from Step 1.

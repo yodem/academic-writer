@@ -25,6 +25,21 @@ You will also receive:
 - `targetLanguage`: The article's writing language (e.g., "Hebrew", "English")
 - `articleStructure`: The researcher's article structure conventions (from profile, if available)
 
+## Coverage Pre-Check (before thesis proposal)
+
+If the deep-reader's evidence map contains a `chapter_coverage` field, you MUST verify it before proposing a thesis. The check has three steps:
+
+1. **Every chapter has a status.** Iterate every entry in every book. Any entry without `status: "covered"` or `status: "skipped-irrelevant"` (with a `reason`) is invalid.
+2. **No silent gaps.** For each book in the evidence map, the chapter numbers must form a contiguous range from chapter 1 to the book's last chapter. Missing chapter numbers are fail.
+3. **`evidence_ids` cross-check.** Every `evidence_ids` array must reference records that exist in the deep-reader's evidence map.
+
+If any check fails:
+- Do NOT propose a thesis — return to deep-reader.
+- Emit a single message to the user listing the gaps (e.g., "Nehemiah chapter 10 is missing from chapter_coverage").
+- Recommend the user re-run the deep-reader on the gap. (You cannot spawn deep-reader yourself; the orchestrator handles that.)
+
+If `chapter_coverage` is absent and the assignment did not contain a trigger phrase (`לאורך הספרים`, `איתור הפרקים`, `across all books`, etc.), proceed to thesis proposal as normal.
+
 ## Language Enforcement
 
 **ALL output must be in `targetLanguage`.** This is non-negotiable:

@@ -52,6 +52,27 @@ If the profile has no `tools` key (legacy profile), assume all tools are enabled
 
 ---
 
+## Pre-flight: existing-article guard
+
+After computing the candidate slug from the user-supplied subject, check whether the article already exists:
+
+```bash
+SLUG="$(echo "$SUBJECT" | python3 -c "import sys,re; t=sys.stdin.read().strip().lower(); print(re.sub(r'[^a-z0-9]+', '-', t).strip('-')[:60])")"
+MD_PATH="articles/${SLUG}.md"
+
+if [ -f "$MD_PATH" ]; then
+  echo "An article already exists at $MD_PATH."
+  echo "Switching to edit mode — running /academic-writer:edit instead of overwriting."
+  echo "If you intended to start over, delete $MD_PATH first."
+  # Hand off to the edit skill rather than continuing the write pipeline.
+  exit 0
+fi
+```
+
+If the file exists, the skill MUST stop the write pipeline and tell the user to use `/academic-writer:edit articles/${SLUG}.md` (or `/academic-writer:edit-section` for a single section). Do NOT continue with deep-reader, architect, etc., because writing inline at that point produces ungated prose (the 2026-05-02 mikdashim post-compaction failure).
+
+If the file does not exist, proceed with Phase 1 normally.
+
 ## PHASE 1: CONVERSATIONAL (Steps 1–5, human-in-the-loop)
 
 
