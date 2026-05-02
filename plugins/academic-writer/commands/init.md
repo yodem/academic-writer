@@ -326,17 +326,28 @@ AskUserQuestion(questions=[{
 ls past-articles/
 ```
 
-**Step 1: Computational extraction** — Run the metrics extraction script to get hard numbers:
+**Step 1: Computational extraction** — Run the metrics extraction script to get hard numbers.
+
+First fetch the **shared Hebrew baseline** from CandleKeep (book *Hebrew Linguistic Reference*, mirrored on GitHub at [yodem/hebrew-linguistics-data](https://github.com/yodem/hebrew-linguistics-data); the same book is read by the `hebrew-book-producer` plugin so both share one source of truth):
+
+```bash
+mkdir -p .ctx
+ck items get cmomjonvy0fdmk30zwef79c48 > .ctx/hebrew-linguistic-reference.md
+```
+
+Then run the extractor:
 
 ```bash
 python3 plugins/academic-writer/scripts/extract-style-metrics.py \
   --input past-articles/ \
   --aggregate \
-  --baseline plugins/academic-writer/references/hebrew-academic-baseline.json \
+  --baseline .ctx/hebrew-linguistic-reference.md \
   --contrastive \
   --json \
   --output /tmp/style-metrics.json
 ```
+
+The extractor reads the baseline JSON code block embedded in the `08-style-fingerprint-baseline` chapter of the cached markdown, so there is no separate JSON file in the plugin's `references/` folder.
 
 Read the results:
 ```bash

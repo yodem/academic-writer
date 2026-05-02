@@ -308,6 +308,14 @@ Log completion:
 echo '{"type":"step_completed","data":{"step":"section_SECTION_INDEX_p_M_style_compliance","status":"pass|adjusted","numericalCompliance":N,"qualitativeScore":N,"overallCompliance":N,"dimensionsAdjusted":N,"details":"BRIEF_DESCRIPTION"}}' | cognetivy event append --run RUN_ID
 ```
 
+**Banned-terms sweep (per-project override).** If `.academic-helper/profile.md` contains a `bannedTerms` JSON block, parse it and scan the paragraph for every entry. For each match:
+
+1. If the entry has a non-empty `replacements` array, rewrite the match using the most context-appropriate replacement (favour the first replacement unless it produces awkward Hebrew with the surrounding sentence).
+2. If `replacements` is empty, the term is a hard ban — remove the sentence (or rewrite to omit the term entirely).
+3. Log the rewrite in the paragraph's audit trail (`section_N_p_M_banned_terms`).
+
+This sweep is mandatory before Skill 3. The pattern reference (`anti-ai-patterns-${language}.md`) covers universal AI tells; `bannedTerms` covers researcher-specific voice. Both must pass.
+
 ---
 
 #### Skill 3: HEBREW GRAMMAR CHECK
