@@ -21,6 +21,15 @@
             "statusMessage": "Pulling latest voice profile..."
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash src/skills/voice/voice-migrate.sh",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "SubagentStart": [
