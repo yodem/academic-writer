@@ -4,14 +4,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "tests" / "fixtures" / "voice" / "sample-corpus"
+LEGACY_PROFILE = ROOT / "tests" / "fixtures" / "voice" / "legacy-profile.json"
 
 def test_stage1_seeds_author_voice(tmp_path):
     pa = tmp_path / "past-articles"
     shutil.copytree(FIXTURE, pa)
-    # Create a minimal .academic-helper/profile.md so hooks/scripts treat this as a real project
-    (tmp_path / ".academic-helper").mkdir()
-    (tmp_path / ".academic-helper" / "profile.md").write_text("# stub\n")
-    # Run migration first (no-op, no legacy)
+    # Set up legacy .academic-writer/profile.json so migration has something to convert
+    # (also satisfies the profile-scope guard)
+    aw_dir = tmp_path / ".academic-writer"
+    aw_dir.mkdir()
+    shutil.copy(LEGACY_PROFILE, aw_dir / "profile.json")
+    # Run migration — should produce AUTHOR_VOICE.md from legacy profile
     subprocess.run(["bash", str(ROOT / "src/skills/voice/voice-migrate.sh")],
                    cwd=str(tmp_path), check=True)
     # Stage 1 is normally agent-driven; for the structural test we shell-emit a stub fingerprint
@@ -20,8 +23,7 @@ def test_stage1_seeds_author_voice(tmp_path):
     (tmp_path / ".voice" / "fingerprint.md").write_text(
         "# Fingerprint\n- Corpus summary: 3 articles, 1500 words, Hebrew.\n"
     )
-    # Inject a stub `ck` that exits 0 for all subcommands (simulates ck-not-installed path
-    # so voice-sync.sh treats the push as a no-op once ck books list returns empty).
+    # Inject a stub `ck` that exits 127 → voice-sync treats push as a no-op
     stub_bin = tmp_path / ".stub-bin"
     stub_bin.mkdir()
     stub_ck = stub_bin / "ck"
@@ -33,8 +35,9 @@ def test_stage1_seeds_author_voice(tmp_path):
     r = subprocess.run(["bash", str(ROOT / "src/skills/voice/voice-sync.sh"), "push"],
                        cwd=str(tmp_path), capture_output=True, text=True, env=env)
     assert r.returncode == 0
-    # AUTHOR_VOICE.md should exist (created by migrate or by fixture; ensure either way)
+    # AUTHOR_VOICE.md should have been created by migration — not seeded by the test
     avo = tmp_path / "AUTHOR_VOICE.md"
-    if not avo.exists():
-        avo.write_text("> Updated 2026-05-05 by academic-writer\n\n# Voice Profile — test\n")
-    assert avo.exists()
+    assert avo.exists(), "AUTHOR_VOICE.md was not created by migration"
+    content = avo.read_text()
+    assert "Voice Profile" in content
+    assert "Test Writer" in content  # from legacy-profile.json fixture
