@@ -1,14 +1,27 @@
 ---
 name: edit
-description: "Edit a previously written article — revise sections, fix citations, adjust tone, restructure arguments, or rewrite passages."
+description: "Edit a previously written article — revise sections, fix citations, adjust tone, restructure arguments, or rewrite passages. Use when revising an article that's already drafted — multiple sections, restructuring, or major changes."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 agents: [section-writer, auditor, synthesizer]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Edit Article
 
 You are an editing assistant. The researcher has a previously written article (from `/academic-writer:write` or any .docx/.md file) and wants to revise it.
+
+### Voice profile load (first step of every run)
+
+1. Run `voice-sync.sh pull` — pulls latest `AUTHOR_VOICE.md` from CandleKeep (last-write-wins).
+2. Read `AUTHOR_VOICE.md` from project root. Whole file goes into the section-writer system prompt.
+3. The section writer is instructed to weight `## Academic-specific` rules higher when they
+   conflict with `## Core voice` rules; everything else applies as written.
+
+If `AUTHOR_VOICE.md` is missing or empty, warn once: "No voice profile. Run `/academic-writer:init`
+to seed it." Do not block writing.
+
+---
 
 ## Load Profile
 

@@ -1,15 +1,28 @@
 ---
 name: write
-description: "Write a new academic article. Conversational pipeline: subject → sources → deep read → thesis → outline → write → audit → .docx"
+description: "Write a new academic article. Conversational pipeline: subject → sources → deep read → thesis → outline → write → audit → .docx. Use when starting a new article from scratch — subject, sources, thesis, outline, draft."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 agents: [deep-reader, architect, section-writer, auditor, synthesizer]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Write Article
 
 You are an academic writing assistant for a Humanities researcher.
 
+
+### Voice profile load (first step of every run)
+
+1. Run `voice-sync.sh pull` — pulls latest `AUTHOR_VOICE.md` from CandleKeep (last-write-wins).
+2. Read `AUTHOR_VOICE.md` from project root. Whole file goes into the section-writer system prompt.
+3. The section writer is instructed to weight `## Academic-specific` rules higher when they
+   conflict with `## Core voice` rules; everything else applies as written.
+
+If `AUTHOR_VOICE.md` is missing or empty, warn once: "No voice profile. Run `/academic-writer:init`
+to seed it." Do not block writing.
+
+---
 
 ## Load Profile
 
@@ -326,7 +339,7 @@ Each section-writer handles a **per-paragraph skill pipeline** internally:
 | 3 | **Hebrew Grammar** | Check grammar, spelling, academic register | `section_N_p_M_hebrew_grammar` |
 | 4 | **Academic Language** | Check academic vocabulary level and linking words usage | `section_N_p_M_academic_language` |
 | 5 | **Language Purity** | Detect and fix ALL embedded foreign-language terms in running text | `section_N_p_M_language_purity` |
-| 6 | **Anti-AI Check** | Load `anti-ai-patterns-${targetLanguage_lower}.md` and detect/fix AI writing patterns. Score 5 dimensions, threshold 35/50. | `section_N_p_M_anti_ai` |
+| 6 | **Anti-AI Check** | Load `anti-ai-patterns-${targetLanguage_lower}.md` and detect/fix AI writing patterns. Score 5 dimensions, threshold defined in `thresholds.json` (default 35/50). | `section_N_p_M_anti_ai` |
 | 7 | **Repetition Check** | Check words, phrases, arguments vs. prior text + formulaic-pattern cap sweep against the language blacklist + evidence re-description guard via ownership map | `section_N_p_M_repetition_check` |
 | 8 | **Citation Audit** | Auditor agent verifies every citation against RAG + page + Check D metadata integrity (hard gate for high-confidence mismatches; `[NEEDS REVIEW: <field>]` tag for low-confidence) | `section_N_p_M_citation_audit` |
 
@@ -408,8 +421,8 @@ Run the self-review checklist from `/academic-writer:review`. Score the article 
 
 Present the scorecard to the researcher.
 
-**If score < 40/60**, ask whether to proceed or address issues first (using `AskUserQuestion`).
-**If score >= 40/60**, show the scorecard and continue to DOCX output.
+**If score is below the self-review threshold defined in `thresholds.json` (default 40/60)**, ask whether to proceed or address issues first (using `AskUserQuestion`).
+**If score meets or exceeds the threshold (default 40/60)**, show the scorecard and continue to DOCX output.
 
 Log completion:
 

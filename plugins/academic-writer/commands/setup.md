@@ -1,5 +1,5 @@
 ---
-description: First-time setup for Academic Writer — creates researcher profile, detects integrations, analyzes writing style from past articles
+description: First-time setup for Academic Writer — creates researcher profile, detects integrations, analyzes writing style from past articles. Use for a quick onboarding (faster than init); does not include source indexing.
 allowed-tools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
 ---
 
@@ -8,6 +8,8 @@ allowed-tools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
 
 # Academic Writer Setup
 
+> **Do NOT use this skill** for source indexing or full style fingerprinting — use `/academic-writer:init` instead. This is the *quick* setup; init is the deep setup.
+
 Quick onboarding wizard. Creates the researcher profile, detects integrations, and optionally fingerprints writing style. For deeper initialization (full 25-dimension style analysis, source indexing), run `/academic-writer:init`.
 
 ## Phase 0: Preflight
@@ -15,7 +17,7 @@ Quick onboarding wizard. Creates the researcher profile, detects integrations, a
 Run silently before anything else:
 
 ```bash
-mkdir -p past-articles .academic-helper .academic-helper/logs
+mkdir -p past-articles .academic-helper .academic-helper/logs && cp -n "${CLAUDE_PLUGIN_ROOT}/thresholds.json" .academic-helper/ 2>/dev/null || true
 ```
 
 Migrate any legacy profile from `.academic-writer/profile.json` → `.academic-helper/profile.md`:

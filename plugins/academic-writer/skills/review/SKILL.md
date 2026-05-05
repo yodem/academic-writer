@@ -1,8 +1,9 @@
 ---
 name: review
-description: "Self-review quality gate — scores a completed article on 6 dimensions (structure, argument logic, citation completeness, source coverage, writing quality, academic conventions) and presents a scorecard before final output."
+description: "Self-review quality gate — scores a completed article on 6 dimensions (structure, argument logic, citation completeness, source coverage, writing quality, academic conventions) and presents a scorecard before final output. Use after writing to score the article on quality dimensions before publication."
 user-invocable: true
 allowedTools: [Bash, Read, Glob, Grep, AskUserQuestion]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Article Self-Review
@@ -36,57 +37,22 @@ Read the selected article with the `Read` tool.
 
 When invoked as a pipeline step, the article text is passed directly.
 
-## Review Checklist (6 Dimensions)
+## Scorecard rubric
 
-Score each dimension **1–10**. Present detailed findings for each.
+The 6-dimension scorecard is defined in `references/scorecard.json` (machine-readable, versioned). Read that file at the start of every review:
 
-### 1. Structure (מבנה)
+```bash
+cat plugins/academic-writer/skills/review/references/scorecard.json
+```
 
-- Does the introduction open with `במאמר זה` / `בדף זה` / `במחקר זה`?
-- Does the introduction contain a roadmap of the article's sections?
-- Does the conclusion open with `לסיכום` / `מכל האמור עולה כי` / `בסיכומו של דבר`?
-- Does the conclusion return to the thesis?
-- Are sections ordered logically?
-- Is paragraph count per section balanced (not wildly uneven)?
+For each dimension:
+1. Score 0–10 against the listed `criteria`.
+2. Sum the dimension scores.
+3. Compare to `scoring.passThreshold` (default 40). Below threshold → researcher review required.
 
-**Score 10:** All conventions met, logical order, balanced sections.
-**Score 1:** Missing intro/conclusion conventions, illogical order.
+The scorecard is the single source of truth — do not score on dimensions not listed there, and do not change weights inline. To adjust scoring, edit `references/scorecard.json` and bump its `version` field.
 
-### 2. Argument Logic (הגיון טיעוני)
-
-- Does each section advance the thesis?
-- Are there logical gaps between sections?
-- Do topic sentences clearly state the section's argument?
-- Is there a clear progression (not circular reasoning)?
-- Does the conclusion follow from the body?
-
-**Score 10:** Every section advances thesis, no gaps, clear progression.
-**Score 1:** Sections don't connect to thesis, circular logic, gaps.
-
-### 3. Citation Completeness (שלמות ציטוטים)
-
-- Does every factual claim have a citation?
-- Are there orphan citations (cited but never discussed)?
-- Is citation format consistent throughout?
-- Are page numbers present where expected?
-- Are author names and work titles consistent across citations?
-
-**Score 10:** Every claim cited, consistent format, no orphans.
-**Score 1:** Multiple uncited claims, inconsistent format.
-
-### 4. Source Coverage (כיסוי מקורות)
-
-- Are all sources from the outline actually used in the article?
-- Is any single source over-relied upon (>40% of citations)?
-- Are sources distributed across sections appropriately?
-- Are opposing viewpoints represented?
-
-**Score 10:** All sources used, balanced distribution, counter-arguments present.
-**Score 1:** Sources missing, over-reliance on one source.
-
-### 5. Writing Quality (איכות כתיבה)
-
-Check against the researcher's style fingerprint:
+Also check the researcher's style fingerprint for Writing Quality (dimension 5):
 
 ```bash
 python3 -c "
@@ -97,30 +63,10 @@ print(m.group(1) if m else 'null')
 "
 ```
 
-- Does the writing match the researcher's voice?
-- Is sentence length varied?
-- Are there grammar or spelling issues?
-- Is the language register consistently academic?
-- Are there language purity violations (foreign terms in body text)?
-
-**Score 10:** Matches fingerprint perfectly, no issues.
-**Score 1:** Generic voice, grammar issues, register inconsistencies.
-
-### 6. Academic Conventions (מוסכמות אקדמיות)
-
-Load linking words reference:
+And load linking words reference for Academic Conventions (dimension 6):
 ```bash
 cat plugins/academic-writer/words.md
 ```
-
-- Are linking words varied (not repeating the same connector)?
-- Are linking words used in correct semantic context?
-- Is paragraph length appropriate (not too short, not too long)?
-- Is formal register maintained throughout?
-- Are transitions between sections smooth?
-
-**Score 10:** Rich variety of connectors, appropriate lengths, smooth transitions.
-**Score 1:** Repetitive connectors, choppy transitions.
 
 ## Scorecard Output
 

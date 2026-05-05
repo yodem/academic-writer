@@ -1,9 +1,10 @@
 ---
 name: learn
-description: "Style learning — scans past-articles/ for new files, extracts style patterns, and merges them into the existing style fingerprint. Shows a diff report."
-user-invocable: true
+description: "Style learning — scans past-articles/ for new files, extracts style patterns, and merges them into the existing style fingerprint. Shows a diff report. Use after adding new past articles to past-articles/ — rebuilds the style fingerprint."
+user-invocable: false
 allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
-agents: [style-miner]
+agents: [voice-miner]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Learn from New Articles
@@ -40,7 +41,7 @@ If new files found, show them:
 
 ## Step 2: Spawn Style Miner
 
-**Use the Agent tool to spawn the `style-miner` subagent.** Pass:
+**Use the Agent tool to spawn the `voice-miner` subagent.** Pass:
 - List of new article filenames
 - Current `styleFingerprint` from the profile
 - `targetLanguage`

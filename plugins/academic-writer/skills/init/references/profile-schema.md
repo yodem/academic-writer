@@ -104,7 +104,7 @@ updatedAt: ISO_TIMESTAMP
 
 ## 25-Dimension Style Analysis Rubric
 
-Run via style-miner agent. Dimensions span 8 categories (A–I):
+Run via voice-miner agent. Dimensions span 8 categories (A–I):
 
 ### A. Sentence-Level
 1. Average sentence length (mean + range in words)

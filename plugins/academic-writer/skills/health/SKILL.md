@@ -1,8 +1,9 @@
 ---
 name: health
-description: "Check the health of all Academic Writer integrations — profile, Candlekeep, RAG, past articles, and source index."
+description: "Check the health of all Academic Writer integrations — profile, Candlekeep, RAG, past articles, and source index. Use when something stops working, after install, or before a long write session."
 user-invocable: true
 allowedTools: [Bash, Read]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Health Check

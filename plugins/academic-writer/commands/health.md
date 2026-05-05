@@ -1,5 +1,5 @@
 ---
-description: Check the health of all Academic Writer integrations — profile, Candlekeep, RAG, past articles, and source index.
+description: Check the health of all Academic Writer integrations — profile, Candlekeep, RAG, past articles, and source index. Use when something stops working, after install, or before a long write session.
 allowed-tools: [Bash, Read]
 ---
 
