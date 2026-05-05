@@ -289,6 +289,20 @@ Full rubric (all 30 dimensions across 8 categories A–I): see `references/profi
 
 ---
 
+### Stage 1 voice fingerprint
+
+After past-articles are scanned, invoke the `voice-miner` agent:
+
+1. Run `voice-miner` agent on `past-articles/`. Output is `.voice/fingerprint.md`.
+2. Run `voice-distiller --from-fingerprint` to seed the four-section `AUTHOR_VOICE.md` at root.
+3. Run `voice-sync push`.
+4. Print: "✓ Voice fingerprint created from N past articles. You can write articles now, or run
+   `/academic-writer:voice` for a deeper profile (recommended)."
+
+The user is not required to run Stage 2. They can start writing immediately with the fingerprint.
+
+---
+
 ## Phase 3: Research Sources
 
 **If Candlekeep is enabled:**
