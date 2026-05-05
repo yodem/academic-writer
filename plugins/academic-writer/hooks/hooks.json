@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash src/skills/voice/voice-migrate.sh",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-migrate.sh",
             "timeout": 10
           }
         ]

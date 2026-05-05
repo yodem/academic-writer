@@ -51,7 +51,7 @@ or specified explicitly.
 ### `:voice audit`
 1. Read `AUTHOR_VOICE.md` and corpus.
 2. For each rule, search corpus for evidence. Write `.voice/audit.md` with score and flagged rules.
-3. If score < 6, refuse to recompress until user removes or evidences flagged rules.
+3. If score < `thresholds.json: voice.ruleCoverage.block`, refuse to recompress until user removes or evidences flagged rules.
 
 ### `:voice quick`
 1. Same as `:voice init`, but pass `--quick` to interviewer (cap 8 questions/session, skip sessions

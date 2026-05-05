@@ -48,10 +48,10 @@ You are not invoked on sessions 1, 2, 4, 5, 6.
 
    - "<rule text>" — section: <Core voice|...>; reason: no matching pattern in corpus
    ```
-   Threshold (starting points, calibrate during real usage):
-   - ≥ 8.0 → pass, no user prompt
-   - 6.0–7.9 → warn user, list flagged rules, offer "remove or supply evidence?" prompt
-   - < 6 → block recompress; require user to remove or evidence flagged rules before continuing
+   Threshold: load `<root>/src/thresholds.json` and use `voice.ruleCoverage` keys:
+   - score ≥ `voice.ruleCoverage.pass` → pass, no user prompt
+   - `voice.ruleCoverage.warn` ≤ score < `voice.ruleCoverage.pass` → warn user, list flagged rules, offer "remove or supply evidence?" prompt
+   - score < `voice.ruleCoverage.block` → block recompress; require user to remove or evidence flagged rules before continuing
 
 6. **Sync to CandleKeep.** Call `voice-sync push`. If `ck` is missing, warn once and continue.
 
