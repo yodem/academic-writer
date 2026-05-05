@@ -59,7 +59,7 @@ Slash commands are auto-generated from skills with `user-invocable: true`. To ad
 | `src/agents/section-writer.md` | Writes one complete section through the 8-skill quality pipeline |
 | `src/agents/auditor.md` | Citation hard gate — verifies claims against sources.json |
 | `src/agents/synthesizer.md` | Post-section review for coherence and cross-section flow |
-| `src/agents/style-miner.md` | Extracts writing patterns from past articles; updates style fingerprint |
+| `src/agents/voice-miner.md` | Stage 1 voice subsystem — reads corpus and emits markdown style fingerprint |
 
 ## Pipeline pattern
 

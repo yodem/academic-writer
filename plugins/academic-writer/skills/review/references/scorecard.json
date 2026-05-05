@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0",
+  "description": "6-dimension self-review scorecard for completed academic articles. Each dimension scores 0-10. Total >= 40/60 = pass.",
+  "dimensions": [
+    {
+      "id": "structure",
+      "name": "Structure & Coherence",
+      "nameHe": "מבנה",
+      "weight": 1,
+      "criteria": [
+        "Introduction opens with במאמר זה / בדף זה / במחקר זה",
+        "Introduction contains a roadmap of sections",
+        "Conclusion opens with לסיכום / מכל האמור עולה כי / בסיכומו של דבר",
+        "Conclusion returns to the thesis",
+        "Sections are ordered logically",
+        "Paragraph count per section is balanced"
+      ],
+      "scoreGuide": {
+        "10": "All conventions met, logical order, balanced sections",
+        "1": "Missing intro/conclusion conventions, illogical order"
+      }
+    },
+    {
+      "id": "argument_logic",
+      "name": "Argument Logic",
+      "nameHe": "הגיון טיעוני",
+      "weight": 1,
+      "criteria": [
+        "Each section advances the thesis",
+        "No logical gaps between sections",
+        "Topic sentences clearly state the section's argument",
+        "Clear progression — no circular reasoning",
+        "Conclusion follows from body"
+      ],
+      "scoreGuide": {
+        "10": "Every section advances thesis, no gaps, clear progression",
+        "1": "Sections don't connect to thesis, circular logic, gaps"
+      }
+    },
+    {
+      "id": "citation_completeness",
+      "name": "Citation Completeness",
+      "nameHe": "שלמות ציטוטים",
+      "weight": 1,
+      "criteria": [
+        "Every factual claim has a citation",
+        "No orphan citations (cited but never discussed)",
+        "Citation format is consistent throughout",
+        "Page numbers present where expected",
+        "Author names and work titles consistent across citations"
+      ],
+      "scoreGuide": {
+        "10": "Every claim cited, consistent format, no orphans",
+        "1": "Multiple uncited claims, inconsistent format"
+      }
+    },
+    {
+      "id": "source_coverage",
+      "name": "Source Coverage",
+      "nameHe": "כיסוי מקורות",
+      "weight": 1,
+      "criteria": [
+        "All sources from outline actually used in article",
+        "No single source over-relied upon (>40% of citations)",
+        "Sources distributed across sections appropriately",
+        "Opposing viewpoints represented"
+      ],
+      "scoreGuide": {
+        "10": "All sources used, balanced distribution, counter-arguments present",
+        "1": "Sources missing, over-reliance on one source"
+      }
+    },
+    {
+      "id": "writing_quality",
+      "name": "Writing Quality",
+      "nameHe": "איכות כתיבה",
+      "weight": 1,
+      "criteria": [
+        "Writing matches the researcher's style fingerprint",
+        "Sentence length is varied",
+        "No grammar or spelling issues",
+        "Language register is consistently academic",
+        "No language purity violations (foreign terms in body text)"
+      ],
+      "scoreGuide": {
+        "10": "Matches fingerprint perfectly, no issues",
+        "1": "Generic voice, grammar issues, register inconsistencies"
+      }
+    },
+    {
+      "id": "academic_conventions",
+      "name": "Academic Conventions",
+      "nameHe": "מוסכמות אקדמיות",
+      "weight": 1,
+      "criteria": [
+        "Linking words varied — not repeating the same connector",
+        "Linking words used in correct semantic context",
+        "Paragraph length appropriate (not too short, not too long)",
+        "Formal register maintained throughout",
+        "Transitions between sections smooth"
+      ],
+      "scoreGuide": {
+        "10": "Rich variety of connectors, appropriate lengths, smooth transitions",
+        "1": "Repetitive connectors, choppy transitions"
+      }
+    }
+  ],
+  "scoring": {
+    "perDimensionMax": 10,
+    "totalMax": 60,
+    "passThreshold": 40,
+    "_comment": "passThreshold mirrors thresholds.json:selfReview.passThreshold. Keep in sync.",
+    "grades": [
+      { "label": "Excellent", "min": 50, "max": 60, "note": "ready for submission" },
+      { "label": "Good", "min": 40, "max": 49, "note": "minor improvements recommended" },
+      { "label": "Needs Work", "min": 30, "max": 39, "note": "specific issues to address" },
+      { "label": "Poor", "min": 0, "max": 29, "note": "significant revision needed" }
+    ]
+  }
+}

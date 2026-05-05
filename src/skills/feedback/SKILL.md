@@ -3,7 +3,7 @@ name: feedback
 description: "Capture researcher feedback on a completed article and turn it into concrete improvements — article edits, profile updates, new anti-AI pattern entries, pattern-cap adjustments, and session memory. Use after the researcher reviews an article produced by /academic-writer."
 user-invocable: false
 allowedTools: [Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion, Agent]
-agents: [style-miner]
+agents: [voice-miner]
 metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
@@ -143,11 +143,11 @@ Use `Edit` on `.academic-helper/profile.md`. Common fields:
 - `abstractLanguages` — which languages to emit abstracts in
 - `outputFormatPreferences.font` / `.bodySize` / etc.
 
-If the change touches the style fingerprint broadly, consider spawning the `style-miner` subagent instead of editing by hand:
+If the change touches the style fingerprint broadly, consider spawning the `voice-miner` subagent instead of editing by hand:
 
-> The style-miner can re-scan `past-articles/` and recompute the fingerprint. Use it when the feedback is "the voice was generically off" rather than a specific dimension.
+> The voice-miner can re-scan `past-articles/` and recompute the fingerprint. Use it when the feedback is "the voice was generically off" rather than a specific dimension.
 
-Spawn via the Agent tool with `subagent_type: style-miner` if applicable.
+Spawn via the Agent tool with `subagent_type: voice-miner` if applicable.
 
 ### C. Pattern reference update
 
