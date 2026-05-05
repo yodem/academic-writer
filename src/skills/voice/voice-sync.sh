@@ -77,13 +77,18 @@ case "$action" in
   push)
     id=$(ensure_id)
     if [[ -z "$id" ]]; then
-      id=$(ck books create --title "$title" --format md --content "$profile" --json \
-        | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
-      mkdir -p "$voice_dir"
-      echo "$id" > "$id_cache"
-      echo "voice-sync push: created remote book id=$id"
+      id=$(ck books create --title "$title" --format md --content "$profile" --json 2>/dev/null \
+        | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null || true)
+      if [[ -n "$id" ]]; then
+        mkdir -p "$voice_dir"
+        echo "$id" > "$id_cache"
+        echo "voice-sync push: created remote book id=$id"
+      else
+        echo "voice-sync push: ck unavailable or books subcommand unsupported — local-only mode"
+      fi
     else
-      ck books update "$id" --content "$profile"
+      ck books update "$id" --content "$profile" 2>/dev/null || \
+        echo "voice-sync push: ck update failed — local-only mode"
       echo "voice-sync push: updated remote book id=$id"
     fi
     ;;
