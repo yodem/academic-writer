@@ -50,3 +50,7 @@ plugins/academic-writer/agents/memory/
 .cognetivy/events/
 .cognetivy/collections/
 .cognetivy/node-results/
+
+# Voice profile build artifacts (only AUTHOR_VOICE.md is tracked)
+.voice/*
+!.voice/.gitkeep
