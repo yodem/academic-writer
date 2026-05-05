@@ -11,6 +11,16 @@
             "statusMessage": "Loading Academic Writer dashboard..."
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs lifecycle/voice-pull",
+            "timeout": 10,
+            "statusMessage": "Pulling latest voice profile..."
+          }
+        ]
       }
     ],
     "SubagentStart": [
