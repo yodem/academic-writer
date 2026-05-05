@@ -61,6 +61,7 @@ This walks you through:
 | `/academic-writer:review` | **Self-review** — score a completed article on 6 quality dimensions |
 | `/academic-writer:ideate` | **Brainstorm ideas** — 5W1H framework, gap analysis, research question formulation |
 | `/academic-writer:setup` | **Quick setup** — creates profile, detects integrations |
+| `/academic-writer:voice` | **Deep voice profile** — Stage 2 adversarial interview (7 sessions) |
 | `/academic-writer:help` | **This help page** |
 
 ### Internal skills (invoked from other skills)
