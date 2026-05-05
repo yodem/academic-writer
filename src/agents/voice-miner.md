@@ -42,8 +42,10 @@ Write `.voice/fingerprint.md` only. Never write `AUTHOR_VOICE.md` — that is th
 
 - Output is markdown, not JSON. The fingerprint is human-readable.
 - Quote real examples from the corpus inline (one sentence each, file:line citation).
-- If the corpus is below the "needs more data" threshold (< 3 articles OR < 1500 total words OR
-  < 800 words/article avg), write a stub fingerprint flagged with `> NEEDS CORPUS`.
+- If the corpus is below the "needs more data" threshold (load `<root>/src/thresholds.json` and
+  use `voice.corpus`: fewer than `voice.corpus.minArticles` articles, OR fewer than
+  `voice.corpus.minTotalWords` total words, OR fewer than `voice.corpus.minWordsPerArticle`
+  words/article avg), write a stub fingerprint flagged with `> NEEDS CORPUS`.
 - Idempotent: running you again on the same corpus produces the same output (modulo timestamp).
 
 ## Failure modes

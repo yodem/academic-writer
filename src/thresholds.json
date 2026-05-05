@@ -21,5 +21,17 @@
     "passThreshold": 7,
     "maxScore": 10,
     "_comment": "Per-dimension style compliance score. Below 7 triggers paragraph adjustment."
+  },
+  "voice": {
+    "ruleCoverage": {
+      "pass": 8.0,
+      "warn": 6.0,
+      "block": 6.0
+    },
+    "corpus": {
+      "minArticles": 3,
+      "minTotalWords": 1500,
+      "minWordsPerArticle": 800
+    }
   }
 }
