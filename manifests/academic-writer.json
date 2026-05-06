@@ -1,6 +1,6 @@
 {
   "name": "academic-writer",
-  "version": "0.2.19",
+  "version": "0.2.20",
   "description": "AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as .docx files.",
   "author": {
     "name": "Yotam Fromm",
