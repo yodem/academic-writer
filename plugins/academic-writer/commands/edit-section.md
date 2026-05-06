@@ -1,5 +1,5 @@
 ---
-description: Quick edit of a single section — rewrite, expand, cut, fix citations, or adjust style. Faster than full article edit.
+description: Quick edit of a single section — rewrite, expand, cut, fix citations, or adjust style. Faster than full article edit. Use when changing one specific section only — faster than full edit.
 allowed-tools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 ---
 
@@ -8,7 +8,20 @@ allowed-tools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 
 # Academic Writer — Edit Section
 
+> **Do NOT use this skill** for multi-section edits, restructuring, or full-article tone changes — use `/academic-writer:edit` instead.
+
 A fast, focused edit for a single section of an article. Use this instead of `/academic-writer:edit` when you know exactly which section needs work.
+
+### Voice profile load (first step of every run)
+
+1. Run `voice-sync.sh pull` — pulls latest `AUTHOR_VOICE.md` from CandleKeep (last-write-wins).
+2. Read `AUTHOR_VOICE.md` from project root. Whole file goes into the section-writer system prompt.
+3. The section writer is instructed to weight `## Academic-specific` rules higher when they
+   conflict with `## Core voice` rules; everything else applies as written.
+
+If `AUTHOR_VOICE.md` is missing or empty, warn once: "No voice profile. Run `/academic-writer:init`
+to seed it." Do not block writing.
+
 
 ## Load Profile
 
@@ -53,7 +66,7 @@ Common edit types:
 
 **Use the Agent tool to spawn a `section-writer` subagent** with the full pipeline (draft → style compliance → Hebrew grammar → repetition check → citation audit).
 
-Pass as prompt: the section (title, current text, edit instructions, suggested sources), sectionIndex, thesis, styleFingerprint, citationStyle, runId, tools, priorSectionTexts (text of adjacent sections for repetition awareness).
+Pass as prompt: the section (title, current text, edit instructions, suggested sources), sectionIndex, thesis, styleFingerprint, citationStyle, tools, priorSectionTexts (text of adjacent sections for repetition awareness).
 
 If the researcher wants to expand with new evidence, **first use the Agent tool to spawn research subagents in parallel** — call the Agent tool multiple times in a single response:
 - One subagent for RAG queries on the expansion topic
@@ -63,7 +76,7 @@ Then feed results to the section-writer.
 
 ### For citation fixes:
 
-**Use the Agent tool to spawn an `auditor` subagent** for each paragraph. Pass as prompt: the paragraph text, runId, sectionIndex, paragraphIndex, tools.
+**Use the Agent tool to spawn an `auditor` subagent** for each paragraph. Pass as prompt: the paragraph text, sectionIndex, paragraphIndex, tools.
 
 Apply fixes, re-audit until all pass.
 
@@ -106,13 +119,3 @@ Show the revised section with a change summary:
 > Would you like me to export the full updated article as .docx?
 
 
-## Cognetivy Logging (if enabled)
-
-```bash
-echo '{"type":"step_started","nodeId":"edit_section_N"}' | cognetivy event append --run RUN_ID
-```
-
-On completion:
-```bash
-echo '{"type":"step_completed","nodeId":"edit_section_N","paragraphsEdited":N,"citationsVerified":N,"styleScore":"N/5"}' | cognetivy event append --run RUN_ID
-```

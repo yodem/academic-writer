@@ -1,5 +1,5 @@
 ---
-description: Research a subject or answer questions using your indexed sources — Candlekeep and RAG. Spawns parallel subagents for speed.
+description: Research a subject or answer questions using your indexed sources — Candlekeep and RAG. Spawns parallel subagents for speed. Use when investigating a topic or fact-checking before writing.
 allowed-tools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 ---
 
@@ -145,20 +145,6 @@ Once all subagents return, **merge results** by deduplicating and cross-referenc
 >
 > **Context:** [surrounding text / chapter / argument]
 > **Verified:** ✓ Candlekeep page confirmed / ⚠ RAG only (page may need verification)
-
-
-## Cognetivy Logging (if enabled)
-
-Log the research session:
-```bash
-echo '{"subject": "RESEARCH_TOPIC", "type": "research"}' > /tmp/aw-research-input.json
-cognetivy run start --workflow wf_academic_writer --input /tmp/aw-research-input.json
-```
-
-Log query results:
-```bash
-echo '{"type":"step_completed","nodeId":"research","ragQueries":N,"candlekeepReads":N,"totalPassages":N,"toolsUsed":["rag","candlekeep"]}' | cognetivy event append --run RUN_ID
-```
 
 
 ## Follow-up

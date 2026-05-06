@@ -1,6 +1,6 @@
 ---
-description: Learn what the Academic Writer plugin does and how to use it.
-allowed-tools: [Bash, Read, Write, Edit, Glob, Grep]
+description: Learn what the Academic Writer plugin does and how to use it. Use when you don't know which command to run.
+allowed-tools: [Read]
 ---
 
 # Auto-generated from skills/help/SKILL.md
@@ -42,7 +42,6 @@ This walks you through:
 |------|-------------|
 | **Candlekeep** | Cloud document library — your source PDFs and research materials |
 | **Agentic-Search-Vectorless** | Vectorless semantic search across all your sources |
-| **Cognetivy** | Workflow tracking and audit trail |
 
 
 ## Slash Commands
@@ -55,14 +54,20 @@ This walks you through:
 | `/academic-writer:research` | **Research a topic** — query your sources, get answers with citations |
 | `/academic-writer:init` | **First-time setup** — profile, style analysis, source indexing |
 | `/academic-writer:health` | **System check** — verify all integrations are working |
-| `/academic-writer:update-field` | **Change your field** without re-running full init |
-| `/academic-writer:update-tools` | **Add/remove integrations** |
 | `/academic-writer:review` | **Self-review** — score a completed article on 6 quality dimensions |
 | `/academic-writer:ideate` | **Brainstorm ideas** — 5W1H framework, gap analysis, research question formulation |
-| `/academic-writer:learn` | **Update style** — scan new past articles and refresh your style fingerprint |
-| `/academic-writer:present` | **Post-article deliverables** — conference outlines, journal abstracts, book chapter proposals |
 | `/academic-writer:setup` | **Quick setup** — creates profile, detects integrations |
+| `/academic-writer:voice` | **Deep voice profile** — Stage 2 adversarial interview (7 sessions) |
 | `/academic-writer:help` | **This help page** |
+
+### Internal skills (invoked from other skills)
+
+These don't have their own slash command; they run as sub-workflows:
+
+- `learn` — run after dropping new files in `past-articles/` (auto-invoked by the dashboard hint)
+- `update-tools` / `update-field` — invoked from within `init` or `setup`
+- `present` — invoked from `edit` or `write` after a final article ships
+- `feedback` — invoked from `edit` after researcher review
 
 
 ## How Article Writing Works
@@ -154,7 +159,6 @@ The plugin is designed for speed. Wherever possible, work is parallelized:
 | `.academic-helper/profile.md` | Your researcher profile (field, style, tools, sources) |
 | `past-articles/` | Your published papers for style analysis (never uploaded) |
 | `.claude/agents/` | AI agent prompts (deep-reader, architect, section-writer, auditor, synthesizer) |
-| `.cognetivy/` | Workflow tracking data |
 | `references/` | API documentation for integrations |
 
 
@@ -172,5 +176,4 @@ The plugin is designed for speed. Wherever possible, work is parallelized:
 1. **No fabricated citations** — Every claim verified against your sources
 2. **No invented page numbers** — Exact quotes confirmed via RAG bypass + Candlekeep
 3. **Your voice** — Every paragraph checked against your style fingerprint
-4. **Full transparency** — Every step logged to Cognetivy audit trail
 5. **Your data stays local** — Past articles are never uploaded anywhere

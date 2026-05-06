@@ -1,9 +1,10 @@
 ---
 name: feedback
 description: "Capture researcher feedback on a completed article and turn it into concrete improvements — article edits, profile updates, new anti-AI pattern entries, pattern-cap adjustments, and session memory. Use after the researcher reviews an article produced by /academic-writer."
-user-invocable: true
+user-invocable: false
 allowedTools: [Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion, Agent]
-agents: [style-miner]
+agents: [voice-miner]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Feedback
@@ -59,24 +60,12 @@ Once chosen, load the artifacts:
 ```bash
 # The article text
 cat articles/<slug>.md
-```
-
-```bash
 # The bibliographic registry for this run
 cat .academic-helper/sources.json 2>/dev/null || echo "[]"
-```
-
-```bash
 # The evidence ownership map for this run
 cat .academic-helper/evidence-ownership.json 2>/dev/null || echo "{}"
 ```
 
-```bash
-# The most recent Cognetivy run for this article, if available
-cognetivy run list --limit 5 2>/dev/null
-```
-
-If Cognetivy is enabled and a matching run is found, pull its events — they show what each pipeline gate flagged and fixed, which is useful context when the researcher says "why did it keep using X?"
 
 ## Phase 2 — Structured Interview
 
@@ -154,11 +143,11 @@ Use `Edit` on `.academic-helper/profile.md`. Common fields:
 - `abstractLanguages` — which languages to emit abstracts in
 - `outputFormatPreferences.font` / `.bodySize` / etc.
 
-If the change touches the style fingerprint broadly, consider spawning the `style-miner` subagent instead of editing by hand:
+If the change touches the style fingerprint broadly, consider spawning the `voice-miner` subagent instead of editing by hand:
 
-> The style-miner can re-scan `past-articles/` and recompute the fingerprint. Use it when the feedback is "the voice was generically off" rather than a specific dimension.
+> The voice-miner can re-scan `past-articles/` and recompute the fingerprint. Use it when the feedback is "the voice was generically off" rather than a specific dimension.
 
-Spawn via the Agent tool with `subagent_type: style-miner` if applicable.
+Spawn via the Agent tool with `subagent_type: voice-miner` if applicable.
 
 ### C. Pattern reference update
 
@@ -243,10 +232,6 @@ Then show a summary to the researcher:
 >
 > Next runs of `/academic-writer` will pick up all profile and pattern changes automatically. For the article itself, the edits have been written to `articles/<slug>.md` — you may want to regenerate the .docx by running the last step of `/academic-writer` or edit and re-export manually."
 
-If Cognetivy is enabled, log the feedback session:
-```bash
-echo '{"type":"feedback_session","data":{"article":"<slug>","itemsTotal":N,"itemsApplied":N,"byCategory":{"A":N,"B":N,"C":N,"D":N,"E":N}}}' | cognetivy event append
-```
 
 (No dedicated workflow is required — this is a freestyle event.)
 

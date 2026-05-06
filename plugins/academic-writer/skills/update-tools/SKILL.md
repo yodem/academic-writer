@@ -1,8 +1,9 @@
 ---
 name: update-tools
-description: "Add, remove, or reconfigure integrations (Candlekeep, Vectorless, Cognetivy, NotebookLM)"
-user-invocable: true
+description: "Add, remove, or reconfigure integrations (Candlekeep, Vectorless, NotebookLM). Use when adding/removing integrations after initial setup."
+user-invocable: false
 allowedTools: [Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Update Tools
@@ -36,11 +37,6 @@ command -v ck >/dev/null 2>&1 && echo "DETECTED" || echo "NOT_DETECTED"
 curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo "DETECTED" || echo "NOT_DETECTED"
 ```
 
-**3. Cognetivy** (`cognetivy`)
-```bash
-command -v cognetivy >/dev/null 2>&1 && echo "DETECTED" || echo "NOT_DETECTED"
-```
-
 **4. NotebookLM** (`notebooklm`)
 ```bash
 command -v nlm >/dev/null 2>&1 && nlm login --check 2>/dev/null && echo "DETECTED" || echo "NOT_DETECTED"
@@ -56,7 +52,6 @@ Show a table with current status and detection:
 > |---|------|-----------|----------|-------|
 > | 1 | Candlekeep | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/romiluz13/candlekeep |
 > | 2 | Agentic-Search-Vectorless | ✓ Running / ✗ Not running | ✓ / ✗ | localhost:8000 |
-> | 3 | Cognetivy | ✓ Enabled / ✗ Disabled | ✓ / ✗ | Built-in (.cognetivy/) |
 > | 4 | NotebookLM | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/jacob-bd/notebooklm-mcp-cli |
 >
 > What would you like to change? You can:
@@ -169,7 +164,6 @@ Replace `TOOL_CONFIG` with the actual tools dict, e.g.:
 {
   "candlekeep": { "enabled": true, "version": "detected" },
   "agentic-search-vectorless": { "enabled": true, "port": 8000 },
-  "cognetivy": { "enabled": true, "version": "detected" },
   "notebooklm": { "enabled": true, "version": "detected" }
 }
 ```

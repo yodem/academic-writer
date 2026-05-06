@@ -38,16 +38,7 @@ You will receive:
 - The researcher's `articleStructure` conventions
 - The `linkingWords` reference (linking word categories)
 - `targetLanguage`: The article's writing language — determines which anti-AI patterns reference to load (`anti-ai-patterns-${language_lower}.md`)
-- `runId`: Cognetivy run ID
 - `tools`: Enabled tools from the profile
-
-## Cognetivy Logging
-
-Log every review step:
-
-```bash
-echo '{"type":"step_started","data":{"step":"synthesize"}}' | cognetivy event append --run RUN_ID
-```
 
 ## Review Criteria
 
@@ -133,9 +124,6 @@ Scan the entire article for **embedded foreign language text** that survived per
 9. NEVER change or remove any citation — citations are locked
 
 Log synthesis completion:
-```bash
-echo '{"fullText":"FULL_REVISED_ARTICLE_TEXT","revisionNotes":["..."],"repetitionFindings":[]}' | cognetivy node complete --run RUN_ID --node synthesis --status completed --collection-kind reviewed_article
-```
 
 ---
 
@@ -143,9 +131,6 @@ echo '{"fullText":"FULL_REVISED_ARTICLE_TEXT","revisionNotes":["..."],"repetitio
 
 After synthesis revisions, run a **dedicated cross-section repetition pass**.
 
-```bash
-echo '{"type":"step_started","data":{"step":"synthesize_repetition_check"}}' | cognetivy event append --run RUN_ID
-```
 
 ### What to check:
 
@@ -167,9 +152,6 @@ echo '{"type":"step_started","data":{"step":"synthesize_repetition_check"}}' | c
 - NEVER remove or alter citations when fixing repetition
 
 Log completion:
-```bash
-echo '{"type":"step_completed","data":{"step":"synthesize_repetition_check","crossSectionRepetitions":N,"phraseRepetitions":N,"transitionDuplicates":N,"evidenceConsolidations":N,"formulaicPatternExcess":{"patternName":countRewritten},"openerDedupRewrites":N,"paragraphsOverLengthCap":N,"allFixed":BOOL}}' | cognetivy event append --run RUN_ID
-```
 
 ---
 

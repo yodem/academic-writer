@@ -192,16 +192,6 @@ class TestAgents(unittest.TestCase):
                 f"{name} missing '## Output' section"
             )
 
-    def test_agents_reference_cognetivy(self):
-        """Every agent should log to Cognetivy."""
-        for name in self.REQUIRED_AGENTS:
-            path = os.path.join(self.AGENTS_DIR, name)
-            text = _read(path)
-            self.assertIn(
-                "cognetivy", text.lower(),
-                f"{name} doesn't mention Cognetivy logging"
-            )
-
 
 # ---------------------------------------------------------------------------
 # 3. JSON file validation
@@ -286,39 +276,7 @@ class TestHooks(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# 5. Cognetivy workflow validation
-# ---------------------------------------------------------------------------
-
-class TestCognetivy(unittest.TestCase):
-    """Workflow JSON must be valid and define expected nodes."""
-
-    WORKFLOW = os.path.join(SRC_DIR, "workflows", "wf_write_article.json")
-
-    def test_workflow_file_exists(self):
-        self.assertTrue(os.path.isfile(self.WORKFLOW))
-
-    def test_workflow_is_valid_json(self):
-        with open(self.WORKFLOW, "r") as f:
-            json.load(f)
-
-    def test_workflow_has_required_nodes(self):
-        with open(self.WORKFLOW, "r") as f:
-            data = json.load(f)
-        nodes = data.get("nodes", [])
-        node_ids = {n["id"] for n in nodes if "id" in n}
-        required = [
-            "load_profile", "source_selection", "deep_read",
-            "thesis_proposal", "outline_generation", "synthesis", "docx_output"
-        ]
-        for node in required:
-            self.assertIn(
-                node, node_ids,
-                f"Workflow missing node: {node}"
-            )
-
-
-# ---------------------------------------------------------------------------
-# 6. CLAUDE.md consistency
+# 5. CLAUDE.md consistency
 # ---------------------------------------------------------------------------
 
 class TestClaudeMD(unittest.TestCase):

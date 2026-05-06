@@ -1,5 +1,5 @@
 ---
-description: Edit a previously written article — revise sections, fix citations, adjust tone, restructure arguments, or rewrite passages.
+description: Edit a previously written article — revise sections, fix citations, adjust tone, restructure arguments, or rewrite passages. Use when revising an article that's already drafted — multiple sections, restructuring, or major changes.
 allowed-tools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 ---
 
@@ -9,6 +9,17 @@ allowed-tools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 # Academic Writer — Edit Article
 
 You are an editing assistant. The researcher has a previously written article (from `/academic-writer:write` or any .docx/.md file) and wants to revise it.
+
+### Voice profile load (first step of every run)
+
+1. Run `voice-sync.sh pull` — pulls latest `AUTHOR_VOICE.md` from CandleKeep (last-write-wins).
+2. Read `AUTHOR_VOICE.md` from project root. Whole file goes into the section-writer system prompt.
+3. The section writer is instructed to weight `## Academic-specific` rules higher when they
+   conflict with `## Core voice` rules; everything else applies as written.
+
+If `AUTHOR_VOICE.md` is missing or empty, warn once: "No voice profile. Run `/academic-writer:init`
+to seed it." Do not block writing.
+
 
 ## Load Profile
 
@@ -60,7 +71,7 @@ Ask:
 
 **Use the Agent tool to spawn a `section-writer` subagent** for each section being revised. The section-writer runs the full skill pipeline (draft revision → style compliance → Hebrew grammar → repetition check → citation audit).
 
-Pass as prompt: the section (with current text + edit instructions), sectionIndex, thesis, styleFingerprint, citationStyle, runId, tools, priorSectionTexts.
+Pass as prompt: the section (with current text + edit instructions), sectionIndex, thesis, styleFingerprint, citationStyle, tools, priorSectionTexts.
 
 For multiple sections being edited, **call the Agent tool multiple times in a single response — one call per section — so all section-writers run in parallel**.
 
@@ -68,7 +79,7 @@ For multiple sections being edited, **call the Agent tool multiple times in a si
 
 **Use the Agent tool to spawn `auditor` subagents in parallel** — one per section that needs citation work. Call the Agent tool multiple times in a single response.
 
-Pass as prompt: the paragraph text, runId, sectionIndex, paragraphIndex, tools.
+Pass as prompt: the paragraph text, sectionIndex, paragraphIndex, tools.
 
 The auditor verifies every footnote and returns specific fix instructions. Apply fixes, then re-audit.
 
@@ -93,7 +104,7 @@ If the researcher wants tone that differs from their fingerprint (e.g., "make th
 2. Let the researcher reorder, split, merge, add, or remove sections
 3. For new sections, **spawn a section-writer subagent** with full pipeline
 4. For merged sections, combine text and run synthesis on the merged result
-5. After restructuring, **use the Agent tool to spawn the `synthesizer` subagent** to fix transitions. Pass as prompt: allSections, thesis, styleFingerprint, runId, tools.
+5. After restructuring, **use the Agent tool to spawn the `synthesizer` subagent** to fix transitions. Pass as prompt: allSections, thesis, styleFingerprint, tools.
 
 ### Mode E: Strengthen Argument
 
@@ -117,7 +128,7 @@ If the researcher wants tone that differs from their fingerprint (e.g., "make th
 
 ### Mode G: Full Review
 
-**Use the Agent tool to spawn the `synthesizer` subagent** on the complete article. Pass as prompt: allSections, thesis, styleFingerprint, runId, tools.
+**Use the Agent tool to spawn the `synthesizer` subagent** on the complete article. Pass as prompt: allSections, thesis, styleFingerprint, tools.
 
 This runs:
 1. Argument coherence review
@@ -146,19 +157,6 @@ After edits are applied:
    > - Run a full review on the revised version?"
 
 3. If exporting to .docx, use the same DOCX generation as write-article Step 9.
-
-
-## Cognetivy Logging (if enabled)
-
-```bash
-echo '{"subject": "EDIT: ARTICLE_TITLE", "type": "edit"}' > /tmp/aw-edit-input.json
-cognetivy run start --workflow wf_academic_writer --input /tmp/aw-edit-input.json
-```
-
-Log each edit operation:
-```bash
-echo '{"type":"step_completed","nodeId":"edit_MODE","sectionsEdited":N,"paragraphsChanged":N,"citationsVerified":N}' | cognetivy event append --run RUN_ID
-```
 
 
 ## Critical Rules

@@ -3,7 +3,7 @@
  * CLI Runner for Academic Writer TypeScript Hooks
  *
  * Usage: run-hook.mjs <hook-name>
- * Example: run-hook.mjs lifecycle/check-profile
+ * Example: run-hook.mjs lifecycle/session-dashboard
  */
 
 import { fileURLToPath } from 'node:url';

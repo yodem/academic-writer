@@ -1,6 +1,5 @@
 {
   "enabledPlugins": {
-    "cc10x@cc10x": true,
     "academic-writer@academic-writer": true
   }
 }

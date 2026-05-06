@@ -25,7 +25,6 @@ __pycache__/
 logs/
 
 # Local-only docs and HTML playgrounds (not part of plugin distribution)
-CLAUDE.md
 *.html
 
 # .claude - ignore runtime/session state; commit hooks, skills, and config
@@ -51,3 +50,7 @@ plugins/academic-writer/agents/memory/
 .cognetivy/events/
 .cognetivy/collections/
 .cognetivy/node-results/
+
+# Voice profile build artifacts (only AUTHOR_VOICE.md is tracked)
+.voice/*
+!.voice/.gitkeep

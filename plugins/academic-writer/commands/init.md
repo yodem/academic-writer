@@ -1,5 +1,5 @@
 ---
-description: First-time setup for the Academic Writer. Configures researcher profile, analyzes writing style from past articles, and indexes research sources.
+description: First-time setup for the Academic Writer. Configures researcher profile, analyzes writing style from past articles, and indexes research sources. Use on first install or when redoing onboarding from scratch.
 allowed-tools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
 ---
 
@@ -26,52 +26,10 @@ Personalized onboarding that creates your researcher profile, detects available 
 Run silently before saying anything:
 
 ```bash
-mkdir -p past-articles .academic-helper .cognetivy/runs .cognetivy/events
+mkdir -p past-articles .academic-helper .academic-helper/logs && cp -n "${CLAUDE_PLUGIN_ROOT}/thresholds.json" .academic-helper/ 2>/dev/null || true
 ```
 
-Migrate any legacy profile from `.academic-writer/profile.json` → `.academic-helper/profile.md`:
-
-```bash
-python3 << 'PYTHON'
-import os, json
-from datetime import datetime
-
-old_path = '.academic-writer/profile.json'
-new_path = '.academic-helper/profile.md'
-if os.path.exists(old_path) and not os.path.exists(new_path):
-    with open(old_path) as f:
-        p = json.load(f)
-    scalar_keys = ['fieldOfStudy', 'citationStyle', 'targetLanguage', 'updatedAt', 'createdAt']
-    list_keys = ['abstractLanguages', 'analyzedArticles']
-    json_sections = [
-        ('tools', 'Tools'), ('outputFormatPreferences', 'Output Format Preferences'),
-        ('styleFingerprint', 'Style Fingerprint'), ('articleStructure', 'Article Structure'),
-        ('sources', 'Sources'),
-    ]
-    lines = ['# Academic Writer Profile', '', '---']
-    for k in scalar_keys:
-        if k in p and p[k] is not None:
-            lines.append(f'{k}: {p[k]}')
-    for k in list_keys:
-        v = p.get(k) or []
-        if not v:
-            lines.append(f'{k}: []')
-        else:
-            lines.append(f'{k}:')
-            for item in v:
-                lines.append(f'  - {item}')
-    lines.append('---')
-    lines.append('')
-    for k, heading in json_sections:
-        if k in p and p[k] is not None:
-            lines.extend([f'## {heading}', '', '```json',
-                          json.dumps(p[k], indent=2, ensure_ascii=False), '```', ''])
-    os.makedirs('.academic-helper', exist_ok=True)
-    with open(new_path, 'w') as f:
-        f.write('\n'.join(lines))
-    print(f"Migrated profile to {new_path}")
-PYTHON
-```
+Profile schema, file format, and legacy migration script: see `references/profile-schema.md`.
 
 Check for existing profile:
 
@@ -115,67 +73,9 @@ Then greet the user:
 
 ## Phase 1: Integration Detection
 
-Run ALL detection commands in **one parallel batch**:
+Per-tool detection commands, AskUserQuestion blocks, and port-fallback logic: see `references/integration-setup.md`.
 
-```python
-# PARALLEL — launch all at once
-Bash(command="command -v ck >/dev/null 2>&1 && echo 'DETECTED' || echo 'NOT_DETECTED'")
-Bash(command="curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo 'DETECTED' || echo 'NOT_DETECTED'")
-Bash(command="command -v cognetivy >/dev/null 2>&1 && echo 'DETECTED' || echo 'NOT_DETECTED'")
-Bash(command="command -v nlm >/dev/null 2>&1 && nlm login --check 2>/dev/null && echo 'DETECTED' || echo 'NOT_DETECTED'")
-```
-
-**Vectorless port fallback**: if port 8000 returns `NOT_DETECTED`, ask:
-
-```python
-AskUserQuestion(questions=[{
-  "question": "Agentic-Search-Vectorless didn't respond on port 8000. What port is it running on?",
-  "header": "Vectorless port",
-  "options": [
-    {"label": "Skip for now", "description": "You can enable it later with /academic-writer:update-tools."}
-  ],
-  "multiSelect": false
-}])
-```
-
-If the researcher provides a port number, retry `curl http://localhost:<PORT>/health`. Save the port to `tools.agentic-search-vectorless.port`.
-
-### Present Results
-
-```python
-AskUserQuestion(questions=[{
-  "question": "Here are the tools I found. Which would you like to enable?",
-  "header": "Integration setup",
-  "options": [
-    {
-      "label": "Candlekeep",
-      "description": "✓ Detected  (or ✗ Not found — install from github.com/romiluz13/candlekeep)",
-      "markdown": "```\nCandlekeep\n──────────\nType:    CLI (ck)\nWhat:    Cloud document library\nBest for: Storing and searching your source PDFs\nStatus:  ✓ Detected\n```"
-    },
-    {
-      "label": "Agentic-Search-Vectorless",
-      "description": "✓ Running on port 8000  (or ✗ Not running)",
-      "markdown": "```\nAgentic-Search-Vectorless\n─────────────────────────\nType:    Local HTTP service\nWhat:    Fast semantic search for citations\nBest for: Finding exact page numbers and passages\nStatus:  ✓ Running on :8000\n```"
-    },
-    {
-      "label": "Cognetivy",
-      "description": "✓ Detected  (or ✗ Not found — run: npm install -g cognetivy)",
-      "markdown": "```\nCognetivy\n─────────\nType:    CLI\nWhat:    Workflow tracking and audit trail\nBest for: Logging every pipeline step for review\nStatus:  ✓ Detected\n\nSetup (if not installed):\n  npm install -g cognetivy\n  timeout 5 cognetivy init --workspace-only\n```"
-    },
-    {
-      "label": "NotebookLM",
-      "description": "✓ Detected  (or ✗ Not found — run: npm install -g notebooklm-mcp-cli)",
-      "markdown": "```\nNotebookLM\n──────────\nType:    MCP server (nlm CLI)\nWhat:    AI-powered source Q&A, audio overviews,\n         study guides, research discovery\nBest for: Querying indexed sources with AI,\n          generating audio summaries\nStatus:  ✓ Detected\n\nSetup (if not installed):\n  npm install -g notebooklm-mcp-cli\n  nlm login\n```"
-    }
-  ],
-  "multiSelect": true
-}])
-```
-
-**Rules:**
-- Pre-check options that were detected.
-- If a tool is not detected and the researcher selects it, show the setup URL and walk them through installation. Re-run detection after they confirm, before proceeding.
-- Store final selection as the `tools` object (used in Phase 4).
+After running detection (parallel batch), store the tool selection as the `tools` object for Phase 4.
 
 
 ## Phase 2: Researcher Profile
@@ -326,17 +226,28 @@ AskUserQuestion(questions=[{
 ls past-articles/
 ```
 
-**Step 1: Computational extraction** — Run the metrics extraction script to get hard numbers:
+**Step 1: Computational extraction** — Run the metrics extraction script to get hard numbers.
+
+First fetch the **shared Hebrew baseline** from CandleKeep (book *Hebrew Linguistic Reference*, mirrored on GitHub at [yodem/hebrew-linguistics-data](https://github.com/yodem/hebrew-linguistics-data); the same book is read by the `hebrew-book-producer` plugin so both share one source of truth):
+
+```bash
+mkdir -p .ctx
+ck items get cmomjonvy0fdmk30zwef79c48 > .ctx/hebrew-linguistic-reference.md
+```
+
+Then run the extractor:
 
 ```bash
 python3 plugins/academic-writer/scripts/extract-style-metrics.py \
   --input past-articles/ \
   --aggregate \
-  --baseline plugins/academic-writer/references/hebrew-academic-baseline.json \
+  --baseline .ctx/hebrew-linguistic-reference.md \
   --contrastive \
   --json \
   --output /tmp/style-metrics.json
 ```
+
+The extractor reads the baseline JSON code block embedded in the `08-style-fingerprint-baseline` chapter of the cached markdown, so there is no separate JSON file in the plugin's `references/` folder.
 
 Read the results:
 ```bash
@@ -367,53 +278,20 @@ AskUserQuestion(questions=[{
 
 ### 25-Dimension Style Analysis
 
-#### A. Sentence-Level
-1. Average sentence length (mean + range in words)
-2. Sentence structure variety (% complex/compound/simple)
-3. Common sentence openers (patterns)
-4. Passive voice frequency + examples
+Full rubric (all 30 dimensions across 8 categories A–I): see `references/profile-schema.md`.
 
-#### B. Vocabulary & Register
-5. Vocabulary complexity (simple/moderate/complex/highly-complex)
-6. Academic register level + first vs. impersonal person
-7. Field-specific jargon (list + how introduced)
-8. Hebrew academic conventions (if applicable)
 
-#### C. Paragraph & Argument Structure
-9. Paragraph structure pattern (detailed step-by-step)
-10. Average paragraph length (words + range)
-11. Argument progression (inductive/deductive/other)
-12. How evidence is introduced
-13. How evidence is analyzed after quoting
+### Stage 1 voice fingerprint
 
-#### D. Tone & Voice
-14. Tone descriptors (5–7 adjectives)
-15. Authorial stance + common hedging/asserting phrases
-16. Engagement with other scholars
+After past-articles are scanned, invoke the `voice-miner` agent:
 
-#### E. Transitions & Flow
-17. Preferred transition phrases (grouped by function: addition, contrast, causation, exemplification, conclusion)
-18. Section-level transition patterns
+1. Run `voice-miner` agent on `past-articles/`. Output is `.voice/fingerprint.md`.
+2. Run `voice-distiller --from-fingerprint` to seed the four-section `AUTHOR_VOICE.md` at root.
+3. Run `voice-sync push`.
+4. Print: "✓ Voice fingerprint created from N past articles. You can write articles now, or run
+   `/academic-writer:voice` for a deeper profile (recommended)."
 
-#### F. Citation Style & Density
-19. Citation density (sparse/moderate/dense + footnotes/paragraph average)
-20. Citation integration style
-21. Quote length preference
-
-#### G. Rhetorical Patterns
-22. Rhetorical patterns (3–5 most common)
-23. Opening moves (how they start articles)
-24. Closing moves (how they end articles)
-
-#### H. Representative Excerpts
-25. 5 verbatim excerpts (2–3 sentences each) showing: analytical move, argumentative voice, evidence handling, transition style, most distinctive trait
-
-#### I. Article Structure Analysis
-26. Typical section inventory (in order)
-27. Introduction conventions (opening pattern, elements, element order, roadmap?, typical length)
-28. Conclusion conventions (opening pattern, elements, restatement?, implications?, closing pattern, typical length)
-29. Paragraph formula (topic sentence style, evidence presentation, analysis type, closing move, full sequence)
-30. Section transition patterns (bridging style, transitional paragraphs?, explicit signposting?)
+The user is not required to run Stage 2. They can start writing immediately with the fingerprint.
 
 
 ## Phase 3: Research Sources
@@ -480,7 +358,6 @@ updatedAt: ISO_TIMESTAMP
 {
   "candlekeep": { "enabled": true },
   "agentic-search-vectorless": { "enabled": true, "port": 8000 },
-  "cognetivy": { "enabled": true },
   "notebooklm": { "enabled": false }
 }
 ` ` `
@@ -488,16 +365,6 @@ updatedAt: ISO_TIMESTAMP
 ## Output Format Preferences
 
 ```json
-{
-  "font": "David",
-  "bodySize": 11,
-  "titleSize": 16,
-  "headingSize": 13,
-  "lineSpacing": 1.5,
-  "marginInches": 1.0,
-  "alignment": "justify",
-  "rtl": true
-}
 ` ` `
 
 ## Style Fingerprint
@@ -521,16 +388,6 @@ updatedAt: ISO_TIMESTAMP
 
 (Replace ` ` ` with actual backtick triplets when writing the file.)
 
-**If Cognetivy is enabled**, register all workflows:
-
-```bash
-cognetivy workflow set --file plugins/academic-writer/workflows/wf_write_article.json
-cognetivy workflow set --file plugins/academic-writer/workflows/wf_edit_article.json
-cognetivy workflow set --file plugins/academic-writer/workflows/wf_edit_section.json
-cognetivy workflow set --file plugins/academic-writer/workflows/wf_research.json
-cognetivy workflow set --file plugins/academic-writer/workflows/wf_setup.json
-cognetivy collection-schema set --file plugins/academic-writer/workflows/collection-schemas.json
-```
 
 
 ## Completion
@@ -548,7 +405,6 @@ AskUserQuestion(questions=[{
     {
       "label": "Check system health",
       "description": "Run /academic-writer:health to verify everything is working.",
-      "markdown": "```\nHealth Check\n────────────\n→ /academic-writer:health\n→ Verifies: profile, tools,\n   agents, Cognetivy, sources\n```"
     },
     {
       "label": "I'm done for now",

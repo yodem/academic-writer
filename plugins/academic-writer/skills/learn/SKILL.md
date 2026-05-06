@@ -1,9 +1,10 @@
 ---
 name: learn
-description: "Style learning — scans past-articles/ for new files, extracts style patterns, and merges them into the existing style fingerprint. Shows a diff report."
-user-invocable: true
+description: "Style learning — scans past-articles/ for new files, extracts style patterns, and merges them into the existing style fingerprint. Shows a diff report. Use after adding new past articles to past-articles/ — rebuilds the style fingerprint."
+user-invocable: false
 allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
-agents: [style-miner]
+agents: [voice-miner]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Learn from New Articles
@@ -19,14 +20,6 @@ cat .academic-helper/profile.md
 If no profile, tell the researcher to run `/academic-writer:init` first.
 
 Extract the current `styleFingerprint` and `analyzedArticles` list (if present).
-
-## Cognetivy Tracking
-
-If Cognetivy is enabled:
-```bash
-echo '{"phase": "style_learning"}' > /tmp/aw-learn-input.json
-cognetivy run start --workflow wf_learn --input /tmp/aw-learn-input.json
-```
 
 ## Step 1: Scan for New Articles
 
@@ -48,11 +41,10 @@ If new files found, show them:
 
 ## Step 2: Spawn Style Miner
 
-**Use the Agent tool to spawn the `style-miner` subagent.** Pass:
+**Use the Agent tool to spawn the `voice-miner` subagent.** Pass:
 - List of new article filenames
 - Current `styleFingerprint` from the profile
 - `targetLanguage`
-- `runId` (if Cognetivy enabled)
 
 The style miner returns:
 - Updated fingerprint dimensions
@@ -109,11 +101,6 @@ If **Review details**, show the full before/after for each dimension, then ask a
 
 ## Completion
 
-Log to Cognetivy:
-```bash
-echo '{"type":"step_completed","nodeId":"style_learning","newArticles":N,"dimensionsUpdated":N}' | cognetivy event append --run RUN_ID
-cognetivy run complete --run RUN_ID
-```
 
 > "Style fingerprint updated! [N] new article(s) analyzed, [M] dimensions adjusted.
 >

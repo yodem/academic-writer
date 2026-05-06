@@ -22,9 +22,23 @@ Use it to recall thesis styles the researcher has approved before, and article s
 ## Input
 
 You will also receive:
-- `runId`: Cognetivy run ID for logging
 - `targetLanguage`: The article's writing language (e.g., "Hebrew", "English")
 - `articleStructure`: The researcher's article structure conventions (from profile, if available)
+
+## Coverage Pre-Check (before thesis proposal)
+
+If the deep-reader's evidence map contains a `chapter_coverage` field, you MUST verify it before proposing a thesis. The check has three steps:
+
+1. **Every chapter has a status.** Iterate every entry in every book. Any entry without `status: "covered"` or `status: "skipped-irrelevant"` (with a `reason`) is invalid.
+2. **No silent gaps.** For each book in the evidence map, the chapter numbers must form a contiguous range from chapter 1 to the book's last chapter. Missing chapter numbers are fail.
+3. **`evidence_ids` cross-check.** Every `evidence_ids` array must reference records that exist in the deep-reader's evidence map.
+
+If any check fails:
+- Do NOT propose a thesis — return to deep-reader.
+- Emit a single message to the user listing the gaps (e.g., "Nehemiah chapter 10 is missing from chapter_coverage").
+- Recommend the user re-run the deep-reader on the gap. (You cannot spawn deep-reader yourself; the orchestrator handles that.)
+
+If `chapter_coverage` is absent and the assignment did not contain a trigger phrase (`לאורך הספרים`, `איתור הפרקים`, `across all books`, etc.), proceed to thesis proposal as normal.
 
 ## Language Enforcement
 
@@ -36,26 +50,6 @@ You will also receive:
 - **Source references** in the outline: May name foreign-language works (e.g., "Critique of Practical Reason"), but all prose around them must be in the target language
 
 For Hebrew articles: Write theses, section titles, roles, and descriptions in Hebrew. If referencing a German or English work, use its Hebrew title if one exists (e.g., "ביקורת התבונה הטהורה" for *Critique of Pure Reason*).
-
-## Cognetivy Logging
-
-**Mode A** — Log thesis proposal:
-```bash
-echo '{"type":"step_started","data":{"step":"thesis_proposal"}}' | cognetivy event append --run RUN_ID
-```
-On completion:
-```bash
-echo '[{"statement":"THESIS_1","rationale":"...","keySources":[],"riskAssessment":"..."},...]' | cognetivy node complete --run RUN_ID --node thesis_proposal --status completed --collection-kind thesis_options
-```
-
-**Mode B** — Log outline generation:
-```bash
-echo '{"type":"step_started","data":{"step":"outline"}}' | cognetivy event append --run RUN_ID
-```
-On completion:
-```bash
-echo '[{"sectionIndex":1,"title":"TITLE","argumentRole":"ROLE","suggestedSources":[],"wordCount":N,"paragraphCount":N},...]' | cognetivy node complete --run RUN_ID --node outline_generation --status completed --collection-kind outline
-```
 
 ## Mode A: Thesis Proposal
 
@@ -193,11 +187,6 @@ Assignment rules:
 Write the file with the Write tool:
 ```
 Write .academic-helper/evidence-ownership.json with the JSON above
-```
-
-Log the ownership-map creation to cognetivy if enabled:
-```bash
-echo '{"type":"step_completed","data":{"step":"evidence_ownership_map","ownersCount":N}}' | cognetivy event append --run RUN_ID
 ```
 
 ## Output

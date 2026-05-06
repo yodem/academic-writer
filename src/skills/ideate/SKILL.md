@@ -1,8 +1,9 @@
 ---
 name: ideate
-description: "Guided research ideation — brainstorm research questions using 5W1H, gap analysis, and structured framing. Outputs a research brief that feeds into /academic-writer:write."
+description: "Guided research ideation — brainstorm research questions using 5W1H, gap analysis, and structured framing. Outputs a research brief that feeds into /academic-writer:write. Use when you have a vague topic and need help framing a research question."
 user-invocable: true
 allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
+metadata: {author: "Yotam Fromm", version: "0.2.18"}
 ---
 
 # Academic Writer — Research Ideation
@@ -18,18 +19,6 @@ cat .academic-helper/profile.md
 If no profile, tell the researcher to run `/academic-writer:init` first.
 
 Extract `fieldOfStudy`, `targetLanguage`, and `tools` configuration.
-
-## Cognetivy Tracking
-
-If Cognetivy is enabled, start a run:
-```bash
-echo '{"phase": "ideation"}' > /tmp/aw-ideate-input.json
-cognetivy run start --workflow wf_ideate --input /tmp/aw-ideate-input.json
-```
-
-Record the run ID for all logging below.
-
----
 
 ## Step 1: Topic Exploration
 
@@ -77,10 +66,6 @@ Present the brainstorm:
 >
 > Which angles interest you most?"
 
-Log to Cognetivy:
-```bash
-echo '{"type":"step_completed","nodeId":"brainstorm_5w1h"}' | cognetivy event append --run RUN_ID
-```
 
 ---
 
@@ -118,9 +103,6 @@ Present the gap analysis:
 > These gaps could be fertile ground for a research question."
 
 Log:
-```bash
-echo '{"type":"step_completed","nodeId":"gap_analysis","sourcesScanned":N,"gapsFound":N}' | cognetivy event append --run RUN_ID
-```
 
 ---
 
@@ -248,10 +230,6 @@ Use the `Write` tool to create `.academic-helper/research-brief.md`:
 ```
 
 Log completion:
-```bash
-echo '{"type":"step_completed","nodeId":"research_brief","outputPath":".academic-helper/research-brief.md"}' | cognetivy event append --run RUN_ID
-cognetivy run complete --run RUN_ID
-```
 
 ## Completion
 
