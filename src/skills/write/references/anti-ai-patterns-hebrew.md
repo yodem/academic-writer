@@ -70,6 +70,7 @@ The model often inserts a "wrap-up" sentence that summarises a figure, motif, or
 | `הראוי לבחינה מדוקדקת` / `ראוי לעיון נוסף` / `ראוי להידרש בעתיד` | 0 | Delete. Future-research punts are AI tells. |
 | `ניתן ללמוד כי...` / `ניתן לראות כי...` introducing an interpretation NOT asked for in the assignment | 0 | Delete the sentence, or hedge a claim that IS in the source. **Note:** these phrases ARE part of the researcher's hedging vocabulary when commenting on what a quoted source itself says — the violation is using them to add unprompted opinion beyond the assignment scope. |
 | `בכך ניתן לראות` / `מתוך כך נראה` introducing meta-commentary | 0 | Delete. |
+| `כפי שראינו לאורך המאמר` / `כפי שתואר לעיל` / `כפי שצוין` as a conclusion opener | 0 | Open the conclusion directly with the synthesis: `לסיכום, X…`. No back-reference to the article itself. |
 
 ### G. Unsourced Factual Assertions (טענות לא מבוססות במקורות)
 
@@ -96,6 +97,30 @@ When the assignment specifies the questions to answer, the model often pads with
 | Quantitative trivia not requested (e.g., "מאה עשרים ושמונה משוררים", "מאה שלשים ותשעה שוערים") when the assignment asks for *roles and what each group did* | 0 | Describe the role and the action: `הכהנים — הקריבו את הקרבנות, נשאו חצוצרות בחנוכת היסוד, נטהרו לקראת הפסח (עזרא, ו, כ).` Drop the headcount. |
 | Background context preceding the article's stated scope (e.g., "בשנת 538 לפנה"ס פרסם כורש…" before "במאמר זה…") | 0 | The article opens with scope, not history. If the historical fact matters, fold it into the substantive paragraphs. |
 | Sentences explaining what the article will/won't do beyond the roadmap sentence | 0 | The opening roadmap states the plan once. No further meta-narration. |
+
+### I. Hebrew Conventions: Real Translation, Not Transliteration (תרגום אמיתי, לא תעתיק)
+
+When writing in Hebrew, every name, place, and term must be the **actual Hebrew equivalent** as used in Hebrew academic literature — not a phonetic Hebraization of the English/foreign form. This is a **context-aware judgment**, not a regex match. For each candidate token, identify the referent in context and ask: "is this a real Hebrew word that someone reading only Hebrew academic prose would recognize, or did I just spell a foreign word in Hebrew letters?" If the latter, replace it.
+
+| AI Pattern | Per-article cap | Better |
+|---|---|---|
+| Phonetic Hebraization of a place/person name that has an established Hebrew form (e.g. `אלפנטינה` for the island known in Hebrew/Aramaic literature as `יב`; an English name spelled in Hebrew letters when the Hebrew academic literature uses a different word) | 0 | Use the Hebrew form. If disambiguation matters, append parens: `יב (Elephantine)`. |
+| `יהו` used **in context** to refer to the God of Israel — even when surrounding text shows the referent is the deity (e.g. `מקדש יהו`, `הקריבו ליהו`) | 0 | `ה׳` in standard Hebrew academic prose: `מקדש ה׳`, `הקריבו לה׳`. The check is **contextual** — what does the word refer to here? If the referent is God, rewrite. |
+
+**Exceptions (do NOT rewrite):**
+1. The substring `יהו` inside a different word whose referent is not God: יהו**חנן** (a person), יהו**ד** (a province), יהו**דה** (the kingdom), יהו**די** (an adjective). These refer to people/places, not the deity, so they stay.
+2. Inside a literal quotation from a primary source — preserve verbatim.
+3. In an explicit philological/onomastic discussion of the divine name itself.
+
+### J. Hebrew Citation Format (פורמט ציטוט בעברית)
+
+When the article language is Hebrew, the entire in-text citation follows Hebrew conventions: page marker, range punctuation, and author name. The bibliography entry retains the original publication form (Latin spelling, year, full title) for retrieval.
+
+| AI Pattern | Per-article cap | Better |
+|---|---|---|
+| `p. N` / `pp. N-M` for page numbers in a Hebrew article | 0 | `עמ' N` / `עמ' N–M` (en-dash for ranges). |
+| Year inside in-text citation when the bibliography has only one work by that author (e.g. `Rosenberg 2004, p. 4`) | 0 | Drop the year: `(רוזנברג, עמ' 4)`. Year stays in the bibliography entry. |
+| Latin-script author surname inside a Hebrew in-text citation (e.g. `(Rosenberg, עמ' 4)`) | 0 | Hebraize the surname: `(רוזנברג, עמ' 4)`. The bibliography entry keeps the original Latin spelling. |
 
 ## Scoring Dimensions
 
