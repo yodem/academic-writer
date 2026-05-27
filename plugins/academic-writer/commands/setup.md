@@ -99,24 +99,8 @@ Run ALL detection commands in **one parallel batch**:
 ```python
 # PARALLEL
 Bash(command="command -v ck >/dev/null 2>&1 && echo 'ck: DETECTED' || echo 'ck: NOT_FOUND'")
-Bash(command="curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo 'vectorless: RUNNING' || echo 'vectorless: NOT_RUNNING'")
 Bash(command="command -v nlm >/dev/null 2>&1 && nlm login --check 2>/dev/null && echo 'notebooklm: DETECTED' || echo 'notebooklm: NOT_FOUND'")
 ```
-
-**If vectorless NOT_RUNNING on port 8000:**
-
-```python
-AskUserQuestion(questions=[{
-  "question": "Agentic-Search-Vectorless didn't respond on port 8000. What port is it running on?",
-  "header": "Vectorless port",
-  "options": [
-    {"label": "Skip — not running right now", "description": "You can enable it later with /academic-writer:update-tools."}
-  ],
-  "multiSelect": false
-}])
-```
-
-Retry with the provided port; save to `tools.agentic-search-vectorless.port`.
 
 MongoDB Agent Skills is auto-configured silently — do not show it to the user.
 
@@ -207,11 +191,6 @@ AskUserQuestion(questions=[{
       "markdown": "```\nCandlekeep\n──────────\nType:  CLI (ck)\nWhat:  Cloud document library\n```"
     },
     {
-      "label": "Agentic-Search-Vectorless",
-      "description": "✓ Running  /  ✗ Not running",
-      "markdown": "```\nAgentic-Search-Vectorless\n─────────────────────────\nType:  Local HTTP service\nWhat:  Fast semantic citation search\n```"
-    },
-    {
       "label": "NotebookLM",
       "description": "✓ Detected  /  ✗ Not found",
       "markdown": "```\nNotebookLM\n──────────\nType:  MCP server (nlm CLI)\nWhat:  AI-powered source Q&A,\n       audio overviews, study guides\n\nInstall: npm install -g notebooklm-mcp-cli\nAuth:    nlm login\n```"
@@ -275,7 +254,6 @@ updatedAt: ISO_TIMESTAMP
 ```json
 {
   "candlekeep": { "enabled": true },
-  "agentic-search-vectorless": { "enabled": true, "port": 8000 },
   "notebooklm": { "enabled": false }
 }
 ` ` `

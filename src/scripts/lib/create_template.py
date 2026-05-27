@@ -120,7 +120,7 @@ def create_template_with_footnotes(template_path="footnote_template.docx"):
     fn_ref_rPr = etree.SubElement(fn_ref_style, "{%s}rPr" % w_ns)
     etree.SubElement(fn_ref_rPr, "{%s}vertAlign" % w_ns).set("{%s}val" % w_ns, "superscript")
 
-    # Add FootnoteText style
+    # Add FootnoteText style — with RTL/Hebrew support
     fn_text_style = etree.SubElement(styles_root, "{%s}style" % w_ns)
     fn_text_style.set("{%s}type" % w_ns, "paragraph")
     fn_text_style.set("{%s}styleId" % w_ns, "FootnoteText")
@@ -131,9 +131,14 @@ def create_template_with_footnotes(template_path="footnote_template.docx"):
     spacing.set("{%s}after" % w_ns, "0")
     spacing.set("{%s}line" % w_ns, "240")
     spacing.set("{%s}lineRule" % w_ns, "auto")
+    # RTL paragraph direction for Hebrew footnotes
+    etree.SubElement(fn_text_pPr, "{%s}bidi" % w_ns).set("{%s}val" % w_ns, "1")
+    etree.SubElement(fn_text_pPr, "{%s}jc" % w_ns).set("{%s}val" % w_ns, "right")
     fn_text_rPr = etree.SubElement(fn_text_style, "{%s}rPr" % w_ns)
     etree.SubElement(fn_text_rPr, "{%s}sz" % w_ns).set("{%s}val" % w_ns, "20")
     etree.SubElement(fn_text_rPr, "{%s}szCs" % w_ns).set("{%s}val" % w_ns, "20")
+    # RTL run direction for Hebrew footnote text
+    etree.SubElement(fn_text_rPr, "{%s}rtl" % w_ns)
 
     styles_tree.write(styles_path, xml_declaration=True, encoding="UTF-8", standalone="yes")
 

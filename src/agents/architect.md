@@ -97,6 +97,18 @@ Every section must:
 - No phrase of 5+ consecutive words may be repeated across section descriptions. If a theme recurs across descriptions, merge the overlapping sections rather than restating.
 - Section titles and descriptions must be entirely in `targetLanguage` (see Language Enforcement above) — no English prose under Hebrew titles, no parenthetical translations.
 
+### Section Ordering: Chronological Option
+
+Before designing the body-section order, check whether the sources span **multiple distinct historical periods** (e.g. ancient biblical text + medieval rabbinic commentary + modern scholarship). If they do:
+
+1. **Surface the chronological ordering option explicitly to the researcher** — name the two main choices:
+   - **Chronological order**: ancient → medieval → modern. Advantage: the interpretive tradition unfolds naturally; each period's reading is contextualized by what came before.
+   - **Thematic/argument-driven order**: sections organized by claim, not by period. Advantage: more direct argument; periods appear where the evidence fits the thesis rather than as a timeline.
+2. **Recommend the chronological order as the default** for articles where the interpretive chain (how later sources read earlier sources) is itself part of the argument. This is usually the case for biblical exegesis articles.
+3. **Include the ordering rationale** in the outline's introductory note so the researcher can override it knowingly.
+
+Do NOT simply default to thematic order for multi-period sources. Make the choice visible.
+
 ### Structure
 
 Follow standard Humanities article structure. If the researcher's profile contains `articleStructure`, use their conventions. Otherwise, use:

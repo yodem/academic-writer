@@ -121,6 +121,23 @@ When the article language is Hebrew, the entire in-text citation follows Hebrew 
 | `p. N` / `pp. N-M` for page numbers in a Hebrew article | 0 | `עמ' N` / `עמ' N–M` (en-dash for ranges). |
 | Year inside in-text citation when the bibliography has only one work by that author (e.g. `Rosenberg 2004, p. 4`) | 0 | Drop the year: `(רוזנברג, עמ' 4)`. Year stays in the bibliography entry. |
 | Latin-script author surname inside a Hebrew in-text citation (e.g. `(Rosenberg, עמ' 4)`) | 0 | Hebraize the surname: `(רוזנברג, עמ' 4)`. The bibliography entry keeps the original Latin spelling. |
+| Colon between chapter and verse in biblical references: `(אסתר ד:יד)` or `(אסתר, ד:יד)` | 0 | **Comma between all three fields, no colon:** `(אסתר, ד, יד)`. Pattern: `(ספר, פרק, פסוק)`. This applies inside inline citations and in running text; the same comma-separated format is used throughout. |
+| Biblical book name with a space but no commas: `(אסתר ד יד)` | 0 | Use commas: `(אסתר, ד, יד)`. |
+
+### K. Fiction-Style Dramatic Language (שפה ספרותית-דרמטית)
+
+AI models sometimes use literary-dramatic language when analyzing religious or narrative texts — oxymorons, dramatic verbs, and confident narrative assertions that sound like literary criticism but are not grounded in the text. In Hebrew academic biblical/rabbinic analysis, prose about the text must be descriptive and evidence-bound, not dramatic.
+
+**Hard rule: 0 per article.**
+
+| AI Pattern | Why it's a tell | Better |
+|---|---|---|
+| `שתיקה רועמת` / `שותק רועם` | Oxymoron borrowed from literary criticism — adds drama, not analysis | Describe what the verse actually does, e.g. `מרדכי אינו מסביר את הצהרתו — הוא קובע עובדה בלשון מותנה (אסתר, ד, יד)` |
+| `מחק את הדיכוטומיה` / `מחיקת הדיכוטומיה` | Drama-speak from critical theory; implies a conclusion not argued from the text | State what the text actually shows: `ניסוח זה מרכך את ההפרדה שבין X ל-Y` |
+| `הגאולה נובטת תמיד` / `X נובט/ת` as a poetic metaphor in analysis | Poetic image used as analytical conclusion | `הפסוק מרמז ל-X` or cite the interpreter who makes this claim |
+| `מרדכי אינו מצהיר ספק — הוא מנבא` / any variant asserting character intent as fact | Asserts what a character is doing without citing a specific textual feature | `נוסח הלשון מצביע על ודאות (`אם לא`): ...` — anchor the claim to the actual phrase |
+| `כאן אין עמימות` / `אין ספק` as analytical conclusion about a text | Claims the text is unambiguous without showing why | Replace with evidence: `הנוסח המותנה (`אם`) אינו שולל ודאות — להיפך, הוא מחזק אותה` — cite the specific phrase |
+| Dramatic verbs applied to narrative elements or structures: `מתמוטטת`, `צורמת`, `רועמת`, `נפתח` | Fiction-register verbs in analytical context | Replace with analytical verbs: `מטשטשת`, `מפרה`, `מגדירה`, `מרחיב` |
 
 ## Scoring Dimensions
 

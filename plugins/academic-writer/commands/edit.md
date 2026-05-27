@@ -115,7 +115,6 @@ If the researcher wants tone that differs from their fingerprint (e.g., "make th
    - Logical gaps between sections
 
 2. **Use the Agent tool to spawn research subagents in parallel** to find additional evidence. Call the Agent tool multiple times in a single response:
-   - One subagent for RAG queries (Agentic-Search-Vectorless)
    - If `tools.candlekeep.enabled`: one subagent for Candlekeep document reads
 
 3. Draft new evidence integration and re-run citation audit

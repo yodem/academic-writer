@@ -1,6 +1,6 @@
 ---
 name: update-tools
-description: "Add, remove, or reconfigure integrations (Candlekeep, Vectorless, NotebookLM). Use when adding/removing integrations after initial setup."
+description: "Add, remove, or reconfigure integrations (Candlekeep, NotebookLM). Use when adding/removing integrations after initial setup."
 user-invocable: false
 allowedTools: [Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.2.18"}
@@ -32,12 +32,7 @@ Run detection for every tool in the registry, regardless of current status:
 command -v ck >/dev/null 2>&1 && echo "DETECTED" || echo "NOT_DETECTED"
 ```
 
-**2. Agentic-Search-Vectorless** (`agentic-search-vectorless`)
-```bash
-curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo "DETECTED" || echo "NOT_DETECTED"
-```
-
-**4. NotebookLM** (`notebooklm`)
+**2. NotebookLM** (`notebooklm`)
 ```bash
 command -v nlm >/dev/null 2>&1 && nlm login --check 2>/dev/null && echo "DETECTED" || echo "NOT_DETECTED"
 ```
@@ -51,8 +46,7 @@ Show a table with current status and detection:
 > | # | Tool | Currently | Detected | Setup |
 > |---|------|-----------|----------|-------|
 > | 1 | Candlekeep | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/romiluz13/candlekeep |
-> | 2 | Agentic-Search-Vectorless | ✓ Running / ✗ Not running | ✓ / ✗ | localhost:8000 |
-> | 4 | NotebookLM | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/jacob-bd/notebooklm-mcp-cli |
+> | 2 | NotebookLM | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/jacob-bd/notebooklm-mcp-cli |
 >
 > What would you like to change? You can:
 > - **Enable** a tool by number or name (I'll help install if not detected)
@@ -163,7 +157,6 @@ Replace `TOOL_CONFIG` with the actual tools dict, e.g.:
 ```json
 {
   "candlekeep": { "enabled": true, "version": "detected" },
-  "agentic-search-vectorless": { "enabled": true, "port": 8000 },
   "notebooklm": { "enabled": true, "version": "detected" }
 }
 ```

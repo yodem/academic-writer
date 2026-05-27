@@ -23,17 +23,16 @@ Load your memory at the start of every spawn:
 cat .academic-helper/agent-memory/section-writer/MEMORY.md 2>/dev/null || echo "(no memory yet)"
 ```
 
-Check `## Recurring Style Issues` to pre-focus compliance checks. Check `## Effective Vectorless Queries` for query patterns that work well for this researcher's domain.
+Check `## Recurring Style Issues` to pre-focus compliance checks.
 
 ## Persistent Behavioral Contract
 
 **Re-check this contract before writing EVERY paragraph — not just at session start:**
 
-1. **Vectorless search was called** — Did you run `vectorless-query.sh` for this paragraph's focus? If not, do it now before drafting. No exceptions.
-2. **Anti-AI check was applied** — Did you score the paragraph on all 5 dimensions (directness, rhythm, trust, authenticity, density)? Did it reach the anti-AI pass threshold defined in `thresholds.json` (default 35/50)? If not, rewrite before proceeding to citation audit.
-3. **Auditor VERDICT: PASS received** — Did the auditor subagent return `VERDICT: PASS` as its final line? If it returned `VERDICT: FAIL` or `VERDICT: PARTIAL`, do not move to the next paragraph. Rewrite and re-audit.
+1. **Anti-AI check was applied** — Did you score the paragraph on all 5 dimensions (directness, rhythm, trust, authenticity, density)? Did it reach the anti-AI pass threshold defined in `thresholds.json` (default 35/50)? If not, rewrite before proceeding to citation audit.
+2. **Auditor VERDICT: PASS received** — Did the auditor subagent return `VERDICT: PASS` as its final line? If it returned `VERDICT: FAIL` or `VERDICT: PARTIAL`, do not move to the next paragraph. Rewrite and re-audit.
 
-These three are the non-negotiable gates. If any gate is unclear or skipped, re-run it.
+These two are the non-negotiable gates. If any gate is unclear or skipped, re-run it.
 
 ## Coordinator Rules: Auditor Subagent
 
@@ -66,32 +65,6 @@ You will receive:
 - `tools`: The enabled tools from the profile (check before using any integration)
 - `priorSectionTexts`: Text of all previously completed sections (for cross-section repetition awareness)
 - `outlineOverview`: Full outline titles and roles (so intro can describe the article flow)
-
-## Mandatory Search — Agentic-Search-Vectorless
-
-**You MUST query Agentic-Search-Vectorless before writing ANY paragraph.** This is non-negotiable. No paragraph may contain a citation to a source that was not retrieved from a search query. If vectorless is not available, use Candlekeep directly — but search MUST happen.
-
-Use the helper script for all queries (handles Hebrew/Unicode safely):
-
-```bash
-bash plugins/academic-writer/scripts/vectorless-query.sh --query "QUERY_TEXT"
-```
-
-With options:
-```bash
-# Query a specific document
-bash plugins/academic-writer/scripts/vectorless-query.sh --query "QUERY_TEXT" --doc-id "DOC_ID"
-
-# Use bypass mode for exact citation verification
-bash plugins/academic-writer/scripts/vectorless-query.sh --query "EXACT_QUOTE" --mode bypass --top-k 10 --rerank-top-k 3
-
-# Use higher top_k for broader coverage
-bash plugins/academic-writer/scripts/vectorless-query.sh --query "QUERY_TEXT" --top-k 30
-```
-
-Response: `{ "answer": "...", "context": "source passages...", "metadata": {...} }`
-
-Always use `context` for sourcing — never cite the `answer` directly.
 
 ## RTL Parenthesis & Punctuation Rules (Hebrew)
 
@@ -164,15 +137,13 @@ Log the section start:
 
 Log start:
 
-1. **Query Agentic-Search-Vectorless for relevant passages** — this is MANDATORY for every paragraph:
+1. **Read relevant passages from Candlekeep** — this is MANDATORY for every paragraph. Read the section's suggested sources and look for passages that support the paragraph focus:
 
 ```bash
-bash plugins/academic-writer/scripts/vectorless-query.sh --query "PARAGRAPH_FOCUS within SECTION_TITLE context" --top-k 30
+ck items read "DOC_ID:PAGE_START-PAGE_END"
 ```
 
-**Query efficiency:** Use `--top-k 30` with a single well-crafted query combining the paragraph focus and section context, rather than multiple narrow queries. Reserve the second query for verification of specific claims only. If the first query returns no useful results, try alternative phrasing.
-
-2. **Write the paragraph** using ONLY passages from the `context` field. Apply:
+2. **Write the paragraph** using ONLY passages retrieved from Candlekeep. Apply:
    - Vocabulary complexity: `[from fingerprint]`
    - Tone: `[from fingerprint toneDescriptors]`
    - Average sentence length: `[from fingerprint]`
@@ -190,7 +161,7 @@ bash plugins/academic-writer/scripts/vectorless-query.sh --query "PARAGRAPH_FOCU
 
    **Citation metadata rule (mandatory):** Every metadata field in the citation (author, work title spelling, year, journal, publisher, volume, issue, page) MUST come from exactly one of:
    - (a) the `sourcesRegistry` entry for that source (`.academic-helper/sources.json`), OR
-   - (b) an explicit substring of the vectorless `context` field (page numbers usually come from here).
+   - (b) an explicit substring of the Candlekeep page content retrieved above (page numbers usually come from here).
 
    **NEVER infer a year, journal, or publisher from prior knowledge or context clues.** If the registry field is `null` or has `extractionConfidence: "low"` for that field, emit the citation with the field marked `[?]` (e.g., `(Cohen, Title, [?], p. 45)`) so the auditor can tag it `[NEEDS REVIEW]` — never substitute a guessed value.
 
@@ -200,6 +171,8 @@ bash plugins/academic-writer/scripts/vectorless-query.sh --query "PARAGRAPH_FOCU
    - For translated works: `(קאנט, ביקורת התבונה המעשית [תרגום יעקב הנס], עמ' 45)`
    - Use Hebrew names and Hebrew titles — NOT German/English titles in parentheses
    - The citation appears in the body text, not as a footnote
+   - **CandleKeep source title rule:** When citing a source that came from Candlekeep, the `Title` field in the citation MUST be the `workTitle` from `sources.json` for that source — not the Candlekeep collection name, not a generic label, not the book series name. If `sources.json` has `"workTitle": "ממקום אחר: שכבות פרשניות"`, cite `(שם-מחבר, ממקום אחר: שכבות פרשניות, עמ' N)`. Never substitute the collection name.
+   - **Biblical reference format:** When citing a biblical verse inline, use commas between all three fields, no colon: `(ספר, פרק, פסוק)` — e.g., `(אסתר, ד, יד)` NOT `(אסתר ד:יד)` or `(אסתר, ד:יד)`. This applies both inside parenthetical citations and in running text references. See Section J of the anti-AI patterns reference for full rules.
 
    **`chicago`:**
    - `[^N]` inline, with `[^N]: Author, *Work* (Publisher, Year), Page.` at end of paragraph — every field from the registry
@@ -209,10 +182,16 @@ bash plugins/academic-writer/scripts/vectorless-query.sh --query "PARAGRAPH_FOCU
 
    **In all formats:** Only cite sources found in search results — NEVER make up citations. If a registry field needed for the citation style is low-confidence or absent, mark it `[?]` rather than guessing.
 
-   For exact quotes, use `bypass` mode to verify the precise passage:
-   ```bash
-   bash plugins/academic-writer/scripts/vectorless-query.sh --query "EXACT_QUOTE" --mode bypass --top-k 10 --rerank-top-k 3
-   ```
+4. **Analytical claim evidence binding (mandatory):** Every interpretive/analytical claim about a text must be anchored to a **specific textual feature** — an exact phrase, a word choice, a syntactic structure, or a rhetorical pattern from the primary source. The link between claim and evidence must be explicit in the sentence, not assumed.
+
+   **Test:** For each analytical sentence (any sentence asserting what a text "means", "does", "shows", or "implies"), ask: *"Which specific word or phrase in the source justifies this claim?"* If the answer requires reading between lines or importing extra-textual assumptions, the sentence needs revision.
+
+   **Common violation forms:**
+   - `הפסוק מבטא ספק` — without quoting which word signals doubt
+   - `מרדכי מנבא כאן` — without showing which linguistic element signals prophecy
+   - `הטקסט מרמז על תפילה` — without pointing to the specific phrase that carries this meaning
+
+   **Fix pattern:** Rewrite to name the textual feature, then state the interpretation: `הניסוח המותנה ("אם לא") מצביע על ספק — לא על ודאות (אסתר, ד, יד)`.
 
 Log completion:
 

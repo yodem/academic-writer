@@ -86,7 +86,7 @@ Severity scale (from *Code Review for AI Agents v4*, Ch. 1): **CRITICAL** = data
 - **Location:** `init/SKILL.md` is **568 lines**, `setup/SKILL.md` is 355, `write/SKILL.md` is 520, `feedback/SKILL.md` is 243, `ideate/SKILL.md` is 241. Only `write` uses `references/` (for anti-AI patterns).
 - **Why it matters:** RULE-S09, S10, S11 (Skills Guide, p. 1, p. 9): SKILL.md should be under 5,000 words; move detailed docs to `references/`. The `init` skill body alone has detailed JSON schemas, profile parsing examples, integration registration commands, all inlined. RULE-O05: front-load intent, but progressive disclosure means the *body* is loaded every time the skill triggers.
 - **Fix:**
-  - `init`: split detail (profile JSON schema, registration commands, vectorless setup) into `references/profile-schema.md`, `references/integration-setup.md`. Body becomes phase-by-phase orchestration only.
+  - `init`: split detail (profile JSON schema, registration commands) into `references/profile-schema.md`, `references/integration-setup.md`. Body becomes phase-by-phase orchestration only.
   - `write`: split per-skill detail (style fingerprint scoring rubric, anti-AI scoring matrix) into `references/`.
   - Target SKILL.md body length: under 200 lines.
 

@@ -44,7 +44,6 @@ This walks you through:
 | Tool | What it does |
 |------|-------------|
 | **Candlekeep** | Cloud document library — your source PDFs and research materials |
-| **Agentic-Search-Vectorless** | Vectorless semantic search across all your sources |
 
 ---
 
@@ -179,7 +178,6 @@ The plugin is designed for speed. Wherever possible, work is parallelized:
 - **Want to change your field?** → `/academic-writer:update-field`
 - **Want to add/remove tools?** → `/academic-writer:update-tools`
 - **Style not matching?** → Add more past articles to `past-articles/` and re-run `/academic-writer:init`
-- **Vectorless search not working?** → Ensure `../Agentic-Search-Vectorless/` repo exists and the service is running
 
 ---
 

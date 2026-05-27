@@ -61,7 +61,6 @@ The CLI auto-detects which tools you have installed and lets you toggle them:
 | Tool | What it does | Required? |
 |------|-------------|-----------|
 | **Candlekeep** | Cloud library for your source PDFs | Recommended |
-| **Agentic-Search-Vectorless** | Smart search across your sources | Recommended |
 | **Cognetivy** | Tracks every step (audit trail) | Recommended |
 
 You can change these later with `/academic-writer-update-tools`.
@@ -92,8 +91,6 @@ Claude reads your papers and builds a **Style Fingerprint** — a detailed profi
 If you enabled Candlekeep, Claude also helps you index your research sources:
 - Upload your source PDFs: `ck items add your-source.pdf`
 - The system enriches each document (extracts title, author, table of contents)
-
-If you enabled Agentic-Search-Vectorless, there's nothing to do now — when you run `/academic-writer`, the system automatically pulls your selected sources from Candlekeep and ingests them into the search engine before writing begins. This happens transparently at the start of each article.
 
 When done, your profile is complete. Run `/academic-writer` whenever you're ready to write.
 

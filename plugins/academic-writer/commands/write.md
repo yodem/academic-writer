@@ -184,8 +184,7 @@ Pass the NotebookLM summary as additional context to the deep-reader agent promp
 The deep-reader runs:
 - **Step 1**: Read source content from Candlekeep
 - **Step 1b**: Extract structured bibliographic metadata per source and write `.academic-helper/sources.json`. This registry is the ONLY trusted source for citation metadata in Step 7. Fields the deep-reader cannot confirm are marked `null` with `extractionConfidence: "low"` — never guessed.
-- **Step 2**: Ingest into vectorless (if enabled)
-- **Step 3**: Query each document for subject coverage and arguments
+- **Step 2**: Query NotebookLM notebooks (if enabled) for thematic context
 
 
 Wait for the deep-reader to return retrieved passages before continuing to Step 4. Confirm `.academic-helper/sources.json` exists.
@@ -269,31 +268,7 @@ The 8-skill quality pipeline (style fingerprint compliance, grammar, anti-AI, ci
 
 
 
-### Step 6: Ingestion Sync
-
-
-If both Candlekeep and Agentic-Search-Vectorless are enabled, ensure selected sources are ingested. First check what's already there, then ingest any missing ones:
-
-```bash
-# List already-ingested documents
-bash plugins/academic-writer/scripts/vectorless-list.sh
-```
-
-For each selected source not yet ingested, read from Candlekeep and ingest:
-
-```bash
-# For each DOC_ID in selected sources:
-CONTENT=$(ck items read "DOC_ID:all")
-TITLE=$(ck items list --json | python3 -c "import sys,json; items=json.load(sys.stdin); [print(i.get('title','DOC_ID')) for i in items if i['id']=='DOC_ID']")
-bash plugins/academic-writer/scripts/vectorless-ingest.sh --name "$TITLE" --content "$CONTENT"
-```
-
-**If Agentic-Search-Vectorless is not enabled**, skip this step — the deep-reader already read the sources via Candlekeep.
-
-Log completion:
-
-
-### Step 7: Parallel Section Writing + Auditing
+### Step 6: Parallel Section Writing + Auditing
 
 **CRITICAL: Use the Agent tool to spawn one `section-writer` subagent per section. Call the Agent tool multiple times in a single response — one call per section — so all sections write in parallel.**
 

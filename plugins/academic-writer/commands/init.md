@@ -357,7 +357,6 @@ updatedAt: ISO_TIMESTAMP
 ```json
 {
   "candlekeep": { "enabled": true },
-  "agentic-search-vectorless": { "enabled": true, "port": 8000 },
   "notebooklm": { "enabled": false }
 }
 ` ` `

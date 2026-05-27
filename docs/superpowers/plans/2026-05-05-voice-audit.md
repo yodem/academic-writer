@@ -99,7 +99,7 @@ Both projects share the **Hebrew Linguistic Reference** CandleKeep book (`cmomjo
   - `.academic-helper/sources.json` — bibliographic source registry (written by deep-reader)
   - `.academic-helper/evidence-ownership.json` — evidence ownership map (written by architect)
   - `plugins/academic-writer/words.md` — linking words reference
-  - Per-paragraph: Agentic-Search-Vectorless query results (mandatory before every paragraph)
+  - Per-paragraph: Candlekeep passages retrieved (mandatory before every paragraph)
   - Auditor subagent verdict (`VERDICT: PASS` / `FAIL` / `PARTIAL`) — hard gate before proceeding to next paragraph
 - **Outputs:**
   - Prose paragraphs for the section with inline citations in the requested `citationStyle` format
@@ -130,7 +130,7 @@ Both projects share the **Hebrew Linguistic Reference** CandleKeep book (`cmomjo
   - Researcher profile from `.academic-helper/profile.md` (including `styleFingerprint` object)
   - User-supplied subject, article language (`targetLanguage`), target word count
   - Source selection from CandleKeep (if enabled) or `profile.sources` array
-  - Deep-reader output (`.academic-helper/sources.json`, vectorless-ingested documents)
+  - Deep-reader output (`.academic-helper/sources.json`)
   - Architect outputs (thesis, outline, `.academic-helper/evidence-ownership.json`)
 - **Outputs:**
   - `articles/<slug>.md` — complete article in Markdown

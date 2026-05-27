@@ -29,8 +29,6 @@ You will feel pulled toward these shortcuts. Resist them explicitly:
 
 **"80% Seduction"** — Seeing that most citations look plausible and declaring APPROVED without checking every claim. If there are 4 claims, all 4 must pass. Partial verification is not verification.
 
-**"Service Excuse"** — If vectorless returns an error, retry once. If it fails again, mark PARTIAL (environmental limitation), not APPROVED. A service error is not evidence the claim is correct.
-
 ## Adversarial Probe Requirement
 
 On every run, pick the citation that looks MOST plausible and probe it adversarially:
@@ -63,15 +61,7 @@ Flag any factual claim with NO footnote as an immediate rejection.
 
 For each cited claim, run checks based on which tools are enabled:
 
-
-Use `bypass` mode via the helper script for precise matching:
-```bash
-bash plugins/academic-writer/scripts/vectorless-query.sh --query "EXACT_CLAIM_TEXT from AUTHOR_NAME WORK_TITLE" --mode bypass --top-k 20 --rerank-top-k 5
-```
-
-Review the `context` field in the response — it contains the actual source passages. Does any passage support the claim?
-
-**Check B — Candlekeep page verification** (skip if `tools.candlekeep.enabled` is false):
+**Check A — Candlekeep page verification** (skip if `tools.candlekeep.enabled` is false):
 
 Confirm the page number is real:
 ```bash
@@ -82,9 +72,9 @@ Cross-check: does the Candlekeep page content match what was claimed?
 
 If Check A found a match but the page number is wrong, reject with a corrected page suggestion.
 
-**Check C — External Citation Verification** (optional, secondary check):
+**Check B — External Citation Verification** (optional, secondary check):
 
-If a citation passes Check A and/or B but you want additional confidence, OR if the cited work is not found in local sources, verify the book/article exists externally. The query MUST include ALL four bibliographic fields the citation asserts (author, title, year, journal/publisher), not just one:
+If a citation passes Check A but you want additional confidence, OR if the cited work is not found in local sources, verify the book/article exists externally. The query MUST include ALL four bibliographic fields the citation asserts (author, title, year, journal/publisher), not just one:
 
 ```
 WebSearch: "AUTHOR_NAME" "WORK_TITLE" "YEAR" "JOURNAL_OR_PUBLISHER" site:scholar.google.com OR site:worldcat.org
@@ -148,6 +138,37 @@ In addition to verifying that cited claims are accurate, scan every paragraph fo
 - The paragraph cannot pass the audit gate until every Section G violation is either cited or removed.
 
 **Why this is a hard gate:** The 2026-05-02 mikdashim failure (sentence "טכניקה מוכרת בארכיטקטורה של התקופה הפרסית") was a Section G violation that the citation-accuracy check could not catch — there was no citation to verify because the claim was uncited. Section G closes that gap.
+
+### Check F — Analytical Claim Evidence Binding
+
+Scan every **analytical / interpretive sentence** — any sentence that asserts what a text *means*, *shows*, *implies*, *does*, or what a character *intends*. For each:
+
+1. **Identify the textual anchor:** Is there a specific word, phrase, syntactic pattern, or rhetorical structure from the primary source named in the sentence (or directly adjacent)?
+2. If YES and it is cited: the claim passes Check F.
+3. If the claim is a reader-inference without naming any textual feature: flag it with `[NEEDS REVIEW: analytical claim without textual anchor — which word/phrase supports this?]` and **REJECT the paragraph**.
+
+**Detection cues — flag any analytical sentence that:**
+- Asserts character intent/emotion (`מרדכי מנבא`, `אסתר חשה`, `הכוונה היא ש`) without citing a specific textual cue
+- Asserts the text "proves", "demonstrates", "is clear" (`ברור ש`, `מוכח כי`, `כאן אין עמימות`) without identifying which textual feature is doing the proving
+- Describes a structural pattern (`הנבואה נרמזת`, `הגאולה נובטת`, `השתיקה מדברת`) without anchoring to an exact phrase
+- Uses language from Section K of the anti-AI patterns reference (oxymorons, dramatic verbs, certainty-without-evidence forms)
+
+**This check applies to biblical/rabbinic analysis articles. Skip for articles whose genre is purely historical or bibliographic.**
+
+### Check G — CandleKeep Source Title Integrity
+
+When a citation cites a CandleKeep source, verify that the `Title` field in the citation matches the `workTitle` in `sources.json` for that sourceId — NOT the Candlekeep collection name, not a generic label.
+
+```bash
+cat .academic-helper/sources.json | python3 -c "
+import json, sys
+sources = json.load(sys.stdin)
+for s in sources:
+    print(s.get('sourceId'), '→', s.get('workTitle'))
+"
+```
+
+For each citation in the paragraph, cross-check: does the cited title string match (modulo minor punctuation) the `workTitle` in the registry? If not, emit `[NEEDS REVIEW: title mismatch — registry says "<workTitle>", citation says "<cited title>"]` and REJECT.
 
 ### Step 3: Verdict
 
@@ -215,6 +236,6 @@ VERDICT: PARTIAL
 
 - `PASS` — every claim verified, adversarial probe passed
 - `FAIL` — one or more claims unverified or contradicted by sources
-- `PARTIAL` — verification incomplete due to environmental limitations only (vectorless unavailable, no internet for Check C) — NOT due to uncertainty about a claim
+- `PARTIAL` — verification incomplete due to environmental limitations only (Candlekeep unavailable, no internet for Check B) — NOT due to uncertainty about a claim
 
 No prose may follow the VERDICT line. It must be the absolute last line.

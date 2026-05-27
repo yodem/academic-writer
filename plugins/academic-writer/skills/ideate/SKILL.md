@@ -82,12 +82,6 @@ For each source, check its metadata against the topic:
 - What perspectives or arguments are represented?
 - What's missing — which angles are NOT covered?
 
-If Agentic-Search-Vectorless is enabled, query for the topic:
-
-```bash
-bash plugins/academic-writer/scripts/vectorless-query.sh --query "TOPIC_DESCRIPTION" --mode global --top-k 30
-```
-
 Present the gap analysis:
 > "Based on your source library:
 >

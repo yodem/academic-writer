@@ -98,9 +98,15 @@ def validate_hebrew_text(text: str) -> str:
 
 
 def set_rtl_para(para):
-    """Enable RTL layout for a paragraph via w:bidi element."""
+    """Enable RTL layout for a paragraph via w:bidi.
+
+    w:bidi marks the paragraph as RTL so text flows right-to-left. Paragraph
+    alignment (w:jc) is set separately by the caller via para.alignment, so
+    this function only adds the bidi element to avoid duplicate jc elements.
+    """
     pPr = para._p.get_or_add_pPr()
     bidi = OxmlElement("w:bidi")
+    bidi.set(qn("w:val"), "1")
     pPr.append(bidi)
 
 
@@ -225,7 +231,7 @@ def generate_docx(data: dict, output_path: str):
 
     doc = Document(TEMPLATE_PATH)
     doc._body.clear_content()
-    footnote_adder = FootnoteAdder()
+    footnote_adder = FootnoteAdder(is_rtl=is_rtl)
 
     # Set page margins
     for section in doc.sections:

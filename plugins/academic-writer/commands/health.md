@@ -46,30 +46,7 @@ Report:
 - If empty: "Add 5–10 published articles for style analysis, then re-run `/academic-writer:init`."
 
 
-## 3. Agentic-Search-Vectorless
-
-**Skip if `tools.agentic-search-vectorless.enabled` is false.** Report as "Disabled (enable with `/academic-writer:update-tools`)".
-
-Check port 8000 first (default):
-```bash
-curl -s --max-time 3 http://localhost:8000/health 2>/dev/null && echo "RUNNING" || echo "NOT_RUNNING"
-```
-
-- If `RUNNING`: service is available. ✓
-- If `NOT_RUNNING`: check if a custom port is saved in `profile.tools.agentic-search-vectorless.port`. If a custom port is stored, retry with that port:
-  ```bash
-  curl -s --max-time 3 http://localhost:<CUSTOM_PORT>/health 2>/dev/null && echo "RUNNING" || echo "NOT_RUNNING"
-  ```
-- If still not running: ask the researcher: "Agentic-Search-Vectorless is not responding on port 8000. What port is it running on? (Or press Enter to skip this check.)"
-  - If they provide a port: retry the curl with that port, then save it to `profile.tools.agentic-search-vectorless.port`
-  - If they skip: report as ✗ Not running
-
-Report:
-- Service responding? ✓/✗
-- Port used
-
-
-## 4. Candlekeep
+## 3. Candlekeep
 
 **Skip if `tools.candlekeep.enabled` is false.** Report as "Disabled (enable with `/academic-writer:update-tools`)".
 
@@ -151,7 +128,6 @@ Show a clean summary table:
 > | Profile | ✓ OK / ✗ MISSING | Field: [field], Citation: [style], Sources: [N] |
 > | Style Fingerprint | ✓ Expanded / ⚠ Legacy / ✗ Missing | [N] dimensions |
 > | Past Articles | ✓ [N] files / ✗ Empty | PDF: [n], DOCX: [n] |
-> | Agentic-Search-Vectorless | ✓ Running / ✗ Not running / — Disabled | Port: [port] |
 > | Candlekeep | ✓ Connected / ✗ Error / — Disabled | [N] items |
 > | NotebookLM | ✓ Connected / ✗ Not found / — Disabled | [N] notebooks |
 > | Agent Files | ✓ All present / ✗ Missing [list] | 5/5 |

@@ -32,9 +32,17 @@ import re
 class FootnoteAdder:
     """Helper class to add real Word footnotes to documents."""
 
-    def __init__(self):
+    def __init__(self, is_rtl: bool = False):
+        """Initialize FootnoteAdder.
+
+        Args:
+            is_rtl: When True, footnote paragraphs and text runs get RTL
+                    direction elements (w:bidi, w:jc right, w:rtl). Set this
+                    to True for Hebrew/Arabic documents.
+        """
         self.footnote_id = 0
         self.footnotes_to_add = []
+        self.is_rtl = is_rtl
 
     def add_footnote(self, paragraph, text, footnote_text):
         """Add a footnote reference to a paragraph.
@@ -101,7 +109,14 @@ class FootnoteAdder:
                 pStyle = etree.SubElement(pPr, "{%s}pStyle" % w_ns)
                 pStyle.set("{%s}val" % w_ns, "FootnoteText")
 
-                # Footnote reference mark
+                # RTL paragraph direction for Hebrew footnotes
+                if self.is_rtl:
+                    bidi_el = etree.SubElement(pPr, "{%s}bidi" % w_ns)
+                    bidi_el.set("{%s}val" % w_ns, "1")
+                    jc_el = etree.SubElement(pPr, "{%s}jc" % w_ns)
+                    jc_el.set("{%s}val" % w_ns, "right")
+
+                # Footnote reference mark (superscript via FootnoteReference style)
                 r1 = etree.SubElement(p, "{%s}r" % w_ns)
                 rPr1 = etree.SubElement(r1, "{%s}rPr" % w_ns)
                 rStyle1 = etree.SubElement(rPr1, "{%s}rStyle" % w_ns)
@@ -114,8 +129,11 @@ class FootnoteAdder:
                 t2.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
                 t2.text = " "
 
-                # Footnote text
+                # Footnote text — with RTL run direction for Hebrew
                 r3 = etree.SubElement(p, "{%s}r" % w_ns)
+                if self.is_rtl:
+                    rPr3 = etree.SubElement(r3, "{%s}rPr" % w_ns)
+                    etree.SubElement(rPr3, "{%s}rtl" % w_ns)
                 t3 = etree.SubElement(r3, "{%s}t" % w_ns)
                 t3.text = fn_text
 

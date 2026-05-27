@@ -171,52 +171,52 @@ This step is mandatory before Step 2 (the structured summary). The architect age
 
 ---
 
-### Step 2: Ingest into Agentic-Search-Vectorless (if enabled)
+### Step 1d: Cross-Source Thematic Pattern Search
 
-**Skip this step if `tools.agentic-search-vectorless.enabled` is false** — use only the Candlekeep text from Step 1.
+**Run this after reading all sources.** A per-source focused read often misses themes that appear scattered across pages. Before forming conclusions, do a second pass that searches for the article's KEY THEMES across every source using broad keyword queries.
 
-For each source, ingest its content into the vectorless service using the helper script. **Run all ingests in parallel:**
+**How:**
+
+For each major theme in the assignment (e.g. prayer, redemption, silence, intercession), run a cross-source search:
 
 ```bash
-# Check what's already ingested
-bash plugins/academic-writer/scripts/vectorless-list.sh
-
-# For each source not yet ingested:
-bash plugins/academic-writer/scripts/vectorless-ingest.sh --name "ITEM_TITLE" --content "FULL_TEXT_FROM_CK_READ"
+ck items search "THEME_KEYWORD" --limit 20
 ```
 
-Each response returns a `documentId` in JSON — store these for Step 3.
+Collect every result. Flag themes that appear in sources you initially marked as having only PARTIAL COVERAGE or as GAPS — they may have more content than the targeted read revealed.
+
+**This step is mandatory when the subject involves a motif (prayer, exile, sovereignty, sacrifice, etc.) that could appear incidentally across many pages, not just in the directly relevant sections.**
+
+Log the queries run and how many results each returned.
 
 ---
 
-### Step 3: Query Each Document (if Agentic-Search-Vectorless enabled)
+### Step 1e: Sefaria Context Expansion
 
-Run these queries **in parallel** across all ingested documentIds using the helper script:
+**Run this when the assignment references specific biblical or rabbinic verses.**
 
-**Query 1 — Main subject exploration:**
+For every biblical verse mentioned in the assignment or retrieved from Candlekeep:
+
+1. **Fetch surrounding context** — retrieve at minimum ±3 verses before and after the target verse. If the chapter is short (≤20 verses), retrieve the entire chapter:
+
 ```bash
-bash plugins/academic-writer/scripts/vectorless-query.sh --query "SUBJECT_TEXT" --doc-id "VECTORLESS_DOC_ID"
+# Example: target verse is Esther 4:14
+# Fetch the full immediate context: Esther 4:11-17 (3 before, 3 after)
+# Use the Sefaria MCP tool:
+mcp__claude_ai_Sefaria__get_text("Esther 4:11-17")
+# If chapter is short, get the whole chapter:
+mcp__claude_ai_Sefaria__get_text("Esther 4")
 ```
 
-**Query 2 — Key arguments and theses:**
-```bash
-bash plugins/academic-writer/scripts/vectorless-query.sh --query "main arguments and philosophical positions about SUBJECT_TEXT" --doc-id "VECTORLESS_DOC_ID"
-```
+2. **Purpose:** The surrounding verses often contain lexical parallels, contrasting phrasing, or rhetorical structures that secondary sources point to but don't quote in full. Having the full context lets you identify whether a scholarly claim about "the verse" is really about a broader unit.
 
-**Query 3 — Counterarguments:**
-```bash
-bash plugins/academic-writer/scripts/vectorless-query.sh --query "critique objection counterargument SUBJECT_TEXT" --doc-id "VECTORLESS_DOC_ID"
-```
+3. **Record the context** in your summary under a "PRIMARY TEXT CONTEXT" section — this is NOT citable as a secondary source, but it informs the deep read and prevents the section-writer from misquoting or truncating a verse.
 
-Run all three queries for each document, all in parallel. Each response has:
-- `answer`: synthesized answer (useful but do not cite directly)
-- `confidence`: reliability score
-
-**If Agentic-Search-Vectorless is NOT enabled:** use the Candlekeep full text from Step 1 directly — read and analyze it yourself.
+4. **Skip if** Sefaria tools are not enabled in the profile (`tools.sefaria.enabled == false`).
 
 ---
 
-### Step 3b: Query NotebookLM Notebooks (if enabled)
+### Step 2: Query NotebookLM Notebooks (if enabled)
 
 **Skip if `tools.notebooklm.enabled` is false.**
 
@@ -226,7 +226,7 @@ If the researcher has existing NotebookLM notebooks with relevant sources, query
 2. **Query relevant notebooks** using the `notebook_query` MCP tool with subject-related questions
 3. **Incorporate findings** — NotebookLM can surface connections across sources that keyword search misses
 
-**Important:** NotebookLM answers are AI-synthesized context. Use them to guide exploration, not as citable evidence. All citations must come from Candlekeep or Agentic-Search-Vectorless results.
+**Important:** NotebookLM answers are AI-synthesized context. Use them to guide exploration, not as citable evidence. All citations must come from Candlekeep.
 
 ---
 
@@ -261,7 +261,6 @@ DEEP READ RESULTS
 =================
 Subject: [subject]
 Sources read: [N]
-Vectorless queries: [N] (or "Candlekeep only")
 
 STRONG COVERAGE (well-supported by sources):
 - [theme]: [key evidence with author/work references]

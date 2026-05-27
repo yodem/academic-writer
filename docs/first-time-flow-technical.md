@@ -19,9 +19,8 @@ npx academic-writer-setup       (interactive CLI — runs in terminal, no Claude
 [CLI Step 3] Prompt: citationStyle (select: inline-parenthetical | chicago | mla | apa)
     |
     v
-[CLI Step 4] Auto-detect tools (ck, vectorless, cognetivy)
+[CLI Step 4] Auto-detect tools (ck, cognetivy)
     |           Prompt: multiselect which to enable
-    |           NOTE: mongodb-agent-skills is internal to vectorless, not user-facing
     v
 [CLI Output] mkdir past-articles/ .academic-writer/ .cognetivy/
     |          Write .academic-writer/profile.json (starter — no fingerprint yet)
@@ -89,7 +88,6 @@ npx academic-writer-setup       (interactive CLI — runs in terminal, no Claude
     |   SPAWN: Agent tool → deep-reader subagent
     |       Input: subject, selectedSourceIds, runId, tools
     |       deep-reader queries:
-    |           If vectorless.enabled: POST http://localhost:8000/query (modes: mix, local, global)
     |           If candlekeep.enabled: ck items read "ID:pages"
     |       Output: retrieved passages, evidence map, gaps
     |   WAIT for deep-reader to return
@@ -115,14 +113,7 @@ npx academic-writer-setup       (interactive CLI — runs in terminal, no Claude
 
 === PHASE 2: AUTONOMOUS (no human input) ===
 
-[Step 6: Ingestion Sync]
-    |   If vectorless.enabled AND candlekeep.enabled:
-    |       For each selectedSourceId NOT already in vectorless:
-    |           content = ck items read "ID:all"
-    |           POST http://localhost:8000/documents {name, content, docType}
-    |   Log: step_completed/ingestion_sync
-    v
-[Step 7: Parallel Section Writing]
+[Step 6: Parallel Section Writing]
     |   FOR EACH section in approvedOutline:
     |       SPAWN: Agent tool → section-writer subagent (ALL in parallel)
     |           Input: {
@@ -135,8 +126,8 @@ npx academic-writer-setup       (interactive CLI — runs in terminal, no Claude
     |
     |   EACH section-writer runs PER PARAGRAPH:
     |       Skill 1: DRAFT
-    |           Query vectorless (MANDATORY): POST /query {mode: "mix", query: ...}
-    |           Write paragraph using ONLY retrieved context
+    |           Read relevant Candlekeep passages (MANDATORY)
+    |           Write paragraph using ONLY retrieved content
     |           Log: section_N_p_M_draft
     |       Skill 2: STYLE COMPLIANCE
     |           Score paragraph on 10 fingerprint dimensions
@@ -163,7 +154,6 @@ npx academic-writer-setup       (interactive CLI — runs in terminal, no Claude
     |           SPAWN: Agent tool → auditor subagent
     |               Input: paragraph, runId, sectionIndex, paragraphIndex, tools
     |               Auditor verifies EVERY citation:
-    |                   If vectorless.enabled: POST /query {mode: "bypass"} for exact match
     |                   If candlekeep.enabled: ck items read "ID:page-page"
     |               Output: PASS or REJECT (with reason)
     |           If REJECT:
@@ -240,9 +230,6 @@ words.txt (linking words) ─→ section-writer (Skill 4)      |
 Candlekeep (ck CLI) ───────→ deep-reader, section-writer,  |
                               auditor, source selection     |
                                                             |
-Vectorless (localhost:8000) ─→ deep-reader, section-writer, |
-                               auditor (bypass mode)        |
-                                                            |
 Cognetivy (cognetivy CLI) ──→ ALL steps log events ────────┘
 ```
 
@@ -305,8 +292,6 @@ Cognetivy (cognetivy CLI) ──→ ALL steps log events ───────�
   },
   tools: {
     candlekeep: { enabled: boolean, version?: string },
-    "agentic-search-vectorless": { enabled: boolean, path?: string },
-    "mongodb-agent-skills": { enabled: false },   // internal to vectorless, not user-facing
     cognetivy: { enabled: boolean, version?: string }
   },
   sources: [{ id: string, title: string, type: string }],
@@ -324,7 +309,6 @@ Cognetivy (cognetivy CLI) ──→ ALL steps log events ───────�
 | No profile | Never ran setup | Run `npx academic-writer-setup` then `/academic-writer-init` |
 | Empty past-articles/ | No papers provided | Add 5-10 PDFs/DOCX, re-run init |
 | Candlekeep not authenticated | CLI installed but not logged in | `ck auth logout && ck auth login` |
-| Vectorless repo missing | Not cloned | Clone to `../Agentic-Search-Vectorless/` |
 | Cognetivy not initialized | CLI installed but no workspace | `timeout 5 cognetivy init --workspace-only` in project dir |
 | Citation audit fails 3x | Source doesn't contain claimed info | Paragraph flagged for researcher review |
 | Style fingerprint is flat/legacy | Old init format | Re-run `/academic-writer-init` |
