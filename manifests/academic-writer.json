@@ -1,6 +1,6 @@
 {
   "name": "academic-writer",
-  "version": "0.2.21",
+  "version": "0.3.0",
   "description": "AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as .docx files.",
   "author": {
     "name": "Yotam Fromm",
@@ -20,5 +20,16 @@
   ],
   "skills": "all",
   "agents": "all",
-  "hooks": "all"
+  "hooks": "all",
+  "mcpServers": {
+    "gemini-api": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/gemini-server/dist/index.js"],
+      "env": {
+        "GOOGLE_API_KEY": "${GOOGLE_API_KEY}",
+        "CLAUDE_PROJECT_DIR": "${CLAUDE_PROJECT_DIR}",
+        "CLAUDE_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}"
+      }
+    }
+  }
 }

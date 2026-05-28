@@ -6,8 +6,9 @@
   "scripts": {
     "build": "bash scripts/build-plugins.sh",
     "build:hooks": "cd src/hooks && npm run build",
+    "build:mcp": "bash scripts/build-mcp.sh",
     "typecheck": "cd src/hooks && npx tsc --noEmit",
-    "clean": "rm -rf plugins/ src/hooks/dist/"
+    "clean": "rm -rf plugins/ src/hooks/dist/ plugins/academic-writer/mcp/gemini-server/dist/ plugins/academic-writer/mcp/gemini-server/node_modules/"
   },
   "repository": {
     "type": "git",

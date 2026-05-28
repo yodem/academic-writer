@@ -33,5 +33,26 @@
       "minTotalWords": 1500,
       "minWordsPerArticle": 800
     }
+  },
+  "gemini": {
+    "maxOutputTokens": {
+      "write_section": 16384,
+      "synthesize": 8192,
+      "edit": 4096,
+      "calibrate_sample": 2048,
+      "raw": 8192
+    },
+    "retry": {
+      "maxAttempts": 3,
+      "baseBackoffMs": 1000,
+      "exponentialFactor": 2
+    },
+    "models": {
+      "write_section": { "model": "gemini-2.5-pro", "thinking_budget": 8192 },
+      "synthesize":    { "model": "gemini-2.5-flash", "thinking_budget": 2048 },
+      "edit":          { "model": "gemini-2.5-pro", "thinking_budget": 4096 },
+      "calibrate_sample": { "model": "gemini-2.5-flash", "thinking_budget": 2048 },
+      "raw":           { "model": "gemini-2.5-pro", "thinking_budget": -1 }
+    }
   }
 }

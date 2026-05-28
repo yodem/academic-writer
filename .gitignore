@@ -54,3 +54,10 @@ plugins/academic-writer/agents/memory/
 # Voice profile build artifacts (only AUTHOR_VOICE.md is tracked)
 .voice/*
 !.voice/.gitkeep
+
+# Bundled Gemini MCP server build artifacts
+plugins/academic-writer/mcp/gemini-server/dist/
+plugins/academic-writer/mcp/gemini-server/node_modules/
+
+# Local API key fallback (per gemini integration spec)
+.academic-helper/secrets.json

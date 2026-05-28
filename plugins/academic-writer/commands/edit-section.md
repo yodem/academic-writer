@@ -1,6 +1,6 @@
 ---
 description: Quick edit of a single section — rewrite, expand, cut, fix citations, or adjust style. Faster than full article edit. Use when changing one specific section only — faster than full edit.
-allowed-tools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
+allowed-tools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion, mcp__gemini-api__gemini_edit]
 ---
 
 # Auto-generated from skills/edit-section/SKILL.md
@@ -21,6 +21,24 @@ A fast, focused edit for a single section of an article. Use this instead of `/a
 
 If `AUTHOR_VOICE.md` is missing or empty, warn once: "No voice profile. Run `/academic-writer:init`
 to seed it." Do not block writing.
+
+
+### Gemini routing for prose rewrites
+
+Direct prose-rewrite steps (rewrites, expansions, style adjustments) go through `mcp__gemini-api__gemini_edit` when:
+
+1. `targetLanguage` is in `profile.md > gemini.approvedLanguages`, AND
+2. A Gemini key is configured (env or `.academic-helper/secrets.json`), AND
+3. The MCP call succeeds.
+
+Tool shape:
+
+```
+mcp__gemini-api__gemini_edit({ existing_text, edit_instruction, target_language })
+=> { revised_text }
+```
+
+**Fallback:** On structured error or unapproved language, run the original Claude flow. Tier 1 typography auto-fix and the auditor citation gate remain mandatory on either path. The auditor is never routed to Gemini.
 
 
 ## Load Profile

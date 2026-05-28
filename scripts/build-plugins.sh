@@ -23,14 +23,14 @@ echo -e "${CYAN}============================================${NC}"
 echo ""
 
 # Phase 1: Validate
-echo -e "${BLUE}[1/6] Validating environment...${NC}"
+echo -e "${BLUE}[1/7] Validating environment...${NC}"
 [[ ! -d "$SRC_DIR" ]] && echo -e "${RED}Error: src/ not found${NC}" && exit 1
 [[ ! -d "$MANIFESTS_DIR" ]] && echo -e "${RED}Error: manifests/ not found${NC}" && exit 1
 command -v jq &>/dev/null || { echo -e "${RED}Error: jq required. Install with: brew install jq${NC}"; exit 1; }
 echo -e "${GREEN}  Environment OK${NC}"
 
 # Phase 2: Build hooks
-echo -e "${BLUE}[2/6] Building TypeScript hooks...${NC}"
+echo -e "${BLUE}[2/7] Building TypeScript hooks...${NC}"
 if [[ -f "$SRC_DIR/hooks/package.json" ]]; then
   cd "$SRC_DIR/hooks"
   [[ ! -d "node_modules" ]] && npm install --silent
@@ -42,16 +42,24 @@ else
   exit 1
 fi
 
-# Phase 3: Clean previous build
-echo -e "${BLUE}[3/6] Cleaning previous build...${NC}"
+# Phase 3: Clean previous build (preserve mcp/ subtree which holds bundled MCP server sources)
+echo -e "${BLUE}[3/7] Cleaning previous build...${NC}"
 if [[ -d "$PLUGINS_DIR" ]]; then
-  find "$PLUGINS_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+  for plugin_dir in "$PLUGINS_DIR"/*; do
+    [[ ! -d "$plugin_dir" ]] && continue
+    # Remove each top-level entry except `mcp/` (committed MCP server sources)
+    find "$plugin_dir" -mindepth 1 -maxdepth 1 ! -name 'mcp' -exec rm -rf {} + 2>/dev/null || true
+    # Clean MCP build artifacts so rebuilds are deterministic
+    if [[ -d "$plugin_dir/mcp" ]]; then
+      find "$plugin_dir/mcp" -mindepth 2 -maxdepth 2 -type d \( -name 'dist' -o -name 'node_modules' \) -exec rm -rf {} + 2>/dev/null || true
+    fi
+  done
 fi
 mkdir -p "$PLUGINS_DIR"
 echo -e "${GREEN}  Cleaned${NC}"
 
 # Phase 4: Build plugin from manifest
-echo -e "${BLUE}[4/6] Building plugin...${NC}"
+echo -e "${BLUE}[4/7] Building plugin...${NC}"
 for manifest in "$MANIFESTS_DIR"/*.json; do
   [[ ! -f "$manifest" ]] && continue
 
@@ -154,8 +162,17 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
   echo -e "${GREEN}  Built $PLUGIN_NAME v$PLUGIN_VERSION: $skill_count skills, $agent_count agents, $command_count commands${NC}"
 done
 
+# Phase 4b: Build bundled MCP servers (mcp/ source preserved through clean)
+echo -e "${BLUE}[5/7] Building bundled MCP servers...${NC}"
+if [[ -x "$SCRIPT_DIR/build-mcp.sh" ]]; then
+  "$SCRIPT_DIR/build-mcp.sh"
+else
+  echo -e "${RED}  build-mcp.sh missing or not executable${NC}"
+  exit 1
+fi
+
 # Phase 5: Validate
-echo -e "${BLUE}[5/6] Validating...${NC}"
+echo -e "${BLUE}[6/7] Validating...${NC}"
 errors=0
 for plugin_dir in "$PLUGINS_DIR"/*; do
   [[ ! -d "$plugin_dir" ]] && continue
@@ -183,7 +200,7 @@ fi
 echo -e "${GREEN}  Validation passed${NC}"
 
 # Phase 6: Summary
-echo -e "${BLUE}[6/6] Summary${NC}"
+echo -e "${BLUE}[7/7] Summary${NC}"
 echo -e "${CYAN}============================================${NC}"
 echo -e "${CYAN}  BUILD COMPLETE${NC}"
 echo -e "${CYAN}============================================${NC}"
