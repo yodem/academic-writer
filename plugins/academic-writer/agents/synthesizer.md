@@ -111,6 +111,61 @@ Are any points repeated unnecessarily? Are any crucial steps in the argument mis
 
 Scan the entire article for **embedded foreign language text** that survived per-paragraph checks. Replace with target-language equivalent, transliteration, or footnote.
 
+## Gemini Edit Mode
+
+**At the start of every synthesizer run**, read the provider from AUTHOR_VOICE.md:
+
+```bash
+python3 -c "
+import re
+try:
+    text = open('AUTHOR_VOICE.md').read()
+    m = re.search(r'(?:^|\n)writer:\s*\n((?:[ \t]+\S[^\n]*\n?)+)', text)
+    block = m.group(1) if m else ''
+    for line in block.splitlines():
+        if 'provider' in line:
+            print(line.split(':',1)[1].strip().strip('\"\''))
+            break
+    else:
+        print('claude')
+except Exception:
+    print('claude')
+"
+```
+
+Store as `WRITER_PROVIDER`.
+
+**When `WRITER_PROVIDER=gemini`** and you need to make a surgical edit to existing prose:
+
+1. You (Opus/Claude) identify the problem and write precise edit instructions. You decide *what* to change. Gemini executes *how* to write it.
+
+2. Build the edit context and call Gemini:
+
+```bash
+EDIT_FILE="/tmp/edit-context-$(python3 -c 'import uuid; print(uuid.uuid4())').json"
+python3 -c "
+import json
+context = {
+    'original_text': 'ORIGINAL_PARAGRAPH_TEXT',
+    'edit_instructions': 'PRECISE_EDIT_INSTRUCTIONS_YOU_WROTE',
+    'constraints': ['preserve all citations', 'maintain paragraph count'],
+    'language': 'he'
+}
+print(json.dumps(context, ensure_ascii=False))
+" > "\$EDIT_FILE"
+EDITED=$(python3 plugins/academic-writer/scripts/gemini_academic_writer.py \
+  --mode edit \
+  --voice AUTHOR_VOICE.md \
+  --context "$EDIT_FILE")
+rm -f "$EDIT_FILE"
+```
+
+3. **Verify**: Check whether Gemini's rewrite satisfies your edit instruction. If it does not satisfy after 1 retry (re-run the call above with more explicit instructions), do the edit yourself as Claude. Log: `[GEMINI_EDIT_FALLBACK: reason]`.
+
+4. Never change or remove any citation in the rewritten text — citations are locked.
+
+**When `WRITER_PROVIDER=claude` or absent**: make all edits inline as usual (no script call).
+
 ## Process
 
 1. Read all sections in order

@@ -164,6 +164,75 @@ Log the section start:
 
 Log start:
 
+**Provider check (do this once at section start, before the first paragraph):**
+
+```bash
+python3 -c "
+import re
+try:
+    text = open('AUTHOR_VOICE.md').read()
+    m = re.search(r'(?:^|\n)writer:\s*\n((?:[ \t]+\S[^\n]*\n?)+)', text)
+    block = m.group(1) if m else ''
+    for line in block.splitlines():
+        if 'provider' in line:
+            print(line.split(':',1)[1].strip().strip('\"\''))
+            break
+    else:
+        print('claude')
+except Exception:
+    print('claude')
+"
+```
+
+Store the result as `WRITER_PROVIDER`. If the value is `gemini`, use the Gemini path below. If `claude` or absent, use the default Claude inline path (proceed to step 1 as normal).
+
+**Gemini draft path (when `WRITER_PROVIDER=gemini`):**
+
+1. Query Agentic-Search-Vectorless (same as Claude path — MANDATORY):
+
+```bash
+bash plugins/academic-writer/scripts/vectorless-query.sh --query "PARAGRAPH_FOCUS within SECTION_TITLE context" --top-k 30
+```
+
+2. Build the section context JSON and write it to a temp file:
+
+```bash
+CONTEXT_FILE="/tmp/section-context-$(python3 -c 'import uuid; print(uuid.uuid4())').json"
+python3 -c "
+import json, sys
+context = {
+    'section_outline': 'SECTION_TITLE: SECTION_DESCRIPTION. Argument role: ARGUMENT_ROLE.',
+    'evidence': EVIDENCE_LIST_FROM_VECTORLESS_CONTEXT,
+    'evidence_ownership': {
+        'owns': OWNED_EVIDENCE_IDS,
+        'back_reference': BACK_REF_EVIDENCE_IDS
+    },
+    'vectorless_context': 'VECTORLESS_CONTEXT_FIELD',
+    'paragraph_index': PARAGRAPH_INDEX,
+    'word_ceiling': WORD_CEILING,
+    'language': 'he'
+}
+print(json.dumps(context, ensure_ascii=False))
+" > "\$CONTEXT_FILE"
+```
+
+3. Call Gemini:
+
+```bash
+PARAGRAPH_DRAFT=$(python3 plugins/academic-writer/scripts/gemini_academic_writer.py \
+  --mode draft \
+  --voice AUTHOR_VOICE.md \
+  --context "$CONTEXT_FILE")
+GEMINI_EXIT=$?
+rm -f "$CONTEXT_FILE"
+```
+
+4. If `GEMINI_EXIT != 0` or the output is empty: count as a Gemini failure for this paragraph. **Fallback rule:** After 2 consecutive Gemini failures on the same paragraph (either API error or the paragraph failing Skills 2–8 twice), switch to Claude for that paragraph only and log: `[GEMINI_FALLBACK: paragraph M, reason: REASON]`. Continue the next paragraph with Gemini.
+
+5. Pass `PARAGRAPH_DRAFT` to Steps 2 onward (same skills pipeline — Skills 2–8 unchanged).
+
+**Claude inline path (when `WRITER_PROVIDER=claude` or absent):** continue with the standard steps below.
+
 1. **Query Agentic-Search-Vectorless for relevant passages** — this is MANDATORY for every paragraph:
 
 ```bash

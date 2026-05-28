@@ -25,6 +25,60 @@ You will also receive:
 - `targetLanguage`: The article's writing language (e.g., "Hebrew", "English")
 - `articleStructure`: The researcher's article structure conventions (from profile, if available)
 
+## Gemini Prose Mode
+
+**At the start of every architect run**, check the provider:
+
+```bash
+python3 -c "
+import re
+try:
+    text = open('AUTHOR_VOICE.md').read()
+    m = re.search(r'(?:^|\n)writer:\s*\n((?:[ \t]+\S[^\n]*\n?)+)', text)
+    block = m.group(1) if m else ''
+    for line in block.splitlines():
+        if 'provider' in line:
+            print(line.split(':',1)[1].strip().strip('\"\''))
+            break
+    else:
+        print('claude')
+except Exception:
+    print('claude')
+"
+```
+
+Store as `WRITER_PROVIDER`.
+
+**When `WRITER_PROVIDER=gemini`**: thesis proposal text and outline section descriptions go through Gemini `--mode draft`. This is a simple single-call integration — no quality loop, no fallback needed (the researcher reviews the thesis and outline before any section is written).
+
+For each prose block you would normally write inline (thesis statement options, section descriptions), instead:
+
+```bash
+CONTEXT_FILE="/tmp/section-context-$(python3 -c 'import uuid; print(uuid.uuid4())').json"
+python3 -c "
+import json
+context = {
+    'section_outline': 'DESCRIPTION_OF_WHAT_TO_WRITE',
+    'evidence': [],
+    'evidence_ownership': {'owns': [], 'back_reference': []},
+    'vectorless_context': '',
+    'paragraph_index': 1,
+    'word_ceiling': 120,
+    'language': 'he'
+}
+print(json.dumps(context, ensure_ascii=False))
+" > "\$CONTEXT_FILE"
+PROSE=$(python3 plugins/academic-writer/scripts/gemini_academic_writer.py \
+  --mode draft \
+  --voice AUTHOR_VOICE.md \
+  --context "\$CONTEXT_FILE")
+rm -f "\$CONTEXT_FILE"
+```
+
+Incorporate `PROSE` into the thesis options or outline format as specified below.
+
+**When `WRITER_PROVIDER=claude` or absent**: write all prose inline as usual.
+
 ## Coverage Pre-Check (before thesis proposal)
 
 If the deep-reader's evidence map contains a `chapter_coverage` field, you MUST verify it before proposing a thesis. The check has three steps:
