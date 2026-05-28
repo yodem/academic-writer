@@ -289,6 +289,54 @@ Full rubric (all 30 dimensions across 8 categories A–I): see `references/profi
 
 ---
 
+### Step 4b of 4 — Writer Model
+
+```python
+AskUserQuestion(questions=[{
+  "question": "Which model should write your articles?",
+  "header": "Step 4b — Writer Model",
+  "options": [
+    {
+      "label": "Gemini 2.5 Flash (Recommended for Hebrew)",
+      "description": "Gemini generates Hebrew prose; Claude orchestrates, verifies, and runs quality gates. Requires GEMINI_API_KEY in your shell.",
+      "markdown": "```\nGemini 2.5 Flash\n────────────────\nProse writer:   Gemini 2.5 Flash\nOrchestrator:   Claude (unchanged)\nQuality gates:  Claude (unchanged)\nAPI key:        $GEMINI_API_KEY\nRecommended for: Hebrew articles\n```"
+    },
+    {
+      "label": "Claude (default)",
+      "description": "Claude writes all prose. No additional API key required.",
+      "markdown": "```\nClaude (default)\n────────────────\nAll writing:    Claude\nNo extra setup needed\n```"
+    }
+  ],
+  "multiSelect": false
+}])
+```
+
+Map selection:
+- "Gemini 2.5 Flash" → `provider: "gemini"`, `model: "gemini-2.5-flash"`
+- "Claude (default)" → `provider: "claude"`
+
+Write the `writer:` block to `AUTHOR_VOICE.md` after creating it (append to bottom of the file, before any closing markers):
+
+```
+## Writer Configuration
+
+writer:
+  provider: "PROVIDER_VALUE"
+  model: "MODEL_VALUE"
+  temperature: 0.7
+  max_tokens: 3000
+```
+
+If Gemini was selected, verify `$GEMINI_API_KEY` is set:
+
+```bash
+if [[ -z "${GEMINI_API_KEY:-}" ]]; then
+  echo "WARNING: GEMINI_API_KEY is not set in this shell. Add it to ~/.zshrc: export GEMINI_API_KEY=YOUR_KEY"
+fi
+```
+
+---
+
 ### Stage 1 voice fingerprint
 
 After past-articles are scanned, invoke the `voice-miner` agent:

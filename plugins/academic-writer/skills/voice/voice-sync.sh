@@ -79,7 +79,25 @@ case "$action" in
     local_stamp=$(grep -m1 '^> Updated' "$profile" 2>/dev/null | sed -E 's/^> Updated ([0-9-]+).*/\1/' || echo "0")
     remote_stamp=$(grep -m1 '^> Updated' "$profile.tmp" 2>/dev/null | sed -E 's/^> Updated ([0-9-]+).*/\1/' || echo "0")
     if [[ "$remote_stamp" > "$local_stamp" ]]; then
+      # Preserve the local writer: block — never lose provider config during a pull
+      writer_block=$(python3 -c "
+import re, sys
+try:
+    text = open('$profile').read()
+    m = re.search(r'(## Writer Configuration\s*\nwriter:.*?)(?=\n##|\Z)', text, re.DOTALL)
+    print(m.group(1).rstrip() if m else '')
+except Exception:
+    print('')
+" 2>/dev/null || true)
       mv "$profile.tmp" "$profile"
+      # Re-append writer block if remote version lost it
+      if [[ -n "$writer_block" ]]; then
+        remote_has_writer=$(grep -c '^writer:' "$profile" 2>/dev/null || echo "0")
+        if [[ "$remote_has_writer" -eq 0 ]]; then
+          printf '\n\n%s\n' "$writer_block" >> "$profile"
+          echo "voice-sync pull: restored writer: block (not present in remote)"
+        fi
+      fi
       echo "voice-sync pull: remote ($remote_stamp) overwrote local ($local_stamp)"
     else
       rm "$profile.tmp"

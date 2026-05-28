@@ -77,3 +77,37 @@ or specified explicitly.
 - Sessions 1, 2, 4, 5, 6 invoke distiller but NOT calibrator.
 - Sync is push-only on writes; explicit `:voice sync` is the only place that pulls.
 - Quick mode is reversible: `:voice continue --upgrade` runs the missed sessions.
+
+## Writer Configuration Preservation
+
+**The `writer:` block in `AUTHOR_VOICE.md` MUST be preserved during all voice operations.**
+
+Rules:
+- During voice distillation (`voice-distiller`) and recompression (`--recompress`): read the existing `writer:` block before overwriting, then re-append it to the new file.
+- During voice calibration: do not touch the `writer:` block.
+- If `AUTHOR_VOICE.md` is rewritten from scratch: check for a saved writer block first.
+
+Before any operation that rewrites `AUTHOR_VOICE.md`, capture the writer block:
+
+```bash
+WRITER_BLOCK=$(python3 -c "
+import re, sys
+try:
+    text = open('AUTHOR_VOICE.md').read()
+    m = re.search(r'(## Writer Configuration\s*\nwriter:.*?)(?=\n##|\Z)', text, re.DOTALL)
+    print(m.group(1) if m else '')
+except Exception:
+    print('')
+")
+```
+
+After writing the new `AUTHOR_VOICE.md`, if `WRITER_BLOCK` is non-empty:
+
+```bash
+if [[ -n "$WRITER_BLOCK" ]]; then
+  echo "" >> AUTHOR_VOICE.md
+  echo "$WRITER_BLOCK" >> AUTHOR_VOICE.md
+fi
+```
+
+Default behavior when `writer:` is absent: treat as `provider: "claude"` (backwards-compatible).
