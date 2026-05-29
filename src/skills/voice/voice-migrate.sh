@@ -4,6 +4,12 @@
 
 set -euo pipefail
 
+# Profile scope: silently no-op in any project without the academic-helper profile.
+# Matches the run-hook.mjs:54 directory guard so this hook never fires in unrelated repos.
+if [[ ! -f "${CLAUDE_PROJECT_DIR:-$PWD}/.academic-helper/profile.md" ]]; then
+  exit 0
+fi
+
 root="${VOICE_PROJECT_ROOT:-$(pwd)}"
 
 # Profile scope: only run in projects that actually use one of the plugins

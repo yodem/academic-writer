@@ -66,7 +66,7 @@ export function sessionDashboard(input: HookInput): HookResult {
       const unanalyzed = total - analyzed;
       if (unanalyzed > 0) {
         lines.push(`║  New past articles: ${String(unanalyzed).padEnd(27)}║`);
-        lines.push(`║  → Run /academic-writer-learn to update style    ║`);
+        lines.push(`║  → Run /academic-writer:voice to update style    ║`);
       }
     } catch {
       // ignore
@@ -74,10 +74,10 @@ export function sessionDashboard(input: HookInput): HookResult {
   }
 
   lines.push('╠══════════════════════════════════════════════════╣');
-  lines.push('║  /academic-writer        — Write new article     ║');
-  lines.push('║  /academic-writer-ideate — Brainstorm ideas      ║');
-  lines.push('║  /academic-writer-learn  — Update style          ║');
-  lines.push('║  /academic-writer-health — Check integrations    ║');
+  lines.push('║  /academic-writer:write    — Write new article   ║');
+  lines.push('║  /academic-writer:ideate   — Brainstorm ideas    ║');
+  lines.push('║  /academic-writer:research — Investigate a topic ║');
+  lines.push('║  /academic-writer:health   — Check integrations  ║');
   lines.push('╚══════════════════════════════════════════════════╝');
 
   return {

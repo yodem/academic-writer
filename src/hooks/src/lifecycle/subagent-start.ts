@@ -27,15 +27,19 @@ export function subagentStart(input: SubagentStartInput): HookResult {
   }
 
   // Read thresholds.json so the auditor knows the current cutoffs.
-  const thresholdsPath = join(projectDir, '.academic-helper', 'thresholds.json');
+  // thresholds.json ships at the plugin root, not in the project's .academic-helper/.
+  const pluginRoot = input.plugin_root ?? process.env['CLAUDE_PLUGIN_ROOT'];
   let thresholdNote = '';
-  if (existsSync(thresholdsPath)) {
-    try {
-      const raw = readFileSync(thresholdsPath, 'utf-8');
-      const t = JSON.parse(raw) as Thresholds;
-      thresholdNote = `\nCurrent thresholds: anti-AI ${t.antiAi?.passThreshold}/${t.antiAi?.maxScore}, max rewrite cycles ${t.rewriteCycles?.max}.`;
-    } catch {
-      // ignore parse errors; missing thresholds is non-fatal
+  if (pluginRoot) {
+    const thresholdsPath = join(pluginRoot, 'thresholds.json');
+    if (existsSync(thresholdsPath)) {
+      try {
+        const raw = readFileSync(thresholdsPath, 'utf-8');
+        const t = JSON.parse(raw) as Thresholds;
+        thresholdNote = `\nCurrent thresholds: anti-AI ${t.antiAi?.passThreshold}/${t.antiAi?.maxScore}, max rewrite cycles ${t.rewriteCycles?.max}.`;
+      } catch {
+        // ignore parse errors; missing thresholds is non-fatal
+      }
     }
   }
 
@@ -52,6 +56,9 @@ export function subagentStart(input: SubagentStartInput): HookResult {
 
   return {
     continue: true,
-    systemMessage: rules,
+    hookSpecificOutput: {
+      hookEventName: 'SubagentStart',
+      additionalContext: rules,
+    },
   };
 }

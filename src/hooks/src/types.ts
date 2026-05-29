@@ -26,6 +26,10 @@ export interface HookResult {
   continue: boolean;
   suppressOutput?: boolean;
   systemMessage?: string;
+  hookSpecificOutput?: {
+    hookEventName?: string;
+    additionalContext?: string;
+  };
 }
 
 export interface ProfileData {

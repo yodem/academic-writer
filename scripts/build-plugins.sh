@@ -113,24 +113,23 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
     cp "$SRC_DIR/thresholds.json" "$PLUGIN_DIR/"
   fi
 
-  # Generate plugin.json
-  jq -n \
-    --arg name "$PLUGIN_NAME" \
-    --arg version "$PLUGIN_VERSION" \
-    --arg desc "$PLUGIN_DESC" \
-    '{
-      name: $name,
-      version: $version,
-      description: $desc,
-      author: {
-        name: "Yotam Fromm",
-        url: "https://github.com/yodem/academic-writer"
-      },
-      homepage: "https://github.com/yodem/academic-writer",
-      repository: "https://github.com/yodem/academic-writer",
-      license: "MIT",
-      keywords: ["academic-writing","humanities","citations","claude-code","plugin"]
-    }' > "$PLUGIN_DIR/.claude-plugin/plugin.json"
+  # Generate plugin.json — read recognized plugin.json fields FROM the manifest.
+  # Only the schema-recognized keys are emitted (Official Docs p.114):
+  #   name, version, description, author, homepage, repository, license, keywords, mcpServers.
+  # mcpServers is copied through verbatim so the bundled MCP server is registered.
+  # author/homepage/repository/license/keywords fall back to defaults only when absent.
+  jq '{
+    name: .name,
+    version: .version,
+    description: .description,
+    author: (.author // { name: "Yotam Fromm", url: "https://github.com/yodem/academic-writer" }),
+    homepage: (.homepage // "https://github.com/yodem/academic-writer"),
+    repository: (.repository // "https://github.com/yodem/academic-writer"),
+    license: (.license // "MIT"),
+    keywords: (.keywords // ["academic-writing","humanities","citations","claude-code","plugin"])
+  }
+  + (if .mcpServers then { mcpServers: .mcpServers } else {} end)' \
+    "$manifest" > "$PLUGIN_DIR/.claude-plugin/plugin.json"
 
   # Generate commands from user-invocable skills
   if [[ -d "$PLUGIN_DIR/skills" ]]; then

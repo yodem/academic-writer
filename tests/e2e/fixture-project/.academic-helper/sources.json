@@ -1,0 +1,51 @@
+[
+  {
+    "sourceId": "aug-confessions-bk11",
+    "author": "אוגוסטינוס",
+    "workTitle": "וידויים",
+    "year": "397",
+    "publisher": "ידיעות ספרים",
+    "journal": null,
+    "volume": null,
+    "issue": null,
+    "pageRange": "ספר אחד-עשר",
+    "doi": null,
+    "isbn": null,
+    "extractionConfidence": {
+      "author": "high",
+      "workTitle": "high",
+      "year": "medium",
+      "journal": "low",
+      "publisher": "medium"
+    },
+    "extractionNotes": "Fixture source. Augustine, Confessions Book XI — the canonical locus of his analysis of time.",
+    "passages": [
+      { "page": "11", "text": "מהו אפוא הזמן? אם איש אינו שואל אותי, אני יודע; אם ברצוני להסביר זאת לשואל, אינני יודע." },
+      { "page": "14", "text": "שלושה זמנים הם: הווה של עבר, הווה של הווה, והווה של עתיד; שלושתם קיימים בנפש, ובמקום אחר אינני רואה אותם." }
+    ]
+  },
+  {
+    "sourceId": "ricoeur-time-narrative",
+    "author": "Ricoeur, Paul",
+    "workTitle": "Time and Narrative",
+    "year": "1984",
+    "publisher": "University of Chicago Press",
+    "journal": null,
+    "volume": "1",
+    "issue": null,
+    "pageRange": "5-30",
+    "doi": null,
+    "isbn": null,
+    "extractionConfidence": {
+      "author": "high",
+      "workTitle": "high",
+      "year": "high",
+      "journal": "low",
+      "publisher": "high"
+    },
+    "extractionNotes": "Fixture source. Ricoeur reads Augustine's aporia of time as the seed of his narrative theory.",
+    "passages": [
+      { "page": "7", "text": "האפוריה האוגוסטינית של הזמן אינה כשל אלא נקודת מוצא: היא חושפת את הזמן כחוויה נפשית הניתנת לתפיסה רק דרך הסיפר." }
+    ]
+  }
+]

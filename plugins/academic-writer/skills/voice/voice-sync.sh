@@ -74,6 +74,8 @@ case "$action" in
       echo "voice-sync pull: no remote book yet (run push to create)"
       exit 0
     fi
+    # Clean up the temp file if the pull is interrupted (e.g. SessionStart hook timeout).
+    trap 'rm -f "$profile.tmp" 2>/dev/null' EXIT
     ck books read "$id" --format md > "$profile.tmp"
     # Last-write-wins by `> Updated` stamp comparison
     local_stamp=$(grep -m1 '^> Updated' "$profile" 2>/dev/null | sed -E 's/^> Updated ([0-9-]+).*/\1/' || echo "0")

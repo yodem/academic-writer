@@ -283,7 +283,7 @@ After the researcher picks a thesis, log thesis approval:
 
 **If the researcher chose "Expand my draft" in the draft detection step (`userDraftAsOutline = true`):**
 
-- Skip the architect agent call entirely
+- Do NOT skip the architect entirely. The outline comes from the user's draft, but the architect is still the sole writer of `.academic-helper/evidence-ownership.json` — and without it the per-paragraph thesis-drift guard and the cross-section evidence-dedup both silently no-op. **Use the Agent tool to spawn the `architect` subagent in a lightweight "ownership-only" mode**: pass `userDraftText`, the deep-read results / `sources.json`, and `targetLanguage`, and instruct it to produce ONLY `evidence-ownership.json` (the `thesisAnchor` derived from the draft plus the `evidenceOwners` assignment for shared evidence) — it must NOT generate a new outline or thesis options, since those come from the user's draft.
 - Parse `userDraftText` into sections: use the user's existing section headings and paragraph structure as the outline
 - Present the extracted outline to the researcher:
   > "Using your draft structure:
@@ -316,7 +316,6 @@ Iterate until the researcher says something like "go", "looks good", or "start w
 
 
 
-
 ## ⛔ MANDATORY: NO DIRECT WRITING
 
 **You (the write-article skill) MUST NEVER write article paragraphs or sections yourself.**
@@ -333,9 +332,17 @@ The 8-skill quality pipeline (style fingerprint compliance, grammar, anti-AI, ci
 
 ## PHASE 2: AUTONOMOUS (Steps 6–9, fully automatic)
 
-
-
 ### Step 6: Parallel Section Writing + Auditing
+
+#### Step 6.0: Engine commit (run BEFORE the parallel spawn)
+
+Because all section-writers are spawned in a single parallel response (below), the engine decision must be **final before the spawn** — once the batch is in flight, `geminiFallback` can no longer be made consistent across sections. Commit the whole run to one engine here:
+
+1. **Verify the Gemini tool is actually registered**, not merely that `GOOGLE_API_KEY` is set. A key can be present while the plugin's `mcp__gemini-api__*` MCP tools are absent from your toolset (e.g., the server failed to register). Check whether `mcp__gemini-api__gemini_write_section` appears in your available tools. Optionally, fire one tiny probe call (e.g., `gemini_calibrate_sample` with a trivial input) to confirm the server responds.
+2. **If `geminiMode` is `"gemini"` but the tool is unavailable** (or the probe errors), set `.academic-helper/session-state.json > geminiFallback: true` now — before spawning. The user has already been asked once during the mid-run failure handler / pre-flight, so do not re-ask here; this is a registration check, not a runtime failure.
+3. **Read the committed `geminiFallback` value once**, and pass that SAME value to EVERY section-writer in the parallel batch below.
+
+> **Never mix engines across sections — decide once, before the parallel spawn, and pass `geminiFallback` uniformly.** Sections 1..N must all run on the same engine; a half-Gemini/half-Claude article cannot be style-unified by the synthesizer.
 
 **CRITICAL: Use the Agent tool to spawn one `section-writer` subagent per section. Call the Agent tool multiple times in a single response — one call per section — so all sections write in parallel.**
 
@@ -353,7 +360,7 @@ For each section in the approved outline, the Agent tool prompt must include:
 - `priorSectionTexts`: text of all previously completed sections (for repetition awareness)
 - `outlineOverview`: full outline titles and roles
 - `userDraftParagraphs`: (if `userDraftAsOutline = true`) the user's draft text for this section — agents expand this rather than writing from scratch
-- `geminiFallback`: read from `.academic-helper/session-state.json` — pass `true` if the user opted into Claude fallback for this run, otherwise omit/false
+- `geminiFallback`: the value committed in Step 6.0 above (read from `.academic-helper/session-state.json`). Pass the SAME value to every section-writer in this batch — never spawn some sections with `true` and others with `false`.
 
 **NOTE:** Do NOT pass `styleFingerprint`, `linkingWords`, `sourcesRegistry`, or `evidenceOwnership` in the prompt — section-writer agents load all four directly from disk to reduce context size:
 - Fingerprint from `.academic-helper/profile.md`
@@ -361,30 +368,9 @@ For each section in the approved outline, the Agent tool prompt must include:
 - Source registry from `.academic-helper/sources.json` (deep-reader output)
 - Evidence ownership map from `.academic-helper/evidence-ownership.json` (architect output)
 
-Each section-writer handles a **per-paragraph skill pipeline** internally:
-
-|---|-------|-------------|---------------|
-| 1 | **Draft** | Query RAG (mandatory) + write paragraph using ONLY retrieved context. Enforce paragraph word ceiling (fingerprint mean+stdev, capped at 220 words). Back-reference any evidence not owned by this section. Metadata for citations MUST come from `sources.json` — never infer; mark `[?]` if absent or low-confidence. | `section_N_p_M_draft` |
-| 2 | **Style Compliance** | Re-read fingerprint + `representativeExcerpts`, score 10 dimensions, fix deviations | `section_N_p_M_style_compliance` |
-| 3 | **Hebrew Grammar** | Check grammar, spelling, academic register | `section_N_p_M_hebrew_grammar` |
-| 4 | **Academic Language** | Check academic vocabulary level and linking words usage | `section_N_p_M_academic_language` |
-| 5 | **Language Purity** | Detect and fix ALL embedded foreign-language terms in running text | `section_N_p_M_language_purity` |
-| 6 | **Anti-AI Check** | Load `anti-ai-patterns-${targetLanguage_lower}.md` and detect/fix AI writing patterns. Score 5 dimensions, threshold defined in `thresholds.json` (default 35/50). | `section_N_p_M_anti_ai` |
-| 7 | **Repetition Check** | Check words, phrases, arguments vs. prior text + formulaic-pattern cap sweep against the language blacklist + evidence re-description guard via ownership map | `section_N_p_M_repetition_check` |
-| 8 | **Citation Audit** | Auditor agent verifies every citation against RAG + page + Check D metadata integrity (hard gate for high-confidence mismatches; `[NEEDS REVIEW: <field>]` tag for low-confidence) | `section_N_p_M_citation_audit` |
+Each section-writer handles a **per-paragraph 8-skill pipeline** internally — in order: Draft → Style Compliance → Hebrew Grammar → Academic Language → Language Purity → Anti-AI → Repetition Check → Citation Audit (logged per paragraph as `section_N_p_M_<skill>`). The authoritative contract for that pipeline — exact skill behavior, the 220-word ceiling, the `thresholds.json`-driven anti-AI gate, and the auditor hard gate (Citation Audit / Skill 8) — lives in the `section-writer` agent definition (`src/agents/section-writer.md`). Do not duplicate or override it here; the orchestrator only spawns section-writers and waits for their results.
 
 After receiving each section-writer result, mark node complete:
-
-The auditor is a HARD GATE:
-- Queries RAG for each factual claim (if enabled)
-- Verifies author + work + page via `ck items read` (if enabled)
-- Runs Check D: compares every citation field (year, journal, publisher, title spelling) against `.academic-helper/sources.json`
-  - High-confidence registry field mismatches citation → REJECT (`metadata_mismatch: <field>`)
-  - Low-confidence / absent registry field → APPROVE with `[NEEDS REVIEW: <field>]` tag inline
-- If unverified → REJECT → section-writer rewrites and re-runs all skills (max 3 attempts)
-- If still failing after 3 → flag for researcher review
-
-The `[NEEDS REVIEW: <field>]` marker persists into the final article output so the researcher can see exactly which fields need manual verification. It appears inline in citations, e.g., `(Cohen, Title, 2019 [NEEDS REVIEW: year], p. 45)`.
 
 
 ### Step 8: Synthesis + Full-Article Repetition Check

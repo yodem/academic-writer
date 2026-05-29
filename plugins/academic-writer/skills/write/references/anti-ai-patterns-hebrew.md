@@ -141,7 +141,7 @@ AI models sometimes use literary-dramatic language when analyzing religious or n
 
 ## Scoring Dimensions
 
-Rate the paragraph 1-10 on each dimension. **Threshold: 35/50 to pass.**
+Rate the paragraph 1-10 on each dimension. **Threshold from `thresholds.json > antiAi.passThreshold` (currently 35/50) to pass.**
 
 | Dimension | Question | Low score indicators |
 |-----------|----------|---------------------|

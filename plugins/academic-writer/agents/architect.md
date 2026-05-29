@@ -1,6 +1,6 @@
 ---
 name: architect
-description: Use to generate thesis options (Mode A) or a structured article outline (Mode B) from existing deep-read results. Runs AFTER deep-reader completes, BEFORE any section writing begins. NOT for writing prose or verifying citations.
+description: Use to generate thesis options (Mode A), a structured article outline (Mode B), or — when passed `mode: ownership-only` — only the evidence-ownership.json file from the user's existing draft (Mode C). Runs AFTER deep-reader completes, BEFORE any section writing begins. NOT for writing prose or verifying citations.
 tools: Bash, Read, Write, Grep, Glob
 model: sonnet
 ---
@@ -201,6 +201,50 @@ Write the file with the Write tool:
 Write .academic-helper/evidence-ownership.json with the JSON above
 ```
 
+## Mode C: Ownership-Only (triggered by `mode: ownership-only`)
+
+When the write skill spawns you with `mode: ownership-only`, the user's existing draft IS the outline. You must NOT generate thesis options or a new outline.
+
+**Trigger**: the orchestrator passes the string `mode: ownership-only` in your prompt. Detect it, skip Modes A and B entirely, and execute only the steps below.
+
+**Inputs you will receive**:
+- `userDraftText`: the researcher's existing draft (full text or section-by-section)
+- `sources.json` / deep-read results: evidence map produced by the deep-reader
+- `targetLanguage`: article's writing language
+
+**Steps**:
+
+1. **Extract the thesis anchor.** Read `userDraftText` and identify the researcher's thesis statement (usually the last sentence of the introduction, or the most explicit claim sentence). This becomes `thesisAnchor` verbatim.
+
+2. **Parse the draft into sections.** Identify the draft's section headings and assign each a zero-based index (0 = Introduction, 1 = first body section, etc.). Do NOT rename or reorder sections.
+
+3. **Map evidence to section owners.** For every source, passage, or dataset that appears in more than one section of the draft:
+   - Assign `ownerSectionIndex` to the section whose argument most directly relies on that evidence.
+   - All other draft sections that reference the same evidence go into `backRefSections`.
+   - Evidence appearing in only one section needs no entry.
+
+4. **Write `evidence-ownership.json`** using the Write tool, with the exact schema used in Mode B:
+
+```json
+{
+  "thesisAnchor": "exact thesis sentence from the user's draft",
+  "evidenceOwners": [
+    {
+      "evidenceId": "stable-identifier-for-this-evidence",
+      "label": "short human-readable description",
+      "ownerSectionIndex": 2,
+      "role": "primary full description",
+      "backRefSections": [3, 5]
+    }
+  ],
+  "claimsRegistry": []
+}
+```
+
+5. **Return a one-line confirmation** to the orchestrator: `"evidence-ownership.json written (ownership-only mode). thesisAnchor: [first 80 chars of thesis]."` Do NOT present thesis options or an outline.
+
+**SKIP**: Mode A thesis proposal, Mode B outline generation, Coverage Pre-Check (the deep-reader already ran), and all researcher-facing formatting blocks.
+
 ## Output
 
-Return the formatted thesis options (Mode A) or the formatted outline (Mode B) as shown above. The write-article skill presents these directly to the researcher for approval. For Mode B, also confirm that `.academic-helper/evidence-ownership.json` has been written.
+Return the formatted thesis options (Mode A) or the formatted outline (Mode B) as shown above. The write-article skill presents these directly to the researcher for approval. For Mode B, also confirm that `.academic-helper/evidence-ownership.json` has been written. For Mode C, return only the one-line confirmation described above.

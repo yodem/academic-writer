@@ -80,19 +80,34 @@ if (!hookFn) {
 
 let input = '';
 let stdinClosed = false;
+let timeout;
 
-const timeout = setTimeout(() => {
-  if (!stdinClosed) {
-    stdinClosed = true;
-    runHook(normalizeInput({}));
-  }
-}, 100);
+// Safety net only: resolution normally happens on stdin 'end'/'error'.
+// A generous timeout prevents a hang if stdin never closes, without racing
+// a slow-but-present payload (the old 100ms gap delivered empty input).
+function armTimeout() {
+  clearTimeout(timeout);
+  timeout = setTimeout(() => {
+    if (!stdinClosed) {
+      stdinClosed = true;
+      try {
+        const parsedInput = input.trim() ? JSON.parse(input) : {};
+        runHook(normalizeInput(parsedInput));
+      } catch {
+        runHook(normalizeInput({}));
+      }
+    }
+  }, 2000);
+}
+
+armTimeout();
 
 process.stdin.setEncoding('utf8');
 
 process.stdin.on('data', (chunk) => {
-  clearTimeout(timeout);
   input += chunk;
+  // Re-arm so the safety net always holds, but don't fire mid-stream.
+  armTimeout();
 });
 
 process.stdin.on('end', () => {

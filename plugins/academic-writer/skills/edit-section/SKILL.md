@@ -68,6 +68,21 @@ Parse the target section and all surrounding sections (needed for repetition che
 
 ---
 
+## Load the Source Registry (citation-verification prerequisite)
+
+The auditor's Check D verifies citation fields against `.academic-helper/sources.json`. A single-section edit still relies on this registry being present and current for the works cited in that section.
+
+```bash
+cat .academic-helper/sources.json 2>/dev/null || echo "MISSING"
+```
+
+- **If `sources.json` is missing**, or **if the sources cited in this section aren't represented in the registry** (stale — the deep-reader overwrites it per write run), tell the researcher:
+  > "I don't have a current source registry for this section's citations, so citation verification (Check D) will be limited. Want to re-run the deep-reader on these sources before I edit, so the audit can verify bibliographic metadata?"
+- If the researcher agrees, re-run the deep-reader on this section's sources (hand back to `/academic-writer:edit` or the write pipeline, which owns the deep-reader spawn) so `.academic-helper/sources.json` is refreshed before editing.
+- If the researcher declines, proceed but warn that Check D will be skipped for any citation whose source isn't in the registry.
+
+---
+
 ## Understand the Edit
 
 Ask:

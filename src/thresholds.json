@@ -17,6 +17,11 @@
     "max": 3,
     "_comment": "Maximum number of times a paragraph can be rewritten before being included with [NEEDS REVIEW]."
   },
+  "paragraph": {
+    "wordCeiling": 220,
+    "wordCeilingIntroConclusionBonus": 30,
+    "_comment": "Soft word ceiling per paragraph. Introduction and conclusion paragraphs may exceed by wordCeilingIntroConclusionBonus words."
+  },
   "styleFingerprint": {
     "passThreshold": 7,
     "maxScore": 10,

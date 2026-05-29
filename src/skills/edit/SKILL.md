@@ -83,6 +83,21 @@ Parse the article into sections and paragraphs. Identify all footnotes/citations
 
 ---
 
+## Load the Source Registry (citation-verification prerequisite)
+
+The auditor's Check D verifies every citation field (year, journal, publisher, title spelling) against `.academic-helper/sources.json`. The edit pipeline depends on this registry being present and current for the article being edited.
+
+```bash
+cat .academic-helper/sources.json 2>/dev/null || echo "MISSING"
+```
+
+- **If `sources.json` is missing**, or **if it does not represent this article's sources** (the works cited in the article's footnotes aren't in the registry — i.e., it's stale because the deep-reader overwrites it per write run), tell the researcher:
+  > "I don't have a current source registry for this article, so citation verification (Check D) will be limited — I can only verify against RAG/Candlekeep reads, not against confirmed bibliographic metadata. Want me to re-run the deep-reader on this article's sources first so edits get full citation verification?"
+- If the researcher agrees, **use the Agent tool to spawn the `deep-reader` subagent** on this article's cited sources before proceeding, so it rewrites `.academic-helper/sources.json`.
+- If the researcher declines, proceed but warn that Check D will be skipped for any citation whose source isn't in the registry.
+
+---
+
 ## Understand the Edit Request
 
 Ask:
@@ -123,6 +138,7 @@ Re-read the `styleFingerprint`. For each paragraph being adjusted:
 2. Apply the requested tone change while keeping fingerprint compliance
 3. Use `representativeExcerpts` as style targets
 4. Run Hebrew grammar check if applicable
+5. **Citation hard gate (mandatory):** a tone rewrite mutates the wording of already-cited sentences. For every paragraph whose cited sentence(s) were altered, **use the Agent tool to spawn an `auditor` subagent** (pass the revised paragraph text, sectionIndex, paragraphIndex, tools) and gate on `VERDICT: PASS` — exactly as Modes A/B/E do. If the auditor rejects, fix the citation and re-audit before finalizing. Do NOT ship a tone-adjusted paragraph whose citations have not re-passed the audit.
 
 If the researcher wants tone that differs from their fingerprint (e.g., "make this more polemical even though my usual style is measured"), note the deviation and apply it as a conscious choice.
 
@@ -153,9 +169,9 @@ If the researcher wants tone that differs from their fingerprint (e.g., "make th
 
 ### Mode F: Cut / Expand
 
-**Cut:** Identify redundancies and weak passages. Remove while preserving argument flow. Re-run synthesizer for transitions.
+**Cut:** Identify redundancies and weak passages. Remove while preserving argument flow. Re-run synthesizer for transitions. **Citation hard gate (mandatory):** cutting can splice or reword surviving cited sentences (e.g., when two sentences merge or a citation's anchoring clause is trimmed). For every paragraph whose cited sentence(s) were altered by the cut, **use the Agent tool to spawn an `auditor` subagent** (revised paragraph text, sectionIndex, paragraphIndex, tools) and gate on `VERDICT: PASS` — exactly as Modes A/B/E do. If rejected, restore/fix the citation and re-audit before finalizing.
 
-**Expand:** Spawn research subagents to find additional material, then spawn section-writer for the expanded passages.
+**Expand:** Spawn research subagents to find additional material, then spawn section-writer for the expanded passages. The section-writer already runs the auditor hard gate on every paragraph it produces (including any cited sentences it rewrites), so the expand path is covered by the section-writer pipeline.
 
 ### Mode G: Full Review
 
@@ -196,6 +212,6 @@ After edits are applied:
 
 - **NEVER remove citations** without the researcher's explicit approval
 - **NEVER change the thesis** unless specifically asked
-- **Every new claim added must go through citation audit** (hard gate)
+- **Every new claim AND every modification to an already-cited sentence must pass the citation audit hard gate** — this includes tone rewrites (Mode C) and cut/expand rewrites (Mode F), not only newly added claims
 - Maintain the style fingerprint unless the researcher explicitly overrides
 - Show changes before applying destructive edits (section removal, major rewrites)

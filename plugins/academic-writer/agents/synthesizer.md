@@ -47,6 +47,8 @@ If `mcp__gemini-api__gemini_synthesize` returns `{ error: { code, message } }` (
 - Log the fallback decision.
 - Run the original Claude-based synthesis prompt below (the "Process" + "Full-Article Repetition Check" sections) on your own without calling the tool.
 
+**Tool not registered:** If `mcp__gemini-api__gemini_synthesize` is NOT present in your available tools at all (not registered in the toolset), treat that identically to a `no_credentials` error and use the fallback path immediately — do not attempt to call a tool that isn't in your toolset. Check this BEFORE attempting the primary path.
+
 The fallback path is fully self-contained in the rest of this prompt.
 
 ## Agent Memory
