@@ -25,7 +25,7 @@ researcher on a local machine; the plugin should never assume team workflows.
 
 ## Conventions
 
-- **Profile-scoped**: every hook must silently skip in projects without `.academic-helper/profile.md`. The `run-hook.mjs:54` directory guard handles this; new hooks should respect it.
+- **Profile-scoped**: every hook must silently skip in projects without `.academic-helper/profile.md`. The `run-hook.mjs:54` outer guard checks for the `.academic-helper/` directory; individual hooks then verify `profile.md` exists. New hooks should include the `profile.md` check.
 - **Thresholds**: edit `src/thresholds.json`, never inline numbers in skills or agents.
 - **Strict TypeScript**: hooks must compile under `tsc --noEmit`; never use `any` (use `unknown` and narrow).
 - **Markdown frontmatter**: skills require `name`, `description`, `user-invocable`, `allowedTools`. Agents require `name`, `description`, `tools`, `model`. Add `metadata: {author, version}` to skills.

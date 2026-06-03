@@ -1,6 +1,6 @@
 ---
 description: Stage 2 of the voice subsystem. Run `:voice` to start a 7-session adversarial interview seeded by the past-articles fingerprint. Sub-actions for resume, recompress, audit, quick mode, sync, and status. Use when the user wants to deepen their voice profile beyond what the corpus reveals.
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Agent
+allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent]
 ---
 
 # Auto-generated from skills/voice/SKILL.md

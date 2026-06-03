@@ -16,8 +16,8 @@ id_cache="$voice_dir/.candlekeep-id"
 # Resolve writer name (best-effort; empty is fine)
 writer="${VOICE_WRITER_NAME:-}"
 if [[ -z "$writer" ]]; then
-  if [[ -f "$root/.academic-writer/profile.json" ]]; then
-    writer=$(grep -E '"writer_name"' "$root/.academic-writer/profile.json" 2>/dev/null \
+  if [[ -f "$root/.academic-helper/profile.json" ]]; then
+    writer=$(grep -E '"writer_name"' "$root/.academic-helper/profile.json" 2>/dev/null \
       | sed -E 's/.*"writer_name"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/' || true)
   elif [[ -f "$root/book.yaml" ]]; then
     writer=$(grep -E '^author:' "$root/book.yaml" 2>/dev/null \

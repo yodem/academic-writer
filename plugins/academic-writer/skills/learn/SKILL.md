@@ -4,7 +4,7 @@ description: "Style learning — scans past-articles/ for new files, extracts st
 user-invocable: false
 allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
 agents: [voice-miner]
-metadata: {author: "Yotam Fromm", version: "0.2.18"}
+metadata: {author: "Yotam Fromm", version: "0.2.23"}
 ---
 
 # Academic Writer — Learn from New Articles

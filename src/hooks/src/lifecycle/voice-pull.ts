@@ -12,11 +12,7 @@ export function voicePull(input: HookInput): HookResult {
     return { continue: true, suppressOutput: true };
   }
 
-  const pluginRoot = input.plugin_root ?? process.env["CLAUDE_PLUGIN_ROOT"];
-  if (!pluginRoot) {
-    return { continue: true, suppressOutput: true };
-  }
-
+  const pluginRoot = input.plugin_root ?? process.env["CLAUDE_PLUGIN_ROOT"] ?? "";
   const sync = join(pluginRoot, "skills", "voice", "voice-sync.sh");
   if (!existsSync(sync)) {
     return { continue: true, suppressOutput: true };

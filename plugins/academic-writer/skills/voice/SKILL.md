@@ -2,7 +2,7 @@
 name: voice
 description: Stage 2 of the voice subsystem. Run `:voice` to start a 7-session adversarial interview seeded by the past-articles fingerprint. Sub-actions for resume, recompress, audit, quick mode, sync, and status. Use when the user wants to deepen their voice profile beyond what the corpus reveals.
 user-invocable: true
-allowedTools: Read, Write, Edit, Glob, Grep, Bash, Agent
+allowedTools: [Read, Write, Edit, Glob, Grep, Bash, Agent]
 metadata: {author: "Yotam Fromm", version: "0.2.19"}
 ---
 
