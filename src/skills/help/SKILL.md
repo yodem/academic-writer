@@ -54,6 +54,7 @@ This walks you through:
 | `/academic-writer:write` | **Write a new article** — the full pipeline from subject to .docx |
 | `/academic-writer:edit` | **Edit an article** — revise sections, fix citations, adjust tone, restructure |
 | `/academic-writer:edit-section` | **Edit one section** — fast, focused single-section edit |
+| `/academic-writer:proofread` | **Proofread (הגהה)** — mechanical fixes (typos, punctuation, typography) + a change report; never rewrites prose |
 | `/academic-writer:research` | **Research a topic** — query your sources, get answers with citations |
 | `/academic-writer:init` | **First-time setup** — profile, style analysis, source indexing |
 | `/academic-writer:health` | **System check** — verify all integrations are working |

@@ -42,6 +42,7 @@ Slash commands are auto-generated from skills with `user-invocable: true`. To ad
 | `/academic-writer:write` | write | Start a new article from scratch |
 | `/academic-writer:edit` | edit | Revise a drafted article |
 | `/academic-writer:edit-section` | edit-section | Revise one section only |
+| `/academic-writer:proofread` | proofread | Mechanical הגהה pass — fixes + change report |
 | `/academic-writer:init` | init | Full onboarding (first install) |
 | `/academic-writer:setup` | setup | Quick onboarding |
 | `/academic-writer:research` | research | Investigate a topic |
@@ -59,6 +60,7 @@ Slash commands are auto-generated from skills with `user-invocable: true`. To ad
 | `src/agents/architect.md` | Generates thesis options or structured article outline |
 | `src/agents/section-writer.md` | Writes one complete section through the 8-skill quality pipeline |
 | `src/agents/auditor.md` | Citation hard gate — verifies claims against sources.json |
+| `src/agents/proofreader.md` | Mechanical הגהה — returns a change list (typo/punctuation/grammar/idea-flag); never edits |
 | `src/agents/synthesizer.md` | Post-section review for coherence and cross-section flow |
 | `src/agents/voice-miner.md` | Stage 1 voice subsystem — reads corpus and emits markdown style fingerprint |
 
