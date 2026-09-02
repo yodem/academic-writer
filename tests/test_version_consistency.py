@@ -196,20 +196,161 @@ class TestMultiCommitLevel(unittest.TestCase):
         finally:
             path.unlink()
 
-    def test_workflow_passes_the_whole_event_not_head_commit(self):
+    def test_workflow_derives_level_since_the_last_tag_not_from_the_push(self):
+        """A push-scoped level (--level-from-event) is lost for good when that push's
+        release job fails before a tag is cut — see TestLevelSinceTag below for the
+        regression this guards. The workflow must derive the level from commits since
+        the last release tag instead."""
         wf = _workflow_code()
-        self.assertIn("--level-from-event", wf, "level must come from the whole push payload")
+        self.assertIn("--level-since-tag", wf, "level must come from commits since the last release tag")
+        self.assertNotIn(
+            "--level-from-event", wf,
+            "the workflow must not infer the level from a single push's commits",
+        )
         # head_commit is still fine for the "is this the bot's own bump commit?" guard —
-        # what must NOT happen is deriving the BUMP LEVEL from it alone.
+        # what must NOT happen is deriving the BUMP LEVEL from a single commit message.
         self.assertNotIn(
             "--level-from-message", wf,
             "the workflow must not infer the level from a single commit message",
         )
 
+    def test_workflow_fetches_tags_before_deriving_the_level(self):
+        """--level-since-tag walks tag..HEAD; actions/checkout does not fetch tags by
+        default even with fetch-depth: 0, so a missing fetch would silently fall back
+        to 'no tags' and re-count everything a prior release already shipped."""
+        wf = _workflow_code()
+        self.assertIn("fetch-depth: 0", wf)
+        self.assertRegex(wf, r"fetch\b.*--tags|--tags\b.*fetch")
+
     def test_workflow_exposes_a_manual_level_override(self):
         wf = _workflow_code()
         self.assertIn("workflow_dispatch", wf)
         self.assertIn("inputs.level", wf)
+
+
+class TestLevelSinceTag(unittest.TestCase):
+    """--level-since-tag must derive the bump level from commits since the last
+    release tag, not from any single push — that is the whole point of the fix:
+    a push whose release job fails never gets a tag, so a level computed only
+    from THAT push's commits is discarded and can never come back. Deriving it
+    from tag..HEAD means a feat: commit from a failed push is still counted once
+    a later, unrelated push finally succeeds.
+
+    Every repo here is a hermetic temp dir created with `git init` — never the
+    real project history — so these tests can't drift with this repo's own log.
+    """
+
+    def _init_repo(self) -> Path:
+        import shutil
+        import tempfile
+
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=tmp, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp, check=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp, check=True)
+        return tmp
+
+    def _commit(self, repo: Path, message: str) -> None:
+        subprocess.run(
+            ["git", "commit", "--allow-empty", "-q", "-m", message],
+            cwd=repo, check=True,
+        )
+
+    def _tag(self, repo: Path, tag: str) -> None:
+        subprocess.run(["git", "tag", tag], cwd=repo, check=True)
+
+    def test_no_tags_considers_all_history(self):
+        repo = self._init_repo()
+        self._commit(repo, "chore: init")
+        self._commit(repo, "feat: first feature")
+        self.assertIsNone(version_sync.latest_release_tag(repo))
+        self.assertEqual(version_sync.level_since_tag(repo), "minor")
+
+    def test_no_tags_no_commits_is_patch(self):
+        """An empty repo (no commits at all) must not raise — it has nothing to
+        release, so it falls back to the same default as 'no messages'."""
+        repo = self._init_repo()
+        self.assertEqual(version_sync.level_since_tag(repo), "patch")
+
+    def test_only_fix_commits_after_tag_is_patch(self):
+        repo = self._init_repo()
+        self._commit(repo, "feat: initial release")
+        self._tag(repo, "v0.1.0")
+        self._commit(repo, "fix: repair a bug")
+        self._commit(repo, "docs: typo")
+        self.assertEqual(version_sync.latest_release_tag(repo), "v0.1.0")
+        self.assertEqual(version_sync.level_since_tag(repo), "patch")
+
+    def test_feat_among_several_commits_after_tag_is_minor(self):
+        repo = self._init_repo()
+        self._commit(repo, "feat: initial release")
+        self._tag(repo, "v0.1.0")
+        self._commit(repo, "fix: a")
+        self._commit(repo, "feat: b")
+        self._commit(repo, "docs: c")
+        self.assertEqual(version_sync.level_since_tag(repo), "minor")
+
+    def test_breaking_bang_after_tag_is_major(self):
+        repo = self._init_repo()
+        self._commit(repo, "feat: initial release")
+        self._tag(repo, "v0.1.0")
+        self._commit(repo, "fix: a")
+        self._commit(repo, "feat!: drop the old api")
+        self.assertEqual(version_sync.level_since_tag(repo), "major")
+
+    def test_breaking_change_footer_after_tag_is_major(self):
+        repo = self._init_repo()
+        self._commit(repo, "feat: initial release")
+        self._tag(repo, "v0.1.0")
+        self._commit(repo, "fix: a")
+        self._commit(repo, "fix: repair the gate\n\nBREAKING CHANGE: removed the old flag")
+        self.assertEqual(version_sync.level_since_tag(repo), "major")
+
+    def test_feat_before_a_failed_release_is_still_counted(self):
+        """THE REGRESSION. Push A ships a feat: commit but its release job fails,
+        so no tag is cut — v0.1.0 stays the last tag. Push B is only a fix:, and
+        its release succeeds. The level must be minor: it depends on distance
+        from the tag (tag..HEAD), not on which single push is being evaluated."""
+        repo = self._init_repo()
+        self._commit(repo, "feat: initial release")
+        self._tag(repo, "v0.1.0")
+        # Push A: a feat:, but imagine its CI run failed before a tag was cut.
+        self._commit(repo, "feat: venue profiles")
+        # Push B: a fix:, whose CI run is the one that finally succeeds.
+        self._commit(repo, "fix: repair the failing test")
+        self.assertEqual(version_sync.latest_release_tag(repo), "v0.1.0")
+        # A push-scoped view of push B alone would see only "fix:" -> patch.
+        self.assertEqual(version_sync.level_from_messages(["fix: repair the failing test"]), "patch")
+        # The since-tag view still sees push A's feat: -> minor.
+        self.assertEqual(version_sync.level_since_tag(repo), "minor")
+
+    def test_newest_tag_wins_by_version_order_not_lexical(self):
+        """v0.6.9 < v0.6.10 by version order, but 'v0.6.10' < 'v0.6.9' lexically —
+        picking the tag lexically would pick the wrong one and re-count v0.6.10's
+        already-released commits."""
+        repo = self._init_repo()
+        self._commit(repo, "feat: a")
+        self._tag(repo, "v0.6.9")
+        self._commit(repo, "fix: b")
+        self._tag(repo, "v0.6.10")
+        self._commit(repo, "docs: c")
+        self.assertEqual(version_sync.latest_release_tag(repo), "v0.6.10")
+        self.assertEqual(version_sync.level_since_tag(repo), "patch")
+
+    def test_non_ancestor_tag_is_ignored(self):
+        """A v-tag that exists in the repo but sits on a different line of history
+        (not an ancestor of HEAD) must not be treated as 'the last release'."""
+        repo = self._init_repo()
+        self._commit(repo, "feat: on main")
+        self._tag(repo, "v0.1.0")
+        subprocess.run(["git", "checkout", "-q", "-b", "other"], cwd=repo, check=True)
+        self._commit(repo, "feat: on other branch only")
+        self._tag(repo, "v9.9.9")
+        subprocess.run(["git", "checkout", "-q", "main"], cwd=repo, check=True)
+        self._commit(repo, "fix: on main after the branch")
+        self.assertEqual(version_sync.latest_release_tag(repo), "v0.1.0")
+        self.assertEqual(version_sync.level_since_tag(repo), "patch")
 
 
 class TestWriteModes(unittest.TestCase):

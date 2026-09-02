@@ -28,6 +28,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
+          # Tags are fetched EXPLICITLY, not incidentally: the bump level is now
+          # derived from commits since the last release tag, so a job without tags
+          # would silently compute it over the whole history instead of failing.
+          fetch-tags: true
           persist-credentials: true
 
       - name: Skip if this is a version-bump commit
@@ -40,6 +44,15 @@ jobs:
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # actions/checkout's fetch-tags default is false, independent of fetch-depth —
+      # a full-history checkout is not guaranteed to bring tags with it. The bump
+      # level now comes from "commits since the last release tag" (see below), so a
+      # missing tag here would silently fall back to "no tags, consider all history"
+      # and double-count everything a prior release already shipped.
+      - name: Fetch tags
+        if: steps.guard.outputs.skip == 'false'
+        run: git fetch --tags --force origin
 
       - name: Configure git
         if: steps.guard.outputs.skip == 'false'
@@ -64,23 +77,27 @@ jobs:
       # inline `${PARTS[2]} + 1` could only ever produce a patch, and wrote three
       # of the six locations — which is how features.json sat at 0.5.0 while
       # everything else said 0.6.3 for two releases.
+      #
+      # Level comes from commits SINCE THE LAST RELEASE TAG, not from the push
+      # payload (--level-from-event). A push-scoped level is lost for good the
+      # moment that push's release job fails before a tag is cut: a feat: push
+      # that fails the test gate, followed by an unrelated fix: push that passes,
+      # used to ship a patch release and silently discard the minor bump the
+      # feat: commit was owed. tag..HEAD still contains that feat: commit no
+      # matter how many failed pushes sit between the tag and HEAD.
       - name: Determine bump level
         if: steps.guard.outputs.skip == 'false'
         id: level
         env:
-          # The whole push payload, not just head_commit: head_commit is the LAST
-          # commit, so a merge commit would infer `patch` for a push that contains
-          # feat: commits. version-sync takes the highest level across all of them.
-          EVENT_JSON: ${{ toJSON(github.event) }}
           INPUT_LEVEL: ${{ inputs.level }}
         run: |
           if [[ -n "$INPUT_LEVEL" ]]; then
             LEVEL="$INPUT_LEVEL"
             echo "level from workflow_dispatch input: $LEVEL"
           else
-            printf '%s' "$EVENT_JSON" > /tmp/push-event.json
-            LEVEL=$(python3 scripts/version-sync.py --level-from-event /tmp/push-event.json)
-            echo "level inferred from all commits in the push: $LEVEL"
+            echo "last release tag: $(python3 scripts/version-sync.py --show-last-tag)"
+            LEVEL=$(python3 scripts/version-sync.py --level-since-tag)
+            echo "level inferred from all commits since the last release tag: $LEVEL"
           fi
           echo "level=$LEVEL" >> "$GITHUB_OUTPUT"
 

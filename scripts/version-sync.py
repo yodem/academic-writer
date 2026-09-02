@@ -11,6 +11,7 @@ in exactly one place (scripts/version-locations.json) and never re-derived.
     version-sync.py --set 0.7.0
     version-sync.py --bump minor            # major | minor | patch
     version-sync.py --level-from-message "feat: thing"   # print the implied bump level
+    version-sync.py --level-since-tag       # highest level across commits since the last release tag
 
 Every write preserves the file's existing indentation and trailing newline.
 """
@@ -20,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -146,6 +148,75 @@ def level_from_messages(messages) -> str:
     return best
 
 
+TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
+
+
+def _run_git(args: list[str], repo: Path) -> str:
+    result = subprocess.run(
+        ["git", *args], cwd=repo, capture_output=True, text=True, check=True
+    )
+    return result.stdout
+
+
+def latest_release_tag(repo: Path = REPO) -> str | None:
+    """The newest `v<semver>` tag reachable from HEAD, ordered by version — not
+    lexically (so v0.6.10 sorts after v0.6.9, unlike a plain string sort).
+
+    Only tags that are actual ancestors of HEAD count: a tag cut on some other
+    branch must not be mistaken for "the last release this history shipped".
+    Returns None when no such tag exists, so the caller can fall back to
+    considering the whole history.
+    """
+    raw = _run_git(["tag", "--list", "v*"], repo)
+    candidates: list[tuple[tuple[int, int, int], str]] = []
+    for tag in raw.split():
+        m = TAG_RE.match(tag)
+        if not m:
+            continue
+        check = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", tag, "HEAD"],
+            cwd=repo, capture_output=True,
+        )
+        if check.returncode == 0:
+            candidates.append((tuple(int(g) for g in m.groups()), tag))
+    if not candidates:
+        return None
+    candidates.sort()
+    return candidates[-1][1]
+
+
+def commit_messages_since(tag: str | None, repo: Path = REPO) -> list[str]:
+    """Full subject+body of every commit after `tag` up to HEAD (or all of HEAD's
+    history when `tag` is None — the no-tags-yet case).
+
+    Uses a NUL byte to separate whole commit messages, since a message body can
+    contain blank lines and can't be split on those.
+    """
+    range_arg = f"{tag}..HEAD" if tag else "HEAD"
+    try:
+        raw = _run_git(["log", range_arg, "--format=%B%x00"], repo)
+    except subprocess.CalledProcessError:
+        # No commits at all yet (e.g. a brand-new repo) — HEAD doesn't resolve.
+        return []
+    return [part.strip() for part in raw.split("\x00") if part.strip()]
+
+
+def level_since_tag(repo: Path = REPO) -> str:
+    """The highest conventional-commit level across every commit since the last
+    release tag (or the whole history when there is no tag yet).
+
+    This is the fix for the failed-release regression: a bump level derived from
+    a single push is lost forever when that push's release job fails before a
+    tag is cut. Deriving it from tag..HEAD means a `feat:` from a failed push is
+    still counted once a later, unrelated `fix:` push finally succeeds.
+    """
+    tag = latest_release_tag(repo)
+    msgs = commit_messages_since(tag, repo)
+    if not msgs:
+        return "patch"
+    return level_from_messages(msgs)
+
+
 def messages_from_event(path: Path) -> list[str]:
     """Extract commit messages from a GitHub push-event payload (or a bare JSON array).
 
@@ -233,6 +304,13 @@ def main() -> int:
     g.add_argument("--level-from-message", metavar="MSG")
     g.add_argument("--level-from-event", metavar="EVENT_JSON",
                    help="GitHub push-event payload file; uses the highest level across ALL its commits")
+    g.add_argument("--show-last-tag", action="store_true",
+                   help="Print the release tag --level-since-tag measures from (or NONE)")
+    g.add_argument("--level-since-tag", action="store_true",
+                   help="Highest level across every commit since the last v<semver> release "
+                        "tag reachable from HEAD (or all history if there is no tag yet). Use "
+                        "this instead of --level-from-event: a push-scoped level is lost when "
+                        "that push's release job fails before a tag is cut.")
     args = ap.parse_args()
 
     if args.release_changelog is not None:
@@ -252,6 +330,14 @@ def main() -> int:
             print("patch")
             return 0
         print(level_from_messages(msgs))
+        return 0
+
+    if args.show_last_tag:
+        print(latest_release_tag() or "NONE")
+        return 0
+
+    if args.level_since_tag:
+        print(level_since_tag())
         return 0
 
     reg = load_registry()
