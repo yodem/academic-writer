@@ -62,3 +62,21 @@ plugins/academic-writer/mcp/gemini-server/node_modules/
 
 # Local API key fallback (per gemini integration spec)
 .academic-helper/secrets.json
+
+# --- Shareability: local session/harness state and personal content ---
+# This repo is meant to be shareable as a plugin. Anything below is either
+# machine-local state or the maintainer's own content, and carries the home path,
+# session ids, or personal drafts. Untracked 2026-09-02; files remain on disk.
+# Enforced by scripts/check-no-private-refs.sh so it cannot creep back.
+.claude/state/
+.claude/memory/
+.claude/agents/
+.claude/context/
+.claude/orchestration/
+.claude/HANDOFF.md
+.instance/
+.removal-log/
+past-articles/
+logs/
+pitch-*.md
+*-pitch-*.html

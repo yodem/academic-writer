@@ -4,12 +4,11 @@
 """Coverage for src/scripts/build-tracked-docx.py, the tracked-changes/
 comments builder for the proofread pipeline (src/skills/proofread/SKILL.md).
 Schema contract: src/skills/proofread/references/changes-schema.json. See
-~/.claude/plans/the-plugin-did-terrable-swift-lantern.md Phase 1.3, the
-Phase 0 RESULT block, and the Research digest Q3 / "Decisions this changes"
-list for the measured findings (lxml-only revision handling, positional
-token pairing with nearest-kept-neighbour rPr fallback, max-existing-id+1
-allocation, real comments.xml wiring, NFC matching, no whole-file/whole-
-paragraph fallback) this script and these tests are built to honour.
+the project plan's tracked-docx section and its measured Phase 0 results for
+the findings (lxml-only revision handling, positional token pairing with
+nearest-kept-neighbour rPr fallback, max-existing-id+1 allocation, real
+comments.xml wiring, NFC matching, no whole-file/whole-paragraph fallback)
+this script and these tests are built to honour.
 
 Builds a small synthetic .docx in-process with python-docx (available per
 requirements-dev.txt) -- python-docx is used only to CREATE the fixture
@@ -262,10 +261,10 @@ class IdCollisionTests(TrackedDocxTestCase):
         original_path = self._build_original(
             ["שלום עולם טוב היום"], seed_revision=True, seed_id=500
         )
-        final_text = "\nשלום עולם נחמד היום"
-        # The seeded revision paragraph is inserted first, so the editable
-        # paragraph is now at index 1; final_text has a matching (ignored,
-        # since the seeded paragraph is never diffed) empty first line.
+        final_text = "שלום עולם נחמד היום"
+        # The seeded revision paragraph is never diffed (finding a), so it
+        # is excluded from paragraph alignment entirely -- only the one
+        # editable paragraph needs a matching final-text line.
         changes = [make_change()]
         output_path = os.path.join(self.tmpdir, "original.proofed.docx")
 
@@ -325,6 +324,126 @@ class WiringTests(TrackedDocxTestCase):
                 if etree.QName(el).localname == "Relationship"
             ]
             self.assertIn("comments.xml", targets)
+
+
+class RprBoundaryPairingTests(TrackedDocxTestCase):
+    """Finding (b): an inserted span must NOT collapse to 'the first run's
+    rPr' when the diff group spans a formatting boundary; the deleted side
+    keeps each token's own rPr as separate w:r elements, and the inserted
+    side is paired positionally against those deleted tokens."""
+
+    def _build_bold_boundary_original(self):
+        path = os.path.join(self.tmpdir, "bold.docx")
+        doc = Document()
+        p = doc.add_paragraph()
+        p.add_run("שלום ")
+        bold_run = p.add_run("עולם טוב")
+        bold_run.bold = True
+        doc.save(path)
+        return path
+
+    def test_replace_within_single_formatting_run_preserves_bold(self):
+        original_path = self._build_bold_boundary_original()
+        final_text = "שלום עולם נחמד"
+        changes = [make_change(before="טוב", after="נחמד")]
+        output_path = os.path.join(self.tmpdir, "bold.proofed.docx")
+
+        result = btd.build_tracked_docx(original_path, final_text, changes, output_path)
+        self.assertEqual(result["counts"], {"ins": 1, "del": 1, "comment": 0})
+
+        root = self._document_root(output_path)
+        del_el = next(root.iter(_wtag("del")))
+        ins_el = next(root.iter(_wtag("ins")))
+        self.assertIsNotNone(del_el.find(".//" + _wtag("b")))
+        self.assertIsNotNone(ins_el.find(".//" + _wtag("b")))
+
+    def test_replace_crossing_formatting_boundary_keeps_both_runs_in_del(self):
+        # A dedicated fixture: plain "אלף" is directly adjacent (no
+        # whitespace token in between) to bold "בית", and the replacement
+        # is a single token with nothing in common with either side --
+        # difflib has no shared token to anchor on, so the single
+        # 'replace' opcode is forced to span the plain/bold run boundary.
+        path = os.path.join(self.tmpdir, "bold_cross.docx")
+        doc = Document()
+        p = doc.add_paragraph()
+        p.add_run("מבוא ")
+        p.add_run("אלף")
+        bold_run = p.add_run("בית")
+        bold_run.bold = True
+        p.add_run(" סיום")
+        doc.save(path)
+
+        final_text = "מבוא גימלדלת סיום"
+        changes = [
+            make_change(before="אלףבית", after="גימלדלת", type="word", level="sentence")
+        ]
+        output_path = os.path.join(self.tmpdir, "bold2.proofed.docx")
+
+        original_path = path
+
+        result = btd.build_tracked_docx(original_path, final_text, changes, output_path)
+        self.assertGreaterEqual(result["counts"]["del"], 1)
+
+        root = self._document_root(output_path)
+        del_el = next(root.iter(_wtag("del")))
+        del_runs = del_el.findall(_wtag("r"))
+        self.assertGreaterEqual(
+            len(del_runs), 2, "deleted span crossing a formatting boundary must not collapse to one run"
+        )
+        # exactly one of the deleted runs must carry the bold property --
+        # "first run wins" would either drop it entirely or apply it to
+        # everything.
+        bold_count = sum(1 for r in del_runs if r.find(".//" + _wtag("b")) is not None)
+        plain_count = len(del_runs) - bold_count
+        self.assertGreaterEqual(bold_count, 1)
+        self.assertGreaterEqual(plain_count, 1)
+
+        # accept-all reconstruction must still equal final_text exactly.
+        reconstructed = self._reconstruct_final_text(root)
+        self.assertEqual(reconstructed, final_text)
+
+
+class ParagraphAlignmentSafetyTests(TrackedDocxTestCase):
+    """Finding (f) backstop: final_text carrying markdown-shaped blank
+    separator lines / headings must never be zipped positionally against
+    docx paragraphs in a way that deletes an entire paragraph's content."""
+
+    def test_blank_and_heading_lines_do_not_cause_whole_paragraph_deletion(self):
+        original_path = self._build_original(
+            ["פסקה ראשונה עם טעות קטנה", "פסקה שנייה ללא שינוי", "פסקה שלישית גם ללא שינוי"]
+        )
+        # final_text shaped like PROOF_BASE: a heading line and blank
+        # separators between paragraphs, mirroring chunk-article.py's
+        # `##`-then-paragraph splitting.
+        final_text = (
+            "## כותרת\n"
+            "\n"
+            "פסקה ראשונה עם תיקון קטן\n"
+            "\n"
+            "פסקה שנייה ללא שינוי\n"
+            "\n"
+            "פסקה שלישית גם ללא שינוי\n"
+        )
+        changes = [make_change(before="טעות", after="תיקון")]
+        output_path = os.path.join(self.tmpdir, "aligned.proofed.docx")
+
+        result = btd.build_tracked_docx(original_path, final_text, changes, output_path)
+
+        root = self._document_root(output_path)
+        # The critical assertion: no w:del may cover an entire paragraph's
+        # original token set (that would be the forbidden whole-paragraph
+        # fallback), regardless of how the alignment mismatch is reported.
+        body = root.find(_wtag("body"))
+        for p in body.findall(_wtag("p")):
+            runs_text = "".join(t.text or "" for t in p.iter(_wtag("t")) if not self._is_in_del(t))
+            del_only_text = "".join(
+                t.text or "" for t in p.iter(_wtag("delText"))
+            )
+            if del_only_text:
+                # A paragraph that has ANY deletion must still have some
+                # surviving (kept or inserted) content -- never fully
+                # emptied out.
+                self.assertTrue(runs_text.strip(), f"paragraph fully deleted: {del_only_text!r}")
 
 
 class NoMatchSkipTests(TrackedDocxTestCase):

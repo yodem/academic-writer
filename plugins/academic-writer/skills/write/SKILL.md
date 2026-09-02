@@ -122,7 +122,7 @@ if [ -f "$MD_PATH" ]; then
 fi
 ```
 
-If the file exists, the skill MUST stop the write pipeline and tell the user to use `/academic-writer:edit articles/${SLUG}.md` (or `/academic-writer:edit-section` for a single section). Do NOT continue with deep-reader, architect, etc., because writing inline at that point produces ungated prose (the 2026-05-02 mikdashim post-compaction failure).
+If the file exists, the skill MUST stop the write pipeline and tell the user to use `/academic-writer:edit articles/${SLUG}.md` (or `/academic-writer:edit-section` for a single section). Do NOT continue with deep-reader, architect, etc., because writing inline at that point produces ungated prose (the recorded 2026-05-02 post-compaction failure, in which a context compaction mid-pipeline led to prose being written inline, bypassing the audit gate entirely).
 
 If the file does not exist, proceed with Phase 1 normally.
 

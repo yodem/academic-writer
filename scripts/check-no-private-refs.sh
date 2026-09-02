@@ -38,13 +38,32 @@ IDENTITY_DENY=(
 # Applied to SHIPPED files only — stricter, because these are installed by users.
 SHIPPED_ONLY_DENY=(
   '\bcm[a-z0-9]{22,}\b::CandleKeep item id in a shipped file (cite the title, not the id)'
+  '[Mm]ikdashim::name of an unrelated private project in a shipped file (describe the failure, not the project)'
+)
+
+# Paths that must never be TRACKED at all: machine-local session/harness state and
+# the maintainer's own drafts. They carry home paths, session ids and personal
+# content, and a shareable plugin repo has no use for any of them. Untracked
+# 2026-09-02; this list stops them creeping back via `git add -A`.
+TRACKED_PATH_DENY=(
+  '^\.claude/(state|memory|agents|context|orchestration)/::machine-local harness state'
+  '^\.claude/HANDOFF\.md$::machine-local session handoff'
+  '^\.instance/::machine-local session id'
+  '^\.removal-log/::one-off local migration log'
+  '^past-articles/::the maintainer'"'"'s own article corpus'
+  '^logs/::local run logs'
+  '^pitch-::the maintainer'"'"'s own pitch drafts'
 )
 
 status=0
 
 run_tier() {
   local scope_re="$1"; shift
-  local files; files="$(git ls-files | grep -E "$scope_re" | grep -v node_modules || true)"
+  # This script and its test necessarily CONTAIN the denied patterns — they are the
+  # definition of them. Excluding them is not a loophole: nothing else may match.
+  local files; files="$(git ls-files | grep -E "$scope_re" \
+      | grep -v node_modules \
+      | grep -vE '^(scripts/check-no-private-refs\.sh|tests/test_no_private_refs\.py)$' || true)"
   [[ -z "$files" ]] && return 0
   local entry pattern reason hits
   for entry in "$@"; do
@@ -62,6 +81,22 @@ run_tier() {
 
 run_tier "$SHIPPED_RE"   "${IDENTITY_DENY[@]}" "${SHIPPED_ONLY_DENY[@]}"
 run_tier "$PUBLISHED_RE" "${IDENTITY_DENY[@]}"
+
+# Tracked-path tier: a content grep cannot catch a file that should not be in the
+# index at all.
+all_tracked="$(git ls-files || true)"
+for entry in "${TRACKED_PATH_DENY[@]}"; do
+  pattern="${entry%%::*}"
+  reason="${entry##*::}"
+  hits="$(printf '%s\n' "$all_tracked" | grep -E "$pattern" || true)"
+  if [[ -n "$hits" ]]; then
+    echo "FAIL: tracked file that should be gitignored — $reason"
+    printf '%s\n' "$hits" | sed 's/^/    /' | head -8
+    echo "    fix: git rm -r --cached <path>   (the files stay on disk)"
+    echo ""
+    status=1
+  fi
+done
 
 if [[ $status -eq 0 ]]; then
   echo "✓ check-no-private-refs: no personal identifiers in shipped or published paths"

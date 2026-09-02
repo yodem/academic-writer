@@ -52,3 +52,52 @@ class TestNoPrivateRefs(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestShareability(unittest.TestCase):
+    """The repo must stay shareable: no machine-local state or personal drafts tracked."""
+
+    def test_no_local_state_is_tracked(self):
+        tracked = subprocess.run(
+            ["git", "ls-files"], cwd=REPO, capture_output=True, text=True, check=True
+        ).stdout.split()
+        import re
+
+        banned = re.compile(
+            r"^(\.claude/(state|memory|agents|context|orchestration)/|\.claude/HANDOFF\.md$"
+            r"|\.instance/|\.removal-log/|past-articles/|logs/|pitch-)"
+        )
+        offenders = [p for p in tracked if banned.match(p)]
+        self.assertEqual(
+            offenders,
+            [],
+            "machine-local state or personal drafts are tracked; "
+            f"git rm -r --cached them (files stay on disk): {offenders}",
+        )
+
+    def test_gitignore_covers_them(self):
+        with open(os.path.join(REPO, ".gitignore"), encoding="utf-8") as fh:
+            ignore = fh.read()
+        for entry in (".claude/state/", ".instance/", ".removal-log/", "pitch-*.md"):
+            self.assertIn(entry, ignore, f".gitignore must exclude {entry}")
+
+    def test_no_unrelated_private_project_in_shipped_files(self):
+        shipped = subprocess.run(
+            ["git", "ls-files", "src/", "plugins/", "manifests/"],
+            cwd=REPO, capture_output=True, text=True, check=True,
+        ).stdout.split()
+        offenders = []
+        for rel in shipped:
+            path = os.path.join(REPO, rel)
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    if "mikdashim" in fh.read().lower():
+                        offenders.append(rel)
+            except (UnicodeDecodeError, FileNotFoundError, IsADirectoryError):
+                continue
+        self.assertEqual(
+            offenders,
+            [],
+            "a shipped file names an unrelated private project; describe the failure "
+            f"mode, not the project: {offenders}",
+        )

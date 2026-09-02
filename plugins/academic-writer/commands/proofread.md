@@ -1,27 +1,31 @@
 ---
-description: Mechanical proofreading (הגהה) pass over a finished article — fixes typos, punctuation, spacing, Hebrew typography, and clear grammar errors, then writes a markdown report documenting every change and why. Suggestion-grade safety: never rewrites prose for style, tone, or voice. Use when an article is drafted and you want a clean copy-edit / proofread (הגהה) before submission, without touching wording or argument.
+description: Unified pre-submission proofreading pass over a finished article — editorial (עורך) venue-fit review, language (עריכה לשונית) sentence-level editing, and mechanical (הגהה) typo/punctuation fixes, each refute-verified before it lands. Produces a tracked-changes .docx (real w:ins/w:del + Word comments) and a markdown report documenting every change, downgrade, and why. Use when an article is drafted and you want a full pre-submission pass — venue fit, register, and mechanics — before sending it out, with every automatic edit visible and reversible in Word.
 allowed-tools: [Bash, Read, Write, Edit, Glob, Grep, Agent, AskUserQuestion]
 ---
 
 # Auto-generated from skills/proofread/SKILL.md
 
 
-# Academic Writer — Proofread (הגהה)
+# Academic Writer — Proofread (עריכה קדם־הגשה)
 
-A focused, **mechanical-only** proofreading pass over a finished article. It catches the errors every writing pass misses — typos, punctuation, spacing, broken Hebrew typography, doubled words, clear grammar slips — applies the safe ones to a corrected copy, and writes a report documenting **every change and why**.
+A unified, three-stage pre-submission pass over a finished article: **editorial** (venue/genre fit, argument-level issues — comment-only), **language** (sentence-level register, collocation, syntax — refute-verified before it may apply), and **mechanical** (typos, punctuation, typography — the מגיה's pass). Every automatic edit is refute-verified by an independent lens before it is marked applicable, and a refute majority **downgrades** a change to a comment rather than dropping it — nothing a stage found is ever silently discarded.
 
-It does **not** rewrite prose for style, tone, register, or voice, and it does not restructure. For those, use `/academic-writer:edit`. Think of this as the מגיה's pass, not the editor's.
+Output is a real tracked-changes `.docx` (`w:ins`/`w:del` + Word comments, openable and reviewable in Word) plus a markdown report with a Gates table showing exactly which stage ran, which was skipped, and why.
 
-> **Suggestion-grade safety.** The original file is never modified in place. Mechanical fixes are written to a new `*.proofed.md`; the report records every one with its rationale so you can review it against the corrected copy and revert anything by hand. (One-click accept/reject is the future Option B — DOCX tracked-changes + `/apply`.) Idea-level issues are flagged, never auto-fixed.
+`/academic-writer:proofread [path] [--venue <slug>] [--only editorial|language|mechanical]`
+
+> **Suggestion-grade safety.** The original file is never modified in place. Corrections land in a tracked-changes `.docx` and a corrected `*.proofed.md`; every change is documented with its rationale in the report so you can accept/reject in Word or revert by hand. Idea-level and editorial findings are never auto-fixed — they are comments for you to act on.
 
 
-## Step 1 — Load profile (optional)
+## Step 1 — Load profile and venue (optional)
 
 ```bash
 cat .academic-helper/profile.md 2>/dev/null || echo "MISSING"
 ```
 
-The profile gives the researcher's primary `targetLanguage` (drives typography rules). If missing, don't block — default language detection to the article's script (Hebrew → RTL/Hebrew typography; Latin → standard orthography) and note in the report that no profile was loaded.
+The profile gives the researcher's primary `targetLanguage` (drives typography/register rules) and `approvedLanguages` (drives whether the Gemini refute lens is available). If missing, don't block — default language detection to the article's script and note in the report that no profile was loaded.
+
+If `--venue <slug>` was passed, or a `defaultVenue:` is set in the profile frontmatter, load `.academic-helper/venues/<slug>.md` (name, genre convention, audience, "what they reject", etc). If it doesn't exist yet, ask the researcher whether they want to create one (paste a CFP / author guidelines / rejection letter and the `editor` agent will distill it), or proceed without a venue profile — the editorial stage still runs against general academic-publishing norms and says so in its memo. Never create `.academic-helper/` yourself outside this on-request path.
 
 ## Step 2 — Resolve the article
 
@@ -32,127 +36,122 @@ If the user passed a path as an argument, use it. Otherwise ask:
 List candidates:
 
 ```bash
-ls -t articles/*.md 2>/dev/null | head
+ls -t articles/*.md articles/*.docx 2>/dev/null | head
 ```
 
-Establish a single **`PROOF_BASE`** — a plain-text/markdown file that is both what the proofreader reads and what the corrected copy is built from. This is the key safety step: the corrected copy is **never** a copy of a binary source.
+Establish a single **`PROOF_BASE`** — a plain-text/markdown file that is both what every stage reads and what the corrected copy is built from. This is the key safety step: the corrected copy is **never** a copy of a binary source.
 
 - **Markdown / text source** → `PROOF_BASE` is the source itself. Read it with the `Read` tool.
 - **.docx source** → extract the text to a real markdown file first (do **not** rely on stdout):
   ```bash
   python3 -c "import docx,sys; d=docx.Document('SOURCE_PATH'); open('articles/FILEBASE.extracted.md','w').write('\n\n'.join(p.text for p in d.paragraphs))"
   ```
-  `PROOF_BASE` is `articles/FILEBASE.extracted.md`. A `.docx` source produces a markdown report and a corrected `.md`; it does not round-trip back into Word (that's the future full-port / `/apply` path). The original `.docx` is never touched.
+  `PROOF_BASE` is `articles/FILEBASE.extracted.md`. The **original `.docx`** is what the tracked-changes docx is built from in Step 8 (never touched in place); a plain markdown source has no docx to build against, so Step 8 is skipped for it and the deliverable stays the `.proofed.md` + report, as before.
 
-Record `SOURCE_PATH`, `FILEBASE` (the source filename without extension), and `PROOF_BASE`. Determine `LANGUAGE` from the profile's `targetLanguage` if present, else from the article's dominant script.
+Record `SOURCE_PATH`, `FILEBASE`, and `PROOF_BASE`. Determine `LANGUAGE` from the profile's `targetLanguage` if present, else from the article's dominant script. Determine `GEMINI_APPROVED` from whether `LANGUAGE` is in the profile's `approvedLanguages` list.
 
-## Step 3 — Proofread (spawn the מגיה)
+## Step 3 — Chunk, spell-check, and load thresholds (deterministic scripts)
 
-**Use the Agent tool to spawn the `proofreader` subagent.** Pass it the full article text with line numbers, `LANGUAGE`, and a `SECTION_LABEL` if you proofread section-by-section.
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/chunk-article.py" --input "PROOF_BASE" > /tmp/proofread-chunks.json
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/spellcheck-candidates.py" --input "PROOF_BASE" > /tmp/proofread-spellcandidates.json
+```
 
-- Default: one `proofreader` spawn over the whole article — an article is not book-scale.
-- Optional optimization for long articles (many `##` sections): split on top-level headings and spawn one `proofreader` per section **in a single message** (concurrency cap 6), each with its own `SECTION_LABEL`. Merge the returned change lists. Do this only if the article is long enough that a single pass would lose fidelity; otherwise keep it to one spawn.
+`chunk-article.py` splits `PROOF_BASE` on `##` then paragraph boundaries into windows bounded by `proofread.chunkWords` from `src/thresholds.json`; each chunk carries absolute `startLine`/`endLine`. `spellcheck-candidates.py` wraps hspell when present and prints `{"skipped": "no checker"}` (exit 0) when absent — either way, feed its output straight through; never treat a skip as an error.
 
-Each spawn returns one JSON object: `{agent, language, changes[], summary}` (schema in `agents/proofreader.md`). Collect all `changes`.
+Load the `proofread` threshold block (`chunkWords`, `maxPasses`, `dryRounds`, `concurrencyCap`, `refuteVotes`, `refuteMajority`) from `src/thresholds.json` — this is the **only** place these numbers are ever set; never inline a cap anywhere else in this skill or hand a literal to the workflow.
 
-Each change is one of:
+## Step 4 — Run the pipeline (Workflow, with a sequential fallback)
 
-| `type` | applied? |
-|---|---|
-| `typo`, `punctuation`, `word`, `grammar`, `typography` | **mechanical — applied** (subject to the citation-integrity guard below) |
-| `idea-flag` | **never applied** — reported only |
+**Preferred path — the `Workflow` tool.** Call it with the workflow script shipped by this plugin:
 
-**Colloquial/non-academic terminology is a valid `idea-flag` trigger, never a mechanical fix.** If the proofreader notices a clearly colloquial term where academic register is expected (see the colloquial→academic tables in `${CLAUDE_PLUGIN_ROOT}/skills/write/references/academic-terminology-english.md` § E and `academic-terminology-hebrew.md` § ה for examples of the register gap), it may raise an `idea-flag` noting the term and pointing at the register issue — but it must **never** rewrite the wording itself. Register/tone substitution stays out of proofread's mechanical scope (see "Out of your scope" in `agents/proofreader.md`); flagging it for the researcher's attention is in scope precisely because it changes nothing.
+```
+Workflow({
+  scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/proofread.js",
+  args: {
+    language: LANGUAGE,
+    geminiApproved: GEMINI_APPROVED,
+    venue: VENUE_PROFILE_OR_NULL,
+    thresholds: PROOFREAD_THRESHOLDS,
+    chunks: CHUNKS_FROM_STEP_3,
+    spellCandidates: SPELLCANDIDATES_FROM_STEP_3,
+    stages: ONLY_FLAG_OR_ALL_THREE,
+    authorVoice: AUTHOR_VOICE_MD_CONTENTS_OR_NULL
+  }
+})
+```
 
-## Step 4 — Citation-integrity guard (differential, deterministic)
+The script has no filesystem access — it only reads `args` and returns `{memo, languageChanges, mechanicalChanges, outcome, rounds, gates}`. Everything it returns is unapplied; **this skill** applies changes and writes files, per the steps below. `stages` defaults to `['editorial', 'language', 'mechanical']`; when `--only <stage>` was passed, set `stages` to that single-element array so the script's gates record the others as skipped with reason "not requested".
 
-The proofreader is forbidden from editing inside a citation, quotation, page number, or footnote marker. This step **verifies that invariant was obeyed** — it does not re-audit the article's citations. The question here is *differential* ("did this mechanical fix disturb a citation token?"), not absolute ("are the article's citations sound?"). Re-auditing edited text in isolation would answer the wrong question and would silently drop valid fixes when a paragraph had a pre-existing footnote/anchor issue — so this guard is deterministic and needs no `sources.json`.
+**Fallback — Workflow tool absent.** Run the identical control flow by hand, spawning the **same agents** and calling the **same scripts**, in the same order (this duplicates control flow only, never the agent prompts or script logic):
 
-**Define citation/quotation tokens** (match against `before` and `after` of each change; extend per the article's `LANGUAGE`):
+1. **Editorial** (if requested): spawn `editor` once over the whole article + venue profile. Collect its memo (`changes-schema.json` shape, `stage: "editorial"`).
+2. **Language** (if requested and chunks exist): for each chunk, spawn `copyeditor`; for each returned change, spawn three refute-lens checks (`meaning-preserved` / `standard-language` / `voice-preserved` — one prompt per lens, each independently judging only that concern) capped at `concurrencyCap` chunks in flight at once. A change refuted by `refuteMajority` or more lenses is **downgraded** (`applied: false, skipReason: "refuted", refutedBy: [...]`) — **never dropped**; it stays in the list you hand to Step 5.
+3. **Mechanical** (if requested and chunks exist): loop rounds until `dryRounds` consecutive rounds find nothing new or `maxPasses` is hit (name the exit: `converged` or `cap-reached`). Each round: spawn `proofreader` per chunk with that chunk's `spellCandidates` slice; dedupe fresh-vs-seen by **NFC-normalized `before` plus the chunk it was found in** — never by line number, since a residual round runs on already-corrected text where lines below an applied edit have shifted. Verify each fresh change with `refuteVotes` independent lenses (Gemini `gemini_raw` if `GEMINI_APPROVED`, else an `opus` refute agent, same prompt either way); `refuteMajority`+ refutes downgrades, never drops.
+4. Log every downgrade as you go (no silent caps in either path) so the report's Notes section has something to show.
 
-- Footnote markers and definitions: `[^id]`, `[^id]:`, superscript reference numbers.
-- Parenthetical citations: `(Author, 2019, p. 45)` and Hebrew forms (`(כהן, 2019, עמ׳ 45)`); traditional source refs (`בבלי ברכות י, ע״ב`, `בראשית א, א`).
-- Quotations: `"…"`, `״…״`, `'…'`, `׳…׳`, block quotes.
-- Page numbers / locators: `p. 45`, `pp. 45–47`, `עמ׳ 45`, `ע״א`/`ע״ב`.
+Either path produces the same three lists: `memo` (editorial), `languageChanges`, `mechanicalChanges`, plus a `gates` ledger recording what ran/was skipped and why.
 
-**For each mechanical change:** does its `before` snippet (with surrounding context) overlap, or does applying it alter any character *inside*, one of these tokens?
+## Step 5 — Citation-integrity guard (differential, deterministic)
 
-- **No overlap** (the overwhelmingly common case — a typo/punctuation/spacing fix in plain prose) → **apply it.**
-- **Overlap** → **do not apply.** Downgrade the change to an `idea-flag` with reason `"touches a citation/quotation token — needs human review"`, and record it in the report's Notes. A fix to a citation token is exactly the kind of change a מגיה must hand to a human, not auto-apply.
+No stage may touch a citation, quotation, page number, or footnote marker. This step **verifies that invariant was obeyed** — it does not re-audit the article's citations.
 
-(Typography fixes that only normalize a quotation *mark itself* — straight `"` → `״` opening/closing a quotation — are the one expected overlap; treat them as applicable typography, but record them in Notes so the human can confirm the right mark was chosen. Anything that changes text *inside* the quotation is never applied.)
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/citation-guard.py" --changes /tmp/proofread-language-changes.json --proof-base "PROOF_BASE" --json > /tmp/proofread-language-guarded.json
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/citation-guard.py" --changes /tmp/proofread-mechanical-changes.json --proof-base "PROOF_BASE" --json > /tmp/proofread-mechanical-guarded.json
+```
 
-## Step 5 — Apply mechanical fixes to a corrected copy
+Run it over `languageChanges` and `mechanicalChanges` (editorial findings never touch text, so they skip this guard). Any change overlapping a citation/quotation/page/footnote token comes back `applied: false, skipReason: "citation-guard"` — downgraded, never dropped, same as a refute.
 
-**If there are zero applicable mechanical changes** (proofreader returned `"changes": []`, or all changes were idea-flags / guard-downgraded): do **not** write a `*.proofed.md`. Skip to Step 6 and report a clean pass. No duplicate file for an already-clean article.
-
-Otherwise seed the corrected copy from **`PROOF_BASE`** (the text the proofreader actually read — never the binary source):
+## Step 6 — Apply eligible changes to a corrected copy
 
 ```bash
 cp "PROOF_BASE" "articles/${FILEBASE}.proofed.md"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/apply-changes.py" --changes /tmp/proofread-language-guarded.json --proof-base "articles/${FILEBASE}.proofed.md" --json
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/apply-changes.py" --changes /tmp/proofread-mechanical-guarded.json --proof-base "articles/${FILEBASE}.proofed.md" --json
 ```
 
-Apply each applicable **mechanical** change to `articles/${FILEBASE}.proofed.md` with the `Edit` tool, observing these guards (the apply step is where this feature is most error-prone — typography fixes manipulate exotic/invisible code points: ״ ׳ ־ – U+00A0 U+200F):
+`apply-changes.py` only ever applies a change with `meaningRisk: "low"` and a non-null `after`; everything else comes back `applied: false` with a `skipReason` (`comment-only`, `meaning-risk`, `no-match`, `ambiguous-match`, `overlap`, or a pass-through `citation-guard`/`refuted`). Apply the language batch before the mechanical batch (language runs first in the pipeline order). **If both batches return zero applied changes**, skip the `cp` above — no duplicate file for an already-clean article — and note the clean pass in Step 9.
 
-1. **Order matters.** Sort changes by `line` (then by offset within the line) and apply **bottom-to-top**, so an earlier edit never shifts the anchor of a later one.
-2. **Detect overlap.** If two changes touch the same span (e.g. a quote-mark fix and an NBSP fix in one clause), apply them as a single combined `Edit` (one `before` → one `after` covering both), not two racing edits.
-3. **Verify uniqueness before applying.** The `Edit` tool fails on a non-unique match — when that happens, expand the `before` with surrounding context until it matches exactly once. If it still can't be made unique, **skip it** and record "could not localize (ambiguous) — left for manual review" in Notes.
-4. **Treat a no-match as a hard skip, never a force.** If `before` does not match (e.g. the proofreader mis-transcribed an exotic glyph), do **not** rewrite by hand — skip the change and record "could not localize (no match) — left for manual review" in Notes. For typography fixes, anchor by `line` + a plain-ASCII neighbour where possible to reduce transcription fragility.
+## Step 7 — Build the tracked-changes .docx (only when the source was a .docx)
 
-Skip `idea-flag` and guard-downgraded changes — they are never applied. After applying, delete any `*.extracted.md` working file from Step 2.
-
-## Step 6 — Write the change report
-
-Write `articles/${FILEBASE}.proofread.md` documenting **every change and why**. Use the article's language for prose where natural; keep the table readable. Shape:
-
-```markdown
-# Proofread report — <FILEBASE>
-
-- Source: `<SOURCE_PATH>`
-- Corrected copy: `articles/<FILEBASE>.proofed.md`
-- Language: <LANGUAGE> · Profile: <loaded | none>
-- Applied: <N> mechanical · Flagged (not applied): <M> idea-level
-- Date: <YYYY-MM-DD>
-
-## Applied changes
-
-| # | Line | Level | Type | Before → After | Why |
-|---|------|-------|------|----------------|-----|
-| 1 | 42 | letter | typo | `המחשבות` → `המחשבות` | doubled ו |
-| … | | | | | |
-
-## Idea-level flags (not changed — for your review)
-
-| # | Line | Note |
-|---|------|------|
-| 1 | 88 | This sentence appears to contradict §2's claim that … |
-
-## Notes
-
-- <citation-integrity guard downgrades, un-localizable snippets (no-match / ambiguous), quotation-mark normalizations to confirm, anything skipped, and why>
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build-tracked-docx.py" \
+  --original "SOURCE_PATH" \
+  --final-text /tmp/proofread-final-lines.txt \
+  --changes /tmp/proofread-all-changes.json \
+  --output "articles/${FILEBASE}.proofed.docx"
 ```
 
-Every applied row must carry its rationale — that is the deliverable. Idea-flags go only in the second table; they are never in the corrected copy.
+`--changes` is the full merged, annotated list (editorial memo changes + guarded/applied language changes + guarded/applied mechanical changes). The script builds real `w:ins`/`w:del` per word-level diff hunk against the original `.docx`, attributes each stage to its own author name ("Editor (Claude)" / "Language editor (Claude)" / "Proofreader (Claude)"), and emits editorial findings plus medium/high-risk language changes as real Word comments. Nothing is written when the changes list is empty (a clean pass). If the source was plain markdown (no original `.docx` to build against), skip this step — the deliverable stays the `.proofed.md` + report.
 
-## Step 7 — Report to the researcher
+## Step 8 — Write the report
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/write-proof-report.py" --input /tmp/proofread-report-input.json --out "articles/${FILEBASE}.proofread.md" --json
+```
+
+Assemble the report-input JSON from: `filebase`, `source`, `correctedCopy`, `language`, `profile`, `date`, the workflow's/fallback's `gates` array (one row per stage — editorial, language, mechanical, verify — `ran`/`why`/`model`/`rounds`/`outcome`, **including skipped stages**, per VER-10/SPC-14), the editorial `memo`, and every change from every stage (applied and not). `write-proof-report.py` renders the Gates table, the memo, one applied-changes table per stage that has applied changes, and a flags/notes section covering every `applied: false` change with its `skipReason` — idea-flags, citation-guard downgrades, refutes, no-match/ambiguous, comment-only. Nothing dropped along the way becomes invisible here.
+
+## Step 9 — Report to the researcher
 
 If changes were applied:
 
-> "Proofread complete (mechanical only).
+> "Proofread complete — editorial, language, and mechanical passes run.
 > - **Corrected copy:** `articles/<FILEBASE>.proofed.md`
+> - **Tracked-changes docx** (if the source was `.docx`): `articles/<FILEBASE>.proofed.docx` — open in Word to accept/reject per change, plus editorial and register comments
 > - **Change report:** `articles/<FILEBASE>.proofread.md`
-> - Applied **<N>** mechanical fixes; flagged **<M>** idea-level issues (not changed).
-> Your original is untouched. Review the report against the corrected copy and revert any change by hand if you disagree — every change is listed with its rationale."
+> - Applied **<N>** changes; **<M>** downgraded by refute/citation-guard (comment-only, not dropped); **<K>** editorial findings for your review.
+> Your original is untouched — every applied change, every downgrade, and every skip is documented with its rationale."
 
-If it was a clean pass (no applicable changes):
-
-> "Proofread complete — clean pass. No mechanical errors to apply. <M> idea-level note(s) are in `articles/<FILEBASE>.proofread.md` for your review. No corrected copy was written."
+If it was a clean pass (no applicable changes at any stage): report that explicitly — no corrected copy or docx was written, and the report documents the clean pass plus any editorial/comment-only findings.
 
 ## Hard rules
 
-- **Mechanical only.** Typos, punctuation, spacing, typography, clear grammar/agreement. No rephrasing, no register/tone changes, no restructuring — those are `/academic-writer:edit`.
-- **Never modify the source file in place.** Corrections go to `*.proofed.md`, seeded from `PROOF_BASE` — never from a binary `.docx`.
-- **Idea-flags are never auto-applied** — they live in the report for human decision.
-- **Citation-integrity guard is mandatory and deterministic:** any mechanical change that touches a citation/quotation/page/footnote token is **not applied** — it is downgraded to an idea-flag for human review. This guard verifies the proofreader's no-touch invariant; it does not re-audit citations and does not depend on `sources.json`.
-- **Every applied change is documented with a rationale** in the report. No silent edits — and a change that can't be localized is skipped and recorded, never forced.
-- **Don't create `.academic-helper/`** — all outputs land in `articles/`.
+- **Never modify the source file in place.** Corrections go to `*.proofed.md`/`*.proofed.docx`, built from `PROOF_BASE`/the original `.docx` — never a mutation of either.
+- **A refute majority downgrades, it never drops.** Every change any stage found is present in the final report, either applied, downgraded (with `skipReason` and `refutedBy`), or flagged. Silently discarding a true positive is the exact katharsis-rejection failure this pipeline exists to fix.
+- **Editorial findings are never auto-applied** — comment-only, always `after: null`.
+- **Citation-integrity guard is mandatory and deterministic** for language and mechanical changes: anything touching a citation/quotation/page/footnote token is downgraded, not applied.
+- **Every applied change carries a rationale**; every skipped/downgraded change carries a `skipReason`. No silent edits, no silent caps — every loop the workflow runs exits `converged` or `cap-reached`, named.
+- **Caps come from `src/thresholds.json`'s `proofread` block, never a literal** anywhere in this skill or in `workflows/proofread.js`.
+- **Don't create `.academic-helper/`** except the on-request venue-profile path in Step 1 — all other outputs land in `articles/`.

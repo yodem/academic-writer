@@ -149,7 +149,7 @@ In addition to verifying that cited claims are accurate, scan every paragraph fo
 - If it cannot, mark the paragraph **REJECTED** and tag the offending sentence with `[NEEDS REVIEW: source for "<first 8 words of claim>"]`.
 - The paragraph cannot pass the audit gate until every Section G violation is either cited or removed.
 
-**Why this is a hard gate:** The 2026-05-02 mikdashim failure (sentence "טכניקה מוכרת בארכיטקטורה של התקופה הפרסית") was a Section G violation that the citation-accuracy check could not catch — there was no citation to verify because the claim was uncited. Section G closes that gap.
+**Why this is a hard gate:** A recorded 2026-05-02 failure on an earlier article. A sentence asserted a matter-of-fact historical claim — that a construction technique was "well known" in a given period — carrying no citation at all. The citation-accuracy check passed it, because that check verifies citations against sources and there was no citation to verify. An uncited assertion is invisible to a citation checker by construction, which is exactly why Section G is a separate gate rather than a stricter setting on Check E.
 
 ### Check F — Analytical Claim Evidence Binding
 

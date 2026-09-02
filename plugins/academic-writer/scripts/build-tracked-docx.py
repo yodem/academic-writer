@@ -6,8 +6,8 @@
 build-tracked-docx.py
 
 Deterministic tracked-changes/comments builder for the proofread pipeline
-(src/skills/proofread/SKILL.md, Phase 1.3 in
-~/.claude/plans/the-plugin-did-terrable-swift-lantern.md). Takes the
+(src/skills/proofread/SKILL.md, the "Deterministic scripts" section of the
+0.7.0 proofread-pipeline project plan). Takes the
 ORIGINAL `.docx`, the final corrected text, an attribution map (the `stage`
 field already carried on every change in changes-schema.json), and the
 comment-worthy findings, and produces a `.proofed.docx` carrying real Word
@@ -259,22 +259,40 @@ def _make_del_run(rpr_el, text: str):
     return r
 
 
-def _make_ins(id_alloc: IdAllocator, author: str, date_str: str, run_el):
+def _make_ins(id_alloc: IdAllocator, author: str, date_str: str, run_els):
+    if not isinstance(run_els, list):
+        run_els = [run_els]
     ins = etree.Element(_wtag("ins"))
     ins.set(_wtag("id"), str(id_alloc.next()))
     ins.set(_wtag("author"), author)
     ins.set(_wtag("date"), date_str)
-    ins.append(run_el)
+    for run_el in run_els:
+        ins.append(run_el)
     return ins
 
 
-def _make_del(id_alloc: IdAllocator, author: str, date_str: str, run_el):
+def _make_del(id_alloc: IdAllocator, author: str, date_str: str, run_els):
     d = etree.Element(_wtag("del"))
     d.set(_wtag("id"), str(id_alloc.next()))
     d.set(_wtag("author"), author)
     d.set(_wtag("date"), date_str)
-    d.append(run_el)
+    for run_el in run_els:
+        d.append(run_el)
     return d
+
+
+def _merge_contiguous(pairs):
+    """Merge a list of (text, rpr_or_None) into runs, joining adjacent
+    entries that share the exact same rPr element (by identity -- tokens
+    from the same source run carry the same rPr object reference) so a
+    group that does not cross a formatting boundary stays a single run."""
+    merged: list = []
+    for text, rpr in pairs:
+        if merged and merged[-1][1] is rpr:
+            merged[-1] = (merged[-1][0] + text, rpr)
+        else:
+            merged.append((text, rpr))
+    return merged
 
 
 # ---------------------------------------------------------------------------
@@ -302,14 +320,25 @@ def _find_attribution(applied_changes, consumed, deleted_text: str, inserted_tex
 
 
 def _rebuild_paragraph(p_el, orig_tokens_with_rpr, final_tokens, applied_changes, consumed, id_alloc, date_str, counts):
+    """Rebuild one paragraph's direct runs from a word/whitespace-token diff.
+    Returns None on success (p_el has been mutated in place), or a string
+    skip reason WITHOUT mutating p_el at all when the diff looks like an
+    accidental whole-paragraph replacement (finding f's "never a whole-
+    paragraph fallback" backstop: if not a single original token survives
+    as 'equal', this is far more likely a paragraph/line misalignment
+    upstream than 100 words all changing at once, so the safe move is to
+    leave the paragraph untouched and report it, not to touch)."""
     orig_tokens = [tok for tok, _ in orig_tokens_with_rpr]
     matcher = SequenceMatcher(None, orig_tokens, final_tokens, autojunk=False)
     opcodes = matcher.get_opcodes()
 
+    if orig_tokens and not any(tag == "equal" for tag, _, _, _, _ in opcodes):
+        return "paragraph-mismatch"
+
     new_children = []
     # Nearest-KEPT-neighbour fallback formatting for insertions that occur
-    # before any surviving text at all: default to the paragraph's first
-    # original run.
+    # before any surviving (equal-opcode) text at all: default to the
+    # paragraph's first original run.
     last_kept_rpr = orig_tokens_with_rpr[0][1] if orig_tokens_with_rpr else None
 
     for tag, i1, i2, j1, j2 in opcodes:
@@ -318,40 +347,49 @@ def _rebuild_paragraph(p_el, orig_tokens_with_rpr, final_tokens, applied_changes
                 text, rpr = orig_tokens_with_rpr[k]
                 new_children.append(_make_run(rpr, text))
                 last_kept_rpr = rpr
-        elif tag == "delete":
-            deleted_text = "".join(orig_tokens[i1:i2])
-            stage = _find_attribution(applied_changes, consumed, deleted_text, "")
-            author = STAGE_AUTHORS.get(stage, STAGE_AUTHORS[DEFAULT_STAGE])
-            del_rpr = orig_tokens_with_rpr[i1][1]
-            new_children.append(_make_del(id_alloc, author, date_str, _make_del_run(del_rpr, deleted_text)))
+            continue
+
+        del_group = orig_tokens_with_rpr[i1:i2]  # [] for a pure insert
+        ins_texts = final_tokens[j1:j2]  # [] for a pure delete
+        deleted_text = "".join(orig_tokens[i1:i2])
+        inserted_text = "".join(ins_texts)
+        stage = _find_attribution(applied_changes, consumed, deleted_text, inserted_text)
+        author = STAGE_AUTHORS.get(stage, STAGE_AUTHORS[DEFAULT_STAGE])
+
+        if del_group:
+            del_runs = _merge_contiguous(del_group)
+            del_run_els = [_make_del_run(rpr, text) for text, rpr in del_runs]
+            new_children.append(_make_del(id_alloc, author, date_str, del_run_els))
             counts["del"] += 1
-        elif tag == "insert":
-            inserted_text = "".join(final_tokens[j1:j2])
-            stage = _find_attribution(applied_changes, consumed, "", inserted_text)
-            author = STAGE_AUTHORS.get(stage, STAGE_AUTHORS[DEFAULT_STAGE])
-            new_children.append(_make_ins(id_alloc, author, date_str, _make_run(last_kept_rpr, inserted_text)))
+
+        if ins_texts:
+            # Positional pairing per edit group (finding b): the k-th
+            # inserted token takes the rPr of the k-th deleted token in
+            # this same group when one exists at that position; once the
+            # deleted side runs out, the nearest-kept-neighbour is the
+            # LAST deleted token's rPr (still positionally adjacent), and
+            # only a pure insert (no deleted side at all) falls back to
+            # the last true surviving (equal-opcode) run.
+            n_del = len(del_group)
+            ins_pairs = []
+            for idx, text in enumerate(ins_texts):
+                if idx < n_del:
+                    rpr = del_group[idx][1]
+                elif n_del > 0:
+                    rpr = del_group[-1][1]
+                else:
+                    rpr = last_kept_rpr
+                ins_pairs.append((text, rpr))
+            ins_runs = _merge_contiguous(ins_pairs)
+            ins_run_els = [_make_run(rpr, text) for text, rpr in ins_runs]
+            new_children.append(_make_ins(id_alloc, author, date_str, ins_run_els))
             counts["ins"] += 1
-        elif tag == "replace":
-            deleted_text = "".join(orig_tokens[i1:i2])
-            inserted_text = "".join(final_tokens[j1:j2])
-            stage = _find_attribution(applied_changes, consumed, deleted_text, inserted_text)
-            author = STAGE_AUTHORS.get(stage, STAGE_AUTHORS[DEFAULT_STAGE])
-            del_rpr = orig_tokens_with_rpr[i1][1]
-            new_children.append(_make_del(id_alloc, author, date_str, _make_del_run(del_rpr, deleted_text)))
-            counts["del"] += 1
-            # Nearest-kept-neighbour fallback: the inserted span takes the
-            # formatting of the token it is positionally paired with (the
-            # deleted run right next to it), not "the first run in the
-            # paragraph".
-            ins_rpr = del_rpr if del_rpr is not None else last_kept_rpr
-            new_children.append(_make_ins(id_alloc, author, date_str, _make_run(ins_rpr, inserted_text)))
-            counts["ins"] += 1
-            last_kept_rpr = ins_rpr
 
     for old_r in _direct_runs(p_el):
         p_el.remove(old_r)
     for node in new_children:
         p_el.append(node)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -568,30 +606,71 @@ def build_tracked_docx(original_path: str, final_text: str, changes_payload, out
         date_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         final_text_norm = _nfc(final_text) or ""
-        final_paragraphs = final_text_norm.split("\n")
+        # `final_text` is PROOF_BASE-shaped (chunk-article.py splits on `##`
+        # headings then paragraph boundaries; apply-changes.py works over
+        # `splitlines(keepends=True)`), so a plain 1:1 line<->paragraph zip
+        # would misalign against heading lines and the blank separator
+        # lines between markdown paragraphs. Extract only the lines that
+        # plausibly ARE paragraph bodies (non-blank, non-heading) and match
+        # them, in order, only against paragraphs that are actually
+        # eligible for diffing (never a pre-existing-revision paragraph).
+        final_paragraphs = [
+            ln for ln in final_text_norm.split("\n") if ln.strip() and not ln.lstrip().startswith("#")
+        ]
+        eligible_paragraphs = [p for p in paragraphs if not _has_revision_children(p)]
 
         applied_changes = [c for c in changes if c.get("applied") is True and c.get("after") is not None]
         consumed: set[int] = set()
+        # Which eligible paragraph, if any, ended up mutated -- used below
+        # to tell a genuine no-match apart from "the text is present but
+        # this diff group's difflib opcode already merged it into an
+        # adjacent change's hunk" (a real match, not a drop).
+        edited_paragraph_texts: list[tuple[str, str]] = []
 
-        for idx, p_el in enumerate(paragraphs):
-            if _has_revision_children(p_el):
-                # Finding (a): never touch a paragraph that already carries
-                # hand-built revisions from a previous session.
-                continue
+        if len(final_paragraphs) != len(eligible_paragraphs):
+            # Finding (f): never guess at alignment. Report once, apply no
+            # tracked edits at all this run (comments below are unaffected
+            # -- they locate their own target text independently).
+            skipped.append(
+                {
+                    "reason": "paragraph-alignment-mismatch",
+                    "expected_paragraphs": len(eligible_paragraphs),
+                    "got_final_paragraphs": len(final_paragraphs),
+                }
+            )
+        else:
+            for p_el, final_para_text in zip(eligible_paragraphs, final_paragraphs):
+                orig_text = _paragraph_text(p_el)
+                final_para_text = _nfc(final_para_text) or ""
+                if orig_text == final_para_text:
+                    continue
 
-            orig_text = _paragraph_text(p_el)
-            final_para_text = final_paragraphs[idx] if idx < len(final_paragraphs) else orig_text
-            final_para_text = _nfc(final_para_text) or ""
-            if orig_text == final_para_text:
-                continue
-
-            tokens_with_rpr = _tokenize_paragraph_with_rpr(p_el)
-            final_tokens = _TOKEN_RE.findall(final_para_text)
-            _rebuild_paragraph(p_el, tokens_with_rpr, final_tokens, applied_changes, consumed, id_alloc, date_str, counts)
+                tokens_with_rpr = _tokenize_paragraph_with_rpr(p_el)
+                final_tokens = _TOKEN_RE.findall(final_para_text)
+                abort_reason = _rebuild_paragraph(
+                    p_el, tokens_with_rpr, final_tokens, applied_changes, consumed, id_alloc, date_str, counts
+                )
+                if abort_reason:
+                    skipped.append({"reason": abort_reason, "paragraph_text": orig_text})
+                else:
+                    edited_paragraph_texts.append((orig_text, final_para_text))
 
         for idx, change in enumerate(applied_changes):
-            if idx not in consumed:
-                skipped.append({"change": change, "reason": "no-match"})
+            if idx in consumed:
+                continue
+            before = (_nfc(change.get("before")) or "").strip()
+            after = _nfc(change.get("after"))
+            after = after.strip() if after is not None else ""
+            # A false "no-match": the change's own before/after text IS
+            # present in an edited paragraph's original/final text, but its
+            # diff hunk was absorbed into an adjacent change's opcode (e.g.
+            # two one-word fixes on the same line collapse into a single
+            # difflib 'replace'). That is a real match, not a drop -- report
+            # it distinctly rather than crying no-match over a landed edit.
+            merged = any(
+                before and before in orig_p and after in final_p for orig_p, final_p in edited_paragraph_texts
+            )
+            skipped.append({"change": change, "reason": "merged-into-adjacent-hunk" if merged else "no-match"})
 
         comment_changes = [c for c in changes if _is_comment_worthy(c)]
         comment_entries: list = []

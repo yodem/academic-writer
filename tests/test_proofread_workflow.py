@@ -215,12 +215,16 @@ class TestSkillNamesEveryScriptAndWorkflow(unittest.TestCase):
         self.assertNotIn("Option B", self.src, "the stale 'future Option B' tracked-changes note must be removed — that capability now exists")
 
     def test_stage_order_editorial_language_mechanical(self):
-        editorial_idx = self.src.find("Editorial")
-        language_idx = self.src.find("Language")
-        mechanical_idx = self.src.find("Mechanical")
-        self.assertNotEqual(editorial_idx, -1)
-        self.assertNotEqual(language_idx, -1)
-        self.assertNotEqual(mechanical_idx, -1)
+        # Match the bolded stage markers in the numbered pipeline list
+        # (e.g. "1. **Editorial**"), not any substring occurrence of the
+        # word -- "targetLanguage" contains "Language" and would otherwise
+        # false-positive an early match.
+        editorial_idx = self.src.find("**Editorial**")
+        language_idx = self.src.find("**Language**")
+        mechanical_idx = self.src.find("**Mechanical**")
+        self.assertNotEqual(editorial_idx, -1, "no bolded **Editorial** stage marker found")
+        self.assertNotEqual(language_idx, -1, "no bolded **Language** stage marker found")
+        self.assertNotEqual(mechanical_idx, -1, "no bolded **Mechanical** stage marker found")
         self.assertLess(editorial_idx, language_idx, "Editorial must be introduced before Language")
         self.assertLess(language_idx, mechanical_idx, "Language must be introduced before Mechanical")
 

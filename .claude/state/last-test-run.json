@@ -1,1 +1,0 @@
-{"timestamp":1783009961154,"command":"cd \"/Users/yotamfromm/dev/learning/Academic Helper\" && git stash && python3 -m pytest tests/test_voice_e2e_stage1.py tests/test_voice_migrate.py -q 2>&1 | tail -15 && git stash pop"}
