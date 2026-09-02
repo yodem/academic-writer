@@ -93,6 +93,9 @@ You will receive:
 - `priorSectionTexts`: Text of all previously completed sections (for cross-section repetition awareness)
 - `outlineOverview`: Full outline titles and roles (so intro can describe the article flow)
 - `geminiFallback` (optional): `true` if the orchestrator has already committed this run to the Claude fallback path. If set, skip the Gemini path entirely and use the fallback path below.
+- `AUDIT_MODE` (optional): controls who owns the citation-audit gate (Skill 8 / Step D-E). Exactly two documented values:
+  - `"external"` — an orchestrator script (a Workflow-tool script such as `write-sections.js`) owns the citation-audit gate. When set to `"external"`, you MUST NOT spawn the `auditor` subagent yourself for this section, on either the Gemini path or the fallback path (skip Step D and Step E below entirely, and skip the auditor spawn described under "Fallback: in-context Skills 1-7 / Skill 8" too — `AUDIT_MODE` is orthogonal to `geminiFallback` and supersedes both). Instead, return your drafted, unaudited paragraphs to the script exactly as you would present them for audit, so the calling script can spawn the auditor and apply the post-fence VERDICT parsing rule and the claims-registry append on its own. Under `AUDIT_MODE: external`, the Persistent Behavioral Contract's gate 2 ("Auditor VERDICT: PASS received") is owned by the calling script, not by you — do not re-run an in-agent auditor spawn to satisfy it.
+  - anything else, including this field being absent — preserves today's in-agent behavior unchanged: you spawn the `auditor` subagent yourself, per paragraph, exactly as described in Step D and Step E below (and in the fallback path's own Skill 8). **This is the fallback path or when the Workflow tool is unavailable, and it remains the default** — `AUDIT_MODE` is an additive contract, not a removal of the in-agent audit path.
 
 ## RTL Parenthesis & Punctuation Rules (Hebrew)
 
@@ -267,6 +270,8 @@ For each paragraph, check `self_review_scores.anti_ai` against `thresholds.json 
 - If below threshold → request Gemini regeneration **once** for just that paragraph (pass the failing paragraph plus the anti-AI dimensions it scored low on). After one regeneration attempt, proceed to the auditor regardless — the auditor remains the binding gate.
 
 ### Step D — Skill 8: Citation audit (auditor subagent, unchanged)
+
+**Skip this step entirely when `AUDIT_MODE: external` was passed in** — see the `AUDIT_MODE` entry under `## Input` above. Return the drafted paragraphs unaudited in that case and stop before Step E.
 
 For each paragraph (in order):
 

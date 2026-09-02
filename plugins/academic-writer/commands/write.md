@@ -319,6 +319,34 @@ The 8-skill quality pipeline (style fingerprint compliance, grammar, anti-AI, ci
 
 ## PHASE 2: AUTONOMOUS (Steps 6–9, fully automatic)
 
+**Generation stages (Step 6 through the Step 8.7 scorecard computation) now run via the Workflow
+tool** with `scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/write-sections.js"`. Planning (Steps 1–5,
+Step 5.5's argument-graph validation, and the human's outline approval) stays fully interactive in
+this skill, never inside the script — this is the SPC-03 human-approval-before-generation gate,
+and it is not something the script can perform since the script has no `AskUserQuestion` access.
+The skill invokes the Workflow tool only after Step 5.5 passes, passing it the already-validated
+outline (not the raw architect output).
+
+If the script returns a scorecard below the `thresholds.json > selfReview.passThreshold`, the
+skill resumes inline at that point and asks the researcher via `AskUserQuestion` (see Step 8.7) —
+the below-threshold branch is never handled inside the script itself, only the numeric comparison
+is.
+
+**Note on workflow size**: a full article's writer-unit fan-out (Step 6) plus its per-paragraph
+auditor spawns can exceed the default 15-agent "medium" dynamic-workflow size guideline —
+`thresholds.json > writerUnit` targets ~500 words per unit, so a 6,000–8,000 word article yields
+roughly 12–16 writer units before counting auditor, deep-reader, architect, and synthesizer spawns.
+The plugin cannot raise this ceiling itself; if the run is large, tell the researcher to raise
+"Dynamic workflow size" in `/config` before starting Step 6.
+
+**Fallback when the Workflow tool is unavailable**: run the same stages sequentially through the
+`Agent` tool exactly as described below (control flow only is duplicated) — spawn `section-writer`
+subagents directly, **without** `AUDIT_MODE: external`, so each agent's in-agent audit path
+(auditor spawn per paragraph, rewrite-cycle cap, claims-registry append) runs unchanged. The
+fallback path must produce the same named gate outcomes (auditor VERDICT, anti-AI threshold,
+rewrite-cycle cap) as the script path; state in the closing report which path (Workflow or
+fallback) actually ran.
+
 ### Step 6: Parallel Section Writing + Auditing
 
 #### Step 6.0: Engine commit (run BEFORE the parallel spawn)
