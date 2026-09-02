@@ -196,36 +196,46 @@ class TestMultiCommitLevel(unittest.TestCase):
         finally:
             path.unlink()
 
-    def test_workflow_derives_level_since_the_last_tag_not_from_the_push(self):
-        """A push-scoped level (--level-from-event) is lost for good when that push's
-        release job fails before a tag is cut — see TestLevelSinceTag below for the
-        regression this guards. The workflow must derive the level from commits since
-        the last release tag instead."""
-        wf = _workflow_code()
-        self.assertIn("--level-since-tag", wf, "level must come from commits since the last release tag")
-        self.assertNotIn(
-            "--level-from-event", wf,
-            "the workflow must not infer the level from a single push's commits",
+    def test_workflow_does_not_bump_the_version(self):
+        """The release job publishes the version already committed on main; bumping is
+        a maintainer action in the commit that makes the change. A job that bumps on
+        top of a hand-bumped tree cuts a tag that disagrees with the CHANGELOG section
+        written for it."""
+        # `::error::` lines are guidance printed to a maintainer whose release was
+        # rejected — they legitimately name the bump command they should run by hand.
+        # Only actual invocations are the concern here.
+        wf = "\n".join(
+            ln for ln in _workflow_code().splitlines() if "::error::" not in ln
         )
-        # head_commit is still fine for the "is this the bot's own bump commit?" guard —
-        # what must NOT happen is deriving the BUMP LEVEL from a single commit message.
-        self.assertNotIn(
-            "--level-from-message", wf,
-            "the workflow must not infer the level from a single commit message",
-        )
+        for flag in ("--bump", "--level-since-tag", "--level-from-event",
+                     "--level-from-message", "--release-changelog"):
+            self.assertNotIn(flag, wf, f"the release workflow must not run version-sync {flag}")
 
-    def test_workflow_fetches_tags_before_deriving_the_level(self):
-        """--level-since-tag walks tag..HEAD; actions/checkout does not fetch tags by
-        default even with fetch-depth: 0, so a missing fetch would silently fall back
-        to 'no tags' and re-count everything a prior release already shipped."""
+    def test_workflow_does_not_write_to_main(self):
+        """Its only writes are the tag and the GitHub Release, so it cannot race a
+        maintainer's push or leave main in a state nobody authored."""
         wf = _workflow_code()
-        self.assertIn("fetch-depth: 0", wf)
-        self.assertRegex(wf, r"fetch\b.*--tags|--tags\b.*fetch")
+        self.assertNotIn("git push origin main", wf)
+        self.assertNotIn("chore: bump version", wf)
 
-    def test_workflow_exposes_a_manual_level_override(self):
+    def test_workflow_reads_the_version_from_the_committed_tree(self):
         wf = _workflow_code()
         self.assertIn("workflow_dispatch", wf)
-        self.assertIn("inputs.level", wf)
+        self.assertRegex(wf, r"require\('\./package\.json'\)\.version")
+
+    def test_workflow_refuses_a_version_that_is_already_tagged(self):
+        """Replaces the uniqueness the bump step used to guarantee implicitly: without
+        this, re-running the workflow without a hand-bump would re-tag a released
+        version."""
+        wf = _workflow_code()
+        self.assertIn("refs/tags/v${VERSION}", wf)
+
+    def test_workflow_fetches_tags_for_the_tag_guard(self):
+        """actions/checkout does not fetch tags by default even with fetch-depth: 0,
+        and the already-tagged guard is worthless without them."""
+        wf = _workflow_code()
+        self.assertIn("fetch-depth: 0", wf)
+        self.assertRegex(wf, r"fetch-tags:\s*true|fetch\b.*--tags|--tags\b.*fetch")
 
 
 class TestLevelSinceTag(unittest.TestCase):
@@ -488,7 +498,10 @@ class TestChangelogRoll(unittest.TestCase):
         self.addCleanup(lambda: setattr(version_sync, "REPO", original))
         self.assertIn("nothing to do", version_sync.release_changelog("0.7.0", "2026-09-02"))
 
-    def test_workflow_rolls_the_changelog_and_stages_it(self):
+    def test_workflow_gates_on_a_hand_written_changelog_section(self):
+        """release_changelog() above is still the maintainer's tool for rolling
+        [Unreleased] into a version at bump time. The workflow no longer calls it —
+        it refuses to publish a version whose section was never written."""
         wf = _workflow_code()
-        self.assertIn("--release-changelog", wf)
-        self.assertRegex(wf, r"git add[^\n]*CHANGELOG\.md")
+        self.assertNotIn("--release-changelog", wf)
+        self.assertRegex(wf, r"grep -q .*\\\[\$\{VERSION\}\\\].*CHANGELOG\.md")

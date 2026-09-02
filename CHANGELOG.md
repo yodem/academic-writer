@@ -7,6 +7,22 @@ All notable changes to the academic-writer plugin are documented here.
 ## [0.7.1] — 2026-09-02
 ### Changed
 
+- **`release.yml` no longer bumps the version — it publishes what is committed.**
+  The workflow used to derive a bump level from the commits since the last release
+  tag and write the new version itself, which made the tree's own version
+  meaningless between releases: a maintainer who hand-bumped to prepare a release
+  got bumped a *second* time by the job, cutting a tag that disagreed with the
+  CHANGELOG section written for it. The version is now decided in exactly one
+  place — the commit that makes the change (`version-sync.py --bump ...` plus a
+  hand-written CHANGELOG section) — and this workflow verifies and tags it. Two
+  new guards replace what the bump used to guarantee implicitly: the job fails if
+  `v<version>` is already tagged, and fails if `CHANGELOG.md` has no
+  `## [<version>]` section. It no longer rebuilds or commits, so its gates now
+  check the exact bytes that ship rather than a tree it just regenerated, and its
+  only writes are the tag and the GitHub Release — it can't race a maintainer's
+  push or leave `main` in a state nobody authored. All eight shared gate `run:`
+  lines remain textually identical to `ci.yml`'s.
+
 - **`release.yml` no longer triggers on push — releases are now a deliberate
   `workflow_dispatch` action.** `push: branches: [main]` meant every push auto-cut a
   release, which is exactly what let the `gemini-api` dist/ regression below ship

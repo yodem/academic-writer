@@ -1,39 +1,38 @@
-name: Version Bump & Release
+name: Release
 
-# Manual trigger ONLY — a release is now a deliberate action, not a side effect of
-# pushing to main. Every push to main (and every PR) is instead gated by
-# .github/workflows/ci.yml, which runs every quality gate this file also runs,
-# EXCEPT the bump, rebuild, tag, commit and publish steps below. To cut a release:
-# run this workflow from the Actions tab, or `gh workflow run release.yml
-# [-f level=patch|minor|major]` — omit `level` to let it infer the bump from
-# conventional-commit messages since the last release tag (see "Determine bump
-# level" below).
+# Manual trigger ONLY, and it NO LONGER BUMPS THE VERSION.
 #
-# Until this change, `push: branches: [main]` meant every push auto-cut a release,
-# which is exactly what let plugins/academic-writer/mcp/gemini-server/dist/ ship
-# broken for three releases (v0.6.2 through v0.7.0 — see CHANGELOG.md and
-# scripts/check-mcp-dist.sh): the push trigger kept re-shipping a gitignored (later
-# missing) bundle on every merge with no one deciding "release now". The push
-# trigger is gone; the quality gates it used to carry moved to ci.yml so pushes to
-# main stay gated even though they no longer release.
+# The version that ships is whatever is committed on main. Bumping is a
+# maintainer action performed in the same change that edits the plugin —
+# `python3 scripts/version-sync.py --bump patch|minor|major` writes all six
+# registered locations, and the CHANGELOG section for that version is written by
+# hand in the same commit. This workflow only verifies and publishes what is
+# already there.
 #
-# Because this workflow is workflow_dispatch-only now, `github.event.head_commit` is
-# always unset here, so the "Skip if this is a version-bump commit" guard below
-# always evaluates to skip=false, and every gated step below always runs. That guard
-# existed to stop the OLD push trigger from re-triggering itself on its own
-# "chore: bump version" commit — a loop that can no longer happen without a push
-# trigger. It (and the `if: steps.guard.outputs.skip == 'false'` conditions
-# throughout this file) is left in place rather than surgically removed: it's inert
-# and correct either way, and cutting it is unrelated churn.
+# Why the auto-bump is gone: the workflow used to derive a bump level from the
+# commits since the last release tag and then write the new version itself. That
+# made the tree's own version meaningless between releases — a maintainer who
+# hand-bumped to prepare a release would get bumped a SECOND time by this job,
+# publishing a tag that disagreed with the CHANGELOG section written for it.
+# The version is now decided in exactly one place: the commit that makes the
+# change. This job tags it.
+#
+# Consequences of the above, all deliberate:
+#   - No `chore: bump version` commit, no push to main from CI. This job's only
+#     writes are the tag and the GitHub Release, so it cannot race a maintainer's
+#     push or leave main in a state nobody authored.
+#   - No rebuild. The gates below check the tree AS COMMITTED — the exact bytes
+#     that ship — rather than a tree this job just regenerated. The dist
+#     freshness gate is what proves the committed build output still matches src/.
+#   - Releasing the same version twice fails loudly on the tag guard rather than
+#     silently moving a tag.
+#
+# Every gate below is textually identical to its counterpart in ci.yml, which runs
+# them on every push to main and every PR. Keep them that way: identical `run:`
+# lines are what stops the two files from drifting apart in what they check.
+
 on:
   workflow_dispatch:
-    inputs:
-      level:
-        description: "Bump level (overrides the commit-message inference)"
-        required: false
-        default: ""
-        type: choice
-        options: ["", "patch", "minor", "major"]
 
 concurrency:
   group: release
@@ -43,181 +42,107 @@ permissions:
   contents: write
 
 jobs:
-  bump:
+  release:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
-          # Tags are fetched EXPLICITLY, not incidentally: the bump level is now
-          # derived from commits since the last release tag, so a job without tags
-          # would silently compute it over the whole history instead of failing.
+          # Tags are fetched EXPLICITLY, not incidentally: actions/checkout's
+          # fetch-tags default is false regardless of fetch-depth, and the
+          # "tag already exists" guard below is worthless without them.
           fetch-tags: true
-          persist-credentials: true
-
-      - name: Skip if this is a version-bump commit
-        id: guard
-        env:
-          COMMIT_MSG: ${{ github.event.head_commit.message }}
-        run: |
-          if echo "$COMMIT_MSG" | grep -q "^chore: bump version"; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      # actions/checkout's fetch-tags default is false, independent of fetch-depth —
-      # a full-history checkout is not guaranteed to bring tags with it. The bump
-      # level now comes from "commits since the last release tag" (see below), so a
-      # missing tag here would silently fall back to "no tags, consider all history"
-      # and double-count everything a prior release already shipped.
-      - name: Fetch tags
-        if: steps.guard.outputs.skip == 'false'
-        run: git fetch --tags --force origin
-
-      - name: Configure git
-        if: steps.guard.outputs.skip == 'false'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Setup Node
-        if: steps.guard.outputs.skip == 'false'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Setup Python
-        if: steps.guard.outputs.skip == 'false'
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      # Placement is deliberate: BEFORE the bump/rebuild below, not grouped with the
-      # other gates after it. "Rebuild plugin at bumped version" (npm run build)
-      # regenerates dist/index.js in this same job a few steps down — a freshness
-      # check placed after that step would compare a fresh rebuild against a file
-      # rebuilt moments earlier and pass tautologically, checking nothing. Running it
-      # here instead validates what the maintainer actually committed to main BEFORE
-      # this job starts mutating the tree — the same tree ci.yml's copy of this gate
-      # checks on every push, so a src/ change that outran its own rebuild is caught
-      # long before it reaches this workflow.
-      - name: Gate — gemini-server dist is fresh (matches a rebuild from src/)
-        if: steps.guard.outputs.skip == 'false'
-        run: bash scripts/check-mcp-dist-fresh.sh
+      # ci.yml carries the same explicit install for the same reason: there is no
+      # build step in this workflow, so src/hooks/node_modules is not created as a
+      # side effect of one. The typecheck gate itself stays identical either way.
+      - name: Install hooks dependencies (for the typecheck gate)
+        run: cd src/hooks && npm ci
 
-      # Bump level, and every file the version lives in, are both decided by
-      # scripts/version-sync.py against scripts/version-locations.json. The old
-      # inline `${PARTS[2]} + 1` could only ever produce a patch, and wrote three
-      # of the six locations — which is how features.json sat at 0.5.0 while
-      # everything else said 0.6.3 for two releases.
-      #
-      # Level comes from commits SINCE THE LAST RELEASE TAG, not from the push
-      # payload (--level-from-event). A push-scoped level is lost for good the
-      # moment that push's release job fails before a tag is cut: a feat: push
-      # that fails the test gate, followed by an unrelated fix: push that passes,
-      # used to ship a patch release and silently discard the minor bump the
-      # feat: commit was owed. tag..HEAD still contains that feat: commit no
-      # matter how many failed pushes sit between the tag and HEAD.
-      - name: Determine bump level
-        if: steps.guard.outputs.skip == 'false'
-        id: level
-        env:
-          INPUT_LEVEL: ${{ inputs.level }}
-        run: |
-          if [[ -n "$INPUT_LEVEL" ]]; then
-            LEVEL="$INPUT_LEVEL"
-            echo "level from workflow_dispatch input: $LEVEL"
-          else
-            echo "last release tag: $(python3 scripts/version-sync.py --show-last-tag)"
-            LEVEL=$(python3 scripts/version-sync.py --level-since-tag)
-            echo "level inferred from all commits since the last release tag: $LEVEL"
-          fi
-          echo "level=$LEVEL" >> "$GITHUB_OUTPUT"
-
-      - name: Bump version across every registered location
-        if: steps.guard.outputs.skip == 'false'
-        id: bump
-        run: |
-          NEW=$(python3 scripts/version-sync.py --bump "${{ steps.level.outputs.level }}" | tail -1)
-          echo "new=$NEW" >> "$GITHUB_OUTPUT"
-          echo "bumped to $NEW"
-
-      # Re-run the build against the just-bumped source manifest so the
-      # committed build output (plugins/academic-writer/.claude-plugin/plugin.json,
-      # hooks dist, bundled MCP server) is regenerated at the new version
-      # BEFORE anything is committed or pushed. Without this, the bump only
-      # touches package.json/manifests/academic-writer.json/marketplace.json
-      # and the built plugin.json silently drifts behind (see v0.6.1 incident).
-      # Finding 10 of the 2026-09-01 audit: [Unreleased] had accumulated shipped
-      # features because nothing ever renamed it. Renaming it in the same job that
-      # writes the version is the only place it cannot be forgotten.
-      - name: Roll CHANGELOG [Unreleased] into the released version
-        if: steps.guard.outputs.skip == 'false'
-        run: python3 scripts/version-sync.py --release-changelog "${{ steps.bump.outputs.new }}"
-
-      - name: Rebuild plugin at bumped version
-        if: steps.guard.outputs.skip == 'false'
-        run: npm run build
-
-      # These gates now run AFTER the bump + rebuild, against the exact
-      # tree that is about to be committed and pushed — so a real desync
-      # fails the job here and blocks the push, instead of only checking
-      # the (already-consistent) pre-bump state.
-      - name: Gate — version consistency (marketplace.json vs plugin.json)
-        if: steps.guard.outputs.skip == 'false'
-        run: bash scripts/check-version-consistency.sh
-
-      - name: Gate — built manifest carries mcpServers (v0.3.0 regression guard)
-        if: steps.guard.outputs.skip == 'false'
-        run: bash scripts/check-built-manifest.sh
-
-      - name: Gate — gemini-server dist ships and starts self-contained (v0.6.2 CONNECTION_CLOSED regression guard)
-        if: steps.guard.outputs.skip == 'false'
-        run: bash scripts/check-mcp-dist.sh
-
-      - name: Gate — no personal identifiers in shipped or published files
-        if: steps.guard.outputs.skip == 'false'
-        run: bash scripts/check-no-private-refs.sh
-
-      - name: Gate — version agrees across ALL registered locations
-        if: steps.guard.outputs.skip == 'false'
-        run: python3 scripts/version-sync.py --check
-
-      # Until 0.7.0 the whole deterministic suite gated nothing: release.yml
-      # bumped, rebuilt, checked two manifests and published. A prior 804-line
-      # suite had already rotted this way behind a bypassable local hook
-      # (recorded in the plugin's CandleKeep audit). Tests that do not block a
-      # release are decorative, so they now run here, against the bumped tree.
-      - name: Gate — deterministic test suite
-        if: steps.guard.outputs.skip == 'false'
+      - name: Install Python test dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
-          python -m pytest tests/ -q
+
+      - name: Read the version being released
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "releasing v$VERSION (from package.json, not bumped by this job)"
+
+      # Replaces the uniqueness the old bump step used to guarantee implicitly.
+      # Without it, re-running this workflow without a hand-bump would try to
+      # re-tag a released version.
+      - name: Gate — v${{ steps.version.outputs.version }} is not already tagged
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
+            echo "::error::v${VERSION} is already tagged. Bump the version on main first:"
+            echo "::error::  python3 scripts/version-sync.py --bump patch|minor|major"
+            exit 1
+          fi
+          echo "v${VERSION} is unreleased"
+
+      # Replaces `version-sync.py --release-changelog`, which used to rename
+      # [Unreleased] to the version this job had just invented. The section is now
+      # written by hand in the commit that bumps; this checks it was not forgotten.
+      - name: Gate — CHANGELOG has a section for this version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if ! grep -q "^## \[${VERSION}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [${VERSION}]' section."
+            echo "::error::Write it in the commit that bumps the version."
+            exit 1
+          fi
+          echo "CHANGELOG section for ${VERSION} present"
+
+      - name: Gate — version agrees across ALL registered locations
+        run: python3 scripts/version-sync.py --check
+
+      - name: Gate — built manifest carries mcpServers (v0.3.0 regression guard)
+        run: bash scripts/check-built-manifest.sh
+
+      - name: Gate — version consistency (marketplace.json vs plugin.json)
+        run: bash scripts/check-version-consistency.sh
+
+      - name: Gate — gemini-server dist ships and starts self-contained (v0.6.2 CONNECTION_CLOSED regression guard)
+        run: bash scripts/check-mcp-dist.sh
+
+      - name: Gate — gemini-server dist is fresh (matches a rebuild from src/)
+        run: bash scripts/check-mcp-dist-fresh.sh
+
+      - name: Gate — no personal identifiers in shipped or published files
+        run: bash scripts/check-no-private-refs.sh
+
+      - name: Gate — deterministic test suite
+        run: python -m pytest tests/ -q
 
       - name: Gate — strict TypeScript on hooks
-        if: steps.guard.outputs.skip == 'false'
         run: npm run typecheck
 
-      - name: Commit, tag, and push
-        if: steps.guard.outputs.skip == 'false'
+      - name: Tag the released commit
         run: |
-          NEW="${{ steps.bump.outputs.new }}"
-
-          # Every path version-sync.py can write, plus the rebuilt plugin tree.
-          git add package.json manifests/academic-writer.json .claude-plugin/marketplace.json features.json CHANGELOG.md plugins/
-          git commit -m "chore: bump version to v${NEW}"
-          git tag "v${NEW}"
-          git push origin main
-          git push origin "v${NEW}"
+          VERSION="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${VERSION}" -m "v${VERSION}"
+          git push origin "v${VERSION}"
 
       - name: Create GitHub Release
-        if: steps.guard.outputs.skip == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ steps.bump.outputs.new }}"
-          name: "v${{ steps.bump.outputs.new }}"
+          tag_name: "v${{ steps.version.outputs.version }}"
+          name: "v${{ steps.version.outputs.version }}"
           generate_release_notes: true
