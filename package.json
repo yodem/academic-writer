@@ -8,7 +8,11 @@
     "build:hooks": "cd src/hooks && npm run build",
     "build:mcp": "bash scripts/build-mcp.sh",
     "typecheck": "cd src/hooks && npx tsc --noEmit",
-    "clean": "find plugins/academic-writer -mindepth 1 -maxdepth 1 ! -name mcp -exec rm -rf {} + 2>/dev/null; rm -rf src/hooks/dist/ plugins/academic-writer/mcp/gemini-server/dist/ plugins/academic-writer/mcp/gemini-server/node_modules/"
+    "clean": "find plugins/academic-writer -mindepth 1 -maxdepth 1 ! -name mcp -exec rm -rf {} + 2>/dev/null; rm -rf src/hooks/dist/ plugins/academic-writer/mcp/gemini-server/dist/ plugins/academic-writer/mcp/gemini-server/node_modules/",
+    "version:show": "python3 scripts/version-sync.py --show",
+    "version:check": "python3 scripts/version-sync.py --check",
+    "version:fix": "python3 scripts/version-sync.py --fix",
+    "hooks:install": "git config core.hooksPath .githooks && echo 'core.hooksPath -> .githooks'"
   },
   "repository": {
     "type": "git",

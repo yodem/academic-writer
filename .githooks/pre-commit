@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Local convenience check — NOT the gate.
+#
+# The gate is .github/workflows/release.yml, which runs the same script plus the
+# full pytest suite against the bumped tree before it tags and publishes. A local
+# hook is bypassable with --no-verify and is not installed on a fresh clone, so it
+# can never be the thing standing between a drift and a release. The plugin's own
+# CandleKeep audit recorded a prior 804-line suite that rotted exactly that way.
+#
+# Enable with:  npm run hooks:install     (sets core.hooksPath to .githooks)
+set -euo pipefail
+
+REPO="$(git rev-parse --show-toplevel)"
+cd "$REPO"
+
+if ! python3 scripts/version-sync.py --check; then
+  echo ""
+  echo "pre-commit: plugin version locations disagree."
+  echo "  fix:  python3 scripts/version-sync.py --fix && npm run build"
+  echo "  skip: git commit --no-verify   (CI will still fail)"
+  exit 1
+fi

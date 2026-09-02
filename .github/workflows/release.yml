@@ -3,6 +3,14 @@ name: Version Bump & Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      level:
+        description: "Bump level (overrides the commit-message inference)"
+        required: false
+        default: ""
+        type: choice
+        options: ["", "patch", "minor", "major"]
 
 concurrency:
   group: release
@@ -45,18 +53,44 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Bump patch version
+      - name: Setup Python
+        if: steps.guard.outputs.skip == 'false'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Bump level, and every file the version lives in, are both decided by
+      # scripts/version-sync.py against scripts/version-locations.json. The old
+      # inline `${PARTS[2]} + 1` could only ever produce a patch, and wrote three
+      # of the six locations — which is how features.json sat at 0.5.0 while
+      # everything else said 0.6.3 for two releases.
+      - name: Determine bump level
+        if: steps.guard.outputs.skip == 'false'
+        id: level
+        env:
+          # The whole push payload, not just head_commit: head_commit is the LAST
+          # commit, so a merge commit would infer `patch` for a push that contains
+          # feat: commits. version-sync takes the highest level across all of them.
+          EVENT_JSON: ${{ toJSON(github.event) }}
+          INPUT_LEVEL: ${{ inputs.level }}
+        run: |
+          if [[ -n "$INPUT_LEVEL" ]]; then
+            LEVEL="$INPUT_LEVEL"
+            echo "level from workflow_dispatch input: $LEVEL"
+          else
+            printf '%s' "$EVENT_JSON" > /tmp/push-event.json
+            LEVEL=$(python3 scripts/version-sync.py --level-from-event /tmp/push-event.json)
+            echo "level inferred from all commits in the push: $LEVEL"
+          fi
+          echo "level=$LEVEL" >> "$GITHUB_OUTPUT"
+
+      - name: Bump version across every registered location
         if: steps.guard.outputs.skip == 'false'
         id: bump
         run: |
-          CURRENT=$(jq -r '.version' package.json)
-          IFS='.' read -ra PARTS <<< "$CURRENT"
-          NEW="${PARTS[0]}.${PARTS[1]}.$((${PARTS[2]} + 1))"
+          NEW=$(python3 scripts/version-sync.py --bump "${{ steps.level.outputs.level }}" | tail -1)
           echo "new=$NEW" >> "$GITHUB_OUTPUT"
-
-          jq --arg v "$NEW" '.version = $v' package.json > _tmp.json && mv _tmp.json package.json
-          jq --arg v "$NEW" '.version = $v' manifests/academic-writer.json > _tmp.json && mv _tmp.json manifests/academic-writer.json
-          jq --arg v "$NEW" '.version = $v | .plugins[0].version = $v' .claude-plugin/marketplace.json > _tmp.json && mv _tmp.json .claude-plugin/marketplace.json
+          echo "bumped to $NEW"
 
       # Re-run the build against the just-bumped source manifest so the
       # committed build output (plugins/academic-writer/.claude-plugin/plugin.json,
@@ -80,17 +114,15 @@ jobs:
         if: steps.guard.outputs.skip == 'false'
         run: bash scripts/check-built-manifest.sh
 
+      - name: Gate — version agrees across ALL registered locations
+        if: steps.guard.outputs.skip == 'false'
+        run: python3 scripts/version-sync.py --check
+
       # Until 0.7.0 the whole deterministic suite gated nothing: release.yml
       # bumped, rebuilt, checked two manifests and published. A prior 804-line
       # suite had already rotted this way behind a bypassable local hook
       # (recorded in the plugin's CandleKeep audit). Tests that do not block a
       # release are decorative, so they now run here, against the bumped tree.
-      - name: Setup Python
-        if: steps.guard.outputs.skip == 'false'
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
       - name: Gate — deterministic test suite
         if: steps.guard.outputs.skip == 'false'
         run: |
@@ -107,7 +139,8 @@ jobs:
         run: |
           NEW="${{ steps.bump.outputs.new }}"
 
-          git add package.json manifests/academic-writer.json .claude-plugin/marketplace.json plugins/
+          # Every path version-sync.py can write, plus the rebuilt plugin tree.
+          git add package.json manifests/academic-writer.json .claude-plugin/marketplace.json features.json plugins/
           git commit -m "chore: bump version to v${NEW}"
           git tag "v${NEW}"
           git push origin main
