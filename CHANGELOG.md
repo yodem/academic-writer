@@ -4,6 +4,92 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-09-02
+### Changed
+
+- **`release.yml` no longer triggers on push — releases are now a deliberate
+  `workflow_dispatch` action.** `push: branches: [main]` meant every push auto-cut a
+  release, which is exactly what let the `gemini-api` dist/ regression below ship
+  silently for three releases with no one deciding "release now". The quality gates
+  `release.yml` carried (test suite, `check-mcp-dist.sh`, `check-no-private-refs.sh`,
+  version consistency, hooks typecheck) still need to block every push, so they moved
+  to a new **`.github/workflows/ci.yml`**, which runs on `push: [main]` and
+  `pull_request` and runs every one of those gates against the tree AS PUSHED —
+  no bump, rebuild, tag, commit, or publish. The two files intentionally share
+  identical `run:` commands for every gate so they can't drift apart in what they
+  check.
+- **New gate: `scripts/check-mcp-dist-fresh.sh`** (+ `tests/test_mcp_dist_fresh.py`).
+  With auto-release gone, CI no longer rebuilds and commits `dist/index.js` on every
+  release — the committed bundle is now the only copy that ever ships, and
+  `check-mcp-dist.sh` only proves it *starts*, not that it still matches `src/`. This
+  rebuilds the server from `src/` in an isolated temp copy (`npm ci` against the
+  pinned `gemini-server/package-lock.json`, then the same `esbuild.config.mjs`) and
+  fails if the result differs byte-for-byte from what's committed. esbuild's output
+  was verified byte-identical across three consecutive rebuilds before relying on a
+  direct comparison — the bundle carries no embedded absolute paths, timestamps, or
+  version string, and the lockfile pins the exact esbuild version, so a rebuild in CI
+  uses the same dependency graph as a rebuild on a maintainer's machine. Wired into
+  both `ci.yml` and `release.yml` — in `release.yml` specifically *before* the bump
+  and rebuild steps, so it validates what was actually committed rather than a
+  rebuild compared against itself.
+- **New `.gitattributes`** marks the committed bundle
+  (`plugins/academic-writer/mcp/gemini-server/dist/index.js`) `-diff
+  linguist-generated=true` so it stops showing full diffs in PR review and doesn't
+  count toward GitHub's language statistics, now that it's a permanent, sizeable
+  (2.3MB) tracked file rather than a build artifact.
+
+### Fixed
+
+- **Every user-invocable skill appeared three times in the command palette.**
+  `build-plugins.sh` generated a `commands/<name>.md` wrapper for each of the 13
+  skills marked `user-invocable: true`, whose body was nothing but
+  `# Auto-generated from skills/<name>/SKILL.md` followed by a copy of the skill.
+  Claude Code registers user-invocable skills in the palette on its own, so every one
+  of those names rendered three identical rows (`/academic-writer:ocr`,
+  `:init`, `:edit`, `:write`, `:help`, … each ×3). The control that isolated it:
+  skills with `user-invocable: false` and therefore no wrapper (`learn`, `present`,
+  `feedback`, `update-field`, `update-tools`) rendered exactly one row each — which
+  also ruled out the plugin being loaded more than once and ruled out stale cache
+  version directories, since a directory scan would have multiplied those too.
+  The generator block and all 13 generated files are gone; each skill keeps its
+  single `/academic-writer:<name>` palette entry. Verified against Claude Code
+  2.1.258 by removing `commands/` from an installed 0.7.0 cache and restarting —
+  the triples collapsed to one row per skill.
+
+- **`gemini-api` MCP server `CONNECTION_CLOSED` on every fresh install.** `dist/` for
+  `plugins/academic-writer/mcp/gemini-server/` was gitignored, so the published plugin
+  shipped `plugin.json`'s `mcpServers.gemini-api` command (`node .../dist/index.js`)
+  with no `dist/index.js` on disk — a regression since v0.6.2 (confirmed broken
+  through v0.7.0 across every installed copy). `dist/` is now committed (sourcemap
+  generation turned off — it shipped no runtime value and is one more file for the
+  privacy scan to clear).
+  `dist/index.js` is now a **fully self-contained bundle**: `esbuild.config.mjs`
+  inlines `@modelcontextprotocol/sdk` and `@google/genai` (`external: []`) instead of
+  externalizing them, so no `node_modules` needs to ship alongside `dist/index.js` at
+  all. The blocker on the first attempt at this was `google-auth-library` (pulled in
+  via `@google/genai`) calling `require('child_process')` etc. internally — esbuild's
+  ESM output throws `Dynamic require ... is not supported` for that, and switching to
+  CJS output instead broke the `import.meta.url` resolution used elsewhere in the
+  server. The fix is the standard one for exactly this case: a
+  `createRequire(import.meta.url)` banner shim, so those internal dynamic `require()`
+  calls resolve against the bundle's own inlined modules at runtime. Verified directly
+  by running the shipped `dist/index.js` alone — no `node_modules` anywhere in its
+  ancestry — through the full MCP `initialize`/`tools/list` handshake, a live
+  `gemini_raw` API call, and a real `gemini_ocr` call against a two-page PDF slice
+  (Python OCR helper scripts under `mcp/gemini-server/scripts/` are not bundled and
+  are resolved as a sibling of `dist/` at runtime — unaffected by this change, already
+  tracked in git). New gate `scripts/check-mcp-dist.sh`, wired into `release.yml` and
+  `tests/test_mcp_dist.py`, copies only `dist/index.js` (plus that sibling `scripts/`
+  dir) into an isolated temp dir with no `node_modules` anywhere in its ancestry and
+  fails the build if it doesn't start clean — this exact regression class can no
+  longer ship silently, and the check now proves self-containment rather than merely
+  checking vendored deps were present.
+  (A fully self-contained bundle was the first approach tried; it was set aside after
+  two failures without testing the `createRequire` shim, and `node_modules` was
+  vendored production-only instead — that worked but put ~4,100 files / ~55MB into git
+  permanently, churning on every dependency bump. The shim was tested afterward, found
+  to work end-to-end, and is what's shipped here instead.)
+
 ## [0.6.4] — 2026-09-02
 ### Added
 

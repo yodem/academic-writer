@@ -1,8 +1,31 @@
 name: Version Bump & Release
 
+# Manual trigger ONLY — a release is now a deliberate action, not a side effect of
+# pushing to main. Every push to main (and every PR) is instead gated by
+# .github/workflows/ci.yml, which runs every quality gate this file also runs,
+# EXCEPT the bump, rebuild, tag, commit and publish steps below. To cut a release:
+# run this workflow from the Actions tab, or `gh workflow run release.yml
+# [-f level=patch|minor|major]` — omit `level` to let it infer the bump from
+# conventional-commit messages since the last release tag (see "Determine bump
+# level" below).
+#
+# Until this change, `push: branches: [main]` meant every push auto-cut a release,
+# which is exactly what let plugins/academic-writer/mcp/gemini-server/dist/ ship
+# broken for three releases (v0.6.2 through v0.7.0 — see CHANGELOG.md and
+# scripts/check-mcp-dist.sh): the push trigger kept re-shipping a gitignored (later
+# missing) bundle on every merge with no one deciding "release now". The push
+# trigger is gone; the quality gates it used to carry moved to ci.yml so pushes to
+# main stay gated even though they no longer release.
+#
+# Because this workflow is workflow_dispatch-only now, `github.event.head_commit` is
+# always unset here, so the "Skip if this is a version-bump commit" guard below
+# always evaluates to skip=false, and every gated step below always runs. That guard
+# existed to stop the OLD push trigger from re-triggering itself on its own
+# "chore: bump version" commit — a loop that can no longer happen without a push
+# trigger. It (and the `if: steps.guard.outputs.skip == 'false'` conditions
+# throughout this file) is left in place rather than surgically removed: it's inert
+# and correct either way, and cutting it is unrelated churn.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       level:
@@ -72,6 +95,19 @@ jobs:
         with:
           python-version: '3.12'
 
+      # Placement is deliberate: BEFORE the bump/rebuild below, not grouped with the
+      # other gates after it. "Rebuild plugin at bumped version" (npm run build)
+      # regenerates dist/index.js in this same job a few steps down — a freshness
+      # check placed after that step would compare a fresh rebuild against a file
+      # rebuilt moments earlier and pass tautologically, checking nothing. Running it
+      # here instead validates what the maintainer actually committed to main BEFORE
+      # this job starts mutating the tree — the same tree ci.yml's copy of this gate
+      # checks on every push, so a src/ change that outran its own rebuild is caught
+      # long before it reaches this workflow.
+      - name: Gate — gemini-server dist is fresh (matches a rebuild from src/)
+        if: steps.guard.outputs.skip == 'false'
+        run: bash scripts/check-mcp-dist-fresh.sh
+
       # Bump level, and every file the version lives in, are both decided by
       # scripts/version-sync.py against scripts/version-locations.json. The old
       # inline `${PARTS[2]} + 1` could only ever produce a patch, and wrote three
@@ -137,6 +173,10 @@ jobs:
       - name: Gate — built manifest carries mcpServers (v0.3.0 regression guard)
         if: steps.guard.outputs.skip == 'false'
         run: bash scripts/check-built-manifest.sh
+
+      - name: Gate — gemini-server dist ships and starts self-contained (v0.6.2 CONNECTION_CLOSED regression guard)
+        if: steps.guard.outputs.skip == 'false'
+        run: bash scripts/check-mcp-dist.sh
 
       - name: Gate — no personal identifiers in shipped or published files
         if: steps.guard.outputs.skip == 'false'

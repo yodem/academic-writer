@@ -55,10 +55,19 @@ plugins/academic-writer/agents/memory/
 .voice/*
 !.voice/.gitkeep
 
-# Bundled Gemini MCP server build artifacts
-plugins/academic-writer/mcp/gemini-server/dist/
+# Bundled Gemini MCP server: dist/ IS committed (no ignore rule for it below —
+# node_modules/ stays ignored via the top-level `node_modules/` rule above). The
+# published plugin marketplace ships exactly what's in git — there is no
+# install/build lifecycle hook — so if dist/index.js isn't tracked, a fresh install
+# gets `Cannot find module .../dist/index.js` / CONNECTION_CLOSED (regressed at
+# v0.6.2, confirmed broken through v0.7.0). esbuild.config.mjs bundles
+# @modelcontextprotocol/sdk and @google/genai INTO dist/index.js (`external: []`)
+# with a `createRequire(import.meta.url)` banner shim, so google-auth-library's
+# internal dynamic `require()` calls still resolve under ESM output — dist/index.js
+# is therefore fully self-contained and node_modules is NOT needed at runtime (see
+# scripts/check-mcp-dist.sh, which proves this by running dist/index.js alone with
+# no ancestor node_modules anywhere). Only test-build output stays ignored.
 plugins/academic-writer/mcp/gemini-server/dist-test/
-plugins/academic-writer/mcp/gemini-server/node_modules/
 
 # Local API key fallback (per gemini integration spec)
 .academic-helper/secrets.json
