@@ -114,7 +114,7 @@ variable, then the secrets file, so picking one doesn't disturb whichever else m
 Run a one-shot probe through the MCP server to verify the key works end-to-end:
 
 ```
-mcp__gemini-api__gemini_raw({
+mcp__plugin_academic-writer_gemini-api__gemini_raw({
   system: "Reply with exactly the word PONG and nothing else.",
   prompt: "PING"
 })

@@ -370,7 +370,7 @@ if (requestedStages.indexOf('mechanical') !== -1 && canRunMechanical) {
       if (geminiApproved) {
         // Plan §1.2: geminiApproved routes the verify lens through the Gemini
         // raw MCP tool instead of an Opus refute agent — same REFUTE prompt.
-        opts.mcpTool = 'mcp__gemini-api__gemini_raw';
+        opts.mcpTool = 'mcp__plugin_academic-writer_gemini-api__gemini_raw';
       } else {
         opts.model = 'opus';
       }

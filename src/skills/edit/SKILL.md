@@ -2,7 +2,7 @@
 name: edit
 description: "Edit a previously written article — revise sections, fix citations, adjust tone, restructure arguments, or rewrite passages. Use when revising an article that's already drafted — multiple sections, restructuring, or major changes."
 user-invocable: true
-allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion, mcp__gemini-api__gemini_edit]
+allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion, mcp__plugin_academic-writer_gemini-api__gemini_edit]
 agents: [section-writer, auditor, synthesizer]
 metadata: {author: "Yotam Fromm", version: "0.2.19"}
 ---
@@ -25,7 +25,7 @@ to seed it." Do not block writing.
 
 ### Gemini routing for prose rewrites
 
-Direct prose-rewrite steps in this skill (Mode A delegating to section-writer, Mode C tone adjustment, Mode E new-evidence integration, Mode F cut/expand prose rewrites) go through `mcp__gemini-api__gemini_edit` when ALL of the following hold:
+Direct prose-rewrite steps in this skill (Mode A delegating to section-writer, Mode C tone adjustment, Mode E new-evidence integration, Mode F cut/expand prose rewrites) go through `mcp__plugin_academic-writer_gemini-api__gemini_edit` when ALL of the following hold:
 
 1. The article's `targetLanguage` is in `profile.md > gemini.approvedLanguages`.
 2. `GOOGLE_API_KEY` is set OR `.academic-helper/secrets.json` provides one.
@@ -34,7 +34,7 @@ Direct prose-rewrite steps in this skill (Mode A delegating to section-writer, M
 Tool shape:
 
 ```
-mcp__gemini-api__gemini_edit({
+mcp__plugin_academic-writer_gemini-api__gemini_edit({
   existing_text: <paragraph or passage>,
   edit_instruction: <natural-language edit request from the researcher or auditor>,
   target_language: <targetLanguage>

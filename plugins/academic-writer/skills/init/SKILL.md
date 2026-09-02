@@ -3,7 +3,7 @@ name: init
 description: "First-time setup for the Academic Writer. Configures researcher profile, analyzes writing style from past articles, indexes research sources, and offers Gemini onboarding. Supports a --quick flag for a fast path. Use on first install, when redoing onboarding from scratch, or when the user wants a quick onboarding (pass --quick)."
 user-invocable: true
 disable-model-invocation: true
-allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion, mcp__gemini-api__gemini_raw]
+allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion, mcp__plugin_academic-writer_gemini-api__gemini_raw]
 metadata: {author: "Yotam Fromm", version: "0.3.0"}
 ---
 
@@ -304,7 +304,7 @@ auditor either way.
 
 If they decline, skip the rest of this phase and note Gemini disabled in the summary. If they
 accept: check for an existing `GOOGLE_API_KEY` (env or `.academic-helper/secrets.json`), walk
-through creating and storing one if missing, live-probe it via `mcp__gemini-api__gemini_raw`
+through creating and storing one if missing, live-probe it via `mcp__plugin_academic-writer_gemini-api__gemini_raw`
 (don't just trust the file/env check), note that a per-language calibration gate runs on first
 `/write`, and store the result in the `## Gemini` block of `profile.md` (Phase 4). Full question
 text, exact commands, and error handling for each sub-step: see
