@@ -1,6 +1,6 @@
 # Skills vs Best Practices — Part B (9 skills + hook layer)
 
-Audited 2026-09-02 on branch `feat/proofread-pipeline-0.7.0`, repo `/Users/yotamfromm/dev/learning/Academic Helper`.
+Audited 2026-09-02 on branch `feat/proofread-pipeline-0.7.0`, repo `$REPO`.
 Skills: `setup`, `help`, `health`, `ocr`, `learn`, `present`, `feedback`, `update-field`, `update-tools`.
 Rules: TST-02, WRK-13, WRK-14, REV-03, VER-08, VER-10, SPC-14 (from CandleKeep `cmtifqy5a2cpun00jzpuztuca` ch.5/7/10/11/12) + repo-specific checks from `CLAUDE.md`.
 This is part 2 of 2 — the first run's single 18-skill item died before returning a result; this half covers the above nine plus the hook layer, which no other item covers.

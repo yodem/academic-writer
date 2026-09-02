@@ -83,9 +83,9 @@ Re-verified after fixes: `npm run build` → exit 0; `python3 tests/test_plugin_
 
 ## v2 (0.7.0, in progress) — unified three-stage pipeline, after the קתרסיס rejection
 
-Plan of record: `~/.claude/plans/the-plugin-did-terrable-swift-lantern.md` (2026-09-02).
+Plan of record: `the 0.7.0 plan of record (local, not committed to this repo)` (2026-09-02).
 The article proofread on 2026-07-10 was submitted to קתרסיס and rejected; **all 9 mechanical
-errors the editor quoted survive in `bikoret-musarit.proofed.md`** (grep-verified 2026-09-02).
+errors the editor quoted survive in `the sample article (~6,600 Hebrew tokens)`** (grep-verified 2026-09-02).
 Several belong to error classes the same pass fixed elsewhere — a **recall** failure of a single
 unverified pass, not a rule gap. Root cause is recorded in the section above: the source books'
 two-pass standard was deliberately dropped, chunk-parallel was dropped as the default, and no
@@ -94,7 +94,7 @@ convergence gate or adversarial verification replaced them.
 ### Phase 0 — hspell spike, 2026-09-02: NO-GO on the stated gate, adopted in a narrowed role
 
 hspell 1.4 via Homebrew, measured over the 6,584 Hebrew tokens (2,587 unique) of
-`bikoret-musarit.proofed.md`:
+`the sample article (~6,600 Hebrew tokens)`:
 
 | Measure | Gate | Measured | Verdict |
 |---|---|---|---|

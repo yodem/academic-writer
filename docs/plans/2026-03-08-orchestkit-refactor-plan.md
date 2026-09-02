@@ -9,23 +9,23 @@
 
 **Tech Stack:** TypeScript (strict mode), esbuild, bash (build script), Node.js >= 20
 
-**Prerequisites:** OrchestKit reference repo at `/Users/yotamfromm/dev/orchestkit/` for structural guidance
+**Prerequisites:** OrchestKit reference repo at `~/dev/orchestkit/` for structural guidance
 
 ---
 
 ## Relevant Codebase Files
 
 ### OrchestKit Patterns to Follow
-- `/Users/yotamfromm/dev/orchestkit/manifests/ork.json` - Plugin manifest format
-- `/Users/yotamfromm/dev/orchestkit/.claude-plugin/marketplace.json` - Marketplace manifest
-- `/Users/yotamfromm/dev/orchestkit/scripts/build-plugins.sh` - Build script (10 phases)
-- `/Users/yotamfromm/dev/orchestkit/src/hooks/esbuild.config.mjs` - esbuild config with split bundles
-- `/Users/yotamfromm/dev/orchestkit/src/hooks/bin/run-hook.mjs` - Hook runner CLI
-- `/Users/yotamfromm/dev/orchestkit/src/hooks/hooks.json` - hooks.json format with `${CLAUDE_PLUGIN_ROOT}`
-- `/Users/yotamfromm/dev/orchestkit/src/hooks/package.json` - Hooks package dependencies
-- `/Users/yotamfromm/dev/orchestkit/src/hooks/tsconfig.json` - TS config (ES2022, strict, Bundler resolution)
-- `/Users/yotamfromm/dev/orchestkit/src/settings/ork.settings.json` - Plugin settings format
-- `/Users/yotamfromm/dev/orchestkit/package.json` - Root package with build scripts
+- `~/dev/orchestkit/manifests/ork.json` - Plugin manifest format
+- `~/dev/orchestkit/.claude-plugin/marketplace.json` - Marketplace manifest
+- `~/dev/orchestkit/scripts/build-plugins.sh` - Build script (10 phases)
+- `~/dev/orchestkit/src/hooks/esbuild.config.mjs` - esbuild config with split bundles
+- `~/dev/orchestkit/src/hooks/bin/run-hook.mjs` - Hook runner CLI
+- `~/dev/orchestkit/src/hooks/hooks.json` - hooks.json format with `${CLAUDE_PLUGIN_ROOT}`
+- `~/dev/orchestkit/src/hooks/package.json` - Hooks package dependencies
+- `~/dev/orchestkit/src/hooks/tsconfig.json` - TS config (ES2022, strict, Bundler resolution)
+- `~/dev/orchestkit/src/settings/ork.settings.json` - Plugin settings format
+- `~/dev/orchestkit/package.json` - Root package with build scripts
 
 ### Current Academic Helper Files to Move/Transform
 - `.claude/agents/*.md` (5 files) -> `src/agents/*.md` (copy as-is)

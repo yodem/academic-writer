@@ -121,6 +121,10 @@ jobs:
         if: steps.guard.outputs.skip == 'false'
         run: bash scripts/check-built-manifest.sh
 
+      - name: Gate — no personal identifiers in shipped or published files
+        if: steps.guard.outputs.skip == 'false'
+        run: bash scripts/check-no-private-refs.sh
+
       - name: Gate — version agrees across ALL registered locations
         if: steps.guard.outputs.skip == 'false'
         run: python3 scripts/version-sync.py --check

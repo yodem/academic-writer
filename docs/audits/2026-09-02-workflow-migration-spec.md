@@ -1,11 +1,11 @@
 # Migration spec: `write` / `edit` / `edit-section` onto Workflow-tool scripts
 
-**Date:** 2026-09-02 · **Repo:** `/Users/yotamfromm/dev/learning/Academic Helper` ·
+**Date:** 2026-09-02 · **Repo:** `$REPO` ·
 **Branch:** `feat/proofread-pipeline-0.7.0` (HEAD `98f5bf7`, 4 commits ahead of `main` `24b2154`) ·
 **Status:** scoping only — no workflow script or skill/agent file was written or modified by this item.
 
 This spec scopes the Phase 2 migration described in
-`~/.claude/plans/the-plugin-did-terrable-swift-lantern.md` ("Phase 2 — `write` as a workflow",
+`the 0.7.0 plan of record (local, not committed to this repo)` ("Phase 2 — `write` as a workflow",
 lines 349–373), extended to `edit` and `edit-section` per the follow-up audit's goal contract
 (same file, lines 404–405: "`write` / `edit` / `edit-section` migration to workflow scripts is
 scoped as a spec with the Phase 2 mechanics of this plan as its precondition").
@@ -401,7 +401,7 @@ IDs but was not treated as the source of truth here.
 
 ## 10. Sources consulted
 
-- `~/.claude/plans/the-plugin-did-terrable-swift-lantern.md` (full read; Phase 1.2, Phase 2 lines
+- `the 0.7.0 plan of record (local, not committed to this repo)` (full read; Phase 1.2, Phase 2 lines
   349–373, Research digest lines 107–202, Follow-up section lines 394–409)
 - `src/skills/write/SKILL.md` (full read, 489 lines)
 - `src/skills/edit/SKILL.md` (full read, 217 lines)

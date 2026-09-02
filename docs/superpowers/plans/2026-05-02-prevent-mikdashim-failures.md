@@ -486,7 +486,7 @@ Terms the researcher does not use. Section-writer's Skill 2 (Style Fingerprint C
 - [ ] **Step 6.3: Verify the JSON parses**
 
 ```bash
-python3 -c "import json,re,sys; t=open('/Users/yotamfromm/dev/bar-ilan/mikdashim/.academic-helper/profile.md').read(); m=re.search(r'## Banned Terms.*?```json\s*(\{.*?\})\s*```', t, re.S); assert m, 'banned terms block not found'; json.loads(m.group(1)); print('OK: bannedTerms JSON valid')"
+python3 -c "import json,re,sys; t=open('~/dev/bar-ilan/mikdashim/.academic-helper/profile.md').read(); m=re.search(r'## Banned Terms.*?```json\s*(\{.*?\})\s*```', t, re.S); assert m, 'banned terms block not found'; json.loads(m.group(1)); print('OK: bannedTerms JSON valid')"
 ```
 
 Expected: `OK: bannedTerms JSON valid`.
@@ -578,7 +578,7 @@ git commit -m "feat(section-writer): honour profile.bannedTerms in Skill 2"
 - [ ] **Step 8.1: Build the plugin**
 
 ```bash
-cd "/Users/yotamfromm/dev/Academic Helper" && npm run build
+cd "~/dev/Academic Helper" && npm run build
 ```
 
 Expected: build completes; `plugins/academic-writer/agents/deep-reader.md`, `architect.md`, `auditor.md`, `section-writer.md`, and `skills/write/SKILL.md` are all updated to match `src/`.

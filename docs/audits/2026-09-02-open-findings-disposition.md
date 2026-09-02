@@ -1,6 +1,6 @@
 # Findings Disposition — 2026-09-02
 
-Source of findings: `~/dev/claude-obsidian/wiki/projects/academic-writer-improvements-2026-09-01.md`
+Source of findings: `the maintainer's private improvements page (not committed)`
 (10 numbered findings, P0/P1/P2, dated 2026-09-01).
 
 Branch audited: `feat/proofread-pipeline-0.7.0`, 4 commits ahead of `main`:

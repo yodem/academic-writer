@@ -202,7 +202,7 @@ Replace `src/hooks/hooks.json` with:
 
 Run from project root with a real profile to test against:
 ```bash
-echo '{}' | CLAUDE_PROJECT_DIR=/Users/yotamfromm/dev/Yotam-Asistant/groups/main node src/hooks/bin/run-hook.mjs lifecycle/session-dashboard
+echo '{}' | CLAUDE_PROJECT_DIR=~/dev/Yotam-Asistant/groups/main node src/hooks/bin/run-hook.mjs lifecycle/session-dashboard
 ```
 Expected: JSON output containing a `systemMessage` field with the box-art dashboard.
 
@@ -995,7 +995,7 @@ Expected: build succeeds; bundle includes `notifyStop`.
 
 - [ ] **Step 5: Smoke-test in profiled project**
 
-Run: `echo '{}' | CLAUDE_PROJECT_DIR=/Users/yotamfromm/dev/Yotam-Asistant/groups/main node src/hooks/bin/run-hook.mjs lifecycle/notify-stop`
+Run: `echo '{}' | CLAUDE_PROJECT_DIR=~/dev/Yotam-Asistant/groups/main node src/hooks/bin/run-hook.mjs lifecycle/notify-stop`
 Expected: macOS notification appears (title "Academic Writer", message "Task complete"). JSON output `{"continue":true,"suppressOutput":true}`.
 
 - [ ] **Step 6: Smoke-test silent skip**
@@ -1148,12 +1148,12 @@ Expected: builds clean.
 
 - [ ] **Step 7: Smoke-test SubagentStart**
 
-Run: `echo '{"subagent_type":"auditor"}' | CLAUDE_PROJECT_DIR=/Users/yotamfromm/dev/Yotam-Asistant/groups/main node src/hooks/bin/run-hook.mjs lifecycle/subagent-start`
+Run: `echo '{"subagent_type":"auditor"}' | CLAUDE_PROJECT_DIR=~/dev/Yotam-Asistant/groups/main node src/hooks/bin/run-hook.mjs lifecycle/subagent-start`
 Expected: JSON output with a `systemMessage` field containing "AUDITOR CONTEXT" and the rules.
 
 - [ ] **Step 8: Smoke-test irrelevant subagent**
 
-Run: `echo '{"subagent_type":"general-purpose"}' | CLAUDE_PROJECT_DIR=/Users/yotamfromm/dev/Yotam-Asistant/groups/main node src/hooks/bin/run-hook.mjs lifecycle/subagent-start`
+Run: `echo '{"subagent_type":"general-purpose"}' | CLAUDE_PROJECT_DIR=~/dev/Yotam-Asistant/groups/main node src/hooks/bin/run-hook.mjs lifecycle/subagent-start`
 Expected: silent skip (no systemMessage).
 
 - [ ] **Step 9: Commit**
@@ -1362,7 +1362,7 @@ Expected: `model: opus`.
 
 Pick a real article folder under `~/dev/bar-ilan/` that has been written with the plugin. Note its path:
 ```
-SAMPLE_DIR="/Users/yotamfromm/dev/bar-ilan/<chosen>"
+SAMPLE_DIR="~/dev/bar-ilan/<chosen>"
 ```
 
 Verify it has at least 3 paragraphs of completed text.
