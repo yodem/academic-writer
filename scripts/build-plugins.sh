@@ -140,36 +140,12 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
   + (if .userConfig then { userConfig: .userConfig } else {} end)' \
     "$manifest" > "$PLUGIN_DIR/.claude-plugin/plugin.json"
 
-  # Generate commands from user-invocable skills
-  if [[ -d "$PLUGIN_DIR/skills" ]]; then
-    for skill_md in "$PLUGIN_DIR/skills"/*/SKILL.md; do
-      [[ ! -f "$skill_md" ]] && continue
-      if grep -q "^user-invocable: *true" "$skill_md"; then
-        skill_name=$(basename "$(dirname "$skill_md")")
-        mkdir -p "$PLUGIN_DIR/commands"
-        # Extract description, allowed-tools, and disable-model-invocation from frontmatter using awk
-        description=$(awk '/^---$/{n++; next} n==1 && /^description:/{sub(/^description: *"?/,""); sub(/"$/,""); print; exit}' "$skill_md")
-        allowed_tools=$(awk '/^---$/{n++; next} n==1 && /^allowed-tools:|^allowedTools:/{sub(/^(allowed-tools|allowedTools): */,""); print; exit}' "$skill_md")
-        disable_model_invocation=$(awk '/^---$/{n++; next} n==1 && /^disable-model-invocation:/{sub(/^disable-model-invocation: */,""); print; exit}' "$skill_md")
-        [[ -z "$allowed_tools" ]] && allowed_tools="[Bash, Read, Write, Edit, Glob, Grep]"
-        {
-          echo "---"
-          echo "description: $description"
-          echo "allowed-tools: $allowed_tools"
-          [[ "$disable_model_invocation" == "true" ]] && echo "disable-model-invocation: true"
-          echo "---"
-          echo ""
-          echo "# Auto-generated from skills/$skill_name/SKILL.md"
-          echo ""
-          awk 'BEGIN{c=0} /^---$/{c++; next} c>=2{print}' "$skill_md"
-        } > "$PLUGIN_DIR/commands/$skill_name.md"
-      fi
-    done
-  fi
+  # Commands are deliberately NOT generated from skills. Claude Code registers
+  # user-invocable skills in the palette on its own; shipping a commands/<name>.md
+  # wrapper alongside made every such skill appear three times in the palette.
+  # See CHANGELOG. Do not reintroduce a commands/ generator here.
 
-  command_count=$(find "$PLUGIN_DIR/commands" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
-
-  echo -e "${GREEN}  Built $PLUGIN_NAME v$PLUGIN_VERSION: $skill_count skills, $agent_count agents, $command_count commands${NC}"
+  echo -e "${GREEN}  Built $PLUGIN_NAME v$PLUGIN_VERSION: $skill_count skills, $agent_count agents${NC}"
 done
 
 # Phase 4b: Build bundled MCP servers (mcp/ source preserved through clean)
@@ -221,5 +197,4 @@ for plugin_dir in "$PLUGINS_DIR"/*; do
   echo -e "  Plugin: ${GREEN}$plugin_name${NC}"
   echo -e "    Skills:   $(find "$plugin_dir/skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
   echo -e "    Agents:   $(find "$plugin_dir/agents" -maxdepth 1 -name '*.md' 2>/dev/null | wc -l | tr -d ' ')"
-  echo -e "    Commands: $(find "$plugin_dir/commands" -name '*.md' 2>/dev/null | wc -l | tr -d ' ')"
 done
