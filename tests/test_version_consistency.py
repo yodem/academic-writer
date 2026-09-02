@@ -285,3 +285,69 @@ class TestWriteModes(unittest.TestCase):
         reg = version_sync.load_registry()
         with self.assertRaises(SystemExit):
             version_sync.write_version(reg, "0.7")
+
+
+class TestChangelogRoll(unittest.TestCase):
+    """--release-changelog must be idempotent and must never emit an empty version heading."""
+
+    def _repo_with_changelog(self, text):
+        import shutil
+        import tempfile
+
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        (tmp / "CHANGELOG.md").write_text(text, encoding="utf-8")
+        original = version_sync.REPO
+        version_sync.REPO = tmp
+        self.addCleanup(lambda: setattr(version_sync, "REPO", original))
+        return tmp
+
+    POPULATED = (
+        "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- a shipped thing\n\n"
+        "## [0.6.1] — 2026-08-09\n\n- older\n"
+    )
+
+    def test_roll_renames_and_opens_a_fresh_unreleased(self):
+        tmp = self._repo_with_changelog(self.POPULATED)
+        msg = version_sync.release_changelog("0.7.0", "2026-09-02")
+        out = (tmp / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertIn("0.7.0", msg)
+        self.assertIn("## [0.7.0] — 2026-09-02", out)
+        self.assertIn("## [Unreleased]", out)
+        self.assertLess(
+            out.index("## [Unreleased]"),
+            out.index("## [0.7.0]"),
+            "the fresh [Unreleased] must sit above the released section",
+        )
+        self.assertIn("- a shipped thing", out)
+
+    def test_roll_is_idempotent(self):
+        tmp = self._repo_with_changelog(self.POPULATED)
+        version_sync.release_changelog("0.7.0", "2026-09-02")
+        first = (tmp / "CHANGELOG.md").read_text(encoding="utf-8")
+        msg = version_sync.release_changelog("0.7.0", "2026-09-02")
+        self.assertEqual(first, (tmp / "CHANGELOG.md").read_text(encoding="utf-8"))
+        self.assertIn("nothing to do", msg)
+
+    def test_empty_unreleased_produces_no_version_heading(self):
+        tmp = self._repo_with_changelog("# Changelog\n\n## [Unreleased]\n\n## [0.6.1] — 2026-08-09\n")
+        msg = version_sync.release_changelog("0.7.0", "2026-09-02")
+        out = (tmp / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertNotIn("## [0.7.0]", out, "an empty [Unreleased] must not become a version heading")
+        self.assertIn("empty", msg)
+
+    def test_missing_changelog_is_not_an_error(self):
+        import shutil
+        import tempfile
+
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        original = version_sync.REPO
+        version_sync.REPO = tmp
+        self.addCleanup(lambda: setattr(version_sync, "REPO", original))
+        self.assertIn("nothing to do", version_sync.release_changelog("0.7.0", "2026-09-02"))
+
+    def test_workflow_rolls_the_changelog_and_stages_it(self):
+        wf = _workflow_code()
+        self.assertIn("--release-changelog", wf)
+        self.assertRegex(wf, r"git add[^\n]*CHANGELOG\.md")

@@ -166,6 +166,42 @@ def messages_from_event(path: Path) -> list[str]:
     return []
 
 
+CHANGELOG = "CHANGELOG.md"
+UNRELEASED_RE = re.compile(r"^## \[Unreleased\]\s*$", re.M)
+
+
+def release_changelog(version: str, today: str) -> str:
+    """Rename `## [Unreleased]` to `## [version] — date` and open a fresh Unreleased above it.
+
+    Finding 10 of the 2026-09-01 improvements page was that [Unreleased] had accumulated
+    already-shipped features. It accumulates because nothing ever renamed it: the release
+    workflow bumped manifests and published, and the CHANGELOG was left to a human who
+    reasonably forgot. Doing it in the same step that writes the version is the fix.
+
+    Idempotent by construction: a second call finds the new [Unreleased] section empty and
+    leaves the file alone, so a re-run cannot emit an empty version heading.
+    """
+    path = REPO / CHANGELOG
+    if not path.exists():
+        return "no CHANGELOG.md — nothing to do"
+    text = path.read_text(encoding="utf-8")
+    m = UNRELEASED_RE.search(text)
+    if not m:
+        return "no '## [Unreleased]' heading — nothing to do"
+    if f"## [{version}]" in text:
+        return f"[{version}] already present — nothing to do"
+
+    after = text[m.end():]
+    nxt = re.search(r"^## \[", after, re.M)
+    body = (after[: nxt.start()] if nxt else after).strip()
+    if not body:
+        return "[Unreleased] is empty — not creating an empty version heading"
+
+    replacement = f"## [Unreleased]\n\n## [{version}] — {today}"
+    path.write_text(text[: m.start()] + replacement + text[m.end():], encoding="utf-8")
+    return f"[Unreleased] -> [{version}] — {today}, fresh [Unreleased] opened"
+
+
 def print_table(rows, expected: str) -> bool:
     width = max(len(f"{f} {'.'.join(str(x) for x in p)}") for f, p, _, _ in rows)
     ok = True
@@ -190,10 +226,21 @@ def main() -> int:
     g.add_argument("--fix", action="store_true")
     g.add_argument("--set", metavar="X.Y.Z")
     g.add_argument("--bump", choices=("major", "minor", "patch"))
+    g.add_argument("--release-changelog", metavar="X.Y.Z",
+                   help="Rename ## [Unreleased] to ## [X.Y.Z] — <today> and open a fresh one")
+    ap.add_argument("--today", metavar="YYYY-MM-DD", default=None,
+                    help="Date for --release-changelog (default: UTC today). Explicit so a test is reproducible.")
     g.add_argument("--level-from-message", metavar="MSG")
     g.add_argument("--level-from-event", metavar="EVENT_JSON",
                    help="GitHub push-event payload file; uses the highest level across ALL its commits")
     args = ap.parse_args()
+
+    if args.release_changelog is not None:
+        from datetime import datetime, timezone
+
+        today = args.today or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        print("version-sync: " + release_changelog(args.release_changelog, today))
+        return 0
 
     if args.level_from_message is not None:
         print(level_from_message(args.level_from_message))

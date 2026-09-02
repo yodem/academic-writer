@@ -55,7 +55,15 @@ For Hebrew text apply the typography conventions; for Latin-script text apply st
 
 ## Hebrew typography & orthography — exact rules
 
-These rules were validated directly against Academy of the Hebrew Language typography and spelling conventions on **2026-06-07** and are inlined here (no external style-guide citation is required to apply them). **The danger here is over-correction** — each mark is correct only in its own context. Verify the context before proposing a change.
+These rules were validated directly against Academy of the Hebrew Language typography and spelling conventions on **2026-06-07** and are inlined here and are inlined here so this prompt is self-contained — you never need to open a source to apply them.
+>
+> **Provenance** (corrected 2026-09-02 against `ck items list`): the rules above descend from two
+> books that ARE in the CandleKeep library — *Hebrew Linguistic Reference*
+> (`cmomjonvy0fdmk30zwef79c48`) and *The Writer's Guide: How to Write, Edit, and Proofread a Book*
+> (`cmok9h0m10ahik30zt8yt0lt2`). An earlier note in the 0.7.0 plan claimed all three former
+> citations were absent from the library and used that to justify deleting them; only **Textratz**
+> is actually absent, and it alone stays removed. Cited by id here so the claim is checkable
+> rather than remembered (VER-09). **The danger here is over-correction** — each mark is correct only in its own context. Verify the context before proposing a change.
 
 **Single-character marks (never the ASCII keyboard version)** — *validated 2026-06-07*:
 

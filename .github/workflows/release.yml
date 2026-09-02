@@ -98,6 +98,13 @@ jobs:
       # BEFORE anything is committed or pushed. Without this, the bump only
       # touches package.json/manifests/academic-writer.json/marketplace.json
       # and the built plugin.json silently drifts behind (see v0.6.1 incident).
+      # Finding 10 of the 2026-09-01 audit: [Unreleased] had accumulated shipped
+      # features because nothing ever renamed it. Renaming it in the same job that
+      # writes the version is the only place it cannot be forgotten.
+      - name: Roll CHANGELOG [Unreleased] into the released version
+        if: steps.guard.outputs.skip == 'false'
+        run: python3 scripts/version-sync.py --release-changelog "${{ steps.bump.outputs.new }}"
+
       - name: Rebuild plugin at bumped version
         if: steps.guard.outputs.skip == 'false'
         run: npm run build
@@ -140,7 +147,7 @@ jobs:
           NEW="${{ steps.bump.outputs.new }}"
 
           # Every path version-sync.py can write, plus the rebuilt plugin tree.
-          git add package.json manifests/academic-writer.json .claude-plugin/marketplace.json features.json plugins/
+          git add package.json manifests/academic-writer.json .claude-plugin/marketplace.json features.json CHANGELOG.md plugins/
           git commit -m "chore: bump version to v${NEW}"
           git tag "v${NEW}"
           git push origin main
