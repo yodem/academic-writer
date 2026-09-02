@@ -110,7 +110,7 @@ regression cannot be masked by the checker.
 
 hspell is still adopted as an *additive* candidate generator, on its own merits: of the 60 unique
 flags, ~15 are real orthographic errors that the 2026-07-10 pass also missed — בהגתו · ישיעיהו ·
-האריסטותליות · האוקראניים · דוצדדית · בליברליזים / לפלורליזים / שבליברליזים · כעיסקת / עיסקה ·
+האריסטותליות · האוקראניים · בליברליזים / לפלורליזים / שבליברליזים · כעיסקת / עיסקה ·
 נסיונותיהם · בשניה · דחיה. The rest are ~20 legitimate ktiv-male forms the Academy dictionary
 rejects (אמיתי, איתו/איתה/איתם, אזי, אידיאולוגיה, האשה, הדוגמא, הינה, האוכלוסיה, מודרנים,
 קורבנות, רדיקאלית, פרסונאלי), ~9 proper nouns (בובר, בודפסט, הרטמן, ליבוביץ, פינס, קאנט,
@@ -127,3 +127,11 @@ vocabulary before `iconv -c` was used; the true figure is 60. `spellcheck-candid
 transcode lossily in both directions, assert its output token count against its input, and preserve
 ׳/״ (or map them to ASCII) so abbreviations are not shredded into phantom flags. A pytest case
 feeds niqqud and geresh and asserts no truncation.
+
+> **Correction, 2026-09-02 (same day):** `דוצדדית` was listed above as a real error. It is not.
+> The source reads `דו־צדדית` with a **maqaf (U+05BE)**; the hand measurement's token regex
+> `[\u0590-\u05FF]{2,}` swallowed the maqaf, and `iconv -c` then dropped it — fabricating a
+> non-word that never appears in the article. `spellcheck-candidates.py` treats maqaf as a
+> separator and correctly yields two valid words. The real-error count is ~14, not ~15.
+> Guarded by `tests/test_spellcheck_tokenizer.py::test_maqaf_separates_words`.
+

@@ -2,7 +2,7 @@
 name: present
 description: "Post-article deliverables — generate conference presentation outlines, journal submission summaries, and book chapter proposals from a completed article. Use after publishing an article when you need conference/journal/proposal deliverables."
 user-invocable: false
-allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
+allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion, mcp__notebooklm-mcp__notebook_create, mcp__notebooklm-mcp__source_add, mcp__notebooklm-mcp__studio_create, mcp__notebooklm-mcp__studio_status, mcp__notebooklm-mcp__download_artifact]
 metadata: {author: "Yotam Fromm", version: "0.2.23"}
 ---
 
@@ -163,11 +163,13 @@ Save to `articles/[article-name]-chapter-proposal.md`.
 
 **Skip if `tools.notebooklm.enabled` is false.** Tell the researcher: "Enable NotebookLM with `/academic-writer:update-tools` to generate audio overviews."
 
-1. **Create a notebook** for this article using the `notebook_create` MCP tool with the article title
-2. **Add the article** as a source using the `source_add` MCP tool (paste the article markdown content)
-3. **Generate audio overview** using the `studio_create` MCP tool with type "audio"
-4. **Check status** using the `studio_status` MCP tool — audio generation may take a few minutes
-5. **Download** the audio file using the `download_artifact` MCP tool when ready
+> **If the NotebookLM MCP server is not connected, skip this whole section and say so** — these two branches are optional deliverables, not part of the core output. Check for the tools before starting; do not half-run the sequence.
+
+1. **Create a notebook** for this article using the `mcp__notebooklm-mcp__notebook_create` MCP tool with the article title
+2. **Add the article** as a source using the `mcp__notebooklm-mcp__source_add` MCP tool (paste the article markdown content)
+3. **Generate audio overview** using the `mcp__notebooklm-mcp__studio_create` MCP tool with type "audio"
+4. **Check status** using the `mcp__notebooklm-mcp__studio_status` MCP tool — audio generation may take a few minutes
+5. **Download** the audio file using the `mcp__notebooklm-mcp__download_artifact` MCP tool when ready
 
 Save notification: "Audio overview is being generated. Check status with `nlm studio status`."
 
@@ -176,8 +178,8 @@ Save notification: "Audio overview is being generated. Check status with `nlm st
 **Skip if `tools.notebooklm.enabled` is false.** Tell the researcher: "Enable NotebookLM with `/academic-writer:update-tools` to generate study guides."
 
 1. **Reuse the notebook** created for Audio Overview, or create one if it doesn't exist
-2. **Generate study guide** using the `studio_create` MCP tool with type "study guide"
-3. **Check status** and **download** when ready using the `studio_status` and `download_artifact` MCP tools
+2. **Generate study guide** using the `mcp__notebooklm-mcp__studio_create` MCP tool with type "study guide"
+3. **Check status** and **download** when ready using the `mcp__notebooklm-mcp__studio_status` and `mcp__notebooklm-mcp__download_artifact` MCP tools
 
 Save the study guide content to `articles/[article-name]-study-guide.md`.
 
