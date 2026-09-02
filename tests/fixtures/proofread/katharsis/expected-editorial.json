@@ -1,0 +1,51 @@
+{
+  "_RECONSTRUCTED_WARNING": "RECONSTRUCTED FROM THE PLAN'S CATEGORY LIST, NOT FROM THE EDITOR'S OWN WORDING. The 0.7.0 plan of record (local, not committed to this repo), Phase 1.1, lists the five editorial categories the editorial stage must be able to find: venue/genre fit, loaded terms used without definition, insider references, personal anecdote or epilogue drift, and journalistic rather than research treatment. The katharsis editor's own letter text describing these five points is not available to this fixture. Every 'snippet' and 'note' field below was written by the test-fixture author to illustrate the category in a plausible excerpt paragraph -- it is NOT a quotation of the real editor, and must never be treated as ground truth for what the real letter said. Anyone extending this fixture should keep this distinction visible.",
+  "schemaRef": "src/skills/proofread/references/changes-schema.json",
+  "categories": [
+    {
+      "id": "cat-01",
+      "category": "genre-fit",
+      "planLabel": "venue/genre fit",
+      "line": 62,
+      "snippet": "הכתב עוסק במפעלו האינטלקטואלי המלא של הדמות הנחקרת, כאשר לפי הנחיות כתב העת המבוקש יש להתמקד ביצירה אחת בלבד",
+      "note": "The venue's genre convention (see venue.md) calls for focus on a single work; this paragraph explicitly describes covering the full body of work instead, a direct venue/genre mismatch.",
+      "fixWith": "Narrow the article's scope to one work, or submit to a venue whose genre convention accepts a full-corpus survey."
+    },
+    {
+      "id": "cat-02",
+      "category": "term-undefined",
+      "planLabel": "loaded terms used without definition",
+      "line": 68,
+      "snippet": "לאורך הדיון מופיע המושג \"מהפכנות דתית\" פעמים רבות כהנחת יסוד לטיעון, בלי שהמאמר מגדיר אותו",
+      "note": "'מהפכנות דתית' (religious revolutionism) is used repeatedly as a load-bearing premise but is never defined or distinguished from adjacent terms, so a reader cannot evaluate the argument that depends on it.",
+      "fixWith": "Add an explicit working definition of the term on first use, and distinguish it from the neighboring terms the paragraph names."
+    },
+    {
+      "id": "cat-03",
+      "category": "insider-reference",
+      "planLabel": "insider references a general reader can't follow",
+      "line": 74,
+      "snippet": "הדיון מזכיר בקצרה את \"הוועדה מן הישיבה השכונתית שדנה בנושא ב-1998\" מבלי לפרט מיהם חבריה",
+      "note": "The reference to an unnamed local committee and an undated protocol assumes background knowledge a general journal reader does not have and cannot look up.",
+      "fixWith": "Either drop the reference or add enough context (who convened it, what it decided, where the record is public) for an outside reader to follow it."
+    },
+    {
+      "id": "cat-04",
+      "category": "cut",
+      "planLabel": "personal anecdote or epilogue drift",
+      "line": 80,
+      "snippet": "בשלב זה מבקש הכותב לחזור ולהיזכר כיצד פגש לראשונה, לפני כעשרים שנה, את מי שעליו נסוב המחקר",
+      "note": "A first-person recollection of a personal meeting that shaped the author's attitude to the subject; this is memoir material, not part of the research argument, and reads as epilogue drift mid-article.",
+      "fixWith": "Cut the anecdote, or move it to an author's-note / acknowledgments section clearly separated from the research argument."
+    },
+    {
+      "id": "cat-05",
+      "category": "refocus",
+      "planLabel": "journalistic rather than research treatment",
+      "line": 86,
+      "snippet": "הפרק המסכם עובר לטון של כתבת תחקיר עיתונאית, עם ציטוטים לא מתועדים ותיאור אירועים בזמן עבר מיידי",
+      "note": "The closing section shifts into an investigative-journalism register (undocumented quotations, immediate-past narration) instead of returning to the theoretical framework the article opened with.",
+      "fixWith": "Rewrite the closing section to re-anchor the findings in the article's own theoretical framework, and cite or drop the undocumented quotations."
+    }
+  ]
+}

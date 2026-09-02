@@ -1,0 +1,99 @@
+{
+  "_provenance": "The nine `before` strings are quoted verbatim from the katharsis rejection letter as recorded in the 0.7.0 plan of record (local, not committed to this repo), Phase 0 RESULT block. Each was checked mechanically against excerpt.md after NFC normalization (tests/test_proofread_fixture.py) rather than authored independently, so the fixture cannot silently drift from the prose it is supposed to describe.",
+  "_note": "Per the Phase 0 RESULT (measured 2026-09-02): hspell scored 0 of these 9 as flaggable non-words -- four of them (לארוס, התרי, למלות, לאוהב) are valid Hebrew morphology used in the wrong context, a wrong-word/semantic error class no spell-checker of any kind can reach. The spell-check stage therefore contributes ZERO of the nine finds below; recall on all nine depends entirely on the mechanical-LLM finder plus the chunking/convergence loop (plan Phase 1.2). Every entry's `finder` is set to 'mechanical-llm' for this reason, and a regression that starts crediting the spell-check stage for any of these nine must fail the corresponding pytest assertion.",
+  "schemaRef": "src/skills/proofread/references/changes-schema.json",
+  "spellcheckStageContribution": 0,
+  "errors": [
+    {
+      "id": "err-01",
+      "before": "הקרויים לעצמם",
+      "after": "המכנים עצמם",
+      "type": "word",
+      "level": "word",
+      "line": 10,
+      "finder": "mechanical-llm",
+      "rationale": "'הקרויים לעצמם' is a non-standard passive collocation; the accepted academic form is the reflexive 'המכנים עצמם' (those who call themselves)."
+    },
+    {
+      "id": "err-02",
+      "before": "יהיה אשר יהיה הגדרתו",
+      "after": "תהא הגדרתו מה שתהא",
+      "type": "agreement",
+      "level": "sentence",
+      "line": 16,
+      "finder": "mechanical-llm",
+      "rationale": "'יהיה אשר יהיה' does not agree with a following possessed noun ('הגדרתו'); the idiom requires the feminine/matching construction 'תהא הגדרתו מה שתהא' or 'יהא אשר יהא הגדרתו' is still a mismatch -- correct form binds the copula to the noun it modifies."
+    },
+    {
+      "id": "err-03",
+      "before": "הם רובם ככולם",
+      "after": "הן רובן ככולן",
+      "type": "agreement",
+      "level": "sentence",
+      "line": 22,
+      "finder": "mechanical-llm",
+      "rationale": "'טענותיו' (claims, feminine plural in Hebrew) is followed by the masculine-plural 'הם רובם ככולם'; the pass elsewhere in the same document corrected the identical error class ('הם כולם'->'הן כולן') but missed this instance, which is the katharsis letter's own example of the miss."
+    },
+    {
+      "id": "err-04",
+      "before": "להתפשר אם",
+      "after": "להתפשר עם",
+      "type": "word",
+      "level": "word",
+      "line": 28,
+      "finder": "mechanical-llm",
+      "rationale": "אם/עם confusion: 'to compromise with' takes the preposition 'עם', not the conditional 'אם'. The proofreading pass fixed roughly fifteen instances of this exact swap elsewhere in the source article and missed this one."
+    },
+    {
+      "id": "err-05",
+      "before": "לאוהב את הגר",
+      "after": "לאהוב את הגר",
+      "type": "word",
+      "level": "word",
+      "line": 34,
+      "finder": "mechanical-llm",
+      "rationale": "'לאוהב' is a valid Hebrew word (a form of the noun/adjective 'lover') but is not the infinitive of 'to love'; the correct infinitive is 'לאהוב'. hspell accepts 'לאוהב' as valid morphology, so no spell-checker can flag this -- it is a wrong-word error, not a non-word."
+    },
+    {
+      "id": "err-06",
+      "before": "לארוס את החברה",
+      "after": "לארס את החברה",
+      "type": "word",
+      "level": "word",
+      "level_note": "figurative 'to yoke/commit the society to a new idea', not the literal marital sense",
+      "line": 40,
+      "finder": "mechanical-llm",
+      "rationale": "'לארוס' (to a fiancé / of a fiancé) is a real noun form; the intended infinitive verb is 'לארס' (to betroth/commit figuratively). hspell accepts 'לארוס' as valid, so this is unreachable by spell-check."
+    },
+    {
+      "id": "err-07",
+      "before": "הזוג התרי",
+      "after": "הזוג האחר",
+      "type": "word",
+      "level": "word",
+      "line": 46,
+      "finder": "mechanical-llm",
+      "rationale": "'התרי' is a valid Hebrew adjectival form but not idiomatic in this construction; the intended sense is 'the other couple' ('הזוג האחר'). hspell accepts 'התרי' as valid morphology."
+    },
+    {
+      "id": "err-08",
+      "before": "למלות אחר",
+      "after": "למלא אחר",
+      "type": "word",
+      "level": "word",
+      "line": 51,
+      "finder": "mechanical-llm",
+      "rationale": "'למלות' is a valid plural-imperative-shaped word but the idiom 'to comply with a request' requires the infinitive 'למלא אחר'. hspell accepts 'למלות' as valid, so no spell-checker reaches this."
+    },
+    {
+      "id": "err-09",
+      "before": "כהרגלו קנה",
+      "after": "כהרגלו קינא",
+      "type": "typo",
+      "level": "word",
+      "line": 56,
+      "finder": "mechanical-llm",
+      "rationale": "'קנה' (bought/acquired) and 'קינא' (envied) are near-homographs differing by one consonant; the surrounding biographical sentence is ambiguous between the two senses, and the katharsis letter quotes this as a same-root confusion the mechanical pass should have flagged for the author to disambiguate rather than silently pass through."
+    }
+  ]
+}

@@ -6,6 +6,63 @@ All notable changes to the academic-writer plugin are documented here.
 
 ### Added
 
+- **Unified three-stage `/academic-writer:proofread`.** One user-facing skill now runs
+  editorial (עורך — venue/genre fit, loaded terms used without definition, insider
+  references, anecdote drift, journalistic vs research treatment), language
+  (עריכה לשונית — collocations, cross-clause agreement, academic register, tense), and
+  mechanical (הגהה — typos, punctuation, typography) as three different lenses in
+  book-production order. `--venue <slug>` and `--only editorial|language|mechanical`.
+  New agents `editor.md` and `copyeditor.md`; `proofreader.md` reframed as a
+  chunk-scoped exhaustive finder.
+- **A shared changes contract**, `src/skills/proofread/references/changes-schema.json`,
+  emitted by all three agents and consumed by every script. Carries `stage`,
+  `meaningRisk`, `applied`, `skipReason` and `refutedBy`, so a guarded, refuted or
+  meaning-risky change stays visible in the report instead of disappearing.
+- **Six deterministic scripts, each with pytest coverage**: `chunk-article.py`,
+  `spellcheck-candidates.py`, `apply-changes.py`, `citation-guard.py`,
+  `build-tracked-docx.py`, `write-proof-report.py`.
+- **Real Word tracked changes and comments** on the original `.docx`
+  (`build-tracked-docx.py`), replacing what was previously documented as a future
+  option. Direct lxml on the unzipped XML, per-stage author names, and a real
+  `comments.xml` part.
+- **`src/workflows/proofread.js`**, a Workflow-tool orchestrator: caps come from
+  `thresholds.json > proofread` via `args`, every loop exit is named
+  (`converged` / `cap-reached`), and a refute majority DOWNGRADES a candidate rather
+  than dropping it — dropping a true positive was the original recall failure.
+- **A regression fixture** at `tests/fixtures/proofread/katharsis/` plus a manual eval
+  harness at `tests/e2e/proofread-recall.mjs`.
+- **Version-drift tooling**: `scripts/version-locations.json` registers every place the
+  plugin version lives and `scripts/version-sync.py` reads, checks, fixes, sets and
+  bumps them as one operation. Release bump level now comes from conventional commits
+  across every commit in the push, with a `workflow_dispatch` override.
+- **A privacy/shareability gate**, `scripts/check-no-private-refs.sh`, wired into CI and
+  pytest.
+
+### Changed
+
+- **Gemini is default-on for the profile's target language.** `approvedLanguages` is now
+  seeded with `targetLanguage` when Gemini is enabled, so a project that only proofreads
+  or edits routes to Gemini instead of silently never qualifying.
+  `voice-calibrator --compare-models` becomes an optional opt-OUT rather than the only
+  thing that could grant approval, and `write` no longer blocks on it.
+- **The release now gates on the test suite.** `pytest` and `npm run typecheck` run
+  against the bumped tree before it is tagged and published; previously the whole suite
+  gated nothing.
+
+### Fixed
+
+- Hebrew inline-parenthetical citations no longer carry a publication year
+  (`(מחבר, עמ' N)`), conditioned on the target language.
+- `features.json` `pluginVersion` had drifted for two releases; every version location is
+  now written by one script and checked by a CI gate.
+- Every `status: "partial"` feature entry now states what is missing.
+- `present` declared none of the NotebookLM MCP tools its body calls, so both of its
+  optional branches could never have run.
+- `proofreader.md` no longer cites a source absent from the library, and its remaining
+  provenance is stated by title.
+
+### Added
+
 - **Gemini File API upload for OCR inputs over 20MB.** `uploadViaFilesApi()` was a
   named stub with a `TODO`; documents above the inline limit could only be handled
   by splitting them and OCR'ing page by page — more API calls, more wall-clock, and

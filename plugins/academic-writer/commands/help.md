@@ -50,7 +50,7 @@ This walks you through:
 | `/academic-writer:write` | **Write a new article** — the full pipeline from subject to .docx |
 | `/academic-writer:edit` | **Edit an article** — revise sections, fix citations, adjust tone, restructure |
 | `/academic-writer:edit-section` | **Edit one section** — fast, focused single-section edit |
-| `/academic-writer:proofread` | **Proofread (הגהה)** — mechanical fixes (typos, punctuation, typography) + a change report; never rewrites prose |
+| `/academic-writer:proofread` | **Proofread** — three-stage pipeline (editorial venue-fit memo → language editing → mechanical הגהה) with a tracked-changes .docx and a change report; `--venue <slug>` scopes the editorial memo to a venue profile, `--only editorial\|language\|mechanical` runs a single stage |
 | `/academic-writer:ocr` | **OCR a scanned PDF or image** — clean extracted text via Gemini vision, born-digital pages skipped automatically |
 | `/academic-writer:research` | **Research a topic** — query your sources, get answers with citations |
 | `/academic-writer:init` | **First-time setup** — profile, style analysis, source indexing |

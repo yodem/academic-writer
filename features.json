@@ -102,7 +102,8 @@
           "name": "voice-migrate.sh legacy AUTHOR_VOICE migration",
           "status": "ok"
         }
-      ]
+      ],
+      "notes": "unverified — needs an owner to confirm what is missing. Every one of this feature's 7 listed subfeatures is status ok; no code, test, or doc found (grepped src/skills/voice/, src/agents/voice-*.md, docs/) identifies a concrete gap at the parent level beyond its children."
     },
     {
       "id": "research",
@@ -153,7 +154,8 @@
           "id": "outline",
           "name": "Mode B: structured outline + word/paragraph sizing",
           "status": "partial",
-          "issue": "Sections exceeding thresholds.json writerUnit.maxWords are now decomposed into a units[] array of writer-unit subsections sized within writerUnit.minWords-maxWords (target writerUnit.targetWords), adjacent tiny units merged; decomposition is prompt-enforced (markdown agent instructions), not code-enforced"
+          "issue": "Sections exceeding thresholds.json writerUnit.maxWords are now decomposed into a units[] array of writer-unit subsections sized within writerUnit.minWords-maxWords (target writerUnit.targetWords), adjacent tiny units merged; decomposition is prompt-enforced (markdown agent instructions), not code-enforced",
+          "notes": "The units[] word-bound decomposition (thresholds.json writerUnit.minWords/maxWords/targetWords) is enforced only by prose instructions in src/agents/architect.md (lines ~91-101) — no script validates it and no such script exists under src/scripts/. src/skills/write/SKILL.md Step 5.5 (\"Argument Graph Validation\") checks orphan claims, depends_on cycles, and topological ordering, but never checks that a unit's word count actually falls in range or that adjacent tiny units were merged — verified by reading both files."
         },
         {
           "id": "evidence-ownership",
@@ -176,7 +178,8 @@
           "name": "Mode C: ownership-only from user draft",
           "status": "ok"
         }
-      ]
+      ],
+      "notes": "Rolls up from the outline subfeature (see its own notes): the writer-unit word-bound decomposition it performs is not verified anywhere in the pipeline, so the parent stays partial until that subfeature does."
     },
     {
       "id": "section-writing",
@@ -203,7 +206,8 @@
           "id": "fallback-8skill",
           "name": "Claude in-context 8-skill fallback pipeline",
           "status": "partial",
-          "issue": "Duplicates all Skills 1-7; heavy maintenance surface"
+          "issue": "Duplicates all Skills 1-7; heavy maintenance surface",
+          "notes": "The in-context Skills 1-7 fallback path lives inside src/agents/section-writer.md (the 'PATH: fallback' branches) and is hand-maintained prose kept in sync with the Gemini-delegated primary path by convention, not by a shared source or a diff check. The only automated coverage is tests/e2e/fallback-no-credentials.mjs, which asserts the fallback path triggers when the MCP server has no credentials — it does not assert the fallback's Skills 1-7 output matches the primary path's quality bar."
         },
         {
           "id": "style-compliance",
@@ -311,7 +315,8 @@
           "name": "6-dimension self-review gate (40/60)",
           "status": "ok"
         }
-      ]
+      ],
+      "notes": "No automated test (pytest or e2e) exercises src/agents/synthesizer.md or src/skills/review/SKILL.md's scorecard logic — grepped tests/ and tests/e2e/ for 'synth' and 'review', 0 behavioral hits; tests/test_plugin_structure.py only checks that synthesizer.md exists and is on the agent whitelist, not that its coherence/repetition/abstract checks do anything correct."
     },
     {
       "id": "anti-ai-references",
@@ -372,7 +377,8 @@
           "id": "citation-formats",
           "name": "inline-parenthetical / chicago / mla / apa",
           "status": "partial",
-          "issue": "Gemini prompt inline-parenthetical example uses (Author Year, page), contradicting Hebrew (name, עמ' N) no-year rule"
+          "issue": "Gemini prompt inline-parenthetical example uses (Author Year, page), contradicting Hebrew (name, עמ' N) no-year rule",
+          "notes": "The Hebrew no-year fix (\"(מחבר, עמ' N)\" vs \"(Author Year, page)\") landed only in plugins/academic-writer/mcp/gemini-server/src/tools/write_section.ts (verified by grep). gemini_edit and gemini_synthesize (src/tools/edit.ts, src/tools/synthesize.ts) contain no citation-style-aware prompt logic at all, so a synthesis or edit pass through Gemini does not enforce the same Hebrew no-year rule that write_section.ts now does."
         }
       ]
     },
@@ -395,12 +401,14 @@
         {
           "id": "synthesize-tool",
           "name": "gemini_synthesize",
-          "status": "partial"
+          "status": "partial",
+          "notes": "No test file exercises runSynthesize — plugins/academic-writer/mcp/gemini-server/tests/ has no synthesize.test.ts and tests/e2e/ has no harness calling gemini_synthesize, unlike gemini_write_section which has tests/e2e/write-section-schema-contract.mjs and tests/e2e/gemini-path-harness.mjs."
         },
         {
           "id": "edit-tool",
           "name": "gemini_edit",
-          "status": "partial"
+          "status": "partial",
+          "notes": "No test file exercises runEdit — plugins/academic-writer/mcp/gemini-server/tests/ has no edit.test.ts and tests/e2e/ has no harness calling gemini_edit."
         },
         {
           "id": "calibrate-tool",
@@ -435,18 +443,23 @@
           "status": "ok",
           "issue": "Migrated the plugin's Gemini credential onto Claude Code's userConfig mechanism (manifests/academic-writer.json declares google_api_key, sensitive: true; substituted as USER_CONFIG_GOOGLE_API_KEY in mcpServers.gemini-api.env via ${user_config.google_api_key}). gemini-client.ts's resolveApiKey() checks it first, then falls back to the pre-existing GOOGLE_API_KEY env var, then .academic-helper/secrets.json (GOOGLE_API_KEY or lowercase google_api_key) — all three paths remain fully functional, userConfig is additive/preferred, not a replacement. Investigated whether the 'channels' MCP pattern applied here first (it doesn't — channels is for a server pushing messages into a session, not credential config; userConfig is the actual mechanism, per the Claude Code docs mirror's Plugin manifest reference). scripts/build-plugins.sh now passes userConfig through into the generated plugin.json. Covered by tests/gemini-client-key-resolution.test.ts (9 tests: every precedence pairing plus blank/whitespace optional-field fallthrough)."
         }
-      ]
+      ],
+      "notes": "Rolls up from the synthesize-tool and edit-tool subfeatures: both ship with zero test coverage (unit or e2e), unlike write_section (which has tests/e2e/write-section-schema-contract.mjs)."
     },
     {
       "id": "editing",
       "name": "Editing / revision",
       "sources": [
-        "src/skills/edit/SKILL.md",
-        "src/skills/edit-section/SKILL.md",
-        "src/skills/proofread/SKILL.md",
+        "src/agents/copyeditor.md",
+        "src/agents/editor.md",
         "src/agents/proofreader.md",
+        "src/skills/edit-section/SKILL.md",
+        "src/skills/edit/SKILL.md",
+        "src/skills/proofread/SKILL.md",
+        "src/skills/proofread/references/changes-schema.json",
         "src/skills/update-field/SKILL.md",
-        "src/skills/update-tools/SKILL.md"
+        "src/skills/update-tools/SKILL.md",
+        "src/workflows/proofread.js"
       ],
       "status": "ok",
       "subfeatures": [
@@ -462,7 +475,32 @@
         },
         {
           "id": "proofread",
-          "name": "Mechanical הגהה change-report pass",
+          "name": "Three-stage proofread pipeline (editorial -> language -> mechanical), --venue and --only flags",
+          "status": "ok"
+        },
+        {
+          "id": "proofread-editorial",
+          "name": "Stage 1 editorial (עורך) venue-fit memo — comment-only, never applies edits",
+          "status": "ok"
+        },
+        {
+          "id": "proofread-language",
+          "name": "Stage 2 language editing (עריכה לשונית) — meaningRisk:low applied as tracked change, medium+ as comment",
+          "status": "ok"
+        },
+        {
+          "id": "proofread-mechanical",
+          "name": "Stage 3 mechanical הגהה — converges over rounds (dryRounds/maxPasses from thresholds.json)",
+          "status": "ok"
+        },
+        {
+          "id": "proofread-tracked-docx",
+          "name": "build-tracked-docx.py — real w:ins/w:del/w:comment revisions on the original .docx",
+          "status": "ok"
+        },
+        {
+          "id": "proofread-venue-profile",
+          "name": "Venue profile (.academic-helper/venues/<slug>.md) distilled from a CFP or rejection letter; katharsis.md shipped as example/fixture venue",
           "status": "ok"
         },
         {
@@ -473,6 +511,26 @@
         {
           "id": "update-tools",
           "name": "Change integrations",
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "id": "venues",
+      "name": "Venue profiles",
+      "sources": [
+        "src/skills/proofread/references/venues/katharsis.md"
+      ],
+      "status": "ok",
+      "subfeatures": [
+        {
+          "id": "venue-create",
+          "name": "First-use creation from a pasted CFP, author guidelines, or rejection letter, distilled by the editor agent",
+          "status": "ok"
+        },
+        {
+          "id": "venue-default",
+          "name": "defaultVenue: in profile frontmatter",
           "status": "ok"
         }
       ]
@@ -508,7 +566,8 @@
           "id": "tests",
           "name": "pytest structural + contract + voice tests",
           "status": "partial",
-          "issue": "No test asserts referenced scripts exist; missing scripts pass CI"
+          "issue": "No test asserts referenced scripts exist; missing scripts pass CI",
+          "notes": "Confirmed still open: grepped tests/test_plugin_structure.py for a filesystem existence check keyed off the scripts a skill/agent references (e.g. path.exists() on a script name pulled from markdown) — no match. A skill or agent that references a script which was renamed or deleted would pass the current suite."
         },
         {
           "id": "help-health",
