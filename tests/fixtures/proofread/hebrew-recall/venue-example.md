@@ -1,11 +1,15 @@
-# Venue profile — קתרסיס
+# Venue profile — EXAMPLE (fictional journal)
 
-> **Provenance.** Distilled from the journal editor's own rejection letter for a real
-> submission. The letter itself is deliberately NOT committed to this repository: it is
-> unpublished correspondence about an unpublished article. What appears below is the
-> journal's editorial convention, which is what a venue profile is for.
+> **This is an EXAMPLE, not a shipped venue.** The plugin is venue-agnostic: it hardcodes
+> no journal, and a researcher creates their own profile at
+> `.academic-helper/venues/<slug>.md` on first use. This file exists only to show the
+> shape a profile takes and to give the regression fixture something to run against.
+>
+> The conventions below are generalized from one real pre-submission rejection, which is
+> also where `src/skills/proofread/references/editorial-checks.md` came from. That letter
+> is not committed. No named journal is implied — treat this as a plausible composite.
 
-- **Name:** קתרסיס
+- **Name:** *(example)* a Hebrew-language humanities journal
 - **Language:** Hebrew
 - **Genre convention:** *ad rem*. An article takes **one book or one article — or a small,
   named set of works — as its object**. A survey of a thinker's thought as a whole

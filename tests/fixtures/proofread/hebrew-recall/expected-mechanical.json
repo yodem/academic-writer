@@ -32,7 +32,7 @@
       "level": "sentence",
       "line": 22,
       "finder": "mechanical-llm",
-      "rationale": "'טענותיו' (claims, feminine plural in Hebrew) is followed by the masculine-plural 'הם רובם ככולם'; the pass elsewhere in the same document corrected the identical error class ('הם כולם'->'הן כולן') but missed this instance, which is the katharsis letter's own example of the miss."
+      "rationale": "'טענותיו' (claims, feminine plural in Hebrew) is followed by the masculine-plural 'הם רובם ככולם'; the pass elsewhere in the same document corrected the identical error class ('הם כולם'->'הן כולן') but missed this instance, which is the hebrew-recall letter's own example of the miss."
     },
     {
       "id": "err-04",

@@ -1,9 +1,9 @@
-// proofread-recall.mjs — MANUAL eval harness for the katharsis regression fixture.
+// proofread-recall.mjs — MANUAL eval harness for the hebrew-recall regression fixture.
 //
 // THIS IS NOT A CI TEST. It is intentionally excluded from `python3 -m pytest tests/`
 // and from any npm script that gates a release. It calls real Claude models (via the
 // `claude` CLI, headless mode) to run the mechanical (proofreader) and editorial
-// (editor) finder stages over tests/fixtures/proofread/katharsis/excerpt.md, then
+// (editor) finder stages over tests/fixtures/proofread/hebrew-recall/excerpt.md, then
 // scores the model's own output against the fixed expectations in
 // expected-mechanical.json and expected-editorial.json.
 //
@@ -28,7 +28,7 @@
 // does not need chunking, multi-round convergence, or refute-verify — the fixture is
 // one chunk of test prose). It is a faithful single-pass check of finder RECALL, not
 // a rehearsal of the full multi-stage workflow; running the real
-// `/academic-writer:proofread --venue katharsis` skill against this fixture inside an
+// `/academic-writer:proofread --venue <slug>` skill against this fixture inside an
 // actual Claude Code session is the complementary, closer-to-production check.
 //
 // Usage:
@@ -48,7 +48,7 @@ import { spawnSync } from 'node:child_process';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..', '..');
-const FIXTURE_DIR = join(REPO, 'tests', 'fixtures', 'proofread', 'katharsis');
+const FIXTURE_DIR = join(REPO, 'tests', 'fixtures', 'proofread', 'hebrew-recall');
 
 function nfc(s) {
   return s.normalize('NFC');

@@ -500,7 +500,7 @@
         },
         {
           "id": "proofread-venue-profile",
-          "name": "Venue profile (.academic-helper/venues/<slug>.md) distilled from a CFP or rejection letter; katharsis.md shipped as example/fixture venue",
+          "name": "Venue profile (.academic-helper/venues/<slug>.md) distilled from a CFP or rejection letter; hebrew-recall.md shipped as example/fixture venue",
           "status": "ok"
         },
         {
@@ -519,7 +519,7 @@
       "id": "venues",
       "name": "Venue profiles",
       "sources": [
-        "src/skills/proofread/references/venues/katharsis.md"
+        "src/skills/proofread/references/venues/<slug>.md"
       ],
       "status": "ok",
       "subfeatures": [

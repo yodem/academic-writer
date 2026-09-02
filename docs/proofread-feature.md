@@ -81,10 +81,10 @@ Re-verified after fixes: `npm run build` → exit 0; `python3 tests/test_plugin_
 
 ---
 
-## v2 (0.7.0, in progress) — unified three-stage pipeline, after the קתרסיס rejection
+## v2 (0.7.0, in progress) — unified three-stage pipeline, after the כתב העת שאליו הוגש המאמר rejection
 
 Plan of record: `the 0.7.0 plan of record (local, not committed to this repo)` (2026-09-02).
-The article proofread on 2026-07-10 was submitted to קתרסיס and rejected; **all 9 mechanical
+The article proofread on 2026-07-10 was submitted to כתב העת שאליו הוגש המאמר and rejected; **all 9 mechanical
 errors the editor quoted survive in `the sample article (~6,600 Hebrew tokens)`** (grep-verified 2026-09-02).
 Several belong to error classes the same pass fixed elsewhere — a **recall** failure of a single
 unverified pass, not a rule gap. Root cause is recorded in the section above: the source books'

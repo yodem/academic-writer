@@ -351,7 +351,7 @@ before the first run."
 
 Grounded in the actual numbers rather than restated as a vibe: `thresholds.json > writerUnit`
 (`:25-30`) targets 500 words per writer unit (min 300, max 800). A `targetWordCount` of, say,
-6,000–8,000 words (a typical full academic article, consistent with the katharsis article's
+6,000–8,000 words (a typical full academic article, consistent with the hebrew-recall article's
 "7,000-word article" scale cited in the plan's Context section, line 20) divided by a 500-word
 target unit yields **12–16 writer units** — each writer unit spawns one `section-writer` subagent,
 which in turn spawns at least one `auditor` subagent per paragraph (multiple paragraphs per unit,

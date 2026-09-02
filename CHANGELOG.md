@@ -29,7 +29,7 @@ All notable changes to the academic-writer plugin are documented here.
   `thresholds.json > proofread` via `args`, every loop exit is named
   (`converged` / `cap-reached`), and a refute majority DOWNGRADES a candidate rather
   than dropping it — dropping a true positive was the original recall failure.
-- **A regression fixture** at `tests/fixtures/proofread/katharsis/` plus a manual eval
+- **A regression fixture** at `tests/fixtures/proofread/hebrew-recall/` plus a manual eval
   harness at `tests/e2e/proofread-recall.mjs`.
 - **Version-drift tooling**: `scripts/version-locations.json` registers every place the
   plugin version lives and `scripts/version-sync.py` reads, checks, fixes, sets and

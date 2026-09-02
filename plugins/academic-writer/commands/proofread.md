@@ -149,7 +149,7 @@ If it was a clean pass (no applicable changes at any stage): report that explici
 ## Hard rules
 
 - **Never modify the source file in place.** Corrections go to `*.proofed.md`/`*.proofed.docx`, built from `PROOF_BASE`/the original `.docx` — never a mutation of either.
-- **A refute majority downgrades, it never drops.** Every change any stage found is present in the final report, either applied, downgraded (with `skipReason` and `refutedBy`), or flagged. Silently discarding a true positive is the exact katharsis-rejection failure this pipeline exists to fix.
+- **A refute majority downgrades, it never drops.** Every change any stage found is present in the final report, either applied, downgraded (with `skipReason` and `refutedBy`), or flagged. Silently discarding a true positive is the exact hebrew-recall-rejection failure this pipeline exists to fix.
 - **Editorial findings are never auto-applied** — comment-only, always `after: null`.
 - **Citation-integrity guard is mandatory and deterministic** for language and mechanical changes: anything touching a citation/quotation/page/footnote token is downgraded, not applied.
 - **Every applied change carries a rationale**; every skipped/downgraded change carries a `skipReason`. No silent edits, no silent caps — every loop the workflow runs exits `converged` or `cap-reached`, named.

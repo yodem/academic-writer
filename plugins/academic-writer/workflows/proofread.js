@@ -14,7 +14,7 @@
 //   (i)   A refute majority NEVER drops a change. It downgrades it to
 //         applied=false, skipReason='refuted', refutedBy=[lens keys], and the
 //         change still appears in the returned list so the report can show it.
-//         Dropping a true positive is the exact katharsis-rejection failure
+//         Dropping a true positive is the exact hebrew-recall-rejection failure
 //         (`להתפשר אם`) this pipeline exists to fix.
 //   (ii)  Fresh-vs-seen dedupe keys on NFC-normalized `before` (+ a stable
 //         context anchor), NEVER on `line` — the residual pass runs on
