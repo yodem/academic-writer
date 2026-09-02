@@ -15,13 +15,67 @@ root="${VOICE_PROJECT_ROOT:-$(pwd)}"
 # Profile scope: only run in projects that actually use one of the plugins
 if [[ ! -f "$root/.academic-writer/profile.json" \
    && ! -f "$root/AUTHOR_VOICE.md" \
-   && ! -f "$root/book.yaml" ]]; then
+   && ! -f "$root/book.yaml" \
+   && ! -f "$root/.academic-helper/profile.md" ]]; then
   exit 0
 fi
 
 voice_dir="$root/.voice"
 mkdir -p "$voice_dir/legacy" "$voice_dir/interview"
 marker="$voice_dir/.migrated"
+
+# --- Gemini default-on migration (independent of the legacy .migrated marker below) ---
+# One-time, idempotent: for an EXISTING .academic-helper/profile.md whose gemini.enabled is
+# true but whose approvedLanguages array is empty (profile created before Gemini was seeded
+# default-on at init time — see gemini-onboarding.md Step 3.5.e), add its targetLanguage once
+# so proofread-only / edit-only projects that never run /write's model-comparison check still
+# route to Gemini. Runs on its own marker so it is not skipped just because the legacy
+# .migrated marker already exists from a prior run.
+gemini_profile="$root/.academic-helper/profile.md"
+gemini_marker="$voice_dir/.gemini-languages-migrated"
+if [[ -f "$gemini_profile" && ! -f "$gemini_marker" ]]; then
+  gemini_result="$(python3 - "$gemini_profile" <<'PYEOF'
+import json, re, sys
+
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+
+lang_match = re.search(r'^targetLanguage:\s*(.+)$', text, re.MULTILINE)
+gemini_match = re.search(r'(## Gemini\n+```json\n)(.*?)(\n```)', text, re.DOTALL)
+
+if not lang_match or not gemini_match:
+    print("noop: no targetLanguage or Gemini block")
+    sys.exit(0)
+
+target_language = lang_match.group(1).strip()
+try:
+    data = json.loads(gemini_match.group(2))
+except json.JSONDecodeError:
+    print("noop: unparsable Gemini block")
+    sys.exit(0)
+
+if not data.get("enabled"):
+    print("noop: gemini disabled")
+    sys.exit(0)
+
+if data.get("approvedLanguages"):
+    print("noop: approvedLanguages already populated")
+    sys.exit(0)
+
+data["approvedLanguages"] = [target_language]
+new_block = json.dumps(data, indent=2, ensure_ascii=False)
+new_text = text[: gemini_match.start(2)] + new_block + text[gemini_match.end(2) :]
+with open(path, "w", encoding="utf-8") as f:
+    f.write(new_text)
+print(f"migrated: added {target_language!r} to approvedLanguages")
+PYEOF
+)"
+  echo "voice-migrate (gemini): $gemini_result"
+  date -u +"%Y-%m-%dT%H:%M:%SZ" > "$gemini_marker"
+elif [[ -f "$gemini_marker" ]]; then
+  echo "voice-migrate (gemini): already migrated ($(cat "$gemini_marker")); skipping"
+fi
+# --- end Gemini default-on migration ---
 
 if [[ -f "$marker" ]]; then
   echo "voice-migrate: already migrated ($(cat "$marker")); skipping"

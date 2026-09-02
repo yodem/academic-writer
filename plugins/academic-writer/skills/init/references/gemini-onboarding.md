@@ -124,23 +124,27 @@ mcp__gemini-api__gemini_raw({
 - On `{ error: { code: "no_credentials" } }`: print "Key not detected by the MCP server. If you just set the plugin configuration or the env var, restart Claude Code so the server inherits it. Re-run `/academic-writer:init` after restart."
 - On any other error: print the error and tell the user Gemini will not be available until resolved.
 
-#### Step 3.5.d — Note the calibration gate
+#### Step 3.5.d — Note the opt-out check
 
-> "On your first `/academic-writer:write` in each language, a calibration gate will run:
-> - You'll see one Claude paragraph and one Gemini paragraph on the same topic
-> - You approve or reject Gemini for that language
-> - Approved languages are stored in your profile under `gemini.approvedLanguages`."
+> "Gemini is on by default for `targetLanguage` (`{targetLanguage}`). If you'd rather compare it
+> against Claude first, you can run the optional model-comparison check any time — it shows one
+> Claude paragraph and one Gemini paragraph on the same topic and lets you opt a language back out
+> of `gemini.approvedLanguages` if you prefer Claude's output."
 
 #### Step 3.5.e — Store Gemini settings
 
-The `## Gemini` block in `profile.md` (written in Phase 4 below) will include:
+The `## Gemini` block in `profile.md` (written in Phase 4 below) is seeded with `targetLanguage`
+already approved — Gemini is default-on for the language the researcher is about to write in, so a
+project that only ever proofreads or edits (and never runs `/write`'s model-comparison check)
+still gets Gemini:
 
 ```json
 {
   "enabled": true,
-  "approvedLanguages": [],
+  "approvedLanguages": ["{targetLanguage}"],
   "models": {}
 }
 ```
 
-If the researcher chose "No, Claude only": `enabled: false`, no `approvedLanguages`.
+If the researcher chose "No, Claude only": `enabled: false`, `approvedLanguages: []` (Gemini
+is off entirely, so there is nothing to approve).

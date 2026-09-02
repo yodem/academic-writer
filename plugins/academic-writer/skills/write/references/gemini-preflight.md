@@ -5,7 +5,9 @@
 
 ## Gemini pre-flight (immediately after voice profile load)
 
-Determine which model runs the prose for this article and whether a calibration gate must fire first.
+Determine which model runs the prose for this article. Gemini is approved by default for
+`targetLanguage`, so this step decides `claude-only` vs `gemini` and never fires or waits on a
+calibration gate.
 
 1. Read the approved-language list from the profile:
 
@@ -37,7 +39,11 @@ fi
 |---|---|---|
 | missing | n/a | Warn once: "No Gemini key configured. Running on Claude. Run `/academic-writer:setup` to enable Gemini." Set `geminiMode = "claude-only"`. Proceed. |
 | present | yes | Set `geminiMode = "gemini"`. Proceed. |
-| present | no | **Invoke voice-calibrator with `--compare-models {targetLanguage}` BEFORE continuing.** Wait for its `approved | rejected | error` status. On `approved` set `geminiMode = "gemini"`; on `rejected` set `geminiMode = "claude-only"` for this session (don't ask again this run); on `error` warn once and set `geminiMode = "claude-only"`. |
+| present | no | `targetLanguage` was opted out via `voice-calibrator --compare-models` (or the profile predates default-on seeding and was never migrated). Do **not** invoke voice-calibrator or wait on a decision. Warn once: "Gemini is not approved for {targetLanguage}. Running on Claude. Run the `voice-calibrator --compare-models {targetLanguage}` check any time to reconsider." Set `geminiMode = "claude-only"`. Proceed. |
+
+`voice-calibrator --compare-models` is never invoked from this pre-flight step — it is an
+optional, researcher-initiated opt-OUT check (see `src/agents/voice-calibrator.md`), not a gate
+`/write` waits on.
 
 Persist the chosen mode in `.academic-helper/session-state.json` so subagents and later steps see the same decision:
 
@@ -53,7 +59,7 @@ p.write_text(json.dumps(state, indent=2))
 "
 ```
 
-The calibration gate must run **after** Step 1 (Subject & Language) but **before** Step 3 (Deep Read) — i.e., as soon as `targetLanguage` is known and before any agent is spawned. If it runs at any other point, it cannot influence section-writer or synthesizer.
+This pre-flight decision must run **after** Step 1 (Subject & Language) but **before** Step 3 (Deep Read) — i.e., as soon as `targetLanguage` is known and before any agent is spawned. If it runs at any other point, it cannot influence section-writer or synthesizer.
 
 ## Mid-run Gemini failure handler
 

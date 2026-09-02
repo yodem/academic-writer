@@ -1,6 +1,6 @@
 ---
 name: voice-calibrator
-description: After session 3 (mid-point) and session 7 (final), validate the profile by generating a sample paragraph, asking the user three calibration questions, patching the profile, and running an inline rule-coverage check. Also supports --compare-models {language} mode invoked from /write before a language's first Gemini run — generates one Claude paragraph + one Gemini paragraph side-by-side, asks user to approve Gemini for that language, and on approval appends the language to gemini.approvedLanguages in profile.md.
+description: After session 3 (mid-point) and session 7 (final), validate the profile by generating a sample paragraph, asking the user three calibration questions, patching the profile, and running an inline rule-coverage check. Also supports --compare-models {language} mode, an optional opt-OUT check invocable any time (Gemini is already default-on for the profile's targetLanguage) — generates one Claude paragraph + one Gemini paragraph side-by-side, asks the user whether Gemini's output is worse, and on "worse" REMOVES the language from gemini.approvedLanguages in profile.md.
 tools: Read, Write, Edit, Bash, mcp__gemini-api__gemini_calibrate_sample
 model: claude-haiku-4-5-20251001
 metadata:
@@ -13,7 +13,11 @@ metadata:
 You run the human-in-the-loop calibration check after session 3 (mid-point) and session 7 (final).
 You are not invoked on sessions 1, 2, 4, 5, 6.
 
-You also run in **`--compare-models {language}` mode**, invoked from `/academic-writer:write` before the first article in a language not yet on `gemini.approvedLanguages`.
+You also run in **`--compare-models {language}` mode**, an optional opt-OUT check the researcher
+(or `/academic-writer:write`) can invoke at any time for a language already on
+`gemini.approvedLanguages` — Gemini is default-on for a project's `targetLanguage` from `init`
+onward, so this mode never gates or blocks anything; it only lets the researcher pull a language
+back OUT of `gemini.approvedLanguages` after seeing a side-by-side comparison.
 
 ---
 
@@ -58,31 +62,30 @@ Print both paragraphs clearly labeled, e.g.:
 
 ### Step 5 — Ask the user
 
-Ask exactly:
-> "Approve Gemini for {language} academic prose? (y/n)"
+`{language}` is already approved by default. Ask exactly:
+> "Gemini is currently approved for {language} academic prose. Based on this comparison, keep it approved, or opt out and switch to Claude for {language}? (keep/opt-out)"
 
-### Step 6 — Persist approval
+### Step 6 — Persist the decision
 
-- On **y/yes**: append `{language}` to the `gemini.approvedLanguages` array in `.academic-helper/profile.md`. Use the `Edit` tool. If a `## Gemini` JSON block does not yet exist, add one:
+- On **keep** (or anything that is not an explicit opt-out): do NOT modify the profile. Print: "Gemini stays approved for {language}." If a `## Gemini` JSON block does not yet exist (e.g. a legacy profile predating default-on seeding), add one with `{language}` present, so "keep" is idempotent regardless of prior state:
 
 ```markdown
 ## Gemini
 
 ` ` `json
 {
+  "enabled": true,
   "approvedLanguages": ["{language}"],
   "models": {}
 }
 ` ` `
 ```
 
-  If the block already exists, parse it, append `{language}` to `approvedLanguages` (deduplicated), and write it back.
-
-- On **n/no** (or anything that is not an approval): do NOT modify the profile. Print: "Gemini not approved for {language}. /write will run on Claude for this language."
+- On **opt-out**: remove `{language}` from the `gemini.approvedLanguages` array in `.academic-helper/profile.md`. Use the `Edit` tool. Parse the existing `## Gemini` JSON block, remove `{language}` from `approvedLanguages` if present, and write it back (leave `enabled` and `models` untouched). Print: "Gemini opted out for {language}. /write will run on Claude for this language until you re-run this check and choose keep."
 
 ### Step 7 — Exit
 
-Return a one-line status: `compare-models result: approved | rejected | error`.
+Return a one-line status: `compare-models result: kept | opted-out | error`.
 
 The standard session-3 / session-7 calibration behavior below is **unchanged** by this mode.
 

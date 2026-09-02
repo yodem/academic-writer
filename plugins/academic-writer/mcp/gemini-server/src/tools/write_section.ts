@@ -68,6 +68,28 @@ function fill(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, k: string) => vars[k] ?? '');
 }
 
+// Hebrew academic citation form omits the publication year — `(מחבר, עמ' N)` —
+// while other languages keep the author-year form. See src/agents/section-writer.md
+// for the matching (already-correct) fallback-path convention.
+function citationFormatBullets(targetLanguage: string): string {
+  // profile-schema.md documents `targetLanguage: Hebrew` (capitalized) as the
+  // value stored in the researcher's profile and forwarded verbatim as
+  // `target_language`; match case-insensitively so "Hebrew", "hebrew", and
+  // "HEBREW" all select the year-free form.
+  const inlineParenthetical =
+    targetLanguage.toLowerCase() === 'hebrew'
+      ? "`inline-parenthetical`: `(מחבר, עמ' N)` — Hebrew citations omit the publication year; use author + page only."
+      : '`inline-parenthetical`: `(Author Year, page)`';
+  return [
+    inlineParenthetical,
+    '`chicago`: footnote numerals `[^N]` in the text; the orchestrator manages the footnote pool.',
+    '`mla`: `(Author page)`',
+    '`apa`: `(Author, Year, p. page)`',
+  ]
+    .map((line) => `- ${line}`)
+    .join('\n');
+}
+
 function extractJson(text: string): unknown {
   // Strip markdown fence if present.
   const fence = /```(?:json)?\s*\n([\s\S]*?)\n```/i.exec(text);
@@ -97,6 +119,7 @@ export async function runWriteSection(rawInput: unknown): Promise<z.infer<typeof
     banned_terms: JSON.stringify(input.banned_terms, null, 2),
     prior_sections_summary: input.prior_sections_summary || '(no prior sections)',
     citation_style: input.citation_style,
+    citation_format_bullets: citationFormatBullets(input.target_language),
   });
 
   const result = await generate({

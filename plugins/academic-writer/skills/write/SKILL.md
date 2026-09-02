@@ -47,13 +47,17 @@ behavior for this condition.
 
 ### Gemini pre-flight (immediately after voice profile load)
 
-Determine which model runs the prose for this article and whether a calibration gate must fire
-first. This must run **after** Step 1 (Subject & Language) captures `targetLanguage` but **before**
-Step 3 (Deep Read) — i.e. before any agent is spawned. In short: read the profile's
-`approvedLanguages`, detect whether a Gemini key is available, and either proceed on Gemini, proceed
-on Claude, or invoke voice-calibrator to gate an unapproved language; persist the chosen
-`geminiMode` to `.academic-helper/session-state.json`. Full decision table and exact commands: see
+Determine which model runs the prose for this article. This must run **after** Step 1 (Subject &
+Language) captures `targetLanguage` but **before** Step 3 (Deep Read) — i.e. before any agent is
+spawned. In short: read the profile's `approvedLanguages`, detect whether a Gemini key is
+available, and proceed on Gemini or Claude accordingly; persist the chosen `geminiMode` to
+`.academic-helper/session-state.json`. Full decision table and exact commands: see
 `references/gemini-preflight.md`.
+
+Gemini is approved by default for a project's `targetLanguage` (seeded during `init`), so this
+step never blocks waiting on a human decision — `voice-calibrator --compare-models` is now an
+optional, researcher-initiated opt-OUT check the user can run any time to pull a language back off
+`approvedLanguages`; `/write` does not invoke it and does not wait on it.
 
 Also covered in that reference: the **mid-run Gemini failure handler** — the one-time
 AskUserQuestion prompt fired the first time a Gemini MCP call errors during this run, and how the

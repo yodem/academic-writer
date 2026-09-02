@@ -115,14 +115,18 @@ updatedAt: ISO_TIMESTAMP
 ```json
 {
   "enabled": true,
-  "approvedLanguages": [],
+  "approvedLanguages": ["Hebrew"],
   "models": {}
 }
 ```
 ```
 
-`## Gemini` reflects the outcome of `init` Phase 3.5: `enabled: false` (no `approvedLanguages`/
-`models` keys) if the researcher chose "No, Claude only".
+`## Gemini` reflects the outcome of `init` Phase 3.5. When the researcher enables Gemini,
+`approvedLanguages` is seeded with `targetLanguage` (shown as `["Hebrew"]` above, matching the
+`targetLanguage: Hebrew` example earlier in this doc) — Gemini defaults on for the language the
+profile is being created for, so projects that never run `/write`'s model-comparison check (e.g.
+`proofread`-only or `edit`-only projects) still route to Gemini. `enabled: false` (no
+`approvedLanguages`/`models` keys) if the researcher chose "No, Claude only".
 
 ## 25-Dimension Style Analysis Rubric
 

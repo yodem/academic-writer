@@ -40,10 +40,7 @@ These terms have been flagged by prior auditor passes or by the researcher's voi
 
 Use `{{citation_style}}` style. For each citation, include the `source_id` from the sources list in the `citations` array of the paragraph object. The auditor will use those IDs to verify against `sources.json`. Inline citation strings inside the paragraph text must match the style requested.
 
-- `inline-parenthetical`: `(Author Year, page)`
-- `chicago`: footnote numerals `[^N]` in the text; the orchestrator manages the footnote pool.
-- `mla`: `(Author page)`
-- `apa`: `(Author, Year, p. page)`
+{{citation_format_bullets}}
 
 ## Positive Academic Terminology
 
