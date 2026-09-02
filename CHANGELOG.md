@@ -4,6 +4,7 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.6.4] — 2026-09-02
 ### Added
 
 - **Unified three-stage `/academic-writer:proofread`.** One user-facing skill now runs
