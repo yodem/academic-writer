@@ -1,0 +1,8 @@
+# Test/build dependencies for the deterministic suite (tests/) and src/scripts/.
+# Referenced by .github/workflows/release.yml's test gate; keep in sync with the
+# third-party imports under tests/ and src/scripts/.
+pytest>=8.0
+jsonschema>=4.20
+python-docx>=1.1
+lxml>=5.0
+PyYAML>=6.0

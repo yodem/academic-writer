@@ -80,6 +80,28 @@ jobs:
         if: steps.guard.outputs.skip == 'false'
         run: bash scripts/check-built-manifest.sh
 
+      # Until 0.7.0 the whole deterministic suite gated nothing: release.yml
+      # bumped, rebuilt, checked two manifests and published. A prior 804-line
+      # suite had already rotted this way behind a bypassable local hook
+      # (recorded in the plugin's CandleKeep audit). Tests that do not block a
+      # release are decorative, so they now run here, against the bumped tree.
+      - name: Setup Python
+        if: steps.guard.outputs.skip == 'false'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Gate — deterministic test suite
+        if: steps.guard.outputs.skip == 'false'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pytest tests/ -q
+
+      - name: Gate — strict TypeScript on hooks
+        if: steps.guard.outputs.skip == 'false'
+        run: npm run typecheck
+
       - name: Commit, tag, and push
         if: steps.guard.outputs.skip == 'false'
         run: |
