@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://academic-helper.local/schemas/changes-schema.json",
+  "title": "Academic Writer — proofread pipeline changes contract",
+  "description": "Single handoff contract for the three proofread stages (editorial / language / mechanical). Emitted by the editor, copyeditor and proofreader agents; consumed by citation-guard.py, apply-changes.py, build-tracked-docx.py and write-proof-report.py, and used as the `schema` option for the CHANGES agent calls in workflows/proofread.js. Adapted from hebrew-book-producer 0.7.0 skills/changes-schema (change_id kept so a future /apply round-trip can address a single change).",
+  "type": "object",
+  "required": [
+    "stage",
+    "changes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "stage": {
+      "description": "Which pipeline stage produced this list. One list per stage per chunk.",
+      "enum": [
+        "editorial",
+        "language",
+        "mechanical"
+      ]
+    },
+    "chunk_id": {
+      "type": "string",
+      "description": "Chunk identifier from chunk-article.py. Absent for whole-article stages (editorial)."
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/change"
+      }
+    },
+    "summary": {
+      "type": "string",
+      "description": "One-paragraph note from the agent: what it looked for and what it deliberately left alone."
+    }
+  },
+  "$defs": {
+    "change": {
+      "type": "object",
+      "required": [
+        "stage",
+        "line",
+        "type",
+        "level",
+        "before",
+        "rationale",
+        "meaningRisk"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "change_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{12}$",
+          "description": "Stable 12-hex hash over (stage, line, before). Assigned by the applying script, not by the agent; agents MAY omit it."
+        },
+        "stage": {
+          "enum": [
+            "editorial",
+            "language",
+            "mechanical"
+          ],
+          "description": "Repeated on every change so a merged list stays attributable (drives the DOCX author name)."
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based line number in PROOF_BASE, already offset-corrected for the chunk. Must be >= 1; a 0 is a contract violation, not 'unknown'."
+        },
+        "type": {
+          "enum": [
+            "typo",
+            "punctuation",
+            "typography",
+            "agreement",
+            "word",
+            "collocation",
+            "register",
+            "syntax",
+            "tense",
+            "sentence",
+            "cut",
+            "refocus",
+            "term-undefined",
+            "insider-reference",
+            "genre-fit",
+            "idea-flag",
+            "voice-flag"
+          ],
+          "description": "Mechanical stage uses typo/punctuation/typography/agreement/word; language uses collocation/register/syntax/tense/sentence/agreement/word; editorial uses cut/refocus/term-undefined/insider-reference/genre-fit/idea-flag."
+        },
+        "level": {
+          "enum": [
+            "letter",
+            "word",
+            "sentence",
+            "paragraph",
+            "idea"
+          ]
+        },
+        "before": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Exact source substring to match. NFC-normalized on both sides before matching; never a whole-file fallback."
+        },
+        "after": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Replacement text, or null when the change is comment-only (every editorial change, and any language change with meaningRisk above low)."
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why this is wrong, in the researcher's working language. Becomes the report row and the Word comment body."
+        },
+        "meaningRisk": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "description": "Risk that applying this alters the author's meaning, argument or voice. low → applied as a tracked change; medium/high → comment only, never applied. Editorial-stage findings are never applied at all, so they set 'high' by convention — the field is a not-auto-appliable marker there, not a graded judgement."
+        },
+        "applied": {
+          "type": "boolean",
+          "description": "Set by apply-changes.py, not by the agent. False with a skipReason when the change was not landed."
+        },
+        "skipReason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Why a change was not applied: no-match | ambiguous-match | overlap | citation-guard | meaning-risk | comment-only | refuted."
+        },
+        "refutedBy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Verify-lens keys that refuted this change (meaning-preserved / standard-Hebrew / voice-preserved). Present only for dropped changes; recorded, never silently discarded."
+        },
+        "snippet": {
+          "type": "string",
+          "description": "Editorial stage only: the passage the finding points at, when it is longer than `before`."
+        },
+        "fixWith": {
+          "type": "string",
+          "description": "Editorial stage only: what the researcher would have to do about it (not an automated edit)."
+        }
+      }
+    }
+  }
+}

@@ -138,6 +138,8 @@ class TestSkills(unittest.TestCase):
                         "auditor",
                         "synthesizer",
                         "style-analyzer",
+                        "editor",
+                        "copyeditor",
                     ):
                         self.assertTrue(
                             os.path.isfile(agent_file),
@@ -161,6 +163,8 @@ class TestAgents(unittest.TestCase):
         "section-writer.md",
         "auditor.md",
         "synthesizer.md",
+        "editor.md",
+        "copyeditor.md",
     ]
 
     def test_all_required_agents_exist(self):

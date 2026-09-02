@@ -78,3 +78,52 @@ Re-verified after fixes: `npm run build` → exit 0; `python3 tests/test_plugin_
 ## Future upgrade path (Option B, not built)
 
 `changes.json` schema + DOCX native tracked-changes renderer + `/apply` accept/reject round-trip. Feasible — `generate-docx.py` already manipulates raw OXML (`OxmlElement`), so Word `w:ins`/`w:del`/comments are reachable with the existing `python-docx` + `lxml` stack. Only the report-rendering layer would change; the `proofreader` agent's output is already a structured change list.
+
+---
+
+## v2 (0.7.0, in progress) — unified three-stage pipeline, after the קתרסיס rejection
+
+Plan of record: `~/.claude/plans/the-plugin-did-terrable-swift-lantern.md` (2026-09-02).
+The article proofread on 2026-07-10 was submitted to קתרסיס and rejected; **all 9 mechanical
+errors the editor quoted survive in `bikoret-musarit.proofed.md`** (grep-verified 2026-09-02).
+Several belong to error classes the same pass fixed elsewhere — a **recall** failure of a single
+unverified pass, not a rule gap. Root cause is recorded in the section above: the source books'
+two-pass standard was deliberately dropped, chunk-parallel was dropped as the default, and no
+convergence gate or adversarial verification replaced them.
+
+### Phase 0 — hspell spike, 2026-09-02: NO-GO on the stated gate, adopted in a narrowed role
+
+hspell 1.4 via Homebrew, measured over the 6,584 Hebrew tokens (2,587 unique) of
+`bikoret-musarit.proofed.md`:
+
+| Measure | Gate | Measured | Verdict |
+|---|---|---|---|
+| Known target tokens flagged | ≥ 4 of 6 | **0 of the 4 present in the file** (2 of 6 counting נישאוים / קאטנ fed directly — those are not in this file) | fail |
+| Flag rate | ≤ 8% of tokens | **3.71%** — 60 unique flags, 244 occurrences | pass |
+
+**The gate was measuring the wrong thing.** hspell accepts לארוס · התרי · למלות · לאוהב as valid
+Hebrew morphology, and it is right to: they are real words in wrong contexts, not misspellings.
+No spell-checker of any kind reaches that error class. **Recall on the editor's 9 quotes therefore
+depends entirely on the LLM finder plus chunking and the convergence loop, never on hspell** — and
+the regression fixture asserts the spell-check stage contributes 0 of the 9, so a future recall
+regression cannot be masked by the checker.
+
+hspell is still adopted as an *additive* candidate generator, on its own merits: of the 60 unique
+flags, ~15 are real orthographic errors that the 2026-07-10 pass also missed — בהגתו · ישיעיהו ·
+האריסטותליות · האוקראניים · דוצדדית · בליברליזים / לפלורליזים / שבליברליזים · כעיסקת / עיסקה ·
+נסיונותיהם · בשניה · דחיה. The rest are ~20 legitimate ktiv-male forms the Academy dictionary
+rejects (אמיתי, איתו/איתה/איתם, אזי, אידיאולוגיה, האשה, הדוגמא, הינה, האוכלוסיה, מודרנים,
+קורבנות, רדיקאלית, פרסונאלי), ~9 proper nouns (בובר, בודפסט, הרטמן, ליבוביץ, פינס, קאנט,
+בלייקווד) and 10 artifacts of stripped ׳/״ in abbreviations (הרמב, התנ, פרופ, סולוביצ). Precision
+≈30%, which is acceptable because an LLM adjudicates each candidate — a false positive costs one
+line of prompt. The 2026-05-19 pg_hspell rejection (CandleKeep "Personal · Projects" p.26) does
+reproduce here after all, via ktiv male rather than Mishnaic orthography; a project-extensible
+allowlist at `src/skills/proofread/references/hspell-allowlist.txt` suppresses that class.
+
+**Encoding is a correctness requirement, not a detail.** hspell 1.4 reads **ISO-8859-8 only**, and
+a plain `iconv -f UTF-8 -t ISO-8859-8` **aborts at the first niqqud or geresh**, after which hspell
+silently scores a truncated document. This spike measured 2, then 4, then 10 flags off the same
+vocabulary before `iconv -c` was used; the true figure is 60. `spellcheck-candidates.py` must
+transcode lossily in both directions, assert its output token count against its input, and preserve
+׳/״ (or map them to ASCII) so abbreviations are not shredded into phantom flags. A pytest case
+feeds niqqud and geresh and asserts no truncation.

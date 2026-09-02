@@ -103,6 +103,11 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
     cp -R "$SRC_DIR/scripts" "$PLUGIN_DIR/"
   fi
 
+  # Copy workflow scripts (Workflow-tool scriptPath targets)
+  if [[ -d "$SRC_DIR/workflows" ]]; then
+    cp -R "$SRC_DIR/workflows" "$PLUGIN_DIR/"
+  fi
+
   # Copy shared resources (per-language linking-words references)
   for words_file in "$SRC_DIR"/words-*.md; do
     [[ -f "$words_file" ]] && cp "$words_file" "$PLUGIN_DIR/"

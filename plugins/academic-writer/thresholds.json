@@ -45,6 +45,15 @@
       "minWordsPerArticle": 800
     }
   },
+  "proofread": {
+    "chunkWords": 1200,
+    "maxPasses": 3,
+    "dryRounds": 2,
+    "concurrencyCap": 6,
+    "refuteVotes": 3,
+    "refuteMajority": 2,
+    "_comment": "Proofread pipeline caps, enforced in src/workflows/proofread.js from args.thresholds (WRK-14). chunkWords bounds one finder chunk; the mechanical loop exits 'converged' after dryRounds consecutive rounds with no fresh change, or 'cap-reached' at maxPasses. refuteVotes lenses verify each candidate change and refuteMajority of them refuting drops it."
+  },
   "typography": {
     "dashReplacement": "hyphen",
     "styleMetrics": {
