@@ -1,60 +1,48 @@
-# venue: katharsis (test fixture)
+# Venue profile — קתרסיס
 
-> **RECONSTRUCTED FROM THE PLAN'S CATEGORY LIST, NOT FROM THE EDITOR'S OWN WORDING.**
-> This profile is reconstructed for test purposes from the shape described in the 0.7.0 plan
-> of record (local, not committed to this repo), Phase 1.4, and from the five editorial
-> categories named in Phase 1.1. It is **not** a transcription of the real rejection letter,
-> which is not available to this fixture, and it must not be cited as ground truth for what
-> the actual journal requires. It exists only so `tests/test_proofread_fixture.py` and
-> `tests/e2e/proofread-recall.mjs` have a venue profile in the shape `editor.md` expects to
-> consume, per plan Phase 1.4 (`.academic-helper/venues/<slug>.md`).
+> **Provenance.** Distilled from the journal editor's own rejection letter for a real
+> submission. The letter itself is deliberately NOT committed to this repository: it is
+> unpublished correspondence about an unpublished article. What appears below is the
+> journal's editorial convention, which is what a venue profile is for.
 
-## Name
-
-קתרסיס (katharsis) — a Hebrew-language humanities journal (test-fixture reconstruction).
-
-## Language
-
-Hebrew (עברית), academic register.
-
-## Genre convention
-
-Focused studies: one work, text, or case in depth per article. Full-corpus or
-career-spanning surveys of a single figure's "entire intellectual project" are out of
-scope for a single submission and should be split or narrowed before resubmission.
-
-## Audience
-
-Humanities researchers and advanced students outside the author's own sub-specialty;
-readers should not need private, local, or institutional knowledge to follow the argument.
-
-## Length
-
-Approximately 4,000-6,000 words for a focused study; longer pieces are expected to be
-split across a genuinely comparative structure, not a single-figure survey.
-
-## Citation style
-
-Footnote-based academic citation with full bibliographic detail on first citation;
-loaded or technical terms that are load-bearing for the argument must be defined on
-first use, with a citation to where the definition originates if it is not the author's
-own coinage.
-
-## Register notes
-
-Consistently academic-analytical register throughout, including the closing section.
-First-person authorial reflection, biographical anecdote, or memoir-style recollection
-is acceptable only in a clearly separated preface or acknowledgments note, never
-embedded in the argument or the conclusion.
+- **Name:** קתרסיס
+- **Language:** Hebrew
+- **Genre convention:** *ad rem*. An article takes **one book or one article — or a small,
+  named set of works — as its object**. A survey of a thinker's thought as a whole
+  ("איש והגותו") is out of scope no matter how good it is. An article whose stated aim is
+  to trace and critique the philosophical foundations of a thinker's entire system has
+  already failed this convention, even if it cites individual works along the way.
+- **Audience:** an educated general readership. Readers are **not** assumed to know the
+  internal distinctions of any particular religious community, and the journal takes the
+  explicit position that they should not need to.
+- **Length:** article-scale; a systematic conceptual discussion of a contested value term
+  is understood to exceed what a single article can carry, so an article must not depend
+  on one.
+- **Citation style:** academic Hebrew scholarly apparatus; a work under discussion is
+  cited precisely rather than gestured at.
+- **Register notes:** research treatment, not journalism. A topic already argued at length
+  in the press needs a research framing to belong here. First-person material — the
+  author's acquaintance with the subject, biographical episodes, an epilogue about their
+  relationship — does not fit the journal's character, however meaningful it is
+  personally.
 
 ## What they reject
 
-- Articles that cover a figure's full body of work rather than one focused case
-  (venue/genre fit).
-- Load-bearing terms used repeatedly as premises without an explicit definition.
-- References to institutions, committees, or events that assume insider knowledge the
-  general reader cannot access or verify.
-- Personal anecdote, reminiscence, or epilogue-style drift inside the research argument.
-- Closing sections that shift into an investigative-journalism register (undocumented
-  quotations, immediate-past narration) instead of returning to the article's own
-  theoretical framework.
+1. **Whole-oeuvre treatment** where a work in focus was asked for.
+2. **Personal acquaintance and biographical episodes** concerning the subject.
+3. **Loaded value terms used as premises without definition** — e.g. "conservative
+   morality", "liberal morality", "the true God" — where the assumptions bound up in them
+   get no systematic discussion.
+4. **Sweeping normative claims presented as starting points** rather than argued, e.g.
+   that a whole moral outlook is simply mistaken, or that one group reliably produces a
+   more moral society than another, without stating the criteria by which that is judged.
+5. **Claims about the essence and purpose of a legal or religious system** asserted in one
+   sentence where they require far broader grounding.
+6. **Insider communal references** that need prior familiarity with a specific social
+   world to parse.
+7. **Topics already thrashed out in the press**, carried over without research framing.
+8. **An epilogue on the author's personal connection** to the subject.
+9. **Pervasive language and syntax problems.** The bar is not "a few technical
+   corrections": recurring grammatical errors, non-standard phrasing, typos and syntax
+   unsuited to academic writing are treated as requiring comprehensive linguistic and
+   syntactic editing before the article can be considered at all.

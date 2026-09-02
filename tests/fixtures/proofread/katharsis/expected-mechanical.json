@@ -1,5 +1,5 @@
 {
-  "_provenance": "The nine `before` strings are quoted verbatim from the katharsis rejection letter as recorded in the 0.7.0 plan of record (local, not committed to this repo), Phase 0 RESULT block. Each was checked mechanically against excerpt.md after NFC normalization (tests/test_proofread_fixture.py) rather than authored independently, so the fixture cannot silently drift from the prose it is supposed to describe.",
+  "_provenance": "The nine errors are the ones the journal's editor quoted verbatim in the rejection letter. Three corrections (err-06, err-07, err-09) were derived from the source article's real sentences after an earlier reconstruction guessed them wrong: לארוס had been read as 'betroth' rather than a typo for להרוס, התרי as 'the other' rather than a typo for הטרי, and קנה as 'bought' rather than the typo for כן that the editor named. The letter itself is deliberately NOT committed — it is unpublished correspondence about an unpublished article.",
   "_note": "Per the Phase 0 RESULT (measured 2026-09-02): hspell scored 0 of these 9 as flaggable non-words -- four of them (לארוס, התרי, למלות, לאוהב) are valid Hebrew morphology used in the wrong context, a wrong-word/semantic error class no spell-checker of any kind can reach. The spell-check stage therefore contributes ZERO of the nine finds below; recall on all nine depends entirely on the mechanical-LLM finder plus the chunking/convergence loop (plan Phase 1.2). Every entry's `finder` is set to 'mechanical-llm' for this reason, and a regression that starts crediting the spell-check stage for any of these nine must fail the corresponding pytest assertion.",
   "schemaRef": "src/skills/proofread/references/changes-schema.json",
   "spellcheckStageContribution": 0,
@@ -57,23 +57,23 @@
     {
       "id": "err-06",
       "before": "לארוס את החברה",
-      "after": "לארס את החברה",
+      "after": "להרוס את החברה",
       "type": "word",
       "level": "word",
       "level_note": "figurative 'to yoke/commit the society to a new idea', not the literal marital sense",
       "line": 40,
       "finder": "mechanical-llm",
-      "rationale": "'לארוס' (to a fiancé / of a fiancé) is a real noun form; the intended infinitive verb is 'לארס' (to betroth/commit figuratively). hspell accepts 'לארוס' as valid, so this is unreachable by spell-check."
+      "rationale": "א/ה substitution: להרוס (to destroy) became לארוס (to betroth). The sentence is about liberal values that might DESTROY society and its moral norms; 'betroth society' is not a possible reading. Verified against the source article."
     },
     {
       "id": "err-07",
       "before": "הזוג התרי",
-      "after": "הזוג האחר",
+      "after": "הזוג הטרי",
       "type": "word",
       "level": "word",
       "line": 46,
       "finder": "mechanical-llm",
-      "rationale": "'התרי' is a valid Hebrew adjectival form but not idiomatic in this construction; the intended sense is 'the other couple' ('הזוג האחר'). hspell accepts 'התרי' as valid morphology."
+      "rationale": "ט/ת substitution: הטרי (the newlywed couple) became התרי. The sentence concerns the couple's relationship and love, so 'the fresh/new couple' is the intended reading. Verified against the source article."
     },
     {
       "id": "err-08",
@@ -87,13 +87,13 @@
     },
     {
       "id": "err-09",
-      "before": "כהרגלו קנה",
-      "after": "כהרגלו קינא",
+      "before": "כהרגלו קנה ומודע",
+      "after": "כהרגלו כן ומודע",
       "type": "typo",
       "level": "word",
       "line": 56,
       "finder": "mechanical-llm",
-      "rationale": "'קנה' (bought/acquired) and 'קינא' (envied) are near-homographs differing by one consonant; the surrounding biographical sentence is ambiguous between the two senses, and the katharsis letter quotes this as a same-root confusion the mechanical pass should have flagged for the author to disambiguate rather than silently pass through."
+      "rationale": "Typo the editor named explicitly: קנה written for כן. In context 'היה כהרגלו כן ומודע לעצמו' — 'was, as was his habit, sincere and self-aware'. Verified against the source article and against the editor's own wording."
     }
   ]
 }

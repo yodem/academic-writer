@@ -1,5 +1,4 @@
 {
-  "_RECONSTRUCTED_WARNING": "RECONSTRUCTED FROM THE PLAN'S CATEGORY LIST, NOT FROM THE EDITOR'S OWN WORDING. The 0.7.0 plan of record (local, not committed to this repo), Phase 1.1, lists the five editorial categories the editorial stage must be able to find: venue/genre fit, loaded terms used without definition, insider references, personal anecdote or epilogue drift, and journalistic rather than research treatment. The katharsis editor's own letter text describing these five points is not available to this fixture. Every 'snippet' and 'note' field below was written by the test-fixture author to illustrate the category in a plausible excerpt paragraph -- it is NOT a quotation of the real editor, and must never be treated as ground truth for what the real letter said. Anyone extending this fixture should keep this distinction visible.",
   "schemaRef": "src/skills/proofread/references/changes-schema.json",
   "categories": [
     {
@@ -47,5 +46,13 @@
       "note": "The closing section shifts into an investigative-journalism register (undocumented quotations, immediate-past narration) instead of returning to the theoretical framework the article opened with.",
       "fixWith": "Rewrite the closing section to re-anchor the findings in the article's own theoretical framework, and cite or drop the undocumented quotations."
     }
-  ]
+  ],
+  "_provenance": "The five CATEGORIES and the venue's 'what they reject' list are taken from the journal editor's actual rejection letter, so they are ground truth for what this venue rejects. The ANCHOR LINES are invented fixture prose in excerpt.md, not the real article's sentences — the article is unpublished and its text is not committed here. So a hit means the editor agent found the right CATEGORY in the right place in the fixture; it does not mean it reproduced the editor's wording.",
+  "_letterEvidence": {
+    "genre-fit": "Asked for a focus on one book or article, or a small number of works; the submission treated the thinker's thought as a whole, per its own stated aim.",
+    "term-undefined": "Loaded terms such as conservative morality, liberal morality and 'the true God' used without definition, with sweeping normative claims presented as starting points and an unsupported one-sentence claim about the essence and purpose of halakha.",
+    "insider-reference": "Substantial parts rely on familiarity with a specific religious community's internal distinctions; the editors state readers should not need to know them.",
+    "cut": "Personal acquaintance with the subject, biographical episodes, and an epilogue about the author's relationship with him — meaningful personally, not matter for the journal's readers.",
+    "refocus": "A topic already argued at length in the press, carried over without the research framing the journal requires; likewise a question currently preoccupying a particular public."
+  }
 }

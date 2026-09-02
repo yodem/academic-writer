@@ -101,3 +101,44 @@ class TestShareability(unittest.TestCase):
             "a shipped file names an unrelated private project; describe the failure "
             f"mode, not the project: {offenders}",
         )
+
+
+class TestUnpublishedCorrespondenceNotCommitted(unittest.TestCase):
+    """The rejection letter must never be committed.
+
+    It is unpublished correspondence about an unpublished article: it names the author's
+    personal relationship with the subject, quotes the article's own prose, and is the
+    single most sensitive artifact this work touched. Its CONTENT shaped the fixture's
+    expectations, which is the legitimate use; the letter itself stays out.
+    """
+
+    def test_no_letter_file_is_tracked(self):
+        tracked = subprocess.run(
+            ["git", "ls-files"], cwd=REPO, capture_output=True, text=True, check=True
+        ).stdout.split()
+        import re
+
+        offenders = [
+            p for p in tracked
+            if re.search(r"(rejection[-_]?letter|letter\.(md|txt|docx)$)", p, re.I)
+        ]
+        self.assertEqual(offenders, [], f"unpublished correspondence is tracked: {offenders}")
+
+    def test_no_tracked_file_quotes_the_editor_at_length(self):
+        """A distinctive phrase from the letter, as a canary for a paste-in."""
+        canaries = ("חברי המערכת", "ממין העניין", "בתוך עמי אנכי יושב")
+        tracked = subprocess.run(
+            ["git", "ls-files"], cwd=REPO, capture_output=True, text=True, check=True
+        ).stdout.split()
+        offenders = []
+        for rel in tracked:
+            if "node_modules" in rel or rel == "tests/test_no_private_refs.py":
+                continue
+            try:
+                with open(os.path.join(REPO, rel), encoding="utf-8") as fh:
+                    body = fh.read()
+            except (UnicodeDecodeError, FileNotFoundError, IsADirectoryError):
+                continue
+            if any(c in body for c in canaries):
+                offenders.append(rel)
+        self.assertEqual(offenders, [], f"letter text pasted into tracked files: {offenders}")

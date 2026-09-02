@@ -131,11 +131,29 @@ class TestExpectedEditorialContract(unittest.TestCase):
         self.data = _read_json(EXPECTED_EDITORIAL_PATH)
         self.excerpt_lines = _nfc(_read_text(EXCERPT_PATH)).split("\n")
 
-    def test_marked_as_reconstructed(self):
-        self.assertIn("_RECONSTRUCTED_WARNING", self.data)
-        warning = self.data["_RECONSTRUCTED_WARNING"]
-        self.assertIn("RECONSTRUCTED", warning)
-        self.assertIn("editor's own wording", warning.lower())
+    def test_provenance_distinguishes_ground_truth_from_fixture_prose(self):
+        """The five categories are the editor's; the anchor lines are invented.
+
+        This file started as a reconstruction from the plan's category list and became
+        ground truth once the real rejection letter was available. What must never be
+        lost is the DISTINCTION: the categories and the reject-list are the editor's, the
+        sentences they point at are fixture prose. A hit means the right category in the
+        right place, not that the agent reproduced the editor's wording.
+        """
+        self.assertIn("_provenance", self.data, "provenance must be stated, not assumed")
+        prov = self.data["_provenance"].lower()
+        self.assertIn("categor", prov, "must say what IS ground truth")
+        self.assertIn("anchor", prov, "must say what is NOT ground truth")
+        self.assertIn("not committed", prov, "must record that the letter itself is not in the repo")
+
+    def test_letter_evidence_present_for_every_category(self):
+        self.assertIn("_letterEvidence", self.data)
+        for cat in self.data["categories"]:
+            self.assertIn(
+                cat["category"],
+                self.data["_letterEvidence"],
+                f"no letter evidence recorded for category {cat['category']}",
+            )
 
     def test_exactly_five_categories(self):
         self.assertEqual(len(self.data["categories"]), 5)
@@ -170,8 +188,10 @@ class TestVenueProfile(unittest.TestCase):
     def setUp(self):
         self.text = _read_text(VENUE_PATH)
 
-    def test_marked_as_reconstructed(self):
-        self.assertIn("RECONSTRUCTED", self.text)
+    def test_provenance_stated_and_letter_not_committed(self):
+        low = self.text.lower()
+        self.assertIn("provenance", low, "the venue profile must say where it came from")
+        self.assertIn("not committed", low, "must record that the source letter is not in the repo")
 
     def test_has_all_phase_1_4_fields(self):
         required_headings = [
