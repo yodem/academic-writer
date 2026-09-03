@@ -383,5 +383,119 @@ class TransitionRateTest(unittest.TestCase):
         )
 
 
+
+
+class WordFieldCodeTest(unittest.TestCase):
+    """Word field instructions live in <w:instrText> beside real <w:t> runs, so
+    tag-stripping alone left raw switches in the text. Measured: 8 of 857
+    paragraphs carried TOC/HYPERLINK/PAGEREF markup — small, but it inflates
+    vocabulary with syntax the author never wrote, and it made those
+    table-of-contents paragraphs long enough to land on the 'keep' side of the
+    furniture rule, diluting the very signal that rule looks for."""
+
+    def _docx(self, tmp, body):
+        return _make_docx(tmp, body)
+
+    def test_toc_field_instructions_are_stripped(self):
+        import tempfile
+
+        field = (
+            '<w:r><w:instrText xml:space="preserve"> TOC \\h \\u \\z \\t '
+            '"Heading 1,1,Heading 2,2," </w:instrText></w:r>'
+        )
+        body = _para(_run("סעיף א: מבוא"), field, _run(" עוד טקסט."))
+        with tempfile.TemporaryDirectory() as tmp:
+            text = _read_docx_text(self._docx(tmp, body))
+        self.assertIn("סעיף א: מבוא", text)
+        self.assertNotIn("TOC", text)
+        self.assertNotIn("Heading 1,1", text)
+
+    def test_hyperlink_and_pageref_are_stripped(self):
+        import tempfile
+
+        body = _para(
+            _run("ראו להלן"),
+            '<w:r><w:instrText> HYPERLINK \\l "_Toc123" </w:instrText></w:r>',
+            '<w:r><w:instrText> PAGEREF _Toc123 \\h </w:instrText></w:r>',
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            text = _read_docx_text(self._docx(tmp, body))
+        self.assertIn("ראו להלן", text)
+        for marker in ("HYPERLINK", "PAGEREF", "_Toc123"):
+            self.assertNotIn(marker, text)
+
+
+class HebrewGereshTest(unittest.TestCase):
+    """The gershayim split, one character over. Geresh marks an abbreviation
+    (א׳, פרופ׳) or a foreign consonant (ג׳ורג׳). ASCII "'" tokenizes, but did
+    not merge with the U+05F3 spelling, and the corpus uses both: א'(66)/א׳(7),
+    ה'(37)/ה׳(12), ע'(42)/ע׳(1), ב'(30)/ב׳(5) — seven abbreviations counted as
+    fourteen words."""
+
+    def test_both_spellings_merge(self):
+        counts = Counter(tokenize_words("א' ואחריו א׳ ושוב א'"))
+        self.assertEqual(counts["א׳"], 3)
+        self.assertEqual([t for t in counts if "'" in t], [])
+
+    def test_abbreviations_and_transliterations_survive(self):
+        self.assertIn("לפרופ׳", tokenize_words("לפרופ' ארנון עצמון"))
+        self.assertIn("אתרח׳סיס", tokenize_words("אתרח'סיס מקבל"))
+
+    def test_english_apostrophes_are_untouched(self):
+        self.assertEqual(
+            tokenize_words("don't split the writer's english"),
+            ["don't", "split", "the", "writer's", "english"],
+        )
+
+    def test_hebrew_double_quote_still_needs_both_sides(self):
+        """Asymmetry is deliberate: `"` IS Hebrew's quotation mark, `'` is not."""
+        self.assertEqual(tokenize_words('אמר "שלום"'), ["אמר", "שלום"])
+
+
+class ContentionGateTest(unittest.TestCase):
+    """A share computed over a handful of occurrences has no resolution. On the
+    real corpus ב׳ and א׳ — the same token doing the same job in the same two
+    files — scored 0.80 and 0.50 on five and seven observations, so one was
+    dropped and the other kept. Only terms that could actually reach the
+    reported list are judged."""
+
+    def _corpus(self):
+        body = (
+            "הפסקה הזאת דנה בשאלת המקורות ובוחנת את הטיעון המרכזי לאורך המחקר. "
+            "המשפט השני ממשיך את הקו ומרחיב אותו. המשפט השלישי מסכם ומוביל הלאה."
+        )
+        docs = []
+        for i in range(4):
+            parts = [f"מטלה {i} - כותרת - יותם פרום {i}"]
+            for _ in range(4):
+                parts.append(f"מטלה - כותרת משנה - יותם פרום")
+                parts.append(body)
+            # One rare short header, the ב׳ shape: too rare to be reported.
+            parts.append("נדיר ב׳")
+            docs.append("\n\n".join(parts))
+        return docs
+
+    def test_rare_terms_are_not_judged(self):
+        """"נדיר" is furniture-shaped but far too rare to reach the reported
+        list. A wide gate judges it anyway — on four observations, which is
+        exactly the ב׳/א׳ failure — and the contention gate declines to."""
+        docs = self._corpus()
+        wide = find_structural_furniture_terms(docs, 2, 10, 0.8, 1, 100, 10)
+        narrow = find_structural_furniture_terms(docs, 2, 10, 0.8, 1, 6, 1)
+        self.assertIn("נדיר", wide)
+        self.assertNotIn("נדיר", narrow)
+        # The term that actually reaches the list is judged under both.
+        self.assertIn("מטלה", wide)
+        self.assertIn("מטלה", narrow)
+
+    def test_contenders_are_still_judged(self):
+        docs = self._corpus()
+        furniture = find_structural_furniture_terms(docs, 2, 10, 0.8, 5, 30, 3)
+        for term in ("יותם", "פרום", "מטלה"):
+            self.assertIn(term, furniture)
+        for term in ("המקורות", "הטיעון", "המחקר"):
+            self.assertNotIn(term, furniture)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -70,6 +70,7 @@ DEFAULT_MIN_TERM_LENGTH = 2
 DEFAULT_FURNITURE_MAX_WORDS = 10
 DEFAULT_FURNITURE_SHARE = 0.8
 DEFAULT_FURNITURE_MIN_COUNT = 5
+DEFAULT_FURNITURE_CANDIDATE_MULTIPLIER = 3
 
 
 def _load_style_metrics_config(script_dir: Path) -> dict:
@@ -139,6 +140,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     furn_max_words = config.get("furnitureMaxWords", DEFAULT_FURNITURE_MAX_WORDS)
     furn_share = config.get("furnitureShare", DEFAULT_FURNITURE_SHARE)
     furn_min_count = config.get("furnitureMinCount", DEFAULT_FURNITURE_MIN_COUNT)
+    furn_multiplier = config.get(
+        "furnitureCandidateMultiplier", DEFAULT_FURNITURE_CANDIDATE_MULTIPLIER
+    )
 
     input_path = Path(args.input)
     texts, warnings = read_corpus(input_path)
@@ -167,7 +171,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         # corpus is concatenated — pass the documents, not just combined_text.
         dropped = sorted(
             find_structural_furniture_terms(
-                documents, min_len, furn_max_words, furn_share, furn_min_count
+                documents,
+                min_len,
+                furn_max_words,
+                furn_share,
+                furn_min_count,
+                top_n,
+                furn_multiplier,
             )
         )
         result = {
@@ -180,6 +190,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 furniture_max_words=furn_max_words,
                 furniture_share=furn_share,
                 furniture_min_count=furn_min_count,
+                furniture_candidate_multiplier=furn_multiplier,
             ),
             "meta": {
                 "filesProcessed": sorted(texts.keys()),

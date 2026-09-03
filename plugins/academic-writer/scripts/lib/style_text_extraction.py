@@ -11,7 +11,8 @@ python-docx dependency needed for raw text). .pdf cannot be parsed without a
 third-party library, so it is skipped with a warning; the init skill's
 separate qualitative-extraction step (pdfplumber, best-effort) handles PDFs.
 
-Tracked changes are excluded. Corpus files are frequently supervisor-returned
+Tracked changes and Word field instructions (TOC/HYPERLINK/PAGEREF) are
+excluded. Corpus files are frequently supervisor-returned
 or peer-reviewed papers, and a reviewer's inserted text is not the author's
 voice: `<w:ins>` content (someone else's insertion) and `<w:del>` content
 (text the author removed) are both dropped before analysis, so only the
@@ -35,6 +36,19 @@ _DOCX_TAG_RE = re.compile(r"<[^>]+>")
 # paragraph and wreck every paragraph-level metric.
 _DOCX_PARA_BREAK_RE = re.compile(r"</w:p>", re.IGNORECASE)
 _DOCX_TAB_RE = re.compile(r"<w:tab\b[^>]*/>", re.IGNORECASE)
+# Word field instructions (TOC, HYPERLINK \l, PAGEREF) live in <w:instrText>
+# next to real <w:t> runs, so tag-stripping alone leaves the raw switches in the
+# text: `TOC \h \u \z \t "Heading 1,1,Heading 2,2,..."`. Measured on a real
+# corpus, 8 paragraphs of 857 carried field markup — small, but it inflates
+# vocabulary and paragraph length with syntax the author never wrote, and it
+# lands those table-of-contents paragraphs on the long side of the furniture
+# rule, diluting exactly the signal that rule is looking for.
+_DOCX_FIELD_RES = (
+    re.compile(r"<w:instrText\b[^>]*>.*?</w:instrText>", re.DOTALL | re.IGNORECASE),
+    re.compile(
+        r"<w:delInstrText\b[^>]*>.*?</w:delInstrText>", re.DOTALL | re.IGNORECASE
+    ),
+)
 # Tracked-change containers, stripped *with their content* before tag removal
 # (after tag removal there is no <w:ins> left to find).
 _DOCX_REVISION_RES = (
@@ -70,6 +84,8 @@ def _read_docx_text(path: Path) -> str:
     # and entity unescaping must come after it (unescaping first would turn a
     # literal &lt;w:p&gt; into a tag the stripper would then delete).
     xml = _strip_tracked_changes(xml)
+    for pattern in _DOCX_FIELD_RES:
+        xml = pattern.sub(" ", xml)
     xml = _DOCX_TAB_RE.sub(" ", xml)
     xml = _DOCX_PARA_BREAK_RE.sub("</w:p>\n\n", xml)
     text = _DOCX_TAG_RE.sub("", xml)

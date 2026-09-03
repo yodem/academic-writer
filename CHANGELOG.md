@@ -4,6 +4,50 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.7.5] — 2026-09-03
+### Fixed
+
+- **Word field instructions reached the extracted text.** `<w:instrText>` sits
+  beside real `<w:t>` runs, so stripping tags left the raw switches behind —
+  `TOC \h \u \z \t "Heading 1,1,Heading 2,2,..."`, plus `HYPERLINK \l` and
+  `PAGEREF`. Eight of 857 paragraphs on the measured corpus, 81 tokens. Small in
+  itself, but it inflated vocabulary with syntax the author never wrote, and it
+  made those table-of-contents paragraphs long enough to fall on the "keep" side
+  of the furniture rule — diluting the short-paragraph share of exactly the terms
+  that rule hunts. `<w:instrText>` and `<w:delInstrText>` are now dropped with
+  their content, the same way `<w:ins>` is. With them gone the furniture signal
+  sharpens: the author's name moves from a 0.96 short-paragraph share to 1.00.
+
+- **The gershayim split, one character over: geresh.** Geresh marks an
+  abbreviation (`א׳`, `ה׳`, `ע׳`, `פרופ׳`) or a foreign consonant (`ג׳ורג׳`,
+  `אתרח׳סיס`). ASCII `'` is already in `WORD_RE` so these tokenized, but they did
+  not *merge* with the U+05F3 spelling, and the corpus uses both: `א'`(66)/`א׳`(7),
+  `ה'`(37)/`ה׳`(12), `ע'`(42)/`ע׳`(1), `ב'`(30)/`ב׳`(5). Seven abbreviations were
+  counted as fourteen separate words. Only one side is required here, unlike
+  gershayim, and deliberately: an ASCII double quote genuinely *is* Hebrew's
+  quotation mark, so converting it needs a Hebrew letter on both sides; a single
+  quote is not, so a trailing `א'` is an abbreviation rather than a closing quote.
+  Checked against the corpus — all 517 occurrences following a Hebrew letter are
+  abbreviations or transliterations, none are closing quotes. English
+  apostrophes are untouched.
+
+- **The furniture rule judged terms too rare to judge.** `ב׳` and `א׳` — the same
+  token doing the same job in the same two files — scored 0.80 and 0.50 on five
+  and seven observations, so one was dropped and the other kept. That asymmetry
+  is not a threshold wanting tuning; at that sample size the share has no
+  resolution. (And `ב׳`'s five observations were themselves an artifact of the
+  geresh split above: merged with `ב'` it is 35.) Only terms in **contention** for
+  the reported list are now judged — the top
+  `topFrequentTermsCount * furnitureCandidateMultiplier` by raw count. The filter
+  exists to keep furniture out of `frequentTerms`, so a term that could never be
+  reported does not need classifying, and classifying it anyway only adds noise.
+  On the measured corpus the terms that matter still are judged (the author's
+  name at ranks 32 and 33, `מטלה` at 40) while `ב׳` and `א׳` are not (ranks 1487
+  and 708 of a 90-term field), and `meta.droppedFurnitureTerms` narrows from
+  eight terms to the three that actually reach the list. `furnitureMinCount`
+  stays as an absolute floor for corpora small enough that everything is
+  nominally in contention.
+
 ## [0.7.4] — 2026-09-03
 ### Fixed
 

@@ -216,6 +216,8 @@ def find_structural_furniture_terms(
     max_words: int,
     share: float,
     min_count: int,
+    top_n: int = 30,
+    candidate_multiplier: int = 3,
 ) -> set[str]:
     """Terms that belong to the document's furniture, not the writer's prose.
 
@@ -235,6 +237,19 @@ def find_structural_furniture_terms(
     words, and it occurs at least `min_count` times so a rare word is not
     dropped on noise.
 
+    Only terms in CONTENTION for the reported list are judged — the top
+    `top_n * candidate_multiplier` by raw count. The filter exists to keep
+    furniture out of frequentTerms, so a term that could never be reported does
+    not need classifying, and classifying it anyway is actively harmful: a
+    share computed over a handful of occurrences has no resolution. Measured
+    case, ב׳ against א׳ — the same token doing the same job in the same two
+    files — landed at 0.80 and 0.50 on five and seven observations, so one was
+    dropped and the other kept. Under the contention gate neither is judged
+    (ranks 1487 and 708 of a 90-term field), while the terms that actually
+    reach the list — the author's name at ranks 32 and 33, מטלה at 40 — still
+    are. `min_count` stays as an absolute floor for corpora small enough that
+    everything is nominally in contention.
+
     This replaces a front-matter rule shipped in 0.7.3 that looked at the first
     N paragraphs of each file. It never fired: the headers repeat THROUGHOUT
     each document, one per assignment, so almost none of them are front matter.
@@ -251,10 +266,17 @@ def find_structural_furniture_terms(
         if len(tokenize_words(paragraph)) <= max_words:
             short_counts.update(found)
 
+    contenders = {
+        term
+        for term, _ in total_counts.most_common(max(top_n * candidate_multiplier, top_n))
+    }
+
     return {
         term
         for term, count in total_counts.items()
-        if count >= min_count and short_counts[term] / count >= share
+        if term in contenders
+        and count >= min_count
+        and short_counts[term] / count >= share
     }
 
 
@@ -266,6 +288,7 @@ def compute_frequent_terms(
     furniture_max_words: int = 10,
     furniture_share: float = 0.8,
     furniture_min_count: int = 5,
+    furniture_candidate_multiplier: int = 3,
 ) -> list[dict]:
     """Top-N content terms. Pass `documents` (the per-file texts) to also drop
     structural furniture — TOC lines and section headers, which are only
@@ -278,6 +301,8 @@ def compute_frequent_terms(
             furniture_max_words,
             furniture_share,
             furniture_min_count,
+            top_n,
+            furniture_candidate_multiplier,
         )
 
     normalized = [t for t in _content_terms(text, min_len) if t not in furniture]

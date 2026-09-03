@@ -47,6 +47,23 @@ _ASCII_QUOTE_AS_GERSHAYIM_RE = re.compile(
     rf'(?<=[{HEBREW_RANGE}])"(?=[{HEBREW_RANGE}])'
 )
 
+# The same split one character over. Geresh marks an abbreviation (א׳, ה׳, ע׳,
+# פרופ׳) or a foreign consonant (ג׳ורג׳, אתרח׳סיס). ASCII "'" is already in
+# WORD_RE, so those tokenize — but they do not MERGE with the U+05F3 spelling,
+# and the corpus uses both: measured, א'(66)/א׳(7), ה'(37)/ה׳(12),
+# ע'(42)/ע׳(1), ב'(30)/ב׳(5). Seven abbreviations were being counted as
+# fourteen separate words.
+#
+# Only ONE side is required here, unlike gershayim above, and deliberately: an
+# ASCII double quote is genuinely Hebrew's quotation mark, so converting it
+# needs a Hebrew letter on both sides to avoid eating `אמר "שלום"`. A single
+# quote is not — Hebrew quotes with double marks — so a lone trailing form like
+# א' is an abbreviation, not a closing quote. Checked against the corpus: all
+# 517 occurrences after a Hebrew letter are abbreviations or transliterations
+# (לפרופ', אתרח'סיס), none are closing quotes.
+HEBREW_GERESH = "\u05f3"
+_ASCII_APOSTROPHE_AS_GERESH_RE = re.compile(rf"(?<=[{HEBREW_RANGE}])'")
+
 # First-person markers (Hebrew + English) — a researcher's authorial voice.
 FIRST_PERSON_MARKERS = {
     "אני",
@@ -150,8 +167,10 @@ TRANSITION_CATEGORIES: dict[str, list[str]] = {
 
 
 def normalize_hebrew_quotes(text: str) -> str:
-    """Convert an ASCII double quote used as gershayim into U+05F4."""
-    return _ASCII_QUOTE_AS_GERSHAYIM_RE.sub(HEBREW_GERSHAYIM, text)
+    """Fold ASCII stand-ins for gershayim and geresh onto their real
+    characters, so one word is one token however the writer typed it."""
+    text = _ASCII_QUOTE_AS_GERSHAYIM_RE.sub(HEBREW_GERSHAYIM, text)
+    return _ASCII_APOSTROPHE_AS_GERESH_RE.sub(HEBREW_GERESH, text)
 
 
 def tokenize_words(text: str) -> list[str]:
