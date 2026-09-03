@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from style_metrics_core import HEBREW_CHAR_RE, tokenize_words
+from style_metrics_core import HEBREW_CHAR_RE, split_paragraphs, tokenize_words
 
 HEBREW_STOPWORDS = {
     "של",
@@ -202,13 +202,88 @@ def _normalize(word: str) -> str:
     return word if HEBREW_CHAR_RE.search(word) else word.lower()
 
 
-def compute_frequent_terms(text: str, top_n: int, min_len: int) -> list[dict]:
-    words = tokenize_words(text)
-    normalized = [
+def _content_terms(text: str, min_len: int) -> list[str]:
+    return [
         _normalize(w)
-        for w in words
+        for w in tokenize_words(text)
         if len(w) >= min_len and _normalize(w) not in STOPWORDS
     ]
+
+
+def find_front_matter_terms(
+    documents: list[str],
+    min_len: int,
+    paragraphs: int,
+    doc_ratio: float,
+    share: float,
+) -> set[str]:
+    """Terms that are title-page furniture rather than the writer's vocabulary.
+
+    Corpus files are coursework and papers, so the opening paragraphs of each
+    one carry the author's own name, the course name and an assignment header.
+    Measured on a 10-file corpus: the author's first and last name ranked at 80
+    hits each and the assignment header מטלה at 74, all of it front matter —
+    and frequentTerms is documented as steering the write skill's vocabulary,
+    so these actively push the writer toward the author's own name.
+
+    A term is boilerplate only when BOTH hold, which is what separates a title
+    page from a genuine subject word that happens to open an article:
+
+      * it appears in the first `paragraphs` paragraphs of at least
+        `doc_ratio` of the corpus files (repeated furniture, not one title), and
+      * at least `share` of its total corpus occurrences come from that front
+        matter (it is not also used throughout the body).
+
+    Needs at least three documents to mean anything; returns an empty set below
+    that, and when per-document text is unavailable.
+    """
+    if len(documents) < 3:
+        return set()
+
+    front_counts: Counter[str] = Counter()
+    total_counts: Counter[str] = Counter()
+    docs_with_term_in_front: Counter[str] = Counter()
+
+    for doc in documents:
+        front_text = "\n\n".join(split_paragraphs(doc)[:paragraphs])
+        front_terms = _content_terms(front_text, min_len)
+        front_counts.update(front_terms)
+        total_counts.update(_content_terms(doc, min_len))
+        docs_with_term_in_front.update(set(front_terms))
+
+    needed_docs = doc_ratio * len(documents)
+    return {
+        term
+        for term, docs in docs_with_term_in_front.items()
+        if docs >= needed_docs
+        and total_counts[term]
+        and front_counts[term] / total_counts[term] >= share
+    }
+
+
+def compute_frequent_terms(
+    text: str,
+    top_n: int,
+    min_len: int,
+    documents: list[str] | None = None,
+    front_matter_paragraphs: int = 3,
+    front_matter_doc_ratio: float = 0.6,
+    front_matter_share: float = 0.5,
+) -> list[dict]:
+    """Top-N content terms. Pass `documents` (the per-file texts) to also drop
+    title-page boilerplate — it cannot be detected from the concatenated
+    corpus, since the signal is *per file* front matter."""
+    boilerplate: set[str] = set()
+    if documents:
+        boilerplate = find_front_matter_terms(
+            documents,
+            min_len,
+            front_matter_paragraphs,
+            front_matter_doc_ratio,
+            front_matter_share,
+        )
+
+    normalized = [t for t in _content_terms(text, min_len) if t not in boilerplate]
     total = len(normalized)
     counts = Counter(normalized)
     results = []

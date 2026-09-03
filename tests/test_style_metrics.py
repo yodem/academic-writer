@@ -34,7 +34,10 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 from style_contrastive import extract_baseline_json  # noqa: E402
-from style_frequent_terms import compute_frequent_terms  # noqa: E402
+from style_frequent_terms import (  # noqa: E402
+    compute_frequent_terms,
+    find_front_matter_terms,
+)
 from style_metrics_core import (  # noqa: E402
     compute_computational_metrics,
     split_paragraphs,
@@ -222,3 +225,58 @@ class PassiveVoiceTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FrontMatterBoilerplateTest(unittest.TestCase):
+    """Bug 4 (deferred half) — frequentTerms ranked the author's own name.
+
+    Measured on the reporting session's 10-file corpus: first and last name at
+    80 hits each and the assignment header מטלה at 74, all title-page furniture.
+    That could not be detected until the paragraph fix landed, because every
+    file counted as one paragraph.
+    """
+
+    def _corpus(self, n=10):
+        # Each file opens with a title page (name + assignment header), then
+        # body paragraphs about a different subject.
+        docs = []
+        for i in range(n):
+            docs.append(
+                "יותם פרום\n\nמטלה מספר {0}\n\nקורס בהיסטוריה\n\n"
+                "הפסקה הראשונה דנה בשאלת המקורות. המשפט השני ממשיך.\n\n"
+                "הפסקה השנייה בוחנת את הטיעון המרכזי. משפט נוסף כאן.\n\n"
+                "המקורות מלמדים על תהליך ארוך. הטיעון נשען עליהם.".format(i)
+            )
+        return docs
+
+    def test_title_page_terms_are_dropped(self):
+        docs = self._corpus()
+        dropped = find_front_matter_terms(docs, 2, 3, 0.6, 0.5)
+        self.assertIn("יותם", dropped)
+        self.assertIn("פרום", dropped)
+        self.assertIn("מטלה", dropped)
+
+    def test_body_vocabulary_survives(self):
+        docs = self._corpus()
+        dropped = find_front_matter_terms(docs, 2, 3, 0.6, 0.5)
+        for term in ("המקורות", "הטיעון"):
+            self.assertNotIn(term, dropped)
+        terms = [
+            t["term"]
+            for t in compute_frequent_terms(
+                "\n\n".join(docs), 30, 2, documents=docs
+            )
+        ]
+        self.assertNotIn("יותם", terms)
+        self.assertNotIn("מטלה", terms)
+        self.assertIn("הטיעון", terms)
+
+    def test_no_filtering_without_documents(self):
+        """Back-compat: the three-arg call keeps its old behaviour."""
+        docs = self._corpus()
+        terms = [t["term"] for t in compute_frequent_terms("\n\n".join(docs), 30, 2)]
+        self.assertIn("יותם", terms)
+
+    def test_too_few_documents_is_a_no_op(self):
+        """Two files cannot distinguish furniture from a shared subject."""
+        self.assertEqual(find_front_matter_terms(self._corpus(2), 2, 3, 0.6, 0.5), set())

@@ -58,8 +58,11 @@
     "dashReplacement": "hyphen",
     "styleMetrics": {
       "topFrequentTermsCount": 30,
-      "minTermLength": 2
+      "minTermLength": 2,
+      "frontMatterParagraphs": 3,
+      "frontMatterDocRatio": 0.6,
+      "frontMatterShare": 0.5
     },
-    "_comment": "dashReplacement is the default em/en-dash fix convention used by detect-ai-typography.py (values: hyphen|comma|colon|remove); overridable via --dash-replacement. topFrequentTermsCount/minTermLength configure extract-style-metrics.py's frequentTerms extraction."
+    "_comment": "dashReplacement is the default em/en-dash fix convention used by detect-ai-typography.py (values: hyphen|comma|colon|remove); overridable via --dash-replacement. topFrequentTermsCount/minTermLength configure extract-style-metrics.py's frequentTerms extraction. frontMatterParagraphs/frontMatterDocRatio/frontMatterShare drop title-page boilerplate from frequentTerms: a term counts as boilerplate when it appears in the first frontMatterParagraphs paragraphs of at least frontMatterDocRatio of the corpus files AND at least frontMatterShare of its total occurrences come from that front matter. Measured case: on a 10-file corpus the author's own first and last name ranked at 80 hits each and the assignment header \u05de\u05d8\u05dc\u05d4 at 74, all from title pages, and frequentTerms steers the write skill's vocabulary."
   }
 }

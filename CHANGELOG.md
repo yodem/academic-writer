@@ -4,6 +4,107 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.7.3] — 2026-09-03
+### Fixed
+
+- **Tracked changes were folded into the author's style fingerprint.** The `.docx`
+  reader in `scripts/lib/style_text_extraction.py` kept `<w:ins>` content, so on a
+  supervisor-returned paper the reviewer's marginal notes were attributed to the
+  author — measured on a real corpus, a graded paper with 73 tracked runs whose
+  extracted text contained the supervisor's instruction as if the author wrote it.
+  Corpus files are frequently reviewed papers, so this is the common case, not an
+  edge one. `<w:ins>`, `<w:del>` and `<w:moveFrom>` are now stripped *with their
+  content* before tag removal (after `<[^>]+>` runs there is no `<w:ins>` left to
+  find), with a repeat pass for nested containers. Deleted text is excluded too:
+  it is text the author removed.
+
+- **Every `.docx` file counted as ONE paragraph.** The reader joined `<w:p>`
+  elements with a single newline while `split_paragraphs` splits on a blank line.
+  Observed on a 10-file / 48k-word corpus: `paragraphStructure.length.mean` 4776.7
+  chars, `sentencesPerParagraph.mean` 218.8, `count` 10 — and the artifact
+  propagated, with `transitions.frequencyPerParagraph` at 42.1 against a 3.9
+  baseline, which the contrastive layer then reported as `distinctively_high` for
+  both. The fix needed two changes, not one: the paragraph break now emits a blank
+  line *and* the line filter no longer discards it.
+
+- **`quot` was the top "content term" in Hebrew corpora.** Hebrew gershayim are
+  stored HTML-escaped in `word/document.xml` and were never unescaped, so `quot`
+  ranked #1 at 1642 hits (4.3%), ahead of every real word — in a field documented
+  as steering the write skill's vocabulary. `html.unescape()` now runs *after* tag
+  stripping (before it, a literal `&lt;w:p&gt;` would become a tag the stripper
+  deletes), with a stoplist for entity remnants in corpora that arrive pre-escaped.
+
+- **Title-page boilerplate ranked as the researcher's vocabulary.** On the same
+  corpus the author's own first and last name appeared 80 times each in
+  `frequentTerms`, and the assignment header `מטלה` 74 times — furniture from the
+  opening of every file, pushing the writer toward the author's own name. A term is
+  now dropped when it appears in the first `frontMatterParagraphs` paragraphs of at
+  least `frontMatterDocRatio` of the corpus files AND at least `frontMatterShare`
+  of its occurrences come from that front matter (new keys under
+  `thresholds.json > typography.styleMetrics`). Dropped terms are reported in
+  `meta.droppedFrontMatterTerms` rather than vanishing silently.
+
+- **The contrastive baseline matched headings in Latin only.** `extract_baseline_json`
+  looked for a `json` fence under a heading containing "baseline" or "08". The
+  shipped Hebrew Linguistic Reference has a Hebrew heading, so the match failed and
+  it fell back to the *first* fence in the file — comparing against unrelated
+  numbers with no warning. Selection is now by content: the first fence that parses
+  and resolves at least one `CONTRASTIVE_METRIC_PATHS` leaf. The last-resort
+  fallback now emits a warning.
+
+- **The Hebrew passive-voice metric was noise reported as signal.** The heuristic
+  flagged any 3+ letter word opening with נ or מ, which matches מחקר, מאמר, מקום,
+  נושא and much of the language; it measured 0.7736 against a 0.19 baseline and was
+  reported `distinctively_high`. Reliable nif'al/pu'al/huf'al detection needs
+  morphological analysis this stdlib-only script cannot do, so the metric is now
+  `null` for Hebrew-dominant text with an explanatory
+  `passiveVoiceFrequencyNote`; `compute_contrastive` already degrades a missing
+  metric to `"unavailable"`. Latin-script corpora still get a number. Documented in
+  `style-fingerprint-rubric.md` so the writer reads the null as expected.
+
+- **The `ck items enrich` loop in `write` Step 2 and `init` Phase 3 was dead code.**
+  `ck items enrich` is a manual metadata *setter*, not an auto-extractor: a bare
+  `ck items enrich <ID>` exits with "At least one of --title, --author,
+  --description, --toc, --add-prompt, or --sample-question is required". The loop
+  therefore failed on every item, invisibly inside a `while` loop, and it ran over
+  the researcher's entire library — 183 items in the reported case, mostly unrelated
+  engineering books — where a success would have overwritten hand-curated metadata.
+  Removed at all five call sites, including the `AskUserQuestion` option text that
+  described the enrichment to the user. Source listing is now scoped to the active
+  shelf (`./.candlekeep/active-shelf`, set by `ck shelf use`) when one is set.
+
+- **Cross-project voice sync had never worked, and blamed the user's install.**
+  `skills/voice/voice-sync.sh` called `ck books list|read|create|update`; there is
+  no `ck books` subcommand. Every call was wrapped in
+  `2>/dev/null || echo "… local-only mode"`, so a hard CLI error surfaced as
+  "ck unavailable or books subcommand unsupported" on a machine where `ck` was
+  installed, authenticated and working in the same shell. That made the whole
+  `author_key` mechanism dead machinery: `author_key` resolution failed loudly, as
+  designed, while the step that actually persists anything failed silently, so
+  `init` derived a key that could never be used for the one thing it exists for.
+  Ported to `ck items list|get|import|put`. This also fixed a second, independent
+  bug: `ck items list --json` returns `{"items":[…]}`, not a bare array, and the id
+  parser checked `isinstance(d, list)` — so it would have matched nothing even if
+  `ck books` had existed. Failures now print the real stderr and exit non-zero;
+  only an absent `ck`, or one whose own binary exits 127, is local-only mode. Push
+  binds to an existing `Voice Profile — <author_key>` book by title instead of
+  creating a duplicate.
+
+### Changed
+
+- `voice-distiller` must now run its verification rather than predict it. It had
+  reported "~3,650 words" for a profile that was 1,676, and printed an "Expected
+  script output" block for `check-voice-populated.py` instead of executing it. The
+  gate passed either way that time; an agent that predicts a verification result
+  will eventually report a pass that did not happen.
+
+### Added
+
+- `tests/test_style_metrics.py` — 15 regression tests over the metrics pipeline,
+  plus four appended to `tests/test_voice_sync.py` pinning the `ck items` contract
+  and the "real errors are surfaced, not swallowed" behaviour. Every one of them
+  fails against the previous release.
+
 ## [0.7.2] — 2026-09-03
 ### Fixed
 

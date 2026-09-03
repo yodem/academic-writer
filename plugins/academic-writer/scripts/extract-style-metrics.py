@@ -54,7 +54,10 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 
 from style_contrastive import compute_contrastive, extract_baseline_json  # noqa: E402
-from style_frequent_terms import compute_frequent_terms  # noqa: E402
+from style_frequent_terms import (  # noqa: E402
+    compute_frequent_terms,
+    find_front_matter_terms,
+)
 from style_metrics_core import (  # noqa: E402
     compute_computational_metrics,
     split_sentences,
@@ -64,6 +67,9 @@ from style_text_extraction import read_corpus  # noqa: E402
 
 DEFAULT_TOP_FREQUENT_TERMS = 30
 DEFAULT_MIN_TERM_LENGTH = 2
+DEFAULT_FRONT_MATTER_PARAGRAPHS = 3
+DEFAULT_FRONT_MATTER_DOC_RATIO = 0.6
+DEFAULT_FRONT_MATTER_SHARE = 0.5
 
 
 def _load_style_metrics_config(script_dir: Path) -> dict:
@@ -130,6 +136,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         "topFrequentTermsCount", DEFAULT_TOP_FREQUENT_TERMS
     )
     min_len = config.get("minTermLength", DEFAULT_MIN_TERM_LENGTH)
+    fm_paragraphs = config.get(
+        "frontMatterParagraphs", DEFAULT_FRONT_MATTER_PARAGRAPHS
+    )
+    fm_doc_ratio = config.get("frontMatterDocRatio", DEFAULT_FRONT_MATTER_DOC_RATIO)
+    fm_share = config.get("frontMatterShare", DEFAULT_FRONT_MATTER_SHARE)
 
     input_path = Path(args.input)
     texts, warnings = read_corpus(input_path)
@@ -150,15 +161,33 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     if args.aggregate:
-        combined_text = "\n\n".join(texts.values())
+        documents = list(texts.values())
+        combined_text = "\n\n".join(documents)
         metrics = _metrics_for_text(combined_text)
+        # Title-page boilerplate is a PER-FILE signal (every paper opens with the
+        # author's name and an assignment header), so it is invisible in the
+        # concatenated corpus — pass the documents, not just combined_text.
+        dropped = sorted(
+            find_front_matter_terms(
+                documents, min_len, fm_paragraphs, fm_doc_ratio, fm_share
+            )
+        )
         result = {
             "computationalMetrics": metrics,
-            "frequentTerms": compute_frequent_terms(combined_text, top_n, min_len),
+            "frequentTerms": compute_frequent_terms(
+                combined_text,
+                top_n,
+                min_len,
+                documents=documents,
+                front_matter_paragraphs=fm_paragraphs,
+                front_matter_doc_ratio=fm_doc_ratio,
+                front_matter_share=fm_share,
+            ),
             "meta": {
                 "filesProcessed": sorted(texts.keys()),
                 "totalWords": len(tokenize_words(combined_text)),
                 "totalSentences": len(split_sentences(combined_text)),
+                "droppedFrontMatterTerms": dropped,
                 "warnings": warnings,
             },
         }
