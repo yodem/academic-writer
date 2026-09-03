@@ -74,6 +74,11 @@ _ASCII_QUOTE_AS_GERSHAYIM_RE = re.compile(
 # regex.
 HEBREW_GERESH = "\u05f3"
 _QUOTE_OPEN_BEFORE = " \t([{\u201c\u201d\"\u05be-\u2013\u2014"
+# Hebrew's inseparable prefixes. A quoted title can hang straight off one of
+# these (ו'הכתב והקבלה'), which locally looks exactly like a transliterated
+# consonant (ג'ון, ד'אלמבר). The prefix set is closed and ג/ד/ז/צ/ת are not in
+# it, so it is what separates the two.
+HEBREW_PREFIX_LETTERS = frozenset("\u05d5\u05dc\u05e9\u05d1\u05db\u05de\u05d4")
 _QUOTE_CLOSE_AFTER = ")]},.;:!?\u2013\u2014"
 
 # First-person markers (Hebrew + English) — a researcher's authorial voice.
@@ -197,12 +202,26 @@ def _is_quote_opener(line: str, i: int) -> bool:
         return False
     if before in _QUOTE_OPEN_BEFORE or not before.strip():
         return True
-    # One-letter Hebrew prefix directly before the quote.
+    # A quoted title hanging off a one-letter Hebrew prefix (ו'הכתב והקבלה').
+    # Restricted to the closed prefix set so a transliteration with a
+    # single-letter stem (ג'ון) is not mistaken for one; still only a
+    # CANDIDATE, confirmed by the caller finding a closing quote.
     two_before = line[i - 2] if i >= 2 else " "
     return (
-        bool(HEBREW_CHAR_RE.match(before))
+        before in HEBREW_PREFIX_LETTERS
         and bool(HEBREW_CHAR_RE.match(after))
         and (two_before in _QUOTE_OPEN_BEFORE or not two_before.strip())
+    )
+
+
+def _is_word_internal(line: str, i: int) -> bool:
+    """An apostrophe with a letter on BOTH sides is inside a word — a geresh
+    (ג׳ון, אתרח׳סיס) or an English contraction (don't, writer's). A quote
+    delimiter always has a boundary on one side, so this can never be one."""
+    before = line[i - 1] if i else " "
+    after = line[i + 1] if i + 1 < len(line) else " "
+    return (before.isalpha() or bool(HEBREW_CHAR_RE.match(before))) and (
+        after.isalpha() or bool(HEBREW_CHAR_RE.match(after))
     )
 
 
@@ -221,6 +240,12 @@ def _classify_apostrophes(line: str) -> tuple[set[int], set[int]]:
     for match in re.finditer(r"'", line):
         i = match.start()
         before = line[i - 1] if i else ""
+        if _is_word_internal(line, i) and not _is_quote_opener(line, i):
+            # Never a delimiter. Hebrew-flanked is geresh; Latin-flanked is an
+            # English contraction, which WORD_RE keeps as-is.
+            if HEBREW_CHAR_RE.match(before or ""):
+                geresh.add(i)
+            continue
         opens = _is_quote_opener(line, i)
         hebrew_before = bool(before) and bool(HEBREW_CHAR_RE.match(before))
         if open_at is None:

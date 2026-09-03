@@ -4,6 +4,67 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.7.7] — 2026-09-03
+### Fixed
+
+- **`write-sections.js` produced no sections at all on a real outline.** It read
+  a flat `outline.units`, but the architect emits `sections[]` with an optional
+  nested `units[]`, and a section *without* one is itself the writer unit
+  (`architect.md:101`, `write/SKILL.md:387`). So `units` was always `[]`,
+  `canRunDraftAndAudit` requires `units.length > 0`, and the whole
+  draft-and-audit stage gated off with `"no outline.units supplied"`. The
+  failure was loud rather than silent, but the workflow path was unusable — a
+  live run had to fall back to the `Agent` path. The script now flattens
+  `sections[] → units[]`, deriving `parentSection` and `siblingUnitsSummary` per
+  unit, and still accepts a pre-flattened `outline.units`.
+
+- **The per-unit prompt dropped fields the section-writer documents as
+  required.** `evidence`, `brief`, `depends_on`, `thesis_link`, `words`,
+  paragraph count and suggested sources were never forwarded, and nothing tells
+  a writer to read `outline.json` from disk — `references/section-writer-dispatch.md`
+  lists four from-disk inputs and the outline is not among them, so `evidence`
+  had no route to a writer at all. The code comment cited the migration spec's
+  Section 2.1 disclosed gap as cover; that gap covers `articleStructure`,
+  `tools`, `outlineOverview`, `parentSection` and `siblingUnitsSummary` — a
+  different set. On the reporting run, 30 verified source corrections lived in
+  `evidence`/`brief`, including a Maimonides parable-type mislabel that inverts
+  an argument.
+
+- **`detect-ai-typography.py` corrupted Hebrew abbreviations.** `fix_quotes`
+  pairs any two quote characters, so in `ר' יוסף בעמ' 12` it paired the two
+  geresh marks, read ` יוסף בעמ` as a quoted phrase and returned
+  `ר" יוסף בעמ" 12` — turning geresh ("Rabbi") into gershayim, a meaning change.
+  Three separate units reported 45, 28 and 12 false `quote_normalize` hits and
+  four writers rediscovered it independently in one article. ASCII stand-ins for
+  geresh and gershayim are now folded to U+05F3 / U+05F4 *before* quote pairing,
+  which is the correct typographic fix in its own right and also removes them
+  from the pairing character class. It only ever fired on ASCII-typed marks —
+  and since the Gemini path and the source extracts both emit ASCII, that is
+  every Hebrew article the plugin produces.
+
+- **The same pairing destroyed English contractions.** `don't break the writer's
+  text` came back as `don“t break the writer”s text`. Pre-existing and
+  unreported; it affects any English article with two contractions on a line. An
+  apostrophe with a letter on both sides is now never treated as a span
+  delimiter.
+
+- **Two Hebrew transliterations on one line paired into a false span** —
+  `ג'ון כתב על אתרח'סיס` tokenized as `ג` / `ון` / `אתרח` / `סיס`. This was a
+  regression introduced by 0.7.6's candidate-opener rule; each transliteration
+  worked in isolation, which is why both the unit tests and the corpus check
+  passed it. The prefix-opener candidacy is now restricted to Hebrew's closed
+  set of inseparable prefixes (ו ל ש ב כ מ ה), so a single-letter stem like `ג'`
+  or `ד'` is read as a transliteration while `ו'הכתב והקבלה'` still resolves as
+  a quoted title.
+
+### Changed
+
+- `agents/section-writer.md` now documents the typography script's suppression
+  flags at the point where it mandates the run, and states that
+  `--no-directional-marks` should stay off: Step 9a.5's
+  `validate-hebrew-punctuation.py` flags *missing* bidi marks around embedded
+  Latin, so stripping them sets up a later gate failure.
+
 ## [0.7.6] — 2026-09-03
 ### Fixed
 

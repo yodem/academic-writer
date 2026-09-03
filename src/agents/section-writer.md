@@ -246,6 +246,8 @@ Expected return shape:
 
 For each returned paragraph, run the existing typography detector to scrub em-dashes, straight quotes, and stray directional marks. Gemini cannot reliably guarantee these absent.
 
+Run it with **no suppression flags**. The script is Hebrew-aware: an ASCII apostrophe or double quote standing in for geresh/gershayim (`ר'`, `עמ'`, `ז"ל`) is folded to its real character (`ר׳`, `עמ׳`, `ז״ל`) before quote pairing, so it is no longer mistaken for a stray quote. `--no-quotes`, `--no-rtl-punctuation`, `--no-directional-marks` and `--no-dashes` exist for debugging a specific pass; do not add them routinely. `--no-directional-marks` in particular should stay OFF, because Step 9a.5's `validate-hebrew-punctuation.py` flags *missing* bidi marks around embedded Latin — stripping them here sets up a later gate failure.
+
 ```bash
 for each paragraph i:
   TYPO_REPORT=$(mktemp)

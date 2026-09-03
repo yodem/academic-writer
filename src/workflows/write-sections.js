@@ -93,7 +93,46 @@ const RAW = typeof args === 'string' && args.trim() ? JSON.parse(args) : args;
 const cfg = RAW && typeof RAW === 'object' ? RAW : {};
 
 const outline = (cfg.outline && typeof cfg.outline === 'object') ? cfg.outline : {};
-const units = Array.isArray(outline.units) ? outline.units : [];
+
+// The architect emits `sections[]`, where a section carries an optional nested
+// `units[]` and a section WITHOUT one is itself the single writer unit
+// (architect.md:101, write/SKILL.md:387). Reading a flat `outline.units` found
+// nothing on a real outline, so `units.length > 0` gated the whole
+// draft-and-audit stage off and the run produced no sections at all.
+// A flat `outline.units` is still accepted, for a caller that pre-flattens.
+function flattenUnits(source) {
+  if (Array.isArray(source.units) && source.units.length) return source.units;
+  if (!Array.isArray(source.sections)) return [];
+  const flat = [];
+  for (const section of source.sections) {
+    if (!section || typeof section !== 'object') continue;
+    const parentSection = {
+      title: section.title,
+      argument_role: section.argument_role,
+      thesis_link: section.thesis_link,
+    };
+    const nested = Array.isArray(section.units) ? section.units : [];
+    if (!nested.length) {
+      flat.push({ ...section, parentSection: section.parentSection || parentSection });
+      continue;
+    }
+    const siblingUnitsSummary = nested.map((u) => ({
+      id: u && u.id, title: u && u.title, claim: u && u.claim,
+    }));
+    for (const unit of nested) {
+      if (!unit || typeof unit !== 'object') continue;
+      flat.push({
+        ...unit,
+        parentSection: unit.parentSection || parentSection,
+        siblingUnitsSummary: unit.siblingUnitsSummary
+          || siblingUnitsSummary.filter((sib) => sib.id !== unit.id),
+      });
+    }
+  }
+  return flat;
+}
+
+const units = flattenUnits(outline);
 const thesis = cfg.thesis || null;
 const sources = cfg.sources || null;
 const evidenceOwnership = cfg.evidenceOwnership || null;
@@ -226,6 +265,27 @@ function draftUnitStage(entry) {
   }
   if (unit && unit.siblingUnitsSummary) {
     promptLines.push('SIBLING_UNITS_SUMMARY: ' + JSON.stringify(unit.siblingUnitsSummary));
+  }
+  // Fields agents/section-writer.md:82 documents as required per-unit input.
+  // These were dropped, and nothing tells a writer to read outline.json from
+  // disk (references/section-writer-dispatch.md lists four from-disk inputs;
+  // the outline is not among them), so `evidence` had no route to a writer at
+  // all. The audit spec's Section 2.1 disclosed gap covers articleStructure /
+  // tools / parentSection / siblingUnitsSummary — a different set — so this
+  // was never a documented omission.
+  for (const [label, value] of [
+    ['DESCRIPTION', unit && unit.description],
+    ['BRIEF', unit && unit.brief],
+    ['EVIDENCE', unit && unit.evidence],
+    ['DEPENDS_ON', unit && unit.depends_on],
+    ['THESIS_LINK', unit && unit.thesis_link],
+    ['TARGET_WORDS', unit && (unit.words || unit.targetWords)],
+    ['PARAGRAPH_COUNT', unit && (unit.paragraphs || unit.paragraphCount)],
+    ['FOOTNOTE_FLOOR', unit && unit.footnoteFloor],
+    ['SUGGESTED_SOURCES', unit && unit.sources],
+  ]) {
+    if (value === undefined || value === null || value === '') continue;
+    promptLines.push(label + ': ' + (typeof value === 'string' ? value : JSON.stringify(value)));
   }
   promptLines.push('Return exactly one JSON object matching the draft-unit schema contract: unitId, and paragraphs (each with paragraphIndex, text, and any selfReviewScores computed).');
   return agent(promptLines.join('\n'), {

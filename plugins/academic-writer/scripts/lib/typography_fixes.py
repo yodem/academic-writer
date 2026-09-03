@@ -120,6 +120,64 @@ def _looks_like_abbreviation(inner: str) -> bool:
     )
 
 
+# An ASCII apostrophe or double quote standing in for Hebrew geresh/gershayim
+# must be resolved BEFORE span pairing, or the span regex pairs it with an
+# unrelated quote further along the line and rewrites the Hebrew between them.
+# Measured: `ר' יוסף בעמ' 12` paired the two apostrophes, read " יוסף בעמ" as
+# a quoted phrase, and returned `ר" יוסף בעמ" 12` — turning geresh (Rabbi) into
+# gershayim, a meaning change. Four writers on one Hebrew article hit this
+# independently and rejected the whole diff by hand.
+#
+# Folding these to their real characters is the correct typographic fix in its
+# own right, and it also removes them from span_re's character class, so the
+# pairing bug cannot recur. Same-length substitution, so `fixes` offsets stay
+# accurate. The geresh discriminator is shared with the style-metrics
+# tokenizer, where it was measured against 517 real occurrences.
+_ASCII_GERSHAYIM_RE = re.compile(rf'(?<=[{HEBREW_RANGE}])"(?=[{HEBREW_RANGE}])')
+
+
+def fix_hebrew_marks(text: str) -> tuple[str, list[dict]]:
+    """Fold ASCII stand-ins for gershayim/geresh onto U+05F4 / U+05F3."""
+    from style_metrics_core import _classify_apostrophes  # noqa: PLC0415
+
+    fixes: list[dict] = []
+    out_lines: list[str] = []
+    offset = 0
+    for line in text.split("\n"):
+        chars = list(line)
+        for m in _ASCII_GERSHAYIM_RE.finditer(line):
+            chars[m.start()] = GERSHAYIM
+            fixes.append({
+                "type": "hebrew_gershayim",
+                "original": '"',
+                "replacement": GERSHAYIM,
+                "position": offset + m.start(),
+            })
+        geresh_positions, _ = _classify_apostrophes(line)
+        for i in sorted(geresh_positions):
+            chars[i] = GERESH
+            fixes.append({
+                "type": "hebrew_geresh",
+                "original": "'",
+                "replacement": GERESH,
+                "position": offset + i,
+            })
+        out_lines.append("".join(chars))
+        offset += len(line) + 1
+    return "\n".join(out_lines), fixes
+
+
+def _is_word_internal(text: str, i: int) -> bool:
+    """True when the character at `i` has a letter on both sides."""
+    if text[i] not in "'\u2019":
+        return False
+    before = text[i - 1] if i else " "
+    after = text[i + 1] if i + 1 < len(text) else " "
+    return (before.isalpha() or bool(HEBREW_CHAR_RE.match(before))) and (
+        after.isalpha() or bool(HEBREW_CHAR_RE.match(after))
+    )
+
+
 def fix_quotes(text: str) -> tuple[str, list[dict]]:
     """Normalize quotation marks per detected script inside each quoted span:
 
@@ -137,6 +195,13 @@ def fix_quotes(text: str) -> tuple[str, list[dict]]:
         opener, inner, closer = m.group(1), m.group(2), m.group(3)
         start, end = m.start(), m.end()
         if not inner:
+            continue
+        # An apostrophe with a letter on both sides is inside a word — an
+        # English contraction or possessive (don't, writer's), or a Hebrew
+        # geresh. It is never a span delimiter, and pairing two of them
+        # rewrote everything between: `don't break the writer's text` came
+        # back as `don“t break the writer”s text`.
+        if _is_word_internal(text, start) or _is_word_internal(text, end - 1):
             continue
 
         has_hebrew = bool(HEBREW_RUN_RE.search(inner))
@@ -303,6 +368,11 @@ def run(
         all_fixes.extend(fixes)
 
     if do_quotes:
+        # Hebrew geresh/gershayim first: an ASCII stand-in left in place is a
+        # span_re delimiter, and pairing it with an unrelated quote further
+        # along the line rewrites the Hebrew between them.
+        working, fixes = fix_hebrew_marks(working)
+        all_fixes.extend(fixes)
         working, fixes = fix_quotes(working)
         all_fixes.extend(fixes)
 
