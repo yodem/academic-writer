@@ -4,6 +4,38 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-09-03
+### Fixed
+
+- **The Gemini routing added in 0.7.x never ran — every reference used a tool name
+  that does not resolve.** Claude Code registers a plugin-provided MCP server as
+  `mcp__plugin_<plugin>_<server>__<tool>`, so the bundled server's real tool names
+  are `mcp__plugin_academic-writer_gemini-api__*`. All 35 references across 11 source
+  files used the bare `mcp__gemini-api__*` form instead. The failure was silent by
+  construction: `section-writer`, `synthesizer` and `voice-calibrator` each name the
+  tool in their frontmatter `tools:` allowlist, so the allowlist named a tool that
+  does not exist and each agent was spawned without it; their prompts then hit the
+  documented guard — "if the tool is NOT present in your available tools at all,
+  treat that identically to a `no_credentials` error and use the fallback path
+  immediately" — and quietly degraded to in-context Claude. Nothing errored, and the
+  MCP server itself tested healthy end-to-end the entire time, which is why three
+  releases shipped with the feature inert.
+
+  Confirmed that an explicit frontmatter allowlist *does* deliver an MCP tool when the
+  name is correct, rather than assuming it: `deep-reader` declares
+  `mcp__claude_ai_Sefaria__get_text` and receives it, while its siblings naming the
+  bare form receive nothing. The agents differed only in the tool name.
+
+  The rename also covers `src/workflows/proofread.js:373`, a plain string assignment
+  (`opts.mcpTool = '...'`) that a frontmatter-only sweep would miss, and the Path A
+  prereq in `tests/e2e/fixture-project/RUN.md`, which told an operator to check for a
+  tool name that never existed. Bare-form references in `CHANGELOG.md`,
+  `features.json` and `docs/{audits,reviews}/` are deliberately left as-is — they are
+  dated records of what was true when written. `docs/reviews/2026-05-28-ork-candlekeep-audit.md`
+  is one of them: it reported this exact bug ("reference `mcp__gemini-api__*` tools
+  that have no registration path") three months before it was fixed.
+
+
 ## [0.7.1] — 2026-09-02
 ### Changed
 
