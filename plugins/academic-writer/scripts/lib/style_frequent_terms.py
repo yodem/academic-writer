@@ -175,7 +175,27 @@ ENGLISH_STOPWORDS = {
     "through",
 }
 
-STOPWORDS = HEBREW_STOPWORDS | ENGLISH_STOPWORDS
+# Remnants of HTML entities that survive tokenization when a corpus file was
+# stored escaped (Hebrew gershayim are &quot; in word/document.xml). The docx
+# reader now unescapes before analysis, but .md/.txt corpus files can still
+# arrive pre-escaped, and "quot" outranking every real word poisons the
+# vocabulary steering the write skill reads off frequentTerms.
+ENTITY_REMNANTS = {
+    "quot",
+    "amp",
+    "apos",
+    "nbsp",
+    "lt",
+    "gt",
+    "ndash",
+    "mdash",
+    "rsquo",
+    "lsquo",
+    "rdquo",
+    "ldquo",
+}
+
+STOPWORDS = HEBREW_STOPWORDS | ENGLISH_STOPWORDS | ENTITY_REMNANTS
 
 
 def _normalize(word: str) -> str:

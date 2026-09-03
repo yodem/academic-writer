@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import re
 import statistics
+from typing import Optional
 
 HEBREW_RANGE = r"֐-׿"
 HEBREW_CHAR_RE = re.compile(f"[{HEBREW_RANGE}]")
@@ -59,12 +60,19 @@ FIRST_PERSON_MARKERS = {
     "believe",
 }
 
-# Rough Hebrew passive-voice proxies: nif'al/pu'al/huf'al patterns are hard to
-# detect without nikkud, so this is a coarse heuristic (documented as such):
-# words with a 3+ letter stem opening with נ ("nif'al"-shaped) or מ ("passive
-# participle"-shaped), plus the "by [agent]" construction.
-_HEB_PASSIVE_PREFIX_RE = re.compile(rf"^[נמ][{HEBREW_RANGE}]{{2,}}$")
-HEBREW_PASSIVE_AGENT_MARKER = "על ידי"
+# Hebrew passive voice is NOT measured. The previous heuristic flagged any 3+
+# letter word opening with נ or מ, which matches an enormous set of ordinary
+# non-passive words (מחקר, מאמר, מקום, נושא...). Measured against a real
+# corpus it returned 0.77 versus a 0.19 baseline and the contrastive layer
+# confidently reported "distinctively_high" — steering the section-writer
+# toward passive constructions the author does not use. Real nif'al/pu'al/
+# huf'al detection needs morphological analysis, which this stdlib-only,
+# model-free script cannot do (see module docstring), so the metric is
+# reported as null for Hebrew-dominant corpora rather than guessed at: a
+# wrong confident number is worse than an honest null, and
+# compute_contrastive already degrades such a metric to "unavailable".
+HEBREW_DOMINANCE_THRESHOLD = 0.1
+# English passive: a form of "to be" followed by a past participle.
 # English passive: a form of "to be" followed by a past participle.
 _EN_PASSIVE_RE = re.compile(
     r"\b(is|are|was|were|been|being|be)\s+\w+ed\b", re.IGNORECASE
@@ -167,17 +175,27 @@ def _sentence_length_distribution(lengths: list[int]) -> dict[str, int]:
     return dist
 
 
-def _passive_voice_frequency(sentences: list[str]) -> float:
+def _hebrew_share(sentences: list[str]) -> float:
+    """Fraction of corpus tokens containing Hebrew characters."""
+    words = [w for s in sentences for w in tokenize_words(s)]
+    if not words:
+        return 0.0
+    hebrew = sum(1 for w in words if HEBREW_CHAR_RE.search(w))
+    return hebrew / len(words)
+
+
+def _passive_voice_frequency(sentences: list[str]) -> Optional[float]:
+    """Share of sentences in the passive voice, or None when unmeasurable.
+
+    Returns None for Hebrew-dominant text: see the HEBREW_DOMINANCE_THRESHOLD
+    comment above. For Latin-script text the "to be" + past-participle regex
+    is a usable proxy and a number is returned.
+    """
     if not sentences:
         return 0.0
-    passive_hits = 0
-    for sentence in sentences:
-        words = tokenize_words(sentence)
-        heb_passive = any(_HEB_PASSIVE_PREFIX_RE.match(w) for w in words)
-        agent_passive = HEBREW_PASSIVE_AGENT_MARKER in sentence
-        en_passive = bool(_EN_PASSIVE_RE.search(sentence))
-        if heb_passive or agent_passive or en_passive:
-            passive_hits += 1
+    if _hebrew_share(sentences) > HEBREW_DOMINANCE_THRESHOLD:
+        return None
+    passive_hits = sum(1 for s in sentences if _EN_PASSIVE_RE.search(s))
     return round(passive_hits / len(sentences), 4)
 
 
@@ -197,13 +215,21 @@ def _first_person_frequency(sentences: list[str]) -> float:
 
 def compute_sentence_level(sentences: list[str]) -> dict:
     lengths = [len(tokenize_words(s)) for s in sentences]
-    return {
+    passive = _passive_voice_frequency(sentences)
+    result = {
         "length": _mean_stdev(lengths),
         "distribution": _sentence_length_distribution(lengths),
-        "passiveVoiceFrequency": _passive_voice_frequency(sentences),
+        "passiveVoiceFrequency": passive,
         "firstPersonFrequency": _first_person_frequency(sentences),
         "count": len(sentences),
     }
+    if passive is None:
+        result["passiveVoiceFrequencyNote"] = (
+            "Not measured: reliable Hebrew nif'al/pu'al/huf'al detection needs "
+            "morphological analysis unavailable to this stdlib-only script. "
+            "Judge passive voice qualitatively by reading the corpus."
+        )
+    return result
 
 
 def compute_paragraph_structure(paragraphs: list[str]) -> dict:

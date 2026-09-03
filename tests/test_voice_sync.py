@@ -114,3 +114,131 @@ def test_fails_loudly_when_author_key_missing(tmp_path):
     assert r.returncode == 1
     assert "author_key not found" in (r.stdout + r.stderr).lower()
     assert "<unknown>" not in (r.stdout + r.stderr).lower()
+
+
+# --- ck CLI contract ---------------------------------------------------------
+# voice-sync.sh used to call `ck books list|read|create|update`. There is no
+# `ck books` subcommand (`ck books --help` -> "unrecognized subcommand"), and
+# every call was wrapped in `2>/dev/null || echo "...local-only mode"`, so the
+# failure was reported as a missing CandleKeep install on a machine where ck
+# was installed and authenticated. These tests pin the real `ck items` surface
+# and pin that real errors are surfaced instead of swallowed.
+
+_CK_STUB = r"""#!/bin/bash
+# Fake `ck` implementing just enough of the real `ck items` surface.
+log="$CK_STUB_LOG"
+echo "$*" >> "$log"
+if [[ "$1" == "items" && "$2" == "--help" ]]; then exit 0; fi
+if [[ "$1" != "items" ]]; then
+  echo "error: unrecognized subcommand '$1'" >&2
+  exit 2
+fi
+case "$2" in
+  list)
+    echo '{"items":[{"id":"ITEM123","title":"Voice Profile — test-writer"}]}'
+    ;;
+  get)
+    printf '# remote\n\n> Updated 2999-01-01\n\nremote body\n'
+    ;;
+  import)
+    echo '{"id":"NEWITEM456"}'
+    ;;
+  put)
+    echo '{"ok":true}'
+    ;;
+  *)
+    echo "error: unrecognized subcommand '$2'" >&2
+    exit 2
+    ;;
+esac
+"""
+
+_CK_BROKEN = """#!/bin/bash
+if [[ "$1" == "items" && "$2" == "--help" ]]; then exit 0; fi
+echo "Error: Not found: Item not found" >&2
+exit 1
+"""
+
+
+def _bin_with_ck(tmp_path, name, body):
+    bin_dir = tmp_path / name
+    bin_dir.mkdir()
+    for bin_name in _REQUIRED_BINS + ("bash", "python3", "mktemp", "rm", "mkdir", "printf", "mv"):
+        real = shutil.which(bin_name)
+        if real and not (bin_dir / bin_name).exists():
+            (bin_dir / bin_name).symlink_to(real)
+    stub = bin_dir / "ck"
+    stub.write_text(body)
+    stub.chmod(0o755)
+    return str(bin_dir)
+
+
+def _env_for(tmp_path, bin_dir, log=None):
+    env = os.environ.copy()
+    env["PATH"] = bin_dir + ":" + env["PATH"]
+    env["VOICE_PROJECT_ROOT"] = str(tmp_path)
+    if log:
+        env["CK_STUB_LOG"] = str(log)
+    return env
+
+
+def test_push_uses_ck_items_not_ck_books(tmp_path):
+    """The whole point: no `ck books` call may survive, and an existing
+    "Voice Profile — <author_key>" book must be bound by title rather than
+    duplicated."""
+    log = tmp_path / "ck.log"
+    env = _env_for(tmp_path, _bin_with_ck(tmp_path, "bin-ck", _CK_STUB), log)
+    (tmp_path / "AUTHOR_VOICE.md").write_text("# local\n\n> Updated 2026-01-01\n")
+    _write_profile_with_author_key(tmp_path)
+
+    r = subprocess.run([str(SCRIPT), "push"], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    calls = log.read_text()
+    assert "books" not in calls, f"ck books call survived: {calls}"
+    assert "items list --json" in calls
+    # Bound to the existing item by title -> update, not a duplicate import.
+    assert "items put ITEM123" in calls
+    assert "import" not in calls
+    assert "ITEM123" in (tmp_path / ".voice" / ".candlekeep-id").read_text()
+
+
+def test_push_creates_via_items_import_when_no_remote(tmp_path):
+    log = tmp_path / "ck.log"
+    stub = _CK_STUB.replace('{"items":[{"id":"ITEM123","title":"Voice Profile — test-writer"}]}',
+                            '{"items":[]}')
+    env = _env_for(tmp_path, _bin_with_ck(tmp_path, "bin-ck", stub), log)
+    (tmp_path / "AUTHOR_VOICE.md").write_text("# local\n")
+    _write_profile_with_author_key(tmp_path)
+
+    r = subprocess.run([str(SCRIPT), "push"], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    calls = log.read_text()
+    assert "items import" in calls
+    assert "--title" in calls
+    assert (tmp_path / ".voice" / ".candlekeep-id").read_text().strip() == "NEWITEM456"
+
+
+def test_pull_reads_via_items_get(tmp_path):
+    log = tmp_path / "ck.log"
+    env = _env_for(tmp_path, _bin_with_ck(tmp_path, "bin-ck", _CK_STUB), log)
+    (tmp_path / "AUTHOR_VOICE.md").write_text("# local\n\n> Updated 2000-01-01\n")
+    _write_profile_with_author_key(tmp_path)
+
+    r = subprocess.run([str(SCRIPT), "pull"], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert "items get ITEM123" in log.read_text()
+    assert "remote body" in (tmp_path / "AUTHOR_VOICE.md").read_text()
+
+
+def test_real_ck_error_is_surfaced_not_reported_as_local_only(tmp_path):
+    """A working `ck` that returns an error must NOT be reported as an absent
+    or unsupported CandleKeep — that sends the user to debug their install."""
+    env = _env_for(tmp_path, _bin_with_ck(tmp_path, "bin-broken-ck", _CK_BROKEN))
+    (tmp_path / "AUTHOR_VOICE.md").write_text("# local\n")
+    _write_profile_with_author_key(tmp_path)
+
+    r = subprocess.run([str(SCRIPT), "push"], env=env, capture_output=True, text=True)
+    combined = r.stdout + r.stderr
+    assert r.returncode != 0, combined
+    assert "Item not found" in combined, combined
+    assert "local-only mode" not in combined, combined

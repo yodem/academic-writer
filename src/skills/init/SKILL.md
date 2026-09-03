@@ -326,7 +326,7 @@ AskUserQuestion(questions=[{
     {
       "label": "Yes, index my sources now",
       "description": "I'll enrich and index everything in your Candlekeep library.",
-      "markdown": "```\nSource Indexing\n───────────────\n→ Lists all items in your library\n→ Runs ck items enrich on each\n   (extracts title, author, TOC)\n→ Saves minimal metadata to profile\n   (id, title, type only)\n```"
+      "markdown": "```\nSource Indexing\n───────────────\n→ Lists items in your library\n   (scoped to the active shelf,\n    if you have set one)\n→ Saves minimal metadata to profile\n   (id, title, type only)\n```"
     },
     {
       "label": "Skip — I'll add sources later",
@@ -338,20 +338,32 @@ AskUserQuestion(questions=[{
 }])
 ```
 
-If **"Yes"**: list and enrich all items:
+If **"Yes"**: list the items, scoped to the active shelf when one is set:
 
 ```bash
-ck items list --json
+# `ck shelf use` records the active shelf in ./.candlekeep/active-shelf.
+SHELF="$(tr -d '[:space:]' < ./.candlekeep/active-shelf 2>/dev/null || true)"
+if [ -n "$SHELF" ]; then
+  ck items list --shelf "$SHELF" --json || ck items list --json
+else
+  ck items list --json
+fi
 ```
 
-For each item ID:
+Do **not** run `ck items enrich` over the library. It is a manual metadata *setter*
+(`--title`, `--author`, `--toc`, ...), not an auto-extractor: a bare
+`ck items enrich <ID>` exits with "At least one of --title, --author, --description,
+--toc, --add-prompt, or --sample-question is required", and running it across every
+item would overwrite metadata the researcher curated by hand.
+
+If an item is missing a title or author, tell the researcher which items are thin and
+offer to set the fields explicitly, one item at a time:
+
 ```bash
-ck items enrich ITEM_ID
+ck items enrich ITEM_ID --title "..." --author "..."
 ```
 
-Tell the researcher: "Enriching your sources — extracting titles, authors, and table of contents from each document. This may take a moment..."
-
-After enrichment, re-list and build the sources array (id + title + type only — never raw JSON).
+Build the sources array from the listing (id + title + type only — never raw JSON).
 
 **If Candlekeep is NOT enabled**: set sources to `[]`.
 

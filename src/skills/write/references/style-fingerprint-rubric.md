@@ -18,7 +18,7 @@ For the drafted paragraph, **count** the following and compare against the finge
 
 2. **Sentence length variation** — Check that sentence lengths vary. Compare distribution against `computationalMetrics.sentenceLevel.distribution`. If all sentences same length (±3 words), flag as AI-like and add variety.
 
-3. **Passive voice** — Count passive constructions (nif'al/pu'al/huf'al patterns). Compare frequency against `computationalMetrics.sentenceLevel.passiveVoiceFrequency`.
+3. **Passive voice** — Count passive constructions (nif'al/pu'al/huf'al patterns). Compare frequency against `computationalMetrics.sentenceLevel.passiveVoiceFrequency`. **This field is `null` for Hebrew corpora** (see its `passiveVoiceFrequencyNote`): stdlib-only morphology-free detection of nif'al/pu'al/huf'al is not reliable, so no number is emitted rather than a wrong one. When it is null, judge passive voice qualitatively from the corpus excerpts and treat the contrastive entry's `"unavailable"` status as expected, not as a defect.
 
 4. **First-person usage** — Count first-person markers (אני, לדעתי, אסביר, etc.). Compare against `computationalMetrics.sentenceLevel.firstPersonFrequency`.
 

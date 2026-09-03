@@ -41,7 +41,7 @@ npx academic-writer-setup       (interactive CLI — runs in terminal, no Claude
     v
 [Step 4] If candlekeep.enabled:
     |        User uploads sources: ck items add <file>
-    |        Enrich all: ck items enrich <id> (per item)
+    |        List (shelf-scoped): ck items list --shelf
     |        Build sources[] array (id, title, type)
     |    Else:
     |        sources = []
@@ -77,7 +77,7 @@ npx academic-writer-setup       (interactive CLI — runs in terminal, no Claude
     v
 [Step 2: Source Selection]
     |   If candlekeep.enabled:
-    |       ck items enrich (all) → ck items list --json
+    |       ck items list [--shelf <active>] --json
     |   Else:
     |       Use profile.sources[]
     |   Present list → user picks sources

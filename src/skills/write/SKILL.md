@@ -180,13 +180,25 @@ Store the draft text as `userDraftText` regardless of which option is chosen. If
 ### Step 2: Source Selection
 
 
-**If Candlekeep is enabled**, enrich all items then list them:
+**If Candlekeep is enabled**, list the available sources — scoped to the active shelf when one is set:
 
 ```bash
-# Enrich all items first (extracts title, author, description, TOC)
-ck items list --json | python3 -c "import sys,json; [print(i['id']) for i in json.load(sys.stdin)]" | while read id; do ck items enrich "$id"; done
-ck items list --json
+# `ck shelf use` records the active shelf in ./.candlekeep/active-shelf.
+# Scope the listing to it so a Jewish Studies write run doesn't present the
+# researcher's entire library (engineering books included) as source options.
+SHELF="$(tr -d '[:space:]' < ./.candlekeep/active-shelf 2>/dev/null || true)"
+if [ -n "$SHELF" ]; then
+  ck items list --shelf "$SHELF" --json || ck items list --json
+else
+  ck items list --json
+fi
 ```
+
+Do **not** run `ck items enrich` here. It is a manual metadata *setter* (`--title`,
+`--author`, `--toc`, ...), not an auto-extractor: a bare `ck items enrich <ID>` exits
+with "At least one of --title, --author, --description, --toc, --add-prompt, or
+--sample-question is required". Enrichment is the researcher's curation step, and
+running it across the whole library would overwrite it.
 
 **If Candlekeep is NOT enabled**, use the `sources` array from the profile (indexed during init) to present available sources. If the sources array is empty, ask the researcher to describe their sources manually.
 

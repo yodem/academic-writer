@@ -4,6 +4,16 @@
 # Env:
 #   VOICE_PROJECT_ROOT — overrides $(pwd) for testing
 #   VOICE_WRITER_NAME  — overrides author_key resolution; primarily for testing
+#
+# CandleKeep CLI surface used here (verified against `ck items --help`):
+#   ck items list --json          -> {"items":[{id,title,...}]}   (NOT a bare array)
+#   ck items get   <ID>           -> document markdown on stdout
+#   ck items import <FILE> --title <T> --json   -> creates a new book
+#   ck items put   <ID> -f <FILE>               -> replaces document content
+# There is no `ck books` subcommand. The previous version called one, and wrapped
+# every call in `2>/dev/null || echo "...local-only mode"`, so a hard CLI error
+# was reported as a missing/unsupported CandleKeep install. Failures now print
+# the real stderr and exit non-zero; only a genuinely absent `ck` is local-only.
 
 set -euo pipefail
 
@@ -45,37 +55,108 @@ if ! command -v ck >/dev/null 2>&1; then
   exit 0
 fi
 
-ensure_id() {
-  if [[ -f "$id_cache" ]]; then
-    cat "$id_cache"
-    return 0
+# `ck` resolves on PATH but may still be unrunnable (a shim whose interpreter is
+# missing, a stub). Exit 127 from the binary itself means "command not found" —
+# that, and ONLY that, is local-only mode. Every other non-zero exit is a real
+# CandleKeep error and must be reported as one. `items --help` is a local clap
+# help path: no network, unlike `ck --version`.
+set +e
+ck items --help >/dev/null 2>&1
+_ck_probe=$?
+set -e
+if [[ $_ck_probe -eq 127 ]]; then
+  echo "voice-sync: ck is on PATH but not runnable (exit 127) — local-only mode"
+  exit 0
+fi
+
+# Run a ck command, capturing stdout. On failure, surface the REAL stderr and
+# fail — never rewrite a CLI error into "ck unavailable".
+ck_run() {
+  local err out status
+  err=$(mktemp)
+  set +e
+  out=$(ck "$@" 2>"$err")
+  status=$?
+  set -e
+  if [[ $status -ne 0 ]]; then
+    echo "voice-sync: \`ck $*\` failed (exit $status): $(tr '\n' ' ' < "$err")" >&2
+    rm -f "$err"
+    return $status
   fi
-  # Title fallback — pass title via env var to avoid shell injection
-  id=$(ck books list --json 2>/dev/null \
-    | VOICE_TITLE="$title" python3 -c "
+  rm -f "$err"
+  printf '%s' "$out"
+}
+
+# Extract an item id from a ck --json payload, tolerating the shapes ck uses
+# ({"id":...}, {"item":{"id":...}}, {"items":[...]}, or a bare list).
+_parse_id_by_title() {
+  VOICE_TITLE="$title" python3 -c "
 import sys, json, os
 try:
     d = json.load(sys.stdin)
 except Exception:
     sys.exit(0)
 t = os.environ['VOICE_TITLE']
-if not isinstance(d, list):
+items = d.get('items') if isinstance(d, dict) else d
+if not isinstance(items, list):
     sys.exit(0)
-for b in d:
+for b in items:
     if isinstance(b, dict) and b.get('title') == t:
         print(b.get('id', ''))
         sys.exit(0)
-" || true)
-  if [[ -n "$id" ]]; then
-    mkdir -p "$voice_dir"
-    echo "$id" > "$id_cache"
+"
+}
+
+_parse_created_id() {
+  python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+if isinstance(d, dict):
+    for key in ('id', 'itemId', 'documentId'):
+        if isinstance(d.get(key), str):
+            print(d[key]); sys.exit(0)
+    for key in ('item', 'document', 'book'):
+        inner = d.get(key)
+        if isinstance(inner, dict) and isinstance(inner.get('id'), str):
+            print(inner['id']); sys.exit(0)
+"
+}
+
+cache_id() {
+  mkdir -p "$voice_dir"
+  printf '%s' "$1" > "$id_cache"
+}
+
+# Resolve the CandleKeep item id for this author's voice profile: cached id
+# first, then a title lookup against the library (so a repaired push binds to
+# an existing "Voice Profile — <author_key>" book instead of duplicating it).
+ensure_id() {
+  if [[ -s "$id_cache" ]]; then
+    cat "$id_cache"
+    return 0
   fi
-  echo "$id"
+  local listing id
+  listing=$(ck_run items list --json) || return 1
+  id=$(printf '%s' "$listing" | _parse_id_by_title)
+  if [[ -n "$id" ]]; then
+    cache_id "$id"
+  fi
+  printf '%s' "$id"
+}
+
+require_profile() {
+  if [[ ! -f "$profile" ]]; then
+    echo "voice-sync $action: $profile does not exist — run /academic-writer:voice first" >&2
+    exit 1
+  fi
 }
 
 case "$action" in
   status)
-    if [[ -f "$id_cache" ]]; then
+    if [[ -s "$id_cache" ]]; then
       echo "voice-sync status: cached id=$(cat "$id_cache"), title=$title"
     else
       echo "voice-sync status: no cached candlekeep id"
@@ -84,12 +165,17 @@ case "$action" in
   pull)
     id=$(ensure_id)
     if [[ -z "$id" ]]; then
-      echo "voice-sync pull: no remote book yet (run push to create)"
+      echo "voice-sync pull: no remote book titled \"$title\" yet (run push to create)"
       exit 0
     fi
     # Clean up the temp file if the pull is interrupted (e.g. SessionStart hook timeout).
     trap 'rm -f "$profile.tmp" 2>/dev/null' EXIT
-    ck books read "$id" --format md > "$profile.tmp"
+    ck_run items get "$id" > "$profile.tmp"
+    if [[ ! -s "$profile.tmp" ]]; then
+      echo "voice-sync pull: remote book id=$id returned empty content; kept local" >&2
+      rm -f "$profile.tmp"
+      exit 1
+    fi
     # Last-write-wins by `> Updated` stamp comparison
     local_stamp=$(grep -m1 '^> Updated' "$profile" 2>/dev/null | sed -E 's/^> Updated ([0-9-]+).*/\1/' || echo "0")
     remote_stamp=$(grep -m1 '^> Updated' "$profile.tmp" 2>/dev/null | sed -E 's/^> Updated ([0-9-]+).*/\1/' || echo "0")
@@ -97,32 +183,24 @@ case "$action" in
       mv "$profile.tmp" "$profile"
       echo "voice-sync pull: remote ($remote_stamp) overwrote local ($local_stamp)"
     else
-      rm "$profile.tmp"
+      rm -f "$profile.tmp"
       echo "voice-sync pull: local ($local_stamp) is newer or equal to remote ($remote_stamp); kept local"
     fi
     ;;
   push)
+    require_profile
     id=$(ensure_id)
     if [[ -z "$id" ]]; then
-      id=$(ck books create --title "$title" --format md --content "$profile" --json 2>/dev/null \
-        | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    print(d.get('id', ''))
-except Exception:
-    pass
-" 2>/dev/null || true)
-      if [[ -n "$id" ]]; then
-        mkdir -p "$voice_dir"
-        echo "$id" > "$id_cache"
-        echo "voice-sync push: created remote book id=$id"
-      else
-        echo "voice-sync push: ck unavailable or books subcommand unsupported — local-only mode"
+      created=$(ck_run items import "$profile" --title "$title" --json)
+      id=$(printf '%s' "$created" | _parse_created_id)
+      if [[ -z "$id" ]]; then
+        echo "voice-sync push: \`ck items import\` succeeded but returned no item id; payload was: $(printf '%s' "$created" | tr '\n' ' ' | cut -c1-300)" >&2
+        exit 1
       fi
+      cache_id "$id"
+      echo "voice-sync push: created remote book id=$id"
     else
-      ck books update "$id" --content "$profile" 2>/dev/null || \
-        echo "voice-sync push: ck update failed — local-only mode"
+      ck_run items put "$id" -f "$profile" >/dev/null
       echo "voice-sync push: updated remote book id=$id"
     fi
     ;;

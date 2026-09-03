@@ -10,10 +10,17 @@ XML runs are stripped with a regex (docx is just a zip of XML — no
 python-docx dependency needed for raw text). .pdf cannot be parsed without a
 third-party library, so it is skipped with a warning; the init skill's
 separate qualitative-extraction step (pdfplumber, best-effort) handles PDFs.
+
+Tracked changes are excluded. Corpus files are frequently supervisor-returned
+or peer-reviewed papers, and a reviewer's inserted text is not the author's
+voice: `<w:ins>` content (someone else's insertion) and `<w:del>` content
+(text the author removed) are both dropped before analysis, so only the
+accepted base text reaches the style fingerprint.
 """
 
 from __future__ import annotations
 
+import html
 import re
 import zipfile
 from pathlib import Path
@@ -23,7 +30,35 @@ DOCX_SUFFIXES = {".docx"}
 SKIP_SUFFIXES = {".pdf"}
 
 _DOCX_TAG_RE = re.compile(r"<[^>]+>")
+# Paragraph boundaries become blank lines: style_metrics_core.split_paragraphs
+# splits on \n\s*\n, so a single newline would collapse the whole file into one
+# paragraph and wreck every paragraph-level metric.
 _DOCX_PARA_BREAK_RE = re.compile(r"</w:p>", re.IGNORECASE)
+_DOCX_TAB_RE = re.compile(r"<w:tab\b[^>]*/>", re.IGNORECASE)
+# Tracked-change containers, stripped *with their content* before tag removal
+# (after tag removal there is no <w:ins> left to find).
+_DOCX_REVISION_RES = (
+    re.compile(r"<w:ins\b[^>]*>.*?</w:ins>", re.DOTALL | re.IGNORECASE),
+    re.compile(r"<w:del\b[^>]*>.*?</w:del>", re.DOTALL | re.IGNORECASE),
+    re.compile(r"<w:moveFrom\b[^>]*>.*?</w:moveFrom>", re.DOTALL | re.IGNORECASE),
+)
+_MAX_REVISION_PASSES = 5
+
+
+def _strip_tracked_changes(xml: str) -> str:
+    """Remove <w:ins>/<w:del>/<w:moveFrom> elements and everything inside them.
+
+    Applied repeatedly: revision containers nest (a deletion inside an
+    insertion, a move inside a deletion), and a single non-greedy pass can
+    leave an outer container behind.
+    """
+    for _ in range(_MAX_REVISION_PASSES):
+        before = xml
+        for pattern in _DOCX_REVISION_RES:
+            xml = pattern.sub(" ", xml)
+        if xml == before:
+            break
+    return xml
 
 
 def _read_docx_text(path: Path) -> str:
@@ -31,13 +66,18 @@ def _read_docx_text(path: Path) -> str:
     regex (no python-docx dependency)."""
     with zipfile.ZipFile(path) as zf:
         xml = zf.read("word/document.xml").decode("utf-8", errors="ignore")
-    # Turn paragraph boundaries into newlines before stripping tags so
-    # sentence/paragraph splitting downstream still works.
-    xml = _DOCX_PARA_BREAK_RE.sub("</w:p>\n", xml)
+    # Order matters: tracked-change containers must go before tag stripping,
+    # and entity unescaping must come after it (unescaping first would turn a
+    # literal &lt;w:p&gt; into a tag the stripper would then delete).
+    xml = _strip_tracked_changes(xml)
+    xml = _DOCX_TAB_RE.sub(" ", xml)
+    xml = _DOCX_PARA_BREAK_RE.sub("</w:p>\n\n", xml)
     text = _DOCX_TAG_RE.sub("", xml)
-    # Collapse repeated blank lines but keep paragraph breaks.
-    lines = [line.strip() for line in text.splitlines()]
-    return "\n".join(line for line in lines if line)
+    text = html.unescape(text)
+    # Normalize whitespace but keep the blank line that marks a paragraph break.
+    text = "\n".join(line.strip() for line in text.splitlines())
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 def gather_corpus_files(input_path: Path) -> list[Path]:

@@ -18,7 +18,6 @@ import json
 import re
 
 _JSON_FENCE_RE = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
-_HEADING_RE = re.compile(r"^#{1,6}\s*(.+)$", re.MULTILINE)
 
 # Dot-paths of numeric leaves we compare between computed metrics and baseline.
 CONTRASTIVE_METRIC_PATHS = [
@@ -36,41 +35,59 @@ HIGH_RATIO = 1.2
 LOW_RATIO = 0.8
 
 
-def extract_baseline_json(markdown_text: str) -> dict | None:
+def _looks_like_baseline(payload: object) -> bool:
+    """True when a parsed fence actually carries baseline metrics.
+
+    Identify the payload by the metrics it contains, not by the heading above
+    it: the shipped Hebrew Linguistic Reference has a Hebrew chapter heading,
+    so a Latin-only "baseline"/"08" heading match silently fell through to the
+    first ```json fence in the file and compared against unrelated numbers.
+    """
+    if not isinstance(payload, dict):
+        return False
+    return any(
+        isinstance(_get_path(payload, path), (int, float))
+        for path in CONTRASTIVE_METRIC_PATHS
+    )
+
+
+def extract_baseline_json(markdown_text: str) -> tuple[dict | None, list[str]]:
     """Extract the baseline JSON code block from the cached markdown.
 
-    Prefers a fence that appears under a heading mentioning "baseline" or
-    "08"; falls back to the first ```json fence found anywhere in the file.
+    Returns (payload, warnings). Selection is by content: the first ```json
+    fence that parses and resolves at least one CONTRASTIVE_METRIC_PATHS leaf
+    wins, regardless of the language of the heading above it. If no fence
+    qualifies, the first parseable fence is used as a last resort *and a
+    warning is emitted* — the previous silent fallback produced confident
+    comparisons against the wrong numbers.
     """
+    warnings: list[str] = []
     fences = list(_JSON_FENCE_RE.finditer(markdown_text))
     if not fences:
-        return None
+        return None, warnings
 
-    headings = list(_HEADING_RE.finditer(markdown_text))
-
-    def _heading_before(pos: int) -> str:
-        candidate = ""
-        for h in headings:
-            if h.start() < pos:
-                candidate = h.group(1)
-            else:
-                break
-        return candidate
-
-    for fence in fences:
-        heading = _heading_before(fence.start()).lower()
-        if "baseline" in heading or "08" in heading:
-            try:
-                return json.loads(fence.group(1))
-            except json.JSONDecodeError:
-                continue
-
+    parsed: list[dict] = []
     for fence in fences:
         try:
-            return json.loads(fence.group(1))
+            payload = json.loads(fence.group(1))
         except json.JSONDecodeError:
             continue
-    return None
+        if _looks_like_baseline(payload):
+            return payload, warnings
+        if isinstance(payload, dict):
+            parsed.append(payload)
+
+    if parsed:
+        warnings.append(
+            "No JSON code block in --baseline carried recognizable baseline "
+            "metrics (expected at least one of: "
+            + ", ".join(CONTRASTIVE_METRIC_PATHS)
+            + "); falling back to the first parseable JSON block. Contrastive "
+            "results may compare against unrelated numbers."
+        )
+        return parsed[0], warnings
+
+    return None, warnings
 
 
 def _get_path(data: dict, dot_path: str):

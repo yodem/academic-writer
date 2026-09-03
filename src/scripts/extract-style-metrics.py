@@ -186,7 +186,12 @@ def main(argv: Optional[list[str]] = None) -> int:
             baseline_path = Path(args.baseline)
             try:
                 baseline_markdown = baseline_path.read_text(encoding="utf-8")
-                baseline_metrics = extract_baseline_json(baseline_markdown)
+                baseline_metrics, baseline_warnings = extract_baseline_json(
+                    baseline_markdown
+                )
+                result.setdefault("meta", {}).setdefault("warnings", []).extend(
+                    baseline_warnings
+                )
             except OSError as exc:
                 baseline_metrics = None
                 result.setdefault("meta", {}).setdefault("warnings", []).append(

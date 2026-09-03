@@ -118,3 +118,20 @@ Emit a single closing block:
 <!-- distilled: N transcripts merged, M tokens, YYYY-MM-DD -->
 ```
 on the last line of the file.
+
+## Verification — run it, never predict it
+
+Every number and every gate result you report must come from a command you actually
+executed in this run. Do not estimate the word count, and never print an "Expected
+script output" block in place of real output: an agent that predicts a verification
+result will eventually report a pass that did not happen.
+
+Run both, and paste their **real** stdout/stderr and exit codes into your report:
+
+```bash
+wc -w AUTHOR_VOICE.md
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/check-voice-populated.py" AUTHOR_VOICE.md; echo "exit=$?"
+```
+
+If you cannot run a command (tool unavailable, file missing), say so explicitly and
+report the gate as **not verified** — never as passed.
