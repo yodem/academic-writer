@@ -3,7 +3,7 @@ name: setup
 description: "Friendly, guided first-run setup wizard for a non-engineer: one question at a time, gets your Gemini API key working with a live test, checks your Python tools, and shows you a sample paragraph before you're done. Use on first install, or anytime you want a fast guided re-check of your setup."
 user-invocable: true
 disable-model-invocation: true
-allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion, mcp__gemini-api__gemini_raw]
+allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion, mcp__plugin_academic-writer_gemini-api__gemini_raw]
 metadata: {author: "Yotam Fromm", version: "0.1.0"}
 ---
 
@@ -182,7 +182,7 @@ present just wins.
 Actually call the tool — don't just check the file exists:
 
 ```
-mcp__gemini-api__gemini_raw({
+mcp__plugin_academic-writer_gemini-api__gemini_raw({
   system: "Reply with exactly the word PONG and nothing else.",
   prompt: "PING"
 })
@@ -251,7 +251,7 @@ AskUserQuestion(questions=[{
 ```
 
 Generate a 2-4 sentence paragraph on that topic, in `fieldOfStudy`'s general register, using whichever writer is configured:
-- If Gemini was enabled and passed the live test: call `mcp__gemini-api__gemini_raw` with a short system prompt asking for a 2-4 sentence academic-register paragraph on the topic.
+- If Gemini was enabled and passed the live test: call `mcp__plugin_academic-writer_gemini-api__gemini_raw` with a short system prompt asking for a 2-4 sentence academic-register paragraph on the topic.
 - Otherwise: write the paragraph yourself (Claude) directly in the conversation — no tool call needed.
 
 Show the paragraph, then:

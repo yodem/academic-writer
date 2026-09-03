@@ -17,7 +17,7 @@ Both runs use the SAME pinned inputs below so the only variable is the engine. O
 
 ## Path A — WITH Gemini
 
-Prereq: `/reload-plugins` so `mcp__gemini-api__*` is connected. Run `/write` with `geminiFallback=false`.
+Prereq: `/reload-plugins` so `mcp__plugin_academic-writer_gemini-api__*` is connected. Run `/write` with `geminiFallback=false`.
 The `section-writer` routes Skills 1–7 through `gemini_write_section`; the auditor (Claude) gates each
 paragraph; `synthesizer` routes prose through `gemini_synthesize`.
 

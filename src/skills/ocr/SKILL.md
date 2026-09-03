@@ -2,7 +2,7 @@
 name: ocr
 description: "OCR a scanned PDF or image (or a directory of them) into clean plain-text markdown via the bundled Gemini vision tool. Skips Gemini entirely for born-digital pages (extracted directly). Use when you have a scanned source — an old article, a photographed archival page, a screenshot of a source — and want its text extracted before using it in research or writing. Takes a path to a file or directory as its argument."
 user-invocable: true
-allowedTools: [Bash, Read, Write, Glob, mcp__gemini-api__gemini_ocr]
+allowedTools: [Bash, Read, Write, Glob, mcp__plugin_academic-writer_gemini-api__gemini_ocr]
 metadata: {author: "Yotam Fromm", version: "0.1.0"}
 ---
 
@@ -115,7 +115,7 @@ reports `truncated`/`truncation_message` if the document is longer — loop, fee
 invocation; wait for each result before making the next one:
 
 ```
-mcp__gemini-api__gemini_ocr({
+mcp__plugin_academic-writer_gemini-api__gemini_ocr({
   document_path: "ABS_PATH_TO_DOCUMENT",
   target_language: "he" | "en" | "mixed",
   response_format: "concise"

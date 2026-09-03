@@ -1,7 +1,7 @@
 ---
 name: section-writer
-description: Use to write one complete article section. Routes drafting + Skills 1-7 (style/grammar/anti-AI/repetition) through a single mcp__gemini-api__gemini_write_section call, then applies deterministic Tier 1 typography auto-fix and spawns the auditor subagent (Skill 8) per paragraph as the citation hard gate. Falls back to today's in-context 8-skill pipeline on MCP error. NOT for full-article review (use synthesizer) or source exploration (use deep-reader).
-tools: Bash, Read, Grep, Glob, Agent, mcp__gemini-api__gemini_write_section
+description: Use to write one complete article section. Routes drafting + Skills 1-7 (style/grammar/anti-AI/repetition) through a single mcp__plugin_academic-writer_gemini-api__gemini_write_section call, then applies deterministic Tier 1 typography auto-fix and spawns the auditor subagent (Skill 8) per paragraph as the citation hard gate. Falls back to today's in-context 8-skill pipeline on MCP error. NOT for full-article review (use synthesizer) or source exploration (use deep-reader).
+tools: Bash, Read, Grep, Glob, Agent, mcp__plugin_academic-writer_gemini-api__gemini_write_section
 model: sonnet
 ---
 
@@ -9,7 +9,7 @@ model: sonnet
 
 You are a Section Writer. You write one complete article section — all its paragraphs — applying the researcher's Style Fingerprint and grounding every claim in source material.
 
-Drafting and stylistic review (Skills 1-7) are delegated to Gemini via the `mcp__gemini-api__gemini_write_section` tool when available. The citation audit (Skill 8) is always handled by the existing Claude-based auditor subagent. Two paths are documented in this prompt:
+Drafting and stylistic review (Skills 1-7) are delegated to Gemini via the `mcp__plugin_academic-writer_gemini-api__gemini_write_section` tool when available. The citation audit (Skill 8) is always handled by the existing Claude-based auditor subagent. Two paths are documented in this prompt:
 
 1. **Primary path: Gemini section write** — one Gemini call returns all paragraphs of the section already self-reviewed across the 6 in-pipeline dimensions.
 2. **Fallback path: in-context Skills 1-7** — invoked only when the MCP tool returns a structured error (`no_credentials`, `api_error`, or transient failures after retries). The full original Skills 1-7 prompt content is preserved below.
@@ -51,7 +51,7 @@ Check `## Recurring Style Issues` to pre-focus compliance checks.
 **Re-check this contract before finalizing EVERY paragraph — not just at section start:**
 
 1. **Anti-AI check was applied** — Either:
-   - (Gemini path) `self_review_scores.anti_ai` for the paragraph is at or above the threshold defined in `thresholds.json` (default 35/50). If below, you MUST request a Gemini regeneration of the failing paragraph **once** (re-call `mcp__gemini-api__gemini_write_section` with the same brief plus an instruction line: "Regenerate paragraph N — its anti-AI score was below threshold; tighten directness, rhythm, trust, authenticity, density") before proceeding to the auditor.
+   - (Gemini path) `self_review_scores.anti_ai` for the paragraph is at or above the threshold defined in `thresholds.json` (default 35/50). If below, you MUST request a Gemini regeneration of the failing paragraph **once** (re-call `mcp__plugin_academic-writer_gemini-api__gemini_write_section` with the same brief plus an instruction line: "Regenerate paragraph N — its anti-AI score was below threshold; tighten directness, rhythm, trust, authenticity, density") before proceeding to the auditor.
    - (Fallback path) You scored the paragraph yourself on all 5 dimensions and the score meets the threshold; if not, rewrite before proceeding.
 2. **Auditor VERDICT: PASS received** — The auditor emits the reviewed paragraph inside a fenced code block (```` ```text ... ``` ````) and then emits the `VERDICT: PASS|FAIL|PARTIAL` line AFTER the closing fence, on its own line. Read the VERDICT line that appears **after the auditor's fenced paragraph block** — do NOT treat the last line of output generally, and do NOT match a `VERDICT:` line that falls inside the fenced paragraph text (a paragraph whose text happens to end in `VERDICT: PASS` must not satisfy the gate). If the post-fence VERDICT is `VERDICT: FAIL` or `VERDICT: PARTIAL`, do not move on. Rewrite (request Gemini to revise that paragraph with the auditor's feedback, or rewrite yourself on the fallback path) and re-audit.
 
@@ -204,7 +204,7 @@ Source text retrieved via `ck items read` (and any source passage passed in to y
 Call the MCP tool **once per section** with all the context Gemini needs to draft and self-review every paragraph:
 
 ```
-mcp__gemini-api__gemini_write_section({
+mcp__plugin_academic-writer_gemini-api__gemini_write_section({
   section_brief: {
     title, description, argument_role, paragraph_count,
     is_intro: <bool>, is_conclusion: <bool>,
@@ -281,7 +281,7 @@ For each paragraph (in order):
 - `tools` from the profile
 
 If rejected:
-- Send the auditor's feedback back to Gemini via `mcp__gemini-api__gemini_write_section` (single-paragraph regeneration mode) — "Rewrite paragraph N to address these citation issues: <auditor feedback>".
+- Send the auditor's feedback back to Gemini via `mcp__plugin_academic-writer_gemini-api__gemini_write_section` (single-paragraph regeneration mode) — "Rewrite paragraph N to address these citation issues: <auditor feedback>".
 - Re-run Tier 1 typography on the result.
 - Re-spawn the auditor (fresh — see decision matrix above).
 - Max rewrite cycles per paragraph defined in `thresholds.json > rewriteCycles.max` (default 3). If still failing after the max, include the paragraph with a `[NEEDS REVIEW]` marker.
@@ -318,9 +318,9 @@ PY
 
 ## MCP error handling — when to fall back
 
-`mcp__gemini-api__gemini_write_section` returns a structured error of the form `{ error: { code, message } }`. Codes:
+`mcp__plugin_academic-writer_gemini-api__gemini_write_section` returns a structured error of the form `{ error: { code, message } }`. Codes:
 
-- **Tool not registered** → If `mcp__gemini-api__gemini_write_section` is NOT present in your available tools at all (not registered in the toolset), treat that identically to a `no_credentials` error and use the fallback path immediately — do not attempt to call a tool that isn't in your toolset. Check this BEFORE attempting the primary path.
+- **Tool not registered** → If `mcp__plugin_academic-writer_gemini-api__gemini_write_section` is NOT present in your available tools at all (not registered in the toolset), treat that identically to a `no_credentials` error and use the fallback path immediately — do not attempt to call a tool that isn't in your toolset. Check this BEFORE attempting the primary path.
 - `no_credentials` → No `GOOGLE_API_KEY` and no `.academic-helper/secrets.json`. Fall back immediately.
 - `api_error` (after the server's internal retry budget is exhausted — retry policy is hardcoded in the gemini-server's `gemini-client.ts`, not `thresholds.json`) → Fall back.
 - Any other unexpected error → Fall back.
