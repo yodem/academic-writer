@@ -4,6 +4,39 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.7.6] — 2026-09-03
+### Fixed
+
+- **The v0.7.5 geresh fix converted closing single-quotes.** It rested on a claim
+  made in this changelog — that all 517 Hebrew-preceded apostrophes in the
+  measured corpus "are abbreviations or transliterations, none are closing
+  quotes". That claim was wrong. It was generalized from a handful of sampled
+  long-run cases, and a proper scan finds **119** apostrophes closing a
+  single-quoted span: `'הדברים אשר אנכי מגיד לך'`, `'בין אדם לחברו'`,
+  `'חכמת ישראל'`. Preceding-run length does not separate the two cases — `פרופ'`
+  is four letters, the closing quote in `...מגיד לך'` follows two.
+
+  Two consequences, both fixed. An apostrophe is now treated as geresh only when
+  it is *not* the closing half of a paired span, decided by scanning each line
+  and matching openers to closers. And a confirmed quote mark is **removed**
+  rather than folded: `WORD_RE` accepts `'` for English (`don't`, `writer's`), so
+  a quote left in place welds onto the adjacent word — which is why `ישראל`
+  reported 122 against a true 128.
+
+- **A one-letter Hebrew prefix glued to an opening quote split the quoted
+  title.** `ו'הכתב והקבלה'` ("and 'the Ktav ve-haKabbalah'"), `ל'כתב והקבלה'`,
+  `ש'הכתב והקבלה'` — the prefix leaves the apostrophe flanked by Hebrew on both
+  sides, exactly the shape of a transliteration (`ג'ון`, `אתרח'סיס`), so it was
+  read as an internal geresh and the title's last word split off as its own term.
+  `הכתב והקבלה` is a commentary this corpus discusses at length, so this was
+  losing real subject vocabulary, not noise. Such an apostrophe is now a
+  *candidate* opener, confirmed by finding a closing quote; an unpaired candidate
+  falls back to geresh, which keeps transliterations working.
+
+  Measured on the corpus: tokens carrying a spurious geresh or welded quote fall
+  from **0.330% to 0.037%** — `ישראל` 122 → 128, `והקבלה` 36 → 42. The remaining
+  ~17 are quotes the source itself never closes.
+
 ## [0.7.5] — 2026-09-03
 ### Fixed
 

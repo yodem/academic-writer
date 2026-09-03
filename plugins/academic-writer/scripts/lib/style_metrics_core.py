@@ -54,15 +54,27 @@ _ASCII_QUOTE_AS_GERSHAYIM_RE = re.compile(
 # ע'(42)/ע׳(1), ב'(30)/ב׳(5). Seven abbreviations were being counted as
 # fourteen separate words.
 #
-# Only ONE side is required here, unlike gershayim above, and deliberately: an
-# ASCII double quote is genuinely Hebrew's quotation mark, so converting it
-# needs a Hebrew letter on both sides to avoid eating `אמר "שלום"`. A single
-# quote is not — Hebrew quotes with double marks — so a lone trailing form like
-# א' is an abbreviation, not a closing quote. Checked against the corpus: all
-# 517 occurrences after a Hebrew letter are abbreviations or transliterations
-# (לפרופ', אתרח'סיס), none are closing quotes.
+# Two cases, and only one of them is unambiguous.
+#
+# BETWEEN two Hebrew letters it is always geresh — a transliterated consonant
+# (ג׳ורג׳, אתרח׳סיס). Nothing else puts an apostrophe there.
+#
+# TRAILING a Hebrew letter it is ambiguous, and an earlier version of this fix
+# converted it unconditionally on the stated basis that "all 517 occurrences
+# after a Hebrew letter are abbreviations". That was wrong: it was generalized
+# from a handful of sampled long-run cases, and a proper scan finds 119 of them
+# closing a single-quoted span — 'הדברים אשר אנכי מגיד לך', 'בין אדם לחברו',
+# 'חכמת ישראל'. Converting those welds the quote onto the last word, so ישראל
+# reported 122 where it should be 128.
+#
+# Preceding-run length does not separate the two (פרופ' is 4 letters, the
+# closing quote in ...מגיד לך' is 2). What does is pairing: an apostrophe is a
+# closing quote when an opening one is still unclosed earlier on the same line.
+# That is stateful, so it lives in _geresh_positions() below rather than in a
+# regex.
 HEBREW_GERESH = "\u05f3"
-_ASCII_APOSTROPHE_AS_GERESH_RE = re.compile(rf"(?<=[{HEBREW_RANGE}])'")
+_QUOTE_OPEN_BEFORE = " \t([{\u201c\u201d\"\u05be-\u2013\u2014"
+_QUOTE_CLOSE_AFTER = ")]},.;:!?\u2013\u2014"
 
 # First-person markers (Hebrew + English) — a researcher's authorial voice.
 FIRST_PERSON_MARKERS = {
@@ -166,11 +178,95 @@ TRANSITION_CATEGORIES: dict[str, list[str]] = {
 }
 
 
+def _is_quote_opener(line: str, i: int) -> bool:
+    """Could the apostrophe at `i` open a quoted span?
+
+    Two shapes. The plain one sits after a space or bracket. The other is
+    Hebrew-specific: a one-letter prefix glues straight onto the quote —
+    ו'הכתב והקבלה' ("and 'the Ktav ve-haKabbalah'"), ל'כתב והקבלה',
+    ש'הכתב והקבלה'. Treating that as a transliteration geresh welded the quote
+    onto the title and split it off as its own term.
+
+    Only a CANDIDATE: a transliteration has the same shape (ג'ון, ד'אלמבר), so
+    the caller confirms by finding a closing quote. Unpaired candidates fall
+    back to geresh.
+    """
+    before = line[i - 1] if i else " "
+    after = line[i + 1] if i + 1 < len(line) else " "
+    if not (after.strip() and after not in _QUOTE_CLOSE_AFTER):
+        return False
+    if before in _QUOTE_OPEN_BEFORE or not before.strip():
+        return True
+    # One-letter Hebrew prefix directly before the quote.
+    two_before = line[i - 2] if i >= 2 else " "
+    return (
+        bool(HEBREW_CHAR_RE.match(before))
+        and bool(HEBREW_CHAR_RE.match(after))
+        and (two_before in _QUOTE_OPEN_BEFORE or not two_before.strip())
+    )
+
+
+def _classify_apostrophes(line: str) -> tuple[set[int], set[int]]:
+    """Split the apostrophes in `line` into (geresh, quote) index sets.
+
+    `geresh` are abbreviation marks to fold onto U+05F3. `quote` are the two
+    halves of a single-quoted Hebrew span, which must be removed rather than
+    folded: WORD_RE accepts "'" (for English don't / writer's), so a quote left
+    in place welds onto the adjacent word and 'חכמת ישראל' yields the tokens
+    'חכמת and ישראל' — which is why ישראל reported 122 against a true 128.
+    """
+    geresh: set[int] = set()
+    quote: set[int] = set()
+    open_at: int | None = None
+    for match in re.finditer(r"'", line):
+        i = match.start()
+        before = line[i - 1] if i else ""
+        opens = _is_quote_opener(line, i)
+        hebrew_before = bool(before) and bool(HEBREW_CHAR_RE.match(before))
+        if open_at is None:
+            if opens:
+                open_at = i
+            elif hebrew_before:
+                geresh.add(i)
+        else:
+            span = line[open_at + 1 : i]
+            if hebrew_before and HEBREW_CHAR_RE.search(span):
+                quote.add(open_at)
+                quote.add(i)
+                open_at = None
+            elif not opens:
+                # The candidate opener was never closed: it was a geresh after
+                # all (a transliteration, ג׳ון), not a quote.
+                if HEBREW_CHAR_RE.match(line[open_at - 1] if open_at else ""):
+                    geresh.add(open_at)
+                open_at = None
+                if hebrew_before:
+                    geresh.add(i)
+    if open_at is not None and HEBREW_CHAR_RE.match(
+        line[open_at - 1] if open_at else ""
+    ):
+        geresh.add(open_at)
+    return geresh, quote
+
+
 def normalize_hebrew_quotes(text: str) -> str:
     """Fold ASCII stand-ins for gershayim and geresh onto their real
-    characters, so one word is one token however the writer typed it."""
+    characters, so one word is one token however the writer typed it.
+
+    Closing single-quotes are left as-is; see the comment above the regexes.
+    """
     text = _ASCII_QUOTE_AS_GERSHAYIM_RE.sub(HEBREW_GERSHAYIM, text)
-    return _ASCII_APOSTROPHE_AS_GERESH_RE.sub(HEBREW_GERESH, text)
+    out = []
+    for line in text.split("\n"):
+        if "'" in line:
+            geresh, quote = _classify_apostrophes(line)
+            if geresh or quote:
+                line = "".join(
+                    HEBREW_GERESH if i in geresh else " " if i in quote else ch
+                    for i, ch in enumerate(line)
+                )
+        out.append(line)
+    return "\n".join(out)
 
 
 def tokenize_words(text: str) -> list[str]:

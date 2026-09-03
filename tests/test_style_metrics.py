@@ -451,6 +451,32 @@ class HebrewGereshTest(unittest.TestCase):
         """Asymmetry is deliberate: `"` IS Hebrew's quotation mark, `'` is not."""
         self.assertEqual(tokenize_words('אמר "שלום"'), ["אמר", "שלום"])
 
+    def test_closing_single_quote_is_not_a_geresh(self):
+        """The v0.7.5 fix converted these, on a claim ("no closing quotes in
+        the corpus") generalized from a handful of sampled long-run cases. A
+        proper scan found 119. Converting them welds the quote onto the last
+        word: ישראל reported 122 against a true 128."""
+        self.assertEqual(tokenize_words("'חכמת ישראל'"), ["חכמת", "ישראל"])
+        self.assertEqual(
+            tokenize_words("'הדברים אשר אנכי מגיד לך'"),
+            ["הדברים", "אשר", "אנכי", "מגיד", "לך"],
+        )
+
+    def test_hebrew_prefix_glued_to_an_opening_quote(self):
+        """A one-letter prefix attaches straight to a quoted title —
+        ו'הכתב והקבלה'. Read as a transliteration geresh, it split the title's
+        last word off as its own term."""
+        self.assertNotIn("והקבלה׳", tokenize_words("ו'הכתב והקבלה' אשר"))
+        self.assertIn("והקבלה", tokenize_words("ו'הכתב והקבלה' אשר"))
+        self.assertIn("והקבלה", tokenize_words("ל'כתב והקבלה' ולמלבים"))
+
+    def test_unpaired_candidate_falls_back_to_geresh(self):
+        """A transliteration has the same shape as a prefix+quote (ג'ון), so
+        the opener is only a candidate — with no closer it is geresh."""
+        self.assertIn("ג׳ון", tokenize_words("ג'ון סמית כתב"))
+        self.assertIn("וולוז׳ין", tokenize_words("מישיבת וולוז'ין"))
+        self.assertIn("אתרח׳סיס", tokenize_words("אתרח'סיס מקבל"))
+
 
 class ContentionGateTest(unittest.TestCase):
     """A share computed over a handful of occurrences has no resolution. On the
