@@ -27,6 +27,7 @@ import os
 import sys
 import unittest
 import zipfile
+from collections import Counter
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LIB_DIR = os.path.join(ROOT_DIR, "src", "scripts", "lib")
@@ -36,11 +37,12 @@ if LIB_DIR not in sys.path:
 from style_contrastive import extract_baseline_json  # noqa: E402
 from style_frequent_terms import (  # noqa: E402
     compute_frequent_terms,
-    find_front_matter_terms,
+    find_structural_furniture_terms,
 )
 from style_metrics_core import (  # noqa: E402
     compute_computational_metrics,
     split_paragraphs,
+    tokenize_words,
 )
 from style_text_extraction import _read_docx_text  # noqa: E402
 
@@ -223,60 +225,163 @@ class PassiveVoiceTest(unittest.TestCase):
         self.assertNotIn("passiveVoiceFrequencyNote", sentence_level)
 
 
-if __name__ == "__main__":
-    unittest.main()
+class StructuralFurnitureTest(unittest.TestCase):
+    """frequentTerms ranked the author's own name, and the 0.7.3 front-matter
+    rule never fired because it looked at the wrong structure.
 
-
-class FrontMatterBoilerplateTest(unittest.TestCase):
-    """Bug 4 (deferred half) — frequentTerms ranked the author's own name.
-
-    Measured on the reporting session's 10-file corpus: first and last name at
-    80 hits each and the assignment header מטלה at 74, all title-page furniture.
-    That could not be detected until the paragraph fix landed, because every
-    file counted as one paragraph.
+    Measured on the real 10-file corpus: the name-bearing paragraphs are
+    table-of-contents lines — "מטלה 2 - יוליוס ולהאוזן - יותם פרום 4" — with a
+    median of 5 words against the corpus median of 38, and they repeat once per
+    assignment THROUGHOUT each document rather than opening it. So the signal
+    is paragraph length, not position.
     """
 
-    def _corpus(self, n=10):
-        # Each file opens with a title page (name + assignment header), then
-        # body paragraphs about a different subject.
-        docs = []
-        for i in range(n):
-            docs.append(
-                "יותם פרום\n\nמטלה מספר {0}\n\nקורס בהיסטוריה\n\n"
-                "הפסקה הראשונה דנה בשאלת המקורות. המשפט השני ממשיך.\n\n"
-                "הפסקה השנייה בוחנת את הטיעון המרכזי. משפט נוסף כאן.\n\n"
-                "המקורות מלמדים על תהליך ארוך. הטיעון נשען עליהם.".format(i)
-            )
-        return docs
+    BODY = (
+        "הפסקה הזאת דנה בשאלת המקורות לאורך המחקר כולו ובוחנת את הטיעון המרכזי "
+        "שהוצג בפתח הדברים. המשפט השני ממשיך את אותו קו ומרחיב אותו עוד. "
+        "המשפט השלישי מסכם את הנקודה ומוביל אל הפסקה הבאה בטקסט."
+    )
 
-    def test_title_page_terms_are_dropped(self):
-        docs = self._corpus()
-        dropped = find_front_matter_terms(docs, 2, 3, 0.6, 0.5)
-        self.assertIn("יותם", dropped)
-        self.assertIn("פרום", dropped)
-        self.assertIn("מטלה", dropped)
+    def _doc(self, n):
+        # A ToC line + several short headers, each repeating the name, wrapped
+        # around long body paragraphs — the shape of the real corpus.
+        parts = [f"מטלה {n} - נושא כלשהו - יותם פרום {n}"]
+        for k in range(3):
+            parts.append(f"מטלה {k} - כותרת משנה - יותם פרום {k}")
+            parts.append(self.BODY)
+        return "\n\n".join(parts)
+
+    def _corpus(self, n=5):
+        return [self._doc(i) for i in range(n)]
+
+    def test_header_terms_are_dropped(self):
+        furniture = find_structural_furniture_terms(self._corpus(), 2, 10, 0.8, 5)
+        self.assertIn("יותם", furniture)
+        self.assertIn("פרום", furniture)
+        self.assertIn("מטלה", furniture)
 
     def test_body_vocabulary_survives(self):
         docs = self._corpus()
-        dropped = find_front_matter_terms(docs, 2, 3, 0.6, 0.5)
-        for term in ("המקורות", "הטיעון"):
-            self.assertNotIn(term, dropped)
+        furniture = find_structural_furniture_terms(docs, 2, 10, 0.8, 5)
+        for term in ("המקורות", "הטיעון", "המחקר"):
+            self.assertNotIn(term, furniture)
         terms = [
             t["term"]
-            for t in compute_frequent_terms(
-                "\n\n".join(docs), 30, 2, documents=docs
-            )
+            for t in compute_frequent_terms("\n\n".join(docs), 30, 2, documents=docs)
         ]
         self.assertNotIn("יותם", terms)
         self.assertNotIn("מטלה", terms)
-        self.assertIn("הטיעון", terms)
+        self.assertIn("המקורות", terms)
+
+    def test_headers_repeat_mid_document_not_only_at_the_front(self):
+        """The 0.7.3 regression: a front-matter rule would miss these."""
+        doc = self._doc(1)
+        paragraphs = split_paragraphs(doc)
+        name_positions = [i for i, p in enumerate(paragraphs) if "יותם" in p]
+        self.assertTrue(
+            max(name_positions) > 3,
+            "fixture must place headers past the opening paragraphs",
+        )
+
+    def test_rare_terms_are_not_dropped_on_noise(self):
+        docs = self._corpus()
+        furniture = find_structural_furniture_terms(docs, 2, 10, 0.8, 100)
+        self.assertEqual(furniture, set())
 
     def test_no_filtering_without_documents(self):
-        """Back-compat: the three-arg call keeps its old behaviour."""
         docs = self._corpus()
         terms = [t["term"] for t in compute_frequent_terms("\n\n".join(docs), 30, 2)]
         self.assertIn("יותם", terms)
 
-    def test_too_few_documents_is_a_no_op(self):
-        """Two files cannot distinguish furniture from a shared subject."""
-        self.assertEqual(find_front_matter_terms(self._corpus(2), 2, 3, 0.6, 0.5), set())
+
+class HebrewGershayimTest(unittest.TestCase):
+    """Hebrew acronyms carry gershayim before the last letter. Writers type an
+    ASCII quote, which WORD_RE does not accept, so שד"ל was split into שד + ל —
+    654 occurrences across 243 distinct acronyms in the real corpus, leaving
+    "שד" ranked 8th while שד"ל, that paper's subject, was absent entirely."""
+
+    def test_acronyms_tokenize_as_one_word(self):
+        for raw, expected in (
+            ('שד"ל כתב', "שד״ל"),
+            ('הרמב"ם', "הרמב״ם"),
+            ('חז"ל אמרו', "חז״ל"),
+            ('רש"י על בראשית', "רש״י"),
+        ):
+            self.assertIn(expected, tokenize_words(raw), raw)
+
+    def test_ordinary_quotation_is_untouched(self):
+        self.assertEqual(
+            tokenize_words('הוא אמר "שלום" ואז יצא'),
+            ["הוא", "אמר", "שלום", "ואז", "יצא"],
+        )
+
+    def test_native_gershayim_still_works(self):
+        self.assertIn("שד״ל", tokenize_words("שד״ל כתב"))
+
+    def test_both_spellings_merge_into_one_token(self):
+        """The corpus MIXES both characters for the same acronym, so a fix that
+        normalized the ASCII form but left the two spellings distinct would pass
+        a single-character test and still halve every acronym's frequency.
+
+        Measured on the real corpus: 19 acronyms appear both ways — הרמב״ם at 37
+        ASCII + 33 Unicode, חז״ל at 33 + 15, רש״י at 23 + 3. שד״ל is the pure
+        case at 82 ASCII and 0 Unicode, which is why it vanished entirely rather
+        than merely splitting.
+        """
+        mixed = 'הרמב"ם כתב. הרמב״ם חזר. הרמב"ם שוב.'
+        counts = Counter(tokenize_words(mixed))
+        self.assertEqual(counts["הרמב״ם"], 3)
+        self.assertEqual(
+            [t for t in counts if '"' in t], [], "ASCII form must not survive"
+        )
+
+    def test_mixed_spellings_count_as_one_frequent_term(self):
+        text = ('הרמב"ם פירש. ' * 4) + ("הרמב״ם הוסיף. " * 4) + "המקרא נדון בהרחבה."
+        terms = {t["term"]: t["count"] for t in compute_frequent_terms(text, 10, 2)}
+        self.assertEqual(terms.get("הרמב״ם"), 8)
+
+    def test_acronym_reaches_frequent_terms(self):
+        text = ('שד"ל פירש את הפסוק. ' * 6) + "המקרא נדון כאן שוב ושוב בהרחבה."
+        self.assertIn("שד״ל", [t["term"] for t in compute_frequent_terms(text, 10, 2)])
+
+
+class TransitionRateTest(unittest.TestCase):
+    """frequencyPerParagraph is only comparable when paragraph lengths are.
+    Measured: 53.8 words/paragraph against a 122.6-word baseline reads 8x low
+    per paragraph and ~1.1x low once normalized."""
+
+    def test_per_1000_words_is_emitted(self):
+        text = "\n\n".join(
+            ["לכן הטיעון עומד. " + " ".join(["מילה"] * 40) + "."] * 4
+        )
+        transitions = compute_computational_metrics(text)["transitions"]
+        self.assertGreater(transitions["frequencyPer1000Words"], 0.0)
+        self.assertIn("frequencyPerParagraph", transitions)
+
+    def test_rate_is_independent_of_paragraph_length(self):
+        """Same prose, different paragraphing: the per-paragraph rate moves,
+        the per-1000-words rate does not."""
+        unit = "לכן הטיעון עומד. " + " ".join(["מילה"] * 20) + "."
+        short_paras = "\n\n".join([unit] * 8)
+        long_paras = "\n\n".join([" ".join([unit] * 4)] * 2)
+        a = compute_computational_metrics(short_paras)["transitions"]
+        b = compute_computational_metrics(long_paras)["transitions"]
+        self.assertNotAlmostEqual(
+            a["frequencyPerParagraph"], b["frequencyPerParagraph"], places=2
+        )
+        self.assertAlmostEqual(
+            a["frequencyPer1000Words"], b["frequencyPer1000Words"], places=2
+        )
+
+    def test_not_added_to_contrastive_paths(self):
+        """The published baseline carries no per-1000-words figure, so adding
+        the path would report 'unavailable' on every run."""
+        from style_contrastive import CONTRASTIVE_METRIC_PATHS
+
+        self.assertNotIn(
+            "transitions.frequencyPer1000Words", CONTRASTIVE_METRIC_PATHS
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

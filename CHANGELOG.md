@@ -4,6 +4,71 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.7.4] — 2026-09-03
+### Fixed
+
+- **Hebrew acronyms were being split in half by the tokenizer.** Acronyms and
+  abbreviations carry gershayim before the last letter (`שד"ל`, `הרמב"ם`, `חז"ל`,
+  `רש"י`), writers type an ASCII double quote for it, and `"` is not in `WORD_RE`
+  — so every one of them was cut into two fragments. Measured on a real corpus:
+  654 occurrences across 243 distinct acronyms, leaving the meaningless fragment
+  `שד` ranked 8th among content terms while `שד"ל`, the subject of that paper, did
+  not appear at all. An ASCII quote flanked by Hebrew letters is now normalized to
+  U+05F4 GERSHAYIM, which `WORD_RE` already accepts, before tokenizing. Ordinary
+  quotation marks sit next to a space or punctuation and are untouched. This
+  affects every token-based metric — `typeTokenRatio`, `avgWordLength`, sentence
+  and paragraph lengths — not only `frequentTerms`.
+
+  The corpus **mixes both characters for the same acronym**, so the fix does more
+  than recover broken tokens: it merges a split that was halving the frequency of
+  every acronym its writer typed inconsistently. 19 acronyms appear both ways —
+  `הרמב"ם` at 37 ASCII plus 33 Unicode, `חז"ל` at 33 plus 15, `רש"י` at 23 plus 3
+  — which is why `הרמב"ם` reports 70 after the fix where 0.7.3 saw 37. `שד"ל` is
+  the pure case at 82 ASCII and none Unicode, so it disappeared entirely rather
+  than merely splitting. Pinned by a regression test using both spellings in one
+  fixture: a fix that normalized ASCII but left the two forms distinct would pass
+  a single-character test and still under-count every acronym in a real corpus.
+
+- **The 0.7.3 title-page filter targeted the wrong structure and never fired.**
+  It looked for terms concentrated in the first N paragraphs of each file. On the
+  real corpus it dropped nothing: the author's name and the assignment header are
+  not front matter, they are table-of-contents lines and section headers that
+  repeat once per assignment *throughout* each document — "מטלה 2 - יוליוס
+  ולהאוזן - יותם פרום 4". Only about half the files had the name in their opening
+  paragraphs at all.
+
+  The real signal is paragraph **length**, not position. Across 857 paragraphs
+  with a 38-word median, the paragraphs carrying the author's name have a median
+  of 5 words, and 96% of that name's occurrences sit in paragraphs of ten words or
+  fewer — against 3% for genuine subject vocabulary like `שד"ל` or `המקרא`. A term
+  is now dropped when at least `furnitureShare` of its occurrences fall in
+  paragraphs of at most `furnitureMaxWords` words and it occurs at least
+  `furnitureMinCount` times. On that corpus it removes exactly eight terms — the
+  author's first and last name, `מטלה`, `רפלקציה`, `סמסטר`, `סיכום`,
+  `ביבליוגרפיה`, `ב׳` — with no false positives; the highest-scoring term that is
+  kept scores 73%, so the 0.8 cutoff has margin on both sides. Reported in
+  `meta.droppedFurnitureTerms`.
+
+  The three `frontMatter*` keys under `thresholds.json > typography.styleMetrics`
+  are replaced by `furnitureMaxWords` / `furnitureShare` / `furnitureMinCount`
+  rather than kept alongside them: two overlapping heuristics with six knobs is
+  worse than one with three, and the old keys tuned nothing.
+
+### Added
+
+- `computationalMetrics.transitions.frequencyPer1000Words`, a paragraph-length
+  independent transition rate. `frequencyPerParagraph` is only comparable between
+  corpora whose paragraphs are the same length: a corpus averaging 53.8 words per
+  paragraph measured against a baseline averaging 122.6 reads about 8x low on the
+  per-paragraph rate and only ~1.1x low once normalized, so the contrastive layer
+  can report `distinctively_low` for what is a paragraphing difference rather than
+  a style fact. The new field is deliberately **not** added to
+  `CONTRASTIVE_METRIC_PATHS` — the published baseline carries no per-1000-words
+  value, so a contrastive entry for it would read `"unavailable"` on every run.
+  `style-fingerprint-rubric.md` now tells the writer to check
+  `paragraphStructure.length.mean` before reading a transitions verdict as a style
+  fact.
+
 ## [0.7.3] — 2026-09-03
 ### Fixed
 

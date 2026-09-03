@@ -59,10 +59,10 @@
     "styleMetrics": {
       "topFrequentTermsCount": 30,
       "minTermLength": 2,
-      "frontMatterParagraphs": 3,
-      "frontMatterDocRatio": 0.6,
-      "frontMatterShare": 0.5
+      "furnitureMaxWords": 10,
+      "furnitureShare": 0.8,
+      "furnitureMinCount": 5
     },
-    "_comment": "dashReplacement is the default em/en-dash fix convention used by detect-ai-typography.py (values: hyphen|comma|colon|remove); overridable via --dash-replacement. topFrequentTermsCount/minTermLength configure extract-style-metrics.py's frequentTerms extraction. frontMatterParagraphs/frontMatterDocRatio/frontMatterShare drop title-page boilerplate from frequentTerms: a term counts as boilerplate when it appears in the first frontMatterParagraphs paragraphs of at least frontMatterDocRatio of the corpus files AND at least frontMatterShare of its total occurrences come from that front matter. Measured case: on a 10-file corpus the author's own first and last name ranked at 80 hits each and the assignment header \u05de\u05d8\u05dc\u05d4 at 74, all from title pages, and frequentTerms steers the write skill's vocabulary."
+    "_comment": "dashReplacement is the default em/en-dash fix convention used by detect-ai-typography.py (values: hyphen|comma|colon|remove); overridable via --dash-replacement. topFrequentTermsCount/minTermLength configure extract-style-metrics.py's frequentTerms extraction. furnitureMaxWords/furnitureShare/furnitureMinCount drop structural furniture (table-of-contents lines and section headers) from frequentTerms: a term is furniture when at least furnitureShare of its occurrences fall in paragraphs of at most furnitureMaxWords words and it occurs at least furnitureMinCount times. Calibrated on a real 10-file corpus of 857 paragraphs with a 38-word median: the author's own name sits in 5-word ToC lines and scores 96%, subject vocabulary scores 3%, and the highest-scoring term that is kept scores 73% \u2014 so the 0.8 cutoff has margin on both sides. Replaces a front-matter rule that inspected the first N paragraphs of each file and never fired, because these headers repeat throughout a document rather than opening it."
   }
 }

@@ -22,7 +22,7 @@ For the drafted paragraph, **count** the following and compare against the finge
 
 4. **First-person usage** — Count first-person markers (אני, לדעתי, אסביר, etc.). Compare against `computationalMetrics.sentenceLevel.firstPersonFrequency`.
 
-5. **Transitions** — Count transition phrases per category. Compare total against `computationalMetrics.transitions.frequencyPerParagraph`. Phrases must come from the researcher's actual vocabulary (`computationalMetrics.transitions.byCategory`). **Do not use transitions the researcher doesn't use.**
+5. **Transitions** — Count transition phrases per category. Phrases must come from the researcher's actual vocabulary (`computationalMetrics.transitions.byCategory`). **Do not use transitions the researcher doesn't use.** Two rates are reported. `frequencyPerParagraph` is the one the contrastive baseline is keyed to, but it is only comparable between corpora whose paragraphs are the same length — a corpus averaging 53 words per paragraph against a 123-word baseline reads roughly 8x low on it and only ~1.1x low once normalized. When the contrastive entry for transitions reads `distinctively_high` or `distinctively_low`, check `computationalMetrics.paragraphStructure.length.mean` before treating it as a style fact, and prefer `transitions.frequencyPer1000Words` — which is paragraph-length independent — for judging the researcher's actual transition density.
 
 6. **Paragraph length** — Count total words. Compare against `computationalMetrics.paragraphStructure.length.mean`. Tolerance: ±1 stdev.
 

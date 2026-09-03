@@ -210,54 +210,51 @@ def _content_terms(text: str, min_len: int) -> list[str]:
     ]
 
 
-def find_front_matter_terms(
+def find_structural_furniture_terms(
     documents: list[str],
     min_len: int,
-    paragraphs: int,
-    doc_ratio: float,
+    max_words: int,
     share: float,
+    min_count: int,
 ) -> set[str]:
-    """Terms that are title-page furniture rather than the writer's vocabulary.
+    """Terms that belong to the document's furniture, not the writer's prose.
 
-    Corpus files are coursework and papers, so the opening paragraphs of each
-    one carry the author's own name, the course name and an assignment header.
-    Measured on a 10-file corpus: the author's first and last name ranked at 80
-    hits each and the assignment header מטלה at 74, all of it front matter —
-    and frequentTerms is documented as steering the write skill's vocabulary,
-    so these actively push the writer toward the author's own name.
+    Corpus files are coursework and papers whose tables of contents and section
+    headers repeat the author's name, the assignment number and the course
+    name. Those lines are *paragraphs* to the splitter, so their words land in
+    frequentTerms — which the write skill reads to steer vocabulary, meaning
+    the researcher's own name was being fed back as a word to reach for.
 
-    A term is boilerplate only when BOTH hold, which is what separates a title
-    page from a genuine subject word that happens to open an article:
+    The signal is paragraph LENGTH, not position. Measured on a real 10-file
+    corpus (857 paragraphs, median 38 words): the paragraphs carrying the
+    author's name are TOC entries and headers with a median of 5 words —
+    "מטלה 2 - יוליוס ולהאוזן - יותם פרום 4" — and 96% of that name's
+    occurrences sit in paragraphs of 10 words or fewer, against 3% for real
+    subject vocabulary like שד״ל or המקרא. A term is furniture when at least
+    `share` of its occurrences fall in paragraphs of at most `max_words`
+    words, and it occurs at least `min_count` times so a rare word is not
+    dropped on noise.
 
-      * it appears in the first `paragraphs` paragraphs of at least
-        `doc_ratio` of the corpus files (repeated furniture, not one title), and
-      * at least `share` of its total corpus occurrences come from that front
-        matter (it is not also used throughout the body).
-
-    Needs at least three documents to mean anything; returns an empty set below
-    that, and when per-document text is unavailable.
+    This replaces a front-matter rule shipped in 0.7.3 that looked at the first
+    N paragraphs of each file. It never fired: the headers repeat THROUGHOUT
+    each document, one per assignment, so almost none of them are front matter.
     """
-    if len(documents) < 3:
+    paragraphs = [p for doc in documents for p in split_paragraphs(doc)]
+    if not paragraphs:
         return set()
 
-    front_counts: Counter[str] = Counter()
+    short_counts: Counter[str] = Counter()
     total_counts: Counter[str] = Counter()
-    docs_with_term_in_front: Counter[str] = Counter()
+    for paragraph in paragraphs:
+        found = _content_terms(paragraph, min_len)
+        total_counts.update(found)
+        if len(tokenize_words(paragraph)) <= max_words:
+            short_counts.update(found)
 
-    for doc in documents:
-        front_text = "\n\n".join(split_paragraphs(doc)[:paragraphs])
-        front_terms = _content_terms(front_text, min_len)
-        front_counts.update(front_terms)
-        total_counts.update(_content_terms(doc, min_len))
-        docs_with_term_in_front.update(set(front_terms))
-
-    needed_docs = doc_ratio * len(documents)
     return {
         term
-        for term, docs in docs_with_term_in_front.items()
-        if docs >= needed_docs
-        and total_counts[term]
-        and front_counts[term] / total_counts[term] >= share
+        for term, count in total_counts.items()
+        if count >= min_count and short_counts[term] / count >= share
     }
 
 
@@ -266,24 +263,24 @@ def compute_frequent_terms(
     top_n: int,
     min_len: int,
     documents: list[str] | None = None,
-    front_matter_paragraphs: int = 3,
-    front_matter_doc_ratio: float = 0.6,
-    front_matter_share: float = 0.5,
+    furniture_max_words: int = 10,
+    furniture_share: float = 0.8,
+    furniture_min_count: int = 5,
 ) -> list[dict]:
     """Top-N content terms. Pass `documents` (the per-file texts) to also drop
-    title-page boilerplate — it cannot be detected from the concatenated
-    corpus, since the signal is *per file* front matter."""
-    boilerplate: set[str] = set()
+    structural furniture — TOC lines and section headers, which are only
+    separable from prose when paragraph boundaries survive."""
+    furniture: set[str] = set()
     if documents:
-        boilerplate = find_front_matter_terms(
+        furniture = find_structural_furniture_terms(
             documents,
             min_len,
-            front_matter_paragraphs,
-            front_matter_doc_ratio,
-            front_matter_share,
+            furniture_max_words,
+            furniture_share,
+            furniture_min_count,
         )
 
-    normalized = [t for t in _content_terms(text, min_len) if t not in boilerplate]
+    normalized = [t for t in _content_terms(text, min_len) if t not in furniture]
     total = len(normalized)
     counts = Counter(normalized)
     results = []
