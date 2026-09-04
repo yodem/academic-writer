@@ -1,5 +1,29 @@
 {
   "enabledPlugins": {
     "academic-writer@academic-writer": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(ck items toc *)",
+      "Bash(ck items get *)",
+      "Bash(ck items list)",
+      "Bash(ck items list *)",
+      "Bash(ck items read *)",
+      "Bash(ck items gaps *)",
+      "Bash(ck ms list)",
+      "Bash(ck ms list *)",
+      "Bash(ck ms show *)",
+      "Bash(ck shelf list)",
+      "Bash(ck shelf show *)",
+      "Bash(ck shelf current)",
+      "Bash(ck --help)",
+      "Bash(ck --version)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run version:show)",
+      "Bash(npm run version:check)",
+      "mcp__claude_ai_Google_Drive__search_files",
+      "mcp__claude-in-chrome__get_page_text",
+      "mcp__claude-in-chrome__tabs_context_mcp"
+    ]
   }
 }

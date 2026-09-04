@@ -29,13 +29,49 @@ export interface ModelDefaults {
   thinking_budget: number;
 }
 
+/**
+ * The model every tool uses unless something overrides it.
+ *
+ * Verified against the live ListModels API on 2026-09-04: `gemini-3.8-flash`
+ * is the newest stable text model, and it is the ONLY 3.8 build published —
+ * there is no `gemini-3.8-pro`. The newest pro-tier model of any generation is
+ * `gemini-3.1-pro-preview`, which is a preview; a stable flash three
+ * generations newer beats a preview pro for a pipeline that runs unattended.
+ *
+ * `thinking_budget` stays meaningful across the change: buildThinkingConfig()
+ * maps a budget onto gemini-3's `thinkingLevel` rather than passing it
+ * through, so the per-tool effort ordering below is preserved.
+ *
+ * NOT used by gemini_ocr, which is hard-pinned to gemini-2.5-flash for a
+ * documented reason (see OCR_MODEL in gemini-client-ocr-helpers.ts) and must
+ * not follow this default.
+ */
+export const DEFAULT_MODEL = 'gemini-3.8-flash';
+
 const SPEC_DEFAULTS: Record<ToolName, ModelDefaults> = {
-  write_section: { model: 'gemini-2.5-pro', thinking_budget: 8192 },
-  synthesize: { model: 'gemini-2.5-flash', thinking_budget: 2048 },
-  edit: { model: 'gemini-2.5-pro', thinking_budget: 2048 },
-  calibrate_sample: { model: 'gemini-2.5-flash', thinking_budget: 1024 },
-  raw: { model: 'gemini-2.5-pro', thinking_budget: -1 },
+  write_section: { model: DEFAULT_MODEL, thinking_budget: 8192 },
+  synthesize: { model: DEFAULT_MODEL, thinking_budget: 2048 },
+  edit: { model: DEFAULT_MODEL, thinking_budget: 2048 },
+  calibrate_sample: { model: DEFAULT_MODEL, thinking_budget: 1024 },
+  raw: { model: DEFAULT_MODEL, thinking_budget: -1 },
 };
+
+/**
+ * Resolution order for a tool's model, most specific first:
+ *
+ *   1. profile.md  gemini.models.<tool>.model   — per-tool, unchanged
+ *   2. profile.md  gemini.defaultModel          — every tool at once
+ *   3. env         GEMINI_DEFAULT_MODEL         — machine-level default
+ *   4. DEFAULT_MODEL above
+ *
+ * The profile outranks the environment because it is the user's durable,
+ * reviewed configuration; the env var exists so a machine (or a test) can set
+ * a default without editing a profile that may not exist yet.
+ */
+function envDefaultModel(): string | undefined {
+  const v = process.env['GEMINI_DEFAULT_MODEL'];
+  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+}
 
 const RETRY_MAX_ATTEMPTS = 3;
 const RETRY_BASE_MS = 1000;
@@ -129,6 +165,14 @@ export function __resetApiKeyCacheForTests(): void {
   cachedKey = undefined;
 }
 
+/**
+ * Test-only companion to the above for the model-defaults cache, so a test can
+ * point CLAUDE_PROJECT_DIR at a fresh fixture profile and have it re-read.
+ */
+export function __resetModelDefaultsCacheForTests(): void {
+  cachedDefaults = null;
+}
+
 async function loadProfileModelDefaults(): Promise<Partial<Record<ToolName, ModelDefaults>>> {
   if (cachedDefaults) return cachedDefaults;
   const profilePath = path.join(projectDir(), '.academic-helper', 'profile.md');
@@ -162,11 +206,27 @@ function extractGeminiModels(parsed: unknown): Partial<Record<ToolName, ModelDef
   if (typeof parsed !== 'object' || parsed === null) return null;
   const root = parsed as Record<string, unknown>;
   const gemini = root['gemini'];
+  const geminiObj =
+    gemini && typeof gemini === 'object' ? (gemini as Record<string, unknown>) : undefined;
+
+  // `gemini.defaultModel` (or `gemini.model`) retargets every tool at once, so
+  // a user changing model generation edits one line instead of five.
+  const rawDefault = geminiObj?.['defaultModel'] ?? geminiObj?.['model'] ?? root['gemini.defaultModel'];
+  const profileDefault =
+    typeof rawDefault === 'string' && rawDefault.trim() ? rawDefault.trim() : undefined;
+
   const models =
-    gemini && typeof gemini === 'object' && 'models' in (gemini as object)
-      ? (gemini as { models: unknown }).models
-      : root['gemini.models'];
-  if (typeof models !== 'object' || models === null) return null;
+    geminiObj && 'models' in geminiObj ? geminiObj['models'] : root['gemini.models'];
+
+  if (typeof models !== 'object' || models === null) {
+    if (!profileDefault) return null;
+    // A profile that sets only a global default still overrides every tool.
+    const only: Partial<Record<ToolName, ModelDefaults>> = {};
+    for (const tool of Object.keys(SPEC_DEFAULTS) as ToolName[]) {
+      only[tool] = { model: profileDefault, thinking_budget: SPEC_DEFAULTS[tool].thinking_budget };
+    }
+    return only;
+  }
   const out: Partial<Record<ToolName, ModelDefaults>> = {};
   for (const tool of Object.keys(SPEC_DEFAULTS) as ToolName[]) {
     const entry = (models as Record<string, unknown>)[tool];
@@ -181,10 +241,16 @@ function extractGeminiModels(parsed: unknown): Partial<Record<ToolName, ModelDef
             : undefined;
       if (model || tb !== undefined) {
         out[tool] = {
-          model: model ?? SPEC_DEFAULTS[tool].model,
+          model: model ?? profileDefault ?? SPEC_DEFAULTS[tool].model,
           thinking_budget: tb ?? SPEC_DEFAULTS[tool].thinking_budget,
         };
       }
+    } else if (profileDefault) {
+      // No per-tool entry, but a global default was declared.
+      out[tool] = {
+        model: profileDefault,
+        thinking_budget: SPEC_DEFAULTS[tool].thinking_budget,
+      };
     }
   }
   return Object.keys(out).length > 0 ? out : null;
@@ -192,7 +258,12 @@ function extractGeminiModels(parsed: unknown): Partial<Record<ToolName, ModelDef
 
 export async function getDefaults(tool: ToolName): Promise<ModelDefaults> {
   const overrides = await loadProfileModelDefaults();
-  return overrides[tool] ?? SPEC_DEFAULTS[tool];
+  const override = overrides[tool];
+  if (override) return override;
+  const envModel = envDefaultModel();
+  return envModel
+    ? { model: envModel, thinking_budget: SPEC_DEFAULTS[tool].thinking_budget }
+    : SPEC_DEFAULTS[tool];
 }
 
 function thinkingLevelFromBudget(budget: number): 'low' | 'medium' | 'high' {

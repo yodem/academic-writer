@@ -4,6 +4,49 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-09-04
+### Changed
+
+- **Every Gemini tool now defaults to `gemini-3.8-flash`** (was `gemini-2.5-pro`
+  for `write_section` / `edit` / `raw` and `gemini-2.5-flash` for `synthesize` /
+  `calibrate_sample`).
+
+  Verified against the live ListModels API rather than assumed: `gemini-3.8-flash`
+  is the newest stable text model and the **only** 3.8 build published — there is
+  no `gemini-3.8-pro`. The newest pro-tier model of any generation is
+  `gemini-3.1-pro-preview`, still a preview, so a stable flash three generations
+  newer is the better default for a pipeline that runs unattended. Smoke-tested
+  end to end: the model answers and accepts `thinkingLevel`.
+
+  Per-tool effort ordering is preserved. `buildThinkingConfig` already maps a
+  budget onto `thinkingLevel` for the `gemini-3.x` family (`<512` low, `<4096`
+  medium, else high; `-1` high) instead of passing an integer through, so the
+  existing `thinking_budget` values keep meaning what they meant.
+
+  `gemini_ocr` is unaffected — it stays hard-pinned to `gemini-2.5-flash`,
+  because it needs `thinkingBudget: 0` and the Pro models reject it.
+
+### Added
+
+- **Two ways to change the model globally**, joining the per-tool override that
+  already existed. Resolution order, most specific first:
+
+  | Where | Scope |
+  |---|---|
+  | `gemini.models.<tool>.model` in `profile.md` | one tool |
+  | `gemini.defaultModel` in `profile.md` | every tool |
+  | `GEMINI_DEFAULT_MODEL` env var | every tool, machine-wide |
+  | built-in `DEFAULT_MODEL` | fallback |
+
+  The profile outranks the environment: it is durable, reviewed configuration,
+  while the env var exists so a machine or a test can set a default before any
+  profile exists. A per-tool entry may still set only `thinking_budget` and
+  inherit whichever model won. Previously changing generation meant editing five
+  separate per-tool entries; it is now one line.
+
+  Documented in `skills/init/references/profile-schema.md`, including the warning
+  to check what is actually published before pinning a version.
+
 ## [0.7.7] — 2026-09-03
 ### Fixed
 

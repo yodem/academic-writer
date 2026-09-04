@@ -61609,13 +61609,18 @@ function isRetryable(httpStatus, errCode) {
 }
 
 // src/gemini-client.ts
+var DEFAULT_MODEL = "gemini-3.8-flash";
 var SPEC_DEFAULTS = {
-  write_section: { model: "gemini-2.5-pro", thinking_budget: 8192 },
-  synthesize: { model: "gemini-2.5-flash", thinking_budget: 2048 },
-  edit: { model: "gemini-2.5-pro", thinking_budget: 2048 },
-  calibrate_sample: { model: "gemini-2.5-flash", thinking_budget: 1024 },
-  raw: { model: "gemini-2.5-pro", thinking_budget: -1 }
+  write_section: { model: DEFAULT_MODEL, thinking_budget: 8192 },
+  synthesize: { model: DEFAULT_MODEL, thinking_budget: 2048 },
+  edit: { model: DEFAULT_MODEL, thinking_budget: 2048 },
+  calibrate_sample: { model: DEFAULT_MODEL, thinking_budget: 1024 },
+  raw: { model: DEFAULT_MODEL, thinking_budget: -1 }
 };
+function envDefaultModel() {
+  const v = process.env["GEMINI_DEFAULT_MODEL"];
+  return typeof v === "string" && v.trim() ? v.trim() : void 0;
+}
 var RETRY_MAX_ATTEMPTS = 3;
 var RETRY_BASE_MS = 1e3;
 var RETRY_FACTOR = 2;
@@ -61689,8 +61694,18 @@ function extractGeminiModels(parsed) {
   if (typeof parsed !== "object" || parsed === null) return null;
   const root = parsed;
   const gemini = root["gemini"];
-  const models = gemini && typeof gemini === "object" && "models" in gemini ? gemini.models : root["gemini.models"];
-  if (typeof models !== "object" || models === null) return null;
+  const geminiObj = gemini && typeof gemini === "object" ? gemini : void 0;
+  const rawDefault = geminiObj?.["defaultModel"] ?? geminiObj?.["model"] ?? root["gemini.defaultModel"];
+  const profileDefault = typeof rawDefault === "string" && rawDefault.trim() ? rawDefault.trim() : void 0;
+  const models = geminiObj && "models" in geminiObj ? geminiObj["models"] : root["gemini.models"];
+  if (typeof models !== "object" || models === null) {
+    if (!profileDefault) return null;
+    const only = {};
+    for (const tool of Object.keys(SPEC_DEFAULTS)) {
+      only[tool] = { model: profileDefault, thinking_budget: SPEC_DEFAULTS[tool].thinking_budget };
+    }
+    return only;
+  }
   const out = {};
   for (const tool of Object.keys(SPEC_DEFAULTS)) {
     const entry = models[tool];
@@ -61700,17 +61715,25 @@ function extractGeminiModels(parsed) {
       const tb = typeof e2["thinking_budget"] === "number" ? e2["thinking_budget"] : typeof e2["thinkingBudget"] === "number" ? e2["thinkingBudget"] : void 0;
       if (model || tb !== void 0) {
         out[tool] = {
-          model: model ?? SPEC_DEFAULTS[tool].model,
+          model: model ?? profileDefault ?? SPEC_DEFAULTS[tool].model,
           thinking_budget: tb ?? SPEC_DEFAULTS[tool].thinking_budget
         };
       }
+    } else if (profileDefault) {
+      out[tool] = {
+        model: profileDefault,
+        thinking_budget: SPEC_DEFAULTS[tool].thinking_budget
+      };
     }
   }
   return Object.keys(out).length > 0 ? out : null;
 }
 async function getDefaults(tool) {
   const overrides = await loadProfileModelDefaults();
-  return overrides[tool] ?? SPEC_DEFAULTS[tool];
+  const override = overrides[tool];
+  if (override) return override;
+  const envModel = envDefaultModel();
+  return envModel ? { model: envModel, thinking_budget: SPEC_DEFAULTS[tool].thinking_budget } : SPEC_DEFAULTS[tool];
 }
 function thinkingLevelFromBudget(budget) {
   if (budget < 0) return "high";

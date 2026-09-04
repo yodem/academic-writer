@@ -128,6 +128,33 @@ profile is being created for, so projects that never run `/write`'s model-compar
 `proofread`-only or `edit`-only projects) still route to Gemini. `enabled: false` (no
 `approvedLanguages`/`models` keys) if the researcher chose "No, Claude only".
 
+### Choosing the model
+
+Every Gemini tool defaults to **`gemini-3.8-flash`**. Three ways to change it, most specific
+winning:
+
+| Where | Scope | Example |
+|---|---|---|
+| `gemini.models.<tool>.model` | one tool | `{"models": {"write_section": {"model": "gemini-3.1-pro-preview"}}}` |
+| `gemini.defaultModel` | every tool | `{"defaultModel": "gemini-3.6-flash"}` |
+| `GEMINI_DEFAULT_MODEL` env var | every tool, machine-wide | `export GEMINI_DEFAULT_MODEL=gemini-3.6-flash` |
+
+The profile outranks the environment: it is durable, reviewed configuration, while the env var
+exists so a machine can set a default before any profile exists. A per-tool entry may set only
+`thinking_budget` and inherit the model.
+
+Tool names are `write_section`, `synthesize`, `edit`, `calibrate_sample`, `raw`. **`gemini_ocr` is
+not configurable** — it is hard-pinned to `gemini-2.5-flash` because it needs `thinkingBudget: 0`,
+which the Pro models reject.
+
+`thinking_budget` keeps working across model generations: for `gemini-3.x` the client maps a budget
+onto the API's `thinkingLevel` (`<512` low, `<4096` medium, else high; `-1` is high), and passes it
+through as an integer for the 2.5 family.
+
+Check what is published before pinning a version — `gemini-3.8-flash` is currently the newest
+stable text model and the only 3.8 build; the newest pro-tier model of any generation is
+`gemini-3.1-pro-preview`, which is a preview.
+
 ## 25-Dimension Style Analysis Rubric
 
 Run via voice-miner agent. Dimensions span 8 categories (A–I):
