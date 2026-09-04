@@ -3,6 +3,8 @@
 All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
+
+## [0.10.0] — 2026-09-04
 ### Added
 
 - **`src/scripts/gate.py` — one deterministic gate dispatcher**, with real exit
