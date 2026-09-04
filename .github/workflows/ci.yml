@@ -57,6 +57,16 @@ jobs:
       - name: Install hooks dependencies (for the typecheck gate)
         run: cd src/hooks && npm ci
 
+      # `src/hooks/dist/` is gitignored, so the compiled hook bundle does not
+      # exist in the tree as pushed. tests/test_gate_enforce_hook.py drives the
+      # COMPILED bundle through run-hook.mjs — exactly what Claude Code loads —
+      # so without this the pytest gate fails on CI while passing on any machine
+      # that had run a build (measured 2026-09-04: 14 failures, TST-09). The test
+      # also builds on demand as a fallback; this step makes it deterministic and
+      # keeps the build cost out of the gate's own timing.
+      - name: Build hooks (for the pytest gate — dist/ is gitignored)
+        run: npm run build:hooks
+
       - name: Install Python test dependencies
         run: |
           python -m pip install --upgrade pip

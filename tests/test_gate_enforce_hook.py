@@ -42,13 +42,48 @@ def _require_node():
     return node
 
 
+_BUILD_ATTEMPTED = False
+
+
 def _require_built_bundle():
+    """Ensure the compiled hook bundle exists, building it once if it does not.
+
+    TST-09: an environment-dependent test is invisible until something finally
+    runs the suite somewhere else. This test drives the COMPILED bundle (that is
+    the point — it exercises what Claude Code actually loads), but
+    `src/hooks/dist/` is gitignored and `.github/workflows/ci.yml` deliberately
+    builds nothing, checking the tree as pushed. So the bundle exists on a
+    developer machine that has run `npm run build:hooks` and does not exist on a
+    fresh clone or on CI.
+
+    Raising told you the environment was wrong; it still let the suite pass
+    locally and fail on CI — which is exactly the failure TST-09 names, and it
+    happened here on 2026-09-04. The fix is to CONTROL the environment: build the
+    bundle on demand. A genuine build failure still raises loudly, naming the
+    build output, so a broken build can never be mistaken for a missing one.
+    """
+    global _BUILD_ATTEMPTED
+    if os.path.isfile(LIFECYCLE_BUNDLE):
+        return
+    if _BUILD_ATTEMPTED:
+        raise RuntimeError(
+            f"{LIFECYCLE_BUNDLE} still missing after a build attempt — see the "
+            "build output reported by the first failure."
+        )
+    _BUILD_ATTEMPTED = True
+    proc = subprocess.run(
+        ["npm", "run", "build:hooks"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
     if not os.path.isfile(LIFECYCLE_BUNDLE):
         raise RuntimeError(
-            f"{LIFECYCLE_BUNDLE} not found. Run `npm run build:hooks` before "
-            "running tests/test_gate_enforce_hook.py — the hook must be "
-            "built, not just typechecked, since the test drives the runner "
-            "against the compiled bundle exactly as Claude Code would."
+            "`npm run build:hooks` did not produce "
+            f"{LIFECYCLE_BUNDLE} (exit {proc.returncode}). The hook must be "
+            "built, not just typechecked, since this test drives the runner "
+            "against the compiled bundle exactly as Claude Code would.\n"
+            f"--- stdout ---\n{proc.stdout}\n--- stderr ---\n{proc.stderr}"
         )
 
 
