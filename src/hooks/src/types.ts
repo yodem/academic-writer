@@ -9,7 +9,8 @@ export type HookEvent =
   | 'PreToolUse'
   | 'PostToolUse'
   | 'UserPromptSubmit'
-  | 'Stop';
+  | 'Stop'
+  | 'SubagentStop';
 
 export interface HookInput {
   hook_event?: HookEvent;
@@ -20,6 +21,7 @@ export interface HookInput {
   project_dir?: string;
   plugin_root?: string;
   prompt?: string;
+  stop_hook_active?: boolean;
 }
 
 export interface HookResult {

@@ -1,0 +1,18 @@
+[
+  {
+    "sourceId": "src1",
+    "author": "Cohen, David",
+    "workTitle": "Historical Method in Biblical Studies",
+    "year": "2019",
+    "publisher": "Academic Press",
+    "extractionConfidence": { "author": "high", "workTitle": "high", "year": "high" }
+  },
+  {
+    "sourceId": "src2",
+    "author": "Levi, Sarah",
+    "workTitle": "Textual Criticism and the Second Temple Period",
+    "year": "2020",
+    "journal": "Journal of Ancient Texts",
+    "extractionConfidence": { "author": "high", "workTitle": "high", "year": "high" }
+  }
+]

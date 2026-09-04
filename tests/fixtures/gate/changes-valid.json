@@ -1,0 +1,15 @@
+{
+  "stage": "mechanical",
+  "changes": [
+    {
+      "stage": "mechanical",
+      "line": 3,
+      "type": "typo",
+      "level": "word",
+      "before": "recieve",
+      "after": "receive",
+      "rationale": "spelling fix",
+      "meaningRisk": "low"
+    }
+  ]
+}

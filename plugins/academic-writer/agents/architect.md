@@ -27,13 +27,29 @@ You will also receive:
 
 ## Coverage Pre-Check (before thesis proposal)
 
-If the deep-reader's evidence map contains a `chapter_coverage` field, you MUST verify it before proposing a thesis. The check has three steps:
+If the deep-reader's evidence map contains a `chapter_coverage` field, you MUST verify it before proposing a thesis.
 
-1. **Every chapter has a status.** Iterate every entry in every book. Any entry without `status: "covered"` or `status: "skipped-irrelevant"` (with a `reason`) is invalid.
-2. **No silent gaps.** For each book in the evidence map, the chapter numbers must form a contiguous range from chapter 1 to the book's last chapter. Missing chapter numbers are fail.
-3. **`evidence_ids` cross-check.** Every `evidence_ids` array must reference records that exist in the deep-reader's evidence map.
+**This check is a script, not reasoning.** The evidence map arrives in your prompt rather than on disk, so write it out first, then run the gate:
 
-If any check fails:
+```bash
+# Use the Write tool for this file — never a heredoc; Hebrew text in a heredoc
+# causes UTF-8 encoding errors (same rule as write/SKILL.md Step 9b).
+#   -> write the deep-reader's evidence map verbatim to /tmp/aw-deep-read.json
+
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py coverage /tmp/aw-deep-read.json --json
+```
+
+The exit code is the verdict — do not re-derive it by reading the output prose:
+
+| Exit | Meaning | Action |
+|---|---|---|
+| `0` | coverage is complete | proceed to thesis proposal |
+| `1` | there are gaps | do NOT propose a thesis — report as below |
+| `2` | the gate could not run | fix the cause (malformed/missing map); an unrun gate is not a passed gate |
+
+The three checks it enforces (documented so a reader knows the coverage — the script, not this list, is the enforcement): every entry carries `status: "covered"` or `status: "skipped-irrelevant"` (with a `reason`); each book's chapter numbers form a contiguous range with no gaps; every `evidence_ids` entry resolves to a record that exists in the evidence map.
+
+On exit 1 the gate's `--json` output names each violation with its check and the offending chapter/id — use those directly rather than restating them from your own reading:
 - Do NOT propose a thesis — return to deep-reader.
 - Emit a single message to the user listing the gaps (e.g., "Nehemiah chapter 10 is missing from chapter_coverage").
 - Recommend the user re-run the deep-reader on the gap. (You cannot spawn deep-reader yourself; the orchestrator handles that.)

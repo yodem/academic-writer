@@ -1,0 +1,15 @@
+{
+  "chapter_coverage": {
+    "Ezra": [
+      { "chapter": 1, "status": "covered", "evidence_ids": ["ev_ezra1"] },
+      { "chapter": 2, "status": "skipped-irrelevant", "reason": "list of returnees only -- no temple/personnel/cult content" },
+      { "chapter": 3, "status": "covered", "evidence_ids": ["ev_ezra3"] },
+      { "chapter": 4, "status": "covered", "evidence_ids": ["ev_ezra3", "ev_ezra4"] }
+    ]
+  },
+  "evidence": [
+    { "id": "ev_ezra1", "note": "Cyrus decree" },
+    { "id": "ev_ezra3", "note": "Altar foundation" },
+    { "id": "ev_ezra4", "note": "Opposition to rebuilding" }
+  ]
+}

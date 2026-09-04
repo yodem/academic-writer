@@ -91,6 +91,16 @@ The script has no filesystem access — it only reads `args` and returns `{memo,
 2. **Language** (if requested and chunks exist): for each chunk, spawn `copyeditor`; for each returned change, spawn three refute-lens checks (`meaning-preserved` / `standard-language` / `voice-preserved` — one prompt per lens, each independently judging only that concern) capped at `concurrencyCap` chunks in flight at once. A change refuted by `refuteMajority` or more lenses is **downgraded** (`applied: false, skipReason: "refuted", refutedBy: [...]`) — **never dropped**; it stays in the list you hand to Step 5.
 3. **Mechanical** (if requested and chunks exist): loop rounds until `dryRounds` consecutive rounds find nothing new or `maxPasses` is hit (name the exit: `converged` or `cap-reached`). Each round: spawn `proofreader` per chunk with that chunk's `spellCandidates` slice; dedupe fresh-vs-seen by **NFC-normalized `before` plus the chunk it was found in** — never by line number, since a residual round runs on already-corrected text where lines below an applied edit have shifted. Verify each fresh change with `refuteVotes` independent lenses (Gemini `gemini_raw` if `GEMINI_APPROVED`, else an `opus` refute agent, same prompt either way); `refuteMajority`+ refutes downgrades, never drops.
 4. Log every downgrade as you go (no silent caps in either path) so the report's Notes section has something to show.
+5. **Validate every collected change list against the schema before Step 5.** On the Workflow path the runtime enforces the contract via each `agent()` call's `schema:` option; on this fallback path there is no such enforcement, so a malformed change object would otherwise reach `citation-guard.py` and the DOCX writer unchecked. Write each stage's list to a file and run:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" changes-schema /tmp/proofread-language-changes.json --json
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" changes-schema /tmp/proofread-mechanical-changes.json --json
+```
+
+Exit `0` = valid, continue to Step 5. Exit `1` = the agent returned a malformed list; the violation's `path` names the offending change — re-spawn that stage's agent rather than hand-patching the JSON, since a hand-patch hides a prompt that is producing bad output. Exit `2` = the gate could not run (missing `jsonschema`, unreadable file); fix the cause, because an unrun gate is not a passed gate.
+
+This step is fallback-only — skip it on the Workflow path, where the same contract is already enforced at the boundary.
 
 Either path produces the same three lists: `memo` (editorial), `languageChanges`, `mechanicalChanges`, plus a `gates` ledger recording what ran/was skipped and why.
 

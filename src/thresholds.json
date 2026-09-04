@@ -46,7 +46,13 @@
     "concurrencyCap": 6,
     "refuteVotes": 3,
     "refuteMajority": 2,
-    "_comment": "Proofread pipeline caps, enforced in src/workflows/proofread.js from args.thresholds (WRK-14). chunkWords bounds one finder chunk; the mechanical loop exits 'converged' after dryRounds consecutive rounds with no fresh change, or 'cap-reached' at maxPasses. refuteVotes lenses verify each candidate change and refuteMajority of them refuting drops it."
+    "refuteBudgetPerChunk": 12,
+    "_comment": "Proofread pipeline caps, enforced in src/workflows/proofread.js from args.thresholds (WRK-14). chunkWords bounds one finder chunk; the mechanical loop exits 'converged' after dryRounds consecutive rounds with no fresh change, or 'cap-reached' at maxPasses. refuteVotes lenses verify each candidate change and refuteMajority of them refuting DOWNGRADES it to applied:false with skipReason 'refuted' — it is never dropped from the output (proofread.js:14-18, :305). refuteBudgetPerChunk caps how many changes per chunk are sent for refute-verification at all: without it, total verify calls are findings x refuteVotes with no bound anywhere (concurrencyCap bounds parallelism only, not volume). Changes beyond the budget are carried with skipReason 'refute-budget-exhausted' — downgraded, never dropped — and the budget is spent highest-meaningRisk first."
+  },
+  "citationFloor": {
+    "minSecondaryPer1000Words": 4.0,
+    "minSecondaryTotal": 8,
+    "_comment": "VER-18 absence gate, enforced by src/scripts/gate.py citation-floor. The per-paragraph auditor is a PRESENCE check — it verifies that claims which ARE cited are cited correctly, and is structurally blind to a paragraph that cites nothing. Absence needs its own counting gate, and the count is arithmetic, not judgement (TST-02). Only SECONDARY citations count toward the floor: primary sources stay inline in this field, so a raw citation count reads healthy on an article carrying almost no scholarly engagement. minSecondaryPer1000Words is the rate floor, minSecondaryTotal the absolute floor that keeps a very short article from passing on rate alone. The gate FAILS if EITHER floor is breached."
   },
   "typography": {
     "dashReplacement": "hyphen",

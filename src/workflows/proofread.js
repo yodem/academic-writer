@@ -72,6 +72,15 @@ const concurrencyCap = thresholds.concurrencyCap;
 const refuteVotes = thresholds.refuteVotes;
 const refuteMajority = thresholds.refuteMajority;
 
+// -- refute fan-out budget: bounds volume, not parallelism (concurrencyCap ---
+// -- above bounds parallelism only). Absent/invalid -> today's unbounded ----
+// -- behaviour, but logged so the missing cap is visible, never silent. -----
+const refuteBudgetPerChunk = thresholds.refuteBudgetPerChunk;
+const refuteBudgetIsBounded = typeof refuteBudgetPerChunk === 'number' && refuteBudgetPerChunk > 0;
+if (!refuteBudgetIsBounded) {
+  log('WARN: args.thresholds.refuteBudgetPerChunk is missing or invalid — the caller must load src/thresholds.json\'s proofread block; refute-verification fan-out is UNBOUNDED for this run (pre-budget behaviour) — every found change is sent for refute-verification with no per-chunk volume cap.');
+}
+
 log('proofread workflow: language=' + language + ' geminiApproved=' + geminiApproved + ' chunks=' + chunks.length + ' stages=' + requestedStages.join(','));
 
 // -- shared inline schemas (this script cannot Read changes-schema.json off ---
@@ -79,16 +88,27 @@ log('proofread workflow: language=' + language + ' geminiApproved=' + geminiAppr
 // -- src/skills/proofread/references/changes-schema.json by convention) -----
 const CHANGE_ITEM_SCHEMA = {
   type: 'object',
-  required: ['line', 'type', 'level', 'before', 'rationale', 'meaningRisk'],
+  required: ['stage', 'line', 'type', 'level', 'before', 'rationale', 'meaningRisk'],
   properties: {
+    change_id: { type: 'string' },
     stage: { type: 'string', enum: ['editorial', 'language', 'mechanical'] },
     line: { type: 'integer' },
-    type: { type: 'string' },
+    type: {
+      type: 'string',
+      enum: [
+        'typo', 'punctuation', 'typography', 'agreement', 'word', 'collocation',
+        'register', 'syntax', 'tense', 'sentence', 'cut', 'refocus',
+        'term-undefined', 'insider-reference', 'genre-fit', 'idea-flag', 'voice-flag',
+      ],
+    },
     level: { type: 'string', enum: ['letter', 'word', 'sentence', 'paragraph', 'idea'] },
     before: { type: 'string' },
     after: { type: ['string', 'null'] },
     rationale: { type: 'string' },
     meaningRisk: { type: 'string', enum: ['low', 'medium', 'high'] },
+    applied: { type: 'boolean' },
+    skipReason: { type: ['string', 'null'] },
+    refutedBy: { type: 'array', items: { type: 'string' } },
     snippet: { type: 'string' },
     fixWith: { type: 'string' },
   },
@@ -97,7 +117,7 @@ const CHANGES_SCHEMA = {
   type: 'object',
   required: ['stage', 'changes'],
   properties: {
-    stage: { type: 'string' },
+    stage: { type: 'string', enum: ['editorial', 'language', 'mechanical'] },
     chunk_id: { type: 'string' },
     changes: { type: 'array', items: CHANGE_ITEM_SCHEMA },
     summary: { type: 'string' },
@@ -154,6 +174,45 @@ function normalizeText(text) {
 // an applied edit shifts once the residual pass runs on corrected text.
 function changeKey(change) {
   return (change.chunk_id || 'whole-article') + '::' + (change.type || '') + '::' + normalizeText(change.before);
+}
+
+// Highest-meaningRisk-first ordering for spending a bounded refute budget:
+// exhausting the budget should degrade gracefully (drop verification rigor
+// on the least-risky changes first), not arbitrarily by list order.
+const MEANING_RISK_SPEND_ORDER = ['high', 'medium', 'low'];
+function meaningRiskRank(risk) {
+  const rank = MEANING_RISK_SPEND_ORDER.indexOf(risk);
+  return rank === -1 ? MEANING_RISK_SPEND_ORDER.length : rank;
+}
+
+// Splits a set of found changes into { toVerify, exhausted } against a
+// remaining budget, spending the budget on the highest meaningRisk changes
+// first. Changes beyond the budget are NEVER dropped by this function --
+// the caller carries them with skipReason 'refute-budget-exhausted'
+// (mandate i, extended to the budget gate).
+//
+// `budget` is UNBOUNDED only when it is not a number at all (missing/invalid
+// threshold -- pre-budget behaviour, every change goes to toVerify). A
+// numeric budget of zero or less is a real, spent-out budget, NOT unbounded
+// -- that distinction matters for the mechanical stage, which calls this once
+// per chunk per residual round and must treat "budget already spent in an
+// earlier round" as zero remaining, not as "no cap configured".
+function splitByRefuteBudget(changes, budget) {
+  if (typeof budget !== 'number') {
+    return { toVerify: changes, exhausted: [] };
+  }
+  const safeBudget = budget > 0 ? budget : 0;
+  if (changes.length <= safeBudget) {
+    return { toVerify: changes, exhausted: [] };
+  }
+  const ranked = changes
+    .map((change, index) => ({ change, index }))
+    .sort((a, b) => {
+      const byRisk = meaningRiskRank(a.change.meaningRisk) - meaningRiskRank(b.change.meaningRisk);
+      return byRisk !== 0 ? byRisk : a.index - b.index;
+    })
+    .map((entry) => entry.change);
+  return { toVerify: ranked.slice(0, safeBudget), exhausted: ranked.slice(safeBudget) };
 }
 
 function spellCandidatesFor(chunk) {
@@ -281,7 +340,7 @@ if (requestedStages.indexOf('language') !== -1 && canRunLanguage) {
       chunk.text,
       'LANGUAGE: ' + language,
       authorVoice ? ('AUTHOR_VOICE:\n' + authorVoice) : 'AUTHOR_VOICE: none supplied.',
-      'Return exactly one JSON object matching the language changes-schema contract (stage="language", chunk_id="' + chunk.id + '").',
+      'Return exactly one JSON object matching the language changes-schema contract: stage="language" at the top level AND on every change, chunk_id="' + chunk.id + '".',
     ].join('\n');
     return agent(prompt, {
       agentType: 'academic-writer:copyeditor',
@@ -293,9 +352,10 @@ if (requestedStages.indexOf('language') !== -1 && canRunLanguage) {
   }
   async function languageVerifyStage(found) {
     const list = (found.result && Array.isArray(found.result.changes)) ? found.result.changes : [];
+    const stamped = list.map((rawChange) => ({ ...rawChange, stage: 'language', chunk_id: found.chunk.id }));
+    const budgeted = splitByRefuteBudget(stamped, refuteBudgetPerChunk);
     const verifiedChanges = [];
-    for (const rawChange of list) {
-      const change = { ...rawChange, stage: 'language', chunk_id: found.chunk.id };
+    for (const change of budgeted.toVerify) {
       const lensNames = (typeof refuteVotes === 'number' && refuteVotes > 0 && refuteVotes <= LANGUAGE_LENSES.length)
         ? LANGUAGE_LENSES.slice(0, refuteVotes)
         : LANGUAGE_LENSES;
@@ -307,6 +367,10 @@ if (requestedStages.indexOf('language') !== -1 && canRunLanguage) {
         verifiedChanges.push(change);
       }
     }
+    for (const change of budgeted.exhausted) {
+      log('Language change carried WITHOUT refute-verification — refuteBudgetPerChunk exhausted for chunk ' + found.chunk.id + ': ' + normalizeText(change.before));
+      verifiedChanges.push({ ...change, applied: false, skipReason: 'refute-budget-exhausted' });
+    }
     return { ...found, verifiedChanges };
   }
   const languageResults = await runPipelineCapped(chunks, concurrencyCap, languageFindStage, languageVerifyStage);
@@ -316,13 +380,16 @@ if (requestedStages.indexOf('language') !== -1 && canRunLanguage) {
     }
   }
   const downgraded = languageChanges.filter((c) => c.skipReason === 'refuted').length;
+  const budgetExhausted = languageChanges.filter((c) => c.skipReason === 'refute-budget-exhausted').length;
   gates.push({
     stage: 'language',
     ran: true,
     why: 'requested via args.stages',
     model: 'opus',
     rounds: 1,
-    outcome: languageChanges.length + ' change(s), ' + downgraded + ' downgraded by refute',
+    outcome: languageChanges.length + ' change(s), ' + downgraded + ' downgraded by refute, '
+      + budgetExhausted + ' carried unverified (refute-budget-exhausted)'
+      + (refuteBudgetIsBounded ? '' : ' [refuteBudgetPerChunk unbounded]'),
   });
 } else if (requestedStages.indexOf('language') === -1) {
   gates.push({ stage: 'language', ran: false, why: 'not requested (args.stages excludes language)', model: null, rounds: null, outcome: 'skipped' });
@@ -350,6 +417,13 @@ if (requestedStages.indexOf('mechanical') !== -1 && canRunMechanical) {
   const seen = new Map(); // changeKey -> change, across every round (mandate ii: keyed by before + chunk, never line)
   let workingChunks = chunks.map((c) => ({ ...c }));
   let dryStreak = 0;
+  // refuteBudgetPerChunk is a CUMULATIVE per-chunk cap across every
+  // mechanical round, not a per-round allowance -- the mechanical loop is a
+  // residual pass over the SAME chunks, so a per-round-only budget would let
+  // a chunk spend the budget again on every round (up to maxPasses times
+  // over). This map tracks how much of the budget each chunk_id has already
+  // spent on refute-verification so far.
+  const mechanicalBudgetSpent = new Map(); // chunk_id -> count already sent for refute-verification
 
   async function verifyMechanicalChange(change) {
     const thunks = [];
@@ -389,7 +463,7 @@ if (requestedStages.indexOf('mechanical') !== -1 && canRunMechanical) {
       chunk.text,
       'LANGUAGE: ' + language,
       'spellCandidates for this chunk (adjudicate one at a time; ignore entirely if empty): ' + JSON.stringify(spellCandidatesFor(chunk)),
-      'Return exactly one JSON object matching the mechanical changes-schema contract (stage="mechanical", chunk_id="' + chunk.id + '").',
+      'Return exactly one JSON object matching the mechanical changes-schema contract: stage="mechanical" at the top level AND on every change, chunk_id="' + chunk.id + '".',
     ].join('\n');
     return agent(prompt, {
       agentType: 'academic-writer:proofreader',
@@ -402,12 +476,23 @@ if (requestedStages.indexOf('mechanical') !== -1 && canRunMechanical) {
 
   async function mechanicalVerifyStage(found) {
     const list = (found.result && Array.isArray(found.result.changes)) ? found.result.changes : [];
-    const freshHere = [];
+    const freshFound = [];
     for (const rawChange of list) {
       const change = { ...rawChange, stage: 'mechanical', chunk_id: found.chunk.id };
       const key = changeKey(change);
       if (seen.has(key)) continue; // already discovered/verified in an earlier round
       seen.set(key, true);
+      freshFound.push(change);
+    }
+    const chunkId = found.chunk.id;
+    const alreadySpent = mechanicalBudgetSpent.get(chunkId) || 0;
+    const remainingBudget = refuteBudgetIsBounded
+      ? (refuteBudgetPerChunk > alreadySpent ? refuteBudgetPerChunk - alreadySpent : 0)
+      : refuteBudgetPerChunk; // unbounded stays unbounded (not a number)
+    const budgeted = splitByRefuteBudget(freshFound, remainingBudget);
+    mechanicalBudgetSpent.set(chunkId, alreadySpent + budgeted.toVerify.length);
+    const freshHere = [];
+    for (const change of budgeted.toVerify) {
       const verdict = await verifyMechanicalChange(change);
       if (verdict.refutedCount >= refuteMajority) {
         log('Mechanical change downgraded — refuted by ' + verdict.refutedBy.join(', ') + ': ' + normalizeText(change.before));
@@ -415,6 +500,10 @@ if (requestedStages.indexOf('mechanical') !== -1 && canRunMechanical) {
       } else {
         freshHere.push(change);
       }
+    }
+    for (const change of budgeted.exhausted) {
+      log('Mechanical change carried WITHOUT refute-verification — refuteBudgetPerChunk exhausted for chunk ' + found.chunk.id + ': ' + normalizeText(change.before));
+      freshHere.push({ ...change, applied: false, skipReason: 'refute-budget-exhausted' });
     }
     return { ...found, freshChanges: freshHere };
   }
@@ -447,13 +536,16 @@ if (requestedStages.indexOf('mechanical') !== -1 && canRunMechanical) {
     log('Mechanical loop hit the pass cap (maxPasses=' + maxPasses + ') before going dry for ' + dryRounds + ' consecutive round(s) — outcome=cap-reached, not silently truncated.');
   }
   const downgraded = mechanicalChanges.filter((c) => c.skipReason === 'refuted').length;
+  const budgetExhausted = mechanicalChanges.filter((c) => c.skipReason === 'refute-budget-exhausted').length;
   gates.push({
     stage: 'mechanical',
     ran: true,
     why: 'requested via args.stages',
     model: 'sonnet',
     rounds: mechanicalRounds,
-    outcome: mechanicalOutcome + ' — ' + mechanicalChanges.length + ' change(s), ' + downgraded + ' downgraded by refute',
+    outcome: mechanicalOutcome + ' — ' + mechanicalChanges.length + ' change(s), ' + downgraded + ' downgraded by refute, '
+      + budgetExhausted + ' carried unverified (refute-budget-exhausted)'
+      + (refuteBudgetIsBounded ? '' : ' [refuteBudgetPerChunk unbounded]'),
   });
 } else if (requestedStages.indexOf('mechanical') === -1) {
   mechanicalOutcome = 'skipped';
@@ -473,14 +565,18 @@ phase('Verify');
 
 const languageDowngraded = languageChanges.filter((c) => c.skipReason === 'refuted');
 const mechanicalDowngraded = mechanicalChanges.filter((c) => c.skipReason === 'refuted');
+const languageBudgetExhausted = languageChanges.filter((c) => c.skipReason === 'refute-budget-exhausted');
+const mechanicalBudgetExhausted = mechanicalChanges.filter((c) => c.skipReason === 'refute-budget-exhausted');
 log('Verify: ' + languageDowngraded.length + ' language change(s) and ' + mechanicalDowngraded.length + ' mechanical change(s) downgraded by refute — none dropped, all still present in the returned lists.');
+log('Verify: ' + languageBudgetExhausted.length + ' language change(s) and ' + mechanicalBudgetExhausted.length + ' mechanical change(s) carried unverified because refuteBudgetPerChunk was exhausted — none dropped, all still present in the returned lists.');
 gates.push({
   stage: 'verify',
   ran: true,
   why: 'aggregate refute/downgrade ledger across Language and Mechanical (VER-10 / SPC-14)',
   model: null,
   rounds: null,
-  outcome: languageDowngraded.length + ' language downgrade(s), ' + mechanicalDowngraded.length + ' mechanical downgrade(s)',
+  outcome: languageDowngraded.length + ' language downgrade(s), ' + mechanicalDowngraded.length + ' mechanical downgrade(s), '
+    + languageBudgetExhausted.length + ' language + ' + mechanicalBudgetExhausted.length + ' mechanical budget-exhausted',
 });
 
 return {

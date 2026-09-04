@@ -3,6 +3,63 @@
 All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
+### Added
+
+- **`src/scripts/gate.py` — one deterministic gate dispatcher**, with real exit
+  codes (`0` pass / `1` gate failed / `2` could not run) and four subcommands:
+  `argument-graph` (DFS cycle detection, transitive `thesis_link` reachability,
+  empty-evidence, positional dependency ordering), `coverage` (status
+  completeness, contiguous chapter range, `evidence_ids` referential integrity),
+  `citation-floor`, and `changes-schema`. Each verdict is appended to a per-run
+  gate ledger in `.academic-helper/session-state.json`.
+
+- **`gate-enforce`, the plugin's first blocking hook** (`Stop`). Every previous
+  hook returned `continue: true` unconditionally. This one reads the ledger and
+  refuses to end the turn while a gate in `run.requiredGates` is failing — or
+  **missing**, which is the point: skipping a gate is detected as absence rather
+  than passing silently. Fails closed on a real gate failure, open on its own
+  infrastructure errors, and honours `stop_hook_active` so an unsatisfiable gate
+  cannot trap a session.
+
+- **`citationFloor` thresholds.** The per-paragraph auditor is a *presence*
+  check — it verifies that claims which are cited are cited correctly, and is
+  structurally blind to a paragraph that cites nothing. Counting absence is
+  arithmetic, not judgement. Only secondary citations count, because primary
+  sources are quoted inline and make a raw count read healthy.
+
+### Changed
+
+- **The proofread refute fan-out is now bounded.** `concurrencyCap` bounded
+  parallelism, never volume, and nothing capped the number of findings, so total
+  verify calls were `findings × refuteVotes` with no ceiling — a chunk returning
+  50 findings cost 150 calls, and measured worst case for one run was ~300 LLM
+  invocations. New `proofread.refuteBudgetPerChunk` (cumulative per chunk across
+  residual rounds) caps it; surplus changes are carried with
+  `skipReason: "refute-budget-exhausted"` — downgraded, never dropped, matching
+  the contract the workflow already committed to.
+
+- **Argument-graph validation and the architect's coverage pre-check are now
+  scripts.** Both were previously prose instructing a model to re-derive DFS and
+  set validation in its head (`write/SKILL.md`: *"it is reasoning directly over
+  the outline JSON already in memory"*). The outline is now persisted to
+  `.academic-helper/outline.json`, which also makes the argument graph auditable
+  after the run.
+
+### Fixed
+
+- **The inline `CHANGES_SCHEMA` in `proofread.js` had drifted** from the
+  canonical `changes-schema.json` (missing `stage` in the change-level
+  `required`, missing `change_id`/`applied`/`skipReason`/`refutedBy`, no `type`
+  enum). Harmonized, with a new drift test; the language and mechanical prompts
+  now ask for per-change `stage`, which the harmonized schema requires and only
+  the editorial prompt had been requesting.
+
+- **Consecutive footnote definitions with no blank line between them were being
+  merged** into the first definition's body, losing footnotes 2–8.
+
+See `docs/audits/2026-09-04-determinism-audit.md` for the full audit, the
+measured LLM-call arithmetic, deviations as built, and what was deliberately
+deferred.
 
 ## [0.9.0] — 2026-09-04
 ### Removed

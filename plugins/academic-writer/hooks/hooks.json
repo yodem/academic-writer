@@ -53,6 +53,16 @@
             "statusMessage": "Notifying..."
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs lifecycle/gate-enforce",
+            "timeout": 5,
+            "statusMessage": "Checking gates..."
+          }
+        ]
       }
     ],
     "SessionEnd": [

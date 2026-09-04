@@ -309,20 +309,57 @@ Iterate until the researcher says something like "go", "looks good", or "start w
 
 ### Step 5.5: Argument Graph Validation
 
-Before any section-writer is spawned, the orchestrator itself validates the approved outline's argument graph — the `id` / `claim` / `evidence` / `depends_on` / `thesis_link` / `argument_role` fields already captured during Step 5 approval, across every section AND every unit inside `units` arrays. This is not a subagent call; it is reasoning directly over the outline JSON already in memory. If a fix is needed, re-invoke the architect (Step 4/5 pattern) or ask the researcher via `AskUserQuestion`.
+Before any section-writer is spawned, the approved outline's argument graph is validated — the `id` / `claim` / `evidence` / `depends_on` / `thesis_link` / `argument_role` fields captured during Step 5 approval, across every section AND every unit inside `units` arrays.
 
-Checklist — all four must pass:
+**This check is a script, not reasoning.** Write the approved outline to disk and run the gate:
+
+```bash
+# The outline must be persisted anyway — it is the artifact the gate reads and
+# the record that makes the argument graph auditable after the run (VER-09).
+cat > .academic-helper/outline.json <<'OUTLINE_JSON'
+{ ...the approved outline, verbatim... }
+OUTLINE_JSON
+
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py argument-graph .academic-helper/outline.json --json
+```
+
+Exit code is the verdict — do not re-derive it by reading the output prose:
+
+| Exit | Meaning | Action |
+|---|---|---|
+| `0` | all four checks pass | proceed to Step 6 |
+| `1` | the outline is invalid | repair it (below), then re-run the gate |
+| `2` | the gate could not run | fix the cause (missing/malformed `outline.json`); do NOT proceed — an unrun gate is not a passed gate |
+
+Also record the run in the gate ledger before Step 6, so a skipped gate is detectable rather than invisible:
+
+```bash
+python3 - <<'PY'
+import json, os, pathlib
+p = pathlib.Path('.academic-helper/session-state.json')
+d = json.loads(p.read_text()) if p.exists() else {}
+d['run'] = {'id': os.environ.get('CLAUDE_SESSION_ID', 'run'), 'skill': 'write',
+            'requiredGates': ['argument-graph', 'citation-floor'], 'completed': False}
+p.write_text(json.dumps(d, indent=2, ensure_ascii=False))
+PY
+```
+
+The `gate-enforce` Stop hook reads this and will refuse to let the turn end while a required gate is missing or failing. Mark `run.completed = true` after Step 9b.
+
+The four checks the gate enforces (documented here so a reader knows what it covers — the script, not this list, is the enforcement):
 
 - **No orphan sections/units**: every node's claim must trace back to the thesis via `thesis_link` — either the node has its own `thesis_link` directly, or it `depends_on` a node that (transitively) does. Walk the `depends_on` chain from each node; flag any node where the chain never reaches a `thesis_link`.
-- **No circular `depends_on` references**: detect cycles in the `depends_on` graph (reason through it as a topological sort / DFS with a visited/in-progress marker over node `id`s — no node may depend, directly or transitively, on itself). Flag any cycle found.
+- **No circular `depends_on` references**: no node may depend, directly or transitively, on itself. The gate reports the cycle path.
 - **No empty evidence**: every node's `evidence` array must be non-empty. Flag any node with `evidence: []`.
 - **Dependency ordering**: the section/unit sequence in the outline (which becomes the Step 6 writing order) must respect `depends_on` — a node cannot appear before every node listed in its `depends_on`. Flag any node whose position violates this topological ordering.
 
-**If any check fails**, the outline must be revised before Step 6 begins:
-- Present the specific failing node `id`s and the failed check(s) to the researcher, or
-- Loop back to the architect with the flagged nodes and ask it to repair the outline (fix missing `thesis_link`, break the cycle, add evidence, or reorder), then re-run this checklist against the revised outline.
+**On exit 1**, the outline must be revised before Step 6 begins. The gate's `--json` output names each violation as `{check, nodeId, detail}` — use those ids directly:
+- Present the failing node `id`s and their checks to the researcher, or
+- Loop back to the architect with the flagged nodes and ask it to repair the outline (fix missing `thesis_link`, break the cycle, add evidence, or reorder).
 
-Do NOT proceed to Step 6 until all four checks pass on the current outline.
+Then rewrite `.academic-helper/outline.json` and **re-run the gate**.
+
+Do NOT proceed to Step 6 until all four checks pass on the current outline — that means a fresh exit `0`, re-run after every edit. A remembered pass is not a pass: the artifact changed (`VER-09`).
 
 ---
 
@@ -505,6 +542,21 @@ This checks logical bracket/paren/quote balance and flags mixed gershayim/straig
 
 This gate is mandatory for any article containing Hebrew text — it is not optional and must not be skipped even under time pressure.
 
+#### Step 9a.6: Citation Floor (mandatory quality gate)
+
+The per-paragraph auditor is a **presence** check — it verifies that claims which *are* cited are cited correctly. It is structurally blind to a paragraph that cites nothing, and the self-review scorecard's 1–10 "Citation Completeness" dimension cannot separate 15 footnotes from 30. Absence needs its own counting gate (`VER-18`), and the count is arithmetic, not judgement.
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py citation-floor "$MD_PATH" \
+  --sources .academic-helper/sources.json --json
+```
+
+Only **secondary** citations count toward the floor: primary sources are quoted inline in this field, so a raw citation count reads healthy on an article carrying almost no scholarly engagement. Floors live in `thresholds.json > citationFloor` — never hardcode them here.
+
+- **Exit 1** — the article is under a floor. Do not ship it. Either the argument genuinely lacks scholarly engagement (send the thin sections back through Step 6 with the gate's per-section counts), or citations were dropped in synthesis — check Step 8's revision notes.
+- **Exit 2** — the gate could not run (missing `sources.json`, unreadable markdown). Fix the cause; an unrun gate is not a passed gate.
+- **Exit 0** — continue to Step 9b.
+
 #### Step 9b: DOCX Output
 
 Write the article data to a JSON file, then run the standalone DOCX generator script:
@@ -523,6 +575,21 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/generate-docx.py --input /tmp/aw-article-d
 The script handles all RTL formatting, directional marks, citation parentheses splitting, and conditional section titles deterministically.
 
 Log output completion:
+
+**Close the run in the gate ledger.** Until this runs, the `gate-enforce` Stop hook treats the run
+as still in flight and will keep blocking the end of the turn:
+
+```bash
+python3 - <<'PY'
+import json, pathlib
+p = pathlib.Path('.academic-helper/session-state.json')
+if p.exists():
+    d = json.loads(p.read_text())
+    if isinstance(d.get('run'), dict):
+        d['run']['completed'] = True
+        p.write_text(json.dumps(d, indent=2, ensure_ascii=False))
+PY
+```
 
 Report completion to the researcher — word count, citation count, section count, language, and a
 per-check summary of quality-gate outcomes. Exact template: see

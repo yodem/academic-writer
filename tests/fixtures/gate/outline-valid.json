@@ -1,0 +1,47 @@
+{
+  "sections": [
+    {
+      "id": "I",
+      "title": "Introduction",
+      "argument_role": "introduces thesis",
+      "claim": "The thesis is worth investigating.",
+      "evidence": ["ev1"],
+      "depends_on": [],
+      "thesis_link": "States the article's overall claim."
+    },
+    {
+      "id": "II",
+      "title": "Body (split into writer units)",
+      "argument_role": "supports thesis",
+      "units": [
+        {
+          "id": "II.1",
+          "title": "Body unit 1",
+          "argument_role": "presents evidence A",
+          "claim": "Evidence A supports the thesis.",
+          "evidence": ["ev2"],
+          "depends_on": ["I"],
+          "thesis_link": "Builds the first plank of the main argument."
+        },
+        {
+          "id": "II.2",
+          "title": "Body unit 2",
+          "argument_role": "presents evidence B",
+          "claim": "Evidence B reinforces evidence A.",
+          "evidence": ["ev3"],
+          "depends_on": ["II.1"],
+          "thesis_link": "Builds the second plank of the main argument."
+        }
+      ]
+    },
+    {
+      "id": "III",
+      "title": "Conclusion",
+      "argument_role": "closes thesis",
+      "claim": "The thesis holds.",
+      "evidence": ["ev1", "ev3"],
+      "depends_on": ["I", "II.2"],
+      "thesis_link": "Reaffirms the thesis in light of the evidence presented."
+    }
+  ]
+}
