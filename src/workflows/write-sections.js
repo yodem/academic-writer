@@ -31,7 +31,7 @@
 //         cap) or 'NEEDS_REVIEW' (cap reached) -- a paragraph that never
 //         passes is returned as NEEDS_REVIEW, never silently dropped or
 //         silently treated as PASS.
-//   (iii) Every cap (rewriteCycles.max, antiAi.passThreshold,
+//   (iii) Every cap (rewriteCycles.max,
 //         writerUnit.targetWords/minWords/maxWords) is read from
 //         args.thresholds -- never a literal in this script.
 //   (iv)  There is exactly ONE await barrier over the whole per-unit pipeline
@@ -144,14 +144,13 @@ const geminiApproved = cfg.geminiApproved === true;
 const thresholds = (cfg.thresholds && typeof cfg.thresholds === 'object') ? cfg.thresholds : {};
 
 // -- thresholds: every cap comes from args.thresholds, never a literal here --
-const THRESHOLD_KEYS = ['rewriteCycles', 'antiAi', 'writerUnit'];
+const THRESHOLD_KEYS = ['rewriteCycles', 'writerUnit'];
 const missingThresholdKeys = THRESHOLD_KEYS.filter((k) => thresholds[k] === undefined || thresholds[k] === null);
 if (missingThresholdKeys.length) {
   log('WARN: args.thresholds is missing key(s) ' + missingThresholdKeys.join(', ') + ' — the caller must load src/thresholds.json; units needing a missing cap will be gated off, never given an invented default.');
 }
 
 const rewriteCyclesMax = thresholds.rewriteCycles && thresholds.rewriteCycles.max;
-const antiAiPassThreshold = thresholds.antiAi && thresholds.antiAi.passThreshold;
 const writerUnitTargetWords = thresholds.writerUnit && thresholds.writerUnit.targetWords;
 const writerUnitMinWords = thresholds.writerUnit && thresholds.writerUnit.minWords;
 const writerUnitMaxWords = thresholds.writerUnit && thresholds.writerUnit.maxWords;
@@ -173,7 +172,6 @@ const DRAFT_UNIT_SCHEMA = {
         properties: {
           paragraphIndex: { type: 'integer' },
           text: { type: 'string' },
-          selfReviewScores: { type: 'object' },
         },
       },
     },
@@ -287,7 +285,7 @@ function draftUnitStage(entry) {
     if (value === undefined || value === null || value === '') continue;
     promptLines.push(label + ': ' + (typeof value === 'string' ? value : JSON.stringify(value)));
   }
-  promptLines.push('Return exactly one JSON object matching the draft-unit schema contract: unitId, and paragraphs (each with paragraphIndex, text, and any selfReviewScores computed).');
+  promptLines.push('Return exactly one JSON object matching the draft-unit schema contract: unitId, and paragraphs (each with paragraphIndex and text).');
   return agent(promptLines.join('\n'), {
     agentType: 'academic-writer:section-writer',
     label: 'draft:' + unitLabel(unit),
@@ -453,7 +451,6 @@ phase('Audit');
 
 const canRunDraftAndAudit = units.length > 0
   && typeof rewriteCyclesMax === 'number'
-  && typeof antiAiPassThreshold === 'number'
   && typeof writerUnitTargetWords === 'number'
   && typeof writerUnitMinWords === 'number'
   && typeof writerUnitMaxWords === 'number';
@@ -473,7 +470,7 @@ if (canRunDraftAndAudit) {
 } else {
   const why = units.length === 0
     ? 'no outline.units supplied'
-    : 'missing one or more args.thresholds keys: rewriteCycles.max, antiAi.passThreshold, writerUnit.targetWords/minWords/maxWords';
+    : 'missing one or more args.thresholds keys: rewriteCycles.max, writerUnit.targetWords/minWords/maxWords';
   gates.push({ stage: 'draft-audit', ran: false, why: why, outcome: 'skipped' });
 }
 
@@ -504,8 +501,6 @@ const needsReview = [];
 // that this script itself re-derived which specific evidence supports which
 // sentence.
 const evidenceOwnershipUpdates = [];
-let antiAiBelowThreshold = 0;
-let antiAiScored = 0;
 for (const section of sectionsOut) {
   for (const paragraph of section.paragraphs) {
     if (paragraph.outcome === 'NEEDS_REVIEW') {
@@ -521,39 +516,31 @@ for (const section of sectionsOut) {
         topicSentence: typeof paragraph.text === 'string' ? paragraph.text.slice(0, 200) : '',
       });
     }
-    const antiAiScore = paragraph.selfReviewScores && typeof paragraph.selfReviewScores.anti_ai === 'number'
-      ? paragraph.selfReviewScores.anti_ai
-      : null;
-    if (antiAiScore !== null) {
-      antiAiScored += 1;
-      if (typeof antiAiPassThreshold === 'number' && antiAiScore < antiAiPassThreshold) {
-        antiAiBelowThreshold += 1;
-      }
-    }
   }
 }
 
-// Anti-AI gate is enforced in-agent by section-writer's Step C (it runs
-// regardless of AUDIT_MODE — only Step D/E, the citation audit, is skipped
-// under AUDIT_MODE: external). This script reports the same named gate
-// outcome the fallback path must also report (SPC-14 / write/SKILL.md's
-// "same named gate outcomes" note), from the selfReviewScores each drafted
-// paragraph already carries.
-if (typeof antiAiPassThreshold === 'number' && antiAiScored > 0) {
-  gates.push({
-    stage: 'anti-ai',
-    ran: true,
-    why: 'section-writer Step C runs the anti-AI regeneration gate in-agent regardless of AUDIT_MODE; this reports its outcome against args.thresholds.antiAi.passThreshold',
-    outcome: antiAiScored + ' paragraph(s) scored, ' + antiAiBelowThreshold + ' below passThreshold (' + antiAiPassThreshold + ') after section-writer\'s own regeneration attempt',
-  });
-} else {
-  gates.push({
-    stage: 'anti-ai',
-    ran: false,
-    why: typeof antiAiPassThreshold !== 'number' ? 'antiAi.passThreshold missing from args.thresholds' : 'no paragraph carried a selfReviewScores.anti_ai value',
-    outcome: 'skipped',
-  });
-}
+// The anti-AI numeric gate was REMOVED here (see CHANGELOG 0.9.0). It read
+// `selfReviewScores.anti_ai` and compared it to `antiAi.passThreshold`, but
+// nothing ever computed that score deterministically: `selfReviewScores`
+// appears nowhere in the Gemini server source, so the number was whatever the
+// model chose to assign its own unrevised draft. Measured on a live 13-unit
+// run it came back a flat 50/50 on every dimension of every paragraph —
+// including paragraphs the auditor then FAILED and that were rewritten twice.
+// A scorer pinned at maximum passes unconditionally, so the gate did no work
+// in any unit while reporting that it had.
+//
+// The auditor is now the single per-paragraph hard gate. It produces a real
+// adversarial verdict (PASS / FAIL / PARTIAL) that this script already parses
+// and acts on, so consolidating removed a broken gate rather than a working
+// one. Anti-AI patterns remain as WRITING GUIDANCE in
+// write/references/anti-ai-patterns-*.md — what not to write, with no
+// self-assigned number attached.
+gates.push({
+  stage: 'anti-ai',
+  ran: false,
+  why: 'removed in 0.9.0: the score was self-assigned by the drafting model, not computed, and measured a flat maximum on every paragraph of a live run. The auditor is the per-paragraph gate; anti-AI patterns are guidance, not a scored gate.',
+  outcome: 'not a gate',
+});
 
 // -----------------------------------------------------------------------
 // Synthesize — single synthesizer pass over the completed article

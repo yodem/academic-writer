@@ -1,12 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "Single source of truth for all numeric quality gates (anti-AI scoring, self-review, rewrite limits, paragraph/unit word bounds, style-fingerprint compliance, voice rule-coverage/corpus minimums, typography). Edit here; every skill and agent references this file. Gemini model/thinking-budget defaults and retry policy are NOT read from here — they live in SPEC_DEFAULTS in plugins/academic-writer/mcp/gemini-server/src/gemini-client.ts (overridable per-project via profile.md), and the retry constants are hardcoded in that same file.",
-  "antiAi": {
-    "minScore": 35,
-    "maxScore": 50,
-    "passThreshold": 35,
-    "_comment": "Paragraphs scoring below 35/50 trigger revision. 5 dimensions x 10 points each."
-  },
+  "description": "Single source of truth for all numeric quality gates (self-review, rewrite limits, paragraph/unit word bounds, style-fingerprint compliance, voice rule-coverage/corpus minimums, typography). Edit here; every skill and agent references this file. Gemini model/thinking-budget defaults and retry policy are NOT read from here — they live in SPEC_DEFAULTS in plugins/academic-writer/mcp/gemini-server/src/gemini-client.ts (overridable per-project via profile.md), and the retry constants are hardcoded in that same file. The antiAi block was REMOVED in 0.9.0: nothing computed that score, so it was the drafting model rating its own unrevised draft, and it measured a flat maximum on every paragraph of a live 13-unit run while the auditor failed several of the same paragraphs. Anti-AI patterns are now writing guidance (write/references/anti-ai-patterns-*.md), not a scored gate; the auditor's VERDICT is the per-paragraph gate.",
   "selfReview": {
     "minScore": 40,
     "maxScore": 60,

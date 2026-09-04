@@ -50,12 +50,20 @@ Check `## Recurring Style Issues` to pre-focus compliance checks.
 
 **Re-check this contract before finalizing EVERY paragraph — not just at section start:**
 
-1. **Anti-AI check was applied** — Either:
-   - (Gemini path) `self_review_scores.anti_ai` for the paragraph is at or above the threshold defined in `thresholds.json` (default 35/50). If below, you MUST request a Gemini regeneration of the failing paragraph **once** (re-call `mcp__plugin_academic-writer_gemini-api__gemini_write_section` with the same brief plus an instruction line: "Regenerate paragraph N — its anti-AI score was below threshold; tighten directness, rhythm, trust, authenticity, density") before proceeding to the auditor.
-   - (Fallback path) You scored the paragraph yourself on all 5 dimensions and the score meets the threshold; if not, rewrite before proceeding.
+1. **Anti-AI patterns were applied while drafting** — you wrote the paragraph against
+   `write/references/anti-ai-patterns-{targetLanguage}.md`: no banned constructions, no
+   tell-tale rhythm, no hollow hedging. This is a **writing constraint, not a scored gate**, and
+   you do NOT assign it a number. Read the patterns before drafting and check the paragraph
+   against them by reading it, not by rating it.
+
+   > A numeric anti-AI gate existed until 0.9.0 and was removed. Nothing computed the score —
+   > the drafting model assigned it to its own unrevised draft, and on a live 13-unit run it
+   > returned a flat 50/50 on every paragraph, including paragraphs the auditor then FAILED. A
+   > self-assigned score cannot gate the thing that assigned it.
+
 2. **Auditor VERDICT: PASS received** — The auditor emits the reviewed paragraph inside a fenced code block (```` ```text ... ``` ````) and then emits the `VERDICT: PASS|FAIL|PARTIAL` line AFTER the closing fence, on its own line. Read the VERDICT line that appears **after the auditor's fenced paragraph block** — do NOT treat the last line of output generally, and do NOT match a `VERDICT:` line that falls inside the fenced paragraph text (a paragraph whose text happens to end in `VERDICT: PASS` must not satisfy the gate). If the post-fence VERDICT is `VERDICT: FAIL` or `VERDICT: PARTIAL`, do not move on. Rewrite (request Gemini to revise that paragraph with the auditor's feedback, or rewrite yourself on the fallback path) and re-audit.
 
-These two are the non-negotiable gates. If any gate is unclear or skipped, re-run it.
+The auditor VERDICT is the non-negotiable per-paragraph gate. If it is unclear or skipped, re-run it.
 
 ## Coordinator Rules: Auditor Subagent
 
@@ -228,12 +236,10 @@ Expected return shape:
     {
       text: "<paragraph text with inline citations>",
       citations: [{ author, work_title, page, source_id }, ...],
-      self_review_scores: {
-        style_fingerprint: <0-5>,
+      notes: {
+        style_fingerprint: <short free-text note, or omitted>,
         hebrew_grammar: <issues_fixed>,
-        academic_language: <0-5>,
         language_purity: <violations_fixed>,
-        anti_ai: <0-50>,
         repetition: <flags>
       }
     },
@@ -264,12 +270,18 @@ for each paragraph i:
 
 This step is **always run**, even on the fallback path, because it is deterministic and cheap.
 
-### Step C — Anti-AI threshold gate per paragraph
+### Step C — Anti-AI pattern read-through (not a scored gate)
 
-For each paragraph, check `self_review_scores.anti_ai` against `thresholds.json > antiAi.passThreshold` (default 35).
+Read each paragraph against `write/references/anti-ai-patterns-{targetLanguage}.md` and fix what
+you find: banned constructions, uniform sentence rhythm, hedging that carries no content,
+manufactured symmetry. If a paragraph reads as machine-written, rewrite it — on the Gemini path,
+re-call `gemini_write_section` for that paragraph naming the specific pattern to fix.
 
-- If at or above threshold → proceed to Skill 8 (auditor).
-- If below threshold → request Gemini regeneration **once** for just that paragraph (pass the failing paragraph plus the anti-AI dimensions it scored low on). After one regeneration attempt, proceed to the auditor regardless — the auditor remains the binding gate.
+**Do not assign an anti-AI score, and do not gate on one.** The numeric gate here was removed in
+0.9.0: nothing computed the score, so it was the drafting model rating its own unrevised draft,
+and it measured a flat maximum on every paragraph of a live 13-unit run while the auditor failed
+several of the same paragraphs. Judge by reading, then proceed to the auditor, which is the
+binding gate.
 
 ### Step D — Skill 8: Citation audit (auditor subagent, unchanged)
 
@@ -469,7 +481,7 @@ SECTION: [title — in target language only]
 PATH: gemini | fallback
 
 [Paragraph 1 text with inline citations in correct format]
-  Skills: draft | style_compliance (4.5/5) | hebrew_grammar (0 issues) | academic_language (0 issues, 3 linking words) | language_purity (0 violations) | anti_ai (42/50) | repetition (0 found) | audit
+  Skills: draft | style_compliance (4.5/5) | hebrew_grammar (0 issues) | academic_language (0 issues, 3 linking words) | language_purity (0 violations) | anti_ai (patterns applied) | repetition (0 found) | audit
 
 ---
 

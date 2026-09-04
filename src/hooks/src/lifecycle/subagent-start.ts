@@ -8,7 +8,6 @@ interface SubagentStartInput extends HookInput {
 }
 
 interface Thresholds {
-  antiAi?: { passThreshold?: number; maxScore?: number };
   rewriteCycles?: { max?: number };
 }
 
@@ -36,7 +35,7 @@ export function subagentStart(input: SubagentStartInput): HookResult {
       try {
         const raw = readFileSync(thresholdsPath, 'utf-8');
         const t = JSON.parse(raw) as Thresholds;
-        thresholdNote = `\nCurrent thresholds: anti-AI ${t.antiAi?.passThreshold}/${t.antiAi?.maxScore}, max rewrite cycles ${t.rewriteCycles?.max}.`;
+        thresholdNote = `\nCurrent thresholds: max rewrite cycles ${t.rewriteCycles?.max}.`;
       } catch {
         // ignore parse errors; missing thresholds is non-fatal
       }

@@ -84,7 +84,7 @@ Each of these announces what the article is NOT doing. In small doses they're le
 
 ## Scoring Dimensions
 
-Rate the paragraph 1–10 on each dimension. **Threshold from `thresholds.json > antiAi.passThreshold` (currently 35/50) to pass.**
+Use these dimensions to **read** the paragraph, not to score it. **Do not assign a number and do not gate on one.** The numeric gate was removed in 0.9.0 because nothing computed the score — the drafting model rated its own unrevised draft, and it returned a flat maximum on every paragraph of a live 13-unit run while the auditor failed several of the same paragraphs. If a paragraph trips a dimension below, rewrite it; the auditor's VERDICT is the binding per-paragraph gate.
 
 | Dimension | Question | Low-score indicators |
 |-----------|----------|----------------------|

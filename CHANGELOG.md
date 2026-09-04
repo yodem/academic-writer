@@ -4,6 +4,53 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-09-04
+### Removed
+
+- **The anti-AI numeric gate.** It read `selfReviewScores.anti_ai` and compared
+  it to `thresholds.json > antiAi.passThreshold` (35/50), but **nothing ever
+  computed that score**: `selfReviewScores` appears nowhere in the Gemini server
+  source, so the number was whatever the drafting model chose to assign its own
+  unrevised draft.
+
+  Measured on a live 13-unit Hebrew article, it came back a **flat 50/50 on
+  every dimension of every paragraph** — including paragraphs the auditor then
+  returned `FAIL` on and that were rewritten twice. A scorer pinned at maximum
+  passes unconditionally, so the gate did no work in any of the 13 units while
+  reporting that it had. Hand-scoring the same paragraphs gave 37–44, which is
+  what a scorer with range looks like.
+
+  Removed rather than repaired. Tuning the threshold cannot fix a self-assigned
+  score, and making it deterministic would have been worse: the mechanical tells
+  are already caught by `detect-ai-typography.py`, and the dimensions that
+  remain — cadence, hedging, manufactured symmetry — do not reduce to a script.
+  A deterministic implementation would have produced a number that *looks*
+  rigorous and isn't, trading a visibly broken gate for an invisibly broken one.
+
+  **The auditor is now the single per-paragraph hard gate.** It already produces
+  a real adversarial `PASS`/`FAIL`/`PARTIAL` verdict that the pipeline parses and
+  acts on, so this consolidates onto the gate that was doing the work.
+
+  Gone: `thresholds.json > antiAi`, the `selfReviewScores` field in the
+  draft-unit schema, the score in `section-writer.md`'s output contract, and the
+  threshold line the `SubagentStart` hook injected into every auditor spawn.
+
+### Changed
+
+- **Anti-AI patterns are now writing guidance, not a scored rubric.**
+  `write/references/anti-ai-patterns-{english,hebrew}.md` and
+  `section-writer.md` Step C still list every dimension and banned construction;
+  they now say to judge a paragraph by **reading** it and to rewrite what trips a
+  dimension, explicitly forbidding assigning it a number. The patterns were never
+  the broken part — the self-assigned score was.
+
+### Known gap
+
+- This removes per-paragraph anti-AI *gating*; the auditor gates citations. If
+  that granularity is wanted back, the honest form is an adversarial checker
+  with a named verdict — a second auditor-shaped subagent, not a config value or
+  a self-score.
+
 ## [0.8.0] — 2026-09-04
 ### Changed
 

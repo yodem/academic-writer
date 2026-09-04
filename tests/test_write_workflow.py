@@ -28,7 +28,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKFLOW = os.path.join(REPO, "src", "workflows", "write-sections.js")
 
 REQUIRED_PHASES = ["Draft", "Audit", "Synthesize", "Score"]
-REQUIRED_THRESHOLD_KEYS = ["rewriteCycles", "antiAi", "writerUnit"]
+REQUIRED_THRESHOLD_KEYS = ["rewriteCycles", "writerUnit"]
 REQUIRED_RETURN_KEYS = ["sections", "scorecard", "needsReview", "gates", "outcome"]
 
 
@@ -125,8 +125,27 @@ class TestThresholdsReadFromArgs(unittest.TestCase):
     def test_rewrite_cycles_max_read_from_args(self):
         self.assertIn("rewriteCycles.max", self.src)
 
-    def test_anti_ai_pass_threshold_read_from_args(self):
-        self.assertIn("antiAi.passThreshold", self.src)
+    def test_anti_ai_is_not_a_scored_gate(self):
+        """The anti-AI numeric gate was removed in 0.9.0.
+
+        It read `selfReviewScores.anti_ai` against `antiAi.passThreshold`, but
+        nothing computed that score — `selfReviewScores` appears nowhere in the
+        Gemini server source, so it was the drafting model rating its own
+        unrevised draft. On a live 13-unit run it returned a flat 50/50 on
+        every paragraph, including paragraphs the auditor then FAILED. A scorer
+        pinned at maximum passes unconditionally.
+
+        The auditor VERDICT is now the only per-paragraph hard gate.
+        """
+        self.assertNotIn(
+            "thresholds.antiAi",
+            self.src,
+            "the removed anti-AI threshold must not be read from args again",
+        )
+        # The stage is still reported, so a caller diffing gate names sees it
+        # was deliberately retired rather than silently dropped.
+        self.assertIn("'anti-ai'", self.src)
+        self.assertIn("not a gate", self.src)
 
     def test_writer_unit_bounds_read_from_args(self):
         self.assertIn("writerUnit.targetWords", self.src)
