@@ -291,7 +291,12 @@ function draftUnitStage(entry) {
     label: 'draft:' + unitLabel(unit),
     phase: 'Draft',
     schema: DRAFT_UNIT_SCHEMA,
-  }).then((result) => ({ unit: unit, sectionIndex: sectionIndex, draft: result }));
+  }).then((result) => {
+    const sanitizedDraft = (result && Array.isArray(result.paragraphs))
+      ? { ...result, paragraphs: result.paragraphs.map((p) => ({ ...p, text: sanitizeAgentText(p.text) })) }
+      : result;
+    return { unit: unit, sectionIndex: sectionIndex, draft: sanitizedDraft };
+  });
 }
 
 // -----------------------------------------------------------------------
@@ -305,6 +310,16 @@ function draftUnitStage(entry) {
 // VERDICT Format section. The fence is a ```text ... ``` block; the VERDICT
 // line is the last non-empty line of the auditor's raw response, outside any
 // fence.
+// Returns null — never 'FAIL' — when no VERDICT line is found. A missing
+// verdict is not evidence the paragraph failed: it can mean the auditor call
+// never returned text at all (agent() resolves to null on a terminal API
+// error, e.g. quota/session-limit exhaustion — see auditAndRewriteParagraph),
+// or that the auditor responded but truncated/malformed its output. Defaulting
+// either case to 'FAIL' is what previously drove a rewrite loop off an
+// infrastructure error: the rewrite spawn then failed the same way, its own
+// null was logged as "no usable text", and the loop re-audited — burning the
+// full rewriteCycles cap on every paragraph while a quota outage was in
+// effect. The caller must treat null as an abort, not a verdict.
 function parsePostFenceVerdict(rawAuditorText) {
   const text = typeof rawAuditorText === 'string' ? rawAuditorText : '';
   const fenceEnd = text.lastIndexOf('```');
@@ -314,7 +329,7 @@ function parsePostFenceVerdict(rawAuditorText) {
     const m = /^VERDICT:\s*(PASS|FAIL|PARTIAL)\s*$/.exec(lines[i]);
     if (m) return m[1];
   }
-  return 'FAIL';
+  return null;
 }
 
 function paragraphId(sectionIndex, paragraph) {
@@ -333,6 +348,19 @@ function quarantine(label, text) {
     (typeof text === 'string' ? text : ''),
     '</source_text>',
   ].join('\n');
+}
+
+// Strips tool-call XML fragments that reached the finished DOCX in a live run
+// -- `</invoke>` in five places across four sections, `</text>` in others --
+// because a subagent's own tool-call formatting can leak into the text it
+// reports as its content. Applied ONLY at the boundary where a subagent's raw
+// output becomes article content (drafted paragraph text, a rewrite, the
+// synthesis pass, the abstract) -- never applied to prompt strings this
+// script itself constructs, which legitimately reference these tag names in
+// prose (e.g. the quarantine() wrapper's own instructions).
+const TOOL_CALL_XML_RE = /<\/?(?:antml:)?(?:invoke|parameter|function_calls|text)\b[^>]*>/g;
+function sanitizeAgentText(text) {
+  return typeof text === 'string' ? text.replace(TOOL_CALL_XML_RE, '') : text;
 }
 
 async function auditParagraph(unit, sectionIndex, paragraph) {
@@ -386,7 +414,11 @@ async function rewriteParagraph(unit, sectionIndex, paragraph, auditorRawFeedbac
     label: 'rewrite:' + unitLabel(unit) + ':' + paragraph.paragraphIndex,
     phase: 'Audit',
     schema: REWRITE_PARAGRAPH_SCHEMA,
-  });
+  }).then((result) => (
+    result && typeof result.text === 'string'
+      ? { ...result, text: sanitizeAgentText(result.text) }
+      : result
+  ));
 }
 
 function rawTextOf(result) {
@@ -404,43 +436,101 @@ async function auditAndRewriteParagraph(unit, sectionIndex, paragraph) {
   if (cap === 0) {
     // No cap configured — the auditor gate cannot be safely bounded, so we
     // do not run an unbounded loop. Report NEEDS_REVIEW and log why.
-    log('Audit: no rewriteCycles.max configured for unit ' + unitLabel(unit) + ' paragraph ' + paragraph.paragraphIndex + ' — skipping the audit loop, outcome=NEEDS_REVIEW.');
+    log('AUDIT_OUTCOME: unit=' + unitLabel(unit) + ' paragraph=' + paragraph.paragraphIndex + ' outcome=NEEDS_REVIEW attempts=0 lastVerdict=FAIL reason=no rewriteCycles.max configured, audit loop skipped');
     return { ...currentParagraph, outcome: 'NEEDS_REVIEW', attempts: attempt, lastVerdict: 'FAIL' };
   }
 
   while (attempt < cap) {
     attempt += 1;
     const rawResult = await auditParagraph(unit, sectionIndex, currentParagraph);
+    // agent() resolves to null when the subagent dies on a terminal API error
+    // (e.g. a quota/session-limit exhaustion) after its own retries — this is
+    // NOT the auditor returning a verdict, and must never be scored as one.
+    // Previously this fell through to parsePostFenceVerdict('""'), which
+    // defaulted to 'FAIL', which triggered a rewrite spawn that failed the
+    // same infrastructure way, which re-entered this loop — burning the full
+    // rewriteCycles cap on agent calls that were never going to succeed.
+    if (rawResult === null) {
+      log('AUDIT_OUTCOME: unit=' + unitLabel(unit) + ' paragraph=' + paragraph.paragraphIndex + ' outcome=ERROR attempts=' + attempt + ' lastVerdict=ERROR reason=auditor call did not return (terminal API error, e.g. quota/session limit)');
+      return { ...currentParagraph, outcome: 'ERROR', attempts: attempt, lastVerdict: 'ERROR', errorReason: 'auditor call did not return (terminal API error, e.g. quota/session limit)' };
+    }
     const rawText = rawTextOf(rawResult);
     lastVerdict = parsePostFenceVerdict(rawText);
+    if (lastVerdict === null) {
+      // The auditor responded, but with no parseable VERDICT line (truncation,
+      // prose-only reply, fence mismatch). This is also not a FAIL verdict —
+      // scoring it as one is the same failure shape as the null-result case
+      // above, just reached with text instead of nothing.
+      log('AUDIT_OUTCOME: unit=' + unitLabel(unit) + ' paragraph=' + paragraph.paragraphIndex + ' outcome=ERROR attempts=' + attempt + ' lastVerdict=ERROR reason=auditor response had no parseable VERDICT line');
+      return { ...currentParagraph, outcome: 'ERROR', attempts: attempt, lastVerdict: 'ERROR', errorReason: 'auditor response had no parseable VERDICT line' };
+    }
     if (lastVerdict === 'PASS') {
+      log('AUDIT_OUTCOME: unit=' + unitLabel(unit) + ' paragraph=' + paragraph.paragraphIndex + ' outcome=PASS attempts=' + attempt + ' lastVerdict=PASS');
       return { ...currentParagraph, outcome: 'PASS', attempts: attempt, lastVerdict: lastVerdict };
     }
     if (attempt < cap) {
       log('Audit: paragraph ' + paragraph.paragraphIndex + ' of unit ' + unitLabel(unit) + ' got VERDICT: ' + lastVerdict + ' on attempt ' + attempt + ' — rewriting (cap=' + cap + ').');
       const rewriteResult = await rewriteParagraph(unit, sectionIndex, currentParagraph, rawText);
-      const rewrittenText = rewriteResult && typeof rewriteResult.text === 'string' && rewriteResult.text.trim().length > 0
+      if (rewriteResult === null) {
+        // Same infrastructure-failure class as the audit-side null check
+        // above: the rewrite spawn itself died on a terminal API error. Abort
+        // rather than loop back into another audit call under the same
+        // outage.
+        log('AUDIT_OUTCOME: unit=' + unitLabel(unit) + ' paragraph=' + paragraph.paragraphIndex + ' outcome=ERROR attempts=' + attempt + ' lastVerdict=ERROR reason=rewrite call did not return (terminal API error, e.g. quota/session limit)');
+        return { ...currentParagraph, outcome: 'ERROR', attempts: attempt, lastVerdict: 'ERROR', errorReason: 'rewrite call did not return (terminal API error, e.g. quota/session limit)' };
+      }
+      const rewrittenText = typeof rewriteResult.text === 'string' && rewriteResult.text.trim().length > 0
         ? rewriteResult.text
         : null;
       if (rewrittenText) {
         currentParagraph = { ...currentParagraph, text: rewrittenText, rewriteFeedback: lastVerdict };
       } else {
-        // The rewrite spawn returned no usable text — log it explicitly
-        // rather than silently re-auditing the same text under the
-        // pretense that a rewrite happened.
+        // The rewrite spawn returned a non-null result with no usable text
+        // (schema-shaped but empty) — log it explicitly rather than silently
+        // re-auditing the same text under the pretense that a rewrite
+        // happened.
         log('Audit: rewrite spawn for paragraph ' + paragraph.paragraphIndex + ' of unit ' + unitLabel(unit) + ' returned no usable text — re-auditing unchanged text on attempt ' + (attempt + 1) + ' (this is a degraded retry, not a rewrite).');
         currentParagraph = { ...currentParagraph, rewriteFeedback: lastVerdict };
       }
     }
   }
-  log('Audit: paragraph ' + paragraph.paragraphIndex + ' of unit ' + unitLabel(unit) + ' reached rewriteCycles.max (' + cap + ') without a PASS verdict — outcome=NEEDS_REVIEW.');
+  log('AUDIT_OUTCOME: unit=' + unitLabel(unit) + ' paragraph=' + paragraph.paragraphIndex + ' outcome=NEEDS_REVIEW attempts=' + attempt + ' lastVerdict=' + lastVerdict + ' reason=reached rewriteCycles.max (' + cap + ') without a PASS verdict');
   return { ...currentParagraph, outcome: 'NEEDS_REVIEW', attempts: attempt, lastVerdict: lastVerdict };
 }
 
 async function auditUnitStage(drafted) {
+  // draftUnitStage's agent() call resolves to null when the section-writer
+  // spawn dies on a terminal API error. Falling through to `[]` here reads as
+  // "the unit legitimately drafted zero paragraphs" -- the same silent-empty
+  // shape as the outcome bug below (see the top-level `outcome` computation).
+  // A unit whose draft never happened must say so, not disappear.
+  if (drafted.draft === null) {
+    log('AUDIT_OUTCOME: unit=' + unitLabel(drafted.unit) + ' paragraph=0 outcome=ERROR attempts=0 lastVerdict=ERROR reason=draft call did not return (terminal API error, e.g. quota/session limit)');
+    return {
+      unit: drafted.unit,
+      sectionIndex: drafted.sectionIndex,
+      paragraphs: [{
+        paragraphIndex: 0,
+        text: '',
+        outcome: 'ERROR',
+        attempts: 0,
+        lastVerdict: 'ERROR',
+        errorReason: 'draft call did not return (terminal API error, e.g. quota/session limit)',
+      }],
+    };
+  }
   const paragraphs = (drafted.draft && Array.isArray(drafted.draft.paragraphs)) ? drafted.draft.paragraphs : [];
   const auditedParagraphs = [];
   for (const paragraph of paragraphs) {
+    // Once a paragraph in this unit has errored (an infrastructure failure,
+    // not a citation verdict), further paragraphs are carried through
+    // unaudited rather than spending more agent() calls under the same
+    // outage -- but the array shape is preserved so nothing is silently
+    // dropped from the unit.
+    if (auditedParagraphs.length && auditedParagraphs[auditedParagraphs.length - 1].outcome === 'ERROR') {
+      auditedParagraphs.push({ ...paragraph, outcome: 'ERROR', attempts: 0, lastVerdict: 'ERROR', errorReason: 'skipped: a prior paragraph in this unit already errored' });
+      continue;
+    }
     const auditedParagraph = await auditAndRewriteParagraph(drafted.unit, drafted.sectionIndex, paragraph);
     auditedParagraphs.push(auditedParagraph);
   }
@@ -500,11 +590,15 @@ const needsReview = [];
 // the draft-unit schema this script asks section-writer for), not a claim
 // that this script itself re-derived which specific evidence supports which
 // sentence.
+const errored = [];
 const evidenceOwnershipUpdates = [];
 for (const section of sectionsOut) {
   for (const paragraph of section.paragraphs) {
     if (paragraph.outcome === 'NEEDS_REVIEW') {
       needsReview.push({ unitId: section.unitId, paragraphIndex: paragraph.paragraphIndex, lastVerdict: paragraph.lastVerdict });
+    }
+    if (paragraph.outcome === 'ERROR') {
+      errored.push({ unitId: section.unitId, paragraphIndex: paragraph.paragraphIndex, errorReason: paragraph.errorReason || null });
     }
     if (paragraph.outcome === 'PASS') {
       evidenceOwnershipUpdates.push({
@@ -565,6 +659,11 @@ if (sectionsOut.length > 0) {
     label: 'synthesize',
     phase: 'Synthesize',
   });
+  if (typeof synthesisResult === 'string') {
+    synthesisResult = sanitizeAgentText(synthesisResult);
+  } else if (synthesisResult && typeof synthesisResult.revisedDraft === 'string') {
+    synthesisResult = { ...synthesisResult, revisedDraft: sanitizeAgentText(synthesisResult.revisedDraft) };
+  }
   gates.push({ stage: 'synthesize', ran: true, why: 'sections were produced by the draft-audit stage', outcome: 'synthesizer pass completed' });
 
   // Step 8.5 Abstract Generation — folded into this Synthesize phase per
@@ -586,6 +685,9 @@ if (sectionsOut.length > 0) {
     phase: 'Synthesize',
     schema: ABSTRACT_SCHEMA,
   });
+  if (abstractResult && typeof abstractResult.abstract === 'string') {
+    abstractResult = { ...abstractResult, abstract: sanitizeAgentText(abstractResult.abstract) };
+  }
   gates.push({ stage: 'abstract', ran: true, why: 'sections were produced by the draft-audit stage; folded into Synthesize per the migration spec', outcome: 'abstract generated' });
 } else {
   gates.push({ stage: 'synthesize', ran: false, why: 'no sections to synthesize', outcome: 'skipped' });
@@ -631,12 +733,33 @@ if (sectionsOut.length > 0) {
   gates.push({ stage: 'score', ran: false, why: 'no sections to score', outcome: 'skipped' });
 }
 
-const outcome = needsReview.length > 0 ? 'NEEDS_REVIEW' : 'PASS';
+// A verdict of 'PASS' must mean the draft-audit stage actually ran and
+// actually passed -- not "there was nothing to disagree with". Previously
+// this was `needsReview.length > 0 ? 'NEEDS_REVIEW' : 'PASS'`, so a run with
+// canRunDraftAndAudit === false (e.g. resumeFromRunId without args, so
+// outline.units is empty) produced sectionsOut=[], needsReview=[], and
+// reported the top-level outcome as PASS -- the same "an unrun gate is not a
+// pass" failure the plugin's own anti-AI gate removal (0.9.0) was about,
+// applied one level up to the whole workflow's verdict. A caller that trusts
+// `outcome` without reading `gates` would ship an article that was never
+// generated.
+const ranDraftAudit = gates.some((g) => g.stage === 'draft-audit' && g.ran === true);
+let outcome;
+if (!ranDraftAudit) {
+  outcome = 'SKIPPED';
+} else if (errored.length > 0) {
+  outcome = 'ERROR';
+} else if (needsReview.length > 0) {
+  outcome = 'NEEDS_REVIEW';
+} else {
+  outcome = 'PASS';
+}
 
 return {
   sections: sectionsOut,
   scorecard: scorecard,
   needsReview: needsReview,
+  errored: errored,
   gates: gates,
   outcome: outcome,
   abstract: abstractResult && typeof abstractResult.abstract === 'string' ? abstractResult.abstract : null,

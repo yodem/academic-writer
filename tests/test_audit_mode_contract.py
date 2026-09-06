@@ -57,6 +57,24 @@ def test_section_writer_audit_mode_supersedes_fallback_and_behavioral_contract()
     assert "orthogonal to" in text.lower() and "geminiFallback" in text
 
 
+def test_section_writer_input_section_forbids_silent_hand_draft_on_direct_spawn():
+    # A direct Agent-tool spawn (no write-sections.js orchestrator) that omits
+    # `unit`/`AUDIT_MODE` was observed hand-drafting a paragraph -- skipping
+    # BOTH the Gemini path and the auditor citation gate -- with the omission
+    # surfaced only in prose the caller might not read. AUDIT_MODE absent is
+    # documented (above) as "preserve in-agent auditor behavior", not as
+    # "skip the pipeline", so this guards the gap between what was documented
+    # and what the agent actually did.
+    text = SECTION_WRITER.read_text(encoding="utf-8")
+    input_section = _input_section_text(text)
+    assert "Direct spawn without orchestrator context" in input_section
+    assert "is not license to skip the pipeline" in input_section
+    assert "worst outcome this agent can produce" in input_section
+    # The escape hatch must be an explicit STOP-and-report, not a silent
+    # downgrade to unaudited prose.
+    assert "STOP and report back" in input_section
+
+
 def test_write_skill_names_write_sections_workflow_script():
     text = WRITE_SKILL.read_text(encoding="utf-8")
     assert "workflows/write-sections.js" in text

@@ -243,5 +243,76 @@ class TestThresholdsAreReadNotHardcoded(unittest.TestCase):
         self.assertNotIn("absolute-floor", checks)
 
 
+class TestCitationFloorMissingFromProjectThresholds(unittest.TestCase):
+    """A project's own .academic-helper/thresholds.json can predate the
+    citationFloor key -- it carries every other key but not that one. Before
+    the fallback, this exited 2 (could-not-run) and the floor was silently
+    inert on exactly the projects whose citation habits are already formed.
+    """
+
+    def _project_thresholds_without_citation_floor(self, tmpdir):
+        thresholds_path = os.path.join(tmpdir, "thresholds.json")
+        with open(thresholds_path, "w", encoding="utf-8") as fh:
+            json.dump({"rewriteCycles": {"max": 3}}, fh)  # every OTHER key, not citationFloor
+        return thresholds_path
+
+    def test_falls_back_to_plugin_default_instead_of_exiting_could_not_run(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            thresholds_path = self._project_thresholds_without_citation_floor(tmpdir)
+            proc = run_gate(
+                "citation-floor",
+                VALID_ARTICLE_PATH,
+                "--sources",
+                VALID_SOURCES_PATH,
+                "--thresholds",
+                thresholds_path,
+                "--json",
+            )
+        # The plugin's shipped default (minSecondaryPer1000Words=4.0,
+        # minSecondaryTotal=8) is exactly what VALID_ARTICLE_PATH is built to
+        # satisfy at the boundary -- so this must PASS (exit 0), never exit 2.
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["status"], "pass")
+        self.assertIn("secondary=8", payload["detail"])
+
+    def test_warns_loudly_on_stderr_when_falling_back(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            thresholds_path = self._project_thresholds_without_citation_floor(tmpdir)
+            proc = run_gate(
+                "citation-floor",
+                VALID_ARTICLE_PATH,
+                "--sources",
+                VALID_SOURCES_PATH,
+                "--thresholds",
+                thresholds_path,
+                "--json",
+            )
+        self.assertIn("WARNING", proc.stderr)
+        self.assertIn(thresholds_path, proc.stderr)
+        self.assertIn("citationFloor", proc.stderr)
+
+    def test_real_config_error_still_exits_2_not_silently_invented(self):
+        """A --thresholds file that fails to parse at all (not merely
+        missing citationFloor) must still be a hard error -- the fallback
+        only fires on a well-formed file missing the one key, never papers
+        over a broken --thresholds argument.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            thresholds_path = os.path.join(tmpdir, "thresholds.json")
+            with open(thresholds_path, "w", encoding="utf-8") as fh:
+                fh.write("{not valid json")
+            proc = run_gate(
+                "citation-floor",
+                VALID_ARTICLE_PATH,
+                "--sources",
+                VALID_SOURCES_PATH,
+                "--thresholds",
+                thresholds_path,
+                "--json",
+            )
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
