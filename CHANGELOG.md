@@ -4,6 +4,17 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-09-15
+### Fixed
+
+- **Hebrew DOCX headings and footnotes now retain right alignment in Word.**
+  The generated OOXML now writes RTL paragraph properties in the schema-required
+  order, and the footnote template uses the same order. This prevents Word from
+  silently falling back to left alignment for short RTL paragraphs.
+
+- **The distributable plugin bundle is synchronized with the current source
+  generator and workflow fixes.**
+
 ## [0.10.0] — 2026-09-04
 ### Added
 

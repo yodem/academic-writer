@@ -140,16 +140,39 @@ def validate_hebrew_text(text: str) -> str:
 
 
 def set_rtl_para(para):
-    """Enable RTL layout for a paragraph via w:bidi.
+    """Enable RTL layout for a paragraph via correctly ordered ``w:bidi``.
 
-    w:bidi marks the paragraph as RTL so text flows right-to-left. Paragraph
-    alignment (w:jc) is set separately by the caller via para.alignment, so
-    this function only adds the bidi element to avoid duplicate jc elements.
+    OOXML requires ``w:bidi`` to precede spacing, indentation, and paragraph
+    alignment (``w:jc``) inside ``w:pPr``. Appending it after the alignment is
+    tolerated by some readers but causes Word for macOS to ignore the
+    alignment on short RTL paragraphs such as headings.
     """
     pPr = para._p.get_or_add_pPr()
+    if pPr.find(qn("w:bidi")) is not None:
+        return
+
     bidi = OxmlElement("w:bidi")
     bidi.set(qn("w:val"), "1")
-    pPr.append(bidi)
+    pPr.insert_element_before(
+        bidi,
+        "w:adjustRightInd",
+        "w:snapToGrid",
+        "w:spacing",
+        "w:ind",
+        "w:contextualSpacing",
+        "w:mirrorIndents",
+        "w:suppressOverlap",
+        "w:jc",
+        "w:textDirection",
+        "w:textAlignment",
+        "w:textboxTightWrap",
+        "w:outlineLvl",
+        "w:divId",
+        "w:cnfStyle",
+        "w:rPr",
+        "w:sectPr",
+        "w:pPrChange",
+    )
 
 
 def set_rtl_run(run):

@@ -38,7 +38,11 @@ behavior for this condition.
 
 ### Voice profile load (first step of every run)
 
-1. Run `voice-sync.sh pull` — pulls latest `AUTHOR_VOICE.md` from CandleKeep (last-write-wins).
+1. Run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh pull` — pulls latest `AUTHOR_VOICE.md` from
+   CandleKeep (last-write-wins). **Check its exit code and surface its stdout/stderr** rather than
+   silently continuing: exit 0 means it either pulled successfully or (an explicitly reported)
+   local-only mode; any other exit code is a real failure — say so before proceeding, don't let
+   Step 2 quietly read a stale local file as if the pull had happened.
 2. Read `AUTHOR_VOICE.md` from project root. Whole file goes into the section-writer system prompt.
 3. The section writer is instructed to weight `## Academic-specific` rules higher when they
    conflict with `## Core voice` rules; everything else applies as written.
@@ -360,6 +364,32 @@ The four checks the gate enforces (documented here so a reader knows what it cov
 Then rewrite `.academic-helper/outline.json` and **re-run the gate**.
 
 Do NOT proceed to Step 6 until all four checks pass on the current outline — that means a fresh exit `0`, re-run after every edit. A remembered pass is not a pass: the artifact changed (`VER-09`).
+
+### Step 5.6: stale evidence-ownership check
+
+`.academic-helper/evidence-ownership.json` (written by the architect — see the ownership-only
+fallback above, and "Writes evidence-ownership.json" under the architect's own responsibilities)
+is loaded from disk by every section-writer, by contract. A copy left over from a *previous* run
+of the same article — mapping ownership for a thesis the researcher has since rejected — is never
+compared against the current outline anywhere else, so it would silently steer every freshly
+spawned writer back toward the abandoned frame. Same class of check as Step 5.5, a script not
+reasoning, run once more right before Step 6:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py stale-evidence-ownership .academic-helper/outline.json \
+  --evidence-ownership .academic-helper/evidence-ownership.json --json
+```
+
+| Exit | Meaning | Action |
+|---|---|---|
+| `0` | `evidence-ownership.json` doesn't exist yet, or is newer than or equal to `outline.json` | proceed to Step 6 |
+| `1` | `evidence-ownership.json` is OLDER than `outline.json` — built for a prior outline | move it aside (e.g. rename to `evidence-ownership.stale.json`) or re-run the architect in ownership-only mode to regenerate it, then re-run the gate |
+| `2` | the gate could not run (missing `outline.json`) | fix the cause; do NOT proceed |
+
+Do NOT proceed to Step 6 on exit `1` — an outline can change without evidence-ownership.json being
+regenerated (the researcher revises the thesis after Step 5.5 passes, or a stale file survives from
+an earlier attempt at the same article), and a stale ownership map is a correctness trap, not a
+missing-file error: nothing else in the pipeline will ever notice it's wrong.
 
 ---
 

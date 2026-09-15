@@ -138,7 +138,9 @@ this script rather than re-deriving the rule.
 7. Run `voice-calibrator` only after session 3 and after session 7 (mid-point + final).
 8. If this is the first time session 3 has completed, announce MVV (see above) and set
    `mvvReached: true`.
-9. Run `voice-sync push`.
+9. Run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh push` and check its exit code — a non-zero
+   exit is a real failure (see the script's own header), not a silent no-op; surface it rather than
+   continuing as if the push happened.
 10. If not all 7 sessions are done, ask: "Continue with session N+1, or stop here? `:voice` resumes
     automatically whenever you come back."
 
@@ -161,7 +163,8 @@ this script rather than re-deriving the rule.
 ### `:voice recompress`
 1. Run `voice-distiller --recompress` (full pass, all transcripts + fingerprint).
 2. Run rule-coverage check inline; write `.voice/audit.md`.
-3. Run `voice-sync push`.
+3. Run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh push` and check its exit code — a non-zero
+   exit is a real failure, not a silent no-op.
 
 ### `:voice audit`
 1. Read `AUTHOR_VOICE.md` and corpus.
@@ -176,8 +179,9 @@ this script rather than re-deriving the rule.
 4. Tell user: "Quick profile created. Run `:voice continue --upgrade` to fill in missed sessions."
 
 ### `:voice sync`
-1. Run `voice-sync.sh pull` (last-write-wins by `> Updated` stamp).
-2. Run `voice-sync.sh push`.
+1. Run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh pull` (last-write-wins by `> Updated` stamp)
+   and check its exit code — a non-zero exit is a real failure, not a silent no-op.
+2. Run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh push` and check its exit code likewise.
 3. Report which side won.
 
 ### `:voice status`

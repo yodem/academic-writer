@@ -730,13 +730,36 @@ def cmd_citation_floor(args) -> tuple[int, dict]:
     thresholds, err = _read_json_file(args.thresholds)
     if err:
         return 2, _make_result("citation-floor", "error", f"cannot read --thresholds: {err}", [])
+
+    floor_cfg = thresholds.get("citationFloor") if isinstance(thresholds, dict) else None
+    if floor_cfg is None and str(args.thresholds) != str(DEFAULT_THRESHOLDS_PATH):
+        # citationFloor shipped after some projects' .academic-helper/thresholds.json was
+        # generated -- that file carries every other key but not this one. Exiting 2 here
+        # means the floor is inert, and silently so, on exactly the projects whose citation
+        # habits are already formed (VER-18's whole point). Fall back to the plugin's own
+        # shipped default, loudly -- never invent a number, and never stay quiet about it.
+        default_thresholds, default_err = _read_json_file(str(DEFAULT_THRESHOLDS_PATH))
+        if not default_err and isinstance(default_thresholds, dict):
+            fallback_floor = default_thresholds.get("citationFloor")
+            if fallback_floor is not None:
+                floor_cfg = fallback_floor
+                print(
+                    f"WARNING: {args.thresholds} has no citationFloor config -- "
+                    f"falling back to the plugin's shipped default at {DEFAULT_THRESHOLDS_PATH}. "
+                    "Add citationFloor to the project's own thresholds.json to silence this "
+                    "and to review whether the shipped default is the value you want enforced.",
+                    file=sys.stderr,
+                )
+
     try:
-        floor_cfg = thresholds["citationFloor"]
         min_rate = float(floor_cfg["minSecondaryPer1000Words"])
         min_total = int(floor_cfg["minSecondaryTotal"])
     except (KeyError, TypeError, ValueError) as exc:
         return 2, _make_result(
-            "citation-floor", "error", f"thresholds.json missing citationFloor config: {exc}", []
+            "citation-floor", "error",
+            f"thresholds.json missing citationFloor config (checked {args.thresholds} and the "
+            f"plugin default {DEFAULT_THRESHOLDS_PATH}): {exc}",
+            [],
         )
 
     try:
@@ -817,6 +840,54 @@ def cmd_changes_schema(args) -> tuple[int, dict]:
     return 0, _make_result("changes-schema", "pass", "changes payload matches schema", [])
 
 
+def cmd_stale_evidence_ownership(args) -> tuple[int, dict]:
+    """Refuse a stale evidence-ownership.json -- one built for a previous
+    (possibly abandoned) outline. Section-writers load evidence-ownership.json
+    from disk by contract; nothing else compares it against the current
+    outline, so a leftover file from a prior run of the same article silently
+    steers fresh writers toward an ownership map for a thesis the researcher
+    may have already rejected. Same class of check as the argument-graph gate:
+    a script, not reasoning, run before any section-writer is spawned.
+    """
+    outline_path = Path(args.outline)
+    ownership_path = Path(args.evidence_ownership)
+
+    if not outline_path.exists():
+        return 2, _make_result(
+            "stale-evidence-ownership", "error", f"outline not found: {outline_path}", []
+        )
+
+    if not ownership_path.exists():
+        # Not yet existing is a different, legitimate state (the architect's
+        # ownership-only pass hasn't produced it yet) -- not what this gate
+        # checks. Nothing to compare against.
+        return 0, _make_result(
+            "stale-evidence-ownership", "pass",
+            f"{ownership_path} does not exist yet -- nothing to compare against outline mtime", [],
+        )
+
+    outline_mtime = outline_path.stat().st_mtime
+    ownership_mtime = ownership_path.stat().st_mtime
+
+    if outline_mtime > ownership_mtime:
+        outline_iso = datetime.fromtimestamp(outline_mtime, tz=timezone.utc).isoformat()
+        ownership_iso = datetime.fromtimestamp(ownership_mtime, tz=timezone.utc).isoformat()
+        return 1, _make_result(
+            "stale-evidence-ownership", "fail",
+            f"{ownership_path} (mtime {ownership_iso}) is OLDER than {outline_path} "
+            f"(mtime {outline_iso}) -- it was built for a previous outline and "
+            "section-writers load it from disk by contract, so fresh writers would be "
+            "steered toward a stale (possibly abandoned) frame. Move it aside or "
+            "regenerate it (re-run the architect in ownership-only mode) before Step 6.",
+            [{"check": "stale-mtime", "path": str(ownership_path), "detail": "older than outline.json"}],
+        )
+
+    return 0, _make_result(
+        "stale-evidence-ownership", "pass",
+        f"{ownership_path} is newer than or equal to {outline_path}", [],
+    )
+
+
 # --- CLI ----------------------------------------------------------------------
 
 GATE_HANDLERS = {
@@ -824,6 +895,7 @@ GATE_HANDLERS = {
     "coverage": cmd_coverage,
     "citation-floor": cmd_citation_floor,
     "changes-schema": cmd_changes_schema,
+    "stale-evidence-ownership": cmd_stale_evidence_ownership,
 }
 
 
@@ -869,6 +941,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "changes-schema", parents=[common], help="Validate a changes.json payload against the canonical schema."
     )
     p_cs.add_argument("changes", help="Path to changes.json")
+
+    p_seo = subparsers.add_parser(
+        "stale-evidence-ownership", parents=[common],
+        help="Refuse an evidence-ownership.json older than the current outline.json.",
+    )
+    p_seo.add_argument("outline", help="Path to outline.json")
+    p_seo.add_argument("--evidence-ownership", required=True, help="Path to evidence-ownership.json")
 
     return parser
 

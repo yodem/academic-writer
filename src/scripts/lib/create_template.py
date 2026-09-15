@@ -127,12 +127,12 @@ def create_template_with_footnotes(template_path="footnote_template.docx"):
     etree.SubElement(fn_text_style, "{%s}name" % w_ns).set("{%s}val" % w_ns, "footnote text")
     etree.SubElement(fn_text_style, "{%s}basedOn" % w_ns).set("{%s}val" % w_ns, "Normal")
     fn_text_pPr = etree.SubElement(fn_text_style, "{%s}pPr" % w_ns)
+    # RTL paragraph direction for Hebrew footnotes
+    etree.SubElement(fn_text_pPr, "{%s}bidi" % w_ns).set("{%s}val" % w_ns, "1")
     spacing = etree.SubElement(fn_text_pPr, "{%s}spacing" % w_ns)
     spacing.set("{%s}after" % w_ns, "0")
     spacing.set("{%s}line" % w_ns, "240")
     spacing.set("{%s}lineRule" % w_ns, "auto")
-    # RTL paragraph direction for Hebrew footnotes
-    etree.SubElement(fn_text_pPr, "{%s}bidi" % w_ns).set("{%s}val" % w_ns, "1")
     etree.SubElement(fn_text_pPr, "{%s}jc" % w_ns).set("{%s}val" % w_ns, "right")
     fn_text_rPr = etree.SubElement(fn_text_style, "{%s}rPr" % w_ns)
     etree.SubElement(fn_text_rPr, "{%s}sz" % w_ns).set("{%s}val" % w_ns, "20")
