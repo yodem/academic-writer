@@ -165,9 +165,13 @@ function countLabel(calls, prefix) {
     assert.strictEqual(result.outcome, 'ERROR');
   }
 
-  // E. A unit with two paragraphs where the first errors: the second must
-  // never be audited (no further spend under an active outage), but must
-  // still appear in the output, marked ERROR.
+  // E. A unit with two paragraphs whose batched audit call dies (null): the
+  // audit is batched per unit per round (2026-09-15), so ONE auditor call
+  // covers both paragraphs. Both must surface as ERROR with the terminal-error
+  // reason, in order, and the unit must stop spending -- no second audit
+  // round and no rewrite under an active outage. (Pre-batching this asserted
+  // a sequential "skipped: a prior paragraph already errored" reason for p2;
+  // that sequential semantics no longer exists by design.)
   {
     const { result, calls } = await run(
       { outline: oneUnitOutline(), thresholds: baseThresholds() },
@@ -176,19 +180,22 @@ function countLabel(calls, prefix) {
         if (label.indexOf('draft:') === 0) {
           return { unitId: 'u1', paragraphs: [{ paragraphIndex: 1, text: 'P1.' }, { paragraphIndex: 2, text: 'P2.' }] };
         }
-        if (label === 'audit:u1:1') return null;
-        if (label === 'audit:u1:2') throw new Error('paragraph 2 must never be audited once paragraph 1 has errored');
+        if (label === 'audit:u1:r1') return null;
+        if (label.indexOf('audit:') === 0) throw new Error('no further audit round may run once the batch audit call has errored');
+        if (label.indexOf('rewrite:') === 0) throw new Error('a null batch audit must never trigger a rewrite');
         if (label === 'synthesize') return 'synthesized';
         if (label === 'abstract') return { abstract: 'abstract text' };
         if (label === 'scorecard') return { dimensions: [{ id: 'structure', score: 5 }], total: 30 };
         return null;
       }
     );
-    assert.strictEqual(countLabel(calls, 'audit:u1:2'), 0);
+    assert.strictEqual(countLabel(calls, 'audit:'), 1);
+    assert.strictEqual(countLabel(calls, 'rewrite:'), 0);
     const paragraphs = result.sections[0].paragraphs;
+    assert.deepStrictEqual(paragraphs.map((p) => p.paragraphIndex), [1, 2]);
     assert.strictEqual(paragraphs[0].outcome, 'ERROR');
     assert.strictEqual(paragraphs[1].outcome, 'ERROR');
-    assert.ok(/prior paragraph/.test(paragraphs[1].errorReason || ''));
+    assert.ok(/terminal API error/.test(paragraphs[1].errorReason || ''));
   }
 
   // F. Regression guard: a genuine PASS run is unaffected by the error-path
@@ -199,7 +206,7 @@ function countLabel(calls, prefix) {
       (prompt, opts) => {
         const label = opts.label || '';
         if (label.indexOf('draft:') === 0) return { unitId: 'u1', paragraphs: [{ paragraphIndex: 1, text: 'Draft text.' }] };
-        if (label.indexOf('audit:') === 0) return '```text\nDraft text.\n```\nVERDICT: PASS';
+        if (label.indexOf('audit:') === 0) return { results: [{ paragraphIndex: 1, verdict: 'PASS', feedback: 'all claims verified' }] };
         if (label === 'synthesize') return 'synthesized';
         if (label === 'abstract') return { abstract: 'abstract text' };
         if (label === 'scorecard') return { dimensions: [{ id: 'structure', score: 5 }], total: 30 };

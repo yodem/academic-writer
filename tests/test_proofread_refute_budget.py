@@ -70,7 +70,7 @@ def _change(before, meaning_risk, line):
     }
 
 
-def _build_harness(src_text, args_obj, find_responses, mech_find_responses=None):
+def _build_harness(src_text, args_obj, find_responses, mech_find_responses=None, verdict_overrides=None):
     """Wraps the real proofread.js body in a CommonJS async IIFE with stub
     `agent`/`log`/`phase`/`parallel`/`pipeline` globals injected, and prints
     {"result": <the workflow's return value>, "calls": {"agent": [...labels...], "log": [...msgs...]}}
@@ -81,7 +81,12 @@ def _build_harness(src_text, args_obj, find_responses, mech_find_responses=None)
     find stage, keyed by the EXACT label ('mechanical-find:<chunkId>:round<N>')
     since that stage runs once per chunk PER ROUND -- the round number is part
     of the label, so a test controlling multi-round behaviour must address
-    each round's response individually."""
+    each round's response individually.
+
+    Verifier calls ('refute:' and 'mechanical-verify:') are batched: one call
+    judges every change of a chunk, each tagged 'ID: c<N>' in the prompt. The
+    stub upholds every ID it finds unless `verdict_overrides[label]` says
+    otherwise: {"refute": [ids], "omit": [ids]}."""
     body = re.sub(r"^export const meta", "const meta", src_text, count=1, flags=re.MULTILINE)
     assert "export const meta" not in body, "failed to strip the ESM export keyword"
 
@@ -90,6 +95,14 @@ def _build_harness(src_text, args_obj, find_responses, mech_find_responses=None)
         "const args = " + json.dumps(args_obj) + ";\n"
         "const FIND_RESPONSES = " + json.dumps(find_responses) + ";\n"
         "const MECH_FIND_RESPONSES = " + json.dumps(mech_find_responses or {}) + ";\n"
+        "const VERDICT_OVERRIDES = " + json.dumps(verdict_overrides or {}) + ";\n"
+        "function __batchVerdicts(prompt, label) {\n"
+        "  const o = VERDICT_OVERRIDES[label] || {};\n"
+        "  const ids = (prompt.match(/^ID: (c[0-9]+)$/gm) || []).map(function (l) { return l.slice(4); });\n"
+        "  return { verdicts: ids.filter(function (id) { return (o.omit || []).indexOf(id) === -1; }).map(function (id) {\n"
+        "    return { id: id, outcome: (o.refute || []).indexOf(id) !== -1 ? 'refute' : 'uphold', reason: 'stub' };\n"
+        "  }) };\n"
+        "}\n"
         "async function agent(prompt, opts) {\n"
         "  const label = (opts && opts.label) || '';\n"
         "  __calls.agent.push(label);\n"
@@ -102,11 +115,8 @@ def _build_harness(src_text, args_obj, find_responses, mech_find_responses=None)
         "    if (Object.prototype.hasOwnProperty.call(MECH_FIND_RESPONSES, label)) return MECH_FIND_RESPONSES[label];\n"
         "    return { stage: 'mechanical', changes: [] };\n"
         "  }\n"
-        "  if (label.indexOf('refute:') === 0) {\n"
-        "    return { outcome: 'uphold', reason: 'stub-uphold' };\n"
-        "  }\n"
-        "  if (label.indexOf('mechanical-verify:') === 0) {\n"
-        "    return { outcome: 'uphold', reason: 'stub-uphold' };\n"
+        "  if (label.indexOf('refute:') === 0 || label.indexOf('mechanical-verify:') === 0) {\n"
+        "    return __batchVerdicts(prompt, label);\n"
         "  }\n"
         "  return { stage: 'language', changes: [] };\n"
         "}\n"
@@ -133,9 +143,9 @@ def _build_harness(src_text, args_obj, find_responses, mech_find_responses=None)
     return harness
 
 
-def _run_workflow(args_obj, find_responses, mech_find_responses=None):
+def _run_workflow(args_obj, find_responses, mech_find_responses=None, verdict_overrides=None):
     src_text = _read(WORKFLOW)
-    harness = _build_harness(src_text, args_obj, find_responses, mech_find_responses)
+    harness = _build_harness(src_text, args_obj, find_responses, mech_find_responses, verdict_overrides)
     tmp_dir = tempfile.mkdtemp(prefix="proofread-refute-budget-")
     try:
         harness_path = os.path.join(tmp_dir, "harness.js")
@@ -233,8 +243,10 @@ class TestRefuteBudgetSurplusCarriedNotDropped(unittest.TestCase):
 
 
 class TestRefuteBudgetBoundsCallVolume(unittest.TestCase):
-    """The number of refute calls actually made is <= budget * refuteVotes --
-    asserted by counting real stub invocations, not by reading the source."""
+    """The number of refute calls actually made is one per lens per chunk,
+    independent of how many changes the chunk returned, and each call carries
+    at most `budget` changes -- asserted by counting real stub invocations,
+    not by reading the source."""
 
     def test_refute_call_count_bounded(self):
         budget = 3
@@ -253,9 +265,8 @@ class TestRefuteBudgetBoundsCallVolume(unittest.TestCase):
         out = _run_workflow(args_obj, find_responses)
 
         refute_calls = _refute_calls(out["calls"])
-        self.assertLessEqual(len(refute_calls), budget * refute_votes)
-        # Exact, not just bounded: budget items are verified, no more.
-        self.assertEqual(len(refute_calls), budget * refute_votes)
+        # Batched: one call per lens for the chunk, however many changes.
+        self.assertEqual(len(refute_calls), refute_votes)
         self.assertLess(len(refute_calls), len(changes) * refute_votes)
 
         language_changes = out["result"]["languageChanges"]
@@ -306,7 +317,7 @@ class TestRefuteBudgetSpendsHighestMeaningRiskFirst(unittest.TestCase):
             self.assertEqual(c.get("applied"), False, before)
 
         refute_calls = _refute_calls(out["calls"])
-        self.assertEqual(len(refute_calls), 2 * BASE_THRESHOLDS["refuteVotes"])
+        self.assertEqual(len(refute_calls), BASE_THRESHOLDS["refuteVotes"])
 
 
 class TestRefuteBudgetAbsentDegradesToUnbounded(unittest.TestCase):
@@ -328,8 +339,8 @@ class TestRefuteBudgetAbsentDegradesToUnbounded(unittest.TestCase):
         out = _run_workflow(args_obj, find_responses)
 
         refute_calls = _refute_calls(out["calls"])
-        # Unbounded: every finding gets the full refuteVotes fan-out.
-        self.assertEqual(len(refute_calls), len(changes) * BASE_THRESHOLDS["refuteVotes"])
+        # Unbounded: every finding is verified, still one batched call per lens.
+        self.assertEqual(len(refute_calls), BASE_THRESHOLDS["refuteVotes"])
 
         language_changes = out["result"]["languageChanges"]
         self.assertEqual(len(language_changes), 5)
@@ -419,11 +430,74 @@ class TestMechanicalRefuteBudgetIsCumulativePerChunk(unittest.TestCase):
         verify_calls = [label for label in out["calls"]["agent"] if label.startswith("mechanical-verify:")]
         budget = thresholds["refuteBudgetPerChunk"]
         votes = thresholds["refuteVotes"]
-        # Exactly budget*votes calls total across BOTH rounds combined --
-        # not budget*votes*maxPasses, which is what a per-round-reset budget
-        # would cost.
-        self.assertEqual(len(verify_calls), budget * votes)
+        # Round 1 sends its budgeted changes in one batched call per vote;
+        # round 2 has zero budget left and must make NO verify call at all
+        # (a per-round-reset budget would make `votes` more).
+        self.assertEqual(len(verify_calls), votes)
+        self.assertTrue(all(":c1:" in label for label in verify_calls))
         self.assertLessEqual(len(verify_calls), budget * votes)
+
+
+class TestBatchedVerdictsMapToTheRightChange(unittest.TestCase):
+    """Batching one verifier call over a whole chunk must not shift a verdict
+    onto a neighbour or drop a change the verifier forgot to answer for."""
+
+    def _language_run(self, overrides):
+        thresholds = dict(BASE_THRESHOLDS, refuteBudgetPerChunk=12)
+        changes = [_change("L%d" % i, "low", i + 1) for i in range(5)]
+        args_obj = {"language": "he", "thresholds": thresholds, "chunks": CHUNK, "stages": ["language"]}
+        find_responses = {"c1": {"stage": "language", "chunk_id": "c1", "changes": changes}}
+        return _run_workflow(args_obj, find_responses, verdict_overrides=overrides)
+
+    def test_majority_refute_of_item_three_downgrades_only_item_three(self):
+        out = self._language_run({
+            "refute:meaning-preserved:c1": {"refute": ["c2"]},
+            "refute:voice-preserved:c1": {"refute": ["c2"]},
+            "refute:standard-language:c1": {"refute": ["c4"]},
+        })
+        language_changes = out["result"]["languageChanges"]
+        self.assertEqual([c["before"] for c in language_changes], ["L0", "L1", "L2", "L3", "L4"])
+        l2 = _find_change(language_changes, "L2")
+        self.assertEqual(l2.get("skipReason"), "refuted")
+        self.assertEqual(l2.get("applied"), False)
+        self.assertEqual(sorted(l2.get("refutedBy")), ["meaning-preserved", "voice-preserved"])
+        # L4 has one refute, below refuteMajority: untouched.
+        for before in ("L0", "L1", "L3", "L4"):
+            self.assertIsNone(_find_change(language_changes, before).get("skipReason"), before)
+
+    def test_omitted_verdict_keeps_change_and_logs(self):
+        out = self._language_run({"refute:meaning-preserved:c1": {"omit": ["c3"]}})
+        language_changes = out["result"]["languageChanges"]
+        self.assertEqual(len(language_changes), 5)
+        self.assertIsNone(_find_change(language_changes, "L3").get("skipReason"))
+        joined_log = "\n".join(out["calls"]["log"])
+        self.assertIn("no verdict for 1 of 5", joined_log)
+        self.assertIn("c3", joined_log)
+
+
+class TestGlyphOnlyMechanicalChangesSkipVerify(unittest.TestCase):
+    """A pure quote/geresh/dash substitution is upheld by code: no verify
+    call, no budget spent; a real punctuation change still gets a vote."""
+
+    def test_glyph_only_upheld_without_verify_calls(self):
+        thresholds = dict(BASE_THRESHOLDS, refuteVotes=1, refuteMajority=1, refuteBudgetPerChunk=1,
+                          maxPasses=1, dryRounds=1)
+        glyph = dict(_change('"x"', "low", 1), after="״x״", type="typography")
+        geresh = dict(_change("עמ'", "low", 2), after="עמ׳", type="typography")
+        comma = dict(_change("לא אכלתי", "low", 3), after="לא, אכלתי", type="punctuation")
+        args_obj = {"language": "he", "thresholds": thresholds, "chunks": CHUNK, "stages": ["mechanical"]}
+        mech = {"mechanical-find:c1:round2": {"stage": "mechanical", "chunk_id": "c1", "changes": [glyph, geresh, comma]}}
+        out = _run_workflow(args_obj, {}, mech)
+        mechanical_changes = out["result"]["mechanicalChanges"]
+        self.assertEqual(len(mechanical_changes), 3)
+        for before in ('"x"', "עמ'"):
+            c = _find_change(mechanical_changes, before)
+            self.assertIsNone(c.get("skipReason"), before)
+        # Budget of 1 was not consumed by the two glyph-only changes: the
+        # comma change is verified, not budget-exhausted.
+        self.assertIsNone(_find_change(mechanical_changes, "לא אכלתי").get("skipReason"))
+        verify_calls = [label for label in out["calls"]["agent"] if label.startswith("mechanical-verify:")]
+        self.assertEqual(len(verify_calls), 1)
 
 
 if __name__ == "__main__":

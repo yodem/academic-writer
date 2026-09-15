@@ -64,6 +64,7 @@ function assertNoXml(text, where) {
   const outline = { units: [{ id: 'u1', title: 'Unit One', claim: 'c1', evidence: ['e1'] }] };
 
   let rewriteCount = 0;
+  let rewriteSpawns = 0;
   const result = await run({ outline: outline, thresholds: thresholds }, (prompt, opts) => {
     const label = opts.label || '';
     if (label.indexOf('draft:') === 0) {
@@ -73,11 +74,12 @@ function assertNoXml(text, where) {
       // FAIL once so the rewrite path (also sanitized) gets exercised, then PASS.
       rewriteCount += 1;
       return rewriteCount === 1
-        ? '```text\n' + DIRTY + '\n```\nVERDICT: FAIL'
-        : '```text\nclean\n```\nVERDICT: PASS';
+        ? { results: [{ paragraphIndex: 1, verdict: 'FAIL', feedback: DIRTY }] }
+        : { results: [{ paragraphIndex: 1, verdict: 'PASS', feedback: 'clean' }] };
     }
     if (label.indexOf('rewrite:') === 0) {
-      return { paragraphIndex: 1, text: DIRTY };
+      rewriteSpawns += 1;
+      return { paragraphs: [{ paragraphIndex: 1, text: DIRTY }] };
     }
     if (label === 'synthesize') return DIRTY;
     if (label === 'abstract') return { abstract: DIRTY };
@@ -85,7 +87,10 @@ function assertNoXml(text, where) {
     return null;
   });
 
+  assert.strictEqual(rewriteSpawns, 1, 'the rewrite path must actually be exercised so its sanitization is covered');
   const paragraph = result.sections[0].paragraphs[0];
+  assert.strictEqual(paragraph.outcome, 'PASS');
+  assert.strictEqual(paragraph.attempts, 2);
   assertNoXml(paragraph.text, 'drafted/rewritten paragraph text');
   assert.ok(paragraph.text.indexOf(CLEAN_FRAGMENT) === -1, 'the word "invoke" itself should not remain either, since it only ever appeared inside the stripped tag');
   assertNoXml(typeof result.synthesis === 'string' ? result.synthesis : (result.synthesis && result.synthesis.revisedDraft) || '', 'synthesis result');

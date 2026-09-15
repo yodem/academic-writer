@@ -132,6 +132,16 @@ const REFUTE_VERDICT_SCHEMA = {
     reason: { type: 'string' },
   },
 };
+// One verifier call judges every budgeted change of a chunk, keyed by the id
+// this script assigns (never by list position, so a short or reordered reply
+// cannot shift a verdict onto the wrong change).
+const REFUTE_BATCH_SCHEMA = {
+  type: 'object',
+  required: ['verdicts'],
+  properties: {
+    verdicts: { type: 'array', items: { ...REFUTE_VERDICT_SCHEMA, required: ['id', 'outcome', 'reason'], properties: { id: { type: 'string' }, ...REFUTE_VERDICT_SCHEMA.properties } } },
+  },
+};
 
 // -- generic helpers ----------------------------------------------------------
 
@@ -213,6 +223,64 @@ function splitByRefuteBudget(changes, budget) {
     })
     .map((entry) => entry.change);
   return { toVerify: ranked.slice(0, safeBudget), exhausted: ranked.slice(safeBudget) };
+}
+
+// -- batched refute verification ---------------------------------------------
+// Token cost is dominated by per-agent fixed context (~58k tokens for a
+// workflow subagent), not by the change being judged (~800 chars). Measured
+// on a live 9-chunk Hebrew run: 120 one-change-one-lens agents cost ~9.7M of
+// the run's 13.5M tokens. So each lens (or vote) now judges ALL of a chunk's
+// budgeted changes in one call. Lenses stay separate agents, so each is
+// still blind to the others' reasoning.
+
+function batchItemsText(changes) {
+  return changes.map((change, i) => [
+    'ID: c' + i,
+    'BEFORE: ' + JSON.stringify(change.before),
+    'AFTER: ' + JSON.stringify(change.after),
+    'PROPOSED RATIONALE (do not defer to it — verify independently): ' + JSON.stringify(change.rationale),
+  ].join('\n')).join('\n\n');
+}
+
+// Collects one verifier's reply into a Map id -> verdict. A null reply, or a
+// change the verifier omitted, simply casts no vote for that change (the same
+// as a null single-change agent did before) and is logged, never dropped:
+// the caller iterates over its own change list, not over the reply.
+function verdictsById(reply, changes, who) {
+  const byId = new Map();
+  const list = reply && Array.isArray(reply.verdicts) ? reply.verdicts : [];
+  for (const v of list) {
+    if (v && typeof v.id === 'string' && !byId.has(v.id)) byId.set(v.id, v);
+  }
+  const missing = changes.map((_, i) => 'c' + i).filter((id) => !byId.has(id));
+  if (missing.length) {
+    log('WARN: ' + who + ' returned no verdict for ' + missing.length + ' of ' + changes.length + ' change(s) (' + missing.join(', ') + ') — counted as no vote, change kept.');
+  }
+  return byId;
+}
+
+// Pure glyph substitutions (ASCII double quote <-> gershayim U+05F4, ASCII
+// apostrophe <-> geresh U+05F3, whitespace runs) cannot change wording, so an
+// LLM vote on them is spend without signal (TST-02: arithmetic, not judgement).
+// Dashes/maqaf and curly quotes are deliberately NOT here: which one is right
+// is a configured convention (typography.dashReplacement), not a no-op.
+// Anything that adds, removes or moves a comma, period, dash or letter still
+// goes to the verifier.
+const GLYPH_CLASSES = [
+  [/["״]/g, '"'],
+  [/['׳]/g, '\''],
+  [/\s+/g, ' '],
+];
+function canonicalGlyphs(text) {
+  let out = normalizeText(text);
+  for (const [re, rep] of GLYPH_CLASSES) out = out.replace(re, rep);
+  return out;
+}
+function isGlyphOnlyChange(change) {
+  return typeof change.before === 'string'
+    && typeof change.after === 'string'
+    && change.before !== change.after
+    && canonicalGlyphs(change.before) === canonicalGlyphs(change.after);
 }
 
 function spellCandidatesFor(chunk) {
@@ -301,32 +369,41 @@ phase('Language');
 
 const LANGUAGE_LENSES = ['meaning-preserved', 'standard-language', 'voice-preserved'];
 
-function lensPrompt(lens, change) {
+function lensPrompt(lens, changes) {
   const focus = lens === 'meaning-preserved'
-    ? 'Does AFTER preserve the exact meaning, claim and argument of BEFORE? Refute if meaning shifts at all, even subtly.'
+    ? 'For each change: does AFTER preserve the exact meaning, claim and argument of BEFORE? Refute if meaning shifts at all, even subtly.'
     : lens === 'standard-language'
-      ? 'Is AFTER standard, idiomatic academic ' + language + ' — not itself a new error, and a genuine improvement on BEFORE? Refute if AFTER is non-standard or no better than BEFORE.'
-      : 'Does AFTER preserve the author\'s voice (register, rhythm, personal phrasing) rather than flattening it toward generic prose? Refute if voice is lost.';
-  return [
-    'Adversarial refute-lens: ' + lens + '. You are BLIND to the finder\'s own reasoning — judge ONLY this one lens, independently.',
-    'BEFORE: ' + JSON.stringify(change.before),
-    'AFTER: ' + JSON.stringify(change.after),
-    'PROPOSED RATIONALE (do not defer to it — verify independently): ' + JSON.stringify(change.rationale),
-    focus,
-    'Return JSON only: {"lens": "' + lens + '", "outcome": "uphold" or "refute", "reason": "..."}.',
-  ].join('\n');
+      ? 'For each change: is AFTER standard, idiomatic academic ' + language + ' — not itself a new error, and a genuine improvement on BEFORE? Refute if AFTER is non-standard or no better than BEFORE.'
+      : 'For each change: does AFTER preserve the author\'s voice (register, rhythm, personal phrasing) rather than flattening it toward generic prose? Refute if voice is lost.';
+  const lines = [
+    'Adversarial refute-lens: ' + lens + '. You are BLIND to the finder\'s own reasoning — judge ONLY this one lens, and judge each change independently of the others in the list.',
+    'Everything you need is below; do not search files.',
+  ];
+  if (lens === 'voice-preserved') {
+    lines.push(authorVoice ? ('AUTHOR_VOICE:\n' + authorVoice) : 'AUTHOR_VOICE: none supplied — judge voice from BEFORE itself.');
+  }
+  lines.push(focus, 'CHANGES:', batchItemsText(changes));
+  lines.push('Return JSON only: {"verdicts": [{"id": "<ID>", "lens": "' + lens + '", "outcome": "uphold" or "refute", "reason": "..."}]} with exactly one verdict per ID.');
+  return lines.join('\n');
 }
 
-async function refuteChange(change, lensNames, cap) {
-  const thunks = lensNames.map((lens) => () => agent(lensPrompt(lens, change), {
+// Returns one { refutedBy } per change, index-aligned with `changes`.
+async function refuteChunkChanges(changes, lensNames, cap, chunkId) {
+  if (!changes.length) return [];
+  const thunks = lensNames.map((lens) => () => agent(lensPrompt(lens, changes), {
     model: 'opus',
-    label: 'refute:' + lens + ':' + (change.chunk_id || 'x'),
+    label: 'refute:' + lens + ':' + (chunkId || 'x'),
     phase: 'Language',
-    schema: REFUTE_VERDICT_SCHEMA,
+    schema: REFUTE_BATCH_SCHEMA,
   }));
-  const votes = await runCapped(thunks, cap);
-  const refuted = votes.filter((v) => v && v.outcome === 'refute');
-  return { votes, refutedBy: refuted.map((v) => v.lens || 'unnamed-lens') };
+  const replies = await runCapped(thunks, cap);
+  const maps = lensNames.map((lens, i) => verdictsById(replies[i], changes, 'refute-lens ' + lens + ' on chunk ' + (chunkId || 'x')));
+  return changes.map((_, i) => ({
+    refutedBy: lensNames.filter((lens, l) => {
+      const v = maps[l].get('c' + i);
+      return v && v.outcome === 'refute';
+    }),
+  }));
 }
 
 let languageChanges = [];
@@ -355,11 +432,13 @@ if (requestedStages.indexOf('language') !== -1 && canRunLanguage) {
     const stamped = list.map((rawChange) => ({ ...rawChange, stage: 'language', chunk_id: found.chunk.id }));
     const budgeted = splitByRefuteBudget(stamped, refuteBudgetPerChunk);
     const verifiedChanges = [];
-    for (const change of budgeted.toVerify) {
-      const lensNames = (typeof refuteVotes === 'number' && refuteVotes > 0 && refuteVotes <= LANGUAGE_LENSES.length)
-        ? LANGUAGE_LENSES.slice(0, refuteVotes)
-        : LANGUAGE_LENSES;
-      const verdict = await refuteChange(change, lensNames, concurrencyCap);
+    const lensNames = (typeof refuteVotes === 'number' && refuteVotes > 0 && refuteVotes <= LANGUAGE_LENSES.length)
+      ? LANGUAGE_LENSES.slice(0, refuteVotes)
+      : LANGUAGE_LENSES;
+    const verdicts = await refuteChunkChanges(budgeted.toVerify, lensNames, concurrencyCap, found.chunk.id);
+    for (let i = 0; i < budgeted.toVerify.length; i += 1) {
+      const change = budgeted.toVerify[i];
+      const verdict = verdicts[i];
       if (verdict.refutedBy.length >= refuteMajority) {
         log('Language change downgraded — refuted by [' + verdict.refutedBy.join(', ') + ']: ' + normalizeText(change.before));
         verifiedChanges.push({ ...change, applied: false, skipReason: 'refuted', refutedBy: verdict.refutedBy });
@@ -425,34 +504,43 @@ if (requestedStages.indexOf('mechanical') !== -1 && canRunMechanical) {
   // spent on refute-verification so far.
   const mechanicalBudgetSpent = new Map(); // chunk_id -> count already sent for refute-verification
 
-  async function verifyMechanicalChange(change) {
+  if (geminiApproved) {
+    // agent() has no MCP-tool routing option: an earlier `opts.mcpTool` was
+    // silently ignored and, with no model set, every verify vote ran on the
+    // session model (observed: 18 votes at ~146k tokens each on Opus 1M).
+    log('NOTE: geminiApproved does not reroute mechanical verify votes — agent() cannot call an MCP tool directly; votes run as opus refute agents.');
+  }
+
+  // Returns one { refutedCount, refutedBy } per change, index-aligned with
+  // `changes`. Each of the refuteVotes voters judges the whole list in one call.
+  async function verifyMechanicalChanges(changes, chunkId) {
+    if (!changes.length) return [];
+    const prompt = [
+      'Adversarially refute or uphold each proposed mechanical (typo/punctuation/typography/agreement) edit below. You are BLIND to the finder\'s own reasoning. Judge each change independently of the others; everything you need is below, do not search files.',
+      'For each change judge ONLY whether it is a genuine mechanical fix and not a meaning, register or wording change in disguise. Refute if it changes anything beyond mechanics.',
+      'CHANGES:',
+      batchItemsText(changes),
+      'Return JSON only: {"verdicts": [{"id": "<ID>", "outcome": "uphold" or "refute", "reason": "..."}]} with exactly one verdict per ID.',
+    ].join('\n');
     const thunks = [];
     for (let v = 0; v < refuteVotes; v += 1) {
-      const prompt = [
-        'Adversarially refute or uphold ONE proposed mechanical (typo/punctuation/typography/agreement) edit. You are BLIND to the finder\'s own reasoning.',
-        'BEFORE: ' + JSON.stringify(change.before),
-        'AFTER: ' + JSON.stringify(change.after),
-        'PROPOSED RATIONALE (verify independently, do not defer to it): ' + JSON.stringify(change.rationale),
-        'Judge ONLY whether this is a genuine mechanical fix and not a meaning, register or wording change in disguise. Refute if it changes anything beyond mechanics.',
-        'Return JSON only: {"outcome": "uphold" or "refute", "reason": "..."}.',
-      ].join('\n');
-      const opts = {
-        label: 'mechanical-verify:' + (change.chunk_id || 'x') + ':' + v,
+      thunks.push(() => agent(prompt, {
+        label: 'mechanical-verify:' + (chunkId || 'x') + ':' + v,
         phase: 'Mechanical',
-        schema: REFUTE_VERDICT_SCHEMA,
-      };
-      if (geminiApproved) {
-        // Plan §1.2: geminiApproved routes the verify lens through the Gemini
-        // raw MCP tool instead of an Opus refute agent — same REFUTE prompt.
-        opts.mcpTool = 'mcp__plugin_academic-writer_gemini-api__gemini_raw';
-      } else {
-        opts.model = 'opus';
-      }
-      thunks.push(() => agent(prompt, opts));
+        model: 'opus',
+        schema: REFUTE_BATCH_SCHEMA,
+      }));
     }
-    const votes = await runCapped(thunks, refuteVotes);
-    const refuted = votes.filter((v) => v && v.outcome === 'refute');
-    return { refutedCount: refuted.length, refutedBy: refuted.map((v, i) => 'lens-' + i) };
+    const replies = await runCapped(thunks, refuteVotes);
+    const maps = replies.map((reply, v) => verdictsById(reply, changes, 'mechanical-verify vote ' + v + ' on chunk ' + (chunkId || 'x')));
+    return changes.map((_, i) => {
+      const refutedBy = [];
+      maps.forEach((m, v) => {
+        const verdict = m.get('c' + i);
+        if (verdict && verdict.outcome === 'refute') refutedBy.push('lens-' + v);
+      });
+      return { refutedCount: refutedBy.length, refutedBy };
+    });
   }
 
   function mechanicalFindStage(chunk) {
@@ -485,15 +573,29 @@ if (requestedStages.indexOf('mechanical') !== -1 && canRunMechanical) {
       freshFound.push(change);
     }
     const chunkId = found.chunk.id;
+    const freshHere = [];
+    // Glyph-only substitutions are upheld by code and never spend budget.
+    const needsVote = [];
+    for (const change of freshFound) {
+      if (isGlyphOnlyChange(change)) {
+        freshHere.push(change);
+      } else {
+        needsVote.push(change);
+      }
+    }
+    if (freshHere.length) {
+      log('Mechanical: ' + freshHere.length + ' glyph-only change(s) in chunk ' + chunkId + ' upheld by code (gershayim/geresh/whitespace substitution), no verify votes spent.');
+    }
     const alreadySpent = mechanicalBudgetSpent.get(chunkId) || 0;
     const remainingBudget = refuteBudgetIsBounded
       ? (refuteBudgetPerChunk > alreadySpent ? refuteBudgetPerChunk - alreadySpent : 0)
       : refuteBudgetPerChunk; // unbounded stays unbounded (not a number)
-    const budgeted = splitByRefuteBudget(freshFound, remainingBudget);
+    const budgeted = splitByRefuteBudget(needsVote, remainingBudget);
     mechanicalBudgetSpent.set(chunkId, alreadySpent + budgeted.toVerify.length);
-    const freshHere = [];
-    for (const change of budgeted.toVerify) {
-      const verdict = await verifyMechanicalChange(change);
+    const verdicts = await verifyMechanicalChanges(budgeted.toVerify, chunkId);
+    for (let i = 0; i < budgeted.toVerify.length; i += 1) {
+      const change = budgeted.toVerify[i];
+      const verdict = verdicts[i];
       if (verdict.refutedCount >= refuteMajority) {
         log('Mechanical change downgraded — refuted by ' + verdict.refutedBy.join(', ') + ': ' + normalizeText(change.before));
         freshHere.push({ ...change, applied: false, skipReason: 'refuted', refutedBy: verdict.refutedBy });

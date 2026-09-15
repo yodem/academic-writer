@@ -18,19 +18,22 @@
 //         with AUDIT_MODE set to 'external', so the agent does NOT spawn its
 //         own auditor subagent (Step D/E) -- it returns unaudited paragraphs.
 //   (ii)  This script owns the citation-audit hard gate: it spawns
-//         'academic-writer:auditor' per paragraph itself, parses the VERDICT
-//         line that appears AFTER the auditor's fenced paragraph block (never
-//         a VERDICT-looking string inside the fenced text), and bounds the
-//         rewrite loop by args.thresholds.rewriteCycles.max. On a FAIL/PARTIAL
-//         verdict the script re-spawns 'academic-writer:section-writer'
-//         (AUDIT_MODE still 'external') with the auditor's own rejection
-//         feedback so the paragraph text actually changes between attempts --
+//         'academic-writer:auditor' itself, ONCE per writer unit per round,
+//         covering every still-pending paragraph of that unit, and reads a
+//         structured per-paragraph verdict (results[].verdict) back through a
+//         JSON schema, and bounds the rewrite loop by
+//         args.thresholds.rewriteCycles.max. On FAIL/PARTIAL verdicts the
+//         script re-spawns 'academic-writer:section-writer' ONCE per unit per
+//         round for all failed paragraphs (AUDIT_MODE still 'external') with
+//         each paragraph's own auditor rejection feedback, so the paragraph
+//         text actually changes between attempts --
 //         a FAIL followed by re-submitting byte-identical text is not a
 //         rewrite loop, it is a best-of-N re-roll, which is not this
 //         contract. Every loop exit is NAMED: 'PASS' (auditor approved within
 //         cap) or 'NEEDS_REVIEW' (cap reached) -- a paragraph that never
 //         passes is returned as NEEDS_REVIEW, never silently dropped or
-//         silently treated as PASS.
+//         silently treated as PASS. A paragraph the batched auditor result
+//         omits is 'ERROR', never PASS (see auditUnitStage).
 //   (iii) Every cap (rewriteCycles.max,
 //         writerUnit.targetWords/minWords/maxWords) is read from
 //         args.thresholds -- never a literal in this script.
@@ -82,7 +85,7 @@ export const meta = {
   description: 'Generation stage of the write skill: drafts every writer unit via section-writer under an external audit contract, gates each paragraph through the auditor subagent with a named-outcome rewrite loop, then synthesizes the completed article and scores it against the self-review scorecard.',
   phases: [
     { title: 'Draft', detail: 'one section-writer spawn per writer unit, AUDIT_MODE=external, drafted paragraphs returned unaudited' },
-    { title: 'Audit', detail: 'auditor subagent gates every paragraph; a bounded rewrite loop resolves FAIL/PARTIAL verdicts to a named PASS or NEEDS_REVIEW outcome' },
+    { title: 'Audit', detail: 'one auditor spawn per writer unit per round gates every pending paragraph; a bounded batched rewrite loop resolves FAIL/PARTIAL verdicts to a named PASS or NEEDS_REVIEW outcome' },
     { title: 'Synthesize', detail: 'single await barrier over the completed unit array, then one synthesizer pass for coherence/flow/repetition' },
     { title: 'Score', detail: 'self-review scorecard mirroring references/scorecard.json, six dimensions, pass threshold read from args.thresholds' },
   ],
@@ -178,12 +181,40 @@ const DRAFT_UNIT_SCHEMA = {
   },
 };
 
-const REWRITE_PARAGRAPH_SCHEMA = {
+const AUDIT_BATCH_SCHEMA = {
   type: 'object',
-  required: ['paragraphIndex', 'text'],
+  required: ['results'],
   properties: {
-    paragraphIndex: { type: 'integer' },
-    text: { type: 'string' },
+    results: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['paragraphIndex', 'verdict', 'feedback'],
+        properties: {
+          paragraphIndex: { type: 'integer' },
+          verdict: { type: 'string', enum: ['PASS', 'FAIL', 'PARTIAL'] },
+          feedback: { type: 'string' },
+        },
+      },
+    },
+  },
+};
+
+const REWRITE_BATCH_SCHEMA = {
+  type: 'object',
+  required: ['paragraphs'],
+  properties: {
+    paragraphs: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['paragraphIndex', 'text'],
+        properties: {
+          paragraphIndex: { type: 'integer' },
+          text: { type: 'string' },
+        },
+      },
+    },
   },
 };
 
@@ -303,6 +334,14 @@ function draftUnitStage(entry) {
 // Audit — per-paragraph hard gate with a named-outcome rewrite loop
 // -----------------------------------------------------------------------
 
+// DEAD CODE within this script: nothing here calls it since the audit loop
+// was batched (the loop reads a structured per-paragraph verdict through
+// AUDIT_BATCH_SCHEMA instead). Retained only because
+// tests/test_write_sections_audit_error.cjs (Block A) slices it out of this
+// source by name and pins its null-never-FAIL rule, and because it records
+// the text-output contract (fence, then VERDICT line) that the batched schema
+// replaced. Do not reintroduce a call to it from the batched loop.
+//
 // Parses the auditor's VERDICT line that appears AFTER its fenced paragraph
 // block (never a VERDICT-looking string inside the fenced text itself) — the
 // same post-fence parsing contract documented at
@@ -313,7 +352,7 @@ function draftUnitStage(entry) {
 // Returns null — never 'FAIL' — when no VERDICT line is found. A missing
 // verdict is not evidence the paragraph failed: it can mean the auditor call
 // never returned text at all (agent() resolves to null on a terminal API
-// error, e.g. quota/session-limit exhaustion — see auditAndRewriteParagraph),
+// error, e.g. quota/session-limit exhaustion — see auditUnitStage),
 // or that the auditor responded but truncated/malformed its output. Defaulting
 // either case to 'FAIL' is what previously drove a rewrite loop off an
 // infrastructure error: the rewrite spawn then failed the same way, its own
@@ -363,140 +402,118 @@ function sanitizeAgentText(text) {
   return typeof text === 'string' ? text.replace(TOOL_CALL_XML_RE, '') : text;
 }
 
-async function auditParagraph(unit, sectionIndex, paragraph) {
-  const pId = paragraphId(sectionIndex, paragraph);
-  const auditPromptLines = [
-    'Audit this drafted paragraph as the citation hard gate.',
+// -- batched per-unit audit ---------------------------------------------------
+// Cost evidence (a real /write run, 2026-09-05): 356 agents / ~28M effective
+// tokens, of which the auditor alone was 218 spawns. The old loop spawned ONE
+// auditor per paragraph per attempt and ONE section-writer per failed
+// paragraph per attempt, and every spawn re-discovered its environment from
+// zero (which ck, ck --help, cat MEMORY.md, cat sources.json, re-reading the
+// same ck items) at a fixed ~25-35k cache-write tokens each. The cost driver
+// is the NUMBER OF SPAWNS, so the loop now runs per UNIT per ROUND: one
+// auditor call covers every still-pending paragraph of the unit, and one
+// section-writer call rewrites every paragraph that round failed.
+//
+// Batching must not weaken the gate. The aggregation invariants below are the
+// whole point (tests/test_write_audit_batching.py pins them by execution):
+//   - a paragraph the auditor's results omit (short array, wrong index,
+//     duplicate index) is ERROR, never PASS and never dropped;
+//   - a null auditor call (terminal API error) errors every pending paragraph
+//     and stops the unit -- no further spend under an outage;
+//   - PASS is final with attempts = the round it passed in;
+//   - FAIL/PARTIAL after the cap is NEEDS_REVIEW with the last verdict.
+
+const AUDIT_VERDICTS = ['PASS', 'FAIL', 'PARTIAL'];
+
+function outcomeLog(unit, paragraph, outcome, attempts, lastVerdict, reason) {
+  log('AUDIT_OUTCOME: unit=' + unitLabel(unit) + ' paragraph=' + paragraph.paragraphIndex + ' outcome=' + outcome + ' attempts=' + attempts + ' lastVerdict=' + lastVerdict + (reason ? ' reason=' + reason : ''));
+}
+
+// Indexes a batched agent result array by paragraphIndex, keeping ONLY
+// indices that occur exactly once. A duplicated index is ambiguous (which of
+// the two verdicts is the real one?), so it is treated as absent -- the
+// caller then scores that paragraph ERROR rather than guessing.
+function uniqueByParagraphIndex(entries) {
+  const counts = new Map();
+  const byIndex = new Map();
+  for (const entry of (Array.isArray(entries) ? entries : [])) {
+    if (!entry || typeof entry !== 'object' || typeof entry.paragraphIndex !== 'number') continue;
+    counts.set(entry.paragraphIndex, (counts.get(entry.paragraphIndex) || 0) + 1);
+    byIndex.set(entry.paragraphIndex, entry);
+  }
+  const unique = new Map();
+  for (const [idx, entry] of byIndex) {
+    if (counts.get(idx) === 1) unique.set(idx, entry);
+  }
+  return unique;
+}
+
+async function auditBatch(unit, sectionIndex, pendingParagraphs, round) {
+  const promptLines = [
+    'Audit these drafted paragraphs as the citation hard gate, in batched mode: ' + pendingParagraphs.length + ' paragraph(s) of one writer unit in a single call.',
     'UNIT: ' + unitLabel(unit),
     'SECTION_INDEX: ' + sectionIndex,
-    'PARAGRAPH_INDEX: ' + paragraph.paragraphIndex,
-    'PARAGRAPH_ID: ' + pId,
+    'AUDIT_ROUND: ' + round,
     'CITATION_STYLE: ' + citationStyle,
   ];
   if (cfg.tools) {
-    auditPromptLines.push('TOOLS: ' + JSON.stringify(cfg.tools));
+    promptLines.push('TOOLS: ' + JSON.stringify(cfg.tools));
   }
   if (sources) {
-    auditPromptLines.push('SOURCES_CONTEXT (registry/context available if Candlekeep/RAG are not enabled): ' + JSON.stringify(sources));
+    promptLines.push('SOURCES_CONTEXT (registry/context available if Candlekeep/RAG are not enabled): ' + JSON.stringify(sources));
   }
   if (evidenceOwnership) {
-    auditPromptLines.push('EVIDENCE_OWNERSHIP_CONTEXT (existing claims registry, for Check D/G cross-checks): ' + JSON.stringify(evidenceOwnership));
+    promptLines.push('EVIDENCE_OWNERSHIP_CONTEXT (existing claims registry, for Check D/G cross-checks): ' + JSON.stringify(evidenceOwnership));
   }
-  auditPromptLines.push(quarantine('PARAGRAPH_TEXT', paragraph.text));
-  auditPromptLines.push('Return the reviewed paragraph inside a fenced ```text block, then a VERDICT: PASS|FAIL|PARTIAL line AFTER the closing fence, on its own line, per your standard output contract.');
-  return agent(auditPromptLines.join('\n'), {
+  promptLines.push('HARNESS: the ck CLI is already on PATH. Do not probe it with which ck or ck --help; call the ck subcommands you need directly.');
+  promptLines.push('HARNESS: load your memory file (.academic-helper/agent-memory/auditor/MEMORY.md) ONCE for this whole batch, not once per paragraph.');
+  promptLines.push('HARNESS: fetch each cited source page range ONCE and reuse what you read across every paragraph in this batch; never re-read the same source pages for a second paragraph.');
+  promptLines.push('HARNESS: judge each paragraph independently. Every check and the adversarial probe apply to each paragraph on its own, and one paragraph failing never changes the verdict of another.');
+  for (const paragraph of pendingParagraphs) {
+    promptLines.push('PARAGRAPH_INDEX: ' + paragraph.paragraphIndex);
+    promptLines.push('PARAGRAPH_ID: ' + paragraphId(sectionIndex, paragraph));
+    promptLines.push(quarantine('PARAGRAPH_TEXT [PARAGRAPH_INDEX ' + paragraph.paragraphIndex + ']', paragraph.text));
+  }
+  promptLines.push('Return exactly one JSON object matching the batched audit schema: results, with exactly one entry per PARAGRAPH_INDEX above, each carrying paragraphIndex, verdict (PASS, FAIL or PARTIAL, with the meanings in your VERDICT Format) and feedback (on FAIL or PARTIAL: the issues found and the rewrite instructions from your REJECTED output; on PASS: a one-line summary of what was verified). In this mode do not use the fenced-paragraph plus VERDICT-line output format.');
+  return agent(promptLines.join('\n'), {
     agentType: 'academic-writer:auditor',
-    label: 'audit:' + unitLabel(unit) + ':' + paragraph.paragraphIndex,
+    label: 'audit:' + unitLabel(unit) + ':r' + round,
     phase: 'Audit',
+    schema: AUDIT_BATCH_SCHEMA,
   });
 }
 
-// Actually regenerates the paragraph via a fresh section-writer spawn,
-// carrying the auditor's own rejection feedback (issues + rewrite
-// instructions) so the next audit attempt sees genuinely different text --
-// not a self-assignment. AUDIT_MODE stays 'external' so this respawn does
-// not itself try to spawn an auditor.
-async function rewriteParagraph(unit, sectionIndex, paragraph, auditorRawFeedback) {
+// Actually regenerates every paragraph the round failed via ONE fresh
+// section-writer spawn, carrying each paragraph's own auditor rejection
+// feedback so the next audit round sees genuinely different text -- not a
+// re-roll of byte-identical text. AUDIT_MODE stays 'external' so this respawn
+// does not itself try to spawn an auditor.
+async function rewriteBatch(unit, sectionIndex, failedItems, round) {
   const promptLines = [
-    'Rewrite ONE paragraph to resolve the citation issues the auditor raised. Preserve everything else about the paragraph (argument, claim, style) unchanged; fix only what the auditor flagged.',
+    'Rewrite ' + failedItems.length + ' paragraph(s) of one writer unit to resolve the citation issues the auditor raised. For each paragraph, preserve everything else about it (argument, claim, style) unchanged and fix only what the auditor flagged for THAT paragraph.',
     'UNIT: ' + unitLabel(unit),
     'SECTION_INDEX: ' + sectionIndex,
-    'PARAGRAPH_INDEX: ' + paragraph.paragraphIndex,
     'CITATION_STYLE: ' + citationStyle,
     'TARGET_LANGUAGE: ' + targetLanguage,
     'AUDIT_MODE: external',
-    quarantine('CURRENT_PARAGRAPH_TEXT', paragraph.text),
-    quarantine('AUDITOR_FEEDBACK', auditorRawFeedback),
-    'Return exactly one JSON object: paragraphIndex and the rewritten text for this single paragraph only.',
   ];
+  for (const item of failedItems) {
+    const idx = item.paragraph.paragraphIndex;
+    promptLines.push('PARAGRAPH_INDEX: ' + idx);
+    promptLines.push(quarantine('CURRENT_PARAGRAPH_TEXT [PARAGRAPH_INDEX ' + idx + ']', item.paragraph.text));
+    promptLines.push(quarantine('AUDITOR_FEEDBACK [PARAGRAPH_INDEX ' + idx + ']', item.feedback));
+  }
+  promptLines.push('Return exactly one JSON object: paragraphs, with exactly one entry per PARAGRAPH_INDEX above, each carrying paragraphIndex and the rewritten text for that paragraph only.');
   return agent(promptLines.join('\n'), {
     agentType: 'academic-writer:section-writer',
-    label: 'rewrite:' + unitLabel(unit) + ':' + paragraph.paragraphIndex,
+    label: 'rewrite:' + unitLabel(unit) + ':r' + round,
     phase: 'Audit',
-    schema: REWRITE_PARAGRAPH_SCHEMA,
-  }).then((result) => (
-    result && typeof result.text === 'string'
-      ? { ...result, text: sanitizeAgentText(result.text) }
-      : result
-  ));
+    schema: REWRITE_BATCH_SCHEMA,
+  });
 }
 
-function rawTextOf(result) {
-  if (result && typeof result.raw === 'string') return result.raw;
-  if (typeof result === 'string') return result;
-  return JSON.stringify(result || '');
-}
-
-async function auditAndRewriteParagraph(unit, sectionIndex, paragraph) {
-  const cap = (typeof rewriteCyclesMax === 'number' && rewriteCyclesMax > 0) ? rewriteCyclesMax : 0;
-  let currentParagraph = paragraph;
-  let attempt = 0;
-  let lastVerdict = null;
-
-  if (cap === 0) {
-    // No cap configured — the auditor gate cannot be safely bounded, so we
-    // do not run an unbounded loop. Report NEEDS_REVIEW and log why.
-    log('AUDIT_OUTCOME: unit=' + unitLabel(unit) + ' paragraph=' + paragraph.paragraphIndex + ' outcome=NEEDS_REVIEW attempts=0 lastVerdict=FAIL reason=no rewriteCycles.max configured, audit loop skipped');
-    return { ...currentParagraph, outcome: 'NEEDS_REVIEW', attempts: attempt, lastVerdict: 'FAIL' };
-  }
-
-  while (attempt < cap) {
-    attempt += 1;
-    const rawResult = await auditParagraph(unit, sectionIndex, currentParagraph);
-    // agent() resolves to null when the subagent dies on a terminal API error
-    // (e.g. a quota/session-limit exhaustion) after its own retries — this is
-    // NOT the auditor returning a verdict, and must never be scored as one.
-    // Previously this fell through to parsePostFenceVerdict('""'), which
-    // defaulted to 'FAIL', which triggered a rewrite spawn that failed the
-    // same infrastructure way, which re-entered this loop — burning the full
-    // rewriteCycles cap on agent calls that were never going to succeed.
-    if (rawResult === null) {
-      log('AUDIT_OUTCOME: unit=' + unitLabel(unit) + ' paragraph=' + paragraph.paragraphIndex + ' outcome=ERROR attempts=' + attempt + ' lastVerdict=ERROR reason=auditor call did not return (terminal API error, e.g. quota/session limit)');
-      return { ...currentParagraph, outcome: 'ERROR', attempts: attempt, lastVerdict: 'ERROR', errorReason: 'auditor call did not return (terminal API error, e.g. quota/session limit)' };
-    }
-    const rawText = rawTextOf(rawResult);
-    lastVerdict = parsePostFenceVerdict(rawText);
-    if (lastVerdict === null) {
-      // The auditor responded, but with no parseable VERDICT line (truncation,
-      // prose-only reply, fence mismatch). This is also not a FAIL verdict —
-      // scoring it as one is the same failure shape as the null-result case
-      // above, just reached with text instead of nothing.
-      log('AUDIT_OUTCOME: unit=' + unitLabel(unit) + ' paragraph=' + paragraph.paragraphIndex + ' outcome=ERROR attempts=' + attempt + ' lastVerdict=ERROR reason=auditor response had no parseable VERDICT line');
-      return { ...currentParagraph, outcome: 'ERROR', attempts: attempt, lastVerdict: 'ERROR', errorReason: 'auditor response had no parseable VERDICT line' };
-    }
-    if (lastVerdict === 'PASS') {
-      log('AUDIT_OUTCOME: unit=' + unitLabel(unit) + ' paragraph=' + paragraph.paragraphIndex + ' outcome=PASS attempts=' + attempt + ' lastVerdict=PASS');
-      return { ...currentParagraph, outcome: 'PASS', attempts: attempt, lastVerdict: lastVerdict };
-    }
-    if (attempt < cap) {
-      log('Audit: paragraph ' + paragraph.paragraphIndex + ' of unit ' + unitLabel(unit) + ' got VERDICT: ' + lastVerdict + ' on attempt ' + attempt + ' — rewriting (cap=' + cap + ').');
-      const rewriteResult = await rewriteParagraph(unit, sectionIndex, currentParagraph, rawText);
-      if (rewriteResult === null) {
-        // Same infrastructure-failure class as the audit-side null check
-        // above: the rewrite spawn itself died on a terminal API error. Abort
-        // rather than loop back into another audit call under the same
-        // outage.
-        log('AUDIT_OUTCOME: unit=' + unitLabel(unit) + ' paragraph=' + paragraph.paragraphIndex + ' outcome=ERROR attempts=' + attempt + ' lastVerdict=ERROR reason=rewrite call did not return (terminal API error, e.g. quota/session limit)');
-        return { ...currentParagraph, outcome: 'ERROR', attempts: attempt, lastVerdict: 'ERROR', errorReason: 'rewrite call did not return (terminal API error, e.g. quota/session limit)' };
-      }
-      const rewrittenText = typeof rewriteResult.text === 'string' && rewriteResult.text.trim().length > 0
-        ? rewriteResult.text
-        : null;
-      if (rewrittenText) {
-        currentParagraph = { ...currentParagraph, text: rewrittenText, rewriteFeedback: lastVerdict };
-      } else {
-        // The rewrite spawn returned a non-null result with no usable text
-        // (schema-shaped but empty) — log it explicitly rather than silently
-        // re-auditing the same text under the pretense that a rewrite
-        // happened.
-        log('Audit: rewrite spawn for paragraph ' + paragraph.paragraphIndex + ' of unit ' + unitLabel(unit) + ' returned no usable text — re-auditing unchanged text on attempt ' + (attempt + 1) + ' (this is a degraded retry, not a rewrite).');
-        currentParagraph = { ...currentParagraph, rewriteFeedback: lastVerdict };
-      }
-    }
-  }
-  log('AUDIT_OUTCOME: unit=' + unitLabel(unit) + ' paragraph=' + paragraph.paragraphIndex + ' outcome=NEEDS_REVIEW attempts=' + attempt + ' lastVerdict=' + lastVerdict + ' reason=reached rewriteCycles.max (' + cap + ') without a PASS verdict');
-  return { ...currentParagraph, outcome: 'NEEDS_REVIEW', attempts: attempt, lastVerdict: lastVerdict };
-}
+const AUDITOR_NULL_REASON = 'auditor call did not return (terminal API error, e.g. quota/session limit)';
+const REWRITE_NULL_REASON = 'rewrite call did not return (terminal API error, e.g. quota/session limit)';
+const AUDITOR_OMITTED_REASON = 'auditor batch omitted this paragraph';
 
 async function auditUnitStage(drafted) {
   // draftUnitStage's agent() call resolves to null when the section-writer
@@ -519,22 +536,126 @@ async function auditUnitStage(drafted) {
       }],
     };
   }
+  const unit = drafted.unit;
+  const sectionIndex = drafted.sectionIndex;
   const paragraphs = (drafted.draft && Array.isArray(drafted.draft.paragraphs)) ? drafted.draft.paragraphs : [];
-  const auditedParagraphs = [];
-  for (const paragraph of paragraphs) {
-    // Once a paragraph in this unit has errored (an infrastructure failure,
-    // not a citation verdict), further paragraphs are carried through
-    // unaudited rather than spending more agent() calls under the same
-    // outage -- but the array shape is preserved so nothing is silently
-    // dropped from the unit.
-    if (auditedParagraphs.length && auditedParagraphs[auditedParagraphs.length - 1].outcome === 'ERROR') {
-      auditedParagraphs.push({ ...paragraph, outcome: 'ERROR', attempts: 0, lastVerdict: 'ERROR', errorReason: 'skipped: a prior paragraph in this unit already errored' });
-      continue;
-    }
-    const auditedParagraph = await auditAndRewriteParagraph(drafted.unit, drafted.sectionIndex, paragraph);
-    auditedParagraphs.push(auditedParagraph);
+  const cap = (typeof rewriteCyclesMax === 'number' && rewriteCyclesMax > 0) ? rewriteCyclesMax : 0;
+
+  if (cap === 0) {
+    // No cap configured — the auditor gate cannot be safely bounded, so we
+    // do not run an unbounded loop. Report NEEDS_REVIEW and log why.
+    return {
+      unit: unit,
+      sectionIndex: sectionIndex,
+      paragraphs: paragraphs.map((paragraph) => {
+        outcomeLog(unit, paragraph, 'NEEDS_REVIEW', 0, 'FAIL', 'no rewriteCycles.max configured, audit loop skipped');
+        return { ...paragraph, outcome: 'NEEDS_REVIEW', attempts: 0, lastVerdict: 'FAIL' };
+      }),
+    };
   }
-  return { unit: drafted.unit, sectionIndex: drafted.sectionIndex, paragraphs: auditedParagraphs };
+
+  // Outcomes are tracked by POSITION in the drafted array, so the returned
+  // array is always the original order with nothing dropped; results from a
+  // batched call are matched to a position by paragraphIndex.
+  const finals = paragraphs.map(() => null);
+  const current = paragraphs.slice();
+  const finish = (i, outcome, attempts, lastVerdict, errorReason) => {
+    outcomeLog(unit, current[i], outcome, attempts, lastVerdict, errorReason);
+    finals[i] = errorReason && outcome === 'ERROR'
+      ? { ...current[i], outcome: outcome, attempts: attempts, lastVerdict: lastVerdict, errorReason: errorReason }
+      : { ...current[i], outcome: outcome, attempts: attempts, lastVerdict: lastVerdict };
+  };
+
+  // A batched verdict can only be attributed through paragraphIndex, so a
+  // drafted paragraph whose index is missing or shared with another paragraph
+  // of the same unit cannot be gated safely -- it is ERROR, not audited.
+  const draftIndexCounts = new Map();
+  for (const paragraph of paragraphs) {
+    if (paragraph && typeof paragraph.paragraphIndex === 'number') {
+      draftIndexCounts.set(paragraph.paragraphIndex, (draftIndexCounts.get(paragraph.paragraphIndex) || 0) + 1);
+    }
+  }
+  let pending = [];
+  paragraphs.forEach((paragraph, i) => {
+    if (!paragraph || typeof paragraph.paragraphIndex !== 'number' || draftIndexCounts.get(paragraph.paragraphIndex) !== 1) {
+      current[i] = (paragraph && typeof paragraph === 'object') ? paragraph : { paragraphIndex: null, text: '' };
+      finish(i, 'ERROR', 0, 'ERROR', 'drafted paragraphIndex is missing or not unique within the unit, so a batched verdict cannot be attributed to it');
+    } else {
+      pending.push(i);
+    }
+  });
+
+  for (let round = 1; round <= cap && pending.length > 0; round += 1) {
+    const auditResult = await auditBatch(unit, sectionIndex, pending.map((i) => current[i]), round);
+    // agent() resolves to null when the subagent dies on a terminal API error
+    // (e.g. a quota/session-limit exhaustion) after its own retries -- this is
+    // NOT the auditor returning a verdict, and must never be scored as one.
+    // Every pending paragraph errors and the unit stops spending.
+    if (auditResult === null) {
+      for (const i of pending) finish(i, 'ERROR', round, 'ERROR', AUDITOR_NULL_REASON);
+      pending = [];
+      break;
+    }
+    const verdictsByIndex = uniqueByParagraphIndex(auditResult && auditResult.results);
+    const failed = [];
+    for (const i of pending) {
+      const entry = verdictsByIndex.get(current[i].paragraphIndex);
+      if (!entry || AUDIT_VERDICTS.indexOf(entry.verdict) === -1) {
+        finish(i, 'ERROR', round, 'ERROR', entry ? 'auditor batch returned no valid verdict for this paragraph' : AUDITOR_OMITTED_REASON);
+        continue;
+      }
+      if (entry.verdict === 'PASS') {
+        finish(i, 'PASS', round, 'PASS');
+        continue;
+      }
+      failed.push({ i: i, verdict: entry.verdict, feedback: entry.feedback });
+    }
+    if (failed.length === 0) {
+      pending = [];
+      break;
+    }
+    if (round >= cap) {
+      for (const f of failed) {
+        finish(f.i, 'NEEDS_REVIEW', round, f.verdict, 'reached rewriteCycles.max (' + cap + ') without a PASS verdict');
+      }
+      pending = [];
+      break;
+    }
+    for (const f of failed) {
+      log('Audit: paragraph ' + current[f.i].paragraphIndex + ' of unit ' + unitLabel(unit) + ' got VERDICT: ' + f.verdict + ' on attempt ' + round + ' — rewriting (cap=' + cap + ').');
+    }
+    const rewriteResult = await rewriteBatch(unit, sectionIndex, failed.map((f) => ({ paragraph: current[f.i], feedback: f.feedback })), round);
+    if (rewriteResult === null) {
+      // Same infrastructure-failure class as the audit-side null check above:
+      // the rewrite spawn itself died on a terminal API error. Abort rather
+      // than loop back into another audit call under the same outage.
+      for (const f of failed) finish(f.i, 'ERROR', round, 'ERROR', REWRITE_NULL_REASON);
+      pending = [];
+      break;
+    }
+    const rewritesByIndex = uniqueByParagraphIndex(rewriteResult && rewriteResult.paragraphs);
+    for (const f of failed) {
+      const entry = rewritesByIndex.get(current[f.i].paragraphIndex);
+      const rewrittenText = entry && typeof entry.text === 'string' ? sanitizeAgentText(entry.text) : null;
+      if (rewrittenText && rewrittenText.trim().length > 0) {
+        current[f.i] = { ...current[f.i], text: rewrittenText, rewriteFeedback: f.verdict };
+      } else {
+        // The rewrite result carried no usable text for this paragraph
+        // (omitted, duplicated or empty) -- log it explicitly rather than
+        // silently re-auditing the same text under the pretense that a
+        // rewrite happened.
+        log('Audit: rewrite spawn for paragraph ' + current[f.i].paragraphIndex + ' of unit ' + unitLabel(unit) + ' returned no usable text — re-auditing unchanged text on attempt ' + (round + 1) + ' (this is a degraded retry, not a rewrite).');
+        current[f.i] = { ...current[f.i], rewriteFeedback: f.verdict };
+      }
+    }
+    pending = failed.map((f) => f.i);
+  }
+
+  return {
+    unit: unit,
+    sectionIndex: sectionIndex,
+    paragraphs: finals.map((p, i) => p || { ...current[i], outcome: 'ERROR', attempts: 0, lastVerdict: 'ERROR', errorReason: 'audit loop ended without an outcome for this paragraph' }),
+  };
 }
 
 phase('Audit');
