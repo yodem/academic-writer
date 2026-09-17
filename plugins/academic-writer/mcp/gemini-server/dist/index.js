@@ -13724,21 +13724,21 @@ var init_from = __esm({
     init_fetch_blob();
     ({ stat } = fs);
     blobFromSync = (path5, type) => fromBlob(statSync(path5), path5, type);
-    blobFrom = (path5, type) => stat(path5).then((stat4) => fromBlob(stat4, path5, type));
-    fileFrom = (path5, type) => stat(path5).then((stat4) => fromFile(stat4, path5, type));
+    blobFrom = (path5, type) => stat(path5).then((stat5) => fromBlob(stat5, path5, type));
+    fileFrom = (path5, type) => stat(path5).then((stat5) => fromFile(stat5, path5, type));
     fileFromSync = (path5, type) => fromFile(statSync(path5), path5, type);
-    fromBlob = (stat4, path5, type = "") => new fetch_blob_default([new BlobDataItem({
+    fromBlob = (stat5, path5, type = "") => new fetch_blob_default([new BlobDataItem({
       path: path5,
-      size: stat4.size,
-      lastModified: stat4.mtimeMs,
+      size: stat5.size,
+      lastModified: stat5.mtimeMs,
       start: 0
     })], { type });
-    fromFile = (stat4, path5, type = "") => new file_default([new BlobDataItem({
+    fromFile = (stat5, path5, type = "") => new file_default([new BlobDataItem({
       path: path5,
-      size: stat4.size,
-      lastModified: stat4.mtimeMs,
+      size: stat5.size,
+      lastModified: stat5.mtimeMs,
       start: 0
-    })], basename(path5), { type, lastModified: stat4.mtimeMs });
+    })], basename(path5), { type, lastModified: stat5.mtimeMs });
     BlobDataItem = class _BlobDataItem {
       #path;
       #start;
@@ -17430,7 +17430,7 @@ var require_parse = __commonJS({
           }
         }
       }
-      var at, ch, escapee = {
+      var at2, ch, escapee = {
         '"': '"',
         "\\": "\\",
         "/": "/",
@@ -17443,15 +17443,15 @@ var require_parse = __commonJS({
         throw {
           name: "SyntaxError",
           message: m2,
-          at,
+          at: at2,
           text
         };
       }, next = function(c) {
         if (c && c !== ch) {
           error2("Expected '" + c + "' instead of '" + ch + "'");
         }
-        ch = text.charAt(at);
-        at += 1;
+        ch = text.charAt(at2);
+        at2 += 1;
         return ch;
       }, number3 = function() {
         var number4, string4 = "";
@@ -17494,15 +17494,15 @@ var require_parse = __commonJS({
       }, string3 = function() {
         var hex, i2, string4 = "", uffff;
         if (ch === '"') {
-          var startAt = at;
+          var startAt = at2;
           while (next()) {
             if (ch === '"') {
-              if (at - 1 > startAt) string4 += text.substring(startAt, at - 1);
+              if (at2 - 1 > startAt) string4 += text.substring(startAt, at2 - 1);
               next();
               return string4;
             }
             if (ch === "\\") {
-              if (at - 1 > startAt) string4 += text.substring(startAt, at - 1);
+              if (at2 - 1 > startAt) string4 += text.substring(startAt, at2 - 1);
               next();
               if (ch === "u") {
                 uffff = 0;
@@ -17519,7 +17519,7 @@ var require_parse = __commonJS({
               } else {
                 break;
               }
-              startAt = at;
+              startAt = at2;
             }
           }
         }
@@ -17636,7 +17636,7 @@ var require_parse = __commonJS({
       return function(source, reviver) {
         var result;
         text = source + "";
-        at = 0;
+        at2 = 0;
         ch = " ";
         result = value();
         white();
@@ -61882,11 +61882,11 @@ function normalizeResponse(resp) {
 }
 
 // src/bundle.ts
-import { readFile as readFile2 } from "node:fs/promises";
+import { readFile as readFile2, stat as stat3 } from "node:fs/promises";
 import * as path3 from "node:path";
 var cache = /* @__PURE__ */ new Map();
 function projectDir2() {
-  return process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+  return process.env.CLAUDE_PROJECT_DIR || process.cwd();
 }
 function pluginRoot() {
   const fromEnv = process.env.CLAUDE_PLUGIN_ROOT;
@@ -61900,6 +61900,13 @@ async function readOptional(filePath) {
     return "";
   }
 }
+async function mtimeOf(filePath) {
+  try {
+    return String((await stat3(filePath)).mtimeMs);
+  } catch {
+    return "absent";
+  }
+}
 function extractStyleFingerprint(profileMd) {
   const header = /^##\s+Style Fingerprint\s*$/im;
   const m2 = header.exec(profileMd);
@@ -61911,99 +61918,110 @@ function extractStyleFingerprint(profileMd) {
 function lang(t2) {
   return (t2 || "hebrew").toLowerCase().trim();
 }
-async function loadAntiAi(plugin, targetLanguage) {
-  const lc = lang(targetLanguage);
-  const candidate = path3.join(
-    plugin,
-    "skills",
-    "write",
-    "references",
-    `anti-ai-patterns-${lc}.md`
-  );
-  const primary = await readOptional(candidate);
-  if (primary) return primary;
-  const fallback = path3.join(
-    plugin,
-    "skills",
-    "write",
-    "references",
-    "anti-ai-patterns-hebrew.md"
-  );
-  return await readOptional(fallback);
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return void 0;
+  }
 }
-async function loadPositiveTerminology(plugin, targetLanguage) {
-  const lc = lang(targetLanguage);
-  const candidate = path3.join(
-    plugin,
-    "skills",
-    "write",
-    "references",
-    `academic-terminology-${lc}.md`
-  );
-  const primary = await readOptional(candidate);
-  if (primary) return primary;
-  const fallback = path3.join(
-    plugin,
-    "skills",
-    "write",
-    "references",
-    "academic-terminology-hebrew.md"
-  );
-  return await readOptional(fallback);
+function at(obj, dotted) {
+  let cur = obj;
+  for (const key of dotted.split(".")) {
+    if (typeof cur !== "object" || cur === null) return void 0;
+    cur = cur[key];
+  }
+  return cur;
+}
+function excerptsFromFingerprint(fingerprintJson) {
+  const fp = parseJson(fingerprintJson);
+  for (const p of ["dimensions.representative_excerpts", "representative_excerpts", "representativeExcerpts"]) {
+    const v = at(fp, p);
+    if (Array.isArray(v)) {
+      return v.filter((s2) => typeof s2 === "string" && s2.trim().length > 0).map((s2) => s2.trim());
+    }
+  }
+  return [];
+}
+function parseExemplarsFile(md) {
+  return md.split(/^\s*---\s*$/m).map((block) => block.split("\n").filter((line) => !/^\s*#/.test(line) && !/^\s*<!--.*-->\s*$/.test(line)).join("\n").trim()).filter((block) => block.length > 0);
 }
 async function getBundle(targetLanguage) {
   const key = lang(targetLanguage);
-  const hit = cache.get(key);
-  if (hit) return hit;
   const project = projectDir2();
   const plugin = pluginRoot();
+  const voicePath = path3.join(project, "AUTHOR_VOICE.md");
+  const profilePath = path3.join(project, ".academic-helper", "profile.md");
+  const exemplarsPath = path3.join(project, ".academic-helper", "voice-exemplars.md");
+  const cacheKey = project + "::" + key;
+  const signature = (await Promise.all([voicePath, profilePath, exemplarsPath].map(mtimeOf))).join("|");
+  const hit = cache.get(cacheKey);
+  if (hit && hit.signature === signature) return hit.bundle;
   try {
-    const [voice, profileMd, words, antiAi, rubric, positiveTerminology] = await Promise.all([
-      readOptional(path3.join(project, "AUTHOR_VOICE.md")),
-      readOptional(path3.join(project, ".academic-helper", "profile.md")),
-      readOptional(path3.join(plugin, "words.md")),
-      loadAntiAi(plugin, key),
-      readOptional(
-        path3.join(plugin, "skills", "write", "references", "style-fingerprint-rubric.md")
-      ),
-      loadPositiveTerminology(plugin, key)
+    const [voice, profileMd, exemplarsMd, antiAi, positiveTerminology] = await Promise.all([
+      readOptional(voicePath),
+      readOptional(profilePath),
+      readOptional(exemplarsPath),
+      loadLanguageReference(plugin, "anti-ai-patterns", key),
+      loadLanguageReference(plugin, "academic-terminology", key)
     ]);
     const fingerprint = extractStyleFingerprint(profileMd);
+    const fileExemplars = parseExemplarsFile(exemplarsMd);
+    const fpExemplars = excerptsFromFingerprint(fingerprint);
+    const exemplars = fileExemplars.length ? fileExemplars : fpExemplars;
     const bundle = {
       voice,
       fingerprint,
-      words,
+      exemplars,
+      exemplarSource: fileExemplars.length ? "voice-exemplars.md" : fpExemplars.length ? "fingerprint" : "none",
       antiAi,
-      rubric,
       positiveTerminology,
       targetLanguage: key
     };
-    cache.set(key, bundle);
+    cache.set(cacheKey, { signature, bundle });
     return bundle;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw bundleLoadFailed(`Failed to load calibration bundle for ${key}: ${message}`);
   }
 }
+async function loadLanguageReference(plugin, stem, lc) {
+  const dir = path3.join(plugin, "skills", "write", "references");
+  const primary = await readOptional(path3.join(dir, `${stem}-${lc}.md`));
+  if (primary) return primary;
+  return await readOptional(path3.join(dir, `${stem}-hebrew.md`));
+}
 function renderBundleMarkdown(b) {
   const sections = [];
-  sections.push(`<!-- target_language: ${b.targetLanguage} -->`);
-  if (b.voice) sections.push("## AUTHOR VOICE\n\n" + b.voice);
-  if (b.fingerprint)
-    sections.push("## STYLE FINGERPRINT (JSON)\n\n```json\n" + b.fingerprint + "\n```");
-  if (b.rubric) sections.push("## STYLE FINGERPRINT RUBRIC\n\n" + b.rubric);
-  if (b.words) sections.push("## ACADEMIC LINKING WORDS\n\n" + b.words);
-  if (b.antiAi) sections.push("## ANTI-AI PATTERNS\n\n" + b.antiAi);
-  if (b.positiveTerminology)
-    sections.push("## POSITIVE ACADEMIC TERMINOLOGY\n\n" + b.positiveTerminology);
-  return sections.join("\n\n---\n\n");
+  if (b.antiAi) {
+    sections.push("<reference_anti_ai_patterns>\nPatterns that make text read as machine-written. Use as a check, not as a style model.\n\n" + b.antiAi + "\n</reference_anti_ai_patterns>");
+  }
+  if (b.positiveTerminology) {
+    sections.push("<reference_academic_terminology>\nGeneral academic-register vocabulary for " + b.targetLanguage + ". Where it disagrees with the author's own usage below, the author wins.\n\n" + b.positiveTerminology + "\n</reference_academic_terminology>");
+  }
+  if (b.voice) sections.push("<author_voice>\n" + b.voice + "\n</author_voice>");
+  if (b.fingerprint) sections.push("<style_fingerprint>\n" + b.fingerprint + "\n</style_fingerprint>");
+  if (b.exemplars.length) {
+    const kind = b.exemplarSource === "fingerprint" ? "sentences" : "paragraphs";
+    sections.push(
+      "<voice_examples>\nReal " + kind + ` written by this author in earlier work. They show the voice to reproduce: rhythm, how a claim is introduced, how a quotation is followed by the author's own analysis, where the author says "I" and where the author hedges. Imitate the voice; never reuse their content or wording.
+
+` + b.exemplars.map((e2, i2) => '<example n="' + (i2 + 1) + '">\n' + e2 + "\n</example>").join("\n\n") + "\n</voice_examples>"
+    );
+  }
+  return sections.join("\n\n");
+}
+function renderStyleTargets(paragraphCeiling) {
+  const lines = ["- Paragraph and sentence length: follow <voice_examples>, varying lengths as the author does."];
+  if (paragraphCeiling) lines.push("- " + paragraphCeiling + " words per paragraph is a hard maximum, not a target.");
+  return lines.join("\n");
 }
 function isStructuredError(e2) {
   return typeof e2 === "object" && e2 !== null && "code" in e2 && typeof e2.code === "string";
 }
 
 // src/prompts/write-section.md
-var write_section_default = 'You are the section-writer for a Humanities researcher. The orchestrator (Claude) has produced the outline, identified sources, and assigned evidence ownership for each paragraph. Your job is to draft and quality-rewrite this entire section in the researcher\'s voice. The citation auditor (Claude) will verify your citations afterward \u2014 your job is prose, theirs is facts.\n\nYou will draft each paragraph, then self-review against six dimensions, then rewrite below-threshold paragraphs before returning. Return JSON only \u2014 no prose around it.\n\n## Calibration\n\n{{calibration_bundle}}\n\n## Section Brief\n\n{{section_brief}}\n\n## Evidence Ownership\n\nThe orchestrator assigned each paragraph the sources it must rely on. Do not pull from sources outside its assigned set.\n\n```json\n{{evidence_ownership}}\n```\n\n## Sources (excerpts available for citation)\n\n```json\n{{sources}}\n```\n\n## Banned Terms\n\nThese terms have been flagged by prior auditor passes or by the researcher\'s voice profile. Do not use them.\n\n```json\n{{banned_terms}}\n```\n\n## Prior Sections Summary\n\n{{prior_sections_summary}}\n\n## Citation Format\n\nUse `{{citation_style}}` style. For each citation, include the `source_id` from the sources list in the `citations` array of the paragraph object. The auditor will use those IDs to verify against `sources.json`. Inline citation strings inside the paragraph text must match the style requested.\n\n{{citation_format_bullets}}\n\n## Positive Academic Terminology\n\nThe calibration bundle\'s `## POSITIVE ACADEMIC TERMINOLOGY` section (when present) lists the\nhedging verbs, argumentation connectives, citation-introduction verbs, and section-transition\nphrases appropriate to the target language\'s academic register \u2014 the "what to reach for"\ncompanion to the `## ANTI-AI PATTERNS` section above ("what to avoid"). Prefer these over\ngeneric or colloquial phrasing whenever both are equally accurate. When the calibration\nbundle\'s style fingerprint includes `computationalMetrics.frequentTerms`, prefer the\nresearcher\'s own established terms from that list over generic synonyms whenever both are\nacademically appropriate.\n\n## Self-Review (mandatory, every paragraph)\n\nFor each paragraph you draft, score yourself against six dimensions before returning. If any dimension is below threshold, rewrite the paragraph and rescore. Only return paragraphs that pass.\n\nDimensions:\n1. **style_fingerprint** (0-5): adherence to AUTHOR_VOICE.md + style fingerprint. Threshold \u2265 4.\n2. **academic_language** (0-5): academic register + use of approved linking words from `words.md` and the POSITIVE ACADEMIC TERMINOLOGY reference. Threshold \u2265 4.\n3. **anti_ai** (0-50): count of anti-AI tells from the ANTI-AI PATTERNS ref, scored as `50 - violations`. Threshold \u2265 47.\n4. **repetition** (0-5): no repeated phrases within section or against the prior-sections summary. Threshold \u2265 4.\n5. **hebrew_grammar** (0-5, only if `target_language == "hebrew"`): correct gender/number agreement, smikhut, etc. Threshold \u2265 4.\n6. **language_purity** (0-5): no foreign-language calques unless explicitly approved. Threshold \u2265 4.\n\n## Output\n\nReturn a single JSON object \u2014 no markdown fence, no commentary:\n\n```\n{\n  "paragraphs": [\n    {\n      "text": "<final paragraph text, post-rewrite>",\n      "citations": ["<source_id>", ...],\n      "self_review_scores": {\n        "style_fingerprint": 0,\n        "academic_language": 0,\n        "anti_ai": 0,\n        "repetition": 0,\n        "hebrew_grammar": 0,\n        "language_purity": 0\n      }\n    }\n  ]\n}\n```\n';
+var write_section_default = 'You are writing one section of a scholarly article as its author, a Humanities researcher publishing in {{target_language}}. The text you produce goes into the article under the author\'s name, so it must read as the author\'s own academic prose, indistinguishable from the examples below. Claude has already planned the argument, chosen the evidence and will verify every citation after you; your job is the prose.\n\nEverything you need follows: first the reference material and the author\'s voice, then this section\'s plan and sources, and last the instructions.\n\n{{calibration_bundle}}\n\n<section_plan>\n{{section_brief}}\n</section_plan>\n\n<evidence_ownership>\nWhich sources each paragraph may rely on. Do not use a source outside a paragraph\'s assigned set.\n{{evidence_ownership}}\n</evidence_ownership>\n\n<sources>\nThe only material you may quote or cite. Quote it exactly.\n{{sources}}\n</sources>\n\n<banned_terms>\n{{banned_terms}}\n</banned_terms>\n\n<prior_sections_summary>\n{{prior_sections_summary}}\n</prior_sections_summary>\n\n<instructions>\nWrite the section described in <section_plan>, in {{target_language}}, in the author\'s voice.\n\nVoice\n- Reproduce the voice of <voice_examples> and <author_voice>: the rhythm, how a claim is introduced, how evidence is framed. Where the reference lists and the author\'s own usage disagree, follow the author.\n- The plan may be written in English or in note form. It is a plan, not text: never translate or paraphrase its wording into the article. Compose the paragraph natively in {{target_language}}, the way the author would.\n- Take interpretive positions the way the author does, in first person singular where the author uses it (for example when stating what the article argues or how a text should be read). State textual facts plainly; hedge interpretive claims the way the author hedges. Do not flatten every sentence into the same certainty.\n\nArgument\n- Each paragraph advances its step of the plan: open with the paragraph\'s claim in the author\'s words, bring the evidence, and interpret it.\n- After a quotation, give the author\'s own analysis of it (what it shows, and why it matters for the claim).\n- Connect to the thesis and to the neighbouring steps of the argument; do not restate what <prior_sections_summary> already argued.\n\nLength and form\n{{style_targets}}\n- Use exactly {{paragraph_count_hint}}.\n- Do not use any term in <banned_terms>.\n- Plain text only: no markdown (no `*`, `_`, `#` or backticks). Write work titles the way the author does in <voice_examples>, without emphasis markers.\n\nCitations\n- Use `{{citation_style}}` style for inline citation strings:\n{{citation_format_bullets}}\n- List the `source_id` of every source a paragraph cites in that paragraph\'s `citations` array.\n- If a source excerpt lacks a detail the citation style needs (a page number, an edition), cite with what you have. Never write a note about the missing detail inside the article text; record it in that paragraph\'s `gaps` array instead.\n</instructions>\n\nReturn a single JSON object and nothing else:\n\n{\n  "paragraphs": [\n    {\n      "text": "<the paragraph, exactly as it should appear in the article>",\n      "citations": ["<source_id>"],\n      "gaps": ["<a missing citation detail, if any>"]\n    }\n  ]\n}\n';
 
 // src/tools/write_section.ts
 var SourceExcerpt = external_exports.object({
@@ -62025,7 +62043,11 @@ var SectionBrief = external_exports.object({
   is_intro: external_exports.boolean(),
   is_conclusion: external_exports.boolean(),
   intro_or_conclusion_rules: external_exports.string().optional().default(""),
-  paragraph_word_ceiling: external_exports.number()
+  paragraph_word_ceiling: external_exports.number(),
+  // The article thesis and this unit's claim. Without them Gemini only sees a
+  // title and a description and writes a summary instead of an argument step.
+  thesis: external_exports.string().optional(),
+  claim: external_exports.string().optional()
 });
 var WriteSectionInput = external_exports.object({
   // Structured brief is the documented call shape; a plain string remains valid
@@ -62049,7 +62071,8 @@ var SelfReviewScores = external_exports.object({
 var ParagraphOut = external_exports.object({
   text: external_exports.string(),
   citations: external_exports.array(external_exports.string()),
-  self_review_scores: SelfReviewScores
+  gaps: external_exports.array(external_exports.string()).optional(),
+  self_review_scores: SelfReviewScores.optional()
 });
 var WriteSectionOutput = external_exports.object({
   paragraphs: external_exports.array(ParagraphOut)
@@ -62064,12 +62087,31 @@ function citationFormatBullets(targetLanguage) {
     "`chicago`: footnote numerals `[^N]` in the text; the orchestrator manages the footnote pool.",
     "`mla`: `(Author page)`",
     "`apa`: `(Author, Year, p. page)`"
-  ].map((line) => `- ${line}`).join("\n");
+  ].map((line) => `  - ${line}`).join("\n");
 }
 function extractJson(text) {
   const fence = /```(?:json)?\s*\n([\s\S]*?)\n```/i.exec(text);
   const body = fence ? fence[1] : text;
   return JSON.parse(body);
+}
+function buildWriteSectionSystem(input, bundle) {
+  const brief = input.section_brief;
+  const sectionBriefText = typeof brief === "string" ? brief : JSON.stringify(brief, null, 2);
+  const ceiling = typeof brief === "string" ? void 0 : brief.paragraph_word_ceiling;
+  const paragraphCountHint = typeof brief === "string" || !brief.paragraph_count ? "the number of paragraphs the plan calls for" : String(brief.paragraph_count) + " paragraph" + (brief.paragraph_count === 1 ? "" : "s");
+  return fill(write_section_default, {
+    calibration_bundle: renderBundleMarkdown(bundle),
+    section_brief: sectionBriefText,
+    evidence_ownership: JSON.stringify(input.evidence_ownership, null, 2),
+    sources: JSON.stringify(input.sources, null, 2),
+    banned_terms: JSON.stringify(input.banned_terms, null, 2),
+    prior_sections_summary: input.prior_sections_summary || "(no prior sections)",
+    citation_style: input.citation_style,
+    citation_format_bullets: citationFormatBullets(input.target_language),
+    target_language: input.target_language,
+    style_targets: renderStyleTargets(ceiling),
+    paragraph_count_hint: paragraphCountHint
+  });
 }
 async function runWriteSection(rawInput) {
   const parsed = WriteSectionInput.safeParse(rawInput);
@@ -62079,17 +62121,7 @@ async function runWriteSection(rawInput) {
   const input = parsed.data;
   const bundle = await getBundle(input.target_language);
   const defaults = await getDefaults("write_section");
-  const sectionBriefText = typeof input.section_brief === "string" ? input.section_brief : JSON.stringify(input.section_brief, null, 2);
-  const system = fill(write_section_default, {
-    calibration_bundle: renderBundleMarkdown(bundle),
-    section_brief: sectionBriefText,
-    evidence_ownership: JSON.stringify(input.evidence_ownership, null, 2),
-    sources: JSON.stringify(input.sources, null, 2),
-    banned_terms: JSON.stringify(input.banned_terms, null, 2),
-    prior_sections_summary: input.prior_sections_summary || "(no prior sections)",
-    citation_style: input.citation_style,
-    citation_format_bullets: citationFormatBullets(input.target_language)
-  });
+  const system = buildWriteSectionSystem(input, bundle);
   const result = await generate({
     system,
     user: "Draft the section now. Return JSON only.",
@@ -62117,7 +62149,7 @@ async function runWriteSection(rawInput) {
 }
 
 // src/prompts/synthesize.md
-var synthesize_default = 'You are the synthesizer for a Humanities article. The section-writer produced each section in isolation; your job is a cross-section polish for coherence, flow, and transitions. The auditor has already verified citations on the drafted sections \u2014 you must NOT touch citation strings, footnote markers, or any text inside citation parentheses, brackets, or footnote bodies.\n\n## Calibration\n\n{{calibration_bundle}}\n\n## Full Draft\n\n```\n{{full_draft}}\n```\n\n## Rules\n\n1. Improve transitions between sections. Add a connector sentence at section boundaries only when it tightens the argument.\n2. Eliminate cross-section repetition (a phrase used heavily in \xA71 and reused in \xA73 should be varied in one of them).\n3. Smooth voice drift \u2014 every section must match the AUTHOR_VOICE and fingerprint.\n4. NEVER rewrite, move, delete, or paraphrase:\n   - text inside `(...)` that contains a year (citation)\n   - footnote markers `[^N]` or any text between `[^N]:` and end-of-line\n   - bracketed source IDs like `[Smith2019]` or `[Cohen 2021, 412]`\n5. NEVER alter quoted material (text inside `" "` or block-quoted lines).\n6. Anti-AI patterns from the calibration bundle apply \u2014 if you find a violation, fix it.\n\n## Output\n\nReturn JSON only:\n\n```\n{\n  "revised_draft": "<full revised article text>",\n  "change_log": ["<short bullet describing each material change made>"]\n}\n```\n';
+var synthesize_default = 'You are the final-pass editor of a scholarly article, working as its author. Each section was drafted separately; your job is a cross-section polish for coherence, flow and a single consistent authorial voice. Citations have already been verified, so they must survive your pass byte for byte.\n\n{{calibration_bundle}}\n\n<full_draft>\n{{full_draft}}\n</full_draft>\n\n<instructions>\n1. Improve transitions between sections. Add a connector sentence at a section boundary only when it tightens the argument.\n2. Remove cross-section repetition: a phrase used heavily in one section and reused in another should be varied in one of them.\n3. Smooth voice drift so every section reads like <voice_examples> and <author_voice>: the author\'s rhythm, first person singular where the author uses it, the author\'s hedging on interpretive claims. Where the reference lists and the author\'s own usage disagree, follow the author.\n4. Where a passage places two quotations back to back with no analysis between them, you may rework the surrounding sentences, but never the quotations or citations themselves.\n5. Fix any machine-written patterns listed in <reference_anti_ai_patterns>.\n6. NEVER rewrite, move, delete or paraphrase any of the following:\n   - a parenthetical citation: text inside `(...)` that names a work, an author or a location, with or without a year. Hebrew citations normally carry no year, for example `(\u05DE\u05D7\u05D1\u05E8, \u05E2\u05DE\' 12)`, `(\u05E4\u05D9\u05E8\u05D5\u05E9 \u05E1\u05E4\u05E8 \u05D9\u05E6\u05D9\u05E8\u05D4, \u05D4\u05E7\u05D3\u05DE\u05D4, \u05E4\u05E8\u05E7 \u05D1)` or `(\u05E9\u05DD, \u05E2\u05DE\' 45)`; English ones may, for example `(Smith 2019, 12)`\n   - footnote markers `[^N]`, and any text from `[^N]:` to the end of that line\n   - bracketed source IDs such as `[Smith2019]` or `[Cohen 2021, 412]`\n   - quoted material: text inside `" "`, `\u05F4 \u05F4`, `\u201C \u201D`, or block-quoted lines\n</instructions>\n\nReturn a single JSON object and nothing else:\n\n{\n  "revised_draft": "<full revised article text>",\n  "change_log": ["<one short bullet per material change>"]\n}\n';
 
 // src/tools/synthesize.ts
 var SynthesizeInput = external_exports.object({
@@ -62174,7 +62206,32 @@ async function runSynthesize(rawInput) {
 }
 
 // src/prompts/edit.md
-var edit_default = 'You are an editor for a Humanities researcher\'s article. You receive an existing passage and an edit instruction. Apply the instruction in the researcher\'s voice as defined by the calibration bundle.\n\n## Calibration\n\n{{calibration_bundle}}\n\n## Edit Instruction\n\n{{edit_instruction}}\n\n## Existing Text\n\n```\n{{existing_text}}\n```\n\n## Rules\n\n- Apply only the requested change. Do not refactor the surrounding prose unless the instruction explicitly says to.\n- Preserve all citations, footnote markers, and quoted material verbatim.\n- Maintain the AUTHOR_VOICE and style fingerprint.\n- Respect the ANTI-AI PATTERNS reference.\n\n## Output\n\nReturn JSON only:\n\n```\n{\n  "revised_text": "<full revised passage>"\n}\n```\n';
+var edit_default = `You are revising a passage of a scholarly article as its author. The result goes into the article under the author's name, so it must read as the author's own prose.
+
+{{calibration_bundle}}
+
+<existing_text>
+{{existing_text}}
+</existing_text>
+
+<edit_instruction>
+{{edit_instruction}}
+</edit_instruction>
+
+<instructions>
+- Apply only the requested change. Do not rework the surrounding prose unless the instruction says to.
+- Any sentence you write or change must match <voice_examples> and <author_voice>: the author's rhythm, first person singular where the author uses it, the author's hedging on interpretive claims. Where the reference lists and the author's own usage disagree, follow the author.
+- If the instruction is written in another language or in note form, treat it as a request, not as text to translate into the passage.
+- Preserve every citation (including year-less Hebrew citations such as \`(\u05DE\u05D7\u05D1\u05E8, \u05E2\u05DE' 12)\`), footnote marker and quotation exactly.
+- Avoid the patterns in <reference_anti_ai_patterns>.
+</instructions>
+
+Return a single JSON object and nothing else:
+
+{
+  "revised_text": "<full revised passage>"
+}
+`;
 
 // src/tools/edit.ts
 var EditInput = external_exports.object({
@@ -62239,7 +62296,7 @@ var CalibrateSampleInput = external_exports.object({
 var CalibrateSampleOutput = external_exports.object({
   paragraph: external_exports.string()
 });
-var SYSTEM_HEADER = `You are producing a single calibration paragraph for a Humanities researcher's voice calibration gate. The orchestrator will compare your paragraph against a Claude-written paragraph side-by-side. Match the AUTHOR_VOICE and style fingerprint exactly. Do not include citations. One paragraph only \u2014 no headings, no commentary.`;
+var SYSTEM_HEADER = `You are producing a single calibration paragraph for a Humanities researcher's voice calibration gate. The orchestrator will compare your paragraph against a Claude-written paragraph side-by-side. Write it as the author: reproduce the voice of <voice_examples> and <author_voice> (rhythm, first person singular where the author uses it, the author's hedging), and never reuse the examples' content. Do not include citations. One paragraph only \u2014 no headings, no commentary.`;
 function extractJsonOrText(text) {
   const fence = /```(?:json)?\s*\n([\s\S]*?)\n```/i.exec(text);
   const body = fence ? fence[1] : text;
@@ -62564,7 +62621,7 @@ var GEMINI_OCR_RESPONSE_SCHEMA = {
 
 // src/tools/gemini_ocr_deps.ts
 import { spawn } from "node:child_process";
-import { readFile as readFile3, rm, stat as stat3 } from "node:fs/promises";
+import { readFile as readFile3, rm, stat as stat4 } from "node:fs/promises";
 import * as path4 from "node:path";
 import { fileURLToPath } from "node:url";
 var scriptsDir = path4.resolve(path4.dirname(fileURLToPath(import.meta.url)), "..", "scripts");
@@ -62647,7 +62704,7 @@ function defaultDeps() {
     },
     fileExists: async (filePath) => {
       try {
-        await stat3(filePath);
+        await stat4(filePath);
         return true;
       } catch {
         return false;

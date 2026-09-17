@@ -99,6 +99,28 @@ Use the `Write` tool to save the updated profile.
 
 If **Review details**, show the full before/after for each dimension, then ask again.
 
+## Step 5: Refresh Voice Exemplars
+
+Gemini matches the researcher's voice from real paragraphs in `.academic-helper/voice-exemplars.md`, not from the fingerprint's description. The selection script cannot tell a finished paper from a course reflection (on a real corpus the whole-folder run picked a colloquial reflection), so the researcher chooses the sources:
+
+```python
+AskUserQuestion(questions=[{
+  "question": "Which of your past articles best represent your finished academic writing? Gemini will imitate paragraphs taken from them.",
+  "header": "Voice examples",
+  "options": [<one option per file in past-articles/, label = filename>],
+  "multiSelect": true
+}])
+```
+
+Then run (with the chosen files):
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/extract-voice-exemplars.py past-articles/<chosen-1> [past-articles/<chosen-2> ...] \
+  --output .academic-helper/voice-exemplars.md --language <targetLanguage lowercased>
+```
+
+Show the researcher the written paragraphs and tell them they can edit or replace any of them (paragraphs are separated by a line containing only `---`). Exit code 1 means no paragraph met the criteria (body paragraph with a citation, within `thresholds.json > voice.exemplars` word bounds): say so and suggest a different article.
+
 ## Completion
 
 

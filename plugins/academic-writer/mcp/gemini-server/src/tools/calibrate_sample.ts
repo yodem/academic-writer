@@ -12,7 +12,7 @@ export const CalibrateSampleOutput = z.object({
   paragraph: z.string(),
 });
 
-const SYSTEM_HEADER = `You are producing a single calibration paragraph for a Humanities researcher's voice calibration gate. The orchestrator will compare your paragraph against a Claude-written paragraph side-by-side. Match the AUTHOR_VOICE and style fingerprint exactly. Do not include citations. One paragraph only — no headings, no commentary.`;
+const SYSTEM_HEADER = `You are producing a single calibration paragraph for a Humanities researcher's voice calibration gate. The orchestrator will compare your paragraph against a Claude-written paragraph side-by-side. Write it as the author: reproduce the voice of <voice_examples> and <author_voice> (rhythm, first person singular where the author uses it, the author's hedging), and never reuse the examples' content. Do not include citations. One paragraph only — no headings, no commentary.`;
 
 function extractJsonOrText(text: string): { paragraph: string } {
   const fence = /```(?:json)?\s*\n([\s\S]*?)\n```/i.exec(text);

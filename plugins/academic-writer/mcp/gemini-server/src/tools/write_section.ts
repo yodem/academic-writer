@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { generate, getDefaults } from '../gemini-client.js';
-import { getBundle, renderBundleMarkdown } from '../bundle.js';
+import { getBundle, renderBundleMarkdown, renderStyleTargets, type CalibrationBundle } from '../bundle.js';
 import WRITE_SECTION_TEMPLATE from '../prompts/write-section.md';
 import { validation } from '../errors.js';
 
@@ -29,6 +29,10 @@ export const SectionBrief = z.object({
   is_conclusion: z.boolean(),
   intro_or_conclusion_rules: z.string().optional().default(''),
   paragraph_word_ceiling: z.number(),
+  // The article thesis and this unit's claim. Without them Gemini only sees a
+  // title and a description and writes a summary instead of an argument step.
+  thesis: z.string().optional(),
+  claim: z.string().optional(),
 });
 export type SectionBrief = z.infer<typeof SectionBrief>;
 
@@ -54,10 +58,14 @@ export const SelfReviewScores = z.object({
   language_purity: z.number().optional(),
 });
 
+// self_review_scores is no longer requested: across 28 recorded calls Gemini
+// scored every paragraph at the flat maximum, so it gated nothing. Kept
+// optional so an older caller's response still parses.
 export const ParagraphOut = z.object({
   text: z.string(),
   citations: z.array(z.string()),
-  self_review_scores: SelfReviewScores,
+  gaps: z.array(z.string()).optional(),
+  self_review_scores: SelfReviewScores.optional(),
 });
 
 export const WriteSectionOutput = z.object({
@@ -86,7 +94,7 @@ function citationFormatBullets(targetLanguage: string): string {
     '`mla`: `(Author page)`',
     '`apa`: `(Author, Year, p. page)`',
   ]
-    .map((line) => `- ${line}`)
+    .map((line) => `  - ${line}`)
     .join('\n');
 }
 
@@ -97,21 +105,17 @@ function extractJson(text: string): unknown {
   return JSON.parse(body);
 }
 
-export async function runWriteSection(rawInput: unknown): Promise<z.infer<typeof WriteSectionOutput>> {
-  const parsed = WriteSectionInput.safeParse(rawInput);
-  if (!parsed.success) {
-    throw validation('Invalid input to gemini_write_section', { issues: parsed.error.issues }) as unknown as Error;
-  }
-  const input = parsed.data;
-  const bundle = await getBundle(input.target_language);
-  const defaults = await getDefaults('write_section');
+// Pure: the full system prompt for one call, so tests (and prompt A/B runs)
+// can assert on exactly what Gemini receives without calling the API.
+export function buildWriteSectionSystem(input: WriteSectionInput, bundle: CalibrationBundle): string {
+  const brief = input.section_brief;
+  const sectionBriefText = typeof brief === 'string' ? brief : JSON.stringify(brief, null, 2);
+  const ceiling = typeof brief === 'string' ? undefined : brief.paragraph_word_ceiling;
+  const paragraphCountHint = typeof brief === 'string' || !brief.paragraph_count
+    ? 'the number of paragraphs the plan calls for'
+    : String(brief.paragraph_count) + ' paragraph' + (brief.paragraph_count === 1 ? '' : 's');
 
-  const sectionBriefText =
-    typeof input.section_brief === 'string'
-      ? input.section_brief
-      : JSON.stringify(input.section_brief, null, 2);
-
-  const system = fill(WRITE_SECTION_TEMPLATE, {
+  return fill(WRITE_SECTION_TEMPLATE, {
     calibration_bundle: renderBundleMarkdown(bundle),
     section_brief: sectionBriefText,
     evidence_ownership: JSON.stringify(input.evidence_ownership, null, 2),
@@ -120,7 +124,21 @@ export async function runWriteSection(rawInput: unknown): Promise<z.infer<typeof
     prior_sections_summary: input.prior_sections_summary || '(no prior sections)',
     citation_style: input.citation_style,
     citation_format_bullets: citationFormatBullets(input.target_language),
+    target_language: input.target_language,
+    style_targets: renderStyleTargets(ceiling),
+    paragraph_count_hint: paragraphCountHint,
   });
+}
+
+export async function runWriteSection(rawInput: unknown): Promise<z.infer<typeof WriteSectionOutput>> {
+  const parsed = WriteSectionInput.safeParse(rawInput);
+  if (!parsed.success) {
+    throw validation('Invalid input to gemini_write_section', { issues: parsed.error.issues }) as unknown as Error;
+  }
+  const input = parsed.data;
+  const bundle = await getBundle(input.target_language);
+  const defaults = await getDefaults('write_section');
+  const system = buildWriteSectionSystem(input, bundle);
 
   const result = await generate({
     system,
@@ -156,7 +174,8 @@ export const WRITE_SECTION_INPUT_SHAPE = {
     description:
       'Outline + brief for the section. Either a structured object ' +
       '{title, description, argument_role, paragraph_count, is_intro, is_conclusion, ' +
-      'intro_or_conclusion_rules, paragraph_word_ceiling} or a plain-string brief (legacy).',
+      'intro_or_conclusion_rules, paragraph_word_ceiling, thesis?, claim?} or a plain-string brief (legacy). ' +
+      'Pass the article thesis and this unit\'s claim whenever they exist.',
   },
   sources: { type: 'array' as const, description: 'Source excerpts available for citation.' },
   evidence_ownership: {

@@ -223,7 +223,9 @@ mcp__plugin_academic-writer_gemini-api__gemini_write_section({
     title, description, argument_role, paragraph_count,
     is_intro: <bool>, is_conclusion: <bool>,
     intro_or_conclusion_rules: <inline the rules above when applicable>,
-    paragraph_word_ceiling: min(fingerprint.paragraphStructure.length.mean + fingerprint.paragraphStructure.length.stdev, `thresholds.json > paragraph.wordCeiling` (default 220))
+    paragraph_word_ceiling: min(fingerprint.paragraphStructure.length.mean + fingerprint.paragraphStructure.length.stdev, `thresholds.json > paragraph.wordCeiling` (default 220)),
+    thesis: <the article thesis>,
+    claim: <unit.claim — this unit's step of the argument; always pass it when the unit has one>
   },
   sources: [<pre-fetched passages as above>],
   evidence_ownership: <evidenceOwnership object>,
@@ -241,18 +243,15 @@ Expected return shape:
   paragraphs: [
     {
       text: "<paragraph text with inline citations>",
-      citations: [{ author, work_title, page, source_id }, ...],
-      notes: {
-        style_fingerprint: <short free-text note, or omitted>,
-        hebrew_grammar: <issues_fixed>,
-        language_purity: <violations_fixed>,
-        repetition: <flags>
-      }
+      citations: ["<source_id>", ...],
+      gaps: ["<a citation detail the source excerpt lacked, e.g. a page number>", ...]
     },
     ...
   ]
 }
 ```
+
+Gemini no longer returns self-review scores (they came back at a flat maximum on every paragraph of 28 recorded calls). `gaps` lists missing citation details it was told never to write into the prose; resolve each one (look up the page, or flag it to the researcher) before the auditor sees the paragraph. Voice matching rests on real paragraphs in `.academic-helper/voice-exemplars.md` (see `learn`); when that file is absent Gemini sees only the fingerprint's short excerpts.
 
 ### Step B — Tier 1 typography auto-fix (deterministic, mandatory)
 

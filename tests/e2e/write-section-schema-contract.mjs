@@ -5,7 +5,7 @@
 // No network, no GOOGLE_API_KEY required. Verifies the exact call shape documented in
 // src/agents/section-writer.md (structured `section_brief` object + all sibling fields)
 // actually parses against the real `WriteSectionInput` Zod schema, and that the
-// documented `self_review_scores` key set parses against the real `SelfReviewScores`
+// documented return shape parses against the real `WriteSectionOutput`
 // Zod schema.
 //
 // Approach: the schemas live in
@@ -75,7 +75,7 @@ try {
   rmSync(tmpDir, { recursive: true, force: true });
 }
 
-const { WriteSectionInput, SelfReviewScores, SectionBrief } = mod;
+const { WriteSectionInput, SelfReviewScores, SectionBrief, WriteSectionOutput } = mod;
 
 check('WriteSectionInput is exported', () => {
   assert.ok(WriteSectionInput, 'WriteSectionInput export missing from write_section.ts');
@@ -98,6 +98,8 @@ const documentedSectionBrief = {
   intro_or_conclusion_rules:
     'Open with "במאמר זה", state the thesis, describe the flow of the article.',
   paragraph_word_ceiling: 220,
+  thesis: 'Kant grounds morality in reason alone.',
+  claim: 'The categorical imperative is the formal core of that grounding.',
 };
 
 const documentedCallShape = {
@@ -150,33 +152,26 @@ check('bare structured section_brief validates against SectionBrief schema direc
   );
 });
 
-// Documented self_review_scores key set (src/agents/section-writer.md, Step A expected return shape).
-const documentedSelfReviewScores = {
-  style_fingerprint: 4.5,
-  academic_language: 4,
-  anti_ai: 42,
-  repetition: 4,
-  hebrew_grammar: 5,
-  language_purity: 5,
-};
-
-check('documented self_review_scores key set parses via SelfReviewScores.safeParse', () => {
-  const parsed = SelfReviewScores.safeParse(documentedSelfReviewScores);
-  assert.equal(
-    parsed.success,
-    true,
-    `safeParse failed: ${parsed.success ? '' : JSON.stringify(parsed.error.issues)}`,
-  );
+// Documented return shape (src/agents/section-writer.md, Step A): citations as
+// source_id strings plus an optional `gaps` array. Self-review scores are no
+// longer requested (flat maximum on 28/28 recorded calls) and must stay
+// optional so an older response still parses.
+check('documented return shape (citations + gaps, no scores) parses via WriteSectionOutput', () => {
+  const parsed = WriteSectionOutput.safeParse({
+    paragraphs: [{ text: 'פסקה.', citations: ['kant-1788-p42'], gaps: ['page number missing for kant-1788-p42'] }],
+  });
+  assert.equal(parsed.success, true, `safeParse failed: ${parsed.success ? '' : JSON.stringify(parsed.error.issues)}`);
 });
 
-check('old key names (style/language) no longer satisfy SelfReviewScores', () => {
-  const parsed = SelfReviewScores.safeParse({
-    style: 4.5,
-    language: 4,
-    anti_ai: 42,
-    repetition: 4,
+check('a legacy response carrying self_review_scores still parses', () => {
+  const parsed = WriteSectionOutput.safeParse({
+    paragraphs: [{
+      text: 'פסקה.',
+      citations: [],
+      self_review_scores: { style_fingerprint: 4, academic_language: 4, anti_ai: 42, repetition: 4 },
+    }],
   });
-  assert.equal(parsed.success, false, 'old-shape object unexpectedly parsed as valid');
+  assert.equal(parsed.success, true, `safeParse failed: ${parsed.success ? '' : JSON.stringify(parsed.error.issues)}`);
 });
 
 console.log('');
