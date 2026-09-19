@@ -115,6 +115,13 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/citation-guard.py" --changes /tmp/proofre
 
 Run it over `languageChanges` and `mechanicalChanges` (editorial findings never touch text, so they skip this guard). Any change overlapping a citation/quotation/page/footnote token comes back `applied: false, skipReason: "citation-guard"` — downgraded, never dropped, same as a refute.
 
+Optionally run the Jev shadow scorer after the guard. `jev-risk-shadow.py` is off unless `proofread.jevShadow.enabled` is true or `AW_JEV_SHADOW=1`; it changes nothing and appends only to `.academic-helper/jev-shadow.jsonl`.
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/jev-risk-shadow.py" --changes /tmp/proofread-language-guarded.json --filebase "${FILEBASE}" || true
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/jev-risk-shadow.py" --changes /tmp/proofread-mechanical-guarded.json --filebase "${FILEBASE}" || true
+```
+
 ## Step 6 — Apply eligible changes to a corrected copy
 
 ```bash

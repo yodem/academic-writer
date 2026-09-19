@@ -4,6 +4,8 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+- Add an opt-in Jev shadow scorer for proofread `meaningRisk` labels that writes only to `.academic-helper/jev-shadow.jsonl`.
+
 ## [0.10.1] — 2026-09-15
 ### Fixed
 
