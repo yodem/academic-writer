@@ -1,0 +1,224 @@
+#!/usr/bin/env node
+
+// src/paths.ts
+import { resolve } from "node:path";
+var dataArgument;
+var projectArgument;
+function setPathArguments(args2) {
+  const rest = [];
+  for (let index = 0; index < args2.length; index += 1) {
+    const arg = args2[index];
+    if ((arg === "--data-dir" || arg === "--project-dir") && args2[index + 1]) {
+      if (arg === "--data-dir") dataArgument = args2[index + 1];
+      else projectArgument = args2[index + 1];
+      index += 1;
+    } else rest.push(arg);
+  }
+  return rest;
+}
+function dataDir() {
+  if (!dataArgument) throw new Error("ERROR: --data-dir is required");
+  return resolve(dataArgument);
+}
+function projectDir() {
+  if (!projectArgument) throw new Error("ERROR: --project-dir is required");
+  return resolve(projectArgument);
+}
+
+// src/main.ts
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+// ../thresholds.json
+var thresholds_default = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  description: "Single source of truth for all numeric quality gates (self-review, rewrite limits, paragraph/unit word bounds, style-fingerprint compliance, voice rule-coverage/corpus minimums, typography). Edit here; every skill and agent references this file. Gemini model/thinking-budget defaults and retry policy are NOT read from here \u2014 they live in SPEC_DEFAULTS in plugins/academic-writer/mcp/gemini-server/src/gemini-client.ts (overridable per-project via profile.md), and the retry constants are hardcoded in that same file. The antiAi block was REMOVED in 0.9.0: nothing computed that score, so it was the drafting model rating its own unrevised draft, and it measured a flat maximum on every paragraph of a live 13-unit run while the auditor failed several of the same paragraphs. Anti-AI patterns are now writing guidance (write/references/anti-ai-patterns-*.md), not a scored gate; the auditor's VERDICT is the per-paragraph gate.",
+  selfReview: {
+    minScore: 40,
+    maxScore: 60,
+    passThreshold: 40,
+    _comment: "Articles scoring below 40/60 trigger researcher review before final output. 6 dimensions x 10 points each."
+  },
+  rewriteCycles: {
+    max: 3,
+    _comment: "Maximum number of times a paragraph can be rewritten before being included with [NEEDS REVIEW]."
+  },
+  paragraph: {
+    wordCeiling: 220,
+    wordCeilingIntroConclusionBonus: 30,
+    _comment: "Soft word ceiling per paragraph. Introduction and conclusion paragraphs may exceed by wordCeilingIntroConclusionBonus words."
+  },
+  writerUnit: {
+    targetWords: 500,
+    minWords: 300,
+    maxWords: 800,
+    _comment: "Min/target/max word bounds for a 'writer unit' \u2014 the leaf-level chunk that gets exactly one section-writer subagent. Sections whose word count exceeds maxWords must be decomposed by the architect into multiple writer-unit subsections (an outline `units` array); adjacent subsections under minWords should be merged into one unit rather than left tiny."
+  },
+  styleFingerprint: {
+    passThreshold: 7,
+    maxScore: 10,
+    _comment: "Per-dimension style compliance score. Below 7 triggers paragraph adjustment."
+  },
+  voice: {
+    ruleCoverage: {
+      pass: 8,
+      warn: 6,
+      block: 6
+    },
+    corpus: {
+      minArticles: 3,
+      minTotalWords: 1500,
+      minWordsPerArticle: 800
+    },
+    exemplars: {
+      count: 4,
+      minWords: 40,
+      maxWords: 150,
+      maxPerFile: 1,
+      _comment: "src/scripts/extract-voice-exemplars.py: how many real paragraphs from past-articles/ are shown to Gemini as few-shot voice examples, their word bounds, and at most maxPerFile per source article so no single paper dominates the voice. Measured 2026-09-15 on the author's finished Hebrew papers: mean paragraph 97-134 words, so 40-150 keeps typical body paragraphs and drops headings and footnote-length fragments (a whole-folder corpus reads shorter because course reflections pull the mean down). Gemini guidance: 2-5 examples; more rarely helps."
+    }
+  },
+  proofread: {
+    chunkWords: 1200,
+    maxPasses: 3,
+    dryRounds: 2,
+    concurrencyCap: 6,
+    refuteVotes: 3,
+    refuteMajority: 2,
+    refuteBudgetPerChunk: 12,
+    jevShadow: {
+      enabled: false,
+      flagScore: 1.5,
+      model: "jev-1.13.0",
+      _comment: "Opt-in (sends change text to TypeSafe AI); flagScore was fitted 2026-09-19 on 177 Hebrew edits from one article, where every edit labelled low scored \u2264 1.13 and every edit labelled medium or high scored \u2265 1.96 (agreement with the copyeditor LLM, not accuracy); shadow only. Script: src/scripts/jev-risk-shadow.py."
+    },
+    _comment: "Proofread pipeline caps, enforced in src/workflows/proofread.js from args.thresholds (WRK-14). chunkWords bounds one finder chunk; the mechanical loop exits 'converged' after dryRounds consecutive rounds with no fresh change, or 'cap-reached' at maxPasses. refuteVotes lenses verify each candidate change and refuteMajority of them refuting DOWNGRADES it to applied:false with skipReason 'refuted' \u2014 it is never dropped from the output (proofread.js:14-18, :305). refuteBudgetPerChunk caps how many changes per chunk are sent for refute-verification at all. Verification is batched: each lens (language) or vote (mechanical) judges all of a chunk's budgeted changes in ONE call, so verify calls are refuteVotes per chunk regardless of finding count (a live run spent ~9.7M of 13.5M tokens when it was one call per change per lens); the budget now bounds how many changes one call must judge, and glyph-only mechanical changes (gershayim/geresh/whitespace) are upheld by code and spend none of it. Changes beyond the budget are carried with skipReason 'refute-budget-exhausted' \u2014 downgraded, never dropped \u2014 and the budget is spent highest-meaningRisk first."
+  },
+  citationFloor: {
+    minSecondaryPer1000Words: 4,
+    minSecondaryTotal: 8,
+    _comment: "VER-18 absence gate, enforced by src/scripts/gate.py citation-floor. The per-paragraph auditor is a PRESENCE check \u2014 it verifies that claims which ARE cited are cited correctly, and is structurally blind to a paragraph that cites nothing. Absence needs its own counting gate, and the count is arithmetic, not judgement (TST-02). Only SECONDARY citations count toward the floor: primary sources stay inline in this field, so a raw citation count reads healthy on an article carrying almost no scholarly engagement. minSecondaryPer1000Words is the rate floor, minSecondaryTotal the absolute floor that keeps a very short article from passing on rate alone. The gate FAILS if EITHER floor is breached."
+  },
+  typography: {
+    dashReplacement: "hyphen",
+    styleMetrics: {
+      topFrequentTermsCount: 30,
+      minTermLength: 2,
+      furnitureMaxWords: 10,
+      furnitureShare: 0.8,
+      furnitureMinCount: 5,
+      furnitureCandidateMultiplier: 3
+    },
+    _comment: "dashReplacement is the default em/en-dash fix convention used by detect-ai-typography.py (values: hyphen|comma|colon|remove); overridable via --dash-replacement. topFrequentTermsCount/minTermLength configure extract-style-metrics.py's frequentTerms extraction. furnitureMaxWords/furnitureShare/furnitureMinCount drop structural furniture (table-of-contents lines and section headers) from frequentTerms: a term is furniture when at least furnitureShare of its occurrences fall in paragraphs of at most furnitureMaxWords words and it occurs at least furnitureMinCount times. Calibrated on a real 10-file corpus of 857 paragraphs with a 38-word median: the author's own name sits in 5-word ToC lines and scores 96%, subject vocabulary scores 3%, and the highest-scoring term that is kept scores 73% \u2014 so the 0.8 cutoff has margin on both sides. Only terms in contention for the reported list are judged \u2014 the top topFrequentTermsCount * furnitureCandidateMultiplier by raw count \u2014 because a share computed over a handful of occurrences has no resolution: \u05D1\u05F3 and \u05D0\u05F3, the same token doing the same job in the same two files, scored 0.80 and 0.50 on five and seven observations and split. Replaces a front-matter rule that inspected the first N paragraphs of each file and never fired, because these headers repeat throughout a document rather than opening it."
+  },
+  models: {
+    "proofread.find": {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1
+    },
+    "proofread.verify": {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1
+    },
+    "proofread.memo": {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1
+    },
+    "evidence.extract": {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1
+    },
+    "write.draft": {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1
+    },
+    "write.synthesize": {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1
+    },
+    "voice.moves": {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1
+    },
+    "revise.classify": {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1
+    },
+    ocr: {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1
+    },
+    edit: {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1
+    }
+  },
+  budget: {
+    proofread: {
+      maxTokens: 1e6,
+      maxUsd: 0.5,
+      _comment: "Token ceiling comfortably covers a long proofread run; the USD ceiling is the primary cost guard."
+    },
+    write: {
+      maxTokens: 5e6,
+      maxUsd: 3,
+      _comment: "Token ceiling covers multi-section drafting; the USD ceiling is the primary cost guard."
+    }
+  }
+};
+
+// src/routing.ts
+var stepIds = ["proofread.find", "proofread.verify", "proofread.memo", "evidence.extract", "write.draft", "write.synthesize", "voice.moves", "revise.classify", "ocr", "edit"];
+var modelTable = thresholds_default.models;
+
+// src/main.ts
+var args = setPathArguments(process.argv.slice(2));
+var [command, subcommand, runId] = args;
+if (command === "ledger" && subcommand === "show" && runId) {
+  try {
+    dataDir();
+    const file = join(projectDir(), ".academic-helper", "runs", runId, "usage.jsonl");
+    const rows = readFileSync(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    const totals = /* @__PURE__ */ new Map();
+    for (const row of rows) {
+      const total = totals.get(row.step) ?? { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
+      total.input_tokens += row.input_tokens;
+      total.output_tokens += row.output_tokens;
+      total.cost_usd = total.cost_usd === null || row.cost_usd === null ? null : total.cost_usd + row.cost_usd;
+      totals.set(row.step, total);
+    }
+    process.stdout.write(`${JSON.stringify(Object.fromEntries(totals), null, 2)}
+`);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error && error.message.startsWith("ERROR:") ? error.message : `ERROR ledger: missing run ${runId}`}
+`);
+    process.exitCode = error instanceof Error && error.message.startsWith("ERROR:") ? 3 : 2;
+  }
+} else if (command === "models" && subcommand === "check") {
+  process.stdout.write(`Configured Gemini steps: ${stepIds.join(", ")}
+Live model verification requires GOOGLE_API_KEY.
+`);
+} else {
+  process.stderr.write("ERROR: expected aw models check or aw ledger show <runId>\n");
+  process.exitCode = 2;
+}

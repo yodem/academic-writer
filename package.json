@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "bash scripts/build-plugins.sh",
+    "test:cli": "cd src/cli && npm test",
+    "typecheck:cli": "cd src/cli && npx tsc --noEmit",
     "build:hooks": "cd src/hooks && npm run build",
     "build:mcp": "bash scripts/build-mcp.sh",
     "typecheck": "cd src/hooks && npx tsc --noEmit",

@@ -6,7 +6,16 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs lifecycle/session-dashboard\"",
+            "command": "USER_CONFIG_GOOGLE_API_KEY='${user_config.google_api_key}' USER_CONFIG_JEV_API_KEY='${user_config.jev_api_key}' node \"${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs\" lifecycle/session-env",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs\" lifecycle/session-dashboard",
             "timeout": 5,
             "statusMessage": "Loading Academic Writer dashboard..."
           }
@@ -16,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs lifecycle/voice-pull\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs\" lifecycle/voice-pull",
             "timeout": 10,
             "statusMessage": "Pulling latest voice profile..."
           }
@@ -37,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs lifecycle/subagent-start\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs\" lifecycle/subagent-start",
             "timeout": 3
           }
         ]
@@ -48,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs lifecycle/notify-stop\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs\" lifecycle/notify-stop",
             "timeout": 3,
             "statusMessage": "Notifying..."
           }
@@ -58,7 +67,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs lifecycle/gate-enforce\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs\" lifecycle/gate-enforce",
             "timeout": 5,
             "statusMessage": "Checking gates..."
           }
@@ -70,7 +79,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs lifecycle/session-end-log\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs\" lifecycle/session-end-log",
             "timeout": 10,
             "statusMessage": "Logging session..."
           }
