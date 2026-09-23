@@ -260,7 +260,7 @@ Read `.academic-helper/research-brief.md` when it exists. Seed the thesis from i
 Start evidence extraction in the background while planning continues. Pass the selected source IDs, core text references, author intent path, run ID, and the required `--project-dir` and `--data-dir` arguments:
 
 ```bash
-aw --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" evidence build \
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" evidence build \
   --sources <comma-separated-source-ids> --sefaria <comma-separated-references> \
   --intent "$CLAUDE_PROJECT_DIR/.academic-helper/author-intent.json" --run <run-id>
 ```
@@ -276,7 +276,7 @@ Spawn `architect` with the author-intent file and evidence file paths. The archi
 For every section, show its claim to the author and record explicit approval in that section's `approved` field. For each claim, invoke `aw decide outline.support` with a focused question and context containing the claim and evidence support note. Use `supported` or `unsupported` as the fallback according to the architect's support assessment. Include `--label approved` or `--label rejected` after the author's response. This logged decision is advisory; only the author's approval sets `approved` and the gate decides whether writing may proceed.
 
 ```bash
-aw --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" decide outline.support \
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" decide outline.support \
   --question "Does this section claim follow from the cited passages and advance the thesis?" \
   --options supported,unsupported --context-file <claim-context-file> \
   --fallback <supported-or-unsupported> --run <run-id> --label <approved-or-rejected>
