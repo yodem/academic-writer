@@ -1,40 +1,100 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["thesis", "thesisSha256", "sections"],
+  "required": [
+    "thesis",
+    "thesisSha256",
+    "sections"
+  ],
   "properties": {
-    "thesis": { "type": "string", "minLength": 1 },
-    "thesisSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "thesis": {
+      "type": "string",
+      "minLength": 1
+    },
+    "thesisSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
     "sections": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "title", "claim", "approved", "units"],
+        "required": [
+          "id",
+          "title",
+          "claim",
+          "approved",
+          "units"
+        ],
         "properties": {
-          "id": { "type": "string", "minLength": 1 },
-          "title": { "type": "string" },
-          "claim": { "type": "string" },
-          "approved": { "type": "boolean" },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string"
+          },
+          "claim": {
+            "type": "string"
+          },
+          "approved": {
+            "type": "boolean"
+          },
           "units": {
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["id", "dependsOn", "paragraphs"],
+              "required": [
+                "id",
+                "dependsOn",
+                "paragraphs"
+              ],
               "properties": {
-                "id": { "type": "string", "minLength": 1 },
-                "dependsOn": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dependsOn": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": true
+                },
                 "paragraphs": {
                   "type": "array",
                   "items": {
                     "type": "object",
-                    "required": ["move", "evidenceIds", "bridgeTo"],
+                    "required": [
+                      "move",
+                      "evidenceIds",
+                      "bridgeTo"
+                    ],
                     "properties": {
-                      "move": { "type": "string" },
-                      "evidenceIds": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
-                      "bridgeTo": { "type": "string" }
+                      "move": {
+                        "type": "string"
+                      },
+                      "evidenceIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "uniqueItems": true
+                      },
+                      "bridgeTo": {
+                        "type": "string"
+                      }
                     },
                     "additionalProperties": false
                   }
+                },
+                "role": {
+                  "enum": [
+                    "intro",
+                    "body",
+                    "conclusion"
+                  ],
+                  "description": "Drafting role: intro and conclusion are drafted last, from the body (aw draft)."
                 }
               },
               "additionalProperties": false

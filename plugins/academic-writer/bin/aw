@@ -64,8 +64,9 @@ var init_thresholds = __esm({
       paragraph: {
         wordCeiling: 220,
         wordCeilingIntroConclusionBonus: 30,
-        _comment: "Soft word ceiling per paragraph. Introduction and conclusion paragraphs may exceed by wordCeilingIntroConclusionBonus words. wordFloor: minimum words for one drafted paragraph. The drafted-unit word gate is per planned paragraph (n x [wordFloor, wordCeiling]); writerUnit min/max bound the ARCHITECT's unit sizing, not a single draft (live run 2026-09-23: a 1-paragraph unit correctly drafted ~110 words failed a 300-word unit floor).",
-        wordFloor: 40
+        _comment: "Soft word ceiling per paragraph. Introduction and conclusion paragraphs may exceed by wordCeilingIntroConclusionBonus words. wordFloor: minimum words for one drafted paragraph. The drafted-unit word gate is per planned paragraph (n x [wordFloor, wordCeiling]); writerUnit min/max bound the ARCHITECT's unit sizing, not a single draft (live run 2026-09-23: a 1-paragraph unit correctly drafted ~110 words failed a 300-word unit floor). quotedTermMaxWords: a quoted span of at most this many words is treated as a term (scare quotes, e.g. \u05F4\u05D9\u05E9 \u05DE\u05D0\u05D9\u05DF\u05F4), not a source quotation, by the draft quote gate.",
+        wordFloor: 40,
+        quotedTermMaxWords: 3
       },
       writerUnit: {
         targetWords: 500,
@@ -170,7 +171,7 @@ var init_thresholds = __esm({
           provider: "gemini",
           model: "gemini-3.8-flash",
           maxOutputTokens: 8192,
-          concurrency: 1,
+          concurrency: 4,
           piModel: "openrouter/z-ai/glm-5.3"
         },
         "write.draft": {
@@ -299,14 +300,32 @@ var init_thresholds = __esm({
         },
         _comment: "Development-only defect clustering and Jev roster thresholds."
       },
-      _piModelNote: "piModel = OpenRouter model for the isolated Pi judge. Must be a non-Claude, non-Gemini family (cross-family verification); taken from the author's Pi model roster (executor tier, machine-config/pi/model-roster.json). Runs in shadow until the Hebrew fixture shows parity."
+      _piModelNote: "piModel = OpenRouter model for the isolated Pi judge. Must be a non-Claude, non-Gemini family (cross-family verification); taken from the author's Pi model roster (executor tier, machine-config/pi/model-roster.json). Runs in shadow until the Hebrew fixture shows parity.",
+      evidence: {
+        passagesPerSource: {
+          core: {
+            min: 12,
+            max: 30
+          },
+          other: {
+            min: 4,
+            max: 12
+          }
+        },
+        _comment: "aw evidence build coverage targets per source. Live rehearsal 2026-09-23: with no target, Gemini returned 5 passages for a 12-page core text and 0 for Sefer Yetzirah, missing the article's opening dilemma. The core text (author-intent coreTextSourceId) gets dense coverage; every other source a smaller floor. Concurrency for evidence.extract is 4 (sources in parallel)."
+      },
+      synthesis: {
+        openerWords: 3,
+        repeatedOpenerMin: 3,
+        _comment: "aw synthesize: a paragraph opener (first openerWords words) used at least repeatedOpenerMin times across the article is passed to the synthesizer as a required variation (live rehearsal 2026-09-23: 7 units opened with the same phrase, 0 edits proposed)."
+      }
     };
   }
 });
 
-// ../../../../../../../src/cli/node_modules/retry/lib/retry_operation.js
+// node_modules/retry/lib/retry_operation.js
 var require_retry_operation = __commonJS({
-  "../../../../../../../src/cli/node_modules/retry/lib/retry_operation.js"(exports, module) {
+  "node_modules/retry/lib/retry_operation.js"(exports, module) {
     function RetryOperation(timeouts, options) {
       if (typeof options === "boolean") {
         options = { forever: options };
@@ -439,9 +458,9 @@ var require_retry_operation = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/retry/lib/retry.js
+// node_modules/retry/lib/retry.js
 var require_retry = __commonJS({
-  "../../../../../../../src/cli/node_modules/retry/lib/retry.js"(exports) {
+  "node_modules/retry/lib/retry.js"(exports) {
     var RetryOperation = require_retry_operation();
     exports.operation = function(options) {
       var timeouts = exports.timeouts(options);
@@ -525,16 +544,16 @@ var require_retry = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/retry/index.js
+// node_modules/retry/index.js
 var require_retry2 = __commonJS({
-  "../../../../../../../src/cli/node_modules/retry/index.js"(exports, module) {
+  "node_modules/retry/index.js"(exports, module) {
     module.exports = require_retry();
   }
 });
 
-// ../../../../../../../src/cli/node_modules/p-retry/index.js
+// node_modules/p-retry/index.js
 var require_p_retry = __commonJS({
-  "../../../../../../../src/cli/node_modules/p-retry/index.js"(exports, module) {
+  "node_modules/p-retry/index.js"(exports, module) {
     "use strict";
     var retry = require_retry2();
     var networkErrorMsgs = [
@@ -611,9 +630,9 @@ var require_p_retry = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/extend/index.js
+// node_modules/extend/index.js
 var require_extend = __commonJS({
-  "../../../../../../../src/cli/node_modules/extend/index.js"(exports, module) {
+  "node_modules/extend/index.js"(exports, module) {
     "use strict";
     var hasOwn2 = Object.prototype.hasOwnProperty;
     var toStr = Object.prototype.toString;
@@ -702,9 +721,9 @@ var require_extend = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/gaxios/package.json
+// node_modules/gaxios/package.json
 var require_package = __commonJS({
-  "../../../../../../../src/cli/node_modules/gaxios/package.json"(exports, module) {
+  "node_modules/gaxios/package.json"(exports, module) {
     module.exports = {
       name: "gaxios",
       version: "7.3.1",
@@ -813,18 +832,18 @@ var require_package = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/util.cjs
+// node_modules/gaxios/build/cjs/src/util.cjs
 var require_util = __commonJS({
-  "../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/util.cjs"(exports, module) {
+  "node_modules/gaxios/build/cjs/src/util.cjs"(exports, module) {
     "use strict";
     var pkg = require_package();
     module.exports = { pkg };
   }
 });
 
-// ../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/common.js
+// node_modules/gaxios/build/cjs/src/common.js
 var require_common = __commonJS({
-  "../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/common.js"(exports) {
+  "node_modules/gaxios/build/cjs/src/common.js"(exports) {
     "use strict";
     var __importDefault = exports && exports.__importDefault || function(mod) {
       return mod && mod.__esModule ? mod : { "default": mod };
@@ -1064,9 +1083,9 @@ var require_common = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/retry.js
+// node_modules/gaxios/build/cjs/src/retry.js
 var require_retry3 = __commonJS({
-  "../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/retry.js"(exports) {
+  "node_modules/gaxios/build/cjs/src/retry.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getRetryConfig = getRetryConfig;
@@ -1169,9 +1188,9 @@ var require_retry3 = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/interceptor.js
+// node_modules/gaxios/build/cjs/src/interceptor.js
 var require_interceptor = __commonJS({
-  "../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/interceptor.js"(exports) {
+  "node_modules/gaxios/build/cjs/src/interceptor.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GaxiosInterceptorManager = void 0;
@@ -1181,9 +1200,9 @@ var require_interceptor = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/ms/index.js
+// node_modules/ms/index.js
 var require_ms = __commonJS({
-  "../../../../../../../src/cli/node_modules/ms/index.js"(exports, module) {
+  "node_modules/ms/index.js"(exports, module) {
     var s2 = 1e3;
     var m2 = s2 * 60;
     var h2 = m2 * 60;
@@ -1297,9 +1316,9 @@ var require_ms = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/debug/src/common.js
+// node_modules/debug/src/common.js
 var require_common2 = __commonJS({
-  "../../../../../../../src/cli/node_modules/debug/src/common.js"(exports, module) {
+  "node_modules/debug/src/common.js"(exports, module) {
     function setup(env) {
       createDebug.debug = createDebug;
       createDebug.default = createDebug;
@@ -1474,9 +1493,9 @@ var require_common2 = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/debug/src/browser.js
+// node_modules/debug/src/browser.js
 var require_browser = __commonJS({
-  "../../../../../../../src/cli/node_modules/debug/src/browser.js"(exports, module) {
+  "node_modules/debug/src/browser.js"(exports, module) {
     exports.formatArgs = formatArgs;
     exports.save = save;
     exports.load = load;
@@ -1644,9 +1663,9 @@ var require_browser = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/debug/src/node.js
+// node_modules/debug/src/node.js
 var require_node = __commonJS({
-  "../../../../../../../src/cli/node_modules/debug/src/node.js"(exports, module) {
+  "node_modules/debug/src/node.js"(exports, module) {
     var tty = __require("tty");
     var util = __require("util");
     exports.init = init;
@@ -1818,9 +1837,9 @@ var require_node = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/debug/src/index.js
+// node_modules/debug/src/index.js
 var require_src = __commonJS({
-  "../../../../../../../src/cli/node_modules/debug/src/index.js"(exports, module) {
+  "node_modules/debug/src/index.js"(exports, module) {
     if (typeof process === "undefined" || process.type === "renderer" || process.browser === true || process.__nwjs) {
       module.exports = require_browser();
     } else {
@@ -1829,9 +1848,9 @@ var require_src = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/agent-base/dist/helpers.js
+// node_modules/agent-base/dist/helpers.js
 var require_helpers = __commonJS({
-  "../../../../../../../src/cli/node_modules/agent-base/dist/helpers.js"(exports) {
+  "node_modules/agent-base/dist/helpers.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -1899,9 +1918,9 @@ var require_helpers = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/agent-base/dist/index.js
+// node_modules/agent-base/dist/index.js
 var require_dist = __commonJS({
-  "../../../../../../../src/cli/node_modules/agent-base/dist/index.js"(exports) {
+  "node_modules/agent-base/dist/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -2055,9 +2074,9 @@ var require_dist = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/https-proxy-agent/dist/parse-proxy-response.js
+// node_modules/https-proxy-agent/dist/parse-proxy-response.js
 var require_parse_proxy_response = __commonJS({
-  "../../../../../../../src/cli/node_modules/https-proxy-agent/dist/parse-proxy-response.js"(exports) {
+  "node_modules/https-proxy-agent/dist/parse-proxy-response.js"(exports) {
     "use strict";
     var __importDefault = exports && exports.__importDefault || function(mod) {
       return mod && mod.__esModule ? mod : { "default": mod };
@@ -2151,9 +2170,9 @@ var require_parse_proxy_response = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/https-proxy-agent/dist/index.js
+// node_modules/https-proxy-agent/dist/index.js
 var require_dist2 = __commonJS({
-  "../../../../../../../src/cli/node_modules/https-proxy-agent/dist/index.js"(exports) {
+  "node_modules/https-proxy-agent/dist/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -2301,7 +2320,7 @@ var require_dist2 = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/data-uri-to-buffer/dist/index.js
+// node_modules/data-uri-to-buffer/dist/index.js
 function dataUriToBuffer(uri) {
   if (!/^data:/i.test(uri)) {
     throw new TypeError('`uri` does not appear to be a Data URI (must begin with "data:")');
@@ -2340,14 +2359,14 @@ function dataUriToBuffer(uri) {
 }
 var dist_default;
 var init_dist = __esm({
-  "../../../../../../../src/cli/node_modules/data-uri-to-buffer/dist/index.js"() {
+  "node_modules/data-uri-to-buffer/dist/index.js"() {
     dist_default = dataUriToBuffer;
   }
 });
 
-// ../../../../../../../src/cli/node_modules/web-streams-polyfill/dist/ponyfill.es2018.js
+// node_modules/web-streams-polyfill/dist/ponyfill.es2018.js
 var require_ponyfill_es2018 = __commonJS({
-  "../../../../../../../src/cli/node_modules/web-streams-polyfill/dist/ponyfill.es2018.js"(exports, module) {
+  "node_modules/web-streams-polyfill/dist/ponyfill.es2018.js"(exports, module) {
     (function(global2, factory) {
       typeof exports === "object" && typeof module !== "undefined" ? factory(exports) : typeof define === "function" && define.amd ? define(["exports"], factory) : (global2 = typeof globalThis !== "undefined" ? globalThis : global2 || self, factory(global2.WebStreamsPolyfill = {}));
     })(exports, (function(exports2) {
@@ -6620,9 +6639,9 @@ var require_ponyfill_es2018 = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/fetch-blob/streams.cjs
+// node_modules/fetch-blob/streams.cjs
 var require_streams = __commonJS({
-  "../../../../../../../src/cli/node_modules/fetch-blob/streams.cjs"() {
+  "node_modules/fetch-blob/streams.cjs"() {
     var POOL_SIZE2 = 65536;
     if (!globalThis.ReadableStream) {
       try {
@@ -6666,7 +6685,7 @@ var require_streams = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/fetch-blob/index.js
+// node_modules/fetch-blob/index.js
 async function* toIterator(parts, clone2 = true) {
   for (const part of parts) {
     if ("stream" in part) {
@@ -6703,7 +6722,7 @@ async function* toIterator(parts, clone2 = true) {
 }
 var import_streams, POOL_SIZE, _Blob, Blob3, fetch_blob_default;
 var init_fetch_blob = __esm({
-  "../../../../../../../src/cli/node_modules/fetch-blob/index.js"() {
+  "node_modules/fetch-blob/index.js"() {
     import_streams = __toESM(require_streams(), 1);
     POOL_SIZE = 65536;
     _Blob = class Blob2 {
@@ -6870,10 +6889,10 @@ var init_fetch_blob = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/fetch-blob/file.js
+// node_modules/fetch-blob/file.js
 var _File, File3, file_default;
 var init_file = __esm({
-  "../../../../../../../src/cli/node_modules/fetch-blob/file.js"() {
+  "node_modules/fetch-blob/file.js"() {
     init_fetch_blob();
     _File = class File2 extends fetch_blob_default {
       #lastModified = 0;
@@ -6914,7 +6933,7 @@ var init_file = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/formdata-polyfill/esm.min.js
+// node_modules/formdata-polyfill/esm.min.js
 function formDataToBlob(F2, B = fetch_blob_default) {
   var b = `${r()}${r()}`.replace(/\./g, "").slice(-28).padStart(32, "-"), c = [], p = `--${b}\r
 Content-Disposition: form-data; name="`;
@@ -6930,7 +6949,7 @@ Content-Type: ${v.type || "application/octet-stream"}\r
 }
 var t, i, h, r, m, f, e, x, FormData2;
 var init_esm_min = __esm({
-  "../../../../../../../src/cli/node_modules/formdata-polyfill/esm.min.js"() {
+  "node_modules/formdata-polyfill/esm.min.js"() {
     init_fetch_blob();
     init_file();
     ({ toStringTag: t, iterator: i, hasInstance: h } = Symbol);
@@ -7011,10 +7030,10 @@ var init_esm_min = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/node-fetch/src/errors/base.js
+// node_modules/node-fetch/src/errors/base.js
 var FetchBaseError;
 var init_base = __esm({
-  "../../../../../../../src/cli/node_modules/node-fetch/src/errors/base.js"() {
+  "node_modules/node-fetch/src/errors/base.js"() {
     FetchBaseError = class extends Error {
       constructor(message, type) {
         super(message);
@@ -7031,10 +7050,10 @@ var init_base = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/node-fetch/src/errors/fetch-error.js
+// node_modules/node-fetch/src/errors/fetch-error.js
 var FetchError;
 var init_fetch_error = __esm({
-  "../../../../../../../src/cli/node_modules/node-fetch/src/errors/fetch-error.js"() {
+  "node_modules/node-fetch/src/errors/fetch-error.js"() {
     init_base();
     FetchError = class extends FetchBaseError {
       /**
@@ -7053,10 +7072,10 @@ var init_fetch_error = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/node-fetch/src/utils/is.js
+// node_modules/node-fetch/src/utils/is.js
 var NAME, isURLSearchParameters, isBlob, isAbortSignal, isDomainOrSubdomain, isSameProtocol;
 var init_is = __esm({
-  "../../../../../../../src/cli/node_modules/node-fetch/src/utils/is.js"() {
+  "node_modules/node-fetch/src/utils/is.js"() {
     NAME = Symbol.toStringTag;
     isURLSearchParameters = (object) => {
       return typeof object === "object" && typeof object.append === "function" && typeof object.delete === "function" && typeof object.get === "function" && typeof object.getAll === "function" && typeof object.has === "function" && typeof object.set === "function" && typeof object.sort === "function" && object[NAME] === "URLSearchParams";
@@ -7080,9 +7099,9 @@ var init_is = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/node-domexception/index.js
+// node_modules/node-domexception/index.js
 var require_node_domexception = __commonJS({
-  "../../../../../../../src/cli/node_modules/node-domexception/index.js"(exports, module) {
+  "node_modules/node-domexception/index.js"(exports, module) {
     if (!globalThis.DOMException) {
       try {
         const { MessageChannel } = __require("worker_threads"), port = new MessageChannel().port1, ab = new ArrayBuffer();
@@ -7095,12 +7114,12 @@ var require_node_domexception = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/fetch-blob/from.js
+// node_modules/fetch-blob/from.js
 import { statSync, createReadStream, promises as fs } from "node:fs";
 import { basename } from "node:path";
 var import_node_domexception, stat, blobFromSync, blobFrom, fileFrom, fileFromSync, fromBlob, fromFile, BlobDataItem;
 var init_from = __esm({
-  "../../../../../../../src/cli/node_modules/fetch-blob/from.js"() {
+  "node_modules/fetch-blob/from.js"() {
     import_node_domexception = __toESM(require_node_domexception(), 1);
     init_file();
     init_fetch_blob();
@@ -7159,7 +7178,7 @@ var init_from = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/node-fetch/src/utils/multipart-parser.js
+// node_modules/node-fetch/src/utils/multipart-parser.js
 var multipart_parser_exports = {};
 __export(multipart_parser_exports, {
   toFormData: () => toFormData
@@ -7253,7 +7272,7 @@ async function toFormData(Body2, ct) {
 }
 var s, S, f2, F, LF, CR, SPACE, HYPHEN, COLON, A, Z, lower, noop, MultipartParser;
 var init_multipart_parser = __esm({
-  "../../../../../../../src/cli/node_modules/node-fetch/src/utils/multipart-parser.js"() {
+  "node_modules/node-fetch/src/utils/multipart-parser.js"() {
     init_from();
     init_esm_min();
     s = 0;
@@ -7521,7 +7540,7 @@ var init_multipart_parser = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/node-fetch/src/body.js
+// node_modules/node-fetch/src/body.js
 import Stream, { PassThrough } from "node:stream";
 import { types, deprecate, promisify } from "node:util";
 import { Buffer as Buffer2 } from "node:buffer";
@@ -7571,7 +7590,7 @@ async function consumeBody(data) {
 }
 var pipeline, INTERNALS, Body, clone, getNonSpecFormDataBoundary, extractContentType, getTotalBytes, writeToStream;
 var init_body = __esm({
-  "../../../../../../../src/cli/node_modules/node-fetch/src/body.js"() {
+  "node_modules/node-fetch/src/body.js"() {
     init_fetch_blob();
     init_esm_min();
     init_fetch_error();
@@ -7779,7 +7798,7 @@ var init_body = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/node-fetch/src/headers.js
+// node_modules/node-fetch/src/headers.js
 import { types as types2 } from "node:util";
 import http from "node:http";
 function fromRawHeaders(headers = []) {
@@ -7802,7 +7821,7 @@ function fromRawHeaders(headers = []) {
 }
 var validateHeaderName, validateHeaderValue, Headers2;
 var init_headers = __esm({
-  "../../../../../../../src/cli/node_modules/node-fetch/src/headers.js"() {
+  "node_modules/node-fetch/src/headers.js"() {
     validateHeaderName = typeof http.validateHeaderName === "function" ? http.validateHeaderName : (name) => {
       if (!/^[\^`\-\w!#$%&'*+.|~]+$/.test(name)) {
         const error = new TypeError(`Header name must be a valid HTTP token [${name}]`);
@@ -7970,10 +7989,10 @@ var init_headers = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/node-fetch/src/utils/is-redirect.js
+// node_modules/node-fetch/src/utils/is-redirect.js
 var redirectStatus, isRedirect;
 var init_is_redirect = __esm({
-  "../../../../../../../src/cli/node_modules/node-fetch/src/utils/is-redirect.js"() {
+  "node_modules/node-fetch/src/utils/is-redirect.js"() {
     redirectStatus = /* @__PURE__ */ new Set([301, 302, 303, 307, 308]);
     isRedirect = (code) => {
       return redirectStatus.has(code);
@@ -7981,10 +8000,10 @@ var init_is_redirect = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/node-fetch/src/response.js
+// node_modules/node-fetch/src/response.js
 var INTERNALS2, Response2;
 var init_response = __esm({
-  "../../../../../../../src/cli/node_modules/node-fetch/src/response.js"() {
+  "node_modules/node-fetch/src/response.js"() {
     init_headers();
     init_body();
     init_is_redirect();
@@ -8107,10 +8126,10 @@ var init_response = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/node-fetch/src/utils/get-search.js
+// node_modules/node-fetch/src/utils/get-search.js
 var getSearch;
 var init_get_search = __esm({
-  "../../../../../../../src/cli/node_modules/node-fetch/src/utils/get-search.js"() {
+  "node_modules/node-fetch/src/utils/get-search.js"() {
     getSearch = (parsedURL) => {
       if (parsedURL.search) {
         return parsedURL.search;
@@ -8122,7 +8141,7 @@ var init_get_search = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/node-fetch/src/utils/referrer.js
+// node_modules/node-fetch/src/utils/referrer.js
 import { isIP } from "node:net";
 function stripURLForUseAsAReferrer(url, originOnly = false) {
   if (url == null) {
@@ -8251,7 +8270,7 @@ function parseReferrerPolicyFromHeader(headers) {
 }
 var ReferrerPolicy, DEFAULT_REFERRER_POLICY;
 var init_referrer = __esm({
-  "../../../../../../../src/cli/node_modules/node-fetch/src/utils/referrer.js"() {
+  "node_modules/node-fetch/src/utils/referrer.js"() {
     ReferrerPolicy = /* @__PURE__ */ new Set([
       "",
       "no-referrer",
@@ -8267,12 +8286,12 @@ var init_referrer = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/node-fetch/src/request.js
+// node_modules/node-fetch/src/request.js
 import { format as formatUrl } from "node:url";
 import { deprecate as deprecate2 } from "node:util";
 var INTERNALS3, isRequest, doBadDataWarn, Request, getNodeRequestOptions;
 var init_request = __esm({
-  "../../../../../../../src/cli/node_modules/node-fetch/src/request.js"() {
+  "node_modules/node-fetch/src/request.js"() {
     init_headers();
     init_body();
     init_is();
@@ -8472,10 +8491,10 @@ var init_request = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/node-fetch/src/errors/abort-error.js
+// node_modules/node-fetch/src/errors/abort-error.js
 var AbortError;
 var init_abort_error = __esm({
-  "../../../../../../../src/cli/node_modules/node-fetch/src/errors/abort-error.js"() {
+  "node_modules/node-fetch/src/errors/abort-error.js"() {
     init_base();
     AbortError = class extends FetchBaseError {
       constructor(message, type = "aborted") {
@@ -8485,7 +8504,7 @@ var init_abort_error = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/node-fetch/src/index.js
+// node_modules/node-fetch/src/index.js
 var src_exports = {};
 __export(src_exports, {
   AbortError: () => AbortError,
@@ -8771,7 +8790,7 @@ function fixResponseChunkedTransferBadEnding(request, errorCallback) {
 }
 var supportedSchemas;
 var init_src = __esm({
-  "../../../../../../../src/cli/node_modules/node-fetch/src/index.js"() {
+  "node_modules/node-fetch/src/index.js"() {
     init_dist();
     init_body();
     init_response();
@@ -8788,9 +8807,9 @@ var init_src = __esm({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/gaxios.js
+// node_modules/gaxios/build/cjs/src/gaxios.js
 var require_gaxios = __commonJS({
-  "../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/gaxios.js"(exports) {
+  "node_modules/gaxios/build/cjs/src/gaxios.js"(exports) {
     "use strict";
     var __importDefault = exports && exports.__importDefault || function(mod) {
       return mod && mod.__esModule ? mod : { "default": mod };
@@ -9262,9 +9281,9 @@ Content-Type: ${partContentType}\r
   }
 });
 
-// ../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/index.js
+// node_modules/gaxios/build/cjs/src/index.js
 var require_src2 = __commonJS({
-  "../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/index.js"(exports) {
+  "node_modules/gaxios/build/cjs/src/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -9301,9 +9320,9 @@ var require_src2 = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/bignumber.js/bignumber.js
+// node_modules/bignumber.js/bignumber.js
 var require_bignumber = __commonJS({
-  "../../../../../../../src/cli/node_modules/bignumber.js/bignumber.js"(exports, module) {
+  "node_modules/bignumber.js/bignumber.js"(exports, module) {
     (function(globalObject) {
       "use strict";
       var BigNumber, isNumeric = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i, mathceil = Math.ceil, mathfloor = Math.floor, bignumberError = "[BigNumber Error] ", tooManyDigits = bignumberError + "Number primitive has more than 15 significant digits: ", BASE = 1e14, LOG_BASE = 14, MAX_SAFE_INTEGER = 9007199254740991, POWS_TEN = [1, 10, 100, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13], SQRT_BASE = 1e7, MAX = 1e9;
@@ -10652,9 +10671,9 @@ var require_bignumber = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/json-bigint/lib/stringify.js
+// node_modules/json-bigint/lib/stringify.js
 var require_stringify = __commonJS({
-  "../../../../../../../src/cli/node_modules/json-bigint/lib/stringify.js"(exports, module) {
+  "node_modules/json-bigint/lib/stringify.js"(exports, module) {
     var BigNumber = require_bignumber();
     var JSON2 = module.exports;
     (function() {
@@ -10764,9 +10783,9 @@ var require_stringify = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/json-bigint/lib/parse.js
+// node_modules/json-bigint/lib/parse.js
 var require_parse = __commonJS({
-  "../../../../../../../src/cli/node_modules/json-bigint/lib/parse.js"(exports, module) {
+  "node_modules/json-bigint/lib/parse.js"(exports, module) {
     var BigNumber = null;
     var suspectProtoRx = /(?:_|\\u005[Ff])(?:_|\\u005[Ff])(?:p|\\u0070)(?:r|\\u0072)(?:o|\\u006[Ff])(?:t|\\u0074)(?:o|\\u006[Ff])(?:_|\\u005[Ff])(?:_|\\u005[Ff])/;
     var suspectConstructorRx = /(?:c|\\u0063)(?:o|\\u006[Ff])(?:n|\\u006[Ee])(?:s|\\u0073)(?:t|\\u0074)(?:r|\\u0072)(?:u|\\u0075)(?:c|\\u0063)(?:t|\\u0074)(?:o|\\u006[Ff])(?:r|\\u0072)/;
@@ -11045,9 +11064,9 @@ var require_parse = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/json-bigint/index.js
+// node_modules/json-bigint/index.js
 var require_json_bigint = __commonJS({
-  "../../../../../../../src/cli/node_modules/json-bigint/index.js"(exports, module) {
+  "node_modules/json-bigint/index.js"(exports, module) {
     var json_stringify = require_stringify().stringify;
     var json_parse = require_parse();
     module.exports = function(options) {
@@ -11061,9 +11080,9 @@ var require_json_bigint = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/gcp-metadata/build/src/gcp-residency.js
+// node_modules/gcp-metadata/build/src/gcp-residency.js
 var require_gcp_residency = __commonJS({
-  "../../../../../../../src/cli/node_modules/gcp-metadata/build/src/gcp-residency.js"(exports) {
+  "node_modules/gcp-metadata/build/src/gcp-residency.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GCE_LINUX_BIOS_PATHS = void 0;
@@ -11116,9 +11135,9 @@ var require_gcp_residency = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-logging-utils/build/src/colours.js
+// node_modules/google-logging-utils/build/src/colours.js
 var require_colours = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-logging-utils/build/src/colours.js"(exports) {
+  "node_modules/google-logging-utils/build/src/colours.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Colours = void 0;
@@ -11177,9 +11196,9 @@ var require_colours = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-logging-utils/build/src/logging-utils.js
+// node_modules/google-logging-utils/build/src/logging-utils.js
 var require_logging_utils = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-logging-utils/build/src/logging-utils.js"(exports) {
+  "node_modules/google-logging-utils/build/src/logging-utils.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -11466,9 +11485,9 @@ var require_logging_utils = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-logging-utils/build/src/index.js
+// node_modules/google-logging-utils/build/src/index.js
 var require_src3 = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-logging-utils/build/src/index.js"(exports) {
+  "node_modules/google-logging-utils/build/src/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -11491,9 +11510,9 @@ var require_src3 = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/gcp-metadata/build/src/index.js
+// node_modules/gcp-metadata/build/src/index.js
 var require_src4 = __commonJS({
-  "../../../../../../../src/cli/node_modules/gcp-metadata/build/src/index.js"(exports) {
+  "node_modules/gcp-metadata/build/src/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -11747,9 +11766,9 @@ var require_src4 = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/base64-js/index.js
+// node_modules/base64-js/index.js
 var require_base64_js = __commonJS({
-  "../../../../../../../src/cli/node_modules/base64-js/index.js"(exports) {
+  "node_modules/base64-js/index.js"(exports) {
     "use strict";
     exports.byteLength = byteLength;
     exports.toByteArray = toByteArray;
@@ -11848,9 +11867,9 @@ var require_base64_js = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/crypto/shared.js
+// node_modules/google-auth-library/build/src/crypto/shared.js
 var require_shared = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/crypto/shared.js"(exports) {
+  "node_modules/google-auth-library/build/src/crypto/shared.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.fromArrayBufferToHex = fromArrayBufferToHex;
@@ -11863,9 +11882,9 @@ var require_shared = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/crypto/browser/crypto.js
+// node_modules/google-auth-library/build/src/crypto/browser/crypto.js
 var require_crypto = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/crypto/browser/crypto.js"(exports) {
+  "node_modules/google-auth-library/build/src/crypto/browser/crypto.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.BrowserCrypto = void 0;
@@ -11959,9 +11978,9 @@ var require_crypto = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/crypto/node/crypto.js
+// node_modules/google-auth-library/build/src/crypto/node/crypto.js
 var require_crypto2 = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/crypto/node/crypto.js"(exports) {
+  "node_modules/google-auth-library/build/src/crypto/node/crypto.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.NodeCrypto = void 0;
@@ -12028,9 +12047,9 @@ var require_crypto2 = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/crypto/crypto.js
+// node_modules/google-auth-library/build/src/crypto/crypto.js
 var require_crypto3 = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/crypto/crypto.js"(exports) {
+  "node_modules/google-auth-library/build/src/crypto/crypto.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -12066,9 +12085,9 @@ var require_crypto3 = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/safe-buffer/index.js
+// node_modules/safe-buffer/index.js
 var require_safe_buffer = __commonJS({
-  "../../../../../../../src/cli/node_modules/safe-buffer/index.js"(exports, module) {
+  "node_modules/safe-buffer/index.js"(exports, module) {
     var buffer = __require("buffer");
     var Buffer4 = buffer.Buffer;
     function copyProps(src, dst) {
@@ -12124,9 +12143,9 @@ var require_safe_buffer = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/ecdsa-sig-formatter/src/param-bytes-for-alg.js
+// node_modules/ecdsa-sig-formatter/src/param-bytes-for-alg.js
 var require_param_bytes_for_alg = __commonJS({
-  "../../../../../../../src/cli/node_modules/ecdsa-sig-formatter/src/param-bytes-for-alg.js"(exports, module) {
+  "node_modules/ecdsa-sig-formatter/src/param-bytes-for-alg.js"(exports, module) {
     "use strict";
     function getParamSize(keySize) {
       var result = (keySize / 8 | 0) + (keySize % 8 === 0 ? 0 : 1);
@@ -12148,9 +12167,9 @@ var require_param_bytes_for_alg = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js
+// node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js
 var require_ecdsa_sig_formatter = __commonJS({
-  "../../../../../../../src/cli/node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js"(exports, module) {
+  "node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js"(exports, module) {
     "use strict";
     var Buffer4 = require_safe_buffer().Buffer;
     var getParamBytesForAlg = require_param_bytes_for_alg();
@@ -12288,9 +12307,9 @@ var require_ecdsa_sig_formatter = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/util.js
+// node_modules/google-auth-library/build/src/util.js
 var require_util2 = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/util.js"(exports) {
+  "node_modules/google-auth-library/build/src/util.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.LRUCache = void 0;
@@ -12403,9 +12422,9 @@ var require_util2 = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/package.json
+// node_modules/google-auth-library/package.json
 var require_package2 = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/package.json"(exports, module) {
+  "node_modules/google-auth-library/package.json"(exports, module) {
     module.exports = {
       name: "google-auth-library",
       version: "10.9.1",
@@ -12499,9 +12518,9 @@ var require_package2 = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/shared.cjs
+// node_modules/google-auth-library/build/src/shared.cjs
 var require_shared2 = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/shared.cjs"(exports) {
+  "node_modules/google-auth-library/build/src/shared.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.USER_AGENT = exports.PRODUCT_NAME = exports.pkg = void 0;
@@ -12514,9 +12533,9 @@ var require_shared2 = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/authclient.js
+// node_modules/google-auth-library/build/src/auth/authclient.js
 var require_authclient = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/authclient.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/authclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.AuthClient = exports.DEFAULT_EAGER_REFRESH_THRESHOLD_MILLIS = exports.DEFAULT_UNIVERSE = void 0;
@@ -12749,9 +12768,9 @@ var require_authclient = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/loginticket.js
+// node_modules/google-auth-library/build/src/auth/loginticket.js
 var require_loginticket = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/loginticket.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/loginticket.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.LoginTicket = void 0;
@@ -12801,9 +12820,9 @@ var require_loginticket = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/oauth2client.js
+// node_modules/google-auth-library/build/src/auth/oauth2client.js
 var require_oauth2client = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/oauth2client.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/oauth2client.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.OAuth2Client = exports.ClientAuthentication = exports.CertificateFormat = exports.CodeChallengeMethod = void 0;
@@ -13482,9 +13501,9 @@ var require_oauth2client = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/computeclient.js
+// node_modules/google-auth-library/build/src/auth/computeclient.js
 var require_computeclient = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/computeclient.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/computeclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Compute = void 0;
@@ -13574,9 +13593,9 @@ var require_computeclient = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/idtokenclient.js
+// node_modules/google-auth-library/build/src/auth/idtokenclient.js
 var require_idtokenclient = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/idtokenclient.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/idtokenclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.IdTokenClient = void 0;
@@ -13620,9 +13639,9 @@ var require_idtokenclient = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/envDetect.js
+// node_modules/google-auth-library/build/src/auth/envDetect.js
 var require_envDetect = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/envDetect.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/envDetect.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GCPEnv = void 0;
@@ -13697,9 +13716,9 @@ var require_envDetect = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/jws/lib/data-stream.js
+// node_modules/jws/lib/data-stream.js
 var require_data_stream = __commonJS({
-  "../../../../../../../src/cli/node_modules/jws/lib/data-stream.js"(exports, module) {
+  "node_modules/jws/lib/data-stream.js"(exports, module) {
     var Buffer4 = require_safe_buffer().Buffer;
     var Stream4 = __require("stream");
     var util = __require("util");
@@ -13745,9 +13764,9 @@ var require_data_stream = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/buffer-equal-constant-time/index.js
+// node_modules/buffer-equal-constant-time/index.js
 var require_buffer_equal_constant_time = __commonJS({
-  "../../../../../../../src/cli/node_modules/buffer-equal-constant-time/index.js"(exports, module) {
+  "node_modules/buffer-equal-constant-time/index.js"(exports, module) {
     "use strict";
     var Buffer4 = __require("buffer").Buffer;
     var SlowBuffer = __require("buffer").SlowBuffer;
@@ -13779,9 +13798,9 @@ var require_buffer_equal_constant_time = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/jwa/index.js
+// node_modules/jwa/index.js
 var require_jwa = __commonJS({
-  "../../../../../../../src/cli/node_modules/jwa/index.js"(exports, module) {
+  "node_modules/jwa/index.js"(exports, module) {
     var Buffer4 = require_safe_buffer().Buffer;
     var crypto2 = __require("crypto");
     var formatEcdsa = require_ecdsa_sig_formatter();
@@ -14003,9 +14022,9 @@ var require_jwa = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/jws/lib/tostring.js
+// node_modules/jws/lib/tostring.js
 var require_tostring = __commonJS({
-  "../../../../../../../src/cli/node_modules/jws/lib/tostring.js"(exports, module) {
+  "node_modules/jws/lib/tostring.js"(exports, module) {
     var Buffer4 = __require("buffer").Buffer;
     module.exports = function toString(obj) {
       if (typeof obj === "string")
@@ -14017,9 +14036,9 @@ var require_tostring = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/jws/lib/sign-stream.js
+// node_modules/jws/lib/sign-stream.js
 var require_sign_stream = __commonJS({
-  "../../../../../../../src/cli/node_modules/jws/lib/sign-stream.js"(exports, module) {
+  "node_modules/jws/lib/sign-stream.js"(exports, module) {
     var Buffer4 = require_safe_buffer().Buffer;
     var DataStream = require_data_stream();
     var jwa = require_jwa();
@@ -14092,9 +14111,9 @@ var require_sign_stream = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/jws/lib/verify-stream.js
+// node_modules/jws/lib/verify-stream.js
 var require_verify_stream = __commonJS({
-  "../../../../../../../src/cli/node_modules/jws/lib/verify-stream.js"(exports, module) {
+  "node_modules/jws/lib/verify-stream.js"(exports, module) {
     var Buffer4 = require_safe_buffer().Buffer;
     var DataStream = require_data_stream();
     var jwa = require_jwa();
@@ -14207,9 +14226,9 @@ var require_verify_stream = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/jws/index.js
+// node_modules/jws/index.js
 var require_jws = __commonJS({
-  "../../../../../../../src/cli/node_modules/jws/index.js"(exports) {
+  "node_modules/jws/index.js"(exports) {
     var SignStream = require_sign_stream();
     var VerifyStream = require_verify_stream();
     var ALGORITHMS = [
@@ -14240,9 +14259,9 @@ var require_jws = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/jwsSign.js
+// node_modules/google-auth-library/build/src/gtoken/jwsSign.js
 var require_jwsSign = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/jwsSign.js"(exports) {
+  "node_modules/google-auth-library/build/src/gtoken/jwsSign.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.buildPayloadForJwsSign = buildPayloadForJwsSign;
@@ -14274,9 +14293,9 @@ var require_jwsSign = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/getToken.js
+// node_modules/google-auth-library/build/src/gtoken/getToken.js
 var require_getToken = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/getToken.js"(exports) {
+  "node_modules/google-auth-library/build/src/gtoken/getToken.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getToken = getToken;
@@ -14318,9 +14337,9 @@ var require_getToken = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/errorWithCode.js
+// node_modules/google-auth-library/build/src/gtoken/errorWithCode.js
 var require_errorWithCode = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/errorWithCode.js"(exports) {
+  "node_modules/google-auth-library/build/src/gtoken/errorWithCode.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ErrorWithCode = void 0;
@@ -14335,9 +14354,9 @@ var require_errorWithCode = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/getCredentials.js
+// node_modules/google-auth-library/build/src/gtoken/getCredentials.js
 var require_getCredentials = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/getCredentials.js"(exports) {
+  "node_modules/google-auth-library/build/src/gtoken/getCredentials.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getCredentials = getCredentials;
@@ -14436,9 +14455,9 @@ var require_getCredentials = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/tokenHandler.js
+// node_modules/google-auth-library/build/src/gtoken/tokenHandler.js
 var require_tokenHandler = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/tokenHandler.js"(exports) {
+  "node_modules/google-auth-library/build/src/gtoken/tokenHandler.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.TokenHandler = void 0;
@@ -14527,9 +14546,9 @@ var require_tokenHandler = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/revokeToken.js
+// node_modules/google-auth-library/build/src/gtoken/revokeToken.js
 var require_revokeToken = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/revokeToken.js"(exports) {
+  "node_modules/google-auth-library/build/src/gtoken/revokeToken.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.revokeToken = revokeToken;
@@ -14545,9 +14564,9 @@ var require_revokeToken = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/googleToken.js
+// node_modules/google-auth-library/build/src/gtoken/googleToken.js
 var require_googleToken = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/googleToken.js"(exports) {
+  "node_modules/google-auth-library/build/src/gtoken/googleToken.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GoogleToken = void 0;
@@ -14651,9 +14670,9 @@ var require_googleToken = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/jwtaccess.js
+// node_modules/google-auth-library/build/src/auth/jwtaccess.js
 var require_jwtaccess = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/jwtaccess.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/jwtaccess.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.JWTAccess = void 0;
@@ -14821,9 +14840,9 @@ var require_jwtaccess = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/jwtclient.js
+// node_modules/google-auth-library/build/src/auth/jwtclient.js
 var require_jwtclient = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/jwtclient.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/jwtclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.JWT = void 0;
@@ -15093,9 +15112,9 @@ var require_jwtclient = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/refreshclient.js
+// node_modules/google-auth-library/build/src/auth/refreshclient.js
 var require_refreshclient = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/refreshclient.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/refreshclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.UserRefreshClient = exports.USER_REFRESH_ACCOUNT_TYPE = void 0;
@@ -15221,9 +15240,9 @@ var require_refreshclient = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/impersonated.js
+// node_modules/google-auth-library/build/src/auth/impersonated.js
 var require_impersonated = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/impersonated.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/impersonated.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Impersonated = exports.IMPERSONATED_ACCOUNT_TYPE = void 0;
@@ -15400,9 +15419,9 @@ var require_impersonated = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/oauth2common.js
+// node_modules/google-auth-library/build/src/auth/oauth2common.js
 var require_oauth2common = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/oauth2common.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/oauth2common.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.OAuthClientAuthHandler = void 0;
@@ -15548,9 +15567,9 @@ var require_oauth2common = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/stscredentials.js
+// node_modules/google-auth-library/build/src/auth/stscredentials.js
 var require_stscredentials = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/stscredentials.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/stscredentials.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.StsCredentials = void 0;
@@ -15636,9 +15655,9 @@ var require_stscredentials = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/baseexternalclient.js
+// node_modules/google-auth-library/build/src/auth/baseexternalclient.js
 var require_baseexternalclient = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/baseexternalclient.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/baseexternalclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.BaseExternalAccountClient = exports.CLOUD_RESOURCE_MANAGER = exports.EXTERNAL_ACCOUNT_TYPE = exports.EXPIRATION_TIME_OFFSET = void 0;
@@ -16015,9 +16034,9 @@ var require_baseexternalclient = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/filesubjecttokensupplier.js
+// node_modules/google-auth-library/build/src/auth/filesubjecttokensupplier.js
 var require_filesubjecttokensupplier = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/filesubjecttokensupplier.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/filesubjecttokensupplier.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.FileSubjectTokenSupplier = void 0;
@@ -16080,9 +16099,9 @@ var require_filesubjecttokensupplier = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/urlsubjecttokensupplier.js
+// node_modules/google-auth-library/build/src/auth/urlsubjecttokensupplier.js
 var require_urlsubjecttokensupplier = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/urlsubjecttokensupplier.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/urlsubjecttokensupplier.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.UrlSubjectTokenSupplier = void 0;
@@ -16138,9 +16157,9 @@ var require_urlsubjecttokensupplier = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js
+// node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js
 var require_certificatesubjecttokensupplier = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.CertificateSubjectTokenSupplier = exports.InvalidConfigurationError = exports.CertificateSourceUnavailableError = exports.CERTIFICATE_CONFIGURATION_ENV_VARIABLE = void 0;
@@ -16322,9 +16341,9 @@ var require_certificatesubjecttokensupplier = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/identitypoolclient.js
+// node_modules/google-auth-library/build/src/auth/identitypoolclient.js
 var require_identitypoolclient = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/identitypoolclient.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/identitypoolclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.IdentityPoolClient = void 0;
@@ -16434,9 +16453,9 @@ var require_identitypoolclient = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/awsrequestsigner.js
+// node_modules/google-auth-library/build/src/auth/awsrequestsigner.js
 var require_awsrequestsigner = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/awsrequestsigner.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/awsrequestsigner.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.AwsRequestSigner = void 0;
@@ -16584,9 +16603,9 @@ ${credentialScope}
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js
+// node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js
 var require_defaultawssecuritycredentialssupplier = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DefaultAwsSecurityCredentialsSupplier = void 0;
@@ -16739,9 +16758,9 @@ var require_defaultawssecuritycredentialssupplier = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/awsclient.js
+// node_modules/google-auth-library/build/src/auth/awsclient.js
 var require_awsclient = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/awsclient.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/awsclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.AwsClient = void 0;
@@ -16853,9 +16872,9 @@ var require_awsclient = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/executable-response.js
+// node_modules/google-auth-library/build/src/auth/executable-response.js
 var require_executable_response = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/executable-response.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/executable-response.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.InvalidSubjectTokenError = exports.InvalidMessageFieldError = exports.InvalidCodeFieldError = exports.InvalidTokenTypeFieldError = exports.InvalidExpirationTimeFieldError = exports.InvalidSuccessFieldError = exports.InvalidVersionFieldError = exports.ExecutableResponseError = exports.ExecutableResponse = void 0;
@@ -16984,9 +17003,9 @@ var require_executable_response = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js
+// node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js
 var require_pluggable_auth_handler = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.PluggableAuthHandler = exports.ExecutableError = void 0;
@@ -17125,9 +17144,9 @@ var require_pluggable_auth_handler = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js
+// node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js
 var require_pluggable_auth_client = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.PluggableAuthClient = exports.ExecutableError = void 0;
@@ -17252,9 +17271,9 @@ var require_pluggable_auth_client = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/externalclient.js
+// node_modules/google-auth-library/build/src/auth/externalclient.js
 var require_externalclient = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/externalclient.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/externalclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ExternalAccountClient = void 0;
@@ -17301,9 +17320,9 @@ var require_externalclient = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/externalAccountAuthorizedUserClient.js
+// node_modules/google-auth-library/build/src/auth/externalAccountAuthorizedUserClient.js
 var require_externalAccountAuthorizedUserClient = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/externalAccountAuthorizedUserClient.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/externalAccountAuthorizedUserClient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ExternalAccountAuthorizedUserClient = exports.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE = void 0;
@@ -17488,9 +17507,9 @@ var require_externalAccountAuthorizedUserClient = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/gdchclient.js
+// node_modules/google-auth-library/build/src/auth/gdchclient.js
 var require_gdchclient = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/gdchclient.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/gdchclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GdchClient = exports.GDCH_SERVICE_ACCOUNT_TYPE = void 0;
@@ -17771,9 +17790,9 @@ var require_gdchclient = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/googleauth.js
+// node_modules/google-auth-library/build/src/auth/googleauth.js
 var require_googleauth = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/googleauth.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/googleauth.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GoogleAuth = exports.GoogleAuthExceptionMessages = void 0;
@@ -18579,9 +18598,9 @@ var require_googleauth = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/iam.js
+// node_modules/google-auth-library/build/src/auth/iam.js
 var require_iam = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/iam.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/iam.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.IAMAuth = void 0;
@@ -18615,9 +18634,9 @@ var require_iam = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/downscopedclient.js
+// node_modules/google-auth-library/build/src/auth/downscopedclient.js
 var require_downscopedclient = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/downscopedclient.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/downscopedclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DownscopedClient = exports.EXPIRATION_TIME_OFFSET = exports.MAX_ACCESS_BOUNDARY_RULES_COUNT = void 0;
@@ -18800,9 +18819,9 @@ var require_downscopedclient = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/passthrough.js
+// node_modules/google-auth-library/build/src/auth/passthrough.js
 var require_passthrough = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/passthrough.js"(exports) {
+  "node_modules/google-auth-library/build/src/auth/passthrough.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.PassThroughClient = void 0;
@@ -18845,9 +18864,9 @@ var require_passthrough = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/index.js
+// node_modules/google-auth-library/build/src/index.js
 var require_src5 = __commonJS({
-  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/index.js"(exports) {
+  "node_modules/google-auth-library/build/src/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -18981,9 +19000,9 @@ var require_src5 = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/ws/lib/constants.js
+// node_modules/ws/lib/constants.js
 var require_constants = __commonJS({
-  "../../../../../../../src/cli/node_modules/ws/lib/constants.js"(exports, module) {
+  "node_modules/ws/lib/constants.js"(exports, module) {
     "use strict";
     var BINARY_TYPES = ["nodebuffer", "arraybuffer", "fragments"];
     var hasBlob = typeof Blob !== "undefined";
@@ -19004,9 +19023,9 @@ var require_constants = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/ws/lib/buffer-util.js
+// node_modules/ws/lib/buffer-util.js
 var require_buffer_util = __commonJS({
-  "../../../../../../../src/cli/node_modules/ws/lib/buffer-util.js"(exports, module) {
+  "node_modules/ws/lib/buffer-util.js"(exports, module) {
     "use strict";
     var { EMPTY_BUFFER } = require_constants();
     var FastBuffer = Buffer[Symbol.species];
@@ -19079,9 +19098,9 @@ var require_buffer_util = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/ws/lib/limiter.js
+// node_modules/ws/lib/limiter.js
 var require_limiter = __commonJS({
-  "../../../../../../../src/cli/node_modules/ws/lib/limiter.js"(exports, module) {
+  "node_modules/ws/lib/limiter.js"(exports, module) {
     "use strict";
     var kDone = Symbol("kDone");
     var kRun = Symbol("kRun");
@@ -19129,9 +19148,9 @@ var require_limiter = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/ws/lib/permessage-deflate.js
+// node_modules/ws/lib/permessage-deflate.js
 var require_permessage_deflate = __commonJS({
-  "../../../../../../../src/cli/node_modules/ws/lib/permessage-deflate.js"(exports, module) {
+  "node_modules/ws/lib/permessage-deflate.js"(exports, module) {
     "use strict";
     var zlib2 = __require("zlib");
     var bufferUtil = require_buffer_util();
@@ -19512,9 +19531,9 @@ var require_permessage_deflate = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/ws/lib/validation.js
+// node_modules/ws/lib/validation.js
 var require_validation = __commonJS({
-  "../../../../../../../src/cli/node_modules/ws/lib/validation.js"(exports, module) {
+  "node_modules/ws/lib/validation.js"(exports, module) {
     "use strict";
     var { isUtf8 } = __require("buffer");
     var { hasBlob } = require_constants();
@@ -19713,9 +19732,9 @@ var require_validation = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/ws/lib/receiver.js
+// node_modules/ws/lib/receiver.js
 var require_receiver = __commonJS({
-  "../../../../../../../src/cli/node_modules/ws/lib/receiver.js"(exports, module) {
+  "node_modules/ws/lib/receiver.js"(exports, module) {
     "use strict";
     var { Writable } = __require("stream");
     var PerMessageDeflate2 = require_permessage_deflate();
@@ -20336,9 +20355,9 @@ var require_receiver = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/ws/lib/sender.js
+// node_modules/ws/lib/sender.js
 var require_sender = __commonJS({
-  "../../../../../../../src/cli/node_modules/ws/lib/sender.js"(exports, module) {
+  "node_modules/ws/lib/sender.js"(exports, module) {
     "use strict";
     var { Duplex } = __require("stream");
     var { randomFillSync } = __require("crypto");
@@ -20829,9 +20848,9 @@ var require_sender = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/ws/lib/event-target.js
+// node_modules/ws/lib/event-target.js
 var require_event_target = __commonJS({
-  "../../../../../../../src/cli/node_modules/ws/lib/event-target.js"(exports, module) {
+  "node_modules/ws/lib/event-target.js"(exports, module) {
     "use strict";
     var { kForOnEventAttribute, kListener } = require_constants();
     var kCode = Symbol("kCode");
@@ -21058,9 +21077,9 @@ var require_event_target = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/ws/lib/extension.js
+// node_modules/ws/lib/extension.js
 var require_extension = __commonJS({
-  "../../../../../../../src/cli/node_modules/ws/lib/extension.js"(exports, module) {
+  "node_modules/ws/lib/extension.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
     function push(dest, name, elem) {
@@ -21211,9 +21230,9 @@ var require_extension = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/ws/lib/websocket.js
+// node_modules/ws/lib/websocket.js
 var require_websocket = __commonJS({
-  "../../../../../../../src/cli/node_modules/ws/lib/websocket.js"(exports, module) {
+  "node_modules/ws/lib/websocket.js"(exports, module) {
     "use strict";
     var EventEmitter = __require("events");
     var https2 = __require("https");
@@ -22107,9 +22126,9 @@ var require_websocket = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/ws/lib/stream.js
+// node_modules/ws/lib/stream.js
 var require_stream = __commonJS({
-  "../../../../../../../src/cli/node_modules/ws/lib/stream.js"(exports, module) {
+  "node_modules/ws/lib/stream.js"(exports, module) {
     "use strict";
     var WebSocket2 = require_websocket();
     var { Duplex } = __require("stream");
@@ -22205,9 +22224,9 @@ var require_stream = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/ws/lib/subprotocol.js
+// node_modules/ws/lib/subprotocol.js
 var require_subprotocol = __commonJS({
-  "../../../../../../../src/cli/node_modules/ws/lib/subprotocol.js"(exports, module) {
+  "node_modules/ws/lib/subprotocol.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
     function parse(header) {
@@ -22250,9 +22269,9 @@ var require_subprotocol = __commonJS({
   }
 });
 
-// ../../../../../../../src/cli/node_modules/ws/lib/websocket-server.js
+// node_modules/ws/lib/websocket-server.js
 var require_websocket_server = __commonJS({
-  "../../../../../../../src/cli/node_modules/ws/lib/websocket-server.js"(exports, module) {
+  "node_modules/ws/lib/websocket-server.js"(exports, module) {
     "use strict";
     var EventEmitter = __require("events");
     var http3 = __require("http");
@@ -22696,7 +22715,7 @@ import { spawn as spawn2 } from "node:child_process";
 import { createHash } from "node:crypto";
 import { join as join4, resolve as resolve3 } from "node:path";
 
-// ../../../../../../../src/cli/node_modules/@google/genai/dist/node/index.mjs
+// node_modules/@google/genai/dist/node/index.mjs
 var import_p_retry = __toESM(require_p_retry(), 1);
 var import_google_auth_library = __toESM(require_src5(), 1);
 import { createWriteStream } from "fs";
@@ -22705,7 +22724,7 @@ import { writeFile } from "fs/promises";
 import { Readable } from "node:stream";
 import { finished } from "node:stream/promises";
 
-// ../../../../../../../src/cli/node_modules/ws/wrapper.mjs
+// node_modules/ws/wrapper.mjs
 var import_stream = __toESM(require_stream(), 1);
 var import_extension = __toESM(require_extension(), 1);
 var import_permessage_deflate = __toESM(require_permessage_deflate(), 1);
@@ -22715,7 +22734,7 @@ var import_subprotocol = __toESM(require_subprotocol(), 1);
 var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 
-// ../../../../../../../src/cli/node_modules/@google/genai/dist/node/index.mjs
+// node_modules/@google/genai/dist/node/index.mjs
 import * as path$1 from "path";
 var _defaultBaseGeminiUrl = void 0;
 var _defaultBaseVertexUrl = void 0;
@@ -41269,6 +41288,7 @@ import { appendFileSync as appendFileSync4, existsSync as existsSync2, mkdirSync
 import { execFile } from "node:child_process";
 import { promisify as promisify2 } from "node:util";
 import { join as join5 } from "node:path";
+init_thresholds();
 
 // src/sefaria.ts
 async function fetchSefaria(reference) {
@@ -41327,9 +41347,20 @@ var evidence_schema_default = {
 // src/evidence.ts
 var execFileAsync = promisify2(execFile);
 var sourceCache = /* @__PURE__ */ new Map();
-var prompt2 = "Extract evidence passages from the supplied source for the author thesis. Use only the supplied author intent and source text. The intent JSON contains the thesis and must-use passages. Return passages that support, complicate, or contradict the thesis. Quotes must be exact substrings copied from the source text; never reconstruct, translate, or silently normalize a quote. Include a locator, a concise gloss, and relevance from 0 through 3. Return only useful passages; return an empty array when none qualify.";
+var prompt2 = (min, max, isCore) => [
+  "Extract evidence passages from the supplied source for the author thesis. Use only the supplied author intent and source text.",
+  "The intent JSON contains the thesis in the author's words, the argument moves, the core text id and any must-use passages.",
+  `Return between ${min} and ${max} passages that support, complicate, illustrate or contradict the thesis or any of its moves.`,
+  isCore ? "This source IS the author's core text: cover it densely. Include every passage that states a position the thesis depends on, every dilemma or argument the author will analyse, and the key definitions." : "Prefer passages that bear directly on a move.",
+  "Quotes must be exact substrings copied from the source text; never reconstruct, translate, or silently normalize a quote. Keep each quote to one or two sentences.",
+  "Include a locator (page/section as given in the text), a concise gloss, and relevance from 0 (tangential) through 3 (central)."
+].join(" ");
 var extractionSchema = { type: "object", required: ["passages"], properties: { passages: evidence_schema_default.properties.passages }, additionalProperties: false };
 var stubState = {};
+function stablePassageId(sourceId, quote) {
+  const prefix = sourceId.replace(/^sefaria:/u, "s-").replace(/[^\p{L}\p{N}-]/gu, "").slice(0, 8);
+  return `${prefix}-${createHash2("sha256").update(normalize(quote)).digest("hex").slice(0, 8)}`;
+}
 function normalize(value) {
   return value.normalize("NFC").replace(/\s+/gu, " ").trim();
 }
@@ -41349,16 +41380,38 @@ function cachedText(id) {
   const path2 = join5(root, entry, "text.md");
   return existsSync2(path2) ? readFileSync3(path2, "utf8") : void 0;
 }
+function ckMetadata(text) {
+  const head = text.slice(0, 4e3);
+  const title = head.match(/\*\*([^*\n]{2,200})\*\*/u)?.[1]?.trim();
+  const authorBlock = head.split(/^#+\s*(?:מחבר|Author)[^\n]*$/imu)[1];
+  const author = authorBlock?.match(/^\s*[-*]\s+([^·(\n]+)/mu)?.[1]?.trim();
+  return { title, author };
+}
+function titleFromToc(toc) {
+  const lines = toc.split("\n").map((l) => l.replace(/^=+|=+$/gu, "").trim()).filter((l) => l && !/^=+$/u.test(l));
+  const idLine = lines.findIndex((l) => l.startsWith("ID:"));
+  const candidate = idLine > 0 ? lines[idLine - 1] : void 0;
+  return candidate?.replace(/^=+\s*|\s*=+$/gu, "").trim() || void 0;
+}
+async function ckTitle(id) {
+  try {
+    const { stdout } = await execFileAsync("ck", ["items", "toc", id], { maxBuffer: 8 * 1024 * 1024 });
+    return titleFromToc(stdout);
+  } catch {
+    return void 0;
+  }
+}
 async function fetchCk(id) {
   const { stdout } = await execFileAsync("ck", ["items", "read", `${id}:all`], { maxBuffer: 64 * 1024 * 1024 });
   return stdout;
 }
-async function extract(sourceId, text, intent, runId2) {
+async function extract(sourceId, text, intent, runId2, isCore = false) {
   if (stubState.value?.extract) return stubState.value.extract(sourceId, text, intent, runId2);
+  const target = thresholds_default.evidence.passagesPerSource[isCore ? "core" : "other"];
   const result = await callGemini({
     step: "evidence.extract",
     runId: runId2,
-    system: prompt2,
+    system: prompt2(target.min, target.max, isCore),
     parts: [`Author intent (thesis and must-use passages):
 ${intent}`, `Source ${sourceId}:
 ${text}`],
@@ -41379,20 +41432,32 @@ async function buildEvidence(options) {
   dataDir();
   projectDir();
   const intent = options.intent ? readFileSync3(options.intent, "utf8") : "";
+  const intentJson = (() => {
+    try {
+      return JSON.parse(intent);
+    } catch {
+      return {};
+    }
+  })();
+  const intentCore = intentJson.coreTextSourceId ?? "";
+  const primaryIds = new Set(intentJson.primarySources ?? []);
   const tasks = [
     ...options.sources.map(async (id) => {
       const cached = sourceCache.get(id) ?? cachedText(id);
       const text = cached ?? await (stubState.value?.fetchCk ?? fetchCk)(id);
       sourceCache.set(id, text);
       cachePath(id, text);
-      return { id, title: id, author: "", role: "secondary", isCoreText: false, text };
+      const meta = ckMetadata(text);
+      const tocTitle = stubState.value?.fetchCk ? void 0 : await ckTitle(id);
+      const isCoreText = id === intentCore;
+      return { id, title: tocTitle ?? meta.title ?? id, author: meta.author ?? "", role: isCoreText || primaryIds.has(id) ? "primary" : "secondary", isCoreText, text };
     }),
     ...(options.sefaria ?? []).map(async (reference) => {
       const id = `sefaria:${reference}`;
       const cached = cachedText(id);
       const result = cached === void 0 ? await (stubState.value?.fetchSefaria ?? fetchSefaria)(reference) : { title: reference, author: "", text: cached };
       cachePath(id, result.text);
-      return { id, title: result.title, author: result.author, role: "primary", isCoreText: true, text: result.text };
+      return { id, title: result.title, author: result.author, role: "primary", isCoreText: id === intentCore, text: result.text };
     })
   ];
   const fetched = await Promise.all(tasks);
@@ -41405,7 +41470,7 @@ async function buildEvidence(options) {
       const index = next;
       next += 1;
       const source = fetched[index];
-      if (source) extracted[index] = { source, result: await extract(source.id, source.text, intent, options.runId) };
+      if (source) extracted[index] = { source, result: await extract(source.id, source.text, intent, options.runId, source.isCoreText) };
     }
   }));
   const sources = fetched.map(({ text: _text, ...source }) => source);
@@ -41425,7 +41490,23 @@ async function buildEvidence(options) {
         runId: options.runId,
         fallback: async () => String(passage.relevance)
       });
-      passages.push({ ...passage, relevance: Number(rated.answer) });
+      const id = stablePassageId(source.id, passage.quote);
+      if (passages.some((p) => p.id === id)) continue;
+      passages.push({ ...passage, id, relevance: Number(rated.answer) });
+    }
+  }
+  const previousPath = join5(projectDir(), ".academic-helper", "evidence.json");
+  if (existsSync2(previousPath)) {
+    try {
+      const previous = JSON.parse(readFileSync3(previousPath, "utf8"));
+      const texts = new Map(fetched.map((f3) => [f3.id, normalize(sourceCache.get(f3.id) ?? f3.text)]));
+      for (const p of previous.passages ?? []) {
+        if (passages.some((q) => q.id === p.id)) continue;
+        const text = texts.get(p.sourceId);
+        if (text === void 0 || text.includes(normalize(p.quote))) passages.push(p);
+      }
+      for (const src of previous.sources ?? []) if (!sources.some((x2) => x2.id === src.id)) sources.push(src);
+    } catch {
     }
   }
   const output = { sources, passages };
@@ -41672,7 +41753,7 @@ import { join as join8 } from "node:path";
 init_thresholds();
 
 // src/prompts/write-draft.md
-var write_draft_default = "You are writing one unit of a scholarly article as its author, a Humanities researcher. The text you produce goes into the article under the author's name, so it must read as the author's own academic prose. Claude has already planned the argument, chosen the evidence, and will verify every citation after you; your job is the prose for exactly one unit of the plan.\n\nEverything you need follows in this order: the reference material for this unit (evidence, the predecessor units' finished text, and the outline), then the author's voice, then the task, and last the output contract.\n\n<evidence_passages>\nQuote from these verbatim when you quote at all. Do not invent, translate, or paraphrase a quotation \u2014 copy the exact characters. If nothing here is worth quoting, write without a quotation rather than approximate one.\n{{evidence_passages}}\n</evidence_passages>\n\n<predecessor_units>\nThe finished text of every unit this one depends on (or, for the introduction and conclusion, every body unit already drafted). Continue the argument from here \u2014 do not repeat what these units already established.\n{{predecessor_text}}\n</predecessor_units>\n\n<outline>\nThesis: {{thesis}}\n\nThis unit: {{unit_id}} (role: {{unit_role}})\nClaim: {{unit_claim}}\nParagraph plan (move / evidence assignment / bridge target for each paragraph):\n{{unit_plan}}\n\nFull outline (id + claim per unit), for context only \u2014 write only the unit above:\n{{outline_summary}}\n</outline>\n\n<voice>\nExemplar paragraphs in the author's own words:\n{{voice_exemplars}}\n\nBefore/after pairs showing how the author's voice has been corrected in past drafts:\n{{voice_pairs}}\n\nVoice rules:\n{{voice_rules}}\n</voice>\n\n<redraft_feedback>\n{{feedback}}\n</redraft_feedback>\n\n<task>\nWrite unit {{unit_id}} now, following its paragraph plan. Reproduce the author's voice from <voice>: the rhythm, how a claim is introduced, how evidence is framed. Where <voice> and your own instincts disagree, follow the author. Each paragraph advances its assigned move; after a quotation, give the author's own analysis of it. If <redraft_feedback> is not empty, it is the citation auditor's rejection of your previous draft of this unit \u2014 fix every issue it names.\n\n{{language_directive}}\n\nCitations: cite by writing a footnote marker `[^KEY]` immediately after the sentence it supports. KEY is EXACTLY the `id` of the evidence passage you rely on, as shown in <evidence_passages> (for example `[^p1]`) \u2014 never a number, never a title, never an id you did not see. At the end of the unit, after a blank line, add one footnote definition per marker you used, in the form `[^KEY]: <locator> \u2014 <one-line gloss of what it supports>`. Do not cite a passage you did not quote or rely on. Code rejects any other key.\n\nQuotations: every quotation must be copied verbatim, character for character, from <evidence_passages>. Mark a quotation with Hebrew gershayim (\u05F4\u2026\u05F4) for Hebrew text, or with standard double quotation marks for other languages. Never quote from <predecessor_units>, <outline>, or <voice> \u2014 those are reference material, not primary sources.\n</task>\n\n<output_contract>\nReturn plain prose only \u2014 the unit's paragraphs, separated by a single blank line, followed (if any citations were used) by a blank line and the footnote definitions. No markdown formatting (no `*`, `_`, `#`, backticks, headings, or bullet lists), no preamble, no commentary about what you wrote, no JSON. The first character of your response is the first character of the unit's first paragraph.\n</output_contract>\n";
+var write_draft_default = "You are writing one unit of a scholarly article as its author, a Humanities researcher. The text you produce goes into the article under the author's name, so it must read as the author's own academic prose. Claude has already planned the argument, chosen the evidence, and will verify every citation after you; your job is the prose for exactly one unit of the plan.\n\nEverything you need follows in this order: the reference material for this unit (evidence, the predecessor units' finished text, and the outline), then the author's voice, then the task, and last the output contract.\n\n<evidence_passages>\nDo NOT copy the quotations yourself. Where you want a quotation, write only its placeholder `\u27E6Q:ID\u27E7` (ID = the passage id, e.g. `\u27E6Q:p1\u27E7`) inside your sentence; code inserts the exact verbatim text with quotation marks. Never write the quoted words yourself.\n{{evidence_passages}}\n</evidence_passages>\n\n<predecessor_units>\nThe finished text of every unit this one depends on (or, for the introduction and conclusion, every body unit already drafted). Continue the argument from here \u2014 do not repeat what these units already established.\n{{predecessor_text}}\n</predecessor_units>\n\n<outline>\nThesis: {{thesis}}\n\nThis unit: {{unit_id}} (role: {{unit_role}})\nClaim: {{unit_claim}}\nParagraph plan (move / evidence assignment / bridge target for each paragraph):\n{{unit_plan}}\n\nFull outline (id + claim per unit), for context only \u2014 write only the unit above:\n{{outline_summary}}\n</outline>\n\n<voice>\nExemplar paragraphs in the author's own words:\n{{voice_exemplars}}\n\nBefore/after pairs showing how the author's voice has been corrected in past drafts:\n{{voice_pairs}}\n\nVoice rules:\n{{voice_rules}}\n</voice>\n\n<redraft_feedback>\n{{feedback}}\n</redraft_feedback>\n\n<task>\nWrite unit {{unit_id}} now, following its paragraph plan. Reproduce the author's voice from <voice>: the rhythm, how a claim is introduced, how evidence is framed. Where <voice> and your own instincts disagree, follow the author. Each paragraph advances its assigned move; after a quotation, give the author's own analysis of it. If <redraft_feedback> is not empty, it is the citation auditor's rejection of your previous draft of this unit \u2014 fix every issue it names.\n\n{{language_directive}}\n\nCitations: cite by writing a footnote marker `[^KEY]` immediately after the sentence it supports. KEY is EXACTLY the `id` of the evidence passage you rely on, as shown in <evidence_passages> (for example `[^p1]`) \u2014 never a number, never a title, never an id you did not see. At the end of the unit, after a blank line, add one footnote definition per marker you used, in the form `[^KEY]: <locator> \u2014 <one-line gloss of what it supports>`. Do not cite a passage you did not quote or rely on. Code rejects any other key.\n\nQuotations: never reproduce source text yourself. Write `\u27E6Q:ID\u27E7` where the quotation belongs, using an id from <evidence_passages>; code substitutes the verbatim quote (with \u05F4\u2026\u05F4 for Hebrew) and your footnote marker should follow the sentence as usual. Paraphrase in your own words is fine; quoted words must only come through placeholders. Never quote from <predecessor_units>, <outline>, or <voice>.\n</task>\n\n<output_contract>\nReturn plain prose only \u2014 the unit's paragraphs, separated by a single blank line, followed (if any citations were used) by a blank line and the footnote definitions. No markdown formatting (no `*`, `_`, `#`, backticks, headings, or bullet lists), no preamble, no commentary about what you wrote, no JSON. The first character of your response is the first character of the unit's first paragraph.\n</output_contract>\n";
 
 // src/draft.ts
 var stubs2 = {};
@@ -41736,7 +41817,8 @@ var HEBREW_LETTER = /[א-ת]/;
 function isAbbreviationGershayim(text, index) {
   const prev = text[index - 1];
   const next = text[index + 1];
-  return Boolean(prev && next && HEBREW_LETTER.test(prev) && HEBREW_LETTER.test(next));
+  const after = text[index + 2];
+  return Boolean(prev && next && HEBREW_LETTER.test(prev) && HEBREW_LETTER.test(next) && !(after && HEBREW_LETTER.test(after)));
 }
 function pairDelimiters(text, char, filterAbbreviation) {
   const positions = [];
@@ -41765,10 +41847,15 @@ function runGates(unit, text, paragraphs2, ctx) {
   const citations = extractCitationKeys(text);
   const badCitation = citations.find((key) => !ctx.sourceKeys.has(key));
   if (badCitation !== void 0) return { gate: "citation-not-in-sources", detail: badCitation };
+  const quoteText = ctx.quoteCheckText ?? text;
+  const leftover = quoteText.match(/⟦Q:([^⟧\s]+)⟧/u);
+  if (leftover) return { gate: "quote-not-in-evidence", detail: `unknown quote placeholder ${leftover[1]}` };
   const pool = ctx.evidenceQuotes.map(normalize2).filter(Boolean);
-  for (const quote of extractQuotedSpans(text)) {
+  const termMaxWords = thresholds_default.paragraph.quotedTermMaxWords ?? 0;
+  for (const quote of extractQuotedSpans(quoteText)) {
     const needle = normalize2(quote);
     if (!needle) continue;
+    if (needle.split(" ").length <= termMaxWords) continue;
     if (!pool.some((passage) => passage.includes(needle))) return { gate: "quote-not-in-evidence", detail: quote.slice(0, 80) };
   }
   for (const banned of ctx.styleWords.banned) {
@@ -41786,7 +41873,7 @@ function runGates(unit, text, paragraphs2, ctx) {
     }
   }
   if (Array.isArray(unit.paragraphs)) {
-    const words = text.split(/\s+/).filter(Boolean).length;
+    const words = (ctx.quoteCheckText ?? text).split(/\s+/).filter(Boolean).length;
     const para = thresholds_default.paragraph;
     const n = Math.max(1, unit.paragraphs.length);
     const bonus = unit.role === "intro" || unit.role === "conclusion" ? para.wordCeilingIntroConclusionBonus : 0;
@@ -41847,11 +41934,13 @@ function loadSourceKeys() {
     return /* @__PURE__ */ new Set();
   }
 }
-function withPassageKeys(sourceKeys) {
+function withPassageKeys(given) {
+  const sourceKeys = new Set(given);
   const path2 = join8(projectDir(), ".academic-helper", "evidence.json");
   if (!existsSync4(path2)) return sourceKeys;
   try {
     const raw = JSON.parse(readFileSync6(path2, "utf8"));
+    for (const source of raw.sources ?? []) sourceKeys.add(source.id);
     const keys = new Set(sourceKeys);
     for (const passage of raw.passages ?? []) if (sourceKeys.has(passage.sourceId)) keys.add(passage.id);
     return keys;
@@ -41874,6 +41963,43 @@ function renderPassages(passages) {
   return passages.length ? passages.map((p) => `[${p.id}] source=${p.sourceId}${p.locator ? ` locator=${p.locator}` : ""}
   quote: ${p.quote}${p.gloss ? `
   gloss: ${p.gloss}` : ""}`).join("\n") : "(none)";
+}
+function quoteIndex() {
+  const path2 = join8(projectDir(), ".academic-helper", "evidence.json");
+  if (!existsSync4(path2)) return /* @__PURE__ */ new Map();
+  try {
+    const raw = JSON.parse(readFileSync6(path2, "utf8"));
+    return new Map((raw.passages ?? []).map((p) => [p.id, p.quote]));
+  } catch {
+    return /* @__PURE__ */ new Map();
+  }
+}
+function substituteQuotes(text, quotes) {
+  return text.replace(/⟦Q:([^⟧\s]+)⟧([.,;:]?)/gu, (whole, id, after) => {
+    const quote = quotes.get(id);
+    if (quote === void 0) return whole;
+    const body = after ? quote.replace(/[.,;:]+\s*$/u, "") : quote;
+    return (/[\u0590-\u05FF]/u.test(body) ? `\u05F4${body}\u05F4` : `"${body}"`) + after;
+  });
+}
+function renderFootnotes(text, meta) {
+  return text.replace(/^\[\^([^\]]+)\]:.*$/gmu, (line, key) => {
+    const m2 = meta.get(key);
+    if (!m2) return line;
+    const locator = m2.locator.replace(/^Page\s+(\d+).*$/iu, "\u05E2\u05DE\u05F3 $1");
+    return `[^${key}]: ${[m2.author, m2.title, locator].filter(Boolean).join(", ")}.`;
+  });
+}
+function footnoteMeta() {
+  const path2 = join8(projectDir(), ".academic-helper", "evidence.json");
+  if (!existsSync4(path2)) return /* @__PURE__ */ new Map();
+  try {
+    const raw = JSON.parse(readFileSync6(path2, "utf8"));
+    const src = new Map((raw.sources ?? []).map((x2) => [x2.id, x2]));
+    return new Map((raw.passages ?? []).map((p) => [p.id, { author: src.get(p.sourceId)?.author ?? "", title: src.get(p.sourceId)?.title ?? "", locator: p.locator ?? "" }]));
+  } catch {
+    return /* @__PURE__ */ new Map();
+  }
 }
 function evidenceQuotesFor(unit) {
   const path2 = join8(projectDir(), ".academic-helper", "evidence.json");
@@ -41932,7 +42058,10 @@ async function draftAll(outline, options) {
     const predecessors = role === "body" ? (unit.dependsOn ?? []).filter((id) => draftedText.has(id)).map((id) => ({ id, text: draftedText.get(id) })) : bodyUnits.filter((u) => draftedText.has(u.id)).map((u) => ({ id: u.id, text: draftedText.get(u.id) }));
     const evidenceQuotes = stubs2.evidenceQuotes ?? evidenceQuotesFor(unit);
     const generate = stubs2.gen ?? ((u, preds) => realGenerate(u, preds, { outline, voice, evidenceQuotes, passagesText: renderPassages(evidencePassagesFor(unit)), feedback, budget, runId: options.runId }));
-    const text = await generate(unit, predecessors);
+    const raw = await generate(unit, predecessors);
+    const quotes = quoteIndex();
+    const text = renderFootnotes(substituteQuotes(raw, quotes), footnoteMeta());
+    const modelQuotesText = raw.replace(/⟦Q:([^⟧\s]+)⟧/gu, (whole, id) => quotes.has(id) ? "\u27E8quote\u27E9" : whole);
     draftedText.set(unit.id, text);
     writeDraft(unit.id, text);
     drafted.push(unit.id);
@@ -41957,7 +42086,7 @@ async function draftAll(outline, options) {
         fallback: async () => voiceCheckFallback(paragraph, voice.styleWords)
       });
     }
-    const failure = runGates(unit, text, paragraphs2, { sourceKeys, evidenceQuotes, styleWords: voice.styleWords });
+    const failure = runGates(unit, text, paragraphs2, { sourceKeys, evidenceQuotes, styleWords: voice.styleWords, quoteCheckText: modelQuotesText });
     if (failure) failures.push({ unit: unit.id, gate: failure.gate, detail: failure.detail });
   }
   return { drafted, failures, audit };
@@ -41966,9 +42095,10 @@ async function draftAll(outline, options) {
 // src/synthesize.ts
 import { existsSync as existsSync5, readFileSync as readFileSync7, readdirSync as readdirSync3, writeFileSync as writeFileSync6 } from "node:fs";
 import { join as join9 } from "node:path";
+init_thresholds();
 
 // src/prompts/write-synthesize.md
-var write_synthesize_default = 'You are the final-pass editor of a scholarly article, working as its author. Every unit was drafted separately; your job is to propose transition edits at paragraph boundaries \u2014 nothing else. Citations have already been verified, so nothing you propose may touch a citation or a quotation.\n\nYou will never see or return the whole article at once. You are given every unit\'s paragraphs, numbered, and you propose a small set of surgical edits: one paragraph\'s text, replaced with a version that bridges better to its neighbour. Everything else in the article is untouched by construction \u2014 you cannot rewrite a paragraph you don\'t name, and you cannot touch anything outside the paragraph you do name.\n\n<units>\nEach unit\'s paragraphs, in draft order, with their 0-based paragraphIndex.\n{{units}}\n</units>\n\n<instructions>\nPropose an edit only where a transition genuinely needs it: a paragraph boundary that reads abruptly, a phrase repeated heavily across two nearby paragraphs, or a voice drift within one paragraph. Do not propose an edit merely because you could rephrase something.\n\nFor each edit:\n- `unitId` and `paragraphIndex` must exactly identify one paragraph from `<units>`.\n- `before` must be copied EXACTLY, character for character, from that paragraph\'s text in `<units>` \u2014 this is how the edit gets verified and applied; if it does not match exactly, the edit is discarded.\n- `after` is the full replacement text for that paragraph.\n- `reason` is a one-line explanation.\n\nNEVER change, move, or remove any of the following inside `after`, even when editing the sentence around them:\n- a parenthetical citation: text inside `(...)` naming a work, an author, or a location, with or without a year (Hebrew citations normally carry no year, e.g. `(\u05DE\u05D7\u05D1\u05E8, \u05E2\u05DE\' 12)`)\n- a footnote marker `[^id]`, or a footnote definition line `[^id]: ...`\n- quoted material: text inside `" "`, `\u05F4 \u05F4`, or `" "`\n\nPropose at most one edit per paragraph. Return an empty `edits` array if no boundary needs one \u2014 that is the expected result far more often than not.\n</instructions>\n\nReturn a single JSON object and nothing else:\n\n{\n  "edits": [\n    { "unitId": "<unit id>", "paragraphIndex": 0, "before": "<exact current paragraph text>", "after": "<replacement paragraph text>", "reason": "<one line>" }\n  ]\n}\n';
+var write_synthesize_default = 'You are the final-pass editor of a scholarly article, working as its author. Every unit was drafted separately; your job is to propose transition edits at paragraph boundaries \u2014 nothing else. Citations have already been verified, so nothing you propose may touch a citation or a quotation.\n\nYou will never see or return the whole article at once. You are given every unit\'s paragraphs, numbered, and you propose a small set of surgical edits: one paragraph\'s text, replaced with a version that bridges better to its neighbour. Everything else in the article is untouched by construction \u2014 you cannot rewrite a paragraph you don\'t name, and you cannot touch anything outside the paragraph you do name.\n\n<units>\nEach unit\'s paragraphs, in draft order, with their 0-based paragraphIndex.\n{{units}}\n</units>\n\n<outline>\nThe approved thesis and section claims. Transitions must carry this argument forward.\n{{outline}}\n</outline>\n\n<repetition>\nParagraph openers that code found repeated across the article (word-for-word). Each listed occurrence beyond the first MUST be varied: propose an edit for it that opens differently while keeping its meaning. This overrides the preference for few edits.\n{{repetition}}\n</repetition>\n\n<instructions>\nPropose an edit only where a transition genuinely needs it: a paragraph boundary that reads abruptly, a phrase repeated heavily across two nearby paragraphs, or a voice drift within one paragraph. Do not propose an edit merely because you could rephrase something.\n\nFor each edit:\n- `unitId` and `paragraphIndex` must exactly identify one paragraph from `<units>`.\n- `before` must be copied EXACTLY, character for character, from that paragraph\'s text in `<units>` \u2014 this is how the edit gets verified and applied; if it does not match exactly, the edit is discarded.\n- `after` is the full replacement text for that paragraph.\n- `reason` is a one-line explanation.\n\nNEVER change, move, or remove any of the following inside `after`, even when editing the sentence around them:\n- a parenthetical citation: text inside `(...)` naming a work, an author, or a location, with or without a year (Hebrew citations normally carry no year, e.g. `(\u05DE\u05D7\u05D1\u05E8, \u05E2\u05DE\' 12)`)\n- a footnote marker `[^id]`, or a footnote definition line `[^id]: ...`\n- quoted material: text inside `" "`, `\u05F4 \u05F4`, or `" "`\n\nPropose at most one edit per paragraph. Return an empty `edits` array if no boundary needs one \u2014 that is the expected result far more often than not.\n</instructions>\n\nReturn a single JSON object and nothing else:\n\n{\n  "edits": [\n    { "unitId": "<unit id>", "paragraphIndex": 0, "before": "<exact current paragraph text>", "after": "<replacement paragraph text>", "reason": "<one line>" }\n  ]\n}\n';
 
 // src/synthesize.ts
 var stubs3 = {};
@@ -41998,9 +42128,40 @@ function splitParagraphs2(text) {
 function fillTemplate2(template, vars) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
 }
-async function realGenerate2(units, runId2, budget) {
+function repeatedOpeners(units, words, minCount) {
+  const seen = /* @__PURE__ */ new Map();
+  for (const u of units) u.paragraphs.forEach((text, paragraphIndex) => {
+    const opener = text.split(/\s+/).slice(0, words).join(" ");
+    if (!opener) return;
+    seen.set(opener, [...seen.get(opener) ?? [], { unitId: u.id, paragraphIndex }]);
+  });
+  return [...seen.entries()].filter(([, at]) => at.length >= minCount).map(([opener, at]) => ({ opener, at }));
+}
+function outlineOrder(path2) {
+  if (!path2) return [];
+  try {
+    const o = JSON.parse(readFileSync7(path2, "utf8"));
+    return (o.units ?? (o.sections ?? []).flatMap((x2) => x2.units ?? [])).map((u) => u.id);
+  } catch {
+    return [];
+  }
+}
+function outlineContext(path2) {
+  if (!path2) return "(no outline)";
+  try {
+    const o = JSON.parse(readFileSync7(path2, "utf8"));
+    return JSON.stringify({ thesis: o.thesis, sections: (o.sections ?? []).map((x2) => ({ id: x2.id, title: x2.title, claim: x2.claim })) }, null, 2);
+  } catch {
+    return "(no outline)";
+  }
+}
+async function realGenerate2(units, runId2, budget, outlinePath) {
+  const cfg = thresholds_default.synthesis;
+  const repeats = repeatedOpeners(units, cfg.openerWords, cfg.repeatedOpenerMin);
   const system = fillTemplate2(write_synthesize_default, {
-    units: JSON.stringify(units.map((u) => ({ unitId: u.id, paragraphs: u.paragraphs.map((text, paragraphIndex) => ({ paragraphIndex, text })) })), null, 2)
+    units: JSON.stringify(units.map((u) => ({ unitId: u.id, paragraphs: u.paragraphs.map((text, paragraphIndex) => ({ paragraphIndex, text })) })), null, 2),
+    outline: outlineContext(outlinePath),
+    repetition: repeats.length ? JSON.stringify(repeats, null, 2) : "(none)"
   });
   const result = await callGemini({ step: "write.synthesize", system, parts: ["Propose transition edits now. Return JSON only."], responseSchema: editsSchema, runId: runId2, budget });
   const json = result.json;
@@ -42015,10 +42176,15 @@ async function synthesizeAll(options) {
   if (!existsSync5(dir)) throw new AwError("ERROR", "write.synthesize", "no drafts directory \u2014 run aw draft first");
   const files = readdirSync3(dir).filter((f3) => f3.endsWith(".md")).sort();
   if (files.length === 0) throw new AwError("ERROR", "write.synthesize", "drafts directory is empty");
-  const units = files.map((file) => ({ id: file.replace(/\.md$/, ""), text: readFileSync7(join9(dir, file), "utf8") }));
+  const order = outlineOrder(options.outline);
+  const rank = (id) => {
+    const i2 = order.indexOf(id);
+    return i2 < 0 ? order.length : i2;
+  };
+  const units = files.map((file) => ({ id: file.replace(/\.md$/, ""), text: readFileSync7(join9(dir, file), "utf8") })).sort((a, b) => rank(a.id) - rank(b.id));
   const unitsWithParagraphs = units.map((u) => ({ id: u.id, paragraphs: splitParagraphs2(u.text) }));
   const budget = new Budget(options.runId, budgetFor("write"));
-  const generate = stubs3.gen ?? ((list) => realGenerate2(list, options.runId, budget));
+  const generate = stubs3.gen ?? ((list) => realGenerate2(list, options.runId, budget, options.outline));
   const proposed = await generate(unitsWithParagraphs);
   const byUnit = new Map(units.map((u) => [u.id, u]));
   const paragraphsByUnit = new Map(units.map((u) => [u.id, splitParagraphs2(u.text)]));
