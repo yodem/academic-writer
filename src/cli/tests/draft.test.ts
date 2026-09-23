@@ -128,3 +128,24 @@ test('--unit redraft mode drafts only the named unit', async () => {
   assert.deepEqual(calls, ['B']);
   assert.deepEqual(r.drafted, ['B']);
 });
+
+test('a passage id whose source is known is a valid citation; an unknown one fails the gate', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { setPathArguments } = await import('../src/paths.ts');
+  const root = mkdtempSync(join(tmpdir(), 'aw-cite-')); const h = join(root, '.academic-helper'); mkdirSync(h, { recursive: true });
+  writeFileSync(join(h, 'sources.json'), JSON.stringify([{ id: 's1' }]));
+  writeFileSync(join(h, 'evidence.json'), JSON.stringify({ passages: [{ id: 'p1', sourceId: 's1', quote: 'ציטוט' }, { id: 'p9', sourceId: 'sX', quote: 'אחר' }] }));
+  setPathArguments(['--data-dir', root, '--project-dir', root]);
+  __stubs({ gen: async (u) => (u.id === 'U1' ? 'טענה ״ציטוט״.[^p1]' : 'טענה.[^p9]'),
+            evidenceQuotes: ['ציטוט'], voice: { exemplars: [], pairs: [], rules: '', styleWords: { banned: [], capped: [], filler: [] } } });
+  const r = await draftAll({ units: [{ id: 'U1', dependsOn: [] }, { id: 'U2', dependsOn: ['U1'] }] }, { runId: 'cite' });
+  assert.deepEqual(r.failures.map((f) => [f.unit, f.gate]), [['U2', 'citation-not-in-sources']]);
+});
+
+test('evidence passages reach the drafter with their ids, sources and locators', async () => {
+  const { renderPassages } = await import('../src/draft.ts');
+  const out = renderPassages([{ id: 'p1', sourceId: 's1', locator: 'הקדמה', quote: 'ראיתי להעתיק', gloss: 'g' }]);
+  assert.match(out, /\[p1\] source=s1 locator=הקדמה/);
+  assert.match(out, /quote: ראיתי להעתיק/);
+});

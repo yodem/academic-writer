@@ -14,7 +14,8 @@
   "paragraph": {
     "wordCeiling": 220,
     "wordCeilingIntroConclusionBonus": 30,
-    "_comment": "Soft word ceiling per paragraph. Introduction and conclusion paragraphs may exceed by wordCeilingIntroConclusionBonus words."
+    "_comment": "Soft word ceiling per paragraph. Introduction and conclusion paragraphs may exceed by wordCeilingIntroConclusionBonus words. wordFloor: minimum words for one drafted paragraph. The drafted-unit word gate is per planned paragraph (n x [wordFloor, wordCeiling]); writerUnit min/max bound the ARCHITECT's unit sizing, not a single draft (live run 2026-09-23: a 1-paragraph unit correctly drafted ~110 words failed a 300-word unit floor).",
+    "wordFloor": 40
   },
   "writerUnit": {
     "targetWords": 500,
@@ -156,7 +157,7 @@
     },
     "ocr": {
       "provider": "gemini",
-      "model": "gemini-3.8-flash",
+      "model": "gemini-2.5-flash",
       "maxOutputTokens": 8192,
       "concurrency": 1,
       "piModel": "openrouter/z-ai/glm-5.3"

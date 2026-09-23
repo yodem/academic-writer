@@ -44,7 +44,7 @@ Write unit {{unit_id}} now, following its paragraph plan. Reproduce the author's
 
 {{language_directive}}
 
-Citations: cite a source by writing a footnote marker `[^sourceId]` immediately after the sentence it supports, where `sourceId` is one of the source ids visible in <evidence_passages> or <predecessor_units>. Never invent a sourceId. At the end of the unit, after a blank line, add one footnote definition per marker you used, in the form `[^sourceId]: <locator> — <one-line gloss of what it supports>`. Do not cite a source you did not quote or rely on.
+Citations: cite by writing a footnote marker `[^KEY]` immediately after the sentence it supports. KEY is EXACTLY the `id` of the evidence passage you rely on, as shown in <evidence_passages> (for example `[^p1]`) — never a number, never a title, never an id you did not see. At the end of the unit, after a blank line, add one footnote definition per marker you used, in the form `[^KEY]: <locator> — <one-line gloss of what it supports>`. Do not cite a passage you did not quote or rely on. Code rejects any other key.
 
 Quotations: every quotation must be copied verbatim, character for character, from <evidence_passages>. Mark a quotation with Hebrew gershayim (״…״) for Hebrew text, or with standard double quotation marks for other languages. Never quote from <predecessor_units>, <outline>, or <voice> — those are reference material, not primary sources.
 </task>

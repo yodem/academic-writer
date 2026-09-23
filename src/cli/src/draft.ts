@@ -183,9 +183,13 @@ function runGates(unit: OutlineUnit, text: string, paragraphs: string[], ctx: { 
   // flat test fixture's units) has no basis for a min/max word judgement.
   if (Array.isArray(unit.paragraphs)) {
     const words = text.split(/\s+/).filter(Boolean).length;
-    const bounds = thresholds.writerUnit as { minWords: number; maxWords: number };
+    // Bounds scale with the planned paragraph count (writerUnit min/max size the architect's units).
+    const para = thresholds.paragraph as { wordFloor: number; wordCeiling: number; wordCeilingIntroConclusionBonus: number };
+    const n = Math.max(1, unit.paragraphs.length);
+    const bonus = unit.role === 'intro' || unit.role === 'conclusion' ? para.wordCeilingIntroConclusionBonus : 0;
+    const bounds = { minWords: n * para.wordFloor, maxWords: n * (para.wordCeiling + bonus) };
     if (words < bounds.minWords || words > bounds.maxWords) {
-      return { gate: 'word-bounds', detail: `${words} words (bounds ${bounds.minWords}-${bounds.maxWords})` };
+      return { gate: 'word-bounds', detail: `${words} words (bounds ${bounds.minWords}-${bounds.maxWords} for ${n} planned paragraph(s))` };
     }
   }
   return null;
@@ -205,7 +209,7 @@ function languageDirective(thesis: string): string {
     : 'Write this unit only in English. Do not translate or mix languages.';
 }
 
-async function realGenerate(unit: OutlineUnit, predecessors: Predecessor[], ctx: { outline: Outline; voice: VoiceBundle; evidenceQuotes: string[]; feedback?: string; budget: Budget; runId: string }): Promise<string> {
+async function realGenerate(unit: OutlineUnit, predecessors: Predecessor[], ctx: { outline: Outline; voice: VoiceBundle; evidenceQuotes: string[]; passagesText: string; feedback?: string; budget: Budget; runId: string }): Promise<string> {
   const system = fillTemplate(DRAFT_PROMPT, {
     thesis: ctx.outline.thesis ?? '',
     unit_id: unit.id,
@@ -213,7 +217,7 @@ async function realGenerate(unit: OutlineUnit, predecessors: Predecessor[], ctx:
     unit_claim: unit.claim ?? '',
     unit_plan: JSON.stringify(unit.paragraphs ?? [], null, 2),
     outline_summary: JSON.stringify(flatten(ctx.outline).map((u) => ({ id: u.id, claim: u.claim ?? '' })), null, 2),
-    evidence_passages: ctx.evidenceQuotes.length ? ctx.evidenceQuotes.map((q, i) => `${i + 1}. ${q}`).join('\n') : '(none)',
+    evidence_passages: ctx.passagesText,
     predecessor_text: predecessors.length ? predecessors.map((p) => `### ${p.id}\n${p.text}`).join('\n\n') : '(none — this is the first unit)',
     voice_exemplars: JSON.stringify(ctx.voice.exemplars, null, 2),
     voice_pairs: JSON.stringify(ctx.voice.pairs, null, 2),
@@ -247,6 +251,36 @@ function loadSourceKeys(): Set<string> {
       return String(source.sourceId ?? source.id ?? '');
     }).filter(Boolean));
   } catch { return new Set(); }
+}
+
+function withPassageKeys(sourceKeys: Set<string>): Set<string> {
+  const path = join(projectDir(), '.academic-helper', 'evidence.json');
+  if (!existsSync(path)) return sourceKeys;
+  try {
+    const raw = JSON.parse(readFileSync(path, 'utf8')) as { passages?: { id: string; sourceId: string }[] };
+    const keys = new Set(sourceKeys);
+    for (const passage of raw.passages ?? []) if (sourceKeys.has(passage.sourceId)) keys.add(passage.id);
+    return keys;
+  } catch { return sourceKeys; }
+}
+
+type EvidencePassage = { id: string; sourceId: string; locator?: string; quote: string; gloss?: string };
+// The drafter must see each passage's id, source and locator: rendered as a bare numbered list
+// ("1. quote") the model cited [^1], which no gate can resolve (live run 2026-09-23).
+function evidencePassagesFor(unit: OutlineUnit): EvidencePassage[] {
+  const path = join(projectDir(), '.academic-helper', 'evidence.json');
+  if (!existsSync(path)) return [];
+  try {
+    const raw = JSON.parse(readFileSync(path, 'utf8')) as { passages?: EvidencePassage[] };
+    const ids = new Set((unit.paragraphs ?? []).flatMap((p) => p.evidenceIds ?? []));
+    return (raw.passages ?? []).filter((passage) => ids.size === 0 || ids.has(passage.id));
+  } catch { return []; }
+}
+
+export function renderPassages(passages: EvidencePassage[]): string {
+  return passages.length
+    ? passages.map((p) => `[${p.id}] source=${p.sourceId}${p.locator ? ` locator=${p.locator}` : ''}\n  quote: ${p.quote}${p.gloss ? `\n  gloss: ${p.gloss}` : ''}`).join('\n')
+    : '(none)';
 }
 
 function evidenceQuotesFor(unit: OutlineUnit): string[] {
@@ -305,7 +339,9 @@ export async function draftAll(outline: Outline, options: DraftAllOptions): Prom
   }
 
   const voice = stubs.voice ?? await loadVoiceBundle(options.runId);
-  const sourceKeys = loadSourceKeys();
+  // A citation key may be a source id (sources.json) or an evidence passage id whose source is
+  // known: the drafter cites passages ([^p1]) because that is what it was handed (live run 2026-09-23).
+  const sourceKeys = withPassageKeys(loadSourceKeys());
   const feedback = options.feedbackFile && existsSync(options.feedbackFile) ? readFileSync(options.feedbackFile, 'utf8') : undefined;
   const budget = new Budget(options.runId, budgetFor('write'));
 
@@ -320,7 +356,7 @@ export async function draftAll(outline: Outline, options: DraftAllOptions): Prom
       : bodyUnits.filter((u) => draftedText.has(u.id)).map((u) => ({ id: u.id, text: draftedText.get(u.id)! }));
 
     const evidenceQuotes = stubs.evidenceQuotes ?? evidenceQuotesFor(unit);
-    const generate: GenFn = stubs.gen ?? ((u, preds) => realGenerate(u, preds, { outline, voice, evidenceQuotes, feedback, budget, runId: options.runId }));
+    const generate: GenFn = stubs.gen ?? ((u, preds) => realGenerate(u, preds, { outline, voice, evidenceQuotes, passagesText: renderPassages(evidencePassagesFor(unit)), feedback, budget, runId: options.runId }));
 
     const text = await generate(unit, predecessors);
     draftedText.set(unit.id, text);

@@ -64,7 +64,8 @@ var init_thresholds = __esm({
       paragraph: {
         wordCeiling: 220,
         wordCeilingIntroConclusionBonus: 30,
-        _comment: "Soft word ceiling per paragraph. Introduction and conclusion paragraphs may exceed by wordCeilingIntroConclusionBonus words."
+        _comment: "Soft word ceiling per paragraph. Introduction and conclusion paragraphs may exceed by wordCeilingIntroConclusionBonus words. wordFloor: minimum words for one drafted paragraph. The drafted-unit word gate is per planned paragraph (n x [wordFloor, wordCeiling]); writerUnit min/max bound the ARCHITECT's unit sizing, not a single draft (live run 2026-09-23: a 1-paragraph unit correctly drafted ~110 words failed a 300-word unit floor).",
+        wordFloor: 40
       },
       writerUnit: {
         targetWords: 500,
@@ -123,6 +124,12 @@ var init_thresholds = __esm({
           _comment: "Optional second finder call per chunk (src/cli/src/prompts/proofread-find-wrongword.md), focused only on real-word (wrong_word) errors the main finder pass tends to miss. DEFAULT OFF: doubles find-stage Gemini calls and its cost/recall tradeoff is unmeasured against a live key. Flip to true only after a live evals/proofread-recall run with it on."
         },
         _comment: "Proofread chunk target; execution and call budgets are configured under models and budget."
+      },
+      ocr: {
+        perCallPageCap: 40,
+        geminiBatchSize: 6,
+        inlineSizeLimitBytes: 20971520,
+        _comment: "Ported from the retired MCP gemini_ocr tool (PER_CALL_PAGE_CAP, GEMINI_BATCH_SIZE, INLINE_SIZE_LIMIT_BYTES = 20*1024*1024). perCallPageCap bounds how many pages one `aw ocr` invocation processes before truncating (Files API upload path for pages over inlineSizeLimitBytes was not ported to the CLI -- see T15a handoff notes; oversized pages fail with a named ERROR instead of silently uploading)."
       },
       citationFloor: {
         minSecondaryPer1000Words: 4,
@@ -200,7 +207,7 @@ var init_thresholds = __esm({
         },
         ocr: {
           provider: "gemini",
-          model: "gemini-3.8-flash",
+          model: "gemini-2.5-flash",
           maxOutputTokens: 8192,
           concurrency: 1,
           piModel: "openrouter/z-ai/glm-5.3"
@@ -301,9 +308,9 @@ var init_thresholds = __esm({
   }
 });
 
-// node_modules/retry/lib/retry_operation.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/retry/lib/retry_operation.js
 var require_retry_operation = __commonJS({
-  "node_modules/retry/lib/retry_operation.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/retry/lib/retry_operation.js"(exports, module) {
     function RetryOperation(timeouts, options) {
       if (typeof options === "boolean") {
         options = { forever: options };
@@ -436,9 +443,9 @@ var require_retry_operation = __commonJS({
   }
 });
 
-// node_modules/retry/lib/retry.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/retry/lib/retry.js
 var require_retry = __commonJS({
-  "node_modules/retry/lib/retry.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/retry/lib/retry.js"(exports) {
     var RetryOperation = require_retry_operation();
     exports.operation = function(options) {
       var timeouts = exports.timeouts(options);
@@ -522,16 +529,16 @@ var require_retry = __commonJS({
   }
 });
 
-// node_modules/retry/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/retry/index.js
 var require_retry2 = __commonJS({
-  "node_modules/retry/index.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/retry/index.js"(exports, module) {
     module.exports = require_retry();
   }
 });
 
-// node_modules/p-retry/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/p-retry/index.js
 var require_p_retry = __commonJS({
-  "node_modules/p-retry/index.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/p-retry/index.js"(exports, module) {
     "use strict";
     var retry = require_retry2();
     var networkErrorMsgs = [
@@ -565,7 +572,7 @@ var require_p_retry = __commonJS({
       return error;
     };
     var isNetworkError = (errorMessage) => networkErrorMsgs.includes(errorMessage);
-    var pRetry2 = (input, options) => new Promise((resolve5, reject) => {
+    var pRetry2 = (input, options) => new Promise((resolve6, reject) => {
       options = {
         onFailedAttempt: () => {
         },
@@ -575,7 +582,7 @@ var require_p_retry = __commonJS({
       const operation = retry.operation(options);
       operation.attempt(async (attemptNumber) => {
         try {
-          resolve5(await input(attemptNumber));
+          resolve6(await input(attemptNumber));
         } catch (error) {
           if (!(error instanceof Error)) {
             reject(new TypeError(`Non-error was thrown: "${error}". You should only throw errors.`));
@@ -608,9 +615,9 @@ var require_p_retry = __commonJS({
   }
 });
 
-// node_modules/extend/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/extend/index.js
 var require_extend = __commonJS({
-  "node_modules/extend/index.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/extend/index.js"(exports, module) {
     "use strict";
     var hasOwn2 = Object.prototype.hasOwnProperty;
     var toStr = Object.prototype.toString;
@@ -699,12 +706,12 @@ var require_extend = __commonJS({
   }
 });
 
-// node_modules/gaxios/package.json
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gaxios/package.json
 var require_package = __commonJS({
-  "node_modules/gaxios/package.json"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gaxios/package.json"(exports, module) {
     module.exports = {
       name: "gaxios",
-      version: "7.3.1",
+      version: "7.3.0",
       description: "A simple common HTTP client specifically for Google APIs and services.",
       main: "build/cjs/src/index.js",
       types: "build/cjs/src/index.d.ts",
@@ -782,7 +789,7 @@ var require_package = __commonJS({
         "karma-mocha": "^2.0.0",
         "karma-remap-coverage": "^0.1.5",
         "karma-sourcemap-loader": "^0.4.0",
-        "karma-webpack": "^5.0.0",
+        "karma-webpack": "^5.0.1",
         mocha: "^11.1.0",
         multiparty: "^4.2.1",
         mv: "^2.1.1",
@@ -793,7 +800,7 @@ var require_package = __commonJS({
         puppeteer: "^24.0.0",
         sinon: "21.0.3",
         "stream-browserify": "^3.0.0",
-        tmp: "0.2.7",
+        tmp: "0.2.6",
         "ts-loader": "^9.5.2",
         typescript: "5.8.3",
         "undici-types": "^7.24.1",
@@ -810,18 +817,18 @@ var require_package = __commonJS({
   }
 });
 
-// node_modules/gaxios/build/cjs/src/util.cjs
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gaxios/build/cjs/src/util.cjs
 var require_util = __commonJS({
-  "node_modules/gaxios/build/cjs/src/util.cjs"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gaxios/build/cjs/src/util.cjs"(exports, module) {
     "use strict";
     var pkg = require_package();
     module.exports = { pkg };
   }
 });
 
-// node_modules/gaxios/build/cjs/src/common.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gaxios/build/cjs/src/common.js
 var require_common = __commonJS({
-  "node_modules/gaxios/build/cjs/src/common.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gaxios/build/cjs/src/common.js"(exports) {
     "use strict";
     var __importDefault = exports && exports.__importDefault || function(mod) {
       return mod && mod.__esModule ? mod : { "default": mod };
@@ -1061,9 +1068,9 @@ var require_common = __commonJS({
   }
 });
 
-// node_modules/gaxios/build/cjs/src/retry.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gaxios/build/cjs/src/retry.js
 var require_retry3 = __commonJS({
-  "node_modules/gaxios/build/cjs/src/retry.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gaxios/build/cjs/src/retry.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getRetryConfig = getRetryConfig;
@@ -1109,8 +1116,8 @@ var require_retry3 = __commonJS({
       }
       const delay = getNextRetryDelay(config);
       err.config.retryConfig.currentRetryAttempt += 1;
-      const backoff = config.retryBackoff ? config.retryBackoff(err, delay) : new Promise((resolve5) => {
-        setTimeout(resolve5, delay);
+      const backoff = config.retryBackoff ? config.retryBackoff(err, delay) : new Promise((resolve6) => {
+        setTimeout(resolve6, delay);
       });
       if (config.onRetryAttempt) {
         await config.onRetryAttempt(err);
@@ -1166,9 +1173,9 @@ var require_retry3 = __commonJS({
   }
 });
 
-// node_modules/gaxios/build/cjs/src/interceptor.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gaxios/build/cjs/src/interceptor.js
 var require_interceptor = __commonJS({
-  "node_modules/gaxios/build/cjs/src/interceptor.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gaxios/build/cjs/src/interceptor.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GaxiosInterceptorManager = void 0;
@@ -1178,9 +1185,9 @@ var require_interceptor = __commonJS({
   }
 });
 
-// node_modules/ms/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ms/index.js
 var require_ms = __commonJS({
-  "node_modules/ms/index.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ms/index.js"(exports, module) {
     var s2 = 1e3;
     var m2 = s2 * 60;
     var h2 = m2 * 60;
@@ -1294,9 +1301,9 @@ var require_ms = __commonJS({
   }
 });
 
-// node_modules/debug/src/common.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/debug/src/common.js
 var require_common2 = __commonJS({
-  "node_modules/debug/src/common.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/debug/src/common.js"(exports, module) {
     function setup(env) {
       createDebug.debug = createDebug;
       createDebug.default = createDebug;
@@ -1471,9 +1478,9 @@ var require_common2 = __commonJS({
   }
 });
 
-// node_modules/debug/src/browser.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/debug/src/browser.js
 var require_browser = __commonJS({
-  "node_modules/debug/src/browser.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/debug/src/browser.js"(exports, module) {
     exports.formatArgs = formatArgs;
     exports.save = save;
     exports.load = load;
@@ -1641,9 +1648,9 @@ var require_browser = __commonJS({
   }
 });
 
-// node_modules/debug/src/node.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/debug/src/node.js
 var require_node = __commonJS({
-  "node_modules/debug/src/node.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/debug/src/node.js"(exports, module) {
     var tty = __require("tty");
     var util = __require("util");
     exports.init = init;
@@ -1815,9 +1822,9 @@ var require_node = __commonJS({
   }
 });
 
-// node_modules/debug/src/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/debug/src/index.js
 var require_src = __commonJS({
-  "node_modules/debug/src/index.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/debug/src/index.js"(exports, module) {
     if (typeof process === "undefined" || process.type === "renderer" || process.browser === true || process.__nwjs) {
       module.exports = require_browser();
     } else {
@@ -1826,9 +1833,9 @@ var require_src = __commonJS({
   }
 });
 
-// node_modules/agent-base/dist/helpers.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/agent-base/dist/helpers.js
 var require_helpers = __commonJS({
-  "node_modules/agent-base/dist/helpers.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/agent-base/dist/helpers.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -1886,8 +1893,8 @@ var require_helpers = __commonJS({
     function req(url, opts = {}) {
       const href = typeof url === "string" ? url : url.href;
       const req2 = (href.startsWith("https:") ? https2 : http3).request(url, opts);
-      const promise = new Promise((resolve5, reject) => {
-        req2.once("response", resolve5).once("error", reject).end();
+      const promise = new Promise((resolve6, reject) => {
+        req2.once("response", resolve6).once("error", reject).end();
       });
       req2.then = promise.then.bind(promise);
       return req2;
@@ -1896,9 +1903,9 @@ var require_helpers = __commonJS({
   }
 });
 
-// node_modules/agent-base/dist/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/agent-base/dist/index.js
 var require_dist = __commonJS({
-  "node_modules/agent-base/dist/index.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/agent-base/dist/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -2052,9 +2059,9 @@ var require_dist = __commonJS({
   }
 });
 
-// node_modules/https-proxy-agent/dist/parse-proxy-response.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/https-proxy-agent/dist/parse-proxy-response.js
 var require_parse_proxy_response = __commonJS({
-  "node_modules/https-proxy-agent/dist/parse-proxy-response.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/https-proxy-agent/dist/parse-proxy-response.js"(exports) {
     "use strict";
     var __importDefault = exports && exports.__importDefault || function(mod) {
       return mod && mod.__esModule ? mod : { "default": mod };
@@ -2064,7 +2071,7 @@ var require_parse_proxy_response = __commonJS({
     var debug_1 = __importDefault(require_src());
     var debug = (0, debug_1.default)("https-proxy-agent:parse-proxy-response");
     function parseProxyResponse(socket) {
-      return new Promise((resolve5, reject) => {
+      return new Promise((resolve6, reject) => {
         let buffersLength = 0;
         const buffers = [];
         function read() {
@@ -2130,7 +2137,7 @@ var require_parse_proxy_response = __commonJS({
           }
           debug("got proxy server response: %o %o", firstLine, headers);
           cleanup();
-          resolve5({
+          resolve6({
             connect: {
               statusCode,
               statusText,
@@ -2148,9 +2155,9 @@ var require_parse_proxy_response = __commonJS({
   }
 });
 
-// node_modules/https-proxy-agent/dist/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/https-proxy-agent/dist/index.js
 var require_dist2 = __commonJS({
-  "node_modules/https-proxy-agent/dist/index.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/https-proxy-agent/dist/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -2298,7 +2305,7 @@ var require_dist2 = __commonJS({
   }
 });
 
-// node_modules/data-uri-to-buffer/dist/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/data-uri-to-buffer/dist/index.js
 function dataUriToBuffer(uri) {
   if (!/^data:/i.test(uri)) {
     throw new TypeError('`uri` does not appear to be a Data URI (must begin with "data:")');
@@ -2337,14 +2344,14 @@ function dataUriToBuffer(uri) {
 }
 var dist_default;
 var init_dist = __esm({
-  "node_modules/data-uri-to-buffer/dist/index.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/data-uri-to-buffer/dist/index.js"() {
     dist_default = dataUriToBuffer;
   }
 });
 
-// node_modules/web-streams-polyfill/dist/ponyfill.es2018.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/web-streams-polyfill/dist/ponyfill.es2018.js
 var require_ponyfill_es2018 = __commonJS({
-  "node_modules/web-streams-polyfill/dist/ponyfill.es2018.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/web-streams-polyfill/dist/ponyfill.es2018.js"(exports, module) {
     (function(global2, factory) {
       typeof exports === "object" && typeof module !== "undefined" ? factory(exports) : typeof define === "function" && define.amd ? define(["exports"], factory) : (global2 = typeof globalThis !== "undefined" ? globalThis : global2 || self, factory(global2.WebStreamsPolyfill = {}));
     })(exports, (function(exports2) {
@@ -2372,7 +2379,7 @@ var require_ponyfill_es2018 = __commonJS({
         return new originalPromise(executor);
       }
       function promiseResolvedWith(value) {
-        return newPromise((resolve5) => resolve5(value));
+        return newPromise((resolve6) => resolve6(value));
       }
       function promiseRejectedWith(reason) {
         return originalPromiseReject(reason);
@@ -2542,8 +2549,8 @@ var require_ponyfill_es2018 = __commonJS({
         return new TypeError("Cannot " + name + " a stream using a released reader");
       }
       function defaultReaderClosedPromiseInitialize(reader) {
-        reader._closedPromise = newPromise((resolve5, reject) => {
-          reader._closedPromise_resolve = resolve5;
+        reader._closedPromise = newPromise((resolve6, reject) => {
+          reader._closedPromise_resolve = resolve6;
           reader._closedPromise_reject = reject;
         });
       }
@@ -2717,8 +2724,8 @@ var require_ponyfill_es2018 = __commonJS({
           }
           let resolvePromise;
           let rejectPromise;
-          const promise = newPromise((resolve5, reject) => {
-            resolvePromise = resolve5;
+          const promise = newPromise((resolve6, reject) => {
+            resolvePromise = resolve6;
             rejectPromise = reject;
           });
           const readRequest = {
@@ -2823,8 +2830,8 @@ var require_ponyfill_es2018 = __commonJS({
           const reader = this._reader;
           let resolvePromise;
           let rejectPromise;
-          const promise = newPromise((resolve5, reject) => {
-            resolvePromise = resolve5;
+          const promise = newPromise((resolve6, reject) => {
+            resolvePromise = resolve6;
             rejectPromise = reject;
           });
           const readRequest = {
@@ -3843,8 +3850,8 @@ var require_ponyfill_es2018 = __commonJS({
           }
           let resolvePromise;
           let rejectPromise;
-          const promise = newPromise((resolve5, reject) => {
-            resolvePromise = resolve5;
+          const promise = newPromise((resolve6, reject) => {
+            resolvePromise = resolve6;
             rejectPromise = reject;
           });
           const readIntoRequest = {
@@ -4156,10 +4163,10 @@ var require_ponyfill_es2018 = __commonJS({
           wasAlreadyErroring = true;
           reason = void 0;
         }
-        const promise = newPromise((resolve5, reject) => {
+        const promise = newPromise((resolve6, reject) => {
           stream._pendingAbortRequest = {
             _promise: void 0,
-            _resolve: resolve5,
+            _resolve: resolve6,
             _reject: reject,
             _reason: reason,
             _wasAlreadyErroring: wasAlreadyErroring
@@ -4176,9 +4183,9 @@ var require_ponyfill_es2018 = __commonJS({
         if (state === "closed" || state === "errored") {
           return promiseRejectedWith(new TypeError(`The stream (in ${state} state) is not in the writable state and cannot be closed`));
         }
-        const promise = newPromise((resolve5, reject) => {
+        const promise = newPromise((resolve6, reject) => {
           const closeRequest = {
-            _resolve: resolve5,
+            _resolve: resolve6,
             _reject: reject
           };
           stream._closeRequest = closeRequest;
@@ -4191,9 +4198,9 @@ var require_ponyfill_es2018 = __commonJS({
         return promise;
       }
       function WritableStreamAddWriteRequest(stream) {
-        const promise = newPromise((resolve5, reject) => {
+        const promise = newPromise((resolve6, reject) => {
           const writeRequest = {
-            _resolve: resolve5,
+            _resolve: resolve6,
             _reject: reject
           };
           stream._writeRequests.push(writeRequest);
@@ -4809,8 +4816,8 @@ var require_ponyfill_es2018 = __commonJS({
         return new TypeError("Cannot " + name + " a stream using a released writer");
       }
       function defaultWriterClosedPromiseInitialize(writer) {
-        writer._closedPromise = newPromise((resolve5, reject) => {
-          writer._closedPromise_resolve = resolve5;
+        writer._closedPromise = newPromise((resolve6, reject) => {
+          writer._closedPromise_resolve = resolve6;
           writer._closedPromise_reject = reject;
           writer._closedPromiseState = "pending";
         });
@@ -4846,8 +4853,8 @@ var require_ponyfill_es2018 = __commonJS({
         writer._closedPromiseState = "resolved";
       }
       function defaultWriterReadyPromiseInitialize(writer) {
-        writer._readyPromise = newPromise((resolve5, reject) => {
-          writer._readyPromise_resolve = resolve5;
+        writer._readyPromise = newPromise((resolve6, reject) => {
+          writer._readyPromise_resolve = resolve6;
           writer._readyPromise_reject = reject;
         });
         writer._readyPromiseState = "pending";
@@ -4934,7 +4941,7 @@ var require_ponyfill_es2018 = __commonJS({
         source._disturbed = true;
         let shuttingDown = false;
         let currentWrite = promiseResolvedWith(void 0);
-        return newPromise((resolve5, reject) => {
+        return newPromise((resolve6, reject) => {
           let abortAlgorithm;
           if (signal !== void 0) {
             abortAlgorithm = () => {
@@ -5079,7 +5086,7 @@ var require_ponyfill_es2018 = __commonJS({
             if (isError) {
               reject(error);
             } else {
-              resolve5(void 0);
+              resolve6(void 0);
             }
             return null;
           }
@@ -5360,8 +5367,8 @@ var require_ponyfill_es2018 = __commonJS({
         let branch1;
         let branch2;
         let resolveCancelPromise;
-        const cancelPromise = newPromise((resolve5) => {
-          resolveCancelPromise = resolve5;
+        const cancelPromise = newPromise((resolve6) => {
+          resolveCancelPromise = resolve6;
         });
         function pullAlgorithm() {
           if (reading) {
@@ -5452,8 +5459,8 @@ var require_ponyfill_es2018 = __commonJS({
         let branch1;
         let branch2;
         let resolveCancelPromise;
-        const cancelPromise = newPromise((resolve5) => {
-          resolveCancelPromise = resolve5;
+        const cancelPromise = newPromise((resolve6) => {
+          resolveCancelPromise = resolve6;
         });
         function forwardReaderError(thisReader) {
           uponRejection(thisReader._closedPromise, (r2) => {
@@ -6233,8 +6240,8 @@ var require_ponyfill_es2018 = __commonJS({
           const writableHighWaterMark = ExtractHighWaterMark(writableStrategy, 1);
           const writableSizeAlgorithm = ExtractSizeAlgorithm(writableStrategy);
           let startPromise_resolve;
-          const startPromise = newPromise((resolve5) => {
-            startPromise_resolve = resolve5;
+          const startPromise = newPromise((resolve6) => {
+            startPromise_resolve = resolve6;
           });
           InitializeTransformStream(this, startPromise, writableHighWaterMark, writableSizeAlgorithm, readableHighWaterMark, readableSizeAlgorithm);
           SetUpTransformStreamDefaultControllerFromTransformer(this, transformer);
@@ -6327,8 +6334,8 @@ var require_ponyfill_es2018 = __commonJS({
         if (stream._backpressureChangePromise !== void 0) {
           stream._backpressureChangePromise_resolve();
         }
-        stream._backpressureChangePromise = newPromise((resolve5) => {
-          stream._backpressureChangePromise_resolve = resolve5;
+        stream._backpressureChangePromise = newPromise((resolve6) => {
+          stream._backpressureChangePromise_resolve = resolve6;
         });
         stream._backpressure = backpressure;
       }
@@ -6496,8 +6503,8 @@ var require_ponyfill_es2018 = __commonJS({
           return controller._finishPromise;
         }
         const readable = stream._readable;
-        controller._finishPromise = newPromise((resolve5, reject) => {
-          controller._finishPromise_resolve = resolve5;
+        controller._finishPromise = newPromise((resolve6, reject) => {
+          controller._finishPromise_resolve = resolve6;
           controller._finishPromise_reject = reject;
         });
         const cancelPromise = controller._cancelAlgorithm(reason);
@@ -6523,8 +6530,8 @@ var require_ponyfill_es2018 = __commonJS({
           return controller._finishPromise;
         }
         const readable = stream._readable;
-        controller._finishPromise = newPromise((resolve5, reject) => {
-          controller._finishPromise_resolve = resolve5;
+        controller._finishPromise = newPromise((resolve6, reject) => {
+          controller._finishPromise_resolve = resolve6;
           controller._finishPromise_reject = reject;
         });
         const flushPromise = controller._flushAlgorithm();
@@ -6554,8 +6561,8 @@ var require_ponyfill_es2018 = __commonJS({
           return controller._finishPromise;
         }
         const writable = stream._writable;
-        controller._finishPromise = newPromise((resolve5, reject) => {
-          controller._finishPromise_resolve = resolve5;
+        controller._finishPromise = newPromise((resolve6, reject) => {
+          controller._finishPromise_resolve = resolve6;
           controller._finishPromise_reject = reject;
         });
         const cancelPromise = controller._cancelAlgorithm(reason);
@@ -6617,9 +6624,9 @@ var require_ponyfill_es2018 = __commonJS({
   }
 });
 
-// node_modules/fetch-blob/streams.cjs
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/fetch-blob/streams.cjs
 var require_streams = __commonJS({
-  "node_modules/fetch-blob/streams.cjs"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/fetch-blob/streams.cjs"() {
     var POOL_SIZE2 = 65536;
     if (!globalThis.ReadableStream) {
       try {
@@ -6663,7 +6670,7 @@ var require_streams = __commonJS({
   }
 });
 
-// node_modules/fetch-blob/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/fetch-blob/index.js
 async function* toIterator(parts, clone2 = true) {
   for (const part of parts) {
     if ("stream" in part) {
@@ -6700,7 +6707,7 @@ async function* toIterator(parts, clone2 = true) {
 }
 var import_streams, POOL_SIZE, _Blob, Blob3, fetch_blob_default;
 var init_fetch_blob = __esm({
-  "node_modules/fetch-blob/index.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/fetch-blob/index.js"() {
     import_streams = __toESM(require_streams(), 1);
     POOL_SIZE = 65536;
     _Blob = class Blob2 {
@@ -6867,10 +6874,10 @@ var init_fetch_blob = __esm({
   }
 });
 
-// node_modules/fetch-blob/file.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/fetch-blob/file.js
 var _File, File3, file_default;
 var init_file = __esm({
-  "node_modules/fetch-blob/file.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/fetch-blob/file.js"() {
     init_fetch_blob();
     _File = class File2 extends fetch_blob_default {
       #lastModified = 0;
@@ -6911,7 +6918,7 @@ var init_file = __esm({
   }
 });
 
-// node_modules/formdata-polyfill/esm.min.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/formdata-polyfill/esm.min.js
 function formDataToBlob(F2, B = fetch_blob_default) {
   var b = `${r()}${r()}`.replace(/\./g, "").slice(-28).padStart(32, "-"), c = [], p = `--${b}\r
 Content-Disposition: form-data; name="`;
@@ -6927,7 +6934,7 @@ Content-Type: ${v.type || "application/octet-stream"}\r
 }
 var t, i, h, r, m, f, e, x, FormData2;
 var init_esm_min = __esm({
-  "node_modules/formdata-polyfill/esm.min.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/formdata-polyfill/esm.min.js"() {
     init_fetch_blob();
     init_file();
     ({ toStringTag: t, iterator: i, hasInstance: h } = Symbol);
@@ -7008,10 +7015,10 @@ var init_esm_min = __esm({
   }
 });
 
-// node_modules/node-fetch/src/errors/base.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/errors/base.js
 var FetchBaseError;
 var init_base = __esm({
-  "node_modules/node-fetch/src/errors/base.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/errors/base.js"() {
     FetchBaseError = class extends Error {
       constructor(message, type) {
         super(message);
@@ -7028,10 +7035,10 @@ var init_base = __esm({
   }
 });
 
-// node_modules/node-fetch/src/errors/fetch-error.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/errors/fetch-error.js
 var FetchError;
 var init_fetch_error = __esm({
-  "node_modules/node-fetch/src/errors/fetch-error.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/errors/fetch-error.js"() {
     init_base();
     FetchError = class extends FetchBaseError {
       /**
@@ -7050,10 +7057,10 @@ var init_fetch_error = __esm({
   }
 });
 
-// node_modules/node-fetch/src/utils/is.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/utils/is.js
 var NAME, isURLSearchParameters, isBlob, isAbortSignal, isDomainOrSubdomain, isSameProtocol;
 var init_is = __esm({
-  "node_modules/node-fetch/src/utils/is.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/utils/is.js"() {
     NAME = Symbol.toStringTag;
     isURLSearchParameters = (object) => {
       return typeof object === "object" && typeof object.append === "function" && typeof object.delete === "function" && typeof object.get === "function" && typeof object.getAll === "function" && typeof object.has === "function" && typeof object.set === "function" && typeof object.sort === "function" && object[NAME] === "URLSearchParams";
@@ -7077,9 +7084,9 @@ var init_is = __esm({
   }
 });
 
-// node_modules/node-domexception/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-domexception/index.js
 var require_node_domexception = __commonJS({
-  "node_modules/node-domexception/index.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-domexception/index.js"(exports, module) {
     if (!globalThis.DOMException) {
       try {
         const { MessageChannel } = __require("worker_threads"), port = new MessageChannel().port1, ab = new ArrayBuffer();
@@ -7092,12 +7099,12 @@ var require_node_domexception = __commonJS({
   }
 });
 
-// node_modules/fetch-blob/from.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/fetch-blob/from.js
 import { statSync, createReadStream, promises as fs } from "node:fs";
 import { basename } from "node:path";
 var import_node_domexception, stat, blobFromSync, blobFrom, fileFrom, fileFromSync, fromBlob, fromFile, BlobDataItem;
 var init_from = __esm({
-  "node_modules/fetch-blob/from.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/fetch-blob/from.js"() {
     import_node_domexception = __toESM(require_node_domexception(), 1);
     init_file();
     init_fetch_blob();
@@ -7156,7 +7163,7 @@ var init_from = __esm({
   }
 });
 
-// node_modules/node-fetch/src/utils/multipart-parser.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/utils/multipart-parser.js
 var multipart_parser_exports = {};
 __export(multipart_parser_exports, {
   toFormData: () => toFormData
@@ -7250,7 +7257,7 @@ async function toFormData(Body2, ct) {
 }
 var s, S, f2, F, LF, CR, SPACE, HYPHEN, COLON, A, Z, lower, noop, MultipartParser;
 var init_multipart_parser = __esm({
-  "node_modules/node-fetch/src/utils/multipart-parser.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/utils/multipart-parser.js"() {
     init_from();
     init_esm_min();
     s = 0;
@@ -7518,7 +7525,7 @@ var init_multipart_parser = __esm({
   }
 });
 
-// node_modules/node-fetch/src/body.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/body.js
 import Stream, { PassThrough } from "node:stream";
 import { types, deprecate, promisify } from "node:util";
 import { Buffer as Buffer2 } from "node:buffer";
@@ -7568,7 +7575,7 @@ async function consumeBody(data) {
 }
 var pipeline, INTERNALS, Body, clone, getNonSpecFormDataBoundary, extractContentType, getTotalBytes, writeToStream;
 var init_body = __esm({
-  "node_modules/node-fetch/src/body.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/body.js"() {
     init_fetch_blob();
     init_esm_min();
     init_fetch_error();
@@ -7776,7 +7783,7 @@ var init_body = __esm({
   }
 });
 
-// node_modules/node-fetch/src/headers.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/headers.js
 import { types as types2 } from "node:util";
 import http from "node:http";
 function fromRawHeaders(headers = []) {
@@ -7799,7 +7806,7 @@ function fromRawHeaders(headers = []) {
 }
 var validateHeaderName, validateHeaderValue, Headers2;
 var init_headers = __esm({
-  "node_modules/node-fetch/src/headers.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/headers.js"() {
     validateHeaderName = typeof http.validateHeaderName === "function" ? http.validateHeaderName : (name) => {
       if (!/^[\^`\-\w!#$%&'*+.|~]+$/.test(name)) {
         const error = new TypeError(`Header name must be a valid HTTP token [${name}]`);
@@ -7967,10 +7974,10 @@ var init_headers = __esm({
   }
 });
 
-// node_modules/node-fetch/src/utils/is-redirect.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/utils/is-redirect.js
 var redirectStatus, isRedirect;
 var init_is_redirect = __esm({
-  "node_modules/node-fetch/src/utils/is-redirect.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/utils/is-redirect.js"() {
     redirectStatus = /* @__PURE__ */ new Set([301, 302, 303, 307, 308]);
     isRedirect = (code) => {
       return redirectStatus.has(code);
@@ -7978,10 +7985,10 @@ var init_is_redirect = __esm({
   }
 });
 
-// node_modules/node-fetch/src/response.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/response.js
 var INTERNALS2, Response2;
 var init_response = __esm({
-  "node_modules/node-fetch/src/response.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/response.js"() {
     init_headers();
     init_body();
     init_is_redirect();
@@ -8104,10 +8111,10 @@ var init_response = __esm({
   }
 });
 
-// node_modules/node-fetch/src/utils/get-search.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/utils/get-search.js
 var getSearch;
 var init_get_search = __esm({
-  "node_modules/node-fetch/src/utils/get-search.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/utils/get-search.js"() {
     getSearch = (parsedURL) => {
       if (parsedURL.search) {
         return parsedURL.search;
@@ -8119,7 +8126,7 @@ var init_get_search = __esm({
   }
 });
 
-// node_modules/node-fetch/src/utils/referrer.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/utils/referrer.js
 import { isIP } from "node:net";
 function stripURLForUseAsAReferrer(url, originOnly = false) {
   if (url == null) {
@@ -8248,7 +8255,7 @@ function parseReferrerPolicyFromHeader(headers) {
 }
 var ReferrerPolicy, DEFAULT_REFERRER_POLICY;
 var init_referrer = __esm({
-  "node_modules/node-fetch/src/utils/referrer.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/utils/referrer.js"() {
     ReferrerPolicy = /* @__PURE__ */ new Set([
       "",
       "no-referrer",
@@ -8264,12 +8271,12 @@ var init_referrer = __esm({
   }
 });
 
-// node_modules/node-fetch/src/request.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/request.js
 import { format as formatUrl } from "node:url";
 import { deprecate as deprecate2 } from "node:util";
 var INTERNALS3, isRequest, doBadDataWarn, Request, getNodeRequestOptions;
 var init_request = __esm({
-  "node_modules/node-fetch/src/request.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/request.js"() {
     init_headers();
     init_body();
     init_is();
@@ -8469,10 +8476,10 @@ var init_request = __esm({
   }
 });
 
-// node_modules/node-fetch/src/errors/abort-error.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/errors/abort-error.js
 var AbortError;
 var init_abort_error = __esm({
-  "node_modules/node-fetch/src/errors/abort-error.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/errors/abort-error.js"() {
     init_base();
     AbortError = class extends FetchBaseError {
       constructor(message, type = "aborted") {
@@ -8482,7 +8489,7 @@ var init_abort_error = __esm({
   }
 });
 
-// node_modules/node-fetch/src/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/index.js
 var src_exports = {};
 __export(src_exports, {
   AbortError: () => AbortError,
@@ -8506,7 +8513,7 @@ import zlib from "node:zlib";
 import Stream2, { PassThrough as PassThrough2, pipeline as pump } from "node:stream";
 import { Buffer as Buffer3 } from "node:buffer";
 async function fetch2(url, options_) {
-  return new Promise((resolve5, reject) => {
+  return new Promise((resolve6, reject) => {
     const request = new Request(url, options_);
     const { parsedURL, options } = getNodeRequestOptions(request);
     if (!supportedSchemas.has(parsedURL.protocol)) {
@@ -8515,7 +8522,7 @@ async function fetch2(url, options_) {
     if (parsedURL.protocol === "data:") {
       const data = dist_default(request.url);
       const response2 = new Response2(data, { headers: { "Content-Type": data.typeFull } });
-      resolve5(response2);
+      resolve6(response2);
       return;
     }
     const send = (parsedURL.protocol === "https:" ? https : http2).request;
@@ -8637,7 +8644,7 @@ async function fetch2(url, options_) {
             if (responseReferrerPolicy) {
               requestOptions.referrerPolicy = responseReferrerPolicy;
             }
-            resolve5(fetch2(new Request(locationURL, requestOptions)));
+            resolve6(fetch2(new Request(locationURL, requestOptions)));
             finalize();
             return;
           }
@@ -8670,7 +8677,7 @@ async function fetch2(url, options_) {
       const codings = headers.get("Content-Encoding");
       if (!request.compress || request.method === "HEAD" || codings === null || response_.statusCode === 204 || response_.statusCode === 304) {
         response = new Response2(body, responseOptions);
-        resolve5(response);
+        resolve6(response);
         return;
       }
       const zlibOptions = {
@@ -8684,7 +8691,7 @@ async function fetch2(url, options_) {
           }
         });
         response = new Response2(body, responseOptions);
-        resolve5(response);
+        resolve6(response);
         return;
       }
       if (codings === "deflate" || codings === "x-deflate") {
@@ -8708,12 +8715,12 @@ async function fetch2(url, options_) {
             });
           }
           response = new Response2(body, responseOptions);
-          resolve5(response);
+          resolve6(response);
         });
         raw.once("end", () => {
           if (!response) {
             response = new Response2(body, responseOptions);
-            resolve5(response);
+            resolve6(response);
           }
         });
         return;
@@ -8725,11 +8732,11 @@ async function fetch2(url, options_) {
           }
         });
         response = new Response2(body, responseOptions);
-        resolve5(response);
+        resolve6(response);
         return;
       }
       response = new Response2(body, responseOptions);
-      resolve5(response);
+      resolve6(response);
     });
     writeToStream(request_, request).catch(reject);
   });
@@ -8768,7 +8775,7 @@ function fixResponseChunkedTransferBadEnding(request, errorCallback) {
 }
 var supportedSchemas;
 var init_src = __esm({
-  "node_modules/node-fetch/src/index.js"() {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/node-fetch/src/index.js"() {
     init_dist();
     init_body();
     init_response();
@@ -8785,9 +8792,9 @@ var init_src = __esm({
   }
 });
 
-// node_modules/gaxios/build/cjs/src/gaxios.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gaxios/build/cjs/src/gaxios.js
 var require_gaxios = __commonJS({
-  "node_modules/gaxios/build/cjs/src/gaxios.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gaxios/build/cjs/src/gaxios.js"(exports) {
     "use strict";
     var __importDefault = exports && exports.__importDefault || function(mod) {
       return mod && mod.__esModule ? mod : { "default": mod };
@@ -9259,9 +9266,9 @@ Content-Type: ${partContentType}\r
   }
 });
 
-// node_modules/gaxios/build/cjs/src/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gaxios/build/cjs/src/index.js
 var require_src2 = __commonJS({
-  "node_modules/gaxios/build/cjs/src/index.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gaxios/build/cjs/src/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -9298,9 +9305,9 @@ var require_src2 = __commonJS({
   }
 });
 
-// node_modules/bignumber.js/bignumber.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/bignumber.js/bignumber.js
 var require_bignumber = __commonJS({
-  "node_modules/bignumber.js/bignumber.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/bignumber.js/bignumber.js"(exports, module) {
     (function(globalObject) {
       "use strict";
       var BigNumber, isNumeric = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i, mathceil = Math.ceil, mathfloor = Math.floor, bignumberError = "[BigNumber Error] ", tooManyDigits = bignumberError + "Number primitive has more than 15 significant digits: ", BASE = 1e14, LOG_BASE = 14, MAX_SAFE_INTEGER = 9007199254740991, POWS_TEN = [1, 10, 100, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13], SQRT_BASE = 1e7, MAX = 1e9;
@@ -10649,9 +10656,9 @@ var require_bignumber = __commonJS({
   }
 });
 
-// node_modules/json-bigint/lib/stringify.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/json-bigint/lib/stringify.js
 var require_stringify = __commonJS({
-  "node_modules/json-bigint/lib/stringify.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/json-bigint/lib/stringify.js"(exports, module) {
     var BigNumber = require_bignumber();
     var JSON2 = module.exports;
     (function() {
@@ -10761,9 +10768,9 @@ var require_stringify = __commonJS({
   }
 });
 
-// node_modules/json-bigint/lib/parse.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/json-bigint/lib/parse.js
 var require_parse = __commonJS({
-  "node_modules/json-bigint/lib/parse.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/json-bigint/lib/parse.js"(exports, module) {
     var BigNumber = null;
     var suspectProtoRx = /(?:_|\\u005[Ff])(?:_|\\u005[Ff])(?:p|\\u0070)(?:r|\\u0072)(?:o|\\u006[Ff])(?:t|\\u0074)(?:o|\\u006[Ff])(?:_|\\u005[Ff])(?:_|\\u005[Ff])/;
     var suspectConstructorRx = /(?:c|\\u0063)(?:o|\\u006[Ff])(?:n|\\u006[Ee])(?:s|\\u0073)(?:t|\\u0074)(?:r|\\u0072)(?:u|\\u0075)(?:c|\\u0063)(?:t|\\u0074)(?:o|\\u006[Ff])(?:r|\\u0072)/;
@@ -11042,9 +11049,9 @@ var require_parse = __commonJS({
   }
 });
 
-// node_modules/json-bigint/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/json-bigint/index.js
 var require_json_bigint = __commonJS({
-  "node_modules/json-bigint/index.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/json-bigint/index.js"(exports, module) {
     var json_stringify = require_stringify().stringify;
     var json_parse = require_parse();
     module.exports = function(options) {
@@ -11058,9 +11065,9 @@ var require_json_bigint = __commonJS({
   }
 });
 
-// node_modules/gcp-metadata/build/src/gcp-residency.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gcp-metadata/build/src/gcp-residency.js
 var require_gcp_residency = __commonJS({
-  "node_modules/gcp-metadata/build/src/gcp-residency.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gcp-metadata/build/src/gcp-residency.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GCE_LINUX_BIOS_PATHS = void 0;
@@ -11113,9 +11120,9 @@ var require_gcp_residency = __commonJS({
   }
 });
 
-// node_modules/google-logging-utils/build/src/colours.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-logging-utils/build/src/colours.js
 var require_colours = __commonJS({
-  "node_modules/google-logging-utils/build/src/colours.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-logging-utils/build/src/colours.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Colours = void 0;
@@ -11174,9 +11181,9 @@ var require_colours = __commonJS({
   }
 });
 
-// node_modules/google-logging-utils/build/src/logging-utils.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-logging-utils/build/src/logging-utils.js
 var require_logging_utils = __commonJS({
-  "node_modules/google-logging-utils/build/src/logging-utils.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-logging-utils/build/src/logging-utils.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -11463,9 +11470,9 @@ var require_logging_utils = __commonJS({
   }
 });
 
-// node_modules/google-logging-utils/build/src/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-logging-utils/build/src/index.js
 var require_src3 = __commonJS({
-  "node_modules/google-logging-utils/build/src/index.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-logging-utils/build/src/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -11488,9 +11495,9 @@ var require_src3 = __commonJS({
   }
 });
 
-// node_modules/gcp-metadata/build/src/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gcp-metadata/build/src/index.js
 var require_src4 = __commonJS({
-  "node_modules/gcp-metadata/build/src/index.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/gcp-metadata/build/src/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -11744,9 +11751,9 @@ var require_src4 = __commonJS({
   }
 });
 
-// node_modules/base64-js/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/base64-js/index.js
 var require_base64_js = __commonJS({
-  "node_modules/base64-js/index.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/base64-js/index.js"(exports) {
     "use strict";
     exports.byteLength = byteLength;
     exports.toByteArray = toByteArray;
@@ -11845,9 +11852,9 @@ var require_base64_js = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/crypto/shared.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/crypto/shared.js
 var require_shared = __commonJS({
-  "node_modules/google-auth-library/build/src/crypto/shared.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/crypto/shared.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.fromArrayBufferToHex = fromArrayBufferToHex;
@@ -11860,9 +11867,9 @@ var require_shared = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/crypto/browser/crypto.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/crypto/browser/crypto.js
 var require_crypto = __commonJS({
-  "node_modules/google-auth-library/build/src/crypto/browser/crypto.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/crypto/browser/crypto.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.BrowserCrypto = void 0;
@@ -11956,9 +11963,9 @@ var require_crypto = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/crypto/node/crypto.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/crypto/node/crypto.js
 var require_crypto2 = __commonJS({
-  "node_modules/google-auth-library/build/src/crypto/node/crypto.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/crypto/node/crypto.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.NodeCrypto = void 0;
@@ -12025,9 +12032,9 @@ var require_crypto2 = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/crypto/crypto.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/crypto/crypto.js
 var require_crypto3 = __commonJS({
-  "node_modules/google-auth-library/build/src/crypto/crypto.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/crypto/crypto.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -12063,9 +12070,9 @@ var require_crypto3 = __commonJS({
   }
 });
 
-// node_modules/safe-buffer/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/safe-buffer/index.js
 var require_safe_buffer = __commonJS({
-  "node_modules/safe-buffer/index.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/safe-buffer/index.js"(exports, module) {
     var buffer = __require("buffer");
     var Buffer4 = buffer.Buffer;
     function copyProps(src, dst) {
@@ -12121,9 +12128,9 @@ var require_safe_buffer = __commonJS({
   }
 });
 
-// node_modules/ecdsa-sig-formatter/src/param-bytes-for-alg.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ecdsa-sig-formatter/src/param-bytes-for-alg.js
 var require_param_bytes_for_alg = __commonJS({
-  "node_modules/ecdsa-sig-formatter/src/param-bytes-for-alg.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ecdsa-sig-formatter/src/param-bytes-for-alg.js"(exports, module) {
     "use strict";
     function getParamSize(keySize) {
       var result = (keySize / 8 | 0) + (keySize % 8 === 0 ? 0 : 1);
@@ -12145,9 +12152,9 @@ var require_param_bytes_for_alg = __commonJS({
   }
 });
 
-// node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js
 var require_ecdsa_sig_formatter = __commonJS({
-  "node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js"(exports, module) {
     "use strict";
     var Buffer4 = require_safe_buffer().Buffer;
     var getParamBytesForAlg = require_param_bytes_for_alg();
@@ -12285,9 +12292,9 @@ var require_ecdsa_sig_formatter = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/util.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/util.js
 var require_util2 = __commonJS({
-  "node_modules/google-auth-library/build/src/util.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/util.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.LRUCache = void 0;
@@ -12400,9 +12407,9 @@ var require_util2 = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/package.json
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/package.json
 var require_package2 = __commonJS({
-  "node_modules/google-auth-library/package.json"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/package.json"(exports, module) {
     module.exports = {
       name: "google-auth-library",
       version: "10.9.1",
@@ -12496,9 +12503,9 @@ var require_package2 = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/shared.cjs
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/shared.cjs
 var require_shared2 = __commonJS({
-  "node_modules/google-auth-library/build/src/shared.cjs"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/shared.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.USER_AGENT = exports.PRODUCT_NAME = exports.pkg = void 0;
@@ -12511,9 +12518,9 @@ var require_shared2 = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/authclient.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/authclient.js
 var require_authclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/authclient.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/authclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.AuthClient = exports.DEFAULT_EAGER_REFRESH_THRESHOLD_MILLIS = exports.DEFAULT_UNIVERSE = void 0;
@@ -12746,9 +12753,9 @@ var require_authclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/loginticket.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/loginticket.js
 var require_loginticket = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/loginticket.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/loginticket.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.LoginTicket = void 0;
@@ -12798,9 +12805,9 @@ var require_loginticket = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/oauth2client.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/oauth2client.js
 var require_oauth2client = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/oauth2client.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/oauth2client.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.OAuth2Client = exports.ClientAuthentication = exports.CertificateFormat = exports.CodeChallengeMethod = void 0;
@@ -13479,9 +13486,9 @@ var require_oauth2client = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/computeclient.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/computeclient.js
 var require_computeclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/computeclient.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/computeclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Compute = void 0;
@@ -13571,9 +13578,9 @@ var require_computeclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/idtokenclient.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/idtokenclient.js
 var require_idtokenclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/idtokenclient.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/idtokenclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.IdTokenClient = void 0;
@@ -13617,9 +13624,9 @@ var require_idtokenclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/envDetect.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/envDetect.js
 var require_envDetect = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/envDetect.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/envDetect.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GCPEnv = void 0;
@@ -13694,9 +13701,9 @@ var require_envDetect = __commonJS({
   }
 });
 
-// node_modules/jws/lib/data-stream.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/jws/lib/data-stream.js
 var require_data_stream = __commonJS({
-  "node_modules/jws/lib/data-stream.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/jws/lib/data-stream.js"(exports, module) {
     var Buffer4 = require_safe_buffer().Buffer;
     var Stream4 = __require("stream");
     var util = __require("util");
@@ -13742,9 +13749,9 @@ var require_data_stream = __commonJS({
   }
 });
 
-// node_modules/buffer-equal-constant-time/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/buffer-equal-constant-time/index.js
 var require_buffer_equal_constant_time = __commonJS({
-  "node_modules/buffer-equal-constant-time/index.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/buffer-equal-constant-time/index.js"(exports, module) {
     "use strict";
     var Buffer4 = __require("buffer").Buffer;
     var SlowBuffer = __require("buffer").SlowBuffer;
@@ -13776,9 +13783,9 @@ var require_buffer_equal_constant_time = __commonJS({
   }
 });
 
-// node_modules/jwa/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/jwa/index.js
 var require_jwa = __commonJS({
-  "node_modules/jwa/index.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/jwa/index.js"(exports, module) {
     var Buffer4 = require_safe_buffer().Buffer;
     var crypto2 = __require("crypto");
     var formatEcdsa = require_ecdsa_sig_formatter();
@@ -14000,9 +14007,9 @@ var require_jwa = __commonJS({
   }
 });
 
-// node_modules/jws/lib/tostring.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/jws/lib/tostring.js
 var require_tostring = __commonJS({
-  "node_modules/jws/lib/tostring.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/jws/lib/tostring.js"(exports, module) {
     var Buffer4 = __require("buffer").Buffer;
     module.exports = function toString(obj) {
       if (typeof obj === "string")
@@ -14014,9 +14021,9 @@ var require_tostring = __commonJS({
   }
 });
 
-// node_modules/jws/lib/sign-stream.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/jws/lib/sign-stream.js
 var require_sign_stream = __commonJS({
-  "node_modules/jws/lib/sign-stream.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/jws/lib/sign-stream.js"(exports, module) {
     var Buffer4 = require_safe_buffer().Buffer;
     var DataStream = require_data_stream();
     var jwa = require_jwa();
@@ -14089,9 +14096,9 @@ var require_sign_stream = __commonJS({
   }
 });
 
-// node_modules/jws/lib/verify-stream.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/jws/lib/verify-stream.js
 var require_verify_stream = __commonJS({
-  "node_modules/jws/lib/verify-stream.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/jws/lib/verify-stream.js"(exports, module) {
     var Buffer4 = require_safe_buffer().Buffer;
     var DataStream = require_data_stream();
     var jwa = require_jwa();
@@ -14204,9 +14211,9 @@ var require_verify_stream = __commonJS({
   }
 });
 
-// node_modules/jws/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/jws/index.js
 var require_jws = __commonJS({
-  "node_modules/jws/index.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/jws/index.js"(exports) {
     var SignStream = require_sign_stream();
     var VerifyStream = require_verify_stream();
     var ALGORITHMS = [
@@ -14237,9 +14244,9 @@ var require_jws = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/gtoken/jwsSign.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/gtoken/jwsSign.js
 var require_jwsSign = __commonJS({
-  "node_modules/google-auth-library/build/src/gtoken/jwsSign.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/gtoken/jwsSign.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.buildPayloadForJwsSign = buildPayloadForJwsSign;
@@ -14271,9 +14278,9 @@ var require_jwsSign = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/gtoken/getToken.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/gtoken/getToken.js
 var require_getToken = __commonJS({
-  "node_modules/google-auth-library/build/src/gtoken/getToken.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/gtoken/getToken.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getToken = getToken;
@@ -14315,9 +14322,9 @@ var require_getToken = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/gtoken/errorWithCode.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/gtoken/errorWithCode.js
 var require_errorWithCode = __commonJS({
-  "node_modules/google-auth-library/build/src/gtoken/errorWithCode.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/gtoken/errorWithCode.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ErrorWithCode = void 0;
@@ -14332,9 +14339,9 @@ var require_errorWithCode = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/gtoken/getCredentials.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/gtoken/getCredentials.js
 var require_getCredentials = __commonJS({
-  "node_modules/google-auth-library/build/src/gtoken/getCredentials.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/gtoken/getCredentials.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getCredentials = getCredentials;
@@ -14433,9 +14440,9 @@ var require_getCredentials = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/gtoken/tokenHandler.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/gtoken/tokenHandler.js
 var require_tokenHandler = __commonJS({
-  "node_modules/google-auth-library/build/src/gtoken/tokenHandler.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/gtoken/tokenHandler.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.TokenHandler = void 0;
@@ -14524,9 +14531,9 @@ var require_tokenHandler = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/gtoken/revokeToken.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/gtoken/revokeToken.js
 var require_revokeToken = __commonJS({
-  "node_modules/google-auth-library/build/src/gtoken/revokeToken.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/gtoken/revokeToken.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.revokeToken = revokeToken;
@@ -14542,9 +14549,9 @@ var require_revokeToken = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/gtoken/googleToken.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/gtoken/googleToken.js
 var require_googleToken = __commonJS({
-  "node_modules/google-auth-library/build/src/gtoken/googleToken.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/gtoken/googleToken.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GoogleToken = void 0;
@@ -14648,9 +14655,9 @@ var require_googleToken = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/jwtaccess.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/jwtaccess.js
 var require_jwtaccess = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/jwtaccess.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/jwtaccess.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.JWTAccess = void 0;
@@ -14797,7 +14804,7 @@ var require_jwtaccess = __commonJS({
         }
       }
       fromStreamAsync(inputStream) {
-        return new Promise((resolve5, reject) => {
+        return new Promise((resolve6, reject) => {
           if (!inputStream) {
             reject(new Error("Must pass in a stream containing the service account auth settings."));
           }
@@ -14806,7 +14813,7 @@ var require_jwtaccess = __commonJS({
             try {
               const data = JSON.parse(s2);
               this.fromJSON(data);
-              resolve5();
+              resolve6();
             } catch (err) {
               reject(err);
             }
@@ -14818,9 +14825,9 @@ var require_jwtaccess = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/jwtclient.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/jwtclient.js
 var require_jwtclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/jwtclient.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/jwtclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.JWT = void 0;
@@ -15045,7 +15052,7 @@ var require_jwtclient = __commonJS({
         }
       }
       fromStreamAsync(inputStream) {
-        return new Promise((resolve5, reject) => {
+        return new Promise((resolve6, reject) => {
           if (!inputStream) {
             throw new Error("Must pass in a stream containing the service account auth settings.");
           }
@@ -15054,7 +15061,7 @@ var require_jwtclient = __commonJS({
             try {
               const data = JSON.parse(s2);
               this.fromJSON(data);
-              resolve5();
+              resolve6();
             } catch (e2) {
               reject(e2);
             }
@@ -15090,9 +15097,9 @@ var require_jwtclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/refreshclient.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/refreshclient.js
 var require_refreshclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/refreshclient.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/refreshclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.UserRefreshClient = exports.USER_REFRESH_ACCOUNT_TYPE = void 0;
@@ -15187,7 +15194,7 @@ var require_refreshclient = __commonJS({
         }
       }
       async fromStreamAsync(inputStream) {
-        return new Promise((resolve5, reject) => {
+        return new Promise((resolve6, reject) => {
           if (!inputStream) {
             return reject(new Error("Must pass in a stream containing the user refresh token."));
           }
@@ -15196,7 +15203,7 @@ var require_refreshclient = __commonJS({
             try {
               const data = JSON.parse(s2);
               this.fromJSON(data);
-              return resolve5();
+              return resolve6();
             } catch (err) {
               return reject(err);
             }
@@ -15218,9 +15225,9 @@ var require_refreshclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/impersonated.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/impersonated.js
 var require_impersonated = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/impersonated.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/impersonated.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Impersonated = exports.IMPERSONATED_ACCOUNT_TYPE = void 0;
@@ -15397,9 +15404,9 @@ var require_impersonated = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/oauth2common.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/oauth2common.js
 var require_oauth2common = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/oauth2common.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/oauth2common.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.OAuthClientAuthHandler = void 0;
@@ -15545,9 +15552,9 @@ var require_oauth2common = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/stscredentials.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/stscredentials.js
 var require_stscredentials = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/stscredentials.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/stscredentials.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.StsCredentials = void 0;
@@ -15633,9 +15640,9 @@ var require_stscredentials = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/baseexternalclient.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/baseexternalclient.js
 var require_baseexternalclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/baseexternalclient.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/baseexternalclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.BaseExternalAccountClient = exports.CLOUD_RESOURCE_MANAGER = exports.EXTERNAL_ACCOUNT_TYPE = exports.EXPIRATION_TIME_OFFSET = void 0;
@@ -16012,9 +16019,9 @@ var require_baseexternalclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/filesubjecttokensupplier.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/filesubjecttokensupplier.js
 var require_filesubjecttokensupplier = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/filesubjecttokensupplier.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/filesubjecttokensupplier.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.FileSubjectTokenSupplier = void 0;
@@ -16077,9 +16084,9 @@ var require_filesubjecttokensupplier = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/urlsubjecttokensupplier.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/urlsubjecttokensupplier.js
 var require_urlsubjecttokensupplier = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/urlsubjecttokensupplier.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/urlsubjecttokensupplier.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.UrlSubjectTokenSupplier = void 0;
@@ -16135,9 +16142,9 @@ var require_urlsubjecttokensupplier = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js
 var require_certificatesubjecttokensupplier = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.CertificateSubjectTokenSupplier = exports.InvalidConfigurationError = exports.CertificateSourceUnavailableError = exports.CERTIFICATE_CONFIGURATION_ENV_VARIABLE = void 0;
@@ -16319,9 +16326,9 @@ var require_certificatesubjecttokensupplier = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/identitypoolclient.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/identitypoolclient.js
 var require_identitypoolclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/identitypoolclient.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/identitypoolclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.IdentityPoolClient = void 0;
@@ -16431,9 +16438,9 @@ var require_identitypoolclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/awsrequestsigner.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/awsrequestsigner.js
 var require_awsrequestsigner = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/awsrequestsigner.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/awsrequestsigner.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.AwsRequestSigner = void 0;
@@ -16581,9 +16588,9 @@ ${credentialScope}
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js
 var require_defaultawssecuritycredentialssupplier = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DefaultAwsSecurityCredentialsSupplier = void 0;
@@ -16736,9 +16743,9 @@ var require_defaultawssecuritycredentialssupplier = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/awsclient.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/awsclient.js
 var require_awsclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/awsclient.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/awsclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.AwsClient = void 0;
@@ -16850,9 +16857,9 @@ var require_awsclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/executable-response.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/executable-response.js
 var require_executable_response = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/executable-response.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/executable-response.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.InvalidSubjectTokenError = exports.InvalidMessageFieldError = exports.InvalidCodeFieldError = exports.InvalidTokenTypeFieldError = exports.InvalidExpirationTimeFieldError = exports.InvalidSuccessFieldError = exports.InvalidVersionFieldError = exports.ExecutableResponseError = exports.ExecutableResponse = void 0;
@@ -16981,9 +16988,9 @@ var require_executable_response = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js
 var require_pluggable_auth_handler = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.PluggableAuthHandler = exports.ExecutableError = void 0;
@@ -17029,7 +17036,7 @@ var require_pluggable_auth_handler = __commonJS({
        * @return A promise that resolves with the executable response.
        */
       retrieveResponseFromExecutable(envMap) {
-        return new Promise((resolve5, reject) => {
+        return new Promise((resolve6, reject) => {
           const child = childProcess.spawn(this.commandComponents[0], this.commandComponents.slice(1), {
             env: { ...process.env, ...Object.fromEntries(envMap) }
           });
@@ -17051,7 +17058,7 @@ var require_pluggable_auth_handler = __commonJS({
               try {
                 const responseJson = JSON.parse(output);
                 const response = new executable_response_1.ExecutableResponse(responseJson);
-                return resolve5(response);
+                return resolve6(response);
               } catch (error) {
                 if (error instanceof executable_response_1.ExecutableResponseError) {
                   return reject(error);
@@ -17122,9 +17129,9 @@ var require_pluggable_auth_handler = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js
 var require_pluggable_auth_client = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.PluggableAuthClient = exports.ExecutableError = void 0;
@@ -17249,9 +17256,9 @@ var require_pluggable_auth_client = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/externalclient.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/externalclient.js
 var require_externalclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/externalclient.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/externalclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ExternalAccountClient = void 0;
@@ -17298,9 +17305,9 @@ var require_externalclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/externalAccountAuthorizedUserClient.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/externalAccountAuthorizedUserClient.js
 var require_externalAccountAuthorizedUserClient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/externalAccountAuthorizedUserClient.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/externalAccountAuthorizedUserClient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ExternalAccountAuthorizedUserClient = exports.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE = void 0;
@@ -17485,9 +17492,9 @@ var require_externalAccountAuthorizedUserClient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/gdchclient.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/gdchclient.js
 var require_gdchclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/gdchclient.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/gdchclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GdchClient = exports.GDCH_SERVICE_ACCOUNT_TYPE = void 0;
@@ -17768,9 +17775,9 @@ var require_gdchclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/googleauth.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/googleauth.js
 var require_googleauth = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/googleauth.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/googleauth.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GoogleAuth = exports.GoogleAuthExceptionMessages = void 0;
@@ -18243,7 +18250,7 @@ var require_googleauth = __commonJS({
         }
       }
       fromStreamAsync(inputStream, options) {
-        return new Promise((resolve5, reject) => {
+        return new Promise((resolve6, reject) => {
           if (!inputStream) {
             throw new Error("Must pass in a stream containing the Google auth settings.");
           }
@@ -18253,7 +18260,7 @@ var require_googleauth = __commonJS({
               try {
                 const data = JSON.parse(chunks.join(""));
                 const r2 = this._cacheClientFromJSON(data, options);
-                return resolve5(r2);
+                return resolve6(r2);
               } catch (err) {
                 if (!this.keyFilename)
                   throw err;
@@ -18263,7 +18270,7 @@ var require_googleauth = __commonJS({
                 });
                 this.cachedCredential = client;
                 this.setGapicJWTValues(client);
-                return resolve5(client);
+                return resolve6(client);
               }
             } catch (err) {
               return reject(err);
@@ -18299,17 +18306,17 @@ var require_googleauth = __commonJS({
        * Run the Google Cloud SDK command that prints the default project ID
        */
       async getDefaultServiceProjectId() {
-        return new Promise((resolve5) => {
+        return new Promise((resolve6) => {
           (0, child_process_1.exec)("gcloud config config-helper --format json", (err, stdout) => {
             if (!err && stdout) {
               try {
                 const projectId = JSON.parse(stdout).configuration.properties.core.project;
-                resolve5(projectId);
+                resolve6(projectId);
                 return;
               } catch (e2) {
               }
             }
-            resolve5(null);
+            resolve6(null);
           });
         });
       }
@@ -18576,9 +18583,9 @@ var require_googleauth = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/iam.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/iam.js
 var require_iam = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/iam.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/iam.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.IAMAuth = void 0;
@@ -18612,9 +18619,9 @@ var require_iam = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/downscopedclient.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/downscopedclient.js
 var require_downscopedclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/downscopedclient.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/downscopedclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DownscopedClient = exports.EXPIRATION_TIME_OFFSET = exports.MAX_ACCESS_BOUNDARY_RULES_COUNT = void 0;
@@ -18797,9 +18804,9 @@ var require_downscopedclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/passthrough.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/passthrough.js
 var require_passthrough = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/passthrough.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/auth/passthrough.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.PassThroughClient = void 0;
@@ -18842,9 +18849,9 @@ var require_passthrough = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/index.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/index.js
 var require_src5 = __commonJS({
-  "node_modules/google-auth-library/build/src/index.js"(exports) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/google-auth-library/build/src/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -18978,9 +18985,9 @@ var require_src5 = __commonJS({
   }
 });
 
-// node_modules/ws/lib/constants.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/constants.js
 var require_constants = __commonJS({
-  "node_modules/ws/lib/constants.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/constants.js"(exports, module) {
     "use strict";
     var BINARY_TYPES = ["nodebuffer", "arraybuffer", "fragments"];
     var hasBlob = typeof Blob !== "undefined";
@@ -19001,9 +19008,9 @@ var require_constants = __commonJS({
   }
 });
 
-// node_modules/ws/lib/buffer-util.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/buffer-util.js
 var require_buffer_util = __commonJS({
-  "node_modules/ws/lib/buffer-util.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/buffer-util.js"(exports, module) {
     "use strict";
     var { EMPTY_BUFFER } = require_constants();
     var FastBuffer = Buffer[Symbol.species];
@@ -19076,9 +19083,9 @@ var require_buffer_util = __commonJS({
   }
 });
 
-// node_modules/ws/lib/limiter.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/limiter.js
 var require_limiter = __commonJS({
-  "node_modules/ws/lib/limiter.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/limiter.js"(exports, module) {
     "use strict";
     var kDone = Symbol("kDone");
     var kRun = Symbol("kRun");
@@ -19126,9 +19133,9 @@ var require_limiter = __commonJS({
   }
 });
 
-// node_modules/ws/lib/permessage-deflate.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/permessage-deflate.js
 var require_permessage_deflate = __commonJS({
-  "node_modules/ws/lib/permessage-deflate.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/permessage-deflate.js"(exports, module) {
     "use strict";
     var zlib2 = __require("zlib");
     var bufferUtil = require_buffer_util();
@@ -19255,7 +19262,7 @@ var require_permessage_deflate = __commonJS({
       acceptAsServer(offers) {
         const opts = this._options;
         const accepted = offers.find((params) => {
-          if (opts.serverNoContextTakeover === false && params.server_no_context_takeover || params.server_max_window_bits && (opts.serverMaxWindowBits === false || typeof opts.serverMaxWindowBits === "number" && opts.serverMaxWindowBits > params.server_max_window_bits) || typeof opts.clientMaxWindowBits === "number" && (typeof params.client_max_window_bits === "number" ? opts.clientMaxWindowBits > params.client_max_window_bits : !params.client_max_window_bits)) {
+          if (opts.serverNoContextTakeover === false && params.server_no_context_takeover || params.server_max_window_bits && (opts.serverMaxWindowBits === false || typeof opts.serverMaxWindowBits === "number" && opts.serverMaxWindowBits > params.server_max_window_bits) || typeof opts.clientMaxWindowBits === "number" && !params.client_max_window_bits) {
             return false;
           }
           return true;
@@ -19509,9 +19516,9 @@ var require_permessage_deflate = __commonJS({
   }
 });
 
-// node_modules/ws/lib/validation.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/validation.js
 var require_validation = __commonJS({
-  "node_modules/ws/lib/validation.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/validation.js"(exports, module) {
     "use strict";
     var { isUtf8 } = __require("buffer");
     var { hasBlob } = require_constants();
@@ -19710,9 +19717,9 @@ var require_validation = __commonJS({
   }
 });
 
-// node_modules/ws/lib/receiver.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/receiver.js
 var require_receiver = __commonJS({
-  "node_modules/ws/lib/receiver.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/receiver.js"(exports, module) {
     "use strict";
     var { Writable } = __require("stream");
     var PerMessageDeflate2 = require_permessage_deflate();
@@ -19775,7 +19782,6 @@ var require_receiver = __commonJS({
         this._opcode = 0;
         this._totalPayloadLength = 0;
         this._messageLength = 0;
-        this._numFragments = 0;
         this._fragments = [];
         this._errored = false;
         this._loop = false;
@@ -20126,23 +20132,23 @@ var require_receiver = __commonJS({
           this.controlMessage(data, cb);
           return;
         }
-        if (this._maxFragments > 0 && ++this._numFragments > this._maxFragments) {
-          const error = this.createError(
-            RangeError,
-            "Too many message fragments",
-            false,
-            1008,
-            "WS_ERR_TOO_MANY_BUFFERED_PARTS"
-          );
-          cb(error);
-          return;
-        }
         if (this._compressed) {
           this._state = INFLATING;
           this.decompress(data, cb);
           return;
         }
         if (data.length) {
+          if (this._maxFragments > 0 && this._fragments.length >= this._maxFragments) {
+            const error = this.createError(
+              RangeError,
+              "Too many message fragments",
+              false,
+              1008,
+              "WS_ERR_TOO_MANY_BUFFERED_PARTS"
+            );
+            cb(error);
+            return;
+          }
           this._messageLength = this._totalPayloadLength;
           this._fragments.push(data);
         }
@@ -20172,6 +20178,17 @@ var require_receiver = __commonJS({
               cb(error);
               return;
             }
+            if (this._maxFragments > 0 && this._fragments.length >= this._maxFragments) {
+              const error = this.createError(
+                RangeError,
+                "Too many message fragments",
+                false,
+                1008,
+                "WS_ERR_TOO_MANY_BUFFERED_PARTS"
+              );
+              cb(error);
+              return;
+            }
             this._fragments.push(buf);
           }
           this.dataMessage(cb);
@@ -20194,7 +20211,6 @@ var require_receiver = __commonJS({
         this._totalPayloadLength = 0;
         this._messageLength = 0;
         this._fragmented = 0;
-        this._numFragments = 0;
         this._fragments = [];
         if (this._opcode === 2) {
           let data;
@@ -20333,9 +20349,9 @@ var require_receiver = __commonJS({
   }
 });
 
-// node_modules/ws/lib/sender.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/sender.js
 var require_sender = __commonJS({
-  "node_modules/ws/lib/sender.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/sender.js"(exports, module) {
     "use strict";
     var { Duplex } = __require("stream");
     var { randomFillSync } = __require("crypto");
@@ -20826,9 +20842,9 @@ var require_sender = __commonJS({
   }
 });
 
-// node_modules/ws/lib/event-target.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/event-target.js
 var require_event_target = __commonJS({
-  "node_modules/ws/lib/event-target.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/event-target.js"(exports, module) {
     "use strict";
     var { kForOnEventAttribute, kListener } = require_constants();
     var kCode = Symbol("kCode");
@@ -21055,9 +21071,9 @@ var require_event_target = __commonJS({
   }
 });
 
-// node_modules/ws/lib/extension.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/extension.js
 var require_extension = __commonJS({
-  "node_modules/ws/lib/extension.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/extension.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
     function push(dest, name, elem) {
@@ -21208,9 +21224,9 @@ var require_extension = __commonJS({
   }
 });
 
-// node_modules/ws/lib/websocket.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/websocket.js
 var require_websocket = __commonJS({
-  "node_modules/ws/lib/websocket.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/websocket.js"(exports, module) {
     "use strict";
     var EventEmitter = __require("events");
     var https2 = __require("https");
@@ -21695,8 +21711,8 @@ var require_websocket = __commonJS({
         autoPong: true,
         closeTimeout: CLOSE_TIMEOUT,
         protocolVersion: protocolVersions[1],
-        maxBufferedChunks: 256 * 1024,
-        maxFragments: 16 * 1024,
+        maxBufferedChunks: 1024 * 1024,
+        maxFragments: 128 * 1024,
         maxPayload: 100 * 1024 * 1024,
         skipUTF8Validation: false,
         perMessageDeflate: true,
@@ -22104,9 +22120,9 @@ var require_websocket = __commonJS({
   }
 });
 
-// node_modules/ws/lib/stream.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/stream.js
 var require_stream = __commonJS({
-  "node_modules/ws/lib/stream.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/stream.js"(exports, module) {
     "use strict";
     var WebSocket2 = require_websocket();
     var { Duplex } = __require("stream");
@@ -22202,9 +22218,9 @@ var require_stream = __commonJS({
   }
 });
 
-// node_modules/ws/lib/subprotocol.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/subprotocol.js
 var require_subprotocol = __commonJS({
-  "node_modules/ws/lib/subprotocol.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/subprotocol.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
     function parse(header) {
@@ -22247,9 +22263,9 @@ var require_subprotocol = __commonJS({
   }
 });
 
-// node_modules/ws/lib/websocket-server.js
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/websocket-server.js
 var require_websocket_server = __commonJS({
-  "node_modules/ws/lib/websocket-server.js"(exports, module) {
+  "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/lib/websocket-server.js"(exports, module) {
     "use strict";
     var EventEmitter = __require("events");
     var http3 = __require("http");
@@ -22283,9 +22299,9 @@ var require_websocket_server = __commonJS({
        *     called
        * @param {Function} [options.handleProtocols] A hook to handle protocols
        * @param {String} [options.host] The hostname where to bind the server
-       * @param {Number} [options.maxBufferedChunks=262144] The maximum number of
+       * @param {Number} [options.maxBufferedChunks=1048576] The maximum number of
        *     buffered data chunks
-       * @param {Number} [options.maxFragments=16384] The maximum number of message
+       * @param {Number} [options.maxFragments=131072] The maximum number of message
        *     fragments
        * @param {Number} [options.maxPayload=104857600] The maximum allowed message
        *     size
@@ -22308,8 +22324,8 @@ var require_websocket_server = __commonJS({
         options = {
           allowSynchronousEvents: true,
           autoPong: true,
-          maxBufferedChunks: 256 * 1024,
-          maxFragments: 16 * 1024,
+          maxBufferedChunks: 1024 * 1024,
+          maxFragments: 128 * 1024,
           maxPayload: 100 * 1024 * 1024,
           skipUTF8Validation: false,
           perMessageDeflate: false,
@@ -22674,8 +22690,8 @@ function projectDir() {
 }
 
 // src/main.ts
-import { readFileSync as readFileSync6 } from "node:fs";
-import { join as join8 } from "node:path";
+import { readFileSync as readFileSync10 } from "node:fs";
+import { join as join11 } from "node:path";
 
 // src/routing.ts
 init_thresholds();
@@ -22693,7 +22709,7 @@ import { spawn as spawn2 } from "node:child_process";
 import { createHash } from "node:crypto";
 import { join as join4, resolve as resolve3 } from "node:path";
 
-// node_modules/@google/genai/dist/node/index.mjs
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/@google/genai/dist/node/index.mjs
 var import_p_retry = __toESM(require_p_retry(), 1);
 var import_google_auth_library = __toESM(require_src5(), 1);
 import { createWriteStream } from "fs";
@@ -22702,7 +22718,7 @@ import { writeFile } from "fs/promises";
 import { Readable } from "node:stream";
 import { finished } from "node:stream/promises";
 
-// node_modules/ws/wrapper.mjs
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/ws/wrapper.mjs
 var import_stream = __toESM(require_stream(), 1);
 var import_extension = __toESM(require_extension(), 1);
 var import_permessage_deflate = __toESM(require_permessage_deflate(), 1);
@@ -22712,7 +22728,7 @@ var import_subprotocol = __toESM(require_subprotocol(), 1);
 var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 
-// node_modules/@google/genai/dist/node/index.mjs
+// ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/@google/genai/dist/node/index.mjs
 import * as path$1 from "path";
 var _defaultBaseGeminiUrl = void 0;
 var _defaultBaseVertexUrl = void 0;
@@ -24372,8 +24388,8 @@ function processJsonSchema(_jsonSchema) {
   }
   return genAISchema;
 }
-function tSchema(schema) {
-  return processJsonSchema(schema);
+function tSchema(schema3) {
+  return processJsonSchema(schema3);
 }
 function tSpeechConfig(speechConfig) {
   if (typeof speechConfig === "object") {
@@ -27885,14 +27901,14 @@ function __asyncValues(o) {
   }, i2);
   function verb(n) {
     i2[n] = o[n] && function(v) {
-      return new Promise(function(resolve5, reject) {
-        v = o[n](v), settle(resolve5, reject, v.done, v.value);
+      return new Promise(function(resolve6, reject) {
+        v = o[n](v), settle(resolve6, reject, v.done, v.value);
       });
     };
   }
-  function settle(resolve5, reject, d, v) {
+  function settle(resolve6, reject, d, v) {
     Promise.resolve(v).then(function(v2) {
-      resolve5({ value: v2, done: d });
+      resolve6({ value: v2, done: d });
     }, reject);
   }
 }
@@ -34335,8 +34351,8 @@ var LiveMusic = class {
     const url = `${websocketBaseUrl}/ws/google.ai.generativelanguage.${apiVersion}.GenerativeService.BidiGenerateMusic?key=${apiKey}`;
     let onopenResolve = () => {
     };
-    const onopenPromise = new Promise((resolve5) => {
-      onopenResolve = resolve5;
+    const onopenPromise = new Promise((resolve6) => {
+      onopenResolve = resolve6;
     });
     const callbacks = params.callbacks;
     const onopenAwaitedCallback = function() {
@@ -34576,8 +34592,8 @@ var Live = class {
     }
     let onopenResolve = () => {
     };
-    const onopenPromise = new Promise((resolve5) => {
-      onopenResolve = resolve5;
+    const onopenPromise = new Promise((resolve6) => {
+      onopenResolve = resolve6;
     });
     const callbacks = params.callbacks;
     const onopenAwaitedCallback = function() {
@@ -37642,7 +37658,7 @@ var safeJSON = (text) => {
     return void 0;
   }
 };
-var sleep$1 = (ms) => new Promise((resolve5) => setTimeout(resolve5, ms));
+var sleep$1 = (ms) => new Promise((resolve6) => setTimeout(resolve6, ms));
 function getDefaultFetch() {
   if (typeof fetch !== "undefined") {
     return fetch;
@@ -38490,8 +38506,8 @@ async function defaultParseResponse(client, props) {
 }
 var APIPromise = class _APIPromise extends Promise {
   constructor(client, responsePromise, parseResponse = defaultParseResponse) {
-    super((resolve5) => {
-      resolve5(null);
+    super((resolve6) => {
+      resolve6(null);
     });
     this.responsePromise = responsePromise;
     this.parseResponse = parseResponse;
@@ -40817,7 +40833,7 @@ import { spawn } from "node:child_process";
 import { basename as basename3, dirname, join as join2, resolve as resolve2 } from "node:path";
 var spawnRunner = async (args2, systemPrompt) => {
   const fullArgs = args2.map((arg) => arg === "__SYSTEM_PROMPT__" ? systemPrompt : arg);
-  return await new Promise((resolve5, reject) => {
+  return await new Promise((resolve6, reject) => {
     const child = spawn("pi", fullArgs, { stdio: ["pipe", "pipe", "pipe"] });
     child.stdin.end();
     let stdout = "";
@@ -40843,7 +40859,7 @@ var spawnRunner = async (args2, systemPrompt) => {
           return;
         }
         const finalText = (message.content ?? []).map((item) => item.text ?? "").join("");
-        resolve5({ finalText, usage: { in: message.usage?.input ?? 0, out: message.usage?.output ?? 0 } });
+        resolve6({ finalText, usage: { in: message.usage?.input ?? 0, out: message.usage?.output ?? 0 } });
       } catch (error) {
         reject(error);
       }
@@ -40854,15 +40870,15 @@ var runner = spawnRunner;
 var readyOverride;
 async function piReady() {
   if (readyOverride !== void 0) return readyOverride;
-  return await new Promise((resolve5) => {
+  return await new Promise((resolve6) => {
     const child = spawn("pi", ["auth", "check", "--provider", "openrouter"], { stdio: "ignore" });
-    child.on("error", () => resolve5(false));
-    child.on("close", (code) => resolve5(code === 0));
+    child.on("error", () => resolve6(false));
+    child.on("close", (code) => resolve6(code === 0));
   });
 }
-async function callPi(step, prompt3, systemPrompt) {
+async function callPi(step, prompt4, systemPrompt) {
   const model = piModelFor(step);
-  const args2 = ["-p", "--mode", "json", "--no-session", "--no-tools", "--no-extensions", "--no-skills", "--no-context-files", "--no-prompt-templates", "--provider", "openrouter", "--model", model, "--system-prompt", "__SYSTEM_PROMPT__", "--skill", join2(pluginRoot(), "pi-skills", "aw-judge"), prompt3];
+  const args2 = ["-p", "--mode", "json", "--no-session", "--no-tools", "--no-extensions", "--no-skills", "--no-context-files", "--no-prompt-templates", "--provider", "openrouter", "--model", model, "--system-prompt", "__SYSTEM_PROMPT__", "--skill", join2(pluginRoot(), "pi-skills", "aw-judge"), prompt4];
   return await runner(args2, systemPrompt);
 }
 function piModelFor(step) {
@@ -40881,8 +40897,8 @@ function pluginRoot(argv1 = process.argv[1] ?? "") {
 
 // src/judge.ts
 init_thresholds();
-function matchesSchema(value, schema) {
-  const rule = schema;
+function matchesSchema(value, schema3) {
+  const rule = schema3;
   if (rule.enum && !rule.enum.some((entry) => JSON.stringify(entry) === JSON.stringify(value))) return false;
   if (rule.type === "object") {
     if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
@@ -40901,7 +40917,7 @@ async function judge(req) {
     const basePrompt = `${req.prompt}
 JSON schema:
 ${JSON.stringify(req.schema)}`;
-    let prompt3 = basePrompt;
+    let prompt4 = basePrompt;
     let lastError = "invalid JSON";
     const judgeConfig = thresholds_default.judge;
     for (let attempt = 0; attempt < judgeConfig.validationAttempts; attempt++) {
@@ -40911,7 +40927,7 @@ ${JSON.stringify(req.schema)}`;
       try {
         let result2;
         try {
-          result2 = await callPi(req.step, prompt3, "You are a constrained academic writing judge. Answer ONLY with one JSON object matching the schema in the prompt. Do not use tools. Preserve Hebrew quotations exactly; geresh and gershayim are abbreviation marks and must not be corrected.");
+          result2 = await callPi(req.step, prompt4, "You are a constrained academic writing judge. Answer ONLY with one JSON object matching the schema in the prompt. Do not use tools. Preserve Hebrew quotations exactly; geresh and gershayim are abbreviation marks and must not be corrected.");
         } catch (error) {
           throw new Error(`ERROR ${req.step}: Pi model failure: ${error instanceof Error ? error.message : "unknown error"}`);
         }
@@ -40924,7 +40940,7 @@ ${JSON.stringify(req.schema)}`;
       } catch (error) {
         lastError = error instanceof Error ? error.message : "invalid JSON";
         if (lastError.startsWith(`ERROR ${req.step}:`)) throw error;
-        prompt3 = `${basePrompt}
+        prompt4 = `${basePrompt}
 Validation error: ${lastError}. Return one corrected JSON object.`;
       } finally {
         appendLedger({ run_id: req.runId, step: req.step, provider: "pi", model: piModelFor(req.step), input_tokens: usage.in, output_tokens: usage.out, cost_usd: null, latency_ms: Date.now() - started, exit, same_family: false });
@@ -41291,8 +41307,8 @@ async function fetchSefaria(reference) {
   const payload = await response.json();
   if (typeof payload !== "object" || payload === null) throw new Error("ERROR sefaria.fetch: invalid response");
   const record = payload;
-  const flatten = (value) => Array.isArray(value) ? value.flatMap(flatten) : typeof value === "string" ? [value] : [];
-  const text = flatten(record.he).join("\n");
+  const flatten2 = (value) => Array.isArray(value) ? value.flatMap(flatten2) : typeof value === "string" ? [value] : [];
+  const text = flatten2(record.he).join("\n");
   if (!text) throw new Error("ERROR sefaria.fetch: missing Hebrew text");
   return { title: typeof record.ref === "string" ? record.ref : reference, author: "", text };
 }
@@ -41619,10 +41635,10 @@ function append(file, row) {
 `, "utf8");
 }
 async function classify(items, runId2) {
-  const schema = { type: "OBJECT", properties: { items: { type: "ARRAY", items: { type: "OBJECT", properties: { id: { type: "STRING" }, category: { type: "STRING", enum: ["text_edit", "argument", "voice_signal", "plugin_defect"] }, proposal: { type: "OBJECT" } }, required: ["id", "category", "proposal"] } } }, required: ["items"] };
+  const schema3 = { type: "OBJECT", properties: { items: { type: "ARRAY", items: { type: "OBJECT", properties: { id: { type: "STRING" }, category: { type: "STRING", enum: ["text_edit", "argument", "voice_signal", "plugin_defect"] }, proposal: { type: "OBJECT" } }, required: ["id", "category", "proposal"] } } }, required: ["items"] };
   const fallback = async () => {
     const caps = thresholds_default.budget.revise;
-    const result2 = await callGemini({ step: "revise.classify", system: "Classify review feedback accurately. Return JSON only.", parts: [JSON.stringify(items)], responseSchema: schema, runId: runId2, budget: new Budget(runId2, caps) });
+    const result2 = await callGemini({ step: "revise.classify", system: "Classify review feedback accurately. Return JSON only.", parts: [JSON.stringify(items)], responseSchema: schema3, runId: runId2, budget: new Budget(runId2, caps) });
     return JSON.stringify(result2.json);
   };
   const result = await decide({ point: "revise.classify", question: "Classify each Word review item.", options: ["text_edit", "argument", "voice_signal", "plugin_defect"], context: JSON.stringify(items), runId: runId2, fallback });
@@ -41680,14 +41696,504 @@ async function applyPlan(plan) {
   return { applied, deferred };
 }
 
+// src/draft.ts
+import { existsSync as existsSync4, mkdirSync as mkdirSync7, readFileSync as readFileSync6, writeFileSync as writeFileSync5 } from "node:fs";
+import { join as join8 } from "node:path";
+init_thresholds();
+
+// src/prompts/write-draft.md
+var write_draft_default = "You are writing one unit of a scholarly article as its author, a Humanities researcher. The text you produce goes into the article under the author's name, so it must read as the author's own academic prose. Claude has already planned the argument, chosen the evidence, and will verify every citation after you; your job is the prose for exactly one unit of the plan.\n\nEverything you need follows in this order: the reference material for this unit (evidence, the predecessor units' finished text, and the outline), then the author's voice, then the task, and last the output contract.\n\n<evidence_passages>\nQuote from these verbatim when you quote at all. Do not invent, translate, or paraphrase a quotation \u2014 copy the exact characters. If nothing here is worth quoting, write without a quotation rather than approximate one.\n{{evidence_passages}}\n</evidence_passages>\n\n<predecessor_units>\nThe finished text of every unit this one depends on (or, for the introduction and conclusion, every body unit already drafted). Continue the argument from here \u2014 do not repeat what these units already established.\n{{predecessor_text}}\n</predecessor_units>\n\n<outline>\nThesis: {{thesis}}\n\nThis unit: {{unit_id}} (role: {{unit_role}})\nClaim: {{unit_claim}}\nParagraph plan (move / evidence assignment / bridge target for each paragraph):\n{{unit_plan}}\n\nFull outline (id + claim per unit), for context only \u2014 write only the unit above:\n{{outline_summary}}\n</outline>\n\n<voice>\nExemplar paragraphs in the author's own words:\n{{voice_exemplars}}\n\nBefore/after pairs showing how the author's voice has been corrected in past drafts:\n{{voice_pairs}}\n\nVoice rules:\n{{voice_rules}}\n</voice>\n\n<redraft_feedback>\n{{feedback}}\n</redraft_feedback>\n\n<task>\nWrite unit {{unit_id}} now, following its paragraph plan. Reproduce the author's voice from <voice>: the rhythm, how a claim is introduced, how evidence is framed. Where <voice> and your own instincts disagree, follow the author. Each paragraph advances its assigned move; after a quotation, give the author's own analysis of it. If <redraft_feedback> is not empty, it is the citation auditor's rejection of your previous draft of this unit \u2014 fix every issue it names.\n\n{{language_directive}}\n\nCitations: cite by writing a footnote marker `[^KEY]` immediately after the sentence it supports. KEY is EXACTLY the `id` of the evidence passage you rely on, as shown in <evidence_passages> (for example `[^p1]`) \u2014 never a number, never a title, never an id you did not see. At the end of the unit, after a blank line, add one footnote definition per marker you used, in the form `[^KEY]: <locator> \u2014 <one-line gloss of what it supports>`. Do not cite a passage you did not quote or rely on. Code rejects any other key.\n\nQuotations: every quotation must be copied verbatim, character for character, from <evidence_passages>. Mark a quotation with Hebrew gershayim (\u05F4\u2026\u05F4) for Hebrew text, or with standard double quotation marks for other languages. Never quote from <predecessor_units>, <outline>, or <voice> \u2014 those are reference material, not primary sources.\n</task>\n\n<output_contract>\nReturn plain prose only \u2014 the unit's paragraphs, separated by a single blank line, followed (if any citations were used) by a blank line and the footnote definitions. No markdown formatting (no `*`, `_`, `#`, backticks, headings, or bullet lists), no preamble, no commentary about what you wrote, no JSON. The first character of your response is the first character of the unit's first paragraph.\n</output_contract>\n";
+
+// src/draft.ts
+var stubs2 = {};
+var EMPTY_STYLE_WORDS = { banned: [], capped: [], filler: [] };
+function roleOf(unit) {
+  if (unit.role === "intro" || unit.role === "conclusion") return unit.role;
+  if (unit.id === "intro") return "intro";
+  if (unit.id === "conclusion") return "conclusion";
+  return "body";
+}
+function flatten(outline) {
+  if (Array.isArray(outline.units)) return outline.units;
+  const sections = Array.isArray(outline.sections) ? outline.sections : [];
+  return sections.flatMap((section) => Array.isArray(section.units) ? section.units : []);
+}
+function topoSort(units) {
+  const byId = new Map(units.map((unit) => [unit.id, unit]));
+  const indegree = new Map(units.map((unit) => [unit.id, 0]));
+  const dependents = /* @__PURE__ */ new Map();
+  for (const unit of units) {
+    for (const dep of unit.dependsOn ?? []) {
+      if (!byId.has(dep)) continue;
+      indegree.set(unit.id, (indegree.get(unit.id) ?? 0) + 1);
+      dependents.set(dep, [...dependents.get(dep) ?? [], unit.id]);
+    }
+  }
+  const queue = units.filter((unit) => (indegree.get(unit.id) ?? 0) === 0).map((unit) => unit.id);
+  const order = [];
+  const seen = /* @__PURE__ */ new Set();
+  while (queue.length) {
+    const id = queue.shift();
+    if (id === void 0 || seen.has(id)) continue;
+    seen.add(id);
+    const unit = byId.get(id);
+    if (unit) order.push(unit);
+    for (const next of dependents.get(id) ?? []) {
+      indegree.set(next, (indegree.get(next) ?? 1) - 1);
+      if ((indegree.get(next) ?? 0) <= 0) queue.push(next);
+    }
+  }
+  if (order.length !== units.length) {
+    const stuck = units.filter((unit) => !seen.has(unit.id)).map((unit) => unit.id);
+    throw new AwError("ERROR", "write.draft", `cycle detected in dependsOn: ${stuck.join(", ")}`);
+  }
+  return order;
+}
+function normalize2(value) {
+  return value.normalize("NFC").replace(/\s+/gu, " ").trim();
+}
+function splitParagraphs(text) {
+  return text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+}
+function extractCitationKeys(text) {
+  const keys = /* @__PURE__ */ new Set();
+  const re = /\[\^([^\]]+)\]/g;
+  let match;
+  while (match = re.exec(text)) keys.add(match[1]);
+  return [...keys];
+}
+var HEBREW_LETTER = /[א-ת]/;
+function isAbbreviationGershayim(text, index) {
+  const prev = text[index - 1];
+  const next = text[index + 1];
+  return Boolean(prev && next && HEBREW_LETTER.test(prev) && HEBREW_LETTER.test(next));
+}
+function pairDelimiters(text, char, filterAbbreviation) {
+  const positions = [];
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] !== char) continue;
+    if (filterAbbreviation && isAbbreviationGershayim(text, index)) continue;
+    positions.push(index);
+  }
+  const spans = [];
+  for (let index = 0; index + 1 < positions.length; index += 2) {
+    spans.push(text.slice(positions[index] + 1, positions[index + 1]));
+  }
+  return spans;
+}
+function extractQuotedSpans(text) {
+  const gershayim = pairDelimiters(text, "\u05F4", true);
+  const curly = [...text.matchAll(/“([^“”]+)”/g)].map((m2) => m2[1]);
+  const straight = pairDelimiters(text, '"', false);
+  return [...gershayim, ...curly, ...straight].filter((span) => span.trim().length > 0);
+}
+function countOccurrences(haystack, needle) {
+  if (!needle) return 0;
+  return haystack.split(needle).length - 1;
+}
+function runGates(unit, text, paragraphs2, ctx) {
+  const citations = extractCitationKeys(text);
+  const badCitation = citations.find((key) => !ctx.sourceKeys.has(key));
+  if (badCitation !== void 0) return { gate: "citation-not-in-sources", detail: badCitation };
+  const pool = ctx.evidenceQuotes.map(normalize2).filter(Boolean);
+  for (const quote of extractQuotedSpans(text)) {
+    const needle = normalize2(quote);
+    if (!needle) continue;
+    if (!pool.some((passage) => passage.includes(needle))) return { gate: "quote-not-in-evidence", detail: quote.slice(0, 80) };
+  }
+  for (const banned of ctx.styleWords.banned) {
+    if (text.includes(banned.word)) return { gate: "style-banned", detail: banned.word };
+  }
+  for (const capped of ctx.styleWords.capped) {
+    if (capped.maxPer === "chapter") {
+      const count = countOccurrences(text, capped.word);
+      if (count > capped.max) return { gate: "style-capped", detail: `"${capped.word}" x${count} > ${capped.max}/chapter` };
+    } else {
+      for (const paragraph of paragraphs2) {
+        const count = countOccurrences(paragraph, capped.word);
+        if (count > capped.max) return { gate: "style-capped", detail: `"${capped.word}" x${count} > ${capped.max}/paragraph` };
+      }
+    }
+  }
+  if (Array.isArray(unit.paragraphs)) {
+    const words = text.split(/\s+/).filter(Boolean).length;
+    const para = thresholds_default.paragraph;
+    const n = Math.max(1, unit.paragraphs.length);
+    const bonus = unit.role === "intro" || unit.role === "conclusion" ? para.wordCeilingIntroConclusionBonus : 0;
+    const bounds = { minWords: n * para.wordFloor, maxWords: n * (para.wordCeiling + bonus) };
+    if (words < bounds.minWords || words > bounds.maxWords) {
+      return { gate: "word-bounds", detail: `${words} words (bounds ${bounds.minWords}-${bounds.maxWords} for ${n} planned paragraph(s))` };
+    }
+  }
+  return null;
+}
+function fillTemplate(template, vars) {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
+}
+function languageDirective(thesis) {
+  return HEBREW_LETTER.test(thesis) ? "\u05DB\u05EA\u05D5\u05D1 \u05D0\u05EA \u05D4\u05D9\u05D7\u05D9\u05D3\u05D4 \u05D4\u05D6\u05D5 \u05D1\u05E2\u05D1\u05E8\u05D9\u05EA \u05D1\u05DC\u05D1\u05D3. \u05D0\u05DC \u05EA\u05EA\u05E8\u05D2\u05DD \u05D5\u05D0\u05DC \u05EA\u05E2\u05E8\u05D1\u05D1 \u05E9\u05E4\u05D5\u05EA." : "Write this unit only in English. Do not translate or mix languages.";
+}
+async function realGenerate(unit, predecessors, ctx) {
+  const system = fillTemplate(write_draft_default, {
+    thesis: ctx.outline.thesis ?? "",
+    unit_id: unit.id,
+    unit_role: roleOf(unit),
+    unit_claim: unit.claim ?? "",
+    unit_plan: JSON.stringify(unit.paragraphs ?? [], null, 2),
+    outline_summary: JSON.stringify(flatten(ctx.outline).map((u) => ({ id: u.id, claim: u.claim ?? "" })), null, 2),
+    evidence_passages: ctx.passagesText,
+    predecessor_text: predecessors.length ? predecessors.map((p) => `### ${p.id}
+${p.text}`).join("\n\n") : "(none \u2014 this is the first unit)",
+    voice_exemplars: JSON.stringify(ctx.voice.exemplars, null, 2),
+    voice_pairs: JSON.stringify(ctx.voice.pairs, null, 2),
+    voice_rules: ctx.voice.rules,
+    feedback: ctx.feedback ?? "(none \u2014 first draft of this unit)",
+    language_directive: languageDirective(ctx.outline.thesis ?? "")
+  });
+  const result = await callGemini({ step: "write.draft", system, parts: ["Draft the unit now. Return plain prose only."], runId: ctx.runId, budget: ctx.budget });
+  return result.text;
+}
+function draftDir() {
+  return join8(projectDir(), ".academic-helper", "drafts");
+}
+function draftPath(unitId) {
+  return join8(draftDir(), `${unitId}.md`);
+}
+function writeDraft(unitId, text) {
+  mkdirSync7(draftDir(), { recursive: true });
+  writeFileSync5(draftPath(unitId), text, "utf8");
+}
+function loadSourceKeys() {
+  const path2 = join8(projectDir(), ".academic-helper", "sources.json");
+  if (!existsSync4(path2)) return /* @__PURE__ */ new Set();
+  try {
+    const raw = JSON.parse(readFileSync6(path2, "utf8"));
+    const list = Array.isArray(raw) ? raw : Array.isArray(raw?.sources) ? raw.sources : [];
+    return new Set(list.map((entry) => {
+      const source = entry;
+      return String(source.sourceId ?? source.id ?? "");
+    }).filter(Boolean));
+  } catch {
+    return /* @__PURE__ */ new Set();
+  }
+}
+function withPassageKeys(sourceKeys) {
+  const path2 = join8(projectDir(), ".academic-helper", "evidence.json");
+  if (!existsSync4(path2)) return sourceKeys;
+  try {
+    const raw = JSON.parse(readFileSync6(path2, "utf8"));
+    const keys = new Set(sourceKeys);
+    for (const passage of raw.passages ?? []) if (sourceKeys.has(passage.sourceId)) keys.add(passage.id);
+    return keys;
+  } catch {
+    return sourceKeys;
+  }
+}
+function evidencePassagesFor(unit) {
+  const path2 = join8(projectDir(), ".academic-helper", "evidence.json");
+  if (!existsSync4(path2)) return [];
+  try {
+    const raw = JSON.parse(readFileSync6(path2, "utf8"));
+    const ids = new Set((unit.paragraphs ?? []).flatMap((p) => p.evidenceIds ?? []));
+    return (raw.passages ?? []).filter((passage) => ids.size === 0 || ids.has(passage.id));
+  } catch {
+    return [];
+  }
+}
+function renderPassages(passages) {
+  return passages.length ? passages.map((p) => `[${p.id}] source=${p.sourceId}${p.locator ? ` locator=${p.locator}` : ""}
+  quote: ${p.quote}${p.gloss ? `
+  gloss: ${p.gloss}` : ""}`).join("\n") : "(none)";
+}
+function evidenceQuotesFor(unit) {
+  const path2 = join8(projectDir(), ".academic-helper", "evidence.json");
+  if (!existsSync4(path2)) return [];
+  try {
+    const raw = JSON.parse(readFileSync6(path2, "utf8"));
+    const ids = new Set((unit.paragraphs ?? []).flatMap((p) => p.evidenceIds ?? []));
+    return (raw.passages ?? []).filter((passage) => ids.size === 0 || ids.has(passage.id)).map((passage) => passage.quote);
+  } catch {
+    return [];
+  }
+}
+async function loadVoiceBundle(runId2) {
+  const cfg = thresholds_default.voice.bundle;
+  const result = await voiceBundle({ n: cfg.exemplars, pairs: cfg.pairs, runId: runId2 });
+  const parsed = JSON.parse(readFileSync6(result.path, "utf8"));
+  return { exemplars: parsed.exemplars ?? [], pairs: parsed.pairs ?? [], rules: parsed.rules ?? "", styleWords: parsed.styleWords ?? EMPTY_STYLE_WORDS };
+}
+async function voiceCheckFallback(paragraph, styleWords) {
+  const bannedHits = styleWords.banned.filter((b) => paragraph.includes(b.word)).length;
+  const fillerHits = styleWords.filler.filter((w) => paragraph.includes(w)).length;
+  const cfg = thresholds_default.styleFingerprint;
+  const score = Math.max(0, cfg.maxScore - bannedHits * 2 - fillerHits);
+  return score >= cfg.passThreshold ? "pass" : "fail";
+}
+async function draftAll(outline, options) {
+  const allUnits = flatten(outline);
+  if (allUnits.length === 0) throw new AwError("ERROR", "write.draft", "outline has no units");
+  const bodyUnits = allUnits.filter((unit) => roleOf(unit) === "body");
+  const specialUnits = allUnits.filter((unit) => roleOf(unit) !== "body").sort((a, b) => (roleOf(a) === "conclusion" ? 1 : 0) - (roleOf(b) === "conclusion" ? 1 : 0));
+  const ordered = [...topoSort(bodyUnits), ...specialUnits];
+  const orderedIds = new Set(ordered.map((u) => u.id));
+  for (const dep of allUnits.flatMap((u) => u.dependsOn ?? [])) {
+    if (dep && !orderedIds.has(dep) && !allUnits.some((u) => u.id === dep)) {
+      throw new AwError("ERROR", "write.draft", `dangling dependency: ${dep}`);
+    }
+  }
+  const targetUnits = options.unit ? ordered.filter((unit) => unit.id === options.unit) : ordered;
+  if (options.unit && targetUnits.length === 0) throw new AwError("ERROR", "write.draft", `unknown unit: ${options.unit}`);
+  const draftedText = /* @__PURE__ */ new Map();
+  if (options.unit && !stubs2.gen) {
+    for (const unit of ordered) {
+      if (unit.id === options.unit) break;
+      if (existsSync4(draftPath(unit.id))) draftedText.set(unit.id, readFileSync6(draftPath(unit.id), "utf8"));
+    }
+  }
+  const voice = stubs2.voice ?? await loadVoiceBundle(options.runId);
+  const sourceKeys = withPassageKeys(loadSourceKeys());
+  const feedback = options.feedbackFile && existsSync4(options.feedbackFile) ? readFileSync6(options.feedbackFile, "utf8") : void 0;
+  const budget = new Budget(options.runId, budgetFor("write"));
+  const drafted = [];
+  const failures = [];
+  const audit = [];
+  for (const unit of targetUnits) {
+    const role = roleOf(unit);
+    const predecessors = role === "body" ? (unit.dependsOn ?? []).filter((id) => draftedText.has(id)).map((id) => ({ id, text: draftedText.get(id) })) : bodyUnits.filter((u) => draftedText.has(u.id)).map((u) => ({ id: u.id, text: draftedText.get(u.id) }));
+    const evidenceQuotes = stubs2.evidenceQuotes ?? evidenceQuotesFor(unit);
+    const generate = stubs2.gen ?? ((u, preds) => realGenerate(u, preds, { outline, voice, evidenceQuotes, passagesText: renderPassages(evidencePassagesFor(unit)), feedback, budget, runId: options.runId }));
+    const text = await generate(unit, predecessors);
+    draftedText.set(unit.id, text);
+    writeDraft(unit.id, text);
+    drafted.push(unit.id);
+    const paragraphs2 = splitParagraphs(text);
+    for (let index = 0; index < paragraphs2.length; index += 1) {
+      const paragraph = paragraphs2[index];
+      await decide({
+        point: "write.audit_prescreen",
+        question: "Does this paragraph plausibly contain a citation the auditor should check?",
+        options: ["review", "skip-likely"],
+        context: JSON.stringify({ unit: unit.id, paragraphIndex: index, excerpt: paragraph.slice(0, 200) }),
+        runId: options.runId,
+        fallback: async () => "review"
+      });
+      audit.push({ unit: unit.id, paragraphIndex: index, required: true });
+      await decide({
+        point: "write.voice_check",
+        question: "Does this paragraph meet the voice/style-fingerprint threshold?",
+        options: ["pass", "fail"],
+        context: JSON.stringify({ unit: unit.id, paragraphIndex: index }),
+        runId: options.runId,
+        fallback: async () => voiceCheckFallback(paragraph, voice.styleWords)
+      });
+    }
+    const failure = runGates(unit, text, paragraphs2, { sourceKeys, evidenceQuotes, styleWords: voice.styleWords });
+    if (failure) failures.push({ unit: unit.id, gate: failure.gate, detail: failure.detail });
+  }
+  return { drafted, failures, audit };
+}
+
+// src/synthesize.ts
+import { existsSync as existsSync5, readFileSync as readFileSync7, readdirSync as readdirSync3, writeFileSync as writeFileSync6 } from "node:fs";
+import { join as join9 } from "node:path";
+
+// src/prompts/write-synthesize.md
+var write_synthesize_default = 'You are the final-pass editor of a scholarly article, working as its author. Every unit was drafted separately; your job is to propose transition edits at paragraph boundaries \u2014 nothing else. Citations have already been verified, so nothing you propose may touch a citation or a quotation.\n\nYou will never see or return the whole article at once. You are given every unit\'s paragraphs, numbered, and you propose a small set of surgical edits: one paragraph\'s text, replaced with a version that bridges better to its neighbour. Everything else in the article is untouched by construction \u2014 you cannot rewrite a paragraph you don\'t name, and you cannot touch anything outside the paragraph you do name.\n\n<units>\nEach unit\'s paragraphs, in draft order, with their 0-based paragraphIndex.\n{{units}}\n</units>\n\n<instructions>\nPropose an edit only where a transition genuinely needs it: a paragraph boundary that reads abruptly, a phrase repeated heavily across two nearby paragraphs, or a voice drift within one paragraph. Do not propose an edit merely because you could rephrase something.\n\nFor each edit:\n- `unitId` and `paragraphIndex` must exactly identify one paragraph from `<units>`.\n- `before` must be copied EXACTLY, character for character, from that paragraph\'s text in `<units>` \u2014 this is how the edit gets verified and applied; if it does not match exactly, the edit is discarded.\n- `after` is the full replacement text for that paragraph.\n- `reason` is a one-line explanation.\n\nNEVER change, move, or remove any of the following inside `after`, even when editing the sentence around them:\n- a parenthetical citation: text inside `(...)` naming a work, an author, or a location, with or without a year (Hebrew citations normally carry no year, e.g. `(\u05DE\u05D7\u05D1\u05E8, \u05E2\u05DE\' 12)`)\n- a footnote marker `[^id]`, or a footnote definition line `[^id]: ...`\n- quoted material: text inside `" "`, `\u05F4 \u05F4`, or `" "`\n\nPropose at most one edit per paragraph. Return an empty `edits` array if no boundary needs one \u2014 that is the expected result far more often than not.\n</instructions>\n\nReturn a single JSON object and nothing else:\n\n{\n  "edits": [\n    { "unitId": "<unit id>", "paragraphIndex": 0, "before": "<exact current paragraph text>", "after": "<replacement paragraph text>", "reason": "<one line>" }\n  ]\n}\n';
+
+// src/synthesize.ts
+var stubs3 = {};
+var editsSchema = {
+  type: "object",
+  required: ["edits"],
+  properties: {
+    edits: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["unitId", "paragraphIndex", "before", "after", "reason"],
+        properties: {
+          unitId: { type: "string" },
+          paragraphIndex: { type: "integer" },
+          before: { type: "string" },
+          after: { type: "string" },
+          reason: { type: "string" }
+        }
+      }
+    }
+  }
+};
+function splitParagraphs2(text) {
+  return text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+}
+function fillTemplate2(template, vars) {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
+}
+async function realGenerate2(units, runId2, budget) {
+  const system = fillTemplate2(write_synthesize_default, {
+    units: JSON.stringify(units.map((u) => ({ unitId: u.id, paragraphs: u.paragraphs.map((text, paragraphIndex) => ({ paragraphIndex, text })) })), null, 2)
+  });
+  const result = await callGemini({ step: "write.synthesize", system, parts: ["Propose transition edits now. Return JSON only."], responseSchema: editsSchema, runId: runId2, budget });
+  const json = result.json;
+  if (!json || !Array.isArray(json.edits)) throw new AwError("ERROR", "write.synthesize", "missing edits array");
+  return json.edits;
+}
+function draftsDir() {
+  return join9(projectDir(), ".academic-helper", "drafts");
+}
+async function synthesizeAll(options) {
+  const dir = draftsDir();
+  if (!existsSync5(dir)) throw new AwError("ERROR", "write.synthesize", "no drafts directory \u2014 run aw draft first");
+  const files = readdirSync3(dir).filter((f3) => f3.endsWith(".md")).sort();
+  if (files.length === 0) throw new AwError("ERROR", "write.synthesize", "drafts directory is empty");
+  const units = files.map((file) => ({ id: file.replace(/\.md$/, ""), text: readFileSync7(join9(dir, file), "utf8") }));
+  const unitsWithParagraphs = units.map((u) => ({ id: u.id, paragraphs: splitParagraphs2(u.text) }));
+  const budget = new Budget(options.runId, budgetFor("write"));
+  const generate = stubs3.gen ?? ((list) => realGenerate2(list, options.runId, budget));
+  const proposed = await generate(unitsWithParagraphs);
+  const byUnit = new Map(units.map((u) => [u.id, u]));
+  const paragraphsByUnit = new Map(units.map((u) => [u.id, splitParagraphs2(u.text)]));
+  let appliedCount = 0;
+  for (const edit of proposed) {
+    const unit = byUnit.get(edit.unitId);
+    const paragraphs2 = paragraphsByUnit.get(edit.unitId);
+    if (!unit || !paragraphs2 || edit.paragraphIndex < 0 || edit.paragraphIndex >= paragraphs2.length) continue;
+    const decision = await decide({
+      point: "synthesize.needs_bridge",
+      question: "Does this paragraph boundary need the proposed transition edit?",
+      options: ["bridge", "no-bridge"],
+      context: JSON.stringify(edit),
+      runId: options.runId,
+      fallback: async () => "bridge",
+      label: `${edit.unitId}:${edit.paragraphIndex}`
+    });
+    if (decision.answer !== "bridge") continue;
+    if (paragraphs2[edit.paragraphIndex] !== edit.before) continue;
+    paragraphs2[edit.paragraphIndex] = edit.after;
+    appliedCount += 1;
+  }
+  for (const unit of units) {
+    const paragraphs2 = paragraphsByUnit.get(unit.id);
+    if (!paragraphs2) continue;
+    writeFileSync6(join9(dir, `${unit.id}.md`), `${paragraphs2.join("\n\n")}
+`, "utf8");
+  }
+  return { edits: proposed, applied: appliedCount };
+}
+
+// src/edit.ts
+import { readFileSync as readFileSync8, writeFileSync as writeFileSync7 } from "node:fs";
+init_thresholds();
+var schema = { type: "object", required: ["revised_text"], properties: { revised_text: { type: "string" } } };
+async function editText(options) {
+  const original = readFileSync8(options.textFile, "utf8");
+  if (!original.trim()) throw new AwError("ERROR", "edit", "text file is empty");
+  if (!options.instruction.trim()) throw new AwError("ERROR", "edit", "instruction is empty");
+  const voice = await voiceBundle({ n: thresholds_default.voice.bundle.exemplars, pairs: thresholds_default.voice.bundle.pairs, runId: options.runId });
+  const system = `You are revising a passage of a scholarly article as its author. Apply only the requested change; preserve citations, footnote markers, and quotations exactly. Match this author's voice.
+<voice_examples>
+${voice.exemplars.map((x2) => x2.text).join("\n\n")}
+</voice_examples>
+<voice_pairs>
+${JSON.stringify(voice.pairs)}
+</voice_pairs>
+Language: ${options.language}
+<existing_text>
+${original}
+</existing_text>
+<edit_instruction>
+${options.instruction}
+</edit_instruction>
+Return one JSON object with revised_text.`;
+  const response = await callGemini({ step: "edit", system, parts: ["Apply the edit now. Return JSON only."], responseSchema: schema, runId: options.runId, budget: new Budget(options.runId, budgetFor("write")) });
+  const result = response.json;
+  if (!result || typeof result.revised_text !== "string") throw new AwError("ERROR", "edit", "invalid revised_text response");
+  if (options.out) writeFileSync7(options.out, result.revised_text, "utf8");
+  return { revised_text: result.revised_text };
+}
+
+// src/ocr.ts
+import { existsSync as existsSync6, readFileSync as readFileSync9, readdirSync as readdirSync4, statSync as statSync2, writeFileSync as writeFileSync8 } from "node:fs";
+import { dirname as dirname3, extname, join as join10, resolve as resolve5 } from "node:path";
+import { spawnSync } from "node:child_process";
+init_thresholds();
+var schema2 = { type: "array", items: { type: "object", required: ["page_number", "text", "is_born_digital"], properties: { page_number: { type: "integer" }, text: { type: "string" }, is_born_digital: { type: "boolean" }, confidence: { type: "string", enum: ["high", "medium", "low"] }, notes: { type: "string" } } } };
+function runScript(name, args2) {
+  const plugin = resolve5(dirname3(process.argv[1] ?? ""), "..");
+  const script = join10(plugin, "mcp", "gemini-server", "scripts", name);
+  const result = spawnSync("python3", [script, ...args2], { encoding: "utf8" });
+  if (result.status !== 0) throw new AwError("ERROR", "ocr", result.stderr.trim() || result.stdout.trim() || `${name} failed`);
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    throw new AwError("ERROR", "ocr", `${name} returned invalid JSON`);
+  }
+}
+function prompt3(language, format, pages) {
+  const rtl = language !== "en" ? "Preserve Hebrew right-to-left reading order. Mixed Hebrew and Latin text should follow human reading order." : "";
+  const detail = format === "detailed" ? "Use notes to describe layout, footnotes, tables, and uncertain passages." : "Keep notes brief; flag only low-confidence passages.";
+  return `Transcribe these scanned academic document pages faithfully. OCR ONLY: do not correct, paraphrase, modernize, or summarize. Preserve paragraph breaks and omit running headers/footers unless they are content. Ignore watermarks. ${rtl}
+Language: ${language}; detail: ${format ?? "concise"}. Images are pages in this order: ${pages.join(", ")}. Return one JSON array entry per page with page_number, text, is_born_digital=false, confidence (high|medium|low), notes. ${detail}`;
+}
+function stripFence(value) {
+  const match = /```(?:json)?\s*\n([\s\S]*?)\n```/i.exec(value);
+  return match?.[1] ?? value;
+}
+async function ocrDocument(options) {
+  const input = resolve5(options.input);
+  if (!existsSync6(input)) throw new AwError("ERROR", "ocr", `input does not exist: ${input}`);
+  const isDir = statSync2(input).isDirectory();
+  const imageFiles = isDir ? readdirSync4(input).filter((name) => /\.(png|jpe?g|webp|tiff?)$/i.test(name)).sort().map((name) => join10(input, name)) : [];
+  let pages = [];
+  let truncated = false;
+  let truncation_message;
+  if (!isDir && extname(input).toLowerCase() === ".pdf") {
+    const detected = runScript("detect_text_layer.py", options.pages ? [input, "--pages", options.pages] : [input]);
+    const selected = detected.pages.slice(0, thresholds_default.ocr.perCallPageCap);
+    truncated = detected.pages.length > selected.length;
+    if (truncated) truncation_message = `${selected.length} of ${detected.pages.length} pages processed; rerun with a narrower page range.`;
+    pages.push(...selected.filter((p) => p.is_born_digital).map((p) => ({ page_number: p.page_number, text: p.text, is_born_digital: true, confidence: "high", notes: "" })));
+    const scans = selected.filter((p) => !p.is_born_digital).map((p) => p.page_number);
+    for (let offset = 0; offset < scans.length; offset += thresholds_default.ocr.geminiBatchSize) {
+      const batch = scans.slice(offset, offset + thresholds_default.ocr.geminiBatchSize);
+      const raster = runScript("rasterize_pages.py", [input, "--pages", batch.join(",")]);
+      try {
+        const parts = raster.pages.map((p) => ({ inlineData: { mimeType: "image/png", data: readFileSync9(p.png_path).toString("base64") } }));
+        const result = await callGemini({ step: "ocr", system: prompt3(options.language, options.format, batch), parts: [...parts, prompt3(options.language, options.format, batch)], responseSchema: schema2, runId: options.runId, budget: new Budget(options.runId, budgetFor("write")) });
+        const parsed = JSON.parse(stripFence(result.text));
+        if (!Array.isArray(parsed) || parsed.some((p) => typeof p.page_number !== "number" || typeof p.text !== "string")) throw new AwError("ERROR", "ocr", "invalid OCR page response");
+        pages.push(...parsed);
+      } finally {
+        const fs3 = await import("node:fs/promises");
+        await fs3.rm(raster.temp_dir, { recursive: true, force: true });
+      }
+    }
+  } else {
+    const files = imageFiles.length ? imageFiles : [input];
+    if (isDir && files.length === 0) throw new AwError("ERROR", "ocr", "directory contains no supported image files");
+    for (let index = 0; index < Math.min(files.length, thresholds_default.ocr.perCallPageCap); index++) {
+      const file = files[index];
+      const mime = /\.jpe?g$/i.test(file) ? "image/jpeg" : /\.webp$/i.test(file) ? "image/webp" : /\.tiff?$/i.test(file) ? "image/tiff" : "image/png";
+      const result = await callGemini({ step: "ocr", system: prompt3(options.language, options.format, [index + 1]), parts: [{ inlineData: { mimeType: mime, data: readFileSync9(file).toString("base64") } }, prompt3(options.language, options.format, [index + 1])], responseSchema: schema2, runId: options.runId, budget: new Budget(options.runId, budgetFor("write")) });
+      const parsed = JSON.parse(stripFence(result.text));
+      pages.push(...parsed);
+    }
+    truncated = files.length > pages.length;
+    if (truncated) truncation_message = `${pages.length} of ${files.length} images processed.`;
+  }
+  pages.sort((a, b) => a.page_number - b.page_number);
+  const output = { pages, truncated, ...truncation_message ? { truncation_message } : {} };
+  if (options.out) writeFileSync8(options.out, pages.map((p) => p.text).join("\n\n"), "utf8");
+  return output;
+}
+
 // src/main.ts
 var args = setPathArguments(process.argv.slice(2));
 var [command2, subcommand, runId] = args;
 if (command2 === "ledger" && subcommand === "show" && runId) {
   try {
     dataDir();
-    const file = join8(projectDir(), ".academic-helper", "runs", runId, "usage.jsonl");
-    const rows = readFileSync6(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    const file = join11(projectDir(), ".academic-helper", "runs", runId, "usage.jsonl");
+    const rows = readFileSync10(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
     const totals = /* @__PURE__ */ new Map();
     for (const row of rows) {
       const total = totals.get(row.step) ?? { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
@@ -41742,7 +42248,7 @@ Live model verification requires GOOGLE_API_KEY.
     projectDir();
     const fileArg = args[args.indexOf(subcommand === "classify" ? "--items" : "--plan") + 1];
     if (!fileArg) throw new Error("ERROR revise: --items/--plan path required");
-    const input = JSON.parse(readFileSync6(fileArg, "utf8"));
+    const input = JSON.parse(readFileSync10(fileArg, "utf8"));
     if (subcommand === "classify") {
       if (!Array.isArray(input)) throw new Error("ERROR revise.classify: items must be an array");
       process.stdout.write(`${JSON.stringify(await classify(input, args[args.indexOf("--run") + 1] ?? "revise"))}
@@ -41804,6 +42310,73 @@ Live model verification requires GOOGLE_API_KEY.
     process.stderr.write(`${message}
 `);
     process.exitCode = message.includes("no voice store") ? 3 : 2;
+  }
+} else if (command2 === "draft") {
+  try {
+    const value = (name) => {
+      const i2 = args.indexOf(name);
+      return i2 >= 0 ? args[i2 + 1] : void 0;
+    };
+    const runId2 = value("--run");
+    const outlinePath = value("--outline");
+    if (!runId2 || !outlinePath) throw new Error("ERROR draft: --outline and --run are required");
+    const result = await draftAll(JSON.parse(readFileSync10(outlinePath, "utf8")), { runId: runId2, unit: value("--unit"), feedbackFile: value("--feedback-file") });
+    process.stdout.write(`${JSON.stringify({ drafted: result.drafted, failures: result.failures })}
+`);
+    if (result.failures.length) process.exitCode = 2;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "ERROR draft: unknown failure";
+    process.stderr.write(`${message}
+`);
+    process.exitCode = 1;
+  }
+} else if (command2 === "synthesize") {
+  try {
+    const i2 = args.indexOf("--run");
+    const runId2 = i2 >= 0 ? args[i2 + 1] : void 0;
+    if (!runId2) throw new Error("ERROR synthesize: --run is required");
+    process.stdout.write(`${JSON.stringify(await synthesizeAll({ runId: runId2 }))}
+`);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : "ERROR synthesize: unknown failure"}
+`);
+    process.exitCode = 1;
+  }
+} else if (command2 === "edit") {
+  try {
+    const value = (name) => {
+      const i2 = args.indexOf(name);
+      return i2 >= 0 ? args[i2 + 1] : void 0;
+    };
+    const runId2 = value("--run");
+    const textFile = value("--text-file");
+    const language = value("--lang");
+    const instruction = value("--instruction") ?? (value("--instruction-file") ? readFileSync10(value("--instruction-file"), "utf8") : void 0);
+    if (!runId2 || !textFile || !instruction || language !== "he" && language !== "en") throw new Error("ERROR edit: --text-file, --instruction or --instruction-file, --lang he|en, and --run are required");
+    process.stdout.write(`${JSON.stringify(await editText({ runId: runId2, textFile, instruction, language, out: value("--out") }))}
+`);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : "ERROR edit: unknown failure"}
+`);
+    process.exitCode = 1;
+  }
+} else if (command2 === "ocr") {
+  try {
+    const value = (name) => {
+      const i2 = args.indexOf(name);
+      return i2 >= 0 ? args[i2 + 1] : void 0;
+    };
+    const runId2 = value("--run");
+    const input = value("--input");
+    const language = value("--lang");
+    const format = value("--format");
+    if (!runId2 || !input || !["he", "en", "mixed"].includes(language ?? "") || format && !["concise", "detailed"].includes(format)) throw new Error("ERROR ocr: --input, --lang he|en|mixed, and --run are required; --format must be concise|detailed");
+    process.stdout.write(`${JSON.stringify(await ocrDocument({ runId: runId2, input, language, pages: value("--pages"), format, out: value("--out") }))}
+`);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : "ERROR ocr: unknown failure"}
+`);
+    process.exitCode = 1;
   }
 } else {
   process.stderr.write("ERROR: expected aw models check, aw ledger show <runId>, aw evidence build, or aw decide <point>\n");
