@@ -2,6 +2,7 @@ import { setPathArguments, projectDir, dataDir } from './paths.ts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { stepIds } from './routing.ts';
+import { buildEvidence } from './evidence.ts';
 import { voiceBundle, voiceCandidates, voiceMigrate, voiceMoves, voiceSync } from './voice.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
 
@@ -18,6 +19,21 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
   } catch (error) { process.stderr.write(`${error instanceof Error && error.message.startsWith('ERROR:') ? error.message : `ERROR ledger: missing run ${runId}`}\n`); process.exitCode = error instanceof Error && error.message.startsWith('ERROR:') ? 3 : 2; }
 } else if (command === 'models' && subcommand === 'check') {
   process.stdout.write(`Configured Gemini steps: ${stepIds.join(', ')}\nLive model verification requires GOOGLE_API_KEY.\n`);
+} else if (command === 'evidence' && subcommand === 'build') {
+  const value = (name: string): string | undefined => {
+    const position = args.indexOf(name);
+    return position >= 0 ? args[position + 1] : undefined;
+  };
+  const list = (name: string): string[] => (value(name) ?? '').split(',').map(item => item.trim()).filter(Boolean);
+  const runIdValue = value('--run');
+  try {
+    if (!runIdValue) throw new Error('ERROR evidence.build: --run is required');
+    const result = await buildEvidence({ sources: list('--sources'), sefaria: list('--sefaria'), intent: value('--intent'), runId: runIdValue });
+    process.stdout.write(`${JSON.stringify({ sourceCount: result.sources.length, passageCount: result.passages.length })}\n`);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : 'ERROR evidence.build: unknown failure'}\n`);
+    process.exitCode = 1;
+  }
 } else if (command === 'voice') {
   try {
     dataDir();
@@ -36,6 +52,6 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
     process.exitCode = message.includes('no voice store') ? 3 : 2;
   }
 } else {
-  process.stderr.write('ERROR: expected aw models check or aw ledger show <runId>\n');
+  process.stderr.write('ERROR: expected aw models check, aw ledger show <runId>, or aw evidence build\n');
   process.exitCode = 2;
 }
