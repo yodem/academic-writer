@@ -183,78 +183,38 @@
     },
     {
       "id": "section-writing",
-      "name": "Section writing pipeline",
+      "name": "Ordered CLI drafting and audit pipeline",
       "sources": [
+        "src/cli/src/draft.ts",
         "src/skills/write/SKILL.md",
-        "src/agents/section-writer.md",
-        "src/skills/write/references/style-fingerprint-rubric.md"
+        "src/agents/auditor.md",
+        "src/cli/src/synthesize.ts"
       ],
       "status": "ok",
       "subfeatures": [
         {
-          "id": "parallel-spawn",
-          "name": "One section-writer subagent per writer unit (parallel)",
+          "id": "ordered-draft",
+          "name": "aw draft writes dependency-ordered units and intro/conclusion last with code gates",
           "status": "ok"
         },
         {
-          "id": "gemini-write",
-          "name": "Gemini gemini_write_section primary path (Skills 1-7)",
-          "status": "ok",
-          "issue": "section_brief contract fixed: WriteSectionInput now accepts either the structured object (title/description/argument_role/paragraph_count/is_intro/is_conclusion/intro_or_conclusion_rules/paragraph_word_ceiling) documented in section-writer.md or a legacy plain string; self_review_scores keys renamed to style_fingerprint/academic_language to match the agent's documented return shape. Verified by tests/e2e/write-section-schema-contract.mjs (8/8 assertions pass)."
-        },
-        {
-          "id": "fallback-8skill",
-          "name": "Claude in-context 8-skill fallback pipeline",
-          "status": "partial",
-          "issue": "Duplicates all Skills 1-7; heavy maintenance surface",
-          "notes": "The in-context Skills 1-7 fallback path lives inside src/agents/section-writer.md (the 'PATH: fallback' branches) and is hand-maintained prose kept in sync with the Gemini-delegated primary path by convention, not by a shared source or a diff check. The only automated coverage is tests/e2e/fallback-no-credentials.mjs, which asserts the fallback path triggers when the MCP server has no credentials — it does not assert the fallback's Skills 1-7 output matches the primary path's quality bar."
-        },
-        {
-          "id": "style-compliance",
-          "name": "Skill 2: style fingerprint compliance (10-dim rubric)",
-          "status": "ok",
-          "issue": "extract-style-metrics.py now produces computationalMetrics.*; rubric also now reads frequentTerms for personal-lexicon preference"
-        },
-        {
-          "id": "hebrew-grammar",
-          "name": "Skill 3: Hebrew grammar/register",
+          "id": "batched-audit",
+          "name": "One auditor call per writer unit returns indexed verdicts and taggedText",
           "status": "ok"
         },
         {
-          "id": "academic-language",
-          "name": "Skill 4: linking-word variety",
-          "status": "ok",
-          "issue": "Now also draws on the positive academic-terminology-{en,he}.md references (hedging verbs, argumentation connectives, citation-introduction verbs, transitions)"
-        },
-        {
-          "id": "language-purity",
-          "name": "Skill 5: foreign-term purge",
+          "id": "rewrite-gate",
+          "name": "Failed units redraft with auditor feedback up to rewriteCycles.max",
           "status": "ok"
         },
         {
-          "id": "anti-ai-content",
-          "name": "Skill 6 Tier 2: 5-dimension anti-AI scoring",
+          "id": "diff-synthesis",
+          "name": "aw synthesize applies paragraph-level transition edits",
           "status": "ok"
         },
         {
-          "id": "typography-scrub",
-          "name": "Skill 6 Tier 1: detect-ai-typography.py (em-dash/quote/RTL punctuation)",
-          "status": "ok",
-          "issue": "src/scripts/detect-ai-typography.py now exists and is invoked by section-writer.md Step B / Skill 6 Tier 1"
-        },
-        {
-          "id": "repetition",
-          "name": "Skill 7: cross-paragraph/section repetition",
-          "status": "ok"
-        },
-        {
-          "id": "source-quarantine",
-          "name": "Untrusted source-text delimiter quarantine",
-          "status": "ok"
-        },
-        {
-          "id": "claims-registry",
-          "name": "fcntl-locked claims registry append",
+          "id": "docx-handoff",
+          "name": "generate-docx.py creates Word output; author comments and runs /academic-writer:revise",
           "status": "ok"
         }
       ]
@@ -383,68 +343,17 @@
       ]
     },
     {
-      "id": "gemini-mcp",
-      "name": "Bundled Gemini MCP server",
+      "id": "gemini-mcp-retirement",
+      "name": "Gemini MCP retirement and CLI ports",
       "sources": [
-        "plugins/academic-writer/mcp/gemini-server/",
-        "scripts/build-mcp.sh",
-        "src/thresholds.json"
+        "src/cli/src/edit.ts",
+        "src/cli/src/ocr.ts",
+        "src/skills/edit/SKILL.md",
+        "src/skills/ocr/SKILL.md",
+        "scripts/build-plugins.sh"
       ],
-      "status": "partial",
-      "subfeatures": [
-        {
-          "id": "write-section-tool",
-          "name": "gemini_write_section",
-          "status": "ok",
-          "issue": "Contract fixed to match section-writer.md — see section-writing.gemini-write for detail"
-        },
-        {
-          "id": "synthesize-tool",
-          "name": "gemini_synthesize",
-          "status": "partial",
-          "notes": "No test file exercises runSynthesize — plugins/academic-writer/mcp/gemini-server/tests/ has no synthesize.test.ts and tests/e2e/ has no harness calling gemini_synthesize, unlike gemini_write_section which has tests/e2e/write-section-schema-contract.mjs and tests/e2e/gemini-path-harness.mjs."
-        },
-        {
-          "id": "edit-tool",
-          "name": "gemini_edit",
-          "status": "partial",
-          "notes": "No test file exercises runEdit — plugins/academic-writer/mcp/gemini-server/tests/ has no edit.test.ts and tests/e2e/ has no harness calling gemini_edit."
-        },
-        {
-          "id": "calibrate-tool",
-          "name": "gemini_calibrate_sample",
-          "status": "ok"
-        },
-        {
-          "id": "raw-tool",
-          "name": "gemini_raw",
-          "status": "ok"
-        },
-        {
-          "id": "calibration-bundle",
-          "name": "Cached voice+fingerprint+words+antiAi+rubric+positiveTerminology bundle",
-          "status": "ok",
-          "issue": "bundle.ts now also loads the language-appropriate academic-terminology-*.md via loadPositiveTerminology(), mirroring the existing loadAntiAi() pattern, and renders it under a POSITIVE ACADEMIC TERMINOLOGY section"
-        },
-        {
-          "id": "error-fallback",
-          "name": "Structured error → Claude fallback",
-          "status": "ok"
-        },
-        {
-          "id": "ocr-tool",
-          "name": "gemini_ocr — single consolidated OCR tool (born-digital text-layer detect via PyMuPDF, sequential Gemini vision batches for scans, response_format concise/detailed enum, page-range + truncation_message, actionable structured errors, Sonnet-only correction left out of scope)",
-          "status": "ok",
-          "issue": "Now wired to a user-facing surface: /academic-writer:ocr command (src/skills/ocr/SKILL.md) resolves a file/directory path, checks the shared GOOGLE_API_KEY credential (env or .academic-helper/secrets.json, same resolution as setup/init), calls gemini_ocr sequentially per document/page batch (following truncation), and writes ocr-output/<name>.ocr.md. The >20MB Files API path is now implemented server-side (gemini-client-ocr-helpers.ts's uploadViaFilesApi(), backed by gemini-client.ts's uploadFileToFilesApi/getFilesApiFile/deleteFilesApiFile): oversized pages are uploaded, polled until ACTIVE (2s interval, 120s timeout), OCR'd via a fileData reference, then deleted (success or failure, try/finally). The skill's per-page-narrowing retry remains as a fallback for when the upload/poll path itself errors (upload failure, FAILED state, or poll timeout)."
-        },
-        {
-          "id": "credential-resolution",
-          "name": "Gemini API key resolution — userConfig (preferred, sensitive-stored) > GOOGLE_API_KEY env > .academic-helper/secrets.json (both casings)",
-          "status": "ok",
-          "issue": "Migrated the plugin's Gemini credential onto Claude Code's userConfig mechanism (manifests/academic-writer.json declares google_api_key, sensitive: true; substituted as USER_CONFIG_GOOGLE_API_KEY in mcpServers.gemini-api.env via ${user_config.google_api_key}). gemini-client.ts's resolveApiKey() checks it first, then falls back to the pre-existing GOOGLE_API_KEY env var, then .academic-helper/secrets.json (GOOGLE_API_KEY or lowercase google_api_key) — all three paths remain fully functional, userConfig is additive/preferred, not a replacement. Investigated whether the 'channels' MCP pattern applied here first (it doesn't — channels is for a server pushing messages into a session, not credential config; userConfig is the actual mechanism, per the Claude Code docs mirror's Plugin manifest reference). scripts/build-plugins.sh now passes userConfig through into the generated plugin.json. Covered by tests/gemini-client-key-resolution.test.ts (9 tests: every precedence pairing plus blank/whitespace optional-field fallthrough)."
-        }
-      ],
-      "notes": "Rolls up from the synthesize-tool and edit-tool subfeatures: both ship with zero test coverage (unit or e2e), unlike write_section (which has tests/e2e/write-section-schema-contract.mjs)."
+      "status": "ok",
+      "notes": "Plugin build does not copy the legacy mcp/ subtree. The T15a/T15b integration lead removes plugins/academic-writer/mcp/ after confirming source migration."
     },
     {
       "id": "editing",

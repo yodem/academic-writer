@@ -5,12 +5,8 @@
 ## Gemini key / `gemini_raw` ping failures
 
 **`{ error: { code: "no_credentials" } }`**
-The MCP server (`plugins/academic-writer/mcp/gemini-server`) checks three sources, in this order,
-and found none of them: the plugin's own `google_api_key` configuration option (preferred, securely
-stored), `GOOGLE_API_KEY` in its environment, or `.academic-helper/secrets.json`. Common causes:
-- You just set the plugin configuration or the environment variable but haven't restarted Claude
-  Code — the MCP server process was spawned before the value existed. **Fix**: restart Claude Code,
-  then re-run `/academic-writer:setup`.
+The `aw` CLI (`plugins/academic-writer/bin/aw`) reads the Gemini key from its environment only: `GOOGLE_API_KEY`, which a SessionStart hook exports from the plugin's `google_api_key` setting (stored in the OS keychain), or which you export in your shell. `.academic-helper/secrets.json` is no longer read. Common causes:
+- You just set the plugin option or the environment variable in a session that had already started. The SessionStart hook only runs at session start. **Fix**: start a new Claude Code session, then re-run `/academic-writer:setup`.
 - You configured the plugin option (`claude plugin install --config google_api_key=...` /
   `claude plugin config`) at a different scope (`user` vs `project`) than the one active for this
   session. **Fix**: re-run the config command at the scope you're actually using, or check current

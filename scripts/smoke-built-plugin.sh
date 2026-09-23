@@ -11,8 +11,12 @@ fail=0; ok(){ echo "ok   $1"; }; bad(){ echo "FAIL $1"; fail=1; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT; mkdir -p "$T/data" "$T/proj/.academic-helper"; echo "# profile" > "$T/proj/.academic-helper/profile.md"
 
 [[ -x "$AW" ]] && ok "bin/aw exists" || bad "bin/aw missing"
+[[ ! -d "$P/mcp" ]] && ok "no retired MCP server shipped" || bad "plugins/academic-writer/mcp still present"
+python3 - "$P" <<'PY' && ok "manifest has no mcpServers" || bad "manifest still declares mcpServers"
+import json,sys; sys.exit(1 if "mcpServers" in json.load(open(sys.argv[1]+"/.claude-plugin/plugin.json")) else 0)
+PY
 out="$("$AW" 2>&1)"; [[ "$out" == *ERROR* && "$out" != *"Dynamic require"* && "$out" != *"at file://"* ]] && ok "aw starts" || bad "aw crashes on launch: ${out:0:200}"
-for sub in "ledger show none" "voice bundle" "proofread --run smoke missing.md" "evidence build" "revise classify"; do
+for sub in "ledger show none" "voice bundle" "proofread --run smoke missing.md" "evidence build" "revise classify" "draft --outline missing.json --run smoke" "synthesize --outline missing.json --run smoke" "edit --text-file missing.txt --instruction x --lang he --run smoke" "ocr --input missing.pdf --lang he --run smoke"; do
   # shellcheck disable=SC2086
   o="$("$AW" --data-dir "$T/data" --project-dir "$T/proj" $sub 2>&1)"
   [[ "$o" != *"Dynamic require"* && "$o" != *"at file://"* && "$o" != *"Cannot find module"* ]] && ok "aw $sub loads" || bad "aw $sub: ${o:0:200}"

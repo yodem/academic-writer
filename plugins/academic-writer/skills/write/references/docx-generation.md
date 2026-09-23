@@ -44,7 +44,7 @@ Write the article data to a JSON file, then run the standalone DOCX generator sc
 
 ```json
 {
-  "title": "ARTICLE_TITLE from synthesizer",
+  "title": "ARTICLE_TITLE",
   "thesis": "ARTICLE_THESIS or null",
   "coverPage": {
     "university": "string or null",
@@ -93,7 +93,7 @@ Write the article data to a JSON file, then run the standalone DOCX generator sc
 **Rules:**
 - Use the `Write` tool to write this file — never use Python heredoc or `python3 -c` to construct JSON (Hebrew text causes UTF-8 encoding errors in heredocs)
 - `coverPage` is entirely optional — omit the key (or leave it `null`) for no cover page at all; when present, only its populated fields render, each skipped field renders nothing (no stray "None" or empty line). When present, a page break always separates the cover page from the article title, which starts fresh on the next page
-- Populate `sections` from the synthesizer output — each section's title and paragraph list
+- Populate `sections` from the synthesized `drafts/<unitId>.md` files (W5 in SKILL.md) — each section's title and paragraph list
 - Paragraphs use the structured form `{text, footnotes[]}`. Strip the parenthetical citations out of `text` and move each citation into `footnotes[]` with `after` set to a unique substring in `text` where the marker should appear. The DOCX generator renders them as native Word footnotes (superscript in body, text at page bottom). Plain strings are still accepted for backward compatibility (no footnotes)
 - Dependency: requires `lxml` (`pip install lxml`) in addition to `python-docx`
 - Read `outputFormatPreferences` from the profile and fill in the `format` object

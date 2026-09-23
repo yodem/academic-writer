@@ -20,7 +20,7 @@ researcher on a local machine; the plugin should never assume team workflows.
 | `src/hooks/src/lifecycle/*.ts` | TypeScript hook handlers, bundled by esbuild |
 | `src/hooks/hooks.json` | Hook registry — what events fire which handlers |
 | `src/thresholds.json` | Single source of truth for all numeric quality gates |
-| `src/workflows/<name>.js` | Workflow-tool script, shipped to `${CLAUDE_PLUGIN_ROOT}/workflows/` |
+| `src/cli/src/<command>.ts` | `aw` CLI command implementation |
 | `manifests/academic-writer.json` | Plugin manifest (name, version, description) |
 | `scripts/build-plugins.sh` | Build script — assembles `plugins/academic-writer/` from `src/` |
 
@@ -61,18 +61,16 @@ Slash commands are auto-generated from skills with `user-invocable: true`. To ad
 |---|---|
 | `src/agents/deep-reader.md` | Explores Candlekeep source documents; maps evidence before thesis |
 | `src/agents/architect.md` | Generates thesis options or structured article outline |
-| `src/agents/section-writer.md` | Writes one complete section through the 8-skill quality pipeline |
 | `src/agents/auditor.md` | Citation hard gate — verifies claims against sources.json |
-| `src/agents/synthesizer.md` | Post-section review for coherence and cross-section flow |
 | `src/agents/voice-miner.md` | Stage 1 voice subsystem — reads corpus and emits markdown style fingerprint |
 
 ## Pipeline pattern
 
-The `write` and `edit` skills use a chained-with-gates pattern:
-1. Conversational planning phase (architect agent, human in the loop) — the architect emits a hierarchical outline (sections → writer units of `thresholds.json > writerUnit` size) with an argument graph (claim / evidence / depends_on / thesis_link per node), validated by a logic gate before writing.
-2. Parallel section writing (one section-writer subagent per writer unit).
-3. Per-paragraph 8-skill pipeline (draft → 6 checks → citation audit hard gate).
-4. Synthesis pass + self-review scorecard.
+The `write` skill uses a CLI-backed, gated pipeline:
+1. Conversational planning and approval (architect agent, human in the loop), then outline validation.
+2. `aw draft` writes body units in dependency order and intro/conclusion last, applying code gates.
+3. The auditor receives one batch per unit; it remains the citation hard gate, and failed units are redrafted with feedback.
+4. `aw synthesize` applies paragraph-level transition edits, then the skill creates the DOCX and hands it back for Word comments and `/academic-writer:revise`.
 
 Auditor is the only mandatory hard gate — it must reject paragraphs whose citations don't match `sources.json` or fail external verification.
 

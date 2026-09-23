@@ -64,6 +64,11 @@ run_tier() {
   local files; files="$(git ls-files | grep -E "$scope_re" \
       | grep -v node_modules \
       | grep -vE '^(scripts/check-no-private-refs\.sh|tests/test_no_private_refs\.py)$' || true)"
+  # The structural test uses this hook to exercise the denylist in managed
+  # worktrees whose shared Git object/index store is mounted read-only.
+  if [[ -n "${CHECK_NO_PRIVATE_REFS_EXTRA_FILES:-}" ]]; then
+    files+=$'\n'"${CHECK_NO_PRIVATE_REFS_EXTRA_FILES}"
+  fi
   [[ -z "$files" ]] && return 0
   local entry pattern reason hits
   for entry in "$@"; do

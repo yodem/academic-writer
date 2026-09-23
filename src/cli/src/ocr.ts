@@ -10,7 +10,8 @@ type Page = { page_number: number; text: string; is_born_digital: boolean; confi
 const schema = { type: 'array', items: { type: 'object', required: ['page_number','text','is_born_digital'], properties: { page_number: { type: 'integer' }, text: { type: 'string' }, is_born_digital: { type: 'boolean' }, confidence: { type: 'string', enum: ['high','medium','low'] }, notes: { type: 'string' } } } };
 function runScript(name: string, args: string[]): unknown {
   const plugin = resolve(dirname(process.argv[1] ?? ''), '..');
-  const script = join(plugin, 'mcp', 'gemini-server', 'scripts', name);
+  // OCR helpers moved from the retired MCP server to <plugin>/scripts/ocr/ (T15 integration).
+  const script = join(plugin, 'scripts', 'ocr', name);
   const result = spawnSync('python3', [script, ...args], { encoding: 'utf8' });
   if (result.status !== 0) throw new AwError('ERROR', 'ocr', result.stderr.trim() || result.stdout.trim() || `${name} failed`);
   try { return JSON.parse(result.stdout) as unknown; } catch { throw new AwError('ERROR', 'ocr', `${name} returned invalid JSON`); }
