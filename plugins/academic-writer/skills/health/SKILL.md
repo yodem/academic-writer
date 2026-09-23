@@ -6,6 +6,19 @@ allowed-tools: [Bash, Read]
 metadata: {author: "Yotam Fromm", version: "0.2.23"}
 ---
 
+
+## Plugin version
+
+Report the installed version first, so a stale install is visible:
+
+```bash
+jq -r .version "${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json"
+```
+
+If it is older than the version the author expects, tell them to run
+`claude plugin marketplace update academic-writer` and then `claude plugin update academic-writer@academic-writer`
+(a marketplace refresh alone does not update an installed plugin).
+
 # Academic Writer — Health Check
 
 Run a comprehensive health check on every component of the Academic Writer system. Report status clearly so the researcher knows what's working and what needs attention.
