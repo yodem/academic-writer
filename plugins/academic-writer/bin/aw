@@ -72,6 +72,10 @@ var init_thresholds = __esm({
         maxWords: 800,
         _comment: "Min/target/max word bounds for a 'writer unit' \u2014 the leaf-level chunk that gets exactly one section-writer subagent. Sections whose word count exceeds maxWords must be decomposed by the architect into multiple writer-unit subsections (an outline `units` array); adjacent subsections under minWords should be merged into one unit rather than left tiny."
       },
+      write: {
+        outlineMaxAlternatives: 2,
+        _comment: "Architect may label up to this many thesis alternatives for discussion; none replaces author intent unless the author edits it."
+      },
       styleFingerprint: {
         passThreshold: 7,
         maxScore: 10,
@@ -40991,7 +40995,7 @@ async function decide(req) {
   }
   const dir = join3(projectDir(), ".academic-helper", "runs", req.runId);
   mkdirSync2(dir, { recursive: true });
-  appendFileSync2(join3(dir, "jev.jsonl"), `${JSON.stringify({ point: req.point, jevAnswer: jevResult?.answer ?? null, jevConfidence: jevResult?.confidence ?? null, modelAnswer, decidedBy: by })}
+  appendFileSync2(join3(dir, "jev.jsonl"), `${JSON.stringify({ point: req.point, jevAnswer: jevResult?.answer ?? null, jevConfidence: jevResult?.confidence ?? null, modelAnswer, decidedBy: by, label: req.label ?? null })}
 `, "utf8");
   return { answer, by, confidence: jevResult?.confidence ?? null };
 }
@@ -41724,6 +41728,43 @@ Live model verification requires GOOGLE_API_KEY.
 `);
     process.exitCode = 1;
   }
+} else if (command2 === "decide") {
+  const value = (name) => {
+    const position = args.indexOf(name);
+    return position >= 0 ? args[position + 1] : void 0;
+  };
+  const pointValue = args[1];
+  const validPoints = ["proofread.verify", "proofread.triage", "revise.classify", "evidence.relevance", "outline.support", "write.audit_prescreen", "write.voice_check", "synthesize.needs_bridge", "style.filler"];
+  try {
+    const question = value("--question");
+    const rawOptions = value("--options");
+    const contextFile = value("--context-file");
+    const fallback = value("--fallback");
+    const runIdValue = value("--run");
+    const label = value("--label");
+    if (!pointValue || !validPoints.includes(pointValue) || !question || !rawOptions || !contextFile || !fallback || !runIdValue) {
+      throw new Error("ERROR decide: expected aw decide <point> --question <text> --options a,b --context-file <file> --fallback <answer> --run <id>");
+    }
+    const options = rawOptions.split(",").map((item) => item.trim()).filter(Boolean);
+    if (options.length < 2) throw new Error("ERROR decide: --options requires at least two comma-separated answers");
+    if (!options.includes(fallback)) throw new Error("ERROR decide: --fallback must match one of --options");
+    const context = readFileSync5(contextFile, "utf8");
+    const result = await decide({
+      point: pointValue,
+      question,
+      options,
+      context,
+      runId: runIdValue,
+      fallback: async () => fallback,
+      label
+    });
+    process.stdout.write(`${JSON.stringify(result)}
+`);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : "ERROR decide: unknown failure"}
+`);
+    process.exitCode = 1;
+  }
 } else if (command2 === "voice") {
   try {
     dataDir();
@@ -41748,7 +41789,7 @@ Live model verification requires GOOGLE_API_KEY.
     process.exitCode = message.includes("no voice store") ? 3 : 2;
   }
 } else {
-  process.stderr.write("ERROR: expected aw models check, aw ledger show <runId>, or aw evidence build\n");
+  process.stderr.write("ERROR: expected aw models check, aw ledger show <runId>, aw evidence build, or aw decide <point>\n");
   process.exitCode = 2;
 }
 /*! Bundled license information:
