@@ -89,3 +89,6 @@ past-articles/
 logs/
 pitch-*.md
 *-pitch-*.html
+
+# ALE run dirs and task worktrees (local)
+.ale/runs/
