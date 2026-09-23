@@ -5,7 +5,7 @@ Observed on the Mac with Claude Code 2.1.280, a throwaway probe plugin loaded wi
 ## DATA_DIR_RESOLUTION
 A skill body containing `aw-probe "${CLAUDE_PLUGIN_DATA}" "${CLAUDE_PLUGIN_ROOT}"` produced:
 ```
-ARG1=/Users/yotamfromm/.claude/plugins/data/awprobe-inline
+ARG1=~/.claude/plugins/data/awprobe-inline
 ARG2=<path of the plugin dir>
 ```
 The same script's environment matched nothing for `CLAUDE_PLUGIN|USER_CONFIG|OPTION|CLAUDE_PROJECT`: the grep printed no lines. So Bash subprocesses do **not** receive the plugin variables. Claude Code substitutes them into skill text, and the skill has to pass them to `aw` as arguments (`aw --data-dir "${CLAUDE_PLUGIN_DATA}" ...`).

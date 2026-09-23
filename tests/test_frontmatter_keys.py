@@ -53,7 +53,12 @@ def test_all_skills_clean():
 
 def test_all_agents_clean_and_no_phantoms():
     agents = list((ROOT / "src/agents").glob("*.md"))
-    assert not (ROOT / "src/agents/memory").exists(), "agents/memory creates phantom agents"
+    # src/agents/memory/ is local, gitignored agent memory. What matters is that the shipped
+    # plugin carries only top-level agent definitions: anything under agents/ loads as an agent.
+    import subprocess
+    shipped = subprocess.run(["git", "ls-files", "plugins/academic-writer/agents"], cwd=ROOT,
+                             capture_output=True, text=True, check=True).stdout.split()
+    assert shipped and all(p.count("/") == 3 and p.endswith(".md") for p in shipped), shipped
     bad = {str(path): check_agent(path) for path in agents}
     assert not {key: value for key, value in bad.items() if value}
 
