@@ -18,7 +18,22 @@
 | T12 `/revise` docx loop | accepted, merged | reader exact on 3 real reviewed docx (every inserted/deleted character recovered) |
 | T14 intent + outline v2 | accepted, merged (dev-server lead) | `gate.py outline-v2`, `aw decide` |
 | T15a/T15b draft/synth/edit/ocr + MCP retirement | merged (lead-verified; split after ALE init) | live 2-unit draft: all gates pass, passage-id citations, predecessor bridge; live `aw edit` |
+| F1 follow-ups, F2 rehearsal fixes | merged | F1: setup docs on `aw`, schemas shipped, wrong-word pass removed. F2: see the rehearsal section |
 | T9/T13/T16 measure + release | **0.14.0 prepared, not released** | version-sync 6/6 agree; pytest 459; test:cli 55; smoke gate PASS (offline); `--live` FAILs only on typo 0.77 |
+
+## /write rehearsal on real sources (2026-09-23, after the release hold)
+A full live run of the new `/write` path, with the author's real kabalah thesis ("אשכנזי מאמץ את עקרונות הפיזיקה האריסטוטלית… אך את המעבר מן האין אל היש… בסוד קבלי") and two real CandleKeep sources: Ashkenazi's Kabbalah commentary as the core text, plus Sefer Yetzirah. The author's co-author approvals were simulated (thesis and section claims taken from the finished article).
+- **Evidence** (`aw evidence build`): 25 verbatim-checked passages (the core text densely covered, including the opening dilemma), real titles and authors, the core text marked primary. About 113k input / 5k output Gemini tokens, ~45 s.
+- **Draft** (`aw draft`), 7 units in dependency order with the intro and conclusion last: 2,552 words in about 75–92 s, ~31k in / 5k out Gemini tokens, **0 Claude tokens**. All gates pass after the fixes below. The style gate caught a banned phrase; `aw draft --unit … --feedback-file` redrafted that unit clean.
+- **Synthesis** (`aw synthesize`): proposed 3 transition edits and applied 2; repeated paragraph openers dropped from 9 to 3.
+- **Prose:** argues the thesis, gives each quotation its own analysis, and bridges units as planned. Remaining: "אני טוען כי" / "אינו רק X אלא Y" are overused. That is expected with the rehearsal's 2-exemplar test voice store; the author's real store (12–20 picked exemplars) is the fix. Verify it in the T16 pilot.
+- **Defects the rehearsal found and fixed** (F2, all with tests), none of which a unit test had caught:
+  - Gemini `RECITATION` abort on classical quotes. Quotes are now inserted by code from `⟦Q:id⟧` placeholders, verbatim by construction.
+  - Model-chosen passage ids changed and collided on every rebuild. They are now stable content ids, and rebuilds merge.
+  - The outline schema rejected the `role` field the drafter relies on.
+  - Citations failed without a `sources.json`, and footnotes were model glosses; they are now rendered by code.
+  - The quote gate misread acronym gershayim and inserted quotes; word bounds counted inserted quotes.
+  - Synthesis saw the units in filename order and had no outline.
 
 ## Needs the author
 1. **Typo recall 0.77 vs 0.85:** Gemini flash misses real-word errors. Options: (a) accept; (b) a stronger model for the wrong_word class; (c) relax the apply gate for verified medium-risk wrong_word fixes.
