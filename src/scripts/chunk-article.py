@@ -172,7 +172,7 @@ def parse_blocks(lines: List[str]) -> List[Block]:
     return blocks
 
 
-def pack_chunks(blocks: List[Block], source_lines: List[str], chunk_words: int) -> List[dict]:
+def pack_chunks(blocks: List[Block], source_lines: List[str], chunk_words: int, numbered: bool = False) -> List[dict]:
     """Group consecutive same-heading blocks into <=chunk_words windows.
 
     A heading change always starts a new chunk (never merges blocks from two
@@ -190,7 +190,8 @@ def pack_chunks(blocks: List[Block], source_lines: List[str], chunk_words: int) 
             return
         start_line = current[0].start_line
         end_line = current[-1].end_line
-        text = "\n".join(source_lines[start_line - 1 : end_line])
+        text_lines = source_lines[start_line - 1 : end_line]
+        text = "\n".join((f"L{start_line + offset}\t{line}" if numbered else line) for offset, line in enumerate(text_lines))
         chunks.append(
             {
                 "id": f"chunk-{len(chunks) + 1:03d}",
@@ -227,10 +228,10 @@ def _load_chunk_words(thresholds_path: str) -> int:
         raise KeyError("thresholds.json missing proofread.chunkWords") from exc
 
 
-def chunk_article(text: str, chunk_words: int) -> List[dict]:
+def chunk_article(text: str, chunk_words: int, numbered: bool = False) -> List[dict]:
     lines = text.splitlines()
     blocks = parse_blocks(lines)
-    return pack_chunks(blocks, lines, chunk_words)
+    return pack_chunks(blocks, lines, chunk_words, numbered)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -249,6 +250,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override proofread.chunkWords directly (skips reading --thresholds).",
     )
+    parser.add_argument("--numbered", action="store_true", help="Prefix each text line with its absolute L<n> anchor.")
     return parser
 
 
@@ -272,7 +274,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"chunk-article.py: {exc}", file=sys.stderr)
             return 2
 
-    chunks = chunk_article(text, chunk_words)
+    chunks = chunk_article(text, chunk_words, args.numbered)
     print(json.dumps(chunks, ensure_ascii=False, indent=2))
     return 0
 

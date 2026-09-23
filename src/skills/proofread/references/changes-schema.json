@@ -46,6 +46,9 @@
         "meaningRisk"
       ],
       "additionalProperties": false,
+      "patternProperties": {
+        "^mustCatch$": { "type": "boolean" }
+      },
       "properties": {
         "change_id": {
           "type": "string",
@@ -130,7 +133,8 @@
             "string",
             "null"
           ],
-          "description": "Why a change was not applied: no-match | ambiguous-match | overlap | citation-guard | meaning-risk | comment-only | refuted."
+          "enum": ["no-match", "ambiguous-match", "ambiguous-anchor", "overlap", "citation-guard", "meaning-risk", "comment-only", "refuted", "refute-budget-exhausted"],
+          "description": "Why a change was not applied."
         },
         "refutedBy": {
           "type": "array",
