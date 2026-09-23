@@ -2,7 +2,7 @@
 
 The 2026-09-01 improvements page filed `warn == block == 6.0` as finding 8, "warn and block
 voice.ruleCoverage thresholds share the same value", implying they should differ. They must not.
-The consumers define three bands (src/agents/voice-calibrator.md:132-134):
+The consumers define three bands (voice/rules.md):
 
     score >= pass                 -> pass
     warn <= score < pass          -> warn
@@ -74,7 +74,7 @@ class TestRuleCoverageBands(unittest.TestCase):
             b["warn"],
             b["block"],
             "warn == block is deliberate (contiguous bands). If you intend to change it, "
-            "change the three-band logic in voice-calibrator.md:132-134 first.",
+            "change the rules contract first.",
         )
 
 
