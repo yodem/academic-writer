@@ -80,15 +80,16 @@ PAREN_CITATION_RE = re.compile(r"\([^()\n]*(?:\d{4}|עמ׳)[^()\n]*\)")
 # Hebrew tractate/book-chapter-verse style refs using a Talmud folio-side
 # marker or a short comma-separated Hebrew reference.
 TALMUD_FOLIO_RE = re.compile(r'ע["״][אב]')
-BOOK_CHAPTER_VERSE_RE = re.compile(r"[א-ת]{2,}\s[א-ת]{1,3},\s[א-ת]{1,3}")
+# Hebrew Bible book names, supplied by the deterministic Tanakh book list.
+_TANAKH_BOOKS = ("בראשית|שמות|ויקרא|במדבר|דברים|יהושע|שופטים|שמואל|מלכים|ישעיהו|ירמיהו|יחזקאל|הושע|יואל|עמוס|עובדיה|יונה|מיכה|נחום|חבקוק|צפניה|חגי|זכריה|מלאכי|תהלים|משלי|איוב|שיר השירים|רות|איכה|קהלת|אסתר|דניאל|עזרא|נחמיה|דברי הימים")
+BOOK_CHAPTER_VERSE_RE = re.compile(rf"(?<![א-ת])(?:{_TANAKH_BOOKS})\s+[א-ת]{1,3},\s+[א-ת]{1,3}(?![א-ת])")
 
 # Quotations (straight and Hebrew geresh/gershayim pairs), non-greedy within
 # one line so an unrelated later quote on the same line isn't swallowed.
 QUOTE_PATTERNS = [
     re.compile(r'"[^"\n]*"'),
-    re.compile(r"״[^״\n]*״"),
+    re.compile(r"״(?=[^״\n]{4,}״)[^״\n]{4,}״"),
     re.compile(r"'[^'\n]*'"),
-    re.compile(r"׳[^׳\n]*׳"),
 ]
 
 # Page numbers / locators: "p. 45", "pp. 45-47", "עמ׳ 45" (already covered by
