@@ -27,7 +27,7 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_DIR = os.path.dirname(ROOT_DIR)
 HARNESS_PATH = os.path.join(REPO_DIR, "tests", "e2e", "proofread-recall.mjs")
 FIXTURE_DIR = os.path.join(ROOT_DIR, "fixtures", "proofread", "hebrew-recall")
-AGENTS_DIR = os.path.join(REPO_DIR, "src", "agents")
+PROMPTS_DIR = os.path.join(REPO_DIR, "src", "cli", "src", "prompts")
 
 
 def _read_source():
@@ -88,7 +88,7 @@ class TestFixtureLiteralsResolve(unittest.TestCase):
             f"{FIXTURE_DIR}: {missing}",
         )
 
-    def test_agent_prompt_names_resolve_to_real_agent_files(self):
+    def test_prompt_names_resolve_to_real_cli_prompt_files(self):
         source = _read_source()
         agent_names = re.findall(r"loadAgentPrompt\('([^']+)'\)", source)
         self.assertGreater(
@@ -99,13 +99,13 @@ class TestFixtureLiteralsResolve(unittest.TestCase):
         )
         missing = []
         for name in agent_names:
-            candidate = os.path.join(AGENTS_DIR, f"{name}.md")
+            candidate = os.path.join(PROMPTS_DIR, f"{name}.md")
             if not os.path.isfile(candidate):
                 missing.append(name)
         self.assertEqual(
             missing,
             [],
-            f"harness references agent(s) with no matching src/agents/*.md file: {missing}",
+            f"harness references prompt(s) with no matching src/cli/src/prompts/*.md file: {missing}",
         )
 
 

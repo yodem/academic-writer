@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://academic-helper.local/schemas/changes-schema.json",
   "title": "Academic Writer — proofread pipeline changes contract",
-  "description": "Single handoff contract for the three proofread stages (editorial / language / mechanical). Emitted by the editor, copyeditor and proofreader agents; consumed by citation-guard.py, apply-changes.py, build-tracked-docx.py and write-proof-report.py, and used as the `schema` option for the CHANGES agent calls in workflows/proofread.js. Adapted from hebrew-book-producer 0.7.0 skills/changes-schema (change_id kept so a future /apply round-trip can address a single change).",
+  "description": "Shared handoff contract for proofread changes. The aw CLI emits and verifies change records; must-catch.py and apply-changes.py prepare and apply them, while build-tracked-docx.py renders tracked changes.",
   "type": "object",
   "required": [
     "stage",

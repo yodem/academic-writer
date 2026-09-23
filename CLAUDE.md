@@ -43,7 +43,7 @@ Slash commands are auto-generated from skills with `user-invocable: true`. To ad
 | `/academic-writer:write` | write | Start a new article from scratch |
 | `/academic-writer:edit` | edit | Revise a drafted article |
 | `/academic-writer:edit-section` | edit-section | Revise one section only |
-| `/academic-writer:proofread` | proofread | Three-stage pipeline — editorial venue-fit memo, language editing, mechanical הגהה — with `--venue` and `--only` flags |
+| `/academic-writer:proofread` | proofread | Run the `aw proofread` find, verify, memo, and apply pipeline |
 | `/academic-writer:ocr` | ocr | OCR a scanned PDF/image (or directory) into clean text via Gemini vision |
 | `/academic-writer:init` | init | Full onboarding (first install); pass `--quick` for fast onboarding |
 | `/academic-writer:setup` | setup | Guided first-run wizard (Gemini key, Python tools, sample paragraph) — slash-command only (`disable-model-invocation: true`, so Claude will not auto-invoke it) |
@@ -62,9 +62,6 @@ Slash commands are auto-generated from skills with `user-invocable: true`. To ad
 | `src/agents/architect.md` | Generates thesis options or structured article outline |
 | `src/agents/section-writer.md` | Writes one complete section through the 8-skill quality pipeline |
 | `src/agents/auditor.md` | Citation hard gate — verifies claims against sources.json |
-| `src/agents/proofreader.md` | Mechanical הגהה — returns a change list (typo/punctuation/grammar/idea-flag); never edits |
-| `src/agents/editor.md` | Editorial venue-fit gate — venue/genre fit, undefined loaded terms, audience-insider references; comment-only memo |
-| `src/agents/copyeditor.md` | Language editing (עריכה לשונית) — register, collocations, agreement; meaning-preserving changes only |
 | `src/agents/synthesizer.md` | Post-section review for coherence and cross-section flow |
 | `src/agents/voice-miner.md` | Stage 1 voice subsystem — reads corpus and emits markdown style fingerprint |
 
