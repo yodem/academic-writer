@@ -10,6 +10,7 @@ compares it against the current outline. Same class of check as
 argument-graph: a script, not reasoning, run right before Step 6.
 """
 
+import hashlib
 import json
 import os
 import subprocess
@@ -49,35 +50,31 @@ class TestStaleEvidenceOwnership(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["status"], "pass")
 
-    def test_ownership_newer_than_outline_passes(self):
+    def test_ownership_written_before_outline_with_matching_hash_passes(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             outline_path = os.path.join(tmpdir, "outline.json")
-            with open(outline_path, "w", encoding="utf-8") as fh:
-                json.dump({"units": []}, fh)
-            time.sleep(0.05)
+            outline_content = b'{"units": []}'
+            digest = hashlib.sha256(outline_content).hexdigest()
             ownership_path = os.path.join(tmpdir, "evidence-ownership.json")
             with open(ownership_path, "w", encoding="utf-8") as fh:
-                json.dump({}, fh)
+                json.dump({"outlineSha256": digest}, fh)
+            with open(outline_path, "wb") as fh:
+                fh.write(outline_content)
             proc = run_gate(
                 "stale-evidence-ownership", outline_path,
                 "--evidence-ownership", ownership_path, "--json",
             )
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        payload = json.loads(proc.stdout)
-        self.assertEqual(payload["status"], "pass")
+        self.assertEqual(json.loads(proc.stdout)["status"], "pass")
 
-    def test_ownership_older_than_outline_fails(self):
-        """The exact scenario reported: the researcher revised the outline
-        (or a stale file survived from a prior attempt at the same article)
-        after evidence-ownership.json was written."""
+    def test_mismatched_outline_hash_fails(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            ownership_path = os.path.join(tmpdir, "evidence-ownership.json")
-            with open(ownership_path, "w", encoding="utf-8") as fh:
-                json.dump({"thesisAnchor": "an abandoned thesis"}, fh)
-            time.sleep(0.05)
             outline_path = os.path.join(tmpdir, "outline.json")
             with open(outline_path, "w", encoding="utf-8") as fh:
-                json.dump({"units": []}, fh)  # written AFTER ownership -- newer outline
+                json.dump({"units": []}, fh)
+            ownership_path = os.path.join(tmpdir, "evidence-ownership.json")
+            with open(ownership_path, "w", encoding="utf-8") as fh:
+                json.dump({"outlineSha256": "wrong-hash"}, fh)
             proc = run_gate(
                 "stale-evidence-ownership", outline_path,
                 "--evidence-ownership", ownership_path, "--json",
@@ -85,9 +82,7 @@ class TestStaleEvidenceOwnership(unittest.TestCase):
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["status"], "fail")
-        checks = [v["check"] for v in payload["violations"]]
-        self.assertIn("stale-mtime", checks)
-        self.assertIn("OLDER than", payload["detail"])
+        self.assertIn("stale-hash", [v["check"] for v in payload["violations"]])
 
     def test_missing_outline_is_could_not_run(self):
         with tempfile.TemporaryDirectory() as tmpdir:

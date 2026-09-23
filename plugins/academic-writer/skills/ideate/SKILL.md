@@ -2,7 +2,7 @@
 name: ideate
 description: "Guided research ideation — brainstorm research questions using 5W1H, gap analysis, and structured framing. Outputs a research brief that feeds into /academic-writer:write. Use when you have a vague topic and need help framing a research question."
 user-invocable: true
-allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
+allowed-tools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.2.23"}
 ---
 

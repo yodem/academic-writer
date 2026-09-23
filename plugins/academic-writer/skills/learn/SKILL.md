@@ -1,9 +1,8 @@
 ---
 name: learn
-description: "Style learning — scans past-articles/ for new files, extracts style patterns, and merges them into the existing style fingerprint. Shows a diff report. Use after adding new past articles to past-articles/ — rebuilds the style fingerprint."
+description: "Style learning — scans past-articles/ for new files, extracts style patterns, and merges them into the existing style fingerprint. Shows a diff report. Use after adding new past articles to past-articles/ — rebuilds the style fingerprint. Use when this skill's command or workflow is needed."
 user-invocable: false
-allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
-agents: [voice-miner]
+allowed-tools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.2.23"}
 ---
 

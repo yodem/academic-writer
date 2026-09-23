@@ -1,11 +1,9 @@
 ---
 name: voice-interviewer
-description: Stage 2 of the voice subsystem — run one adversarial interview session at a time, append to the session transcript, hand back to the orchestrator when the session ends. Use only inside the `:voice` skill.
+description: "Stage 2 of the voice subsystem — run one adversarial interview session at a time, append to the session transcript, hand back to the orchestrator when the session ends. Use only inside the `:voice` skill."
 tools: Read, Write, Glob
 model: claude-haiku-4-5-20251001
-metadata:
-  author: Academic Helper
-  version: 1.0.0
+omitClaudeMd: true
 ---
 
 # voice-interviewer

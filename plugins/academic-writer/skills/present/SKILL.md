@@ -1,8 +1,8 @@
 ---
 name: present
-description: "Post-article deliverables — generate conference presentation outlines, journal submission summaries, and book chapter proposals from a completed article. Use after publishing an article when you need conference/journal/proposal deliverables."
+description: "Post-article deliverables — generate conference presentation outlines, journal submission summaries, and book chapter proposals from a completed article. Use after publishing an article when you need conference/journal/proposal deliverables. Use when this skill's command or workflow is needed."
 user-invocable: false
-allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion, mcp__notebooklm-mcp__notebook_create, mcp__notebooklm-mcp__source_add, mcp__notebooklm-mcp__studio_create, mcp__notebooklm-mcp__studio_status, mcp__notebooklm-mcp__download_artifact]
+allowed-tools: [Bash, Read, Write, Glob, Grep, AskUserQuestion, mcp__notebooklm-mcp__notebook_create, mcp__notebooklm-mcp__source_add, mcp__notebooklm-mcp__studio_create, mcp__notebooklm-mcp__studio_status, mcp__notebooklm-mcp__download_artifact]
 metadata: {author: "Yotam Fromm", version: "0.2.23"}
 ---
 

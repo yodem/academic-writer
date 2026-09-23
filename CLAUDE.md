@@ -29,8 +29,8 @@ researcher on a local machine; the plugin should never assume team workflows.
 - **Profile-scoped**: every hook must silently skip in projects without `.academic-helper/profile.md`. The `run-hook.mjs:54` outer guard checks for the `.academic-helper/` directory; individual hooks then verify `profile.md` exists. New hooks should include the `profile.md` check.
 - **Thresholds**: edit `src/thresholds.json`, never inline numbers in skills or agents.
 - **Strict TypeScript**: hooks must compile under `tsc --noEmit`; never use `any` (use `unknown` and narrow).
-- **Markdown frontmatter**: skills require `name`, `description`, `user-invocable`, `allowedTools`. Agents require `name`, `description`, `tools`, `model`. Add `metadata: {author, version}` to skills.
-- **No global pollution**: never write to `$HOME` or paths outside `CLAUDE_PROJECT_DIR`. The plugin must be safe to run in any project.
+- **Markdown frontmatter**: skills use documented keys including `name`, `description`, `user-invocable`, `allowed-tools`, and `metadata`. Agents use documented keys including `name`, `description`, `tools`, `model`, and `omitClaudeMd: true`. Add `metadata: {author, version}` to skills.
+- **No global pollution**: write only inside `CLAUDE_PROJECT_DIR` and `${CLAUDE_PLUGIN_DATA}`; never write elsewhere under `$HOME`. The plugin must be safe to run in any project.
 
 ## Plugin invocation
 

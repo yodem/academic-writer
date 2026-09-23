@@ -1,11 +1,9 @@
 ---
 name: voice-miner
-description: Stage 1 of the voice subsystem — read the writer's corpus and emit a markdown style fingerprint. Use when the user runs init or explicitly requests a voice-fingerprint refresh.
+description: "Stage 1 of the voice subsystem — read the writer's corpus and emit a markdown style fingerprint. Use when the user runs init or explicitly requests a voice-fingerprint refresh."
 tools: Read, Glob, Grep, Write, Bash
 model: claude-haiku-4-5-20251001
-metadata:
-  author: Academic Helper
-  version: 1.0.0
+omitClaudeMd: true
 ---
 
 # voice-miner

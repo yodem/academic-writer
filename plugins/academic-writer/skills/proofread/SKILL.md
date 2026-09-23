@@ -2,8 +2,7 @@
 name: proofread
 description: "Unified pre-submission proofreading pass over a finished article — editorial (עורך) venue-fit review, language (עריכה לשונית) sentence-level editing, and mechanical (הגהה) typo/punctuation fixes, each refute-verified before it lands. Produces a tracked-changes .docx (real w:ins/w:del + Word comments) and a markdown report documenting every change, downgrade, and why. Use when an article is drafted and you want a full pre-submission pass — venue fit, register, and mechanics — before sending it out, with every automatic edit visible and reversible in Word."
 user-invocable: true
-allowedTools: [Bash, Read, Write, Edit, Glob, Grep, Agent, AskUserQuestion]
-agents: [editor, copyeditor, proofreader]
+allowed-tools: [Bash, Read, Write, Edit, Glob, Grep, Agent, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.3.0"}
 ---
 

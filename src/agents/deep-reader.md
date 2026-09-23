@@ -1,8 +1,9 @@
 ---
 name: deep-reader
-description: Use to explore Candlekeep source documents and map available evidence, arguments, and gaps before any thesis is proposed. NOT for writing or editing — read-only source exploration only. Exception — only permitted write is the bibliographic source registry at .academic-helper/sources.json.
+description: "Use to explore Candlekeep source documents and map available evidence, arguments, and gaps before any thesis is proposed. NOT for writing or editing — read-only source exploration only. Exception — only permitted write is the bibliographic source registry at .academic-helper/sources.json."
 tools: Bash, Read, Write, Grep, Glob, mcp__claude_ai_Sefaria__get_text
-disallowed_tools: Edit, MultiEdit, NotebookEdit
+disallowedTools: Edit, MultiEdit, NotebookEdit
+omitClaudeMd: true
 model: sonnet
 ---
 
@@ -252,4 +253,3 @@ KEY AUTHORS & POSITIONS:
 TENSIONS IN SOURCES:
 - [Author A] argues X while [Author B] argues Y on [topic]
 ```
-

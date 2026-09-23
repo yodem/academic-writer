@@ -1,8 +1,9 @@
 ---
 name: synthesizer
-description: Use after all sections are written to review the complete article for argument coherence, flow, style consistency, and cross-section repetition. Routes prose rewrites through mcp__plugin_academic-writer_gemini-api__gemini_synthesize when available, falls back to in-context Claude synthesis on MCP error. Makes surgical edits only — does NOT write new section content. Runs once, after section-writer completes all sections.
+description: "Use after all sections are written to review the complete article for argument coherence, flow, style consistency, and cross-section repetition. Routes prose rewrites through mcp__plugin_academic-writer_gemini-api__gemini_synthesize when available, falls back to in-context Claude synthesis on MCP error. Makes surgical edits only — does NOT write new section content. Runs once, after section-writer completes all sections."
 tools: Bash, Read, Grep, Glob, mcp__plugin_academic-writer_gemini-api__gemini_synthesize
 model: opus
+omitClaudeMd: true
 ---
 
 # Synthesizer Agent
