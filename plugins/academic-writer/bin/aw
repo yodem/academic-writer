@@ -41215,7 +41215,7 @@ ${JSON.stringify(changes)}`, schema: verifySchema, runId: options.runId, finderP
   const editorialChecks = article && existsSync(editorialChecksPath) ? readFileSync2(editorialChecksPath, "utf8") : "";
   const venuePath = options.venue && project ? join4(project, ".academic-helper", "venues", `${options.venue}.md`) : "";
   const venueProfile = venuePath && existsSync(venuePath) ? readFileSync2(venuePath, "utf8") : "";
-  const memo = stubs.memo ? await stubs.memo() : (await callGemini({ step: "proofread.memo", system: prompt("proofread-memo.md"), parts: [`Global editorial checks (always apply):
+  const memo = options.only && options.only !== "editorial" ? "" : stubs.memo ? await stubs.memo() : (await callGemini({ step: "proofread.memo", system: prompt("proofread-memo.md"), parts: [`Global editorial checks (always apply):
 ${editorialChecks}
 
 Optional additive venue profile${options.venue ? ` (${options.venue})` : ""}:

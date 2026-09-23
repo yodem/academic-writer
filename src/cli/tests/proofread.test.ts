@@ -90,3 +90,10 @@ test('a must-catch occurrence index survives contractChange into changes.json', 
   const capped = written.changes.find((change) => change.before === 'כמו כן');
   assert.equal(capped?.occurrence, 2);
 });
+
+test('--only mechanical skips the editorial memo call', async () => {
+  let memoCalls = 0;
+  __stubs({ find: async () => [], verify: async () => [], mustCatch: async () => [], memo: async () => { memoCalls++; return 'memo'; } });
+  const r = await runProofread({ chunks: 1, runId: 'onlymech', only: 'mechanical' });
+  assert.equal(memoCalls, 0); assert.equal(r.memo, '');
+});

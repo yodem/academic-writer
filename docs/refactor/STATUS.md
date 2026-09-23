@@ -35,6 +35,9 @@ A full live run of the new `/write` path, with the author's real kabalah thesis 
   - The quote gate misread acronym gershayim and inserted quotes; word bounds counted inserted quotes.
   - Synthesis saw the units in filename order and had no outline.
 
+## /proofread measured through the REAL skill (headless, built plugin, 2026-09-23)
+`claude -p --plugin-dir plugins/academic-writer "/academic-writer:proofread article.md --only mechanical"` on the 1,244-word fixture: 66.7 s, 53 changes, change-contract gate PASS, source untouched. **Claude usage: 304,229 tokens in total** (Sonnet, forked skill; `measure-run.py`, the same method as the 98.1M baseline). Recall is identical to the direct CLI runs (typo 0.77, names/terms 1.00, style 1.00, inside-quote 0). Scaled to the kabalah article's 2,338 words that is about 0.6M, against a ≤5M target: **the cost target is met with a wide margin** (the old path cost 98.1M). Fixed on the way: `--only mechanical|language` no longer bills the editorial memo.
+
 ## Needs the author
 1. **Typo recall 0.77 vs 0.85:** Gemini flash misses real-word errors. Options: (a) accept; (b) a stronger model for the wrong_word class; (c) relax the apply gate for verified medium-risk wrong_word fixes.
 2. **Release:** merge `refactor/aw-step-engine` to `main`, push, then `claude plugin marketplace update academic-writer` and `claude plugin update academic-writer@academic-writer`. This also approves the MCP server retirement.

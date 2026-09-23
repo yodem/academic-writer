@@ -165,7 +165,8 @@ export async function runProofread(options: RunProofreadOptions): Promise<Proofr
   const editorialChecks = article && existsSync(editorialChecksPath) ? readFileSync(editorialChecksPath, 'utf8') : '';
   const venuePath = options.venue && project ? join(project, '.academic-helper', 'venues', `${options.venue}.md`) : '';
   const venueProfile = venuePath && existsSync(venuePath) ? readFileSync(venuePath, 'utf8') : '';
-  const memo = stubs.memo ? await stubs.memo() : (await callGemini({ step: 'proofread.memo', system: prompt('proofread-memo.md'), parts: [`Global editorial checks (always apply):\n${editorialChecks}\n\nOptional additive venue profile${options.venue ? ` (${options.venue})` : ''}:\n${venueProfile || 'None available.'}\n\nArticle:\n${content}`], runId: options.runId, budget })).text;
+  // The editorial memo is its own pass: --only mechanical|language skips it (it was always billed).
+  const memo = options.only && options.only !== 'editorial' ? '' : stubs.memo ? await stubs.memo() : (await callGemini({ step: 'proofread.memo', system: prompt('proofread-memo.md'), parts: [`Global editorial checks (always apply):\n${editorialChecks}\n\nOptional additive venue profile${options.venue ? ` (${options.venue})` : ''}:\n${venueProfile || 'None available.'}\n\nArticle:\n${content}`], runId: options.runId, budget })).text;
   let proofed = content;
   const changesPath = join(outDir, 'changes.json'); const proofedPath = join(outDir, 'proofed.md'); const reportPath = join(outDir, 'report.md'); const memoPath = join(outDir, 'memo.md');
   const contract = all.map(contractChange);
