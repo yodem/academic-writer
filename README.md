@@ -117,8 +117,10 @@ Your profile is saved to `.academic-writer/profile.json` and loaded automaticall
 | `/academic-writer:research` | Research a topic using your indexed sources |
 | `/academic-writer:edit` | Edit a previously written article |
 | `/academic-writer:edit-section` | Quick edit of a single section |
+| `/academic-writer:revise` | Read your Word comments and tracked changes: apply edits, learn your voice from your rewrites, log plugin defects |
+| `/academic-writer:voice` | Build or update your one shared voice (exemplars you pick, style words, writing moves) |
 | `/academic-writer:ocr` | OCR a scanned PDF or image (or a directory of them) into clean text |
-| `/academic-writer:proofread` | Mechanical proofread (הגהה) pass — typos, punctuation, typography |
+| `/academic-writer:proofread` | Pre-submission proofread: deterministic must-catch pass (your terms, names, style words), Gemini finder, cross-family verify, tracked-changes .docx |
 | `/academic-writer:update-field` | Change your field of study |
 | `/academic-writer:update-tools` | Add or remove integrations |
 | `/academic-writer:health` | Check all integrations and profile status |

@@ -1,3 +1,5 @@
+> **Superseded by `docs/refactor/STATUS.md` (2026-09-23, Mac lead): all implementation tasks are merged and 0.14.0 is prepared, not released.**
+
 # RESUME: academic-writer refactor (state at 2026-09-23, author away)
 
 ## Where things stand (after the dev-server lead's pushes, 12ebd17)

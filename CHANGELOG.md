@@ -6,6 +6,25 @@ All notable changes to the academic-writer plugin are documented here.
 
 - Add an opt-in Jev shadow scorer for proofread `meaningRisk` labels that writes only to `.academic-helper/jev-shadow.jsonl`.
 
+## [0.14.0] — 2026-09-23 (prepared on `refactor/aw-step-engine`; not released)
+### Changed: the architecture
+- **`aw` CLI replaces the Gemini MCP server and the dynamic workflows.** Every model call and deterministic step runs through `plugins/academic-writer/bin/aw`, invoked from Bash (the MCP client's ~60 s timeout and 25k-token cap no longer apply). Every call is logged to `.academic-helper/runs/<id>/usage.jsonl`; `aw ledger show <run>` summarizes it. Budgets and model ids live only in `thresholds.json`.
+- **Proofread** (`aw proofread`): a deterministic must-catch pass (your names/terms canon, banned and capped style words, hspell), a Gemini-flash finder on line-numbered chunks with text anchoring, a batched cross-family verify, and application in code. Measured on the adversarial Hebrew fixture: names/terms 1.00, style words 1.00, no edits inside quotations, typos 0.77, and **0 Claude tokens** (about 13k Gemini tokens for 1,244 words). Before, a single article's proofread cost 98M tokens.
+- **Write** (`aw draft` / `aw synthesize`): your intent and thesis are captured first; evidence passages are extracted with verbatim-checked quotes (`aw evidence build`); the outline is a schema with paragraph moves and bridges, and you approve every section claim. Units are drafted in dependency order and see their predecessors' text; the intro and conclusion come last. Code gates check citations, verbatim quotes, style words and length. The Claude auditor stays the hard gate, one batched call per unit.
+- **One voice** in the plugin data dir, shared by all projects: exemplars you pick, rewrite pairs, style words and writing moves. It syncs to CandleKeep on change. The 7-session voice interview and the four Haiku voice agents are removed.
+- **`/academic-writer:revise`**: reads Word comments and tracked changes, applies text edits, turns your rewrites into voice data (after you confirm), and logs plugin defects to a ledger that the repo-side `aw-improve` skill turns into eval cases.
+- **Jev** (optional `jev_api_key`): a `decide()` cascade at 10 decision points, all in shadow mode until 100 labelled examples and the agreement bar are met. It is never the sole gate on the citation audit. An optional Pi/OpenRouter cross-family judge runs in isolation.
+
+### Removed
+- The Gemini MCP server (`mcp/gemini-server`), the dynamic workflows (`src/workflows/*`), and the section-writer, synthesizer, deep-reader, proofreader, copyeditor, editor and four voice agents, plus the `feedback` skill (replaced by `revise`).
+
+### Fixed (found by running the built plugin, not the unit tests)
+- Every hook command failed with `MODULE_NOT_FOUND` (quoting); the `aw` bundle crashed on launch (ESM `require`); proofread scripts could not find `thresholds.json` inside the built plugin; drafts cited passage ids that the gate rejected. A new `scripts/smoke-built-plugin.sh` runs the shipped artifacts, and `--live` runs the recall eval.
+
+### Known gaps (author decisions)
+- Typo recall is 0.77 against a 0.85 target: Gemini flash misses real-word errors (`לארס→להרוס`, `אם→עם`, `הטעון→הטיעון`), and the optional second pass did not help. Options: accept it; use a stronger model for the wrong_word class; relax the apply gate for verified medium-risk wrong_word fixes.
+- `/write` has not yet been measured end to end on a full paper (T16 pilot).
+
 ## [0.11.0] — 2026-09-23
 ### Fixed
 - **Plugin permissions and agent settings now take effect.** Every skill used `allowedTools`, which Claude Code ignores; skills now use the documented `allowed-tools`. `disallowed_tools` is now `disallowedTools`, and the ignored `agents:` skill key and the plugin `settings.json` permissions block are removed.
