@@ -11,25 +11,41 @@ import { pluginRoot } from './pi.ts';
 import findPrompt from './prompts/proofread-find.md';
 import verifyPrompt from './prompts/proofread-verify.md';
 import memoPrompt from './prompts/proofread-memo.md';
+import wrongWordPrompt from './prompts/proofread-find-wrongword.md';
+import thresholds from '../../thresholds.json' with { type: 'json' };
 
-type Change = { id: string; line: number; before: string; after: string | null; class: string; meaningRisk: 'low' | 'medium' | 'high'; mustCatch?: boolean; status?: string; applied?: boolean; skipReason?: string; [key: string]: unknown };
+type Change = { id: string; line: number; before: string; after: string | null; class: string; meaningRisk: 'low' | 'medium' | 'high'; mustCatch?: boolean; status?: string; applied?: boolean; skipReason?: string; occurrence?: number; [key: string]: unknown };
 type Chunk = { index: number; id: string; startLine: number; endLine: number; text: string };
 type Verdict = { id: string; verdict: 'uphold' | 'refute' };
-type Stubs = { find?: (chunk: Chunk) => Promise<Change[]>; verify?: (changes: Change[]) => Promise<Verdict[]>; mustCatch?: () => Promise<Change[]>; memo?: () => Promise<string> };
+type Stubs = { find?: (chunk: Chunk) => Promise<Change[]>; verify?: (changes: Change[]) => Promise<Verdict[]>; mustCatch?: () => Promise<Change[]>; memo?: () => Promise<string>; findWrongWord?: (chunk: Chunk) => Promise<Change[]> };
 let stubs: Stubs = {};
 export function __stubs(value: Stubs): void { stubs = value; }
+// Test-only override for the optional second wrong_word-focused finder pass
+// (default comes from thresholds.json > proofread.wrongWordPass.enabled).
+// undefined defers to thresholds.json, matching what ships.
+let wrongWordOverride: boolean | undefined;
+export function __setWrongWordPass(value: boolean | undefined): void { wrongWordOverride = value; }
+function wrongWordPassEnabled(): boolean {
+  if (wrongWordOverride !== undefined) return wrongWordOverride;
+  const block = (thresholds as { proofread?: { wrongWordPass?: { enabled?: boolean } } }).proofread?.wrongWordPass;
+  return Boolean(block?.enabled);
+}
 
 const findSchema = { type: 'object', required: ['changes'], properties: { changes: { type: 'array', items: { type: 'object', required: ['id','line','before','after','class','meaningRisk'], properties: { id: { type: 'string' }, line: { type: 'integer' }, before: { type: 'string' }, after: { type: ['string','null'] }, class: { type: 'string' }, meaningRisk: { type: 'string', enum: ['low','medium','high'] } } } } } };
 const verifySchema = { type: 'object', required: ['verdicts'], properties: { verdicts: { type: 'array', items: { type: 'object', required: ['id','verdict'], properties: { id: { type: 'string' }, verdict: { type: 'string', enum: ['uphold','refute'] } } } } } };
-const prompt = (file: string): string => file === 'proofread-find.md' ? findPrompt : file === 'proofread-verify.md' ? verifyPrompt : memoPrompt;
-type ContractChange = { change_id: string; stage: 'mechanical' | 'language'; line: number; type: string; level: 'letter' | 'word' | 'sentence'; before: string; after: string | null; rationale: string; meaningRisk: Change['meaningRisk']; mustCatch?: boolean; applied?: boolean; skipReason?: string | null; refutedBy?: string[] };
+const prompt = (file: string): string => file === 'proofread-find.md' ? findPrompt : file === 'proofread-verify.md' ? verifyPrompt : file === 'proofread-find-wrongword.md' ? wrongWordPrompt : memoPrompt;
+type ContractChange = { change_id: string; stage: 'mechanical' | 'language'; line: number; type: string; level: 'letter' | 'word' | 'sentence'; before: string; after: string | null; rationale: string; meaningRisk: Change['meaningRisk']; mustCatch?: boolean; applied?: boolean; skipReason?: string | null; refutedBy?: string[]; occurrence?: number };
 function contractChange(change: Change): ContractChange {
   const typeMap: Record<string, string> = { wrong_word: 'word', names_terms: 'word', style_words: 'word', agreement: 'agreement', collocation: 'collocation', syntax: 'syntax', tense: 'tense', register: 'register', punctuation: 'punctuation', typography: 'typography', typo: 'typo' };
   const type = typeMap[change.class] ?? 'word';
   const stage = change.mustCatch || ['typo','punctuation','typography','names_terms','style_words'].includes(change.class) ? 'mechanical' : 'language';
   const skipReason = change.status === 'refuted' ? 'refuted' : change.status === 'triaged-out' || change.after === null ? 'comment-only' : change.status === 'unverified' || change.meaningRisk !== 'low' ? 'meaning-risk' : change.skipReason;
   const applied = typeof change.applied === 'boolean' ? change.applied : skipReason ? false : undefined;
-  return { change_id: createHash('sha256').update(`${stage}\0${change.line}\0${change.before}`).digest('hex').slice(0, 12), stage, line: change.line, type, level: ['typo','punctuation','typography'].includes(type) ? 'letter' : type === 'word' ? 'word' : 'sentence', before: change.before, after: change.after, rationale: typeof change.rationale === 'string' ? change.rationale : 'Proofread suggestion; compare with the surrounding context.', meaningRisk: change.meaningRisk, ...(change.mustCatch ? { mustCatch: true } : {}), ...(applied !== undefined ? { applied } : {}), ...(skipReason ? { skipReason } : {}) };
+  // Occurrence joins the hash (when present) so two over-cap instances of the
+  // same word on the same line get distinct change_ids instead of colliding;
+  // every change without it keeps the original hash formula unchanged.
+  const idSeed = `${stage}\0${change.line}\0${change.before}${typeof change.occurrence === 'number' ? `\0${change.occurrence}` : ''}`;
+  return { change_id: createHash('sha256').update(idSeed).digest('hex').slice(0, 12), stage, line: change.line, type, level: ['typo','punctuation','typography'].includes(type) ? 'letter' : type === 'word' ? 'word' : 'sentence', before: change.before, after: change.after, rationale: typeof change.rationale === 'string' ? change.rationale : 'Proofread suggestion; compare with the surrounding context.', meaningRisk: change.meaningRisk, ...(change.mustCatch ? { mustCatch: true } : {}), ...(applied !== undefined ? { applied } : {}), ...(skipReason ? { skipReason } : {}), ...(typeof change.occurrence === 'number' ? { occurrence: change.occurrence } : {}) };
 }
 
 export type RunProofreadOptions = { article?: string; chunks?: number | Chunk[]; runId: string; venue?: string; only?: 'mechanical' | 'language' | 'editorial'; out?: string; dataDir?: string; projectDir?: string; voiceRules?: string };
@@ -71,7 +87,24 @@ async function mapLimit<T, R>(items: T[], limit: number, operation: (item: T) =>
 }
 async function find(chunk: Chunk, options: RunProofreadOptions, budget: Budget, hspell: Change[]): Promise<Change[]> {
   const raw = stubs.find ? await stubs.find(chunk) : (await callGemini({ step: 'proofread.find', system: prompt('proofread-find.md'), parts: [`Chunk ${chunk.index}; absolute lines ${chunk.startLine}-${chunk.endLine}\n${options.voiceRules ?? ''}\nDictionary candidates (propose the correct spelling, or return none if a legitimate name/term):\n${JSON.stringify(hspell)}\n${chunk.text}`], responseSchema: findSchema, runId: options.runId, budget })).json as { changes: Change[] };
-  const candidates = Array.isArray(raw) ? raw : raw.changes;
+  let candidates = Array.isArray(raw) ? raw : raw.changes;
+  // Optional focused second pass: default OFF (unmeasured cost), and skipped
+  // for a mechanical-only run since wrong_word isn't in the mechanical class
+  // list and every result would be filtered out downstream anyway. Its
+  // candidates merge into the same triage/risk loop below, just like the
+  // primary pass's -- the pipeline never treats them specially past this
+  // point. Ids are prefixed so a coincidental same-index id from the two
+  // passes never collides in statusMap/verdict lookups, and a candidate
+  // already found by the primary pass (same line + before) is dropped here
+  // rather than spent on a redundant verify call.
+  if (wrongWordPassEnabled() && options.only !== 'mechanical') {
+    const rawExtra = stubs.findWrongWord ? await stubs.findWrongWord(chunk) : (await callGemini({ step: 'proofread.find', system: prompt('proofread-find-wrongword.md'), parts: [`Chunk ${chunk.index}; absolute lines ${chunk.startLine}-${chunk.endLine}\n${options.voiceRules ?? ''}\n${chunk.text}`], responseSchema: findSchema, runId: options.runId, budget })).json as { changes: Change[] };
+    const extra = (Array.isArray(rawExtra) ? rawExtra : rawExtra.changes)
+      .filter((candidate) => candidate.class === 'wrong_word')
+      .filter((candidate) => !candidates.some((primary) => primary.line === candidate.line && primary.before === candidate.before))
+      .map((candidate) => ({ ...candidate, id: `ww${chunk.index}-${candidate.id}` }));
+    candidates = [...candidates, ...extra];
+  }
   const kept: Change[] = [];
   for (const candidate of candidates) {
     const decision = await decide({ point: 'proofread.triage', question: 'Is this candidate a genuine proofread error?', options: ['keep','discard'], context: JSON.stringify(candidate), runId: options.runId, fallback: async () => 'keep' });
