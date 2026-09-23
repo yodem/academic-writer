@@ -1,11 +1,11 @@
 import { callGemini } from './gemini.ts';
 import { callPi, piModelFor, piReady, type PiResult } from './pi.ts';
 import type { StepId } from './routing.ts';
-import { appendLedger } from './ledger.ts';
+import { appendLedger, type Budget } from './ledger.ts';
 export { __setPiRunner, __setPiReady } from './pi.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
 
-export type JudgeRequest = { step: StepId; prompt: string; schema: object; runId: string; finderProvider: 'gemini' | 'pi' };
+export type JudgeRequest = { step: StepId; prompt: string; schema: object; runId: string; finderProvider: 'gemini' | 'pi'; budget?: Budget };
 export type JudgeResult = { json: unknown; sameFamily: boolean };
 function matchesSchema(value: unknown, schema: object): boolean {
   const rule = schema as { type?: string; required?: string[]; properties?: Record<string, object>; enum?: unknown[] };
@@ -40,6 +40,7 @@ export async function judge(req: JudgeRequest): Promise<JudgeResult> {
           throw new Error(`ERROR ${req.step}: Pi model failure: ${error instanceof Error ? error.message : 'unknown error'}`);
         }
         usage = result.usage;
+        req.budget?.charge(usage, 0, req.step);
         const json: unknown = JSON.parse(result.finalText);
         if (!matchesSchema(json, req.schema)) throw new Error('JSON does not match schema');
         exit = 'OK';
@@ -54,6 +55,6 @@ export async function judge(req: JudgeRequest): Promise<JudgeResult> {
     }
     throw new Error(`ERROR ${req.step}: ${lastError}`);
   }
-  const result = await callGemini({ step: req.step, system: 'Return JSON matching the supplied schema.', parts: [req.prompt], responseSchema: req.schema, runId: req.runId });
+  const result = await callGemini({ step: req.step, system: 'Return JSON matching the supplied schema.', parts: [req.prompt], responseSchema: req.schema, runId: req.runId, budget: req.budget });
   return { json: result.json, sameFamily: req.finderProvider === 'gemini' };
 }

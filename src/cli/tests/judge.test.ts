@@ -6,6 +6,7 @@ import { setPathArguments } from '../src/paths.js';
 setPathArguments(['--data-dir', '/tmp/aw-t6-data', '--project-dir', '/tmp/aw-t6-project']);
 
 test('pi unavailable → gemini, same_family when finder is gemini', async () => {
+  process.env.GOOGLE_API_KEY = 'test-key';
   __setPiReady(false);
   __setTransport(async () => ({ text: '{"v":[]}', finishReason: 'STOP', usage: { in: 1, out: 1 } }));
   const r = await judge({ step: 'proofread.verify', prompt: 'p', schema: { type: 'object' }, runId: 't', finderProvider: 'gemini' });

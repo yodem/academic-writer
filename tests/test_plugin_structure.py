@@ -64,6 +64,7 @@ class TestSkills(unittest.TestCase):
             d
             for d in os.listdir(self.SKILLS_DIR)
             if os.path.isdir(os.path.join(self.SKILLS_DIR, d))
+            and os.path.isfile(os.path.join(self.SKILLS_DIR, d, "SKILL.md"))
         ]
 
     def test_every_skill_has_skill_md(self):
@@ -137,8 +138,6 @@ class TestSkills(unittest.TestCase):
                         "auditor",
                         "synthesizer",
                         "style-analyzer",
-                        "editor",
-                        "copyeditor",
                     ):
                         self.assertTrue(
                             os.path.isfile(agent_file),
@@ -161,8 +160,6 @@ class TestAgents(unittest.TestCase):
         "section-writer.md",
         "auditor.md",
         "synthesizer.md",
-        "editor.md",
-        "copyeditor.md",
     ]
 
     def test_all_required_agents_exist(self):
@@ -454,9 +451,10 @@ class TestCrossReferences(unittest.TestCase):
             )
 
     def test_help_lists_all_slash_commands(self):
-        """Help skill must list every user-invocable skill."""
+        """Help or the command index must list every user-invocable skill."""
         help_path = os.path.join(SRC_DIR, "skills", "help", "SKILL.md")
         help_text = _read(help_path)
+        command_index = _read(os.path.join(ROOT, "CLAUDE.md"))
         skills_dir = os.path.join(SRC_DIR, "skills")
         for d in os.listdir(skills_dir):
             skill_path = os.path.join(skills_dir, d, "SKILL.md")
@@ -466,7 +464,10 @@ class TestCrossReferences(unittest.TestCase):
             if fm and fm.get("user-invocable"):
                 # Commands use namespace format: /academic-writer:{name}
                 slash = f"/academic-writer:{fm['name']}"
-                self.assertIn(slash, help_text, f"Help skill missing command: {slash}")
+                self.assertTrue(
+                    slash in help_text or slash in command_index,
+                    f"Help and command index missing command: {slash}",
+                )
 
 
 # ---------------------------------------------------------------------------

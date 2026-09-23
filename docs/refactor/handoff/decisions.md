@@ -1,0 +1,36 @@
+# Decisions
+- 2026-09-23 human: priority = COST FIRST (hard token budget for /write and /proofread, quality improved inside it).
+- 2026-09-23 human: /write role = CO-AUTHOR (author writes/approves thesis and each section claim before drafting; section-by-section review).
+- 2026-09-23 human: proofread misses that matter = plain typos, style words (filler/hedging/AI-sounding), names & terms. (Banned-list words NOT selected.)
+- 2026-09-23 human (revised): priority = writing quality AND cost together, across /write and /proofread; proofread also in scope from the start.
+- 2026-09-23 human: NO Pi. Delegation to non-Claude models goes through Codex (runtime delegation in the plugin AND build-lane executor).
+- 2026-09-23 human (rev 2): Gemini FLASH (latest), no Pro.
+- 2026-09-23 human (rev 2): Codex is being retired from their workflow; non-Claude delegation moves to OpenRouter (user said "via Pi"; to be challenged vs direct HTTP).
+- 2026-09-23 human (rev 2): "based on ALE" = BUILD the refactor with ALE (/work, ale CLI). Plugin does NOT need ALE label machinery.
+- 2026-09-23 human (rev 2): don't treat user statements as given; brainstorm independently.
+- 2026-09-23 human (rev 2): add Deep Reader refactor (slow, weak); add docx-feedback loop (comments/tracked changes -> (1) voice update, (2) plugin improvement), currently undocumented and unsupported.
+- 2026-09-23 human (rev 2): one voice per person shared across projects.
+- 2026-09-23 human (rev 2): run CandleKeep best-practice review + /learn (no NotebookLM) on Claude Code plugin best practices.
+- 2026-09-23 spec rev 2 written: CLI (bin/aw) replaces MCP server (60s timeout), OpenRouter HTTP runtime judge (not Pi), voice in CLAUDE_PLUGIN_DATA, /revise docx loop + dev-side aw-improve, construction fixes, evals. Awaiting author review.
+- 2026-09-23 human: spec rev 2 APPROVED (full-draft default kept).
+- 2026-09-23 human (rev 3): Jev at ALL plugin decision points (cascade Jev -> code -> model), per Jev book RULE 6.3: Hebrew points start in shadow until >=100 labelled examples and agreement bar; never the sole gate on the citation audit.
+- 2026-09-23 human (rev 3): Pi is the OpenRouter harness inside the plugin, via a plugin-shipped Pi skill. My earlier objection (vault AGENTS.md, extensions/autosave, ~/.pi sessions) is resolved by isolation flags: pi -p --mode json --no-session --no-tools --no-extensions --no-skills --no-context-files --no-prompt-templates --system-prompt <file> --skill <plugin pi-skill>. Direct OpenRouter HTTP dropped.
+- 2026-09-23 human (rev 3): dev side: Jev wherever it benefits (ALE judge shadow on this plan, /work close shadow, aw-improve clustering, eval pre-grading).
+- 2026-09-23: roster judge.default switched off -> shadow (ale setup --judge shadow --force; old roster saved in superseded-init-1/roster.off.json). Jev now shadows every judged ALE decision in this run (verify, monitor, rejection) per ALE docs/labeling.md.
+- 2026-09-23 FINDING (for the ALE owner): `ale plan bake --judge` without --write sent 112 Jev label votes (~470 ms each, jev-1.13.0) but persisted none per task: ~/.claude/analytics/jev-usage.jsonl rows carry no task id and the run events.jsonl has no vote events, so label agreement for this plan cannot be computed. A naive positional mapping gave 49/112 but is misaligned (tag cycle is not 7 per task) and is NOT evidence.
+- 2026-09-23: first init-run moved to superseded-init-1/ (not deleted) after the T6 rewrite; re-initialised from the rev-3 plan; 16 lane notes re-recorded.
+- 2026-09-23: removed codex-exec routing rule from .ale/roster.json (Codex retired per author).
+- 2026-09-23 human: build executors = Codex, model "gpt6 luna", for ALL tasks; do NOT use Pi at all (for now). Supersedes the global "unattended pane work goes to Pi" rule for this run.
+- 2026-09-23 human: push approved for main (rebased b9d91e8) and refactor/aw-step-engine.
+- 2026-09-23: Codex background launch blocked by auto-mode classifier [Create Unsafe Agents]; prepared specs/ + launch-codex.sh for author-run launch.
+- 2026-09-23 human: approved launcher allow rule; executors = Codex gpt-6-luna via launch-codex.sh; T2 host exception dev-server -> mac (Codex runs locally).
+- 2026-09-23 DEVIATION: T2 allowed_paths widened by direct edit of labels/T2.json (ale relabel refuses context.allowed_paths; no ALE mechanism to correct a too-narrow path scope pre-submission). ALE gap for the owner.
+- [1790151573] Reopened T2: A3 failed only because the lead removed the node_modules symlink the typecheck needs; restored; roster worktree_setup_defaults now links it for every task
+- 2026-09-23 DEVIATION: release tasks T4/T9/T13/T16 widened to package.json, features.json, plugins/academic-writer/* (plan omission).
+- 2026-09-23 human: T4 signed off; migrate installs now; release to main only at the END (after slice 3), not per slice.
+- 2026-09-23 DEVIATION (author asked for more parallelism): dropped T9 dep from T10/T11/T12 and T13 dep from T14/T15. Release tasks T9/T13 become end-of-run measurement tasks.
+- 2026-09-23 human: 'continue working on dev server, I need to go' + 'work in parallel'. Dev server has no codex CLI (needs author login) and no hspell -> remaining executors run as parallel Claude subagents under a dev-server lead session. DEVIATION from 'Codex for delegation', forced by host.
+- 2026-09-23 dev-server lead: integration baseline was red (smoke FAIL: ESM require shim + plugin-layout config paths lived only on T8; 2 CLI tests passed only with GOOGLE_API_KEY exported). Fixed tests hermetically on T8 (ec2671a) and merged T8 into refactor/aw-step-engine EARLY as the base for T14/T15. Remaining T8 recall work continues on the T8 branch and lands as a follow-up merge.
+- 2026-09-23 DEVIATION: T8 allowed_paths widened to `src/scripts/apply-changes.py` and `tests/test_apply_changes*.py` (the `כמו כן` over-cap fix needs apply-changes to honour an occurrence index).
+- 2026-09-23 DEVIATION: T15 allowed_paths widened to `src/cli/src/main.ts`, `src/cli/src/prompts.d.ts`, `plugins/academic-writer/*`, `tests/test_plugin_structure.py`, `tests/test_mcp_dist*.py`, `tests/e2e/*`, `package.json`, `scripts/build-mcp.sh`, `src/thresholds.json`, `src/agents/section-writer.md`, `src/agents/synthesizer.md`, `CLAUDE.md` (the spec deletes/ports these; the label omitted them).
+- 2026-09-23 dev-server lead: pytest is not installed system-wide on this host; acceptance runs from a local venv built from requirements-dev.txt.

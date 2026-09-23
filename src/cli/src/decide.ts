@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { projectDir } from './paths.ts';
 import { askJev } from './jev.ts';
 
-export type JevPoint = 'proofread.verify' | 'proofread.triage' | 'revise.classify' | 'evidence.relevance' | 'outline.support' | 'write.audit_prescreen' | 'write.voice_check' | 'synthesize.needs_bridge' | 'style.filler';
+export type JevPoint = 'proofread.verify' | 'proofread.triage' | 'proofread.risk' | 'revise.classify' | 'evidence.relevance' | 'outline.support' | 'write.audit_prescreen' | 'write.voice_check' | 'synthesize.needs_bridge' | 'style.filler';
 type Mode = 'off' | 'shadow' | 'cascade';
 type JevCall = (input: { question: string; options: string[]; context: string }) => Promise<{ answer: string; confidence: number }>;
 let jevCall: JevCall | undefined = askJev;

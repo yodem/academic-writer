@@ -22,7 +22,7 @@
 # INCLUSION RULE (added 2026-09-02 after a seeding error): a token belongs here
 # ONLY if it is unambiguously correct modern academic Hebrew that hspell wrongly
 # rejects. A DEFICIENT pre-2017 spelling never belongs here, even though hspell
-# flags it -- that is a genuine error proofreader.md is meant to fix as a
+# flags it -- that is a genuine error the proofread finder is meant to fix as a
 # word-level correction. Removed on that basis: האשה, הדוגמא, נסיונותיהם (the
 # post-reform forms are ניסיונותיהם / האישה / הדוגמה). Allowlisting them hid three
 # real finds behind a list meant to hide noise.

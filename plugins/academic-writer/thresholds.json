@@ -68,13 +68,7 @@
     "refuteVotes": 3,
     "refuteMajority": 2,
     "refuteBudgetPerChunk": 12,
-    "jevShadow": {
-      "enabled": false,
-      "flagScore": 1.5,
-      "model": "jev-1.13.0",
-      "_comment": "Opt-in (sends change text to TypeSafe AI); flagScore was fitted 2026-09-19 on 177 Hebrew edits from one article, where every edit labelled low scored ≤ 1.13 and every edit labelled medium or high scored ≥ 1.96 (agreement with the copyeditor LLM, not accuracy); shadow only. Script: src/scripts/jev-risk-shadow.py."
-    },
-    "_comment": "Proofread pipeline caps, enforced in src/workflows/proofread.js from args.thresholds (WRK-14). chunkWords bounds one finder chunk; the mechanical loop exits 'converged' after dryRounds consecutive rounds with no fresh change, or 'cap-reached' at maxPasses. refuteVotes lenses verify each candidate change and refuteMajority of them refuting DOWNGRADES it to applied:false with skipReason 'refuted' — it is never dropped from the output (proofread.js:14-18, :305). refuteBudgetPerChunk caps how many changes per chunk are sent for refute-verification at all. Verification is batched: each lens (language) or vote (mechanical) judges all of a chunk's budgeted changes in ONE call, so verify calls are refuteVotes per chunk regardless of finding count (a live run spent ~9.7M of 13.5M tokens when it was one call per change per lens); the budget now bounds how many changes one call must judge, and glyph-only mechanical changes (gershayim/geresh/whitespace) are upheld by code and spend none of it. Changes beyond the budget are carried with skipReason 'refute-budget-exhausted' — downgraded, never dropped — and the budget is spent highest-meaningRisk first."
+    "_comment": "Proofread chunk target; execution and call budgets are configured under models and budget."
   },
   "citationFloor": {
     "minSecondaryPer1000Words": 4.0,
@@ -163,12 +157,18 @@
       "maxOutputTokens": 8192,
       "concurrency": 1,
       "piModel": "openrouter/z-ai/glm-5.3"
+    },
+    "jev": {
+      "model": "jev-1.13.0"
     }
   },
   "budget": {
     "proofread": {
       "maxTokens": 1000000,
       "maxUsd": 0.5,
+      "summaryMaxBytes": 1024,
+      "summaryMemoChars": 240,
+      "summaryExcerptChars": 120,
       "_comment": "Token ceiling comfortably covers a long proofread run; the USD ceiling is the primary cost guard."
     },
     "write": {
@@ -176,24 +176,31 @@
       "maxUsd": 3.0,
       "_comment": "Token ceiling covers multi-section drafting; the USD ceiling is the primary cost guard."
     },
+    "jev": {
+      "maxTokens": 100000,
+      "maxUsd": 0.25
+    },
     "voiceMoves": {
       "maxTokens": 50000,
       "maxUsd": 0.1,
       "_comment": "One call to derive qualitative voice moves."
     },
-    "jev": {
+    "revise": {
       "maxTokens": 100000,
-      "maxUsd": 0.25
+      "maxUsd": 0.25,
+      "_comment": "One bounded classification pass for author review items."
     }
   },
   "jev": {
-    "model": "jev-1.13.0",
     "threshold": 0.75,
     "points": {
       "proofread.verify": {
         "mode": "shadow"
       },
       "proofread.triage": {
+        "mode": "shadow"
+      },
+      "proofread.risk": {
         "mode": "shadow"
       },
       "revise.classify": {
@@ -223,6 +230,17 @@
   },
   "judge": {
     "validationAttempts": 2
+  },
+  "awImprove": {
+    "defectSimilarity": 0.5,
+    "clusterMinimum": 2,
+    "maxExamples": 5,
+    "jevRoster": {
+      "labels": 100,
+      "agreement": 0.8,
+      "instability": 0.1
+    },
+    "_comment": "Development-only defect clustering and Jev roster thresholds."
   },
   "_piModelNote": "piModel = OpenRouter model for the isolated Pi judge. Must be a non-Claude, non-Gemini family (cross-family verification); taken from the author's Pi model roster (executor tier, machine-config/pi/model-roster.json). Runs in shadow until the Hebrew fixture shows parity."
 }

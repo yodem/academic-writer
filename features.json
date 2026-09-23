@@ -450,16 +450,16 @@
       "id": "editing",
       "name": "Editing / revision",
       "sources": [
-        "src/agents/copyeditor.md",
-        "src/agents/editor.md",
-        "src/agents/proofreader.md",
         "src/skills/edit-section/SKILL.md",
         "src/skills/edit/SKILL.md",
         "src/skills/proofread/SKILL.md",
         "src/skills/proofread/references/changes-schema.json",
         "src/skills/update-field/SKILL.md",
         "src/skills/update-tools/SKILL.md",
-        "src/workflows/proofread.js"
+        "src/cli/src/proofread.ts",
+        "src/cli/src/prompts/proofread-find.md",
+        "src/cli/src/prompts/proofread-verify.md",
+        "src/cli/src/prompts/proofread-memo.md"
       ],
       "status": "ok",
       "subfeatures": [
@@ -475,22 +475,22 @@
         },
         {
           "id": "proofread",
-          "name": "Three-stage proofread pipeline (editorial -> language -> mechanical), --venue and --only flags",
+          "name": "aw proofread find, verify, memo, and apply pipeline",
           "status": "ok"
         },
         {
           "id": "proofread-editorial",
-          "name": "Stage 1 editorial (עורך) venue-fit memo — comment-only, never applies edits",
+          "name": "One editorial memo call included in the aw proofread pipeline",
           "status": "ok"
         },
         {
           "id": "proofread-language",
-          "name": "Stage 2 language editing (עריכה לשונית) — meaningRisk:low applied as tracked change, medium+ as comment",
+          "name": "Finder candidates receive batched meaning verification before eligible changes apply",
           "status": "ok"
         },
         {
           "id": "proofread-mechanical",
-          "name": "Stage 3 mechanical הגהה — converges over rounds (dryRounds/maxPasses from thresholds.json)",
+          "name": "Deterministic must-catch corrections run before model suggestions",
           "status": "ok"
         },
         {
@@ -525,7 +525,7 @@
       "subfeatures": [
         {
           "id": "venue-create",
-          "name": "First-use creation from a pasted CFP, author guidelines, or rejection letter, distilled by the editor agent",
+          "name": "First-use venue notes from a CFP, author guidelines, or rejection letter",
           "status": "ok"
         },
         {
@@ -572,6 +572,34 @@
         {
           "id": "help-health",
           "name": "help + health skills",
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "id": "docx-revise-loop",
+      "name": "Word review loop and feedback learning",
+      "sources": [
+        "src/skills/revise/SKILL.md",
+        "src/cli/src/revise.ts",
+        "src/scripts/docx-read-review.py",
+        "scripts/aw-improve-report.py"
+      ],
+      "status": "ok",
+      "subfeatures": [
+        {
+          "id": "docx-review-read",
+          "name": "Read Word comments and tracked changes",
+          "status": "ok"
+        },
+        {
+          "id": "revise-classify-apply",
+          "name": "Classify and apply author-confirmed review items",
+          "status": "ok"
+        },
+        {
+          "id": "aw-improve",
+          "name": "Cluster plugin defects and report Jev agreement",
           "status": "ok"
         }
       ]

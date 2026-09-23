@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, resolve, basename } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -12,6 +12,16 @@ export function __setDataDir(path: string): void { dataOverride = resolve(path);
 function store(): string { return join(dataOverride ?? configuredDataDir(), 'voice'); }
 type Exemplar = { id: string; source: string; text: string };
 type Pair = { before: string; after: string; source?: string };
+export function appendVoicePair(pair: Pair, dataRoot?: string): void {
+  const dir = join(dataRoot ?? dataOverride ?? configuredDataDir(), 'voice');
+  mkdirSync(dir, { recursive: true });
+  appendFileSync(join(dir, 'pairs.jsonl'), `${JSON.stringify(pair)}\n`, 'utf8');
+}
+export function writeVoiceStyleWords(value: unknown, dataRoot?: string): void {
+  const dir = join(dataRoot ?? dataOverride ?? configuredDataDir(), 'voice');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'style-words.json'), JSON.stringify(value, null, 2), 'utf8');
+}
 function readJsonl<T>(path: string): T[] { if (!existsSync(path)) return []; return readFileSync(path, 'utf8').split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line) as T); }
 function sha(content: string): string { return createHash('sha256').update(content).digest('hex'); }
 function refreshVersion(dir: string): string {
