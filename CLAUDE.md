@@ -53,6 +53,7 @@ Slash commands are auto-generated from skills with `user-invocable: true`. To ad
 | `/academic-writer:health` | health | Check integration health |
 | `/academic-writer:help` | help | List available commands |
 | `/academic-writer:voice` | voice | Stage 2 deep voice profile (7-session adversarial interview) |
+| `/academic-writer:revise` | revise | Read Word comments and tracked changes; update the draft and feedback stores |
 
 ## Agents
 

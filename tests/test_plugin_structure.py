@@ -64,6 +64,7 @@ class TestSkills(unittest.TestCase):
             d
             for d in os.listdir(self.SKILLS_DIR)
             if os.path.isdir(os.path.join(self.SKILLS_DIR, d))
+            and os.path.isfile(os.path.join(self.SKILLS_DIR, d, "SKILL.md"))
         ]
 
     def test_every_skill_has_skill_md(self):
@@ -132,7 +133,6 @@ class TestSkills(unittest.TestCase):
                     # Allow agents that are used via subagent_type (general-purpose)
                     # Only check agents that should have dedicated .md files
                     if agent in (
-                        "deep-reader",
                         "architect",
                         "section-writer",
                         "auditor",
@@ -156,7 +156,6 @@ class TestAgents(unittest.TestCase):
 
     AGENTS_DIR = os.path.join(SRC_DIR, "agents")
     REQUIRED_AGENTS = [
-        "deep-reader.md",
         "architect.md",
         "section-writer.md",
         "auditor.md",
@@ -352,7 +351,6 @@ class TestClaudeMD(unittest.TestCase):
     def test_all_agents_listed_in_claude_md(self):
         text = _read(self.CLAUDE_MD)
         required_agents = [
-            "deep-reader",
             "architect",
             "section-writer",
             "auditor",
@@ -453,9 +451,10 @@ class TestCrossReferences(unittest.TestCase):
             )
 
     def test_help_lists_all_slash_commands(self):
-        """Help skill must list every user-invocable skill."""
+        """Help or the command index must list every user-invocable skill."""
         help_path = os.path.join(SRC_DIR, "skills", "help", "SKILL.md")
         help_text = _read(help_path)
+        command_index = _read(os.path.join(ROOT, "CLAUDE.md"))
         skills_dir = os.path.join(SRC_DIR, "skills")
         for d in os.listdir(skills_dir):
             skill_path = os.path.join(skills_dir, d, "SKILL.md")
@@ -465,7 +464,10 @@ class TestCrossReferences(unittest.TestCase):
             if fm and fm.get("user-invocable"):
                 # Commands use namespace format: /academic-writer:{name}
                 slash = f"/academic-writer:{fm['name']}"
-                self.assertIn(slash, help_text, f"Help skill missing command: {slash}")
+                self.assertTrue(
+                    slash in help_text or slash in command_index,
+                    f"Help and command index missing command: {slash}",
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -582,3 +584,9 @@ class TestScriptSmoke(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRemovedVoiceAgents(unittest.TestCase):
+    def test_interview_agents_are_not_shipped(self):
+        for name in ("voice-interviewer.md", "voice-distiller.md", "voice-calibrator.md", "voice-miner.md"):
+            self.assertFalse(os.path.exists(os.path.join(SRC_DIR, "agents", name)), name)

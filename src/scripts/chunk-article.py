@@ -51,8 +51,11 @@ import re
 import sys
 from typing import List, Optional
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DEFAULT_THRESHOLDS_PATH = os.path.join(REPO_ROOT, "src", "thresholds.json")
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Built plugin: <plugin>/scripts/ next to <plugin>/thresholds.json. Repo: src/scripts/ -> src/thresholds.json.
+DEFAULT_THRESHOLDS_PATH = next((p for p in (os.path.join(_SCRIPT_DIR, "..", "thresholds.json"),
+                                            os.path.join(_SCRIPT_DIR, "..", "..", "src", "thresholds.json")) if os.path.exists(p)),
+                               os.path.join(_SCRIPT_DIR, "..", "thresholds.json"))
 
 FENCE_RE = re.compile(r"^\s*(```+|~~~+)")
 HEADING_RE = re.compile(r"^##\s+(.*\S)\s*$")

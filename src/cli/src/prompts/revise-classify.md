@@ -1,0 +1,1 @@
+Classify each Word review item as exactly one category: text_edit (direct article correction), argument (author must resolve through writing loop), voice_signal (author preference or rewrite pair), plugin_defect (plugin behavior or factual process failure). Return JSON {"items":[{"id":"...","category":"...","proposal":{}}]}. Never invent facts. Preserve Hebrew exactly.

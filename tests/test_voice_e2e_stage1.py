@@ -29,32 +29,19 @@ def test_stage1_seeds_author_voice(tmp_path):
         cwd=str(tmp_path),
         check=True,
     )
-    # Stage 1 is normally agent-driven; for the structural test we shell-emit a stub fingerprint
-    # to assert the surrounding pipeline works.
-    (tmp_path / ".voice").mkdir(exist_ok=True)
-    (tmp_path / ".voice" / "fingerprint.md").write_text(
-        "# Fingerprint\n- Corpus summary: 3 articles, 1500 words, Hebrew.\n"
-    )
-    # Inject a stub `ck` that exits 127 → voice-sync treats push as a no-op
-    stub_bin = tmp_path / ".stub-bin"
-    stub_bin.mkdir()
-    stub_ck = stub_bin / "ck"
-    stub_ck.write_text("#!/bin/bash\n# stub ck — not available\nexit 127\n")
-    stub_ck.chmod(0o755)
-    env = os.environ.copy()
-    env["PATH"] = str(stub_bin) + ":" + env["PATH"]
-    # Run sync push (stub ck exits 127 → script sees ck missing → no-op)
-    r = subprocess.run(
-        ["bash", str(ROOT / "src/skills/voice/voice-sync.sh"), "push"],
-        cwd=str(tmp_path),
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    assert r.returncode == 0
     # AUTHOR_VOICE.md should have been created by migration — not seeded by the test
     avo = tmp_path / "AUTHOR_VOICE.md"
     assert avo.exists(), "AUTHOR_VOICE.md was not created by migration"
     content = avo.read_text()
     assert "Voice Profile" in content
     assert "Test Writer" in content  # from legacy-profile.json fixture
+
+
+def test_voice_sync_usage_and_legacy_form(tmp_path):
+    """voice-sync.sh: bad args -> exit 2; legacy 1-arg form resolves defaults and reaches aw."""
+    script = ROOT / "plugins/academic-writer/skills/voice/voice-sync.sh"
+    bad = subprocess.run(["bash", str(script), "sideways"], capture_output=True, text=True)
+    assert bad.returncode == 2 and "usage" in bad.stderr
+    ok = subprocess.run(["bash", str(script), "pull", str(tmp_path / "data"), str(tmp_path)],
+                        capture_output=True, text=True, cwd=str(tmp_path))
+    assert "aw CLI not found" not in ok.stderr, ok.stderr  # built plugin has bin/aw
