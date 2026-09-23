@@ -42,15 +42,13 @@ else
   exit 1
 fi
 
-# Phase 3: Clean previous build. The bundled Gemini MCP server (plugins/academic-writer/mcp/)
-# was retired when its tools were ported into the `aw` CLI (src/cli/) — this build no longer
-# preserves or regenerates an mcp/ subtree, so a stale one from before the retirement is removed
-# outright along with everything else, rather than kept around.
+# Phase 3: Clean previous build. Do not copy mcp/ into the built plugin. Preserve the legacy
+# server source subtree until the T15a/T15b integration lead confirms it has been moved.
 echo -e "${BLUE}[3/7] Cleaning previous build...${NC}"
 if [[ -d "$PLUGINS_DIR" ]]; then
   for plugin_dir in "$PLUGINS_DIR"/*; do
     [[ ! -d "$plugin_dir" ]] && continue
-    find "$plugin_dir" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+    find "$plugin_dir" -mindepth 1 -maxdepth 1 ! -name mcp -exec rm -rf {} + 2>/dev/null || true
   done
 fi
 mkdir -p "$PLUGINS_DIR"
@@ -191,10 +189,6 @@ for plugin_dir in "$PLUGINS_DIR"/*; do
   fi
   if [[ ! -x "$plugin_dir/bin/aw" ]]; then
     echo -e "${RED}  $plugin_name: Missing bin/aw${NC}"
-    errors=$((errors + 1))
-  fi
-  if [[ -d "$plugin_dir/mcp" ]]; then
-    echo -e "${RED}  $plugin_name: mcp/ should not be shipped (retired — see src/cli)${NC}"
     errors=$((errors + 1))
   fi
 done

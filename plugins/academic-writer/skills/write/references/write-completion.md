@@ -1,32 +1,7 @@
 # Write completion steps
 
-### Step 8: Synthesis + Full-Article Repetition Check
-
-Once all sections are approved, log the spawn event:
-
-**Use the Agent tool to spawn the `synthesizer` subagent.** Pass the following as the prompt:
-- All completed section texts
-- The thesis statement
-- The complete styleFingerprint object
-- The articleStructure conventions
-- The linkingWords reference
-- The `targetLanguage` (so the synthesizer loads the correct anti-AI patterns reference)
-- The tools configuration
-
-
-**Phase A — Synthesis review** (`synthesize` node):
-- Argument coherence, logical flow, transitions — including subsection-to-subsection transitions WITHIN a section (between sibling writer units), not just section-to-section transitions
-- Full-article style fingerprint compliance
-- Redundancies & gaps
-
-**Phase B — Full-article repetition check** (`synthesize_repetition_check` node):
-- Cross-section argument, phrase, opener, transition, and evidence repetition
-
-Makes targeted revisions only — does not rewrite from scratch. Citations are locked.
-
-After receiving the synthesizer result, mark node complete:
-
----
+W5 (`aw synthesize`, in SKILL.md) has already applied its paragraph-level transition edits to
+`drafts/*.md` by the time you reach this reference — there is no separate synthesis step here.
 
 ### Step 8.5: Abstract Generation
 
@@ -85,10 +60,12 @@ DOCX_PATH="articles/${FILEBASE}.docx"
 
 #### Step 9a: Markdown Output
 
-Use the `Write` tool to write the article as markdown to `$MD_PATH` — title as H1, thesis as an
-italic line below it, section headings as H2 (only when `totalWords > 1500`), inline citations kept
-exactly as they appear. Exact structure template and full rules: see
-`references/docx-generation.md#step-9a-markdown-output`.
+Assemble the article from `.academic-helper/drafts/<unitId>.md` (intro first, then body units in
+outline order, then conclusion — these are the same files W4's audit and W5's synthesis already
+finalized; do not re-draft or paraphrase them here). Use the `Write` tool to write the assembled
+result as markdown to `$MD_PATH` — title as H1, thesis as an italic line below it, section headings
+as H2 (only when `totalWords > 1500`), inline citations kept exactly as they appear. Exact structure
+template and full rules: see `references/docx-generation.md#step-9a-markdown-output`.
 
 #### Step 9a.5: Hebrew Punctuation Validation (mandatory quality gate)
 
@@ -116,7 +93,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py citation-floor "$MD_PATH" \
 
 Only **secondary** citations count toward the floor: primary sources are quoted inline in this field, so a raw citation count reads healthy on an article carrying almost no scholarly engagement. Floors live in `thresholds.json > citationFloor` — never hardcode them here.
 
-- **Exit 1** — the article is under a floor. Do not ship it. Either the argument genuinely lacks scholarly engagement (send the thin sections back through Step 6 with the gate's per-section counts), or citations were dropped in synthesis — check Step 8's revision notes.
+- **Exit 1** — the article is under a floor. Do not ship it. Either the argument genuinely lacks scholarly engagement (send the thin units back through W4 with the gate's per-section counts, as a redraft feedback file), or citations were dropped in synthesis — check W5's `edits` output.
 - **Exit 2** — the gate could not run (missing `sources.json`, unreadable markdown). Fix the cause; an unrun gate is not a passed gate.
 - **Exit 0** — continue to Step 9b.
 

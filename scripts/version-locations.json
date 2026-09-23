@@ -16,6 +16,7 @@
     { "pattern": "^src/hooks/package\\.json$", "why": "internal hooks bundle, versioned independently at 1.0.0" },
     { "pattern": "^plugins/academic-writer/hooks/package\\.json$", "why": "built copy of the hooks bundle" },
     { "pattern": "review/references/scorecard\\.json$", "why": "scorecard SCHEMA version, not the plugin's" },
+    { "pattern": "^plugins/academic-writer/mcp/gemini-server/package\\.json$", "why": "legacy MCP source retained until T15a/T15b integration; package version is not the plugin version" },
     { "pattern": "^\\.claude/", "why": "local harness state, not shipped" }
   ]
 }

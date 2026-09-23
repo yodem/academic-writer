@@ -134,10 +134,8 @@ class TestSkills(unittest.TestCase):
                     # Only check agents that should have dedicated .md files
                     if agent in (
                         "architect",
-                        "section-writer",
-                        "auditor",
-                        "synthesizer",
-                        "style-analyzer",
+                                    "auditor",
+                                    "style-analyzer",
                     ):
                         self.assertTrue(
                             os.path.isfile(agent_file),
@@ -157,15 +155,18 @@ class TestAgents(unittest.TestCase):
     AGENTS_DIR = os.path.join(SRC_DIR, "agents")
     REQUIRED_AGENTS = [
         "architect.md",
-        "section-writer.md",
         "auditor.md",
-        "synthesizer.md",
     ]
 
     def test_all_required_agents_exist(self):
         for name in self.REQUIRED_AGENTS:
             path = os.path.join(self.AGENTS_DIR, name)
             self.assertTrue(os.path.isfile(path), f"Missing agent: {name}")
+
+    def test_retired_agents_and_workflow_are_absent(self):
+        for name in ("section-writer.md", "synthesizer.md"):
+            self.assertFalse(os.path.exists(os.path.join(self.AGENTS_DIR, name)), name)
+        self.assertFalse(os.path.exists(os.path.join(SRC_DIR, "workflows", "write-sections.js")))
 
     def test_agents_have_title(self):
         for name in self.REQUIRED_AGENTS:
@@ -352,9 +353,7 @@ class TestClaudeMD(unittest.TestCase):
         text = _read(self.CLAUDE_MD)
         required_agents = [
             "architect",
-            "section-writer",
             "auditor",
-            "synthesizer",
         ]
         for agent in required_agents:
             self.assertIn(
@@ -420,35 +419,21 @@ class TestPluginMirror(unittest.TestCase):
 class TestCrossReferences(unittest.TestCase):
     """Validate references between skills, agents, and CLAUDE.md."""
 
-    def test_section_writer_skill_pipeline_matches_workflow(self):
-        """Section writer skill list must match workflow node children."""
-        sw_path = os.path.join(SRC_DIR, "agents", "section-writer.md")
-        text = _read(sw_path)
-        # Check all 5 skills are mentioned
-        skills = [
-            "DRAFT",
-            "STYLE FINGERPRINT COMPLIANCE",
-            "GRAMMAR CHECK",
-            "REPETITION CHECK",
-            "CITATION AUDIT",
-        ]
-        for skill in skills:
-            self.assertIn(skill, text, f"section-writer.md missing skill: {skill}")
+    def test_write_skill_contract_and_auditor_batch_schema(self):
+        text = _read(os.path.join(SRC_DIR, "skills", "write", "SKILL.md"))
+        self.assertLessEqual(len(text.splitlines()), 450)
+        for contract in ("aw draft", "auditor", "taggedText", "aw synthesize", "generate-docx.py", "/academic-writer:revise"):
+            self.assertIn(contract, text, f"write skill missing: {contract}")
+        auditor = _read(os.path.join(SRC_DIR, "agents", "auditor.md"))
+        for contract in ("single batched call", '"results"', '"taggedText"', '"paragraphIndex"'):
+            self.assertIn(contract, auditor, f"auditor batch schema missing: {contract}")
 
-    def test_write_article_references_all_pipeline_skills(self):
-        wa_path = os.path.join(SRC_DIR, "skills", "write", "SKILL.md")
-        text = _read(wa_path)
-        skills = [
-            "Draft",
-            "Style Compliance",
-            "Grammar Check",
-            "Repetition Check",
-            "Citation Audit",
-        ]
-        for skill in skills:
-            self.assertIn(
-                skill, text, f"write-article SKILL.md missing reference to: {skill}"
-            )
+    def test_aw_edit_and_ocr_skill_contracts(self):
+        for name, command in (("edit", "edit"), ("edit-section", "edit"), ("ocr", "ocr")):
+            text = _read(os.path.join(SRC_DIR, "skills", name, "SKILL.md"))
+            self.assertIn(f" {command} \\", text)
+            self.assertIn('--data-dir "${CLAUDE_PLUGIN_DATA}"', text)
+            self.assertIn('--project-dir "$PWD"', text)
 
     def test_help_lists_all_slash_commands(self):
         """Help or the command index must list every user-invocable skill."""

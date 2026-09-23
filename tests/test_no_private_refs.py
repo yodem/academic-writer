@@ -37,12 +37,12 @@ class TestNoPrivateRefs(unittest.TestCase):
         with open(planted, "w", encoding="utf-8") as fh:
             fh.write("path: /Users/someone/dev/thing\n")
         try:
-            subprocess.run(["git", "add", "-N", planted], cwd=REPO, capture_output=True)
-            proc = subprocess.run(["bash", SCRIPT], cwd=REPO, capture_output=True, text=True)
+            env = os.environ.copy()
+            env["CHECK_NO_PRIVATE_REFS_EXTRA_FILES"] = os.path.relpath(planted, REPO)
+            proc = subprocess.run(["bash", SCRIPT], cwd=REPO, env=env, capture_output=True, text=True)
             self.assertNotEqual(proc.returncode, 0, "planted identifier was not caught")
             self.assertIn("absolute macOS home path", proc.stdout)
         finally:
-            subprocess.run(["git", "rm", "--cached", "-q", planted], cwd=REPO, capture_output=True)
             os.unlink(planted)
 
     def test_repo_is_clean_again_after_the_probe(self):

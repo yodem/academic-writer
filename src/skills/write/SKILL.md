@@ -365,6 +365,8 @@ Follow the abstract, self-review, and DOCX output procedures in `references/writ
 build the final article from the (now synthesized) `drafts/<unitId>.md` files in outline order.
 Keep the audited text and citations intact; do not hand-edit prose at this stage.
 
+That procedure assembles the article and invokes `scripts/generate-docx.py` to write the `.docx`.
+
 After the DOCX is written, close the loop with the author: tell them to open the `.docx`, add Word
 comments or tracked changes anywhere they want something revisited, and then run
 `/academic-writer:revise` to fold those comments back into the draft and feedback stores. Mention
