@@ -884,14 +884,17 @@ def cmd_outline_v2(args) -> tuple[int, dict]:
     if not all(isinstance(value, dict) for value in (outline, intent, evidence)):
         return 2, _make_result("outline-v2", "error", "outline, intent, and evidence must be JSON objects", [])
 
+    # jsonschema is a dev dependency, not something /setup installs on the author's
+    # machine. Without it, skip the schema pass; the semantic checks below still
+    # guard every structure they read.
     try:
         from jsonschema import Draft202012Validator
-    except ImportError as exc:
-        return 2, _make_result("outline-v2", "error", f"jsonschema package not importable: {exc}", [])
+    except ImportError:
+        Draft202012Validator = None
     schema_violations = []
     for artifact, schema_path, artifact_name in (
-        (intent, AUTHOR_INTENT_SCHEMA_PATH, "intent"),
-        (outline, OUTLINE_V2_SCHEMA_PATH, "outline"),
+        ((intent, AUTHOR_INTENT_SCHEMA_PATH, "intent"),
+         (outline, OUTLINE_V2_SCHEMA_PATH, "outline")) if Draft202012Validator else ()
     ):
         schema, schema_error = _read_json_file(schema_path)
         if schema_error:

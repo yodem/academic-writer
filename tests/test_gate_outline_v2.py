@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -96,3 +97,13 @@ def test_schema_copies_in_write_skill_references_match_source_of_truth():
         source_of_truth = (ROOT / "src/schemas" / name).read_text(encoding="utf-8")
         write_skill_copy = (ROOT / "src/skills/write/references" / name).read_text(encoding="utf-8")
         assert source_of_truth == write_skill_copy, f"{name} has drifted between src/schemas/ and src/skills/write/references/"
+
+
+def test_semantic_checks_run_without_jsonschema(tmp_path):
+    """The author's machine may lack jsonschema; the gate must still decide, not error."""
+    blocker = tmp_path / "block"
+    blocker.mkdir()
+    (blocker / "jsonschema.py").write_text("raise ImportError('blocked for test')\n")
+    env = {**os.environ, "PYTHONPATH": str(blocker)}
+    assert subprocess.run(_files(tmp_path), env=env).returncode == 0
+    assert subprocess.run(_files(tmp_path, approved=False), env=env).returncode == 1
