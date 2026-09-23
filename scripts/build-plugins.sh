@@ -76,6 +76,11 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
   fi
   skill_count=$(find "$PLUGIN_DIR/skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
 
+  # Copy Pi judge skills as a separate Pi skill directory.
+  if [[ -d "$SRC_DIR/pi-skills" ]]; then
+    cp -R "$SRC_DIR/pi-skills" "$PLUGIN_DIR/"
+  fi
+
   # Copy agents
   if [[ -d "$SRC_DIR/agents" ]]; then
     mkdir -p "$PLUGIN_DIR/agents"

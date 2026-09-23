@@ -116,61 +116,71 @@ var thresholds_default = {
       provider: "gemini",
       model: "gemini-3.8-flash",
       maxOutputTokens: 8192,
-      concurrency: 1
+      concurrency: 1,
+      piModel: "openrouter/anthropic/claude-3.5-haiku"
     },
     "proofread.verify": {
       provider: "gemini",
       model: "gemini-3.8-flash",
       maxOutputTokens: 8192,
-      concurrency: 1
+      concurrency: 1,
+      piModel: "openrouter/anthropic/claude-3.5-haiku"
     },
     "proofread.memo": {
       provider: "gemini",
       model: "gemini-3.8-flash",
       maxOutputTokens: 8192,
-      concurrency: 1
+      concurrency: 1,
+      piModel: "openrouter/anthropic/claude-3.5-haiku"
     },
     "evidence.extract": {
       provider: "gemini",
       model: "gemini-3.8-flash",
       maxOutputTokens: 8192,
-      concurrency: 1
+      concurrency: 1,
+      piModel: "openrouter/anthropic/claude-3.5-haiku"
     },
     "write.draft": {
       provider: "gemini",
       model: "gemini-3.8-flash",
       maxOutputTokens: 8192,
-      concurrency: 1
+      concurrency: 1,
+      piModel: "openrouter/anthropic/claude-3.5-haiku"
     },
     "write.synthesize": {
       provider: "gemini",
       model: "gemini-3.8-flash",
       maxOutputTokens: 8192,
-      concurrency: 1
+      concurrency: 1,
+      piModel: "openrouter/anthropic/claude-3.5-haiku"
     },
     "voice.moves": {
       provider: "gemini",
       model: "gemini-3.8-flash",
       maxOutputTokens: 8192,
-      concurrency: 1
+      concurrency: 1,
+      piModel: "openrouter/anthropic/claude-3.5-haiku"
     },
     "revise.classify": {
       provider: "gemini",
       model: "gemini-3.8-flash",
       maxOutputTokens: 8192,
-      concurrency: 1
+      concurrency: 1,
+      piModel: "openrouter/anthropic/claude-3.5-haiku"
     },
     ocr: {
       provider: "gemini",
       model: "gemini-3.8-flash",
       maxOutputTokens: 8192,
-      concurrency: 1
+      concurrency: 1,
+      piModel: "openrouter/anthropic/claude-3.5-haiku"
     },
     edit: {
       provider: "gemini",
       model: "gemini-3.8-flash",
       maxOutputTokens: 8192,
-      concurrency: 1
+      concurrency: 1,
+      piModel: "openrouter/anthropic/claude-3.5-haiku"
     }
   },
   budget: {
@@ -183,7 +193,49 @@ var thresholds_default = {
       maxTokens: 5e6,
       maxUsd: 3,
       _comment: "Token ceiling covers multi-section drafting; the USD ceiling is the primary cost guard."
+    },
+    jev: {
+      maxTokens: 1e5,
+      maxUsd: 0.25
     }
+  },
+  jev: {
+    model: "jev-1.13.0",
+    threshold: 0.75,
+    points: {
+      "proofread.verify": {
+        mode: "shadow"
+      },
+      "proofread.triage": {
+        mode: "shadow"
+      },
+      "revise.classify": {
+        mode: "shadow"
+      },
+      "evidence.relevance": {
+        mode: "shadow"
+      },
+      "outline.support": {
+        mode: "shadow"
+      },
+      "write.audit_prescreen": {
+        mode: "shadow"
+      },
+      "write.voice_check": {
+        mode: "shadow"
+      },
+      "synthesize.needs_bridge": {
+        mode: "shadow"
+      },
+      "style.filler": {
+        mode: "shadow"
+      }
+    },
+    yesProbability: 0.5,
+    scoreMaximum: 3
+  },
+  judge: {
+    validationAttempts: 2
   }
 };
 
