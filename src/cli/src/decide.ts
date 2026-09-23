@@ -11,7 +11,7 @@ let jevCall: JevCall | undefined = askJev;
 const modeOverrides = new Map<JevPoint, Mode>();
 export function __setJev(value: JevCall | undefined): void { jevCall = value; }
 export function __setMode(point: JevPoint, mode: Mode): void { modeOverrides.set(point, mode); }
-export type DecideRequest = { point: JevPoint; question: string; options: string[]; context: string; runId: string; fallback: () => Promise<string> };
+export type DecideRequest = { point: JevPoint; question: string; options: string[]; context: string; runId: string; fallback: () => Promise<string>; label?: string };
 export async function decide(req: DecideRequest): Promise<{ answer: string; by: 'jev' | 'model'; confidence: number | null }> {
   const config = thresholds.jev as { threshold: number; points: Record<JevPoint, { mode: Mode }> };
   const mode = modeOverrides.get(req.point) ?? config.points[req.point]?.mode ?? 'off';
@@ -34,6 +34,6 @@ export async function decide(req: DecideRequest): Promise<{ answer: string; by: 
   }
   const dir = join(projectDir(), '.academic-helper', 'runs', req.runId);
   mkdirSync(dir, { recursive: true });
-  appendFileSync(join(dir, 'jev.jsonl'), `${JSON.stringify({ point: req.point, jevAnswer: jevResult?.answer ?? null, jevConfidence: jevResult?.confidence ?? null, modelAnswer, decidedBy: by })}\n`, 'utf8');
+  appendFileSync(join(dir, 'jev.jsonl'), `${JSON.stringify({ point: req.point, jevAnswer: jevResult?.answer ?? null, jevConfidence: jevResult?.confidence ?? null, modelAnswer, decidedBy: by, label: req.label ?? null })}\n`, 'utf8');
   return { answer, by, confidence: jevResult?.confidence ?? null };
 }

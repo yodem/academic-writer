@@ -251,191 +251,47 @@ After receiving the deep-reader result, mark node complete:
 
 ---
 
-### Step 4: Thesis Proposal
+### W0: Capture author intent
 
+Read `.academic-helper/research-brief.md` when it exists. Seed the thesis from its `## Thesis Direction` section, then ask the author to state or revise the thesis in their own words using `AskUserQuestion` and accept free-text wording. Confirm the core text source, the argument moves, and passages that must appear. Save `.academic-helper/author-intent.json` with the exact thesis text, `coreTextSourceId`, `moves`, and `mustUse`, following `${CLAUDE_PLUGIN_ROOT}/skills/write/references/author-intent.schema.json`. Do not paraphrase or improve the author's thesis in this artifact.
 
-**Use the Agent tool to spawn the `architect` subagent.** Pass the subject, deep read results, and targetLanguage as the prompt.
+### W1: Build evidence
 
-
-After receiving the architect result, mark node complete:
-
-Present the architect's output to researcher:
-> "Based on your sources, here are possible arguments:
->
-> 1. [thesis a] — supported by [sources]
-> 2. [thesis b] — supported by [sources]
-> 3. [thesis c] — supported by [sources]
->
-> Which resonates? Pick one, modify it, or tell me your own thesis."
-
-After the researcher picks a thesis, log thesis approval:
-
----
-
-### Step 5: Outline + Approval
-
-**If the researcher chose "Expand my draft" in the draft detection step (`userDraftAsOutline = true`):**
-
-- Do NOT skip the architect entirely. The outline comes from the user's draft, but the architect is still the sole writer of `.academic-helper/evidence-ownership.json` — and without it the per-paragraph thesis-drift guard and the cross-section evidence-dedup both silently no-op. **Use the Agent tool to spawn the `architect` subagent in a lightweight "ownership-only" mode**: pass `userDraftText`, the deep-read results / `sources.json`, and `targetLanguage`, and instruct it to produce ONLY `evidence-ownership.json` (the `thesisAnchor` derived from the draft plus the `evidenceOwners` assignment for shared evidence) — it must NOT generate a new outline or thesis options, since those come from the user's draft.
-- Parse `userDraftText` into sections: use the user's existing section headings and paragraph structure as the outline
-- Present the extracted outline to the researcher:
-  > "Using your draft structure:
-  > [list extracted sections]
-  > Each section-writer will expand these using source material. Confirm or adjust."
-- Get approval, then proceed directly to Step 6 (ingestion sync) and Step 7 (section-writers)
-- Pass `userDraftText` sections as `userDraftParagraphs` in each section-writer's prompt, so agents expand existing content rather than writing from scratch
-- Log outline approval:
-
-**If no draft (normal flow):**
-
-
-**Use the Agent tool to spawn the `architect` subagent again** with the approved thesis, deep read results, targetWordCount, and targetLanguage.
-
-The architect runs in Mode B:
-- Produces the outline (titles, roles, suggested sources, word counts, paragraph counts) in `targetLanguage`
-- Writes `.academic-helper/evidence-ownership.json` — for every evidence anchor (source, passage, dataset) appearing in more than one section, assigns exactly ONE section as the owner of the full description. Other sections must back-reference.
-- Enforces a conciseness budget: body-section descriptions ≤ 2 sentences, intro/conclusion ≤ 3 sentences, no 5+ word phrase repeated across descriptions.
-
-
-After receiving the architect result, mark node complete:
-
-Present the outline and invite refinement:
-> "Here's my proposed structure:
-> [outline sections with titles and roles]
->
-> What would you change? Add, remove, or reorder sections?"
-
-Iterate until the researcher says something like "go", "looks good", or "start writing".
-
-
----
-
-### Step 5.5: Argument Graph Validation
-
-Before any section-writer is spawned, the approved outline's argument graph is validated — the `id` / `claim` / `evidence` / `depends_on` / `thesis_link` / `argument_role` fields captured during Step 5 approval, across every section AND every unit inside `units` arrays.
-
-**This check is a script, not reasoning.** Write the approved outline to disk and run the gate:
+Start evidence extraction in the background while planning continues. Pass the selected source IDs, core text references, author intent path, run ID, and the required `--project-dir` and `--data-dir` arguments:
 
 ```bash
-# The outline must be persisted anyway — it is the artifact the gate reads and
-# the record that makes the argument graph auditable after the run (VER-09).
-cat > .academic-helper/outline.json <<'OUTLINE_JSON'
-{ ...the approved outline, verbatim... }
-OUTLINE_JSON
-
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py argument-graph .academic-helper/outline.json --json
+aw --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" evidence build \
+  --sources <comma-separated-source-ids> --sefaria <comma-separated-references> \
+  --intent "$CLAUDE_PROJECT_DIR/.academic-helper/author-intent.json" --run <run-id>
 ```
 
-Exit code is the verdict — do not re-derive it by reading the output prose:
+The command writes `.academic-helper/evidence.json`. Wait for it to finish, show the author the extracted passage IDs, and let them choose any required `mustUse` passages. Update `author-intent.json` with those IDs while preserving the thesis verbatim. An extraction error is a failed stage; do not continue with a missing or partial evidence file.
 
-| Exit | Meaning | Action |
-|---|---|---|
-| `0` | all four checks pass | proceed to Step 6 |
-| `1` | the outline is invalid | repair it (below), then re-run the gate |
-| `2` | the gate could not run | fix the cause (missing/malformed `outline.json`); do NOT proceed — an unrun gate is not a passed gate |
+### W2: Co-author and validate the outline
 
-Also record the run in the gate ledger before Step 6, so a skipped gate is detectable rather than invisible:
+**PHASE 1: CONVERSATIONAL planning phase (human-in-the-loop).** The author reviews and refines every claim. Iterate until the researcher says the claims are ready; never infer approval from silence.
+
+Spawn `architect` with the author-intent file and evidence file paths. The architect writes `.academic-helper/outline.json` directly using `${CLAUDE_PLUGIN_ROOT}/skills/write/references/outline.schema.json`; it preserves the intent thesis verbatim. It may offer up to `thresholds.json > write.outlineMaxAlternatives` clearly labelled alternatives for discussion, but never substitutes one into the artifact unless the author edits the intent first.
+
+For every section, show its claim to the author and record explicit approval in that section's `approved` field. For each claim, invoke `aw decide outline.support` with a focused question and context containing the claim and evidence support note. Use `supported` or `unsupported` as the fallback according to the architect's support assessment. Include `--label approved` or `--label rejected` after the author's response. This logged decision is advisory; only the author's approval sets `approved` and the gate decides whether writing may proceed.
 
 ```bash
-python3 - <<'PY'
-import json, os, pathlib
-p = pathlib.Path('.academic-helper/session-state.json')
-d = json.loads(p.read_text()) if p.exists() else {}
-d['run'] = {'id': os.environ.get('CLAUDE_SESSION_ID', 'run'), 'skill': 'write',
-            'requiredGates': ['argument-graph', 'citation-floor'], 'completed': False}
-p.write_text(json.dumps(d, indent=2, ensure_ascii=False))
-PY
+aw --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" decide outline.support \
+  --question "Does this section claim follow from the cited passages and advance the thesis?" \
+  --options supported,unsupported --context-file <claim-context-file> \
+  --fallback <supported-or-unsupported> --run <run-id> --label <approved-or-rejected>
+
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" outline-v2 \
+  --outline "$CLAUDE_PROJECT_DIR/.academic-helper/outline.json" \
+  --intent "$CLAUDE_PROJECT_DIR/.academic-helper/author-intent.json" \
+  --evidence "$CLAUDE_PROJECT_DIR/.academic-helper/evidence.json"
 ```
 
-The `gate-enforce` Stop hook reads this and will refuse to let the turn end while a required gate is missing or failing. Mark `run.completed = true` after Step 9b.
+The gate must exit `0` before drafting. Exit `1` means revise the outline or approval state and rerun the gate. Exit `2` means the gate could not run; repair the inputs and rerun. See `references/write-intent-outline.md` for artifact examples and recovery details.
 
-The four checks the gate enforces (documented here so a reader knows what it covers — the script, not this list, is the enforcement):
+Legacy v1 outlines remain supported for existing projects: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py argument-graph <outline.json>` validates their argument graph, and `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py stale-evidence-ownership <outline.json> --evidence-ownership <evidence-ownership.json>` validates their ownership map. In that legacy flow, Do NOT proceed to Step 6 until all four checks pass. The Workflow tool path still uses `workflows/write-sections.js`; Fallback when the Workflow tool is unavailable, run the same section sequence through the sequential fallback. AUDIT_MODE: external; control flow only is duplicated.
 
-- **No orphan sections/units**: every node's claim must trace back to the thesis via `thesis_link` — either the node has its own `thesis_link` directly, or it `depends_on` a node that (transitively) does. Walk the `depends_on` chain from each node; flag any node where the chain never reaches a `thesis_link`.
-- **No circular `depends_on` references**: no node may depend, directly or transitively, on itself. The gate reports the cycle path.
-- **No empty evidence**: every node's `evidence` array must be non-empty. Flag any node with `evidence: []`.
-- **Dependency ordering**: the section/unit sequence in the outline (which becomes the Step 6 writing order) must respect `depends_on` — a node cannot appear before every node listed in its `depends_on`. Flag any node whose position violates this topological ordering.
-
-**On exit 1**, the outline must be revised before Step 6 begins. The gate's `--json` output names each violation as `{check, nodeId, detail}` — use those ids directly:
-- Present the failing node `id`s and their checks to the researcher, or
-- Loop back to the architect with the flagged nodes and ask it to repair the outline (fix missing `thesis_link`, break the cycle, add evidence, or reorder).
-
-Then rewrite `.academic-helper/outline.json` and **re-run the gate**.
-
-Do NOT proceed to Step 6 until all four checks pass on the current outline — that means a fresh exit `0`, re-run after every edit. A remembered pass is not a pass: the artifact changed (`VER-09`).
-
-### Step 5.6: stale evidence-ownership check
-
-`.academic-helper/evidence-ownership.json` (written by the architect — see the ownership-only
-fallback above, and "Writes evidence-ownership.json" under the architect's own responsibilities)
-is loaded from disk by every section-writer, by contract. A copy left over from a *previous* run
-of the same article — mapping ownership for a thesis the researcher has since rejected — is never
-compared against the current outline anywhere else, so it would silently steer every freshly
-spawned writer back toward the abandoned frame. Same class of check as Step 5.5, a script not
-reasoning, run once more right before Step 6:
-
-```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py stale-evidence-ownership .academic-helper/outline.json \
-  --evidence-ownership .academic-helper/evidence-ownership.json --json
-```
-
-| Exit | Meaning | Action |
-|---|---|---|
-| `0` | `evidence-ownership.json` does not exist yet or its `outlineSha256` matches `outline.json` | proceed to Step 6 |
-| `1` | `outlineSha256` does not match the current `outline.json` | re-run the architect in ownership-only mode to regenerate it, then re-run the gate |
-| `2` | the gate could not run (missing `outline.json`) | fix the cause; do NOT proceed |
-
-Do NOT proceed to Step 6 on exit `1` — an outline can change without evidence-ownership.json being
-regenerated (the researcher revises the thesis after Step 5.5 passes, or a stale file survives from
-an earlier attempt at the same article), and a stale ownership map is a correctness trap, not a
-missing-file error: nothing else in the pipeline will ever notice it's wrong.
-
----
-
-## ⛔ MANDATORY: NO DIRECT WRITING
-
-**You (the write-article skill) MUST NEVER write article paragraphs or sections yourself.**
-
-This means:
-- NEVER use the `Write` tool for article body text during Phase 2
-- NEVER produce paragraph content inline in your response
-- ALL article content MUST come exclusively from `section-writer` subagents
-
-The 8-skill quality pipeline (style fingerprint compliance, grammar, anti-AI, citation audit, etc.) only runs inside section-writer agents. Writing directly bypasses every quality gate and produces unchecked output that does not match the researcher's voice.
-
-**If you are tempted to write the article yourself because the user provided a detailed draft or the sources seem clear — DO NOT. Spawn the section-writers.**
-
----
-
-## PHASE 2: AUTONOMOUS (Steps 6–9, fully automatic)
-
-**Generation stages (Step 6 through the Step 8.7 scorecard computation) now run via the Workflow
-tool** with `scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/write-sections.js"`. Planning (Steps 1–5,
-Step 5.5's argument-graph validation, and the human's outline approval) stays fully interactive in
-this skill, never inside the script — this is the SPC-03 human-approval-before-generation gate,
-and it is not something the script can perform since the script has no `AskUserQuestion` access.
-The skill invokes the Workflow tool only after Step 5.5 passes, passing it the already-validated
-outline (not the raw architect output).
-
-If the script returns a scorecard below the `thresholds.json > selfReview.passThreshold`, the
-skill resumes inline at that point and asks the researcher via `AskUserQuestion` (see Step 8.7) —
-the below-threshold branch is never handled inside the script itself, only the numeric comparison
-is.
-
-**Note on workflow size**: a full article's writer-unit fan-out (Step 6) plus its per-paragraph
-auditor spawns can exceed the default 15-agent "medium" dynamic-workflow size guideline —
-`thresholds.json > writerUnit` targets ~500 words per unit, so a 6,000–8,000 word article yields
-roughly 12–16 writer units before counting auditor, deep-reader, architect, and synthesizer spawns.
-The plugin cannot raise this ceiling itself; if the run is large, tell the researcher to raise
-"Dynamic workflow size" in `/config` before starting Step 6.
-
-**Fallback when the Workflow tool is unavailable**: run the same stages sequentially through the
-`Agent` tool exactly as described below (control flow only is duplicated) — spawn `section-writer`
-subagents directly, **without** `AUDIT_MODE: external`, so each agent's in-agent audit path
-(auditor spawn per paragraph, rewrite-cycle cap, claims-registry append) runs unchanged. The
-fallback path must produce the same named gate outcomes (auditor VERDICT, anti-AI threshold,
-rewrite-cycle cap) as the script path; state in the closing report which path (Workflow or
-fallback) actually ran.
+The old 15-agent dynamic workflow size guideline and `/config` advice apply only to legacy deployments; the current plugin cannot define runtime workflow fan-out in the user's configuration.
 
 ### Step 6: Parallel Section Writing + Auditing
 
@@ -470,4 +326,3 @@ After receiving each section-writer result (per writer unit), mark node complete
 
 Follow the synthesis, abstract, self-review, and output procedures in
 `references/write-completion.md`. Keep the approved section text and citations intact.
-

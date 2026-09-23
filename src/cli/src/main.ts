@@ -5,6 +5,7 @@ import { stepIds } from './routing.ts';
 import { buildEvidence } from './evidence.ts';
 import { voiceBundle, voiceCandidates, voiceMigrate, voiceMoves, voiceSync } from './voice.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
+import { decide, type JevPoint } from './decide.ts';
 
 const args = setPathArguments(process.argv.slice(2));
 const [command, subcommand, runId] = args;
@@ -34,6 +35,34 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
     process.stderr.write(`${error instanceof Error ? error.message : 'ERROR evidence.build: unknown failure'}\n`);
     process.exitCode = 1;
   }
+} else if (command === 'decide') {
+  const value = (name: string): string | undefined => {
+    const position = args.indexOf(name);
+    return position >= 0 ? args[position + 1] : undefined;
+  };
+  const pointValue = args[1];
+  const validPoints: JevPoint[] = ['proofread.verify', 'proofread.triage', 'revise.classify', 'evidence.relevance', 'outline.support', 'write.audit_prescreen', 'write.voice_check', 'synthesize.needs_bridge', 'style.filler'];
+  try {
+    const question = value('--question');
+    const rawOptions = value('--options');
+    const contextFile = value('--context-file');
+    const fallback = value('--fallback');
+    const runIdValue = value('--run');
+    const label = value('--label');
+    if (!pointValue || !validPoints.includes(pointValue as JevPoint) || !question || !rawOptions || !contextFile || !fallback || !runIdValue) {
+      throw new Error('ERROR decide: expected aw decide <point> --question <text> --options a,b --context-file <file> --fallback <answer> --run <id>');
+    }
+    const options = rawOptions.split(',').map(item => item.trim()).filter(Boolean);
+    if (options.length < 2) throw new Error('ERROR decide: --options requires at least two comma-separated answers');
+    if (!options.includes(fallback)) throw new Error('ERROR decide: --fallback must match one of --options');
+    const context = readFileSync(contextFile, 'utf8');
+    const result = await decide({ point: pointValue as JevPoint, question, options, context, runId: runIdValue,
+      fallback: async () => fallback, label });
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : 'ERROR decide: unknown failure'}\n`);
+    process.exitCode = 1;
+  }
 } else if (command === 'voice') {
   try {
     dataDir();
@@ -52,6 +81,6 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
     process.exitCode = message.includes('no voice store') ? 3 : 2;
   }
 } else {
-  process.stderr.write('ERROR: expected aw models check, aw ledger show <runId>, or aw evidence build\n');
+  process.stderr.write('ERROR: expected aw models check, aw ledger show <runId>, aw evidence build, or aw decide <point>\n');
   process.exitCode = 2;
 }
