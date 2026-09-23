@@ -15,5 +15,5 @@ def test_verification_is_batched_per_chunk_and_refutations_are_retained():
 def test_must_catch_excluded_from_verify_candidates():
     source = (ROOT / "src/cli/src/proofread.ts").read_text(encoding="utf-8")
     assert "const verifiable = candidates.filter" in source
-    assert "deterministic.map((change) => ({ ...change, status: 'must-catch', applied: true }))" in source
+    assert "deterministic.map((change) => ({ ...change, status: change.status ?? (change.after === null ? 'flag' : 'must-catch'), applied: change.after !== null }))" in source
     assert "change.mustCatch" not in source[source.index("const verifiable"):source.index("const byChunk")]

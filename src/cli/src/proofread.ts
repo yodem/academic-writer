@@ -69,8 +69,8 @@ async function mapLimit<T, R>(items: T[], limit: number, operation: (item: T) =>
   await Promise.all(workers);
   return results;
 }
-async function find(chunk: Chunk, options: RunProofreadOptions, budget: Budget): Promise<Change[]> {
-  const raw = stubs.find ? await stubs.find(chunk) : (await callGemini({ step: 'proofread.find', system: prompt('proofread-find.md'), parts: [`Chunk ${chunk.index}; absolute lines ${chunk.startLine}-${chunk.endLine}\n${options.voiceRules ?? ''}\n${chunk.text}`], responseSchema: findSchema, runId: options.runId, budget })).json as { changes: Change[] };
+async function find(chunk: Chunk, options: RunProofreadOptions, budget: Budget, hspell: Change[]): Promise<Change[]> {
+  const raw = stubs.find ? await stubs.find(chunk) : (await callGemini({ step: 'proofread.find', system: prompt('proofread-find.md'), parts: [`Chunk ${chunk.index}; absolute lines ${chunk.startLine}-${chunk.endLine}\n${options.voiceRules ?? ''}\nDictionary candidates (propose the correct spelling, or return none if a legitimate name/term):\n${JSON.stringify(hspell)}\n${chunk.text}`], responseSchema: findSchema, runId: options.runId, budget })).json as { changes: Change[] };
   const candidates = Array.isArray(raw) ? raw : raw.changes;
   const kept: Change[] = [];
   for (const candidate of candidates) {
@@ -112,13 +112,30 @@ export async function runProofread(options: RunProofreadOptions): Promise<Proofr
   const voicePath = join(options.dataDir ?? process.env.CLAUDE_PLUGIN_DATA ?? '', 'voice', 'rules.md');
   const voiceRules = options.voiceRules ?? (existsSync(voicePath) ? readFileSync(voicePath, 'utf8') : '');
   const stageOptions = { ...options, voiceRules };
-  const found = options.only === 'editorial' ? [] : await mapLimit(chunks, routeFor('proofread.find').concurrency, (chunk) => find(chunk, stageOptions, budget));
-  const candidates = found.flat().filter((change) => {
+  const hspell = deterministic.filter((change) => change.class === 'typo' && change.after === null);
+  const found = options.only === 'editorial' ? [] : await mapLimit(chunks, routeFor('proofread.find').concurrency, (chunk) => find(chunk, stageOptions, budget, hspell.filter((item) => item.line >= chunk.startLine && item.line <= chunk.endLine)));
+  let candidates = found.flat().filter((change) => {
     if (options.only === 'mechanical') return ['typo','punctuation','typography','names_terms','style_words'].includes(change.class);
     if (options.only === 'language') return !['typo','punctuation','typography','names_terms','style_words'].includes(change.class);
     return true;
   });
-  const verifiable = candidates.filter((change) => change.status !== 'triaged-out' && (change.meaningRisk === 'low' || (change.meaningRisk === 'medium' && change.class === 'wrong_word')));
+  // A dictionary miss is a prompt for the finder, not a correction. Prefer a
+  // non-null finder correction covering that token; otherwise retain the flag.
+  deterministic = deterministic.map((miss) => {
+    if (miss.after !== null) return miss;
+    const correction = candidates.find((candidate) => candidate.line === miss.line && candidate.after !== null && (candidate.before.includes(miss.before) || miss.before.includes(candidate.before)));
+    return correction ? { ...correction, id: miss.id, mustCatch: true, status: 'must-catch+finder' } : miss;
+  });
+  candidates = candidates.map((candidate) => hspell.some((miss) => miss.line === candidate.line && candidate.after !== null && (candidate.before.includes(miss.before) || miss.before.includes(candidate.before)))
+    ? { ...candidate, status: 'superseded-by-must-catch', applied: false, skipReason: 'superseded-by-must-catch' }
+    : candidate);
+  // Explicit terminology and other deterministic corrections win on an
+  // overlapping source span; record the finder as superseded for the report.
+  candidates = candidates.map((candidate) => {
+    const winner = deterministic.find((fixed) => fixed.after !== null && fixed.line === candidate.line && (fixed.before.includes(candidate.before) || candidate.before.includes(fixed.before)));
+    return winner ? { ...candidate, status: 'superseded-by-must-catch', applied: false, skipReason: 'superseded-by-must-catch' } : candidate;
+  });
+  const verifiable = candidates.filter((change) => change.status !== 'triaged-out' && change.status !== 'superseded-by-must-catch' && (change.meaningRisk === 'low' || (change.meaningRisk === 'medium' && change.class === 'wrong_word')));
   const byChunk = chunks.map((chunk) => ({ chunk, changes: verifiable.filter((change) => change.line >= chunk.startLine && change.line <= chunk.endLine) }));
   const verified = await mapLimit(byChunk.filter((group) => group.changes.length > 0), routeFor('proofread.verify').concurrency, async ({ chunk, changes }) => {
     let verdictPromise: Promise<Map<string, Verdict['verdict']>> | undefined;
@@ -139,7 +156,7 @@ export async function runProofread(options: RunProofreadOptions): Promise<Proofr
     }));
   });
   const statusMap = new Map(verified.flat().map((change) => [change.id, change]));
-  const all: Change[] = [...deterministic.map((change) => ({ ...change, status: 'must-catch', applied: true })), ...candidates.map((change) => statusMap.get(change.id) ?? { ...change, status: 'unverified' })];
+  const all: Change[] = [...deterministic.map((change) => ({ ...change, status: change.status ?? (change.after === null ? 'flag' : 'must-catch'), applied: change.after !== null })), ...candidates.map((change) => statusMap.get(change.id) ?? { ...change, status: 'unverified' })];
   const editorialChecksPath = join(root, 'skills', 'proofread', 'references', 'editorial-checks.md');
   const editorialChecks = article && existsSync(editorialChecksPath) ? readFileSync(editorialChecksPath, 'utf8') : '';
   const venuePath = options.venue && project ? join(project, '.academic-helper', 'venues', `${options.venue}.md`) : '';

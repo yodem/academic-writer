@@ -36,3 +36,43 @@ test('cascade Jev confidence can skip a model verify fallback', async () => {
   __setJev(undefined);
   __setMode('proofread.verify', 'shadow');
 });
+
+test('hspell null-after candidate merges with finder correction as must-catch', async () => {
+  const verified: string[] = [];
+  __stubs({
+    find: async (chunk) => [{ id: 'finder', line: chunk.startLine, before: 'ההיתיחסות', after: 'ההתייחסות', class: 'typo', meaningRisk: 'low' }],
+    mustCatch: async () => [{ id: 'spell', line: 1, before: 'ההיתיחסות', after: null, class: 'typo', meaningRisk: 'low', mustCatch: true }],
+    verify: async (changes) => { verified.push(...changes.map((change) => change.id)); return changes.map((change) => ({ id: change.id, verdict: 'uphold' })); },
+    memo: async () => '',
+  });
+  const result = await runProofread({ chunks: [{ id: 'c', index: 0, startLine: 1, endLine: 1, text: 'ההיתיחסות' }], runId: 't-hspell', out: paths() });
+  assert.deepEqual(verified, []);
+  assert.equal(result.changes.find((change) => change.id === 'spell')?.after, 'ההתייחסות');
+  assert.equal(result.changes.find((change) => change.id === 'spell')?.status, 'must-catch+finder');
+});
+
+test('overlapping must-catch correction supersedes finder candidate', async () => {
+  let verifyCalls = 0;
+  __stubs({
+    find: async (chunk) => [{ id: 'finder-name', line: chunk.startLine, before: 'רש\'', after: 'רש\u05F4י', class: 'wrong_word', meaningRisk: 'low' }],
+    mustCatch: async () => [{ id: 'term-name', line: 1, before: 'רש\'', after: 'רש\u05F4י', class: 'names_terms', meaningRisk: 'low', mustCatch: true }],
+    verify: async (changes) => { verifyCalls += 1; return changes.map((change) => ({ id: change.id, verdict: 'uphold' })); },
+    memo: async () => '',
+  });
+  const result = await runProofread({ chunks: [{ id: 'c', index: 0, startLine: 1, endLine: 1, text: 'רש\'' }], runId: 't-overlap', out: paths() });
+  assert.equal(verifyCalls, 0);
+  assert.equal(result.changes.find((change) => change.id === 'term-name')?.status, 'must-catch');
+  assert.equal(result.changes.find((change) => change.id === 'finder-name')?.skipReason, 'superseded-by-must-catch');
+});
+
+test('find candidates retain the wrong_word class for contextual real-word errors', async () => {
+  let verifyClass = '';
+  __stubs({
+    find: async (chunk) => [{ id: 'wrong', line: chunk.startLine, before: 'להתפשר אם', after: 'להתפשר עם', class: 'wrong_word', meaningRisk: 'medium' }],
+    mustCatch: async () => [],
+    verify: async (changes) => { verifyClass = changes[0]?.class ?? ''; return changes.map((change) => ({ id: change.id, verdict: 'uphold' })); },
+    memo: async () => '',
+  });
+  await runProofread({ chunks: [{ id: 'c', index: 0, startLine: 1, endLine: 1, text: 'להתפשר אם' }], runId: 't-wrong-word', out: paths() });
+  assert.equal(verifyClass, 'wrong_word');
+});
