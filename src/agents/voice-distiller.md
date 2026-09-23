@@ -1,11 +1,9 @@
 ---
 name: voice-distiller
-description: Compress one or more session transcripts plus the fingerprint into the unified AUTHOR_VOICE.md, merging with any prior profile. Use after a Stage 2 session completes, after migration, or on `:voice recompress`.
+description: "Compress one or more session transcripts plus the fingerprint into the unified AUTHOR_VOICE.md, merging with any prior profile. Use after a Stage 2 session completes, after migration, or on `:voice recompress`."
 tools: Read, Write, Edit
 model: claude-haiku-4-5-20251001
-metadata:
-  author: Academic Helper
-  version: 1.0.0
+omitClaudeMd: true
 ---
 
 # voice-distiller

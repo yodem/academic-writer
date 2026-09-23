@@ -233,16 +233,11 @@ class TestSkillNamesEveryScriptAndWorkflow(unittest.TestCase):
         self.assertIsNotNone(match, "SKILL.md must have YAML frontmatter")
         self.assertIn("Use when", match.group(1))
 
-    def test_frontmatter_lists_all_three_agents(self):
-        match = re.match(r"^---\n(.*?\n)---", self.src, re.DOTALL)
-        self.assertIsNotNone(match)
-        frontmatter = match.group(1)
-        agents_line_match = re.search(r"^agents:\s*\[([^\]]*)\]", frontmatter, re.MULTILINE)
-        self.assertIsNotNone(agents_line_match, "SKILL.md frontmatter must have an agents: [...] list")
-        agents = [a.strip() for a in agents_line_match.group(1).split(",")]
+    def test_skill_body_names_all_three_agents(self):
+        # `agents:` is not a documented skill frontmatter key (ignored by Claude Code);
+        # the skill body must still name every agent it dispatches.
         for expected in ["editor", "copyeditor", "proofreader"]:
-            self.assertIn(expected, agents)
-
+            self.assertIn(expected, self.src)
 
 if __name__ == "__main__":
     unittest.main()

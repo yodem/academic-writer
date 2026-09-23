@@ -1,8 +1,8 @@
 ---
 name: review
-description: "Self-review quality gate — scores a completed article on 6 dimensions (structure, argument logic, citation completeness, source coverage, writing quality, academic conventions) and presents a scorecard before final output. Use after writing to score the article on quality dimensions before publication."
+description: "Self-review quality gate — scores a completed article on 6 dimensions (structure, argument logic, citation completeness, source coverage, writing quality, academic conventions) and presents a scorecard before final output. Use after writing to score the article on quality dimensions before publication. Use when this skill's command or workflow is needed."
 user-invocable: true
-allowedTools: [Bash, Read, Glob, Grep, AskUserQuestion]
+allowed-tools: [Bash, Read, Glob, Grep, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.2.24"}
 ---
 

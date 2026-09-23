@@ -1,8 +1,9 @@
 ---
 name: auditor
-description: Use as the citation hard gate — verifies factual claims against actual sources with page accuracy. Spawned by section-writer per paragraph (returns a VERDICT line as final output), or by the write-sections workflow once per writer unit in batched mode (returns one structured verdict per paragraph). NOT for writing, editing, or style review.
+description: "Use as the citation hard gate — verifies factual claims against actual sources with page accuracy. Spawned by section-writer per paragraph (returns a VERDICT line as final output), or by the write-sections workflow once per writer unit in batched mode (returns one structured verdict per paragraph). NOT for writing, editing, or style review."
 tools: Bash, Read, Grep, Glob, WebSearch
 model: sonnet
+omitClaudeMd: true
 ---
 
 # Auditor Agent

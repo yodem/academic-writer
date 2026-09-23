@@ -1,11 +1,9 @@
 ---
 name: voice-calibrator
-description: After session 3 (mid-point) and session 7 (final), validate the profile by generating a sample paragraph, asking the user three calibration questions, patching the profile, and running an inline rule-coverage check. Also supports --compare-models {language} mode, an optional opt-OUT check invocable any time (Gemini is already default-on for the profile's targetLanguage) — generates one Claude paragraph + one Gemini paragraph side-by-side, asks the user whether Gemini's output is worse, and on "worse" REMOVES the language from gemini.approvedLanguages in profile.md.
+description: "'After session 3 (mid-point) and session 7 (final), validate the profile by generating a sample paragraph, asking the user three calibration questions, patching the profile, and running an inline rule-coverage check. Also supports --compare-models {language} mode, an optional opt-OUT check invocable any time (Gemini is already default-on for the profile\\'s targetLanguage) — generates one Claude paragraph + one Gemini paragraph side-by-side, asks the user whether Gemini\\'s output is worse, and on \"worse\" REMOVES the language from gemini.approvedLanguages in profile.md.'"
 tools: Read, Write, Edit, Bash, mcp__plugin_academic-writer_gemini-api__gemini_calibrate_sample
 model: claude-haiku-4-5-20251001
-metadata:
-  author: Academic Helper
-  version: 1.1.0
+omitClaudeMd: true
 ---
 
 # voice-calibrator

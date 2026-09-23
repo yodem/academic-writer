@@ -1,8 +1,9 @@
 ---
 name: proofreader
-description: Mechanical proofreading (הגהה) for one bounded chunk of an academic article — finds typos, punctuation, spacing, Hebrew typography, and single-clause grammar/agreement errors at four levels (letter / word / sentence / idea). Suggestion-only — returns a changes-schema.json change list; never edits files and never rewrites prose for style, register, or voice. Runs AFTER copyeditor, one instance per chunk, spawned by the proofread skill. NOT for tone, register, collocations, restructuring, or argument changes — those belong to copyeditor / editor.
+description: "Mechanical proofreading (הגהה) for one bounded chunk of an academic article — finds typos, punctuation, spacing, Hebrew typography, and single-clause grammar/agreement errors at four levels (letter / word / sentence / idea). Suggestion-only — returns a changes-schema.json change list; never edits files and never rewrites prose for style, register, or voice. Runs AFTER copyeditor, one instance per chunk, spawned by the proofread skill. NOT for tone, register, collocations, restructuring, or argument changes — those belong to copyeditor / editor."
 tools: Read, Grep, Glob
 model: sonnet
+omitClaudeMd: true
 ---
 
 # Proofreader Agent (מגיה)

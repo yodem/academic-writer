@@ -1,8 +1,9 @@
 ---
 name: editor
-description: Editorial (עורך) pre-submission review of a whole academic article against a venue profile — finds venue/genre fit, loaded terms used as premises without definition, insider references a general reader can't follow, personal-anecdote or epilogue drift, journalistic-vs-research treatment, and sections to cut or refocus. Comment-only — never edits the article and never proposes a replacement sentence. Spawned once per article by the proofread skill. NOT for mechanics (typos/punctuation — proofreader) or sentence-level language/register (copyeditor).
+description: "Editorial (עורך) pre-submission review of a whole academic article against a venue profile — finds venue/genre fit, loaded terms used as premises without definition, insider references a general reader can't follow, personal-anecdote or epilogue drift, journalistic-vs-research treatment, and sections to cut or refocus. Comment-only — never edits the article and never proposes a replacement sentence. Spawned once per article by the proofread skill. NOT for mechanics (typos/punctuation — proofreader) or sentence-level language/register (copyeditor)."
 tools: Read, Grep, Glob
 model: opus
+omitClaudeMd: true
 ---
 
 # Editor Agent (עורך)

@@ -259,7 +259,7 @@ class TestHooks(unittest.TestCase):
                         # the source equivalents exist under src/hooks/.
                         # The command is e.g. "hooks/bin/run-hook.mjs ..."
                         # so strip the first arg that isn't a file path.
-                        script_file = script_rel.split()[0]
+                        script_file = script_rel.split()[0].strip('"')
                         # Map from plugin-relative to src-relative
                         src_path = os.path.join(SRC_DIR, script_file)
                         self.assertTrue(

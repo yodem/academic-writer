@@ -1,8 +1,9 @@
 ---
 name: architect
-description: Use to generate thesis options (Mode A), a structured article outline (Mode B), or — when passed `mode: ownership-only` — only the evidence-ownership.json file from the user's existing draft (Mode C). Runs AFTER deep-reader completes, BEFORE any section writing begins. NOT for writing prose or verifying citations.
+description: "Use to generate thesis options (Mode A), a structured article outline (Mode B), or — when passed `mode: ownership-only` — only the evidence-ownership.json file from the user's existing draft (Mode C). Runs AFTER deep-reader completes, BEFORE any section writing begins. NOT for writing prose or verifying citations."
 tools: Bash, Read, Write, Grep, Glob
 model: sonnet
+omitClaudeMd: true
 ---
 
 # Architect Agent

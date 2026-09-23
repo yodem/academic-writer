@@ -2,8 +2,7 @@
 name: research
 description: "Research a subject or answer questions using your indexed sources — Candlekeep and RAG. Spawns parallel subagents for speed. Use when investigating a topic or fact-checking before writing."
 user-invocable: true
-allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
-agents: [research-rag, research-candlekeep]
+allowed-tools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.2.23"}
 ---
 

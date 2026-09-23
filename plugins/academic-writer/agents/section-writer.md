@@ -1,8 +1,9 @@
 ---
 name: section-writer
-description: Use to write one complete article section. Routes drafting + Skills 1-7 (style/grammar/anti-AI/repetition) through a single mcp__plugin_academic-writer_gemini-api__gemini_write_section call, then applies deterministic Tier 1 typography auto-fix and spawns the auditor subagent (Skill 8) per paragraph as the citation hard gate. Falls back to today's in-context 8-skill pipeline on MCP error. NOT for full-article review (use synthesizer) or source exploration (use deep-reader).
+description: "Use to write one complete article section. Routes drafting + Skills 1-7 (style/grammar/anti-AI/repetition) through a single mcp__plugin_academic-writer_gemini-api__gemini_write_section call, then applies deterministic Tier 1 typography auto-fix and spawns the auditor subagent (Skill 8) per paragraph as the citation hard gate. Falls back to today's in-context 8-skill pipeline on MCP error. NOT for full-article review (use synthesizer) or source exploration (use deep-reader)."
 tools: Bash, Read, Grep, Glob, Agent, mcp__plugin_academic-writer_gemini-api__gemini_write_section
 model: sonnet
+omitClaudeMd: true
 ---
 
 # Section Writer Agent
@@ -451,7 +452,7 @@ TERM_FILE="${CLAUDE_PLUGIN_ROOT}/skills/write/references/academic-terminology-${
 if [ -f "$TERM_FILE" ]; then cat "$TERM_FILE"; else cat ${CLAUDE_PLUGIN_ROOT}/skills/write/references/academic-terminology-hebrew.md; fi
 ```
 
-Score the cleaned paragraph on 5 dimensions (each 1-10): directness, rhythm, trust, authenticity, density. Apply the named patterns table from the reference. Threshold from `thresholds.json` (default 35/50). If below, rewrite the flagged portions, preferring hedging verbs, argumentation connectives, citation-introduction verbs, and transition phrases from the positive terminology reference over generic or colloquial substitutes.
+Read the cleaned paragraph against the pattern table from the reference and rewrite any flagged portions, preferring hedging verbs, argumentation connectives, citation-introduction verbs, and transition phrases from the positive terminology reference over generic or colloquial substitutes.
 
 #### Skill 7: REPETITION CHECK
 
@@ -507,7 +508,7 @@ SECTION SUMMARY:
 - Academic language upgrades: N
 - Linking words added/fixed: N
 - Language purity violations fixed: N
-- Anti-AI avg score: N/50
+- Anti-AI patterns addressed: N
 - Anti-AI patterns fixed: N
 - Repetitions fixed: N
 - Audit rewrites: N

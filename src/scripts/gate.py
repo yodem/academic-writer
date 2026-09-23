@@ -129,6 +129,7 @@ an environment where it is not installed.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -841,51 +842,26 @@ def cmd_changes_schema(args) -> tuple[int, dict]:
 
 
 def cmd_stale_evidence_ownership(args) -> tuple[int, dict]:
-    """Refuse a stale evidence-ownership.json -- one built for a previous
-    (possibly abandoned) outline. Section-writers load evidence-ownership.json
-    from disk by contract; nothing else compares it against the current
-    outline, so a leftover file from a prior run of the same article silently
-    steers fresh writers toward an ownership map for a thesis the researcher
-    may have already rejected. Same class of check as the argument-graph gate:
-    a script, not reasoning, run before any section-writer is spawned.
-    """
+    """Require evidence ownership to identify the exact outline it describes."""
     outline_path = Path(args.outline)
     ownership_path = Path(args.evidence_ownership)
-
     if not outline_path.exists():
-        return 2, _make_result(
-            "stale-evidence-ownership", "error", f"outline not found: {outline_path}", []
-        )
-
+        return 2, _make_result("stale-evidence-ownership", "error", f"outline not found: {outline_path}", [])
     if not ownership_path.exists():
-        # Not yet existing is a different, legitimate state (the architect's
-        # ownership-only pass hasn't produced it yet) -- not what this gate
-        # checks. Nothing to compare against.
-        return 0, _make_result(
-            "stale-evidence-ownership", "pass",
-            f"{ownership_path} does not exist yet -- nothing to compare against outline mtime", [],
-        )
-
-    outline_mtime = outline_path.stat().st_mtime
-    ownership_mtime = ownership_path.stat().st_mtime
-
-    if outline_mtime > ownership_mtime:
-        outline_iso = datetime.fromtimestamp(outline_mtime, tz=timezone.utc).isoformat()
-        ownership_iso = datetime.fromtimestamp(ownership_mtime, tz=timezone.utc).isoformat()
+        return 0, _make_result("stale-evidence-ownership", "pass", f"{ownership_path} does not exist yet", [])
+    try:
+        ownership = json.loads(ownership_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return 2, _make_result("stale-evidence-ownership", "error", f"cannot read evidence ownership: {exc}", [])
+    expected = hashlib.sha256(outline_path.read_bytes()).hexdigest()
+    actual = ownership.get("outlineSha256") if isinstance(ownership, dict) else None
+    if actual != expected:
         return 1, _make_result(
             "stale-evidence-ownership", "fail",
-            f"{ownership_path} (mtime {ownership_iso}) is OLDER than {outline_path} "
-            f"(mtime {outline_iso}) -- it was built for a previous outline and "
-            "section-writers load it from disk by contract, so fresh writers would be "
-            "steered toward a stale (possibly abandoned) frame. Move it aside or "
-            "regenerate it (re-run the architect in ownership-only mode) before Step 6.",
-            [{"check": "stale-mtime", "path": str(ownership_path), "detail": "older than outline.json"}],
+            f"{ownership_path} outlineSha256 does not match {outline_path}",
+            [{"check": "stale-hash", "path": str(ownership_path), "detail": "outline hash mismatch"}],
         )
-
-    return 0, _make_result(
-        "stale-evidence-ownership", "pass",
-        f"{ownership_path} is newer than or equal to {outline_path}", [],
-    )
+    return 0, _make_result("stale-evidence-ownership", "pass", f"{ownership_path} matches {outline_path}", [])
 
 
 # --- CLI ----------------------------------------------------------------------

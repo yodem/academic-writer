@@ -1,9 +1,9 @@
 ---
 name: voice
-description: Stage 2 of the voice subsystem. Run `:voice` to resume or start a 7-session adversarial interview seeded by the past-articles fingerprint — progress is checkpointed after every question, so `:voice` is always safe to re-run and always picks up where you left off. Sub-actions for explicit init/continue, restart, jump-to-session, recompress, audit, quick mode, sync, and status. Use when the user wants to deepen their voice profile beyond what the corpus reveals.
+description: "Stage 2 of the voice subsystem. Run `:voice` to resume or start a 7-session adversarial interview seeded by the past-articles fingerprint — progress is checkpointed after every question, so `:voice` is always safe to re-run and always picks up where you left off. Sub-actions for explicit init/continue, restart, jump-to-session, recompress, audit, quick mode, sync, and status. Use when the user wants to deepen their voice profile beyond what the corpus reveals."
 user-invocable: true
 disable-model-invocation: true
-allowedTools: [Read, Write, Edit, Glob, Grep, Bash, Agent]
+allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent]
 metadata: {author: "Yotam Fromm", version: "0.3.0"}
 ---
 

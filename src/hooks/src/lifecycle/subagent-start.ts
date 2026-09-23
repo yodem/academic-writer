@@ -45,11 +45,10 @@ export function subagentStart(input: SubagentStartInput): HookResult {
   const rules = [
     'AUDITOR CONTEXT (injected by SubagentStart hook):',
     '- Verify every citation against the canonical sources.json registry.',
-    '- A citation passes only when title, author, year, and page all match.',
+    '- A citation passes only when title, author and page match; year when the citation style carries one.',
     '- Mark [NEEDS REVIEW: <field>] when a field is missing or low-confidence.',
     '- Use WebSearch for external verification only when the registry has no entry.',
     '- Validate WebSearch results: title (exact), author, year (±1), page range — anything weaker = [NEEDS REVIEW: external_verification].',
-    '- Final output must be a single VERDICT line: PASS or FAIL with reasons.',
     thresholdNote,
   ].filter(Boolean).join('\n');
 

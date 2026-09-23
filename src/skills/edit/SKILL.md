@@ -2,8 +2,7 @@
 name: edit
 description: "Edit a previously written article — revise sections, fix citations, adjust tone, restructure arguments, or rewrite passages. Use when revising an article that's already drafted — multiple sections, restructuring, or major changes."
 user-invocable: true
-allowedTools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion, mcp__plugin_academic-writer_gemini-api__gemini_edit]
-agents: [section-writer, auditor, synthesizer]
+allowed-tools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion, mcp__plugin_academic-writer_gemini-api__gemini_edit]
 metadata: {author: "Yotam Fromm", version: "0.2.19"}
 ---
 

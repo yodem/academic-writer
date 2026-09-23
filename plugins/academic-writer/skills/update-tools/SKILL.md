@@ -2,7 +2,7 @@
 name: update-tools
 description: "Add, remove, or reconfigure integrations (Candlekeep, NotebookLM). Use when adding/removing integrations after initial setup."
 user-invocable: false
-allowedTools: [Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion]
+allowed-tools: [Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.2.23"}
 ---
 

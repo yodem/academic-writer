@@ -1,18 +1,1 @@
-{
-  "$schema": "https://claude.ai/schemas/plugin-settings.json",
-  "respectGitignore": true,
-  "env": {},
-  "permissions": {
-    "allow": [
-      "Bash",
-      "Read",
-      "Write",
-      "Edit",
-      "Glob",
-      "Grep",
-      "Agent",
-      "AskUserQuestion"
-    ],
-    "deny": []
-  }
-}
+{}

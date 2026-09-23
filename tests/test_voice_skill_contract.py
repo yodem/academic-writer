@@ -12,7 +12,7 @@ def test_skill_frontmatter_complete():
     fm = yaml.safe_load(text.split("---")[1])
     assert fm["name"] == "voice"
     assert fm["user-invocable"] is True
-    for k in ("description", "allowedTools"):
+    for k in ("description", "allowed-tools"):
         assert k in fm
 
 def test_skill_lists_subactions():

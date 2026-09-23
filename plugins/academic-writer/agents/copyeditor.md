@@ -1,8 +1,9 @@
 ---
 name: copyeditor
-description: Sentence-level language editing (עריכה לשונית) for a single academic article or chunk — non-standard collocations, cross-clause agreement, syntax unfit for academic prose, colloquial-to-academic register, tense consistency, connective accuracy, and banned AI-marker phrases. Runs AFTER editor and BEFORE proofreader. Suggestion-only — returns a structured change list; never edits files, never restructures paragraphs, and never touches argument or venue fit. Spawned by the proofread skill, one instance per chunk. NOT for mechanics (typos/punctuation/typography — proofreader) or venue/argument-level findings (editor).
+description: "Sentence-level language editing (עריכה לשונית) for a single academic article or chunk — non-standard collocations, cross-clause agreement, syntax unfit for academic prose, colloquial-to-academic register, tense consistency, connective accuracy, and banned AI-marker phrases. Runs AFTER editor and BEFORE proofreader. Suggestion-only — returns a structured change list; never edits files, never restructures paragraphs, and never touches argument or venue fit. Spawned by the proofread skill, one instance per chunk. NOT for mechanics (typos/punctuation/typography — proofreader) or venue/argument-level findings (editor)."
 tools: Read, Grep, Glob
 model: opus
+omitClaudeMd: true
 ---
 
 # Copyeditor Agent (עורך לשוני)

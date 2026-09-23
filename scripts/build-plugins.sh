@@ -78,7 +78,11 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
 
   # Copy agents
   if [[ -d "$SRC_DIR/agents" ]]; then
-    cp -R "$SRC_DIR/agents" "$PLUGIN_DIR/"
+    mkdir -p "$PLUGIN_DIR/agents"
+    # Copy agent definitions only. src/agents/memory/ is local, gitignored agent memory:
+    # anything under agents/ is loaded by Claude Code as an agent, so memory there
+    # creates phantom frontmatter-less agents (claude plugin validate, 2026-09-23).
+    find "$SRC_DIR/agents" -maxdepth 1 -name '*.md' -exec cp {} "$PLUGIN_DIR/agents/" \;
   fi
   agent_count=$(find "$PLUGIN_DIR/agents" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
 

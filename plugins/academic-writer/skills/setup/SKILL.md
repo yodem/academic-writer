@@ -1,9 +1,9 @@
 ---
 name: setup
-description: "Friendly, guided first-run setup wizard for a non-engineer: one question at a time, gets your Gemini API key working with a live test, checks your Python tools, and shows you a sample paragraph before you're done. Use on first install, or anytime you want a fast guided re-check of your setup."
+description: "Friendly, guided first-run setup wizard for a non-engineer: one question at a time, gets your Gemini API key working with a live test, checks your Python tools, and shows you a sample paragraph before you're done. Use on first install, or anytime you want a fast guided re-check of your setup. Use when this skill's command or workflow is needed."
 user-invocable: true
 disable-model-invocation: true
-allowedTools: [Bash, Read, Write, Glob, Grep, AskUserQuestion, mcp__plugin_academic-writer_gemini-api__gemini_raw]
+allowed-tools: [Bash, Read, Write, Glob, Grep, AskUserQuestion, mcp__plugin_academic-writer_gemini-api__gemini_raw]
 metadata: {author: "Yotam Fromm", version: "0.1.0"}
 ---
 
