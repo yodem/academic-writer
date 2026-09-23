@@ -6,6 +6,17 @@ All notable changes to the academic-writer plugin are documented here.
 
 - Add an opt-in Jev shadow scorer for proofread `meaningRisk` labels that writes only to `.academic-helper/jev-shadow.jsonl`.
 
+## [0.11.0] — 2026-09-23
+### Fixed
+- **Plugin permissions and agent settings now take effect.** Every skill used `allowedTools`, which Claude Code ignores; skills now use the documented `allowed-tools`. `disallowed_tools` is now `disallowedTools`, and the ignored `agents:` skill key and the plugin `settings.json` permissions block are removed.
+- **No more phantom agents.** The build copied the local `src/agents/memory/` folder into the plugin, where every file loaded as an agent without frontmatter; only top-level agent definitions ship now.
+- **Subagents no longer load the project CLAUDE.md** (`omitClaudeMd: true`), measured at about 20k tokens saved per spawn.
+- The stale-ownership gate compares a content hash instead of file times, so it no longer fails every normal `/write` run. Hook commands quote `${CLAUDE_PLUGIN_ROOT}`, and the auditor rule injected at subagent start no longer demands a year that Hebrew citations omit.
+
+### Added
+- `scripts/measure-run.py` (token cost of a real run from its transcript), a run-ledger schema, and an applied-recall proofread eval: a 1,244-word adversarial Hebrew fixture with a context-anchored grader.
+- `/academic-writer:health` reports the installed plugin version.
+
 ## [0.10.1] — 2026-09-15
 ### Fixed
 
