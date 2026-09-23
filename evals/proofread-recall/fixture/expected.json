@@ -1,0 +1,208 @@
+{
+ "min_recall": {
+  "names_terms": 0.98,
+  "style_words": 0.98,
+  "typo": 0.85
+ },
+ "items": [
+  {
+   "class": "typo",
+   "context": "ביקש לארוס את התפיסה",
+   "fixed": "ביקש להרוס את התפיסה",
+   "before": "לארוס",
+   "after": "להרוס"
+  },
+  {
+   "class": "typo",
+   "context": "להתפשר אם יריביו",
+   "fixed": "להתפשר עם יריביו",
+   "before": "אם",
+   "after": "עם"
+  },
+  {
+   "class": "typo",
+   "context": "ההיתיחסות הראשונה",
+   "fixed": "ההתייחסות הראשונה",
+   "before": "היתיחסות",
+   "after": "התייחסות"
+  },
+  {
+   "class": "typo",
+   "context": "במישפחה אחת",
+   "fixed": "במשפחה אחת",
+   "before": "מישפחה",
+   "after": "משפחה"
+  },
+  {
+   "class": "typo",
+   "context": "המסקנהה העולה",
+   "fixed": "המסקנה העולה",
+   "before": "המסקנהה",
+   "after": "המסקנה"
+  },
+  {
+   "class": "typo",
+   "context": "את המיסמכים שנכתבו",
+   "fixed": "את המסמכים שנכתבו",
+   "before": "המיסמכים",
+   "after": "המסמכים"
+  },
+  {
+   "class": "typo",
+   "context": "לסיכום, הפילוסופייה",
+   "fixed": "לסיכום, הפילוסופיה",
+   "before": "הפילוסופייה",
+   "after": "הפילוסופיה"
+  },
+  {
+   "class": "typo",
+   "context": "הפרשינים המאוחרים",
+   "fixed": "הפרשנים המאוחרים",
+   "before": "הפרשינים",
+   "after": "הפרשנים"
+  },
+  {
+   "class": "typo",
+   "context": "הטעון המרכזי",
+   "fixed": "הטיעון המרכזי",
+   "before": "הטעון",
+   "after": "הטיעון"
+  },
+  {
+   "class": "typo",
+   "context": "ובעיקבות זאת",
+   "fixed": "ובעקבות זאת",
+   "before": "ובעיקבות",
+   "after": "ובעקבות"
+  },
+  {
+   "class": "typo",
+   "context": "אפישרות אחת",
+   "fixed": "אפשרות אחת",
+   "before": "אפישרות",
+   "after": "אפשרות"
+  },
+  {
+   "class": "typo",
+   "context": "להתפתחוט הקבלה",
+   "fixed": "להתפתחות הקבלה",
+   "before": "להתפתחוט",
+   "after": "להתפתחות"
+  },
+  {
+   "class": "names_terms",
+   "context": "שמואל אבן תבון לא",
+   "fixed": "שמואל אבן תיבון לא",
+   "before": "תבון",
+   "after": "תיבון"
+  },
+  {
+   "class": "names_terms",
+   "context": "הבינו את הרמבם ואת",
+   "fixed": "הבינו את הרמב״ם ואת",
+   "before": "הרמבם",
+   "after": "הרמב״ם"
+  },
+  {
+   "class": "names_terms",
+   "context": "המקרא נדרשו לשאלות אלה. רש׳י",
+   "fixed": "המקרא נדרשו לשאלות אלה. רש״י",
+   "before": "רש׳י",
+   "after": "רש״י"
+  },
+  {
+   "class": "names_terms",
+   "context": "ואילו אבן עזרה שילב",
+   "fixed": "ואילו אבן עזרא שילב",
+   "before": "עזרה",
+   "after": "עזרא"
+  },
+  {
+   "class": "names_terms",
+   "context": "ר׳ יהודה הלווי, מצידו",
+   "fixed": "ר׳ יהודה הלוי, מצידו",
+   "before": "הלווי",
+   "after": "הלוי"
+  },
+  {
+   "class": "names_terms",
+   "context": "החוקר גרשום שלום",
+   "fixed": "החוקר גרשם שלום",
+   "before": "גרשום",
+   "after": "גרשם"
+  },
+  {
+   "class": "style_words",
+   "context": "כמו כן נשמרו שרידים",
+   "fixed": "נוסף על כך נשמרו שרידים",
+   "before": "כמו כן",
+   "after": "נוסף על כך"
+  },
+  {
+   "class": "style_words",
+   "context": "יתרה מזאת, ההכרעות",
+   "fixed": "זאת ועוד, ההכרעות",
+   "before": "יתרה מזאת",
+   "after": "זאת ועוד"
+  },
+  {
+   "class": "style_words",
+   "context": "כאמור, אין מדובר",
+   "fixed": "כפי שראינו, אין מדובר",
+   "before": "כאמור",
+   "after": "כפי שראינו"
+  },
+  {
+   "class": "style_words",
+   "context": "אשר על כן, אין לתאר",
+   "fixed": "לכן אין לתאר",
+   "before": "אשר על כן,",
+   "after": "לכן"
+  },
+  {
+   "class": "style_words",
+   "context": "מאידך גיסא, תומכי",
+   "fixed": "לעומת זאת, תומכי",
+   "before": "מאידך גיסא",
+   "after": "לעומת זאת"
+  },
+  {
+   "class": "style_words",
+   "context": "מן הראוי לציין שהפולמוס",
+   "fixed": "הפולמוס",
+   "before": "מן הראוי לציין ש",
+   "after": ""
+  },
+  {
+   "class": "style_words",
+   "context": "חשוב לציין כי הכותבים",
+   "fixed": "הכותבים",
+   "before": "חשוב לציין כי ",
+   "after": ""
+  },
+  {
+   "class": "style_words",
+   "context": "יתרה מכך, בשני המקרים",
+   "fixed": "זאת ועוד, בשני המקרים",
+   "before": "יתרה מכך",
+   "after": "זאת ועוד"
+  },
+  {
+   "class": "typo",
+   "context": "את התרגום המדוייק",
+   "fixed": "את התרגום המדויק",
+   "before": "המדוייק",
+   "after": "המדויק"
+  }
+ ],
+ "protected": [
+  "אין בכוונתי לארוס את בתו",
+  "״שכל״",
+  "״ספר המורה נכתב בלשון ערבית ונעתק ללשון הקודש״",
+  "ר׳ שלמה מן ההר",
+  "שבעמ׳ 45",
+  "כמו כן יש לשים לב",
+  "יתרה מכך, קריאה זו"
+ ],
+ "_notes": "Synthetic prose written for this eval (not from any private corpus). Adversarial: typo between two geresh abbreviations (ר׳ ... עמ׳, para 6); 'לארוס' correct in one sentence and wrong in another (para 11); 'כמו כן' allowed once per paragraph (para 2, first kept); 'יתרה מכך' allowed once per chapter (first kept, para 10); a quotation with gershayim that must stay verbatim (para 13)."
+}
