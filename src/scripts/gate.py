@@ -148,6 +148,9 @@ _ROOT = _SCRIPT_DIR.parent  # <plugin>/ or src/
 DEFAULT_THRESHOLDS_PATH = _ROOT / "thresholds.json"
 CHANGES_SCHEMA_PATH = _ROOT / "skills" / "proofread" / "references" / "changes-schema.json"
 REPO_ROOT = _ROOT.parent if _ROOT.name == "src" else _ROOT
+_SCHEMA_ROOT = _ROOT / "schemas" if (_ROOT / "schemas").is_dir() else _ROOT / "skills" / "write" / "references"
+AUTHOR_INTENT_SCHEMA_PATH = _SCHEMA_ROOT / "author-intent.schema.json"
+OUTLINE_V2_SCHEMA_PATH = _SCHEMA_ROOT / "outline.schema.json"
 CITATION_GUARD_PATH = Path(os.path.dirname(os.path.abspath(__file__))) / "citation-guard.py"
 
 
@@ -867,6 +870,131 @@ def cmd_stale_evidence_ownership(args) -> tuple[int, dict]:
     return 0, _make_result("stale-evidence-ownership", "pass", f"{ownership_path} matches {outline_path}", [])
 
 
+def cmd_outline_v2(args) -> tuple[int, dict]:
+    """Validate the co-authored W2 outline against author intent and evidence."""
+    outline, err = _read_json_file(args.outline)
+    if err:
+        return 2, _make_result("outline-v2", "error", err, [])
+    intent, err = _read_json_file(args.intent)
+    if err:
+        return 2, _make_result("outline-v2", "error", err, [])
+    evidence, err = _read_json_file(args.evidence)
+    if err:
+        return 2, _make_result("outline-v2", "error", err, [])
+    if not all(isinstance(value, dict) for value in (outline, intent, evidence)):
+        return 2, _make_result("outline-v2", "error", "outline, intent, and evidence must be JSON objects", [])
+
+    # jsonschema is a dev dependency, not something /setup installs on the author's
+    # machine. Without it, skip the schema pass; the semantic checks below still
+    # guard every structure they read.
+    try:
+        from jsonschema import Draft202012Validator
+    except ImportError:
+        Draft202012Validator = None
+    schema_violations = []
+    for artifact, schema_path, artifact_name in (
+        ((intent, AUTHOR_INTENT_SCHEMA_PATH, "intent"),
+         (outline, OUTLINE_V2_SCHEMA_PATH, "outline")) if Draft202012Validator else ()
+    ):
+        schema, schema_error = _read_json_file(schema_path)
+        if schema_error:
+            return 2, _make_result("outline-v2", "error", f"cannot read {artifact_name} schema: {schema_error}", [])
+        errors = sorted(Draft202012Validator(schema).iter_errors(artifact), key=lambda item: list(item.path))
+        schema_violations.extend(
+            {"check": f"{artifact_name}-schema", "path": _json_path_from_error(error), "detail": error.message}
+            for error in errors
+        )
+    if schema_violations:
+        return 1, _make_result("outline-v2", "fail", f"{len(schema_violations)} schema violation(s)", schema_violations)
+
+    sections = outline.get("sections")
+    intent_thesis = intent.get("thesis")
+    outline_thesis = outline.get("thesis")
+    if not isinstance(sections, list) or not isinstance(intent_thesis, str) or not isinstance(outline_thesis, str):
+        return 2, _make_result("outline-v2", "error", "invalid outline or intent structure", [])
+
+    violations = []
+    expected_hash = hashlib.sha256(intent_thesis.encode("utf-8")).hexdigest()
+    if outline.get("thesisSha256") != expected_hash:
+        violations.append({"check": "thesis-drift", "detail": "thesisSha256 does not match intent.thesis"})
+    if outline_thesis != intent_thesis:
+        violations.append({"check": "thesis-drift", "detail": "outline thesis differs from author intent"})
+
+    passages = evidence.get("passages")
+    passage_ids = {item.get("id") for item in passages if isinstance(item, dict) and isinstance(item.get("id"), str)} if isinstance(passages, list) else set()
+    placed = set()
+    ids = set()
+    graph = {}
+    for section in sections:
+        if not isinstance(section, dict):
+            return 2, _make_result("outline-v2", "error", "each section must be an object", [])
+        sid = section.get("id")
+        if isinstance(sid, str):
+            ids.add(sid)
+            graph.setdefault(sid, [])
+        if section.get("approved") is not True:
+            violations.append({"check": "unapproved-section", "sectionId": sid, "detail": "section claim is not approved"})
+        units = section.get("units", [])
+        if not isinstance(units, list):
+            return 2, _make_result("outline-v2", "error", "section units must be an array", [])
+        for unit in units:
+            if not isinstance(unit, dict):
+                return 2, _make_result("outline-v2", "error", "each unit must be an object", [])
+            uid = unit.get("id")
+            if isinstance(uid, str):
+                ids.add(uid)
+                graph.setdefault(uid, [])
+            dependencies = unit.get("dependsOn", [])
+            if not isinstance(dependencies, list):
+                return 2, _make_result("outline-v2", "error", "unit dependsOn must be an array", [])
+            if isinstance(uid, str):
+                graph[uid] = [dep for dep in dependencies if isinstance(dep, str)]
+            paragraphs = unit.get("paragraphs", [])
+            if not isinstance(paragraphs, list):
+                return 2, _make_result("outline-v2", "error", "unit paragraphs must be an array", [])
+            for paragraph in paragraphs:
+                if not isinstance(paragraph, dict) or not isinstance(paragraph.get("evidenceIds", []), list):
+                    return 2, _make_result("outline-v2", "error", "paragraph evidenceIds must be an array", [])
+                for evidence_id in paragraph.get("evidenceIds", []):
+                    if not isinstance(evidence_id, str) or evidence_id not in passage_ids:
+                        violations.append({"check": "unresolved-evidence", "evidenceId": evidence_id, "detail": "evidence id does not resolve against passages[].id"})
+                    else:
+                        placed.add(evidence_id)
+
+    for passage_id in intent.get("mustUse", []):
+        if passage_id not in placed:
+            violations.append({"check": "must-use-unplaced", "passageId": passage_id, "detail": "required passage is not placed in a paragraph"})
+
+    # Only dependencies on known units form graph edges; dangling references are
+    # schema/content errors for a later gate, while this gate's contract is cycles.
+    state = {}
+    cycle_nodes = set()
+    def visit(node):
+        if state.get(node) == 1:
+            cycle_nodes.add(node)
+            return
+        if state.get(node) == 2:
+            return
+        state[node] = 1
+        for dependency in graph.get(node, []):
+            if dependency in ids:
+                if state.get(dependency) == 1:
+                    cycle_nodes.update((node, dependency))
+                else:
+                    visit(dependency)
+                    if dependency in cycle_nodes:
+                        cycle_nodes.add(node)
+        state[node] = 2
+    for node in graph:
+        visit(node)
+    if cycle_nodes:
+        violations.append({"check": "dependency-cycle", "nodeIds": sorted(cycle_nodes), "detail": "dependsOn contains a cycle"})
+
+    if violations:
+        return 1, _make_result("outline-v2", "fail", f"{len(violations)} outline violation(s)", violations)
+    return 0, _make_result("outline-v2", "pass", "outline matches author intent and evidence", [])
+
+
 # --- CLI ----------------------------------------------------------------------
 
 GATE_HANDLERS = {
@@ -875,6 +1003,7 @@ GATE_HANDLERS = {
     "citation-floor": cmd_citation_floor,
     "changes-schema": cmd_changes_schema,
     "stale-evidence-ownership": cmd_stale_evidence_ownership,
+    "outline-v2": cmd_outline_v2,
 }
 
 
@@ -927,6 +1056,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     p_seo.add_argument("outline", help="Path to outline.json")
     p_seo.add_argument("--evidence-ownership", required=True, help="Path to evidence-ownership.json")
+
+    p_ov2 = subparsers.add_parser("outline-v2", parents=[common], help="Validate an author-approved outline against intent and evidence.")
+    p_ov2.add_argument("--outline", required=True, help="Path to outline.json")
+    p_ov2.add_argument("--intent", required=True, help="Path to author-intent.json")
+    p_ov2.add_argument("--evidence", required=True, help="Path to evidence.json")
 
     return parser
 

@@ -192,7 +192,7 @@ Use the `Write` tool to create `.academic-helper/research-brief.md`:
 [The approved question]
 
 ## Thesis Direction
-[Preliminary thesis statement]
+[Preliminary thesis statement in the author's words; /write W0 reads this heading as its thesis seed.]
 
 ## Approach
 [Selected methodology]

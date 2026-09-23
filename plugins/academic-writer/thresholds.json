@@ -22,6 +22,10 @@
     "maxWords": 800,
     "_comment": "Min/target/max word bounds for a 'writer unit' — the leaf-level chunk that gets exactly one section-writer subagent. Sections whose word count exceeds maxWords must be decomposed by the architect into multiple writer-unit subsections (an outline `units` array); adjacent subsections under minWords should be merged into one unit rather than left tiny."
   },
+  "write": {
+    "outlineMaxAlternatives": 2,
+    "_comment": "Architect may label up to this many thesis alternatives for discussion; none replaces author intent unless the author edits it."
+  },
   "styleFingerprint": {
     "passThreshold": 7,
     "maxScore": 10,

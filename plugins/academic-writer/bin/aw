@@ -72,6 +72,10 @@ var init_thresholds = __esm({
         maxWords: 800,
         _comment: "Min/target/max word bounds for a 'writer unit' \u2014 the leaf-level chunk that gets exactly one section-writer subagent. Sections whose word count exceeds maxWords must be decomposed by the architect into multiple writer-unit subsections (an outline `units` array); adjacent subsections under minWords should be merged into one unit rather than left tiny."
       },
+      write: {
+        outlineMaxAlternatives: 2,
+        _comment: "Architect may label up to this many thesis alternatives for discussion; none replaces author intent unless the author edits it."
+      },
       styleFingerprint: {
         passThreshold: 7,
         maxScore: 10,
@@ -22666,7 +22670,7 @@ function projectDir() {
 }
 
 // src/main.ts
-import { readFileSync as readFileSync5 } from "node:fs";
+import { readFileSync as readFileSync6 } from "node:fs";
 import { join as join8 } from "node:path";
 
 // src/routing.ts
@@ -22680,7 +22684,7 @@ function routeFor(step) {
 }
 
 // src/proofread.ts
-import { readFileSync, writeFileSync, mkdirSync as mkdirSync3, existsSync, appendFileSync as appendFileSync3 } from "node:fs";
+import { readFileSync as readFileSync2, writeFileSync, mkdirSync as mkdirSync3, existsSync, appendFileSync as appendFileSync3 } from "node:fs";
 import { spawn as spawn2 } from "node:child_process";
 import { createHash } from "node:crypto";
 import { join as join4, resolve as resolve3 } from "node:path";
@@ -40930,7 +40934,7 @@ Validation error: ${lastError}. Return one corrected JSON object.`;
 
 // src/decide.ts
 init_thresholds();
-import { appendFileSync as appendFileSync2, mkdirSync as mkdirSync2 } from "node:fs";
+import { appendFileSync as appendFileSync2, mkdirSync as mkdirSync2, readFileSync } from "node:fs";
 import { join as join3 } from "node:path";
 
 // src/jev.ts
@@ -40960,6 +40964,7 @@ function jevQuestion(input) {
 }
 
 // src/decide.ts
+var VALID_POINTS = new Set(Object.keys(thresholds_default.jev.points));
 var jevCall = askJev;
 var modeOverrides = /* @__PURE__ */ new Map();
 async function decide(req) {
@@ -40991,9 +40996,30 @@ async function decide(req) {
   }
   const dir = join3(projectDir(), ".academic-helper", "runs", req.runId);
   mkdirSync2(dir, { recursive: true });
-  appendFileSync2(join3(dir, "jev.jsonl"), `${JSON.stringify({ point: req.point, jevAnswer: jevResult?.answer ?? null, jevConfidence: jevResult?.confidence ?? null, modelAnswer, decidedBy: by })}
+  appendFileSync2(join3(dir, "jev.jsonl"), `${JSON.stringify({ point: req.point, jevAnswer: jevResult?.answer ?? null, jevConfidence: jevResult?.confidence ?? null, modelAnswer, decidedBy: by, label: req.label ?? null })}
 `, "utf8");
   return { answer, by, confidence: jevResult?.confidence ?? null };
+}
+async function runDecideCli(args2) {
+  const value = (name) => {
+    const position = args2.indexOf(name);
+    return position >= 0 ? args2[position + 1] : void 0;
+  };
+  const pointValue = args2[1];
+  const question = value("--question");
+  const rawOptions = value("--options");
+  const contextFile = value("--context-file");
+  const fallback = value("--fallback");
+  const runIdValue = value("--run");
+  const label = value("--label");
+  if (!pointValue || !VALID_POINTS.has(pointValue) || !question || !rawOptions || !contextFile || !fallback || !runIdValue) {
+    throw new Error("ERROR decide: expected aw decide <point> --question <text> --options a,b --context-file <file> --fallback <answer> --run <id>");
+  }
+  const options = rawOptions.split(",").map((item) => item.trim()).filter(Boolean);
+  if (options.length < 2) throw new Error("ERROR decide: --options requires at least two comma-separated answers");
+  if (!options.includes(fallback)) throw new Error("ERROR decide: --fallback must match one of --options");
+  const context = readFileSync(contextFile, "utf8");
+  return decide({ point: pointValue, question, options, context, runId: runIdValue, fallback: async () => fallback, label });
 }
 
 // src/prompts/proofread-find.md
@@ -41039,7 +41065,7 @@ function importLegacyJev(runId2, project) {
   if (!existsSync(legacyPath) || existsSync(marker)) return;
   const ledgerDir = join4(project, ".academic-helper", "runs", runId2);
   mkdirSync3(ledgerDir, { recursive: true });
-  const rows = readFileSync(legacyPath, "utf8").split("\n").filter((line) => line.trim());
+  const rows = readFileSync2(legacyPath, "utf8").split("\n").filter((line) => line.trim());
   for (const line of rows) {
     let evidence;
     try {
@@ -41091,7 +41117,7 @@ async function runProofread(options) {
   const project = options.projectDir ?? process.env.CLAUDE_PROJECT_DIR ?? "";
   if (project) importLegacyJev(options.runId, project);
   const article = options.article ? resolve3(options.article) : "";
-  const content = article ? readFileSync(article, "utf8") : "";
+  const content = article ? readFileSync2(article, "utf8") : "";
   const numbered = Array.isArray(options.chunks) ? numberedChunks(options.chunks) : [];
   const chunks = numbered.length ? numbered : content ? JSON.parse(await command("python3", [join4(root, "scripts/chunk-article.py"), "--input", article, "--numbered"])) : Array.from({ length: typeof options.chunks === "number" ? options.chunks : 0 }, (_, index) => ({ id: `chunk-${index}`, index, startLine: index + 1, endLine: index + 1, text: `L${index + 1}	x` }));
   const budget = new Budget(options.runId, budgetFor("proofread"));
@@ -41113,7 +41139,7 @@ async function runProofread(options) {
     await decide({ point: "style.filler", question: "Is this capped style-word use filler?", options: ["flag", "allow"], context: JSON.stringify(hit), runId: options.runId, fallback: async () => "flag" });
   }
   const voicePath = join4(options.dataDir ?? process.env.CLAUDE_PLUGIN_DATA ?? "", "voice", "rules.md");
-  const voiceRules = options.voiceRules ?? (existsSync(voicePath) ? readFileSync(voicePath, "utf8") : "");
+  const voiceRules = options.voiceRules ?? (existsSync(voicePath) ? readFileSync2(voicePath, "utf8") : "");
   const stageOptions = { ...options, voiceRules };
   const hspell = deterministic.filter((change) => change.class === "typo" && change.after === null);
   const found = options.only === "editorial" ? [] : await mapLimit(chunks, routeFor("proofread.find").concurrency, (chunk) => find(chunk, stageOptions, budget, hspell.filter((item) => item.line >= chunk.startLine && item.line <= chunk.endLine)));
@@ -41159,9 +41185,9 @@ ${JSON.stringify(changes)}`, schema: verifySchema, runId: options.runId, finderP
   const statusMap = new Map(verified.flat().map((change) => [change.id, change]));
   const all = [...deterministic.map((change) => ({ ...change, status: change.status ?? (change.after === null ? "flag" : "must-catch"), applied: change.after !== null })), ...candidates.map((change) => statusMap.get(change.id) ?? { ...change, status: "unverified" })];
   const editorialChecksPath = join4(root, "skills", "proofread", "references", "editorial-checks.md");
-  const editorialChecks = article && existsSync(editorialChecksPath) ? readFileSync(editorialChecksPath, "utf8") : "";
+  const editorialChecks = article && existsSync(editorialChecksPath) ? readFileSync2(editorialChecksPath, "utf8") : "";
   const venuePath = options.venue && project ? join4(project, ".academic-helper", "venues", `${options.venue}.md`) : "";
-  const venueProfile = venuePath && existsSync(venuePath) ? readFileSync(venuePath, "utf8") : "";
+  const venueProfile = venuePath && existsSync(venuePath) ? readFileSync2(venuePath, "utf8") : "";
   const memo = stubs.memo ? await stubs.memo() : (await callGemini({ step: "proofread.memo", system: prompt("proofread-memo.md"), parts: [`Global editorial checks (always apply):
 ${editorialChecks}
 
@@ -41206,7 +41232,7 @@ ${content}`], runId: options.runId, budget })).text;
         const outcome = appliedById.get(contract[index].change_id);
         if (outcome) all[index] = { ...change, applied: outcome.applied, skipReason: outcome.skipReason ?? void 0 };
       }
-      proofed = readFileSync(proofedPath, "utf8");
+      proofed = readFileSync2(proofedPath, "utf8");
     }
     const finalContract = all.map(contractChange);
     writeFileSync(changesPath, JSON.stringify({ stage: "language", changes: finalContract }, null, 2));
@@ -41231,7 +41257,7 @@ init_thresholds();
 
 // src/evidence.ts
 import { createHash as createHash2 } from "node:crypto";
-import { appendFileSync as appendFileSync4, existsSync as existsSync2, mkdirSync as mkdirSync4, readFileSync as readFileSync2, readdirSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { appendFileSync as appendFileSync4, existsSync as existsSync2, mkdirSync as mkdirSync4, readFileSync as readFileSync3, readdirSync, writeFileSync as writeFileSync2 } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify as promisify2 } from "node:util";
 import { join as join5 } from "node:path";
@@ -41313,7 +41339,7 @@ function cachedText(id) {
   const entry = readdirSync(root).find((name) => name.startsWith(prefix));
   if (!entry) return void 0;
   const path2 = join5(root, entry, "text.md");
-  return existsSync2(path2) ? readFileSync2(path2, "utf8") : void 0;
+  return existsSync2(path2) ? readFileSync3(path2, "utf8") : void 0;
 }
 async function fetchCk(id) {
   const { stdout } = await execFileAsync("ck", ["items", "read", `${id}:all`], { maxBuffer: 64 * 1024 * 1024 });
@@ -41344,7 +41370,7 @@ function event(runId2, record, reason) {
 async function buildEvidence(options) {
   dataDir();
   projectDir();
-  const intent = options.intent ? readFileSync2(options.intent, "utf8") : "";
+  const intent = options.intent ? readFileSync3(options.intent, "utf8") : "";
   const tasks = [
     ...options.sources.map(async (id) => {
       const cached = sourceCache.get(id) ?? cachedText(id);
@@ -41404,7 +41430,7 @@ async function buildEvidence(options) {
 }
 
 // src/voice.ts
-import { appendFileSync as appendFileSync5, existsSync as existsSync3, mkdirSync as mkdirSync5, readFileSync as readFileSync3, readdirSync as readdirSync2, writeFileSync as writeFileSync3 } from "node:fs";
+import { appendFileSync as appendFileSync5, existsSync as existsSync3, mkdirSync as mkdirSync5, readFileSync as readFileSync4, readdirSync as readdirSync2, writeFileSync as writeFileSync3 } from "node:fs";
 import { createHash as createHash3 } from "node:crypto";
 import { join as join6, resolve as resolve4, basename as basename4 } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -41426,16 +41452,16 @@ function writeVoiceStyleWords(value, dataRoot) {
 }
 function readJsonl(path2) {
   if (!existsSync3(path2)) return [];
-  return readFileSync3(path2, "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+  return readFileSync4(path2, "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
 }
 function sha(content) {
   return createHash3("sha256").update(content).digest("hex");
 }
 function refreshVersion(dir) {
   const profilePath = join6(dir, "profile.json");
-  const profile = JSON.parse(readFileSync3(profilePath, "utf8"));
+  const profile = JSON.parse(readFileSync4(profilePath, "utf8"));
   const names = ["exemplars.jsonl", "pairs.jsonl", "style-words.json", "rules.md"];
-  const version = sha(names.map((name) => existsSync3(join6(dir, name)) ? readFileSync3(join6(dir, name), "utf8") : "").join("\n"));
+  const version = sha(names.map((name) => existsSync3(join6(dir, name)) ? readFileSync4(join6(dir, name), "utf8") : "").join("\n"));
   profile.voiceVersion = version;
   writeFileSync3(profilePath, JSON.stringify(profile, null, 2));
   return version;
@@ -41462,18 +41488,18 @@ async function voiceBundle(options) {
   }
   const pairs = readJsonl(join6(dir, "pairs.jsonl")).slice(-options.pairs);
   const out = join6(dir, `bundle-${sha(options.runId).slice(0, 12)}.json`);
-  writeFileSync3(out, JSON.stringify({ exemplars: chosen, pairs, rules: readFileSync3(join6(dir, "rules.md"), "utf8"), styleWords: JSON.parse(readFileSync3(join6(dir, "style-words.json"), "utf8")) }, null, 2));
+  writeFileSync3(out, JSON.stringify({ exemplars: chosen, pairs, rules: readFileSync4(join6(dir, "rules.md"), "utf8"), styleWords: JSON.parse(readFileSync4(join6(dir, "style-words.json"), "utf8")) }, null, 2));
   return { exemplars: chosen, pairs, path: out };
 }
 function voiceMigrate(from) {
   const dir = store();
   mkdirSync5(dir, { recursive: true });
   const source = resolve4(from);
-  const author = readFileSync3(join6(source, "AUTHOR_VOICE.md"), "utf8");
+  const author = readFileSync4(join6(source, "AUTHOR_VOICE.md"), "utf8");
   const fingerprintPath = join6(source, ".voice", "fingerprint.md");
   const exemplarsPath = join6(source, ".academic-helper", "voice-exemplars.md");
-  const fingerprint = existsSync3(fingerprintPath) ? readFileSync3(fingerprintPath, "utf8") : "";
-  const rawExemplars = existsSync3(exemplarsPath) ? readFileSync3(exemplarsPath, "utf8") : "";
+  const fingerprint = existsSync3(fingerprintPath) ? readFileSync4(fingerprintPath, "utf8") : "";
+  const rawExemplars = existsSync3(exemplarsPath) ? readFileSync4(exemplarsPath, "utf8") : "";
   const version = sha(author + fingerprint + rawExemplars);
   writeFileSync3(join6(dir, "profile.json"), JSON.stringify({ schemaVersion: 1, voiceVersion: version, authorVoice: author, fingerprint }, null, 2));
   const rows = paragraphs(rawExemplars).filter((p) => p !== "# Voice exemplars").map((text, index) => ({ id: `migrated-${index + 1}`, source: `migration-${index + 1}`, text }));
@@ -41485,11 +41511,11 @@ function voiceMigrate(from) {
 }
 function voiceCandidates(corpus) {
   const files = readdirSync2(resolve4(corpus), { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".md"));
-  return files.flatMap((file) => paragraphs(readFileSync3(join6(resolve4(corpus), file.name), "utf8")).map((text, i2) => ({ id: `${basename4(file.name)}-${i2 + 1}`, source: file.name, text }))).filter((e2) => e2.text.split(/\s+/).length >= thresholds_default.voice.exemplars.minWords);
+  return files.flatMap((file) => paragraphs(readFileSync4(join6(resolve4(corpus), file.name), "utf8")).map((text, i2) => ({ id: `${basename4(file.name)}-${i2 + 1}`, source: file.name, text }))).filter((e2) => e2.text.split(/\s+/).length >= thresholds_default.voice.exemplars.minWords);
 }
 async function voiceMoves(runId2) {
   const dir = store();
-  const profile = readFileSync3(join6(dir, "profile.json"), "utf8");
+  const profile = readFileSync4(join6(dir, "profile.json"), "utf8");
   const exemplars = readJsonl(join6(dir, "exemplars.jsonl"));
   const result = await callGemini({ step: "voice.moves", system: `Describe concise reusable author writing moves. Return JSON with a rules string of no more than ${thresholds_default.voice.bundle.maxRuleLines} lines.`, parts: [profile, JSON.stringify(exemplars)], runId: runId2, budget: new Budget(runId2, thresholds_default.budget.voiceMoves), responseSchema: { type: "OBJECT", properties: { rules: { type: "STRING" } }, required: ["rules"] } });
   const parsed = result.json;
@@ -41503,12 +41529,12 @@ function voiceSync(direction) {
   const dir = store();
   mkdirSync5(dir, { recursive: true });
   try {
-    const profileText = readFileSync3(join6(projectDir(), ".academic-helper", "profile.md"), "utf8");
+    const profileText = readFileSync4(join6(projectDir(), ".academic-helper", "profile.md"), "utf8");
     const authorKey = /^author_key:\s*["']?([^\s"']+)/m.exec(profileText)?.[1];
     if (!authorKey) throw new AwError("ERROR", `voice.${direction}`, "author_key missing from project profile");
     const title = `Voice Store \u2014 ${authorKey}`;
     const names = ["profile.json", "exemplars.jsonl", "pairs.jsonl", "style-words.json", "rules.md", "CHANGELOG.jsonl"];
-    const readStore = () => Object.fromEntries(names.map((name) => [name, existsSync3(join6(dir, name)) ? readFileSync3(join6(dir, name), "utf8") : ""]));
+    const readStore = () => Object.fromEntries(names.map((name) => [name, existsSync3(join6(dir, name)) ? readFileSync4(join6(dir, name), "utf8") : ""]));
     const writeStore = (files) => {
       for (const name of names) writeFileSync3(join6(dir, name), files[name] ?? "");
     };
@@ -41517,8 +41543,8 @@ function voiceSync(direction) {
     const currentVersion = refreshVersion(dir);
     if (currentVersion !== previousVersion) writeFileSync3(join6(dir, "CHANGELOG.jsonl"), `${local["CHANGELOG.jsonl"] ?? ""}${JSON.stringify({ voiceVersion: currentVersion, at: (/* @__PURE__ */ new Date()).toISOString() })}
 `);
-    local["profile.json"] = readFileSync3(join6(dir, "profile.json"), "utf8");
-    local["CHANGELOG.jsonl"] = readFileSync3(join6(dir, "CHANGELOG.jsonl"), "utf8");
+    local["profile.json"] = readFileSync4(join6(dir, "profile.json"), "utf8");
+    local["CHANGELOG.jsonl"] = readFileSync4(join6(dir, "CHANGELOG.jsonl"), "utf8");
     const localProfile = local["profile.json"] ? JSON.parse(local["profile.json"]) : {};
     const listingText = execFileSync("ck", ["items", "list", "--json"], { encoding: "utf8" });
     const listing = JSON.parse(listingText);
@@ -41557,7 +41583,7 @@ function voiceSync(direction) {
 }
 
 // src/revise.ts
-import { appendFileSync as appendFileSync6, mkdirSync as mkdirSync6, readFileSync as readFileSync4, writeFileSync as writeFileSync4 } from "node:fs";
+import { appendFileSync as appendFileSync6, mkdirSync as mkdirSync6, readFileSync as readFileSync5, writeFileSync as writeFileSync4 } from "node:fs";
 import { dirname as dirname2, join as join7 } from "node:path";
 init_thresholds();
 var dataOverride2;
@@ -41588,7 +41614,7 @@ function applyTextEdit(item) {
   const after = item.proposal.after;
   if (typeof file !== "string" || typeof before !== "string" || typeof after !== "string") return;
   const target = join7(projectDir(), file);
-  const body = readFileSync4(target, "utf8");
+  const body = readFileSync5(target, "utf8");
   if (!body.includes(before)) throw new Error(`ERROR revise.apply: anchor not found for ${item.id}`);
   writeFileSync4(target, body.replace(before, after), "utf8");
 }
@@ -41639,7 +41665,7 @@ if (command2 === "ledger" && subcommand === "show" && runId) {
   try {
     dataDir();
     const file = join8(projectDir(), ".academic-helper", "runs", runId, "usage.jsonl");
-    const rows = readFileSync5(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    const rows = readFileSync6(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
     const totals = /* @__PURE__ */ new Map();
     for (const row of rows) {
       const total = totals.get(row.step) ?? { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
@@ -41694,7 +41720,7 @@ Live model verification requires GOOGLE_API_KEY.
     projectDir();
     const fileArg = args[args.indexOf(subcommand === "classify" ? "--items" : "--plan") + 1];
     if (!fileArg) throw new Error("ERROR revise: --items/--plan path required");
-    const input = JSON.parse(readFileSync5(fileArg, "utf8"));
+    const input = JSON.parse(readFileSync6(fileArg, "utf8"));
     if (subcommand === "classify") {
       if (!Array.isArray(input)) throw new Error("ERROR revise.classify: items must be an array");
       process.stdout.write(`${JSON.stringify(await classify(input, args[args.indexOf("--run") + 1] ?? "revise"))}
@@ -41724,6 +41750,16 @@ Live model verification requires GOOGLE_API_KEY.
 `);
     process.exitCode = 1;
   }
+} else if (command2 === "decide") {
+  try {
+    const result = await runDecideCli(args);
+    process.stdout.write(`${JSON.stringify(result)}
+`);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : "ERROR decide: unknown failure"}
+`);
+    process.exitCode = 1;
+  }
 } else if (command2 === "voice") {
   try {
     dataDir();
@@ -41748,7 +41784,7 @@ Live model verification requires GOOGLE_API_KEY.
     process.exitCode = message.includes("no voice store") ? 3 : 2;
   }
 } else {
-  process.stderr.write("ERROR: expected aw models check, aw ledger show <runId>, or aw evidence build\n");
+  process.stderr.write("ERROR: expected aw models check, aw ledger show <runId>, aw evidence build, or aw decide <point>\n");
   process.exitCode = 2;
 }
 /*! Bundled license information:
