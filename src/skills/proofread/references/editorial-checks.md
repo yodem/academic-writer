@@ -59,8 +59,8 @@ recurring grammatical errors, non-standard phrasing, typos, syntax unsuited to a
 prose. Editors do not treat that as "a few technical corrections"; it can be a bar to
 consideration on its own, independent of the argument's merit.
 
-That work belongs to the **language** stage (`copyeditor`) and the **mechanical** stage
-(`proofreader`), not here. The editorial stage should not raise it — but it is recorded in
+That work belongs to the language finder or deterministic mechanical pass, not here.
+The editorial memo should not raise it — but it is recorded in
 this file because it explains why all three stages exist and why the mechanical stage's
 recall matters as much as the argument's quality.
 

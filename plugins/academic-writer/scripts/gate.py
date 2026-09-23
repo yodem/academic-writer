@@ -142,9 +142,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-REPO_ROOT = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-DEFAULT_THRESHOLDS_PATH = REPO_ROOT / "src" / "thresholds.json"
-CHANGES_SCHEMA_PATH = REPO_ROOT / "src" / "skills" / "proofread" / "references" / "changes-schema.json"
+_SCRIPT_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
+# Built plugin: <plugin>/scripts/ with <plugin>/thresholds.json and <plugin>/skills/...; repo: src/scripts/.
+_ROOT = _SCRIPT_DIR.parent  # <plugin>/ or src/
+DEFAULT_THRESHOLDS_PATH = _ROOT / "thresholds.json"
+CHANGES_SCHEMA_PATH = _ROOT / "skills" / "proofread" / "references" / "changes-schema.json"
+REPO_ROOT = _ROOT.parent if _ROOT.name == "src" else _ROOT
 CITATION_GUARD_PATH = Path(os.path.dirname(os.path.abspath(__file__))) / "citation-guard.py"
 
 

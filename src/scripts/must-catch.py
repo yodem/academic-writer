@@ -42,7 +42,8 @@ def scan(text, styles, terms):
             for match in re.finditer(re.escape(item["word"]), line):
                 count_by_unit["count"] = count_by_unit.get("count", 0) + 1
                 if count_by_unit["count"] > item["max"]:
-                    add("style_words", match.group(), None, index)
+                    # Occurrences beyond the cap take the configured alternative, if any.
+                    add("style_words", match.group(), item.get("replacement"), index)
     return changes
 
 

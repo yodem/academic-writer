@@ -4,13 +4,13 @@ type JevAnswer = { type?: string; noul?: number; choice?: string; score?: number
 export async function askJev(input: JevQuestion): Promise<JevResult> {
   const key = (process.env.JEV_API_KEY ?? '').trim();
   if (!key) throw new Error('ERROR Jev: missing JEV_API_KEY');
-  const thresholds = (await import('../../thresholds.json', { with: { type: 'json' } })).default as { jev: { model: string; yesProbability: number; scoreMaximum: number } };
+  const thresholds = (await import('../../thresholds.json', { with: { type: 'json' } })).default as { models: { jev: { model: string } }; jev: { yesProbability: number; scoreMaximum: number } };
   const response = await fetch('https://api.typesafe.ai/v1/systemone', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     // Request shape matches the working jev-ask client: choice questions carry `instructions` and a
     // `criteria` map keyed by option (the API rejects `question`/`options`).
-    body: JSON.stringify({ state: input.context, questions: { q: jevQuestion(input) }, model: thresholds.jev.model }),
+    body: JSON.stringify({ state: input.context, questions: { q: jevQuestion(input) }, model: thresholds.models.jev.model }),
   });
   if (!response.ok) throw new Error(`ERROR Jev: HTTP ${response.status}`);
   const payload = await response.json() as { answers?: { q?: JevAnswer } };

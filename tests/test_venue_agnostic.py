@@ -15,7 +15,7 @@ import unittest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHECKS = os.path.join(REPO, "src", "skills", "proofread", "references", "editorial-checks.md")
-EDITOR = os.path.join(REPO, "src", "agents", "editor.md")
+MEMO = os.path.join(REPO, "src", "cli", "src", "prompts", "proofread-memo.md")
 
 
 def _read(path):
@@ -44,23 +44,27 @@ class TestGlobalEditorialChecks(unittest.TestCase):
     def test_language_work_is_explicitly_out_of_scope_here(self):
         """Recorded in the checklist for context, but assigned to the other two stages."""
         text = _read(CHECKS)
-        self.assertIn("copyeditor", text)
-        self.assertIn("proofreader", text)
+        self.assertIn("language finder", text)
+        self.assertIn("mechanical pass", text)
 
 
-class TestEditorAgentUsesThem(unittest.TestCase):
-    def test_editor_always_loads_the_global_checks(self):
-        text = _read(EDITOR)
-        self.assertIn("EDITORIAL_CHECKS", text)
+class TestMemoUsesGlobalChecks(unittest.TestCase):
+    def test_editorial_memo_always_loads_global_checks(self):
+        text = _read(MEMO)
         self.assertIn("editorial-checks.md", text)
-        self.assertIn("always loaded", text.lower())
+        self.assertIn("always", text.lower())
 
     def test_venue_profile_is_optional_and_additive(self):
-        text = _read(EDITOR)
+        text = _read(MEMO)
         low = text.lower()
         self.assertIn("optional", low)
         self.assertIn("additive", low)
         self.assertIn("never remove", low)
+
+    def test_memo_keeps_language_work_out_of_scope(self):
+        text = _read(MEMO).lower()
+        self.assertIn("language", text)
+        self.assertTrue("out of scope" in text or "not" in text)
 
 
 class TestNoHardcodedVenue(unittest.TestCase):

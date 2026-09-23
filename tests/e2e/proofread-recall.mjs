@@ -19,11 +19,8 @@
 // whether the actual model, today, on this fixture, still finds what the 2026-07-10
 // pass missed.
 //
-// Scope of this harness vs. the full pipeline (src/workflows/proofread.js): the real
-// workflow is a Dynamic-Workflow script that only runs inside Claude Code's Workflow
-// tool (agent()/pipeline()/log() are runtime-injected globals; it has no filesystem
-// access and cannot be invoked by plain `node`). This harness instead calls the same
-// two agent prompts (src/agents/proofreader.md, src/agents/editor.md) directly via the
+// Scope of this harness vs. the CLI pipeline (src/cli/src/proofread.ts): the harness
+// calls the finder and memo prompts (src/cli/src/prompts/) directly via the
 // `claude` CLI's headless print mode against the fixture's single, small excerpt (it
 // does not need chunking, multi-round convergence, or refute-verify — the fixture is
 // one chunk of test prose). It is a faithful single-pass check of finder RECALL, not
@@ -87,9 +84,7 @@ function readJson(path) {
 }
 
 function loadAgentPrompt(agentName) {
-  const raw = readFileSync(join(REPO, 'src', 'agents', `${agentName}.md`), 'utf8');
-  // Strip the YAML frontmatter block; the harness only needs the prompt body.
-  return raw.replace(/^---\n[\s\S]*?\n---\n/, '');
+  return readFileSync(join(REPO, 'src', 'cli', 'src', 'prompts', `${agentName}.md`), 'utf8');
 }
 
 // Calls `claude -p <prompt> --output-format json` and returns the raw stdout (the
@@ -283,10 +278,10 @@ async function main() {
   let anyInvalid = false;
 
   // --- Mechanical stage ----------------------------------------------------
-  console.log('--- Mechanical finder (proofreader) ---');
-  const proofreaderPrompt = loadAgentPrompt('proofreader');
+  console.log('--- Mechanical finder ---');
+  const findPrompt = loadAgentPrompt('proofread-find');
   const mechanicalPrompt = [
-    proofreaderPrompt,
+    findPrompt,
     '',
     '## Chunk to review',
     '',
@@ -324,8 +319,8 @@ async function main() {
   console.log('');
 
   // --- Editorial stage -------------------------------------------------------
-  console.log('--- Editorial finder (editor) ---');
-  const editorPrompt = loadAgentPrompt('editor');
+  console.log('--- Editorial memo ---');
+  const editorPrompt = loadAgentPrompt('proofread-memo');
   const editorialPrompt = [
     editorPrompt,
     '',
