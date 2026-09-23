@@ -42,17 +42,15 @@ else
   exit 1
 fi
 
-# Phase 3: Clean previous build (preserve mcp/ subtree which holds bundled MCP server sources)
+# Phase 3: Clean previous build. The bundled Gemini MCP server (plugins/academic-writer/mcp/)
+# was retired when its tools were ported into the `aw` CLI (src/cli/) — this build no longer
+# preserves or regenerates an mcp/ subtree, so a stale one from before the retirement is removed
+# outright along with everything else, rather than kept around.
 echo -e "${BLUE}[3/7] Cleaning previous build...${NC}"
 if [[ -d "$PLUGINS_DIR" ]]; then
   for plugin_dir in "$PLUGINS_DIR"/*; do
     [[ ! -d "$plugin_dir" ]] && continue
-    # Remove each top-level entry except `mcp/` (committed MCP server sources)
-    find "$plugin_dir" -mindepth 1 -maxdepth 1 ! -name 'mcp' -exec rm -rf {} + 2>/dev/null || true
-    # Clean MCP build artifacts so rebuilds are deterministic
-    if [[ -d "$plugin_dir/mcp" ]]; then
-      find "$plugin_dir/mcp" -mindepth 2 -maxdepth 2 -type d \( -name 'dist' -o -name 'node_modules' \) -exec rm -rf {} + 2>/dev/null || true
-    fi
+    find "$plugin_dir" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
   done
 fi
 mkdir -p "$PLUGINS_DIR"
@@ -129,9 +127,9 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
 
   # Generate plugin.json — read recognized plugin.json fields FROM the manifest.
   # Only the schema-recognized keys are emitted (Official Docs p.114):
-  #   name, version, description, author, homepage, repository, license, keywords,
-  #   mcpServers, userConfig.
-  # mcpServers is copied through verbatim so the bundled MCP server is registered.
+  #   name, version, description, author, homepage, repository, license, keywords, userConfig.
+  # No mcpServers block — the bundled Gemini MCP server was retired; its tools now live in
+  # the `aw` CLI (src/cli/), invoked from skills via Bash, not registered as an MCP server.
   # userConfig is copied through verbatim so Claude Code prompts for (and securely
   # stores) declared options like the Gemini API key at plugin-enable time.
   # author/homepage/repository/license/keywords fall back to defaults only when absent.
@@ -145,7 +143,6 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
     license: (.license // "MIT"),
     keywords: (.keywords // ["academic-writing","humanities","citations","claude-code","plugin"])
   }
-  + (if .mcpServers then { mcpServers: .mcpServers } else {} end)
   + (if .userConfig then { userConfig: .userConfig } else {} end)' \
     "$manifest" > "$PLUGIN_DIR/.claude-plugin/plugin.json"
 
@@ -157,27 +154,21 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
   echo -e "${GREEN}  Built $PLUGIN_NAME v$PLUGIN_VERSION: $skill_count skills, $agent_count agents${NC}"
 done
 
-# Phase 4b: Build bundled MCP servers (mcp/ source preserved through clean)
-echo -e "${BLUE}[5/7] Building bundled MCP servers...${NC}"
-if [[ -x "$SCRIPT_DIR/build-mcp.sh" ]]; then
-  "$SCRIPT_DIR/build-mcp.sh"
-else
-  echo -e "${RED}  build-mcp.sh missing or not executable${NC}"
-  exit 1
-fi
-
-# Build the standalone academic-writer CLI.
-echo -e "${BLUE}Building aw CLI...${NC}"
+# Phase 5: Build the standalone academic-writer CLI (`aw`). Its tools (draft, synthesize,
+# edit, ocr, evidence, proofread, decide, voice, revise, ...) replace the retired bundled
+# Gemini MCP server; skills invoke the built binary via Bash, not an MCP connection.
+echo -e "${BLUE}[5/7] Building aw CLI...${NC}"
 if [[ -f "$SRC_DIR/cli/package.json" ]]; then
   cd "$SRC_DIR/cli"
   node esbuild.config.mjs
   cd "$PROJECT_ROOT"
+  echo -e "${GREEN}  aw CLI built${NC}"
 else
   echo -e "${RED}  CLI package.json missing${NC}"
   exit 1
 fi
 
-# Phase 5: Validate
+# Phase 6: Validate
 echo -e "${BLUE}[6/7] Validating...${NC}"
 errors=0
 for plugin_dir in "$PLUGINS_DIR"/*; do
@@ -198,6 +189,14 @@ for plugin_dir in "$PLUGINS_DIR"/*; do
     echo -e "${RED}  $plugin_name: Missing hooks/hooks.json${NC}"
     errors=$((errors + 1))
   fi
+  if [[ ! -x "$plugin_dir/bin/aw" ]]; then
+    echo -e "${RED}  $plugin_name: Missing bin/aw${NC}"
+    errors=$((errors + 1))
+  fi
+  if [[ -d "$plugin_dir/mcp" ]]; then
+    echo -e "${RED}  $plugin_name: mcp/ should not be shipped (retired — see src/cli)${NC}"
+    errors=$((errors + 1))
+  fi
 done
 if [[ $errors -gt 0 ]]; then
   echo -e "${RED}  Validation failed with $errors error(s)${NC}"
@@ -205,7 +204,7 @@ if [[ $errors -gt 0 ]]; then
 fi
 echo -e "${GREEN}  Validation passed${NC}"
 
-# Phase 6: Summary
+# Phase 7: Summary
 echo -e "${BLUE}[7/7] Summary${NC}"
 echo -e "${CYAN}============================================${NC}"
 echo -e "${CYAN}  BUILD COMPLETE${NC}"

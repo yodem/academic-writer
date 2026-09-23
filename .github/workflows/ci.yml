@@ -75,17 +75,8 @@ jobs:
       - name: Gate — version agrees across ALL registered locations
         run: python3 scripts/version-sync.py --check
 
-      - name: Gate — built manifest carries mcpServers (v0.3.0 regression guard)
-        run: bash scripts/check-built-manifest.sh
-
       - name: Gate — version consistency (marketplace.json vs plugin.json)
         run: bash scripts/check-version-consistency.sh
-
-      - name: Gate — gemini-server dist ships and starts self-contained (v0.6.2 CONNECTION_CLOSED regression guard)
-        run: bash scripts/check-mcp-dist.sh
-
-      - name: Gate — gemini-server dist is fresh (matches a rebuild from src/)
-        run: bash scripts/check-mcp-dist-fresh.sh
 
       - name: Gate — no personal identifiers in shipped or published files
         run: bash scripts/check-no-private-refs.sh

@@ -42,29 +42,11 @@ behavior for this condition.
    silently continuing: exit 0 means it either pulled successfully or (an explicitly reported)
    local-only mode; any other exit code is a real failure — say so before proceeding, don't let
    Step 2 quietly read a stale local file as if the pull had happened.
-2. Read `AUTHOR_VOICE.md` from project root. Whole file goes into the section-writer system prompt.
-3. The section writer is instructed to weight `## Academic-specific` rules higher when they
-   conflict with `## Core voice` rules; everything else applies as written.
-
----
-
-### Gemini pre-flight (immediately after voice profile load)
-
-Determine which model runs the prose for this article. This must run **after** Step 1 (Subject &
-Language) captures `targetLanguage` but **before** Step 3 (Deep Read) — i.e. before any agent is
-spawned. In short: read the profile's `approvedLanguages`, detect whether a Gemini key is
-available, and proceed on Gemini or Claude accordingly; persist the chosen `geminiMode` to
-`.academic-helper/session-state.json`. Full decision table and exact commands: see
-`references/gemini-preflight.md`.
-
-Gemini is approved by default for a project's `targetLanguage` (seeded during `init`), so this
-step never blocks waiting on a human decision — `voice-calibrator --compare-models` is now an
-optional, researcher-initiated opt-OUT check the user can run any time to pull a language back off
-`approvedLanguages`; `/write` does not invoke it and does not wait on it.
-
-Also covered in that reference: the **mid-run Gemini failure handler** — the one-time
-AskUserQuestion prompt fired the first time a Gemini MCP call errors during this run, and how the
-resulting `geminiFallback` choice propagates to subagents.
+2. Read `AUTHOR_VOICE.md` from project root. The whole file becomes part of the voice bundle
+   `aw draft` and `aw synthesize` load for every drafting/synthesis call — you do not pass it in a
+   prompt yourself.
+3. The drafting prompt (`aw draft`'s `write-draft.md`) is written to weight `## Academic-specific`
+   rules higher when they conflict with `## Core voice` rules; everything else applies as written.
 
 ---
 
@@ -95,7 +77,7 @@ Print a summary of the fingerprint to confirm it's loaded:
 >
 > Every paragraph will be checked against this fingerprint."
 
-Pass the full `styleFingerprint` object to every agent that writes or reviews text (section-writer, synthesizer). It must be available at every stage — not summarized, but the complete object.
+The full `styleFingerprint` object lives in `profile.md`, which `aw draft` and `aw synthesize` read directly from disk — not summarized, and not something you pass in a prompt. It must stay populated at every stage.
 
 ### Tool Awareness
 
@@ -172,7 +154,7 @@ If a draft is detected, ask (AskUserQuestion):
 - Header: "Draft detected"
 - Question: "I see you've shared a draft/outline. How would you like to proceed?"
 - Options:
-  - "Expand my draft using sources" — use their structure as the approved outline; skip the architect's outline generation (Step 5); pass their draft text to each section-writer as the starting point to expand and anchor in sources
+  - "Expand my draft using sources" — use their structure as the approved outline; skip the architect's outline generation (Step 5); record their draft text as `userDraftParagraphs` per unit in the outline so the W3 drafting step (`aw draft`) has it as the starting point to expand and anchor in sources
   - "Use my draft as context, propose a new structure" — treat their draft as research input for the architect; run the full thesis+outline flow normally
 
 Store the draft text as `userDraftText` regardless of which option is chosen. If the researcher chose "Expand my draft", set `userDraftAsOutline = true`.
@@ -289,40 +271,102 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" outline-v2 \
 
 The gate must exit `0` before drafting. Exit `1` means revise the outline or approval state and rerun the gate. Exit `2` means the gate could not run; repair the inputs and rerun. See `references/write-intent-outline.md` for artifact examples and recovery details.
 
-Legacy v1 outlines remain supported for existing projects: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py argument-graph <outline.json>` validates their argument graph, and `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py stale-evidence-ownership <outline.json> --evidence-ownership <evidence-ownership.json>` validates their ownership map. In that legacy flow, Do NOT proceed to Step 6 until all four checks pass. The Workflow tool path still uses `workflows/write-sections.js`; Fallback when the Workflow tool is unavailable, run the same section sequence through the sequential fallback. AUDIT_MODE: external; control flow only is duplicated.
+Legacy v1 outlines remain supported for existing projects: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py argument-graph <outline.json>` validates their argument graph, and `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py stale-evidence-ownership <outline.json> --evidence-ownership <evidence-ownership.json>` validates their ownership map. Do not proceed to W3 until every check for the outline version in use passes.
 
-The old 15-agent dynamic workflow size guideline and `/config` advice apply only to legacy deployments; the current plugin cannot define runtime workflow fan-out in the user's configuration.
+### W3: Draft the article
 
-### Step 6: Parallel Section Writing + Auditing
+`aw draft` owns the drafting order and the model call — it drafts every body unit in topological
+`dependsOn` order, then drafts `intro` and `conclusion` last (from the body units' claim
+sentences), reading `outline.json`, `author-intent.json`, `evidence.json`, `sources.json`, the
+voice bundle, and `thresholds.json > models["write.draft"]` itself. You do not dispatch units one
+layer at a time — one call drafts the whole outline, and it runs long enough (multiple model
+calls in sequence) that it belongs in the background:
 
-#### Step 6.0: Engine commit (run BEFORE the parallel spawn)
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" draft \
+  --outline "$CLAUDE_PROJECT_DIR/.academic-helper/outline.json" --run <run-id>
+```
 
-Before spawning any section-writer, commit the whole run to ONE engine (Gemini or Claude-only) by
-live-probing Gemini (not just checking the key file) and writing the result to
-`.academic-helper/session-state.json > geminiFallback`. Never mix engines across writer units in
-the same run. Full probe procedure and exact commands: see `references/section-writer-dispatch.md`.
+Run this via the Bash tool with `run_in_background: true`, then poll for its completion rather than
+blocking the turn on it. It writes `drafts/<unitId>.md` for every unit as it finishes and prints one
+JSON object on stdout: `{"drafted": [unitId, ...], "failures": [{"unit", "gate", "detail"}, ...]}`.
 
-#### Spawning section-writers
+- **Exit 0, empty `failures`** — every unit passed its code gates (citation keys in `sources.json`,
+  every quoted span verbatim in `evidence.json`, the `style-words.json` banned/capped rules, and the
+  `thresholds.json > writerUnit` word bounds). Continue to W4.
+- **Exit 2** — one or more units failed a code gate. `failures[]` names the unit and the gate
+  (`citation-not-in-sources`, `quote-not-in-evidence`, `style-banned`, `style-capped`,
+  `word-bounds`). Each such failure counts as one rewrite cycle for that unit (see W4) — write a
+  feedback file naming the gate and detail, then redraft with `--unit`.
+- **Exit 1** — a real error (missing input, model failure). Stop and report it; `aw draft` never
+  falls back silently to a different model.
 
-**CRITICAL: Use the Agent tool to spawn one `section-writer` subagent per WRITER UNIT. Call the Agent tool multiple times in a single response — one call per unit — so all writer units write in parallel.**
+### W4: Batched citation audit, then rewrite failed units
 
-A section with no `units` array in the approved outline is itself a single writer unit — spawn exactly one subagent for it. A section WITH a `units` array is NOT itself spawned directly — spawn one subagent per entry in its `units` array instead. The parallel fan-out count for this step is therefore the total number of writer units across the whole outline, which may exceed the number of top-level sections.
+Once W3 finishes (all units drafted, or as many as could be), audit every unit's draft. **Use the
+Agent tool to spawn one `auditor` subagent per unit — call the Agent tool multiple times in a
+single response so every unit is audited in parallel.** Each call is a single batched call over
+every paragraph in that unit's `drafts/<unitId>.md` (the 847c831 shape: one auditor spawn per unit,
+not one per paragraph) — see `${CLAUDE_PLUGIN_ROOT}/agents/auditor.md` for the exact input/output
+contract, including the `taggedText` field the auditor returns for each passed paragraph.
 
-The exact prompt fields each spawn needs (`unit`, `parentSection`, `siblingUnitsSummary`,
-`sectionIndex`, `totalSections`, `unitIndex`/`unitId`, `totalUnitsInSection`, `thesis`,
-`articleStructure`, `citationStyle`, `targetLanguage`, `targetWordCount`, `tools`,
-`priorSectionTexts`, `outlineOverview`, `userDraftParagraphs`, `geminiFallback`) and the four values
-section-writers load directly from disk instead (`styleFingerprint`, `linkingWords`,
-`sourcesRegistry`, `evidenceOwnership`) are listed in full in `references/section-writer-dispatch.md`
-— read it before constructing the spawn prompts.
+The auditor is the only mandatory hard gate, and it always runs — nothing in this pipeline
+substitutes for it or skips it. (`aw draft` may separately run the `write.audit_prescreen` and
+`write.voice_check` Jev points per paragraph as logged-only signals; neither one gates or replaces
+the Claude auditor call here.)
 
-Each section-writer handles a **per-paragraph 8-skill pipeline** internally — in order: Draft → Style Compliance → Grammar Check (language-specific, dispatched by `targetLanguage`) → Academic Language → Language Purity → Anti-AI → Repetition Check → Citation Audit (logged per paragraph as `section_N_p_M_<skill>`). The authoritative contract for that pipeline — exact skill behavior, the 220-word ceiling, the `thresholds.json`-driven anti-AI gate, and the auditor hard gate (Citation Audit / Skill 8) — lives in the `section-writer` agent definition (`${CLAUDE_PLUGIN_ROOT}/agents/section-writer.md`). Do not duplicate or override it here; the orchestrator only spawns section-writers and waits for their results.
+For each unit's batch of `results`:
+- Every `PASS` paragraph: write its `taggedText` back into `drafts/<unitId>.md` at that paragraph's
+  position (this is where a `[NEEDS REVIEW: <field>]` tag actually lands in the committed text).
+- Any `FAIL`/`PARTIAL` paragraph, or any paragraph the auditor omitted or listed twice (an ERROR,
+  never a silent pass): collect its `feedback` (or, for an omitted/duplicate index, a note saying
+  so) into a feedback file for that unit, e.g. a JSON array of `{paragraphIndex, feedback}`.
+- A unit with any collected feedback — from the auditor above, or from a W3 code-gate `failures[]`
+  entry — gets redrafted:
 
-After receiving each section-writer result (per writer unit), mark node complete:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" draft \
+  --outline "$CLAUDE_PROJECT_DIR/.academic-helper/outline.json" --run <run-id> \
+  --unit <unitId> --feedback-file <path-to-feedback.json>
+```
 
----
+Re-audit only the redrafted unit (one more batched `auditor` call over just its paragraphs), and
+repeat. Track rewrite attempts **per unit**, reading the ceiling at runtime rather than inlining it:
 
-### Completion steps
+```bash
+python3 -c "import json;print(json.load(open('${CLAUDE_PLUGIN_ROOT}/thresholds.json'))['rewriteCycles']['max'])"
+```
 
-Follow the synthesis, abstract, self-review, and output procedures in
-`references/write-completion.md`. Keep the approved section text and citations intact.
+A unit that still has failing paragraphs after `rewriteCycles.max` attempts ships with those
+paragraphs tagged `[NEEDS REVIEW: unresolved after rewrite]` in `drafts/<unitId>.md`, rather than
+looping forever — note this in the closing report (W6) so the author knows exactly which
+paragraphs to check by hand.
+
+### W5: Synthesize
+
+Once every unit's draft is final (audited, or capped at the rewrite limit), run the diff synthesis
+pass. It reads all of `drafts/*.md` in outline order and proposes paragraph-level transition edits
+only — it never rewrites a paragraph from scratch, and citations are untouched:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" synthesize \
+  --outline "$CLAUDE_PROJECT_DIR/.academic-helper/outline.json" --run <run-id>
+```
+
+It prints `{"edits": [{unitId, paragraphIndex, before, after, reason}, ...], "applied": n}` and
+applies the edits to `drafts/*.md` itself — there is nothing further for you to write back. Non-zero
+exit is a real error; stop and report it. (`aw synthesize` may run the `synthesize.needs_bridge`
+Jev point per section boundary as an internal signal for which boundaries to consider; it does not
+change what you do here.)
+
+### W6: Output and handoff
+
+Follow the abstract, self-review, and DOCX output procedures in `references/write-completion.md` —
+build the final article from the (now synthesized) `drafts/<unitId>.md` files in outline order.
+Keep the audited text and citations intact; do not hand-edit prose at this stage.
+
+After the DOCX is written, close the loop with the author: tell them to open the `.docx`, add Word
+comments or tracked changes anywhere they want something revisited, and then run
+`/academic-writer:revise` to fold those comments back into the draft and feedback stores. Mention
+any unit that hit the W4 rewrite cap by name, since those paragraphs need the author's attention
+regardless of whether they added a comment.
