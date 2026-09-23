@@ -176,6 +176,43 @@ def _spans_overlap(a_start: int, a_end: int, b_start: int, b_end: int) -> bool:
     return a_start < b_end and b_start < a_end
 
 
+def _find_nth_span(line_text: str, needle: str, occurrence: int) -> Optional[tuple[int, int]]:
+    """Return the span of the `occurrence`-th (1-based) occurrence of `needle`
+    in `line_text`, counting non-overlapping matches the same way
+    `re.finditer`/must-catch.py does (advance past the whole match, not by one
+    character). None if the line has fewer than `occurrence` occurrences.
+    """
+    start = 0
+    count = 0
+    while True:
+        idx = line_text.find(needle, start)
+        if idx == -1:
+            return None
+        count += 1
+        if count == occurrence:
+            return (idx, idx + len(needle))
+        start = idx + len(needle)
+
+
+def _resolve_line_by_occurrence(
+    lines_norm: list[str], line_no: int, before_norm: str, occurrence: int
+) -> tuple[Optional[int], Optional[tuple[int, int]]]:
+    """Locate the `occurrence`-th instance of `before_norm` on the exact
+    1-based `line_no`. Unlike `_resolve_line`, this is never ambiguous by
+    construction -- the occurrence index IS the disambiguator -- and it never
+    widens the search to neighbouring lines, for the same reason `_resolve_line`
+    doesn't: guessing at a different line is the whole-file-fallback failure
+    mode this script exists to avoid.
+    """
+    if not (1 <= line_no <= len(lines_norm)):
+        return None, None
+    idx = line_no - 1
+    span = _find_nth_span(lines_norm[idx], before_norm, occurrence)
+    if span is None:
+        return None, None
+    return idx, span
+
+
 def apply_changes(payload, proof_base_text: str) -> tuple[dict | list, str]:
     """Apply eligible changes in `payload` to `proof_base_text`.
 
@@ -235,6 +272,28 @@ def apply_changes(payload, proof_base_text: str) -> tuple[dict | list, str]:
             annotated["applied"] = False
             annotated["skipReason"] = "no-match"
             entry["annotated"] = annotated
+            resolved.append(entry)
+            continue
+
+        occurrence = change.get("occurrence")
+        if isinstance(occurrence, int) and not isinstance(occurrence, bool) and occurrence >= 1:
+            # An upstream finder (must-catch.py's capped-word rule) already knows
+            # WHICH instance on this line it means, so skip the ambiguity check
+            # entirely and target that instance directly. Falls through to
+            # "no-match" (never a guess at another line) when the line doesn't
+            # actually have that many occurrences.
+            line_idx, span = _resolve_line_by_occurrence(lines_norm, line_no, before_norm, occurrence)
+            if line_idx is None or span is None:
+                annotated = dict(change)
+                annotated["applied"] = False
+                annotated["skipReason"] = "no-match"
+                entry["annotated"] = annotated
+                resolved.append(entry)
+                continue
+            entry["line_idx"] = line_idx
+            entry["span"] = span
+            entry["before_norm"] = before_norm
+            entry["after_norm"] = after_norm
             resolved.append(entry)
             continue
 

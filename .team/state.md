@@ -13,7 +13,8 @@ No `GOOGLE_API_KEY`, no hspell, no Codex CLI. Executors = Claude subagents (Sonn
 |---|---|---|
 | T8-recall | `../aw-wt-T8` / `ale/aw-refactor-2026-09-23/T8` | `src/cli/src/proofread.ts`, `src/cli/src/prompts/proofread-*.md`, `src/cli/tests/proofread.test.ts`, `src/scripts/must-catch.py`, `src/scripts/apply-changes.py`, `tests/test_must_catch.py`, `tests/test_apply_changes*.py`, `tests/test_proofread_*.py`, `evals/proofread-recall/*` (never `expected.json`), new `proofread*` keys in `src/thresholds.json` |
 | T14-review | `../aw-wt-T14` / `ale/aw-refactor-2026-09-23/T14` | `src/cli/src/main.ts`, `src/cli/src/decide.ts`, `src/scripts/gate.py`, `src/schemas/author-intent.schema.json`, `src/schemas/outline.schema.json`, `src/skills/write/*`, `src/skills/ideate/*`, `src/agents/architect.md`, `tests/test_gate_*.py`, `tests/test_architect_prompt.py`, `tests/test_plugin_structure.py`, `write*` keys in `src/thresholds.json` |
-| T15 | `../aw-wt-T15` / `ale/aw-refactor-2026-09-23/T15` (after T14 merges) | T15 labels + widening (see decisions) |
+| T15a | `../aw-wt-T15a` / `ale/aw-refactor-2026-09-23/T15a` | `src/cli/**`, `src/thresholds.json` (aw draft/synthesize/edit/ocr per `docs/refactor/handoff/T15-cli-contract.md`) |
+| T15b | `../aw-wt-T15b` / `ale/aw-refactor-2026-09-23/T15b` | everything else of T15: skills, agents, tests, build scripts, manifest, MCP retirement (not `src/cli/**`, `src/thresholds.json`, `src/hooks/**`, `docs/**`) |
 | lead | `refactor/aw-step-engine` | merges, `docs/refactor/*`, `.team/state.md`, release prep (T9/T13/T16) |
 
 Nobody hand-edits `plugins/`; it is regenerated with `npm run build` and committed.
@@ -21,8 +22,8 @@ Nobody hand-edits `plugins/`; it is regenerated with `npm run build` and committ
 ## Active work
 - [x] T8 base merged into integration (smoke gate fixes + hermetic CLI tests). Integration: smoke PASS, pytest 488 passed / 4 skipped, test:cli 27/27.
 - [ ] T8-recall: `כמו כן` positional disambiguation; wrong-word second finder pass (flag, default off, unmeasured).
-- [ ] T14: review vs spec-T14, merge integration in, fix gaps, acceptance.
-- [ ] T15: after T14 merges.
+- [x] T14: reviewed (subagent) + lead fix (outline-v2 without jsonschema); merged. Integration: pytest 498 passed / 4 skipped, test:cli 32/32, smoke PASS.
+- [ ] T15: split T15a (CLI) / T15b (skills+MCP retirement), running in parallel; lead merges both, then adds draft/synthesize/edit/ocr to the smoke gate.
 - [ ] T9/T13/T16: release prep 0.14.0, no `main`.
 
 ## Questions for the author

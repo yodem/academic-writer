@@ -12,9 +12,16 @@ def scan(text, styles, terms):
     lines = text.splitlines()
     changes = []
 
-    def add(kind, before, after, line):
-        changes.append({"id": "mc-%04d" % (len(changes) + 1), "class": kind, "before": before,
-                        "after": after, "line": line, "finder": "must-catch", "meaningRisk": "low", "mustCatch": True})
+    def add(kind, before, after, line, occurrence=None):
+        change = {"id": "mc-%04d" % (len(changes) + 1), "class": kind, "before": before,
+                  "after": after, "line": line, "finder": "must-catch", "meaningRisk": "low", "mustCatch": True}
+        if occurrence is not None:
+            # Nth (1-based) occurrence of `before` on this line. Set only when the
+            # same line can carry more than one instance of the flagged span (the
+            # capped-word rule below): apply-changes.py needs it to disambiguate
+            # which instance to touch instead of reporting skipReason="ambiguous-match".
+            change["occurrence"] = occurrence
+        changes.append(change)
 
     for item in terms.get("canon", []):
         for variant in item.get("variants", []):
@@ -39,11 +46,15 @@ def scan(text, styles, terms):
             if item["maxPer"] == "paragraph" and not line.strip():
                 count_by_unit.clear()
                 continue
-            for match in re.finditer(re.escape(item["word"]), line):
+            for line_occurrence, match in enumerate(re.finditer(re.escape(item["word"]), line), 1):
                 count_by_unit["count"] = count_by_unit.get("count", 0) + 1
                 if count_by_unit["count"] > item["max"]:
                     # Occurrences beyond the cap take the configured alternative, if any.
-                    add("style_words", match.group(), item.get("replacement"), index)
+                    # line_occurrence is this match's 1-based position among ALL
+                    # occurrences of the word on THIS line (not the cross-line cap
+                    # count), so a downstream applier can target exactly this one
+                    # even when an earlier, still-allowed occurrence shares the line.
+                    add("style_words", match.group(), item.get("replacement"), index, occurrence=line_occurrence)
     return changes
 
 
