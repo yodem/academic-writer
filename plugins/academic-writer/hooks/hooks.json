@@ -6,6 +6,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "USER_CONFIG_GOOGLE_API_KEY='${user_config.google_api_key}' USER_CONFIG_JEV_API_KEY='${user_config.jev_api_key}' node \"${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs\" lifecycle/session-env",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs\" lifecycle/session-dashboard",
             "timeout": 5,
             "statusMessage": "Loading Academic Writer dashboard..."

@@ -77,6 +77,80 @@
       "furnitureMinCount": 5,
       "furnitureCandidateMultiplier": 3
     },
-    "_comment": "dashReplacement is the default em/en-dash fix convention used by detect-ai-typography.py (values: hyphen|comma|colon|remove); overridable via --dash-replacement. topFrequentTermsCount/minTermLength configure extract-style-metrics.py's frequentTerms extraction. furnitureMaxWords/furnitureShare/furnitureMinCount drop structural furniture (table-of-contents lines and section headers) from frequentTerms: a term is furniture when at least furnitureShare of its occurrences fall in paragraphs of at most furnitureMaxWords words and it occurs at least furnitureMinCount times. Calibrated on a real 10-file corpus of 857 paragraphs with a 38-word median: the author's own name sits in 5-word ToC lines and scores 96%, subject vocabulary scores 3%, and the highest-scoring term that is kept scores 73% \u2014 so the 0.8 cutoff has margin on both sides. Only terms in contention for the reported list are judged \u2014 the top topFrequentTermsCount * furnitureCandidateMultiplier by raw count \u2014 because a share computed over a handful of occurrences has no resolution: \u05d1\u05f3 and \u05d0\u05f3, the same token doing the same job in the same two files, scored 0.80 and 0.50 on five and seven observations and split. Replaces a front-matter rule that inspected the first N paragraphs of each file and never fired, because these headers repeat throughout a document rather than opening it."
+    "_comment": "dashReplacement is the default em/en-dash fix convention used by detect-ai-typography.py (values: hyphen|comma|colon|remove); overridable via --dash-replacement. topFrequentTermsCount/minTermLength configure extract-style-metrics.py's frequentTerms extraction. furnitureMaxWords/furnitureShare/furnitureMinCount drop structural furniture (table-of-contents lines and section headers) from frequentTerms: a term is furniture when at least furnitureShare of its occurrences fall in paragraphs of at most furnitureMaxWords words and it occurs at least furnitureMinCount times. Calibrated on a real 10-file corpus of 857 paragraphs with a 38-word median: the author's own name sits in 5-word ToC lines and scores 96%, subject vocabulary scores 3%, and the highest-scoring term that is kept scores 73% — so the 0.8 cutoff has margin on both sides. Only terms in contention for the reported list are judged — the top topFrequentTermsCount * furnitureCandidateMultiplier by raw count — because a share computed over a handful of occurrences has no resolution: ב׳ and א׳, the same token doing the same job in the same two files, scored 0.80 and 0.50 on five and seven observations and split. Replaces a front-matter rule that inspected the first N paragraphs of each file and never fired, because these headers repeat throughout a document rather than opening it."
+  },
+  "models": {
+    "proofread.find": {
+      "provider": "gemini",
+      "model": "gemini-3.8-flash",
+      "maxOutputTokens": 8192,
+      "concurrency": 1
+    },
+    "proofread.verify": {
+      "provider": "gemini",
+      "model": "gemini-3.8-flash",
+      "maxOutputTokens": 8192,
+      "concurrency": 1
+    },
+    "proofread.memo": {
+      "provider": "gemini",
+      "model": "gemini-3.8-flash",
+      "maxOutputTokens": 8192,
+      "concurrency": 1
+    },
+    "evidence.extract": {
+      "provider": "gemini",
+      "model": "gemini-3.8-flash",
+      "maxOutputTokens": 8192,
+      "concurrency": 1
+    },
+    "write.draft": {
+      "provider": "gemini",
+      "model": "gemini-3.8-flash",
+      "maxOutputTokens": 8192,
+      "concurrency": 1
+    },
+    "write.synthesize": {
+      "provider": "gemini",
+      "model": "gemini-3.8-flash",
+      "maxOutputTokens": 8192,
+      "concurrency": 1
+    },
+    "voice.moves": {
+      "provider": "gemini",
+      "model": "gemini-3.8-flash",
+      "maxOutputTokens": 8192,
+      "concurrency": 1
+    },
+    "revise.classify": {
+      "provider": "gemini",
+      "model": "gemini-3.8-flash",
+      "maxOutputTokens": 8192,
+      "concurrency": 1
+    },
+    "ocr": {
+      "provider": "gemini",
+      "model": "gemini-3.8-flash",
+      "maxOutputTokens": 8192,
+      "concurrency": 1
+    },
+    "edit": {
+      "provider": "gemini",
+      "model": "gemini-3.8-flash",
+      "maxOutputTokens": 8192,
+      "concurrency": 1
+    }
+  },
+  "budget": {
+    "proofread": {
+      "maxTokens": 1000000,
+      "maxUsd": 0.50,
+      "_comment": "Token ceiling comfortably covers a long proofread run; the USD ceiling is the primary cost guard."
+    },
+    "write": {
+      "maxTokens": 5000000,
+      "maxUsd": 3.00,
+      "_comment": "Token ceiling covers multi-section drafting; the USD ceiling is the primary cost guard."
+    }
   }
 }

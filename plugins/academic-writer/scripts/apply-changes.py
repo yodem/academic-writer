@@ -116,6 +116,10 @@ class AmbiguousMatch(Exception):
     """Raised internally when `before` occurs more than once on a resolved line."""
 
 
+class AnchorAmbiguous(Exception):
+    """Raised when equally near source lines contain the anchor."""
+
+
 def _match_on_line(lines_norm: list[str], idx: int, before_norm: str) -> Optional[tuple[int, int]]:
     """Try the three-step context-anchored chain (exact, trimmed-line-ending,
     whitespace-trimmed) against a single 0-based line index. Returns the
@@ -200,7 +204,8 @@ def apply_changes(payload, proof_base_text: str) -> tuple[dict | list, str]:
 
         # Pass through any skip already decided upstream (citation-guard,
         # refuted) untouched.
-        if change.get("applied") is False and change.get("skipReason") in (
+        must_catch = change.get("mustCatch") is True
+        if not must_catch and change.get("applied") is False and change.get("skipReason") in (
             "citation-guard",
             "refuted",
         ):
@@ -216,7 +221,7 @@ def apply_changes(payload, proof_base_text: str) -> tuple[dict | list, str]:
             resolved.append(entry)
             continue
 
-        if meaning_risk in ("medium", "high"):
+        if not must_catch and meaning_risk in ("medium", "high"):
             annotated = dict(change)
             annotated["applied"] = False
             annotated["skipReason"] = "meaning-risk"
@@ -234,11 +239,37 @@ def apply_changes(payload, proof_base_text: str) -> tuple[dict | list, str]:
             continue
 
         try:
-            line_idx, span = _resolve_line(lines_norm, line_no, before_norm)
+            # Preserve the established same-line duplicate diagnostic.
+            try:
+                _match_on_line(lines_norm, line_no - 1, before_norm)
+            except AmbiguousMatch:
+                raise AmbiguousMatch()
+            candidates = []
+            for candidate_line in range(max(1, line_no - 3), min(len(lines_norm), line_no + 3) + 1):
+                try:
+                    candidate_span = _match_on_line(lines_norm, candidate_line - 1, before_norm)
+                except AmbiguousMatch:
+                    candidate_span = None
+                if candidate_span is not None:
+                    candidates.append((abs(candidate_line - line_no), candidate_line - 1, candidate_span))
+            if not candidates:
+                line_idx, span = None, None
+            else:
+                candidates.sort(key=lambda item: item[0])
+                if len(candidates) > 1 and candidates[0][0] == candidates[1][0]:
+                    raise AnchorAmbiguous()
+                _, line_idx, span = candidates[0]
         except AmbiguousMatch:
             annotated = dict(change)
             annotated["applied"] = False
             annotated["skipReason"] = "ambiguous-match"
+            entry["annotated"] = annotated
+            resolved.append(entry)
+            continue
+        except AnchorAmbiguous:
+            annotated = dict(change)
+            annotated["applied"] = False
+            annotated["skipReason"] = "ambiguous-anchor"
             entry["annotated"] = annotated
             resolved.append(entry)
             continue

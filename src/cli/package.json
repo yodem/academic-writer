@@ -1,0 +1,19 @@
+{
+  "name": "academic-writer-cli",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node build-tests.mjs && node --test 'dist-test/**/*.test.mjs'",
+    "build": "node esbuild.config.mjs",
+    "build:tests": "node build-tests.mjs"
+  },
+  "dependencies": {
+    "@google/genai": "^1.52.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  }
+}

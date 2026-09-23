@@ -161,6 +161,17 @@ else
   exit 1
 fi
 
+# Build the standalone academic-writer CLI.
+echo -e "${BLUE}Building aw CLI...${NC}"
+if [[ -f "$SRC_DIR/cli/package.json" ]]; then
+  cd "$SRC_DIR/cli"
+  node esbuild.config.mjs
+  cd "$PROJECT_ROOT"
+else
+  echo -e "${RED}  CLI package.json missing${NC}"
+  exit 1
+fi
+
 # Phase 5: Validate
 echo -e "${BLUE}[6/7] Validating...${NC}"
 errors=0
