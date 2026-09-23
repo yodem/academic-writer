@@ -177,10 +177,22 @@
       "maxUsd": 0.1,
       "_comment": "One call to derive qualitative voice moves."
     },
+    "revise": {
+      "maxTokens": 100000,
+      "maxUsd": 0.25,
+      "_comment": "One bounded classification pass for author review items."
+    },
     "jev": {
       "maxTokens": 100000,
       "maxUsd": 0.25
     }
+  },
+  "awImprove": {
+    "defectSimilarity": 0.5,
+    "clusterMinimum": 2,
+    "maxExamples": 5,
+    "jevRoster": { "labels": 100, "agreement": 0.8, "instability": 0.1 },
+    "_comment": "Development-only defect clustering and Jev roster thresholds."
   },
   "jev": {
     "model": "jev-1.13.0",

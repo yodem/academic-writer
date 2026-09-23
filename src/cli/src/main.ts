@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { stepIds } from './routing.ts';
 import { voiceBundle, voiceCandidates, voiceMigrate, voiceMoves, voiceSync } from './voice.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
+import { classify, applyPlan, type RevisePlan } from './revise.ts';
 
 const args = setPathArguments(process.argv.slice(2));
 const [command, subcommand, runId] = args;
@@ -18,6 +19,18 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
   } catch (error) { process.stderr.write(`${error instanceof Error && error.message.startsWith('ERROR:') ? error.message : `ERROR ledger: missing run ${runId}`}\n`); process.exitCode = error instanceof Error && error.message.startsWith('ERROR:') ? 3 : 2; }
 } else if (command === 'models' && subcommand === 'check') {
   process.stdout.write(`Configured Gemini steps: ${stepIds.join(', ')}\nLive model verification requires GOOGLE_API_KEY.\n`);
+} else if (command === 'revise') {
+  try {
+    dataDir(); projectDir();
+    const fileArg = args[args.indexOf(subcommand === 'classify' ? '--items' : '--plan') + 1];
+    if (!fileArg) throw new Error('ERROR revise: --items/--plan path required');
+    const input = JSON.parse(readFileSync(fileArg, 'utf8')) as unknown;
+    if (subcommand === 'classify') {
+      if (!Array.isArray(input)) throw new Error('ERROR revise.classify: items must be an array');
+      process.stdout.write(`${JSON.stringify(await classify(input, args[args.indexOf('--run') + 1] ?? 'revise'))}\n`);
+    } else if (subcommand === 'apply') process.stdout.write(`${JSON.stringify(await applyPlan(input as RevisePlan))}\n`);
+    else throw new Error('ERROR revise: expected classify or apply');
+  } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : 'ERROR revise: unknown failure'}\n`); process.exitCode = 2; }
 } else if (command === 'voice') {
   try {
     dataDir();

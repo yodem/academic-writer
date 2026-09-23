@@ -575,6 +575,34 @@
           "status": "ok"
         }
       ]
+    },
+    {
+      "id": "docx-revise-loop",
+      "name": "Word review loop and feedback learning",
+      "sources": [
+        "src/skills/revise/SKILL.md",
+        "src/cli/src/revise.ts",
+        "src/scripts/docx-read-review.py",
+        "scripts/aw-improve-report.py"
+      ],
+      "status": "ok",
+      "subfeatures": [
+        {
+          "id": "docx-review-read",
+          "name": "Read Word comments and tracked changes",
+          "status": "ok"
+        },
+        {
+          "id": "revise-classify-apply",
+          "name": "Classify and apply author-confirmed review items",
+          "status": "ok"
+        },
+        {
+          "id": "aw-improve",
+          "name": "Cluster plugin defects and report Jev agreement",
+          "status": "ok"
+        }
+      ]
     }
   ]
 }

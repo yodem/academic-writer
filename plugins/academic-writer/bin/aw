@@ -38,6 +38,253 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
+// ../thresholds.json
+var thresholds_exports = {};
+__export(thresholds_exports, {
+  default: () => thresholds_default
+});
+var thresholds_default;
+var init_thresholds = __esm({
+  "../thresholds.json"() {
+    thresholds_default = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      description: "Single source of truth for all numeric quality gates (self-review, rewrite limits, paragraph/unit word bounds, style-fingerprint compliance, voice rule-coverage/corpus minimums, typography). Edit here; every skill and agent references this file. Gemini model/thinking-budget defaults and retry policy are NOT read from here \u2014 they live in SPEC_DEFAULTS in plugins/academic-writer/mcp/gemini-server/src/gemini-client.ts (overridable per-project via profile.md), and the retry constants are hardcoded in that same file. The antiAi block was REMOVED in 0.9.0: nothing computed that score, so it was the drafting model rating its own unrevised draft, and it measured a flat maximum on every paragraph of a live 13-unit run while the auditor failed several of the same paragraphs. Anti-AI patterns are now writing guidance (write/references/anti-ai-patterns-*.md), not a scored gate; the auditor's VERDICT is the per-paragraph gate.",
+      selfReview: {
+        minScore: 40,
+        maxScore: 60,
+        passThreshold: 40,
+        _comment: "Articles scoring below 40/60 trigger researcher review before final output. 6 dimensions x 10 points each."
+      },
+      rewriteCycles: {
+        max: 3,
+        _comment: "Maximum number of times a paragraph can be rewritten before being included with [NEEDS REVIEW]."
+      },
+      paragraph: {
+        wordCeiling: 220,
+        wordCeilingIntroConclusionBonus: 30,
+        _comment: "Soft word ceiling per paragraph. Introduction and conclusion paragraphs may exceed by wordCeilingIntroConclusionBonus words."
+      },
+      writerUnit: {
+        targetWords: 500,
+        minWords: 300,
+        maxWords: 800,
+        _comment: "Min/target/max word bounds for a 'writer unit' \u2014 the leaf-level chunk that gets exactly one section-writer subagent. Sections whose word count exceeds maxWords must be decomposed by the architect into multiple writer-unit subsections (an outline `units` array); adjacent subsections under minWords should be merged into one unit rather than left tiny."
+      },
+      styleFingerprint: {
+        passThreshold: 7,
+        maxScore: 10,
+        _comment: "Per-dimension style compliance score. Below 7 triggers paragraph adjustment."
+      },
+      voice: {
+        ruleCoverage: {
+          pass: 8,
+          warn: 6,
+          block: 6
+        },
+        corpus: {
+          minArticles: 3,
+          minTotalWords: 1500,
+          minWordsPerArticle: 800
+        },
+        exemplars: {
+          count: 4,
+          minWords: 40,
+          maxWords: 150,
+          maxPerFile: 1,
+          _comment: "src/scripts/extract-voice-exemplars.py: how many real paragraphs from past-articles/ are shown to Gemini as few-shot voice examples, their word bounds, and at most maxPerFile per source article so no single paper dominates the voice. Measured 2026-09-15 on the author's finished Hebrew papers: mean paragraph 97-134 words, so 40-150 keeps typical body paragraphs and drops headings and footnote-length fragments (a whole-folder corpus reads shorter because course reflections pull the mean down). Gemini guidance: 2-5 examples; more rarely helps."
+        },
+        bundle: {
+          exemplars: 6,
+          pairs: 2,
+          maxPerSource: 1,
+          maxRuleLines: 40
+        },
+        selection: {
+          min: 12,
+          max: 20
+        }
+      },
+      proofread: {
+        chunkWords: 1200,
+        maxPasses: 3,
+        dryRounds: 2,
+        concurrencyCap: 6,
+        refuteVotes: 3,
+        refuteMajority: 2,
+        refuteBudgetPerChunk: 12,
+        jevShadow: {
+          enabled: false,
+          flagScore: 1.5,
+          model: "jev-1.13.0",
+          _comment: "Opt-in (sends change text to TypeSafe AI); flagScore was fitted 2026-09-19 on 177 Hebrew edits from one article, where every edit labelled low scored \u2264 1.13 and every edit labelled medium or high scored \u2265 1.96 (agreement with the copyeditor LLM, not accuracy); shadow only. Script: src/scripts/jev-risk-shadow.py."
+        },
+        _comment: "Proofread pipeline caps, enforced in src/workflows/proofread.js from args.thresholds (WRK-14). chunkWords bounds one finder chunk; the mechanical loop exits 'converged' after dryRounds consecutive rounds with no fresh change, or 'cap-reached' at maxPasses. refuteVotes lenses verify each candidate change and refuteMajority of them refuting DOWNGRADES it to applied:false with skipReason 'refuted' \u2014 it is never dropped from the output (proofread.js:14-18, :305). refuteBudgetPerChunk caps how many changes per chunk are sent for refute-verification at all. Verification is batched: each lens (language) or vote (mechanical) judges all of a chunk's budgeted changes in ONE call, so verify calls are refuteVotes per chunk regardless of finding count (a live run spent ~9.7M of 13.5M tokens when it was one call per change per lens); the budget now bounds how many changes one call must judge, and glyph-only mechanical changes (gershayim/geresh/whitespace) are upheld by code and spend none of it. Changes beyond the budget are carried with skipReason 'refute-budget-exhausted' \u2014 downgraded, never dropped \u2014 and the budget is spent highest-meaningRisk first."
+      },
+      citationFloor: {
+        minSecondaryPer1000Words: 4,
+        minSecondaryTotal: 8,
+        _comment: "VER-18 absence gate, enforced by src/scripts/gate.py citation-floor. The per-paragraph auditor is a PRESENCE check \u2014 it verifies that claims which ARE cited are cited correctly, and is structurally blind to a paragraph that cites nothing. Absence needs its own counting gate, and the count is arithmetic, not judgement (TST-02). Only SECONDARY citations count toward the floor: primary sources stay inline in this field, so a raw citation count reads healthy on an article carrying almost no scholarly engagement. minSecondaryPer1000Words is the rate floor, minSecondaryTotal the absolute floor that keeps a very short article from passing on rate alone. The gate FAILS if EITHER floor is breached."
+      },
+      typography: {
+        dashReplacement: "hyphen",
+        styleMetrics: {
+          topFrequentTermsCount: 30,
+          minTermLength: 2,
+          furnitureMaxWords: 10,
+          furnitureShare: 0.8,
+          furnitureMinCount: 5,
+          furnitureCandidateMultiplier: 3
+        },
+        _comment: "dashReplacement is the default em/en-dash fix convention used by detect-ai-typography.py (values: hyphen|comma|colon|remove); overridable via --dash-replacement. topFrequentTermsCount/minTermLength configure extract-style-metrics.py's frequentTerms extraction. furnitureMaxWords/furnitureShare/furnitureMinCount drop structural furniture (table-of-contents lines and section headers) from frequentTerms: a term is furniture when at least furnitureShare of its occurrences fall in paragraphs of at most furnitureMaxWords words and it occurs at least furnitureMinCount times. Calibrated on a real 10-file corpus of 857 paragraphs with a 38-word median: the author's own name sits in 5-word ToC lines and scores 96%, subject vocabulary scores 3%, and the highest-scoring term that is kept scores 73% \u2014 so the 0.8 cutoff has margin on both sides. Only terms in contention for the reported list are judged \u2014 the top topFrequentTermsCount * furnitureCandidateMultiplier by raw count \u2014 because a share computed over a handful of occurrences has no resolution: \u05D1\u05F3 and \u05D0\u05F3, the same token doing the same job in the same two files, scored 0.80 and 0.50 on five and seven observations and split. Replaces a front-matter rule that inspected the first N paragraphs of each file and never fired, because these headers repeat throughout a document rather than opening it."
+      },
+      models: {
+        "proofread.find": {
+          provider: "gemini",
+          model: "gemini-3.8-flash",
+          maxOutputTokens: 8192,
+          concurrency: 1,
+          piModel: "openrouter/z-ai/glm-5.3"
+        },
+        "proofread.verify": {
+          provider: "gemini",
+          model: "gemini-3.8-flash",
+          maxOutputTokens: 8192,
+          concurrency: 1,
+          piModel: "openrouter/z-ai/glm-5.3"
+        },
+        "proofread.memo": {
+          provider: "gemini",
+          model: "gemini-3.8-flash",
+          maxOutputTokens: 8192,
+          concurrency: 1,
+          piModel: "openrouter/z-ai/glm-5.3"
+        },
+        "evidence.extract": {
+          provider: "gemini",
+          model: "gemini-3.8-flash",
+          maxOutputTokens: 8192,
+          concurrency: 1,
+          piModel: "openrouter/z-ai/glm-5.3"
+        },
+        "write.draft": {
+          provider: "gemini",
+          model: "gemini-3.8-flash",
+          maxOutputTokens: 8192,
+          concurrency: 1,
+          piModel: "openrouter/z-ai/glm-5.3"
+        },
+        "write.synthesize": {
+          provider: "gemini",
+          model: "gemini-3.8-flash",
+          maxOutputTokens: 8192,
+          concurrency: 1,
+          piModel: "openrouter/z-ai/glm-5.3"
+        },
+        "voice.moves": {
+          provider: "gemini",
+          model: "gemini-3.8-flash",
+          maxOutputTokens: 8192,
+          concurrency: 1,
+          piModel: "openrouter/z-ai/glm-5.3"
+        },
+        "revise.classify": {
+          provider: "gemini",
+          model: "gemini-3.8-flash",
+          maxOutputTokens: 8192,
+          concurrency: 1,
+          piModel: "openrouter/z-ai/glm-5.3"
+        },
+        ocr: {
+          provider: "gemini",
+          model: "gemini-3.8-flash",
+          maxOutputTokens: 8192,
+          concurrency: 1,
+          piModel: "openrouter/z-ai/glm-5.3"
+        },
+        edit: {
+          provider: "gemini",
+          model: "gemini-3.8-flash",
+          maxOutputTokens: 8192,
+          concurrency: 1,
+          piModel: "openrouter/z-ai/glm-5.3"
+        }
+      },
+      budget: {
+        proofread: {
+          maxTokens: 1e6,
+          maxUsd: 0.5,
+          _comment: "Token ceiling comfortably covers a long proofread run; the USD ceiling is the primary cost guard."
+        },
+        write: {
+          maxTokens: 5e6,
+          maxUsd: 3,
+          _comment: "Token ceiling covers multi-section drafting; the USD ceiling is the primary cost guard."
+        },
+        voiceMoves: {
+          maxTokens: 5e4,
+          maxUsd: 0.1,
+          _comment: "One call to derive qualitative voice moves."
+        },
+        revise: {
+          maxTokens: 1e5,
+          maxUsd: 0.25,
+          _comment: "One bounded classification pass for author review items."
+        },
+        jev: {
+          maxTokens: 1e5,
+          maxUsd: 0.25
+        }
+      },
+      awImprove: {
+        defectSimilarity: 0.5,
+        clusterMinimum: 2,
+        maxExamples: 5,
+        jevRoster: { labels: 100, agreement: 0.8, instability: 0.1 },
+        _comment: "Development-only defect clustering and Jev roster thresholds."
+      },
+      jev: {
+        model: "jev-1.13.0",
+        threshold: 0.75,
+        points: {
+          "proofread.verify": {
+            mode: "shadow"
+          },
+          "proofread.triage": {
+            mode: "shadow"
+          },
+          "revise.classify": {
+            mode: "shadow"
+          },
+          "evidence.relevance": {
+            mode: "shadow"
+          },
+          "outline.support": {
+            mode: "shadow"
+          },
+          "write.audit_prescreen": {
+            mode: "shadow"
+          },
+          "write.voice_check": {
+            mode: "shadow"
+          },
+          "synthesize.needs_bridge": {
+            mode: "shadow"
+          },
+          "style.filler": {
+            mode: "shadow"
+          }
+        },
+        yesProbability: 0.5,
+        scoreMaximum: 3
+      },
+      judge: {
+        validationAttempts: 2
+      },
+      _piModelNote: "piModel = OpenRouter model for the isolated Pi judge. Must be a non-Claude, non-Gemini family (cross-family verification); taken from the author's Pi model roster (executor tier, machine-config/pi/model-roster.json). Runs in shadow until the Hebrew fixture shows parity."
+    };
+  }
+});
+
 // ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/retry/lib/retry_operation.js
 var require_retry_operation = __commonJS({
   "../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/retry/lib/retry_operation.js"(exports, module) {
@@ -8980,9 +9227,9 @@ Content-Type: ${partContentType}\r
        * @param append headers to append/overwrite with
        * @returns the base headers instance with merged `Headers`
        */
-      static mergeHeaders(base, ...append) {
+      static mergeHeaders(base, ...append2) {
         base = base instanceof Headers ? base : new Headers(base);
-        for (const headers of append) {
+        for (const headers of append2) {
           const add = headers instanceof Headers ? headers : new Headers(headers);
           add.forEach((value, key) => {
             key === "set-cookie" ? base.append(key, value) : base.set(key, value);
@@ -22420,236 +22667,11 @@ function projectDir() {
 }
 
 // src/main.ts
-import { readFileSync as readFileSync2 } from "node:fs";
-import { join as join3 } from "node:path";
-
-// ../thresholds.json
-var thresholds_default = {
-  $schema: "https://json-schema.org/draft/2020-12/schema",
-  description: "Single source of truth for all numeric quality gates (self-review, rewrite limits, paragraph/unit word bounds, style-fingerprint compliance, voice rule-coverage/corpus minimums, typography). Edit here; every skill and agent references this file. Gemini model/thinking-budget defaults and retry policy are NOT read from here \u2014 they live in SPEC_DEFAULTS in plugins/academic-writer/mcp/gemini-server/src/gemini-client.ts (overridable per-project via profile.md), and the retry constants are hardcoded in that same file. The antiAi block was REMOVED in 0.9.0: nothing computed that score, so it was the drafting model rating its own unrevised draft, and it measured a flat maximum on every paragraph of a live 13-unit run while the auditor failed several of the same paragraphs. Anti-AI patterns are now writing guidance (write/references/anti-ai-patterns-*.md), not a scored gate; the auditor's VERDICT is the per-paragraph gate.",
-  selfReview: {
-    minScore: 40,
-    maxScore: 60,
-    passThreshold: 40,
-    _comment: "Articles scoring below 40/60 trigger researcher review before final output. 6 dimensions x 10 points each."
-  },
-  rewriteCycles: {
-    max: 3,
-    _comment: "Maximum number of times a paragraph can be rewritten before being included with [NEEDS REVIEW]."
-  },
-  paragraph: {
-    wordCeiling: 220,
-    wordCeilingIntroConclusionBonus: 30,
-    _comment: "Soft word ceiling per paragraph. Introduction and conclusion paragraphs may exceed by wordCeilingIntroConclusionBonus words."
-  },
-  writerUnit: {
-    targetWords: 500,
-    minWords: 300,
-    maxWords: 800,
-    _comment: "Min/target/max word bounds for a 'writer unit' \u2014 the leaf-level chunk that gets exactly one section-writer subagent. Sections whose word count exceeds maxWords must be decomposed by the architect into multiple writer-unit subsections (an outline `units` array); adjacent subsections under minWords should be merged into one unit rather than left tiny."
-  },
-  styleFingerprint: {
-    passThreshold: 7,
-    maxScore: 10,
-    _comment: "Per-dimension style compliance score. Below 7 triggers paragraph adjustment."
-  },
-  voice: {
-    ruleCoverage: {
-      pass: 8,
-      warn: 6,
-      block: 6
-    },
-    corpus: {
-      minArticles: 3,
-      minTotalWords: 1500,
-      minWordsPerArticle: 800
-    },
-    exemplars: {
-      count: 4,
-      minWords: 40,
-      maxWords: 150,
-      maxPerFile: 1,
-      _comment: "src/scripts/extract-voice-exemplars.py: how many real paragraphs from past-articles/ are shown to Gemini as few-shot voice examples, their word bounds, and at most maxPerFile per source article so no single paper dominates the voice. Measured 2026-09-15 on the author's finished Hebrew papers: mean paragraph 97-134 words, so 40-150 keeps typical body paragraphs and drops headings and footnote-length fragments (a whole-folder corpus reads shorter because course reflections pull the mean down). Gemini guidance: 2-5 examples; more rarely helps."
-    },
-    bundle: {
-      exemplars: 6,
-      pairs: 2,
-      maxPerSource: 1,
-      maxRuleLines: 40
-    },
-    selection: {
-      min: 12,
-      max: 20
-    }
-  },
-  proofread: {
-    chunkWords: 1200,
-    maxPasses: 3,
-    dryRounds: 2,
-    concurrencyCap: 6,
-    refuteVotes: 3,
-    refuteMajority: 2,
-    refuteBudgetPerChunk: 12,
-    jevShadow: {
-      enabled: false,
-      flagScore: 1.5,
-      model: "jev-1.13.0",
-      _comment: "Opt-in (sends change text to TypeSafe AI); flagScore was fitted 2026-09-19 on 177 Hebrew edits from one article, where every edit labelled low scored \u2264 1.13 and every edit labelled medium or high scored \u2265 1.96 (agreement with the copyeditor LLM, not accuracy); shadow only. Script: src/scripts/jev-risk-shadow.py."
-    },
-    _comment: "Proofread pipeline caps, enforced in src/workflows/proofread.js from args.thresholds (WRK-14). chunkWords bounds one finder chunk; the mechanical loop exits 'converged' after dryRounds consecutive rounds with no fresh change, or 'cap-reached' at maxPasses. refuteVotes lenses verify each candidate change and refuteMajority of them refuting DOWNGRADES it to applied:false with skipReason 'refuted' \u2014 it is never dropped from the output (proofread.js:14-18, :305). refuteBudgetPerChunk caps how many changes per chunk are sent for refute-verification at all. Verification is batched: each lens (language) or vote (mechanical) judges all of a chunk's budgeted changes in ONE call, so verify calls are refuteVotes per chunk regardless of finding count (a live run spent ~9.7M of 13.5M tokens when it was one call per change per lens); the budget now bounds how many changes one call must judge, and glyph-only mechanical changes (gershayim/geresh/whitespace) are upheld by code and spend none of it. Changes beyond the budget are carried with skipReason 'refute-budget-exhausted' \u2014 downgraded, never dropped \u2014 and the budget is spent highest-meaningRisk first."
-  },
-  citationFloor: {
-    minSecondaryPer1000Words: 4,
-    minSecondaryTotal: 8,
-    _comment: "VER-18 absence gate, enforced by src/scripts/gate.py citation-floor. The per-paragraph auditor is a PRESENCE check \u2014 it verifies that claims which ARE cited are cited correctly, and is structurally blind to a paragraph that cites nothing. Absence needs its own counting gate, and the count is arithmetic, not judgement (TST-02). Only SECONDARY citations count toward the floor: primary sources stay inline in this field, so a raw citation count reads healthy on an article carrying almost no scholarly engagement. minSecondaryPer1000Words is the rate floor, minSecondaryTotal the absolute floor that keeps a very short article from passing on rate alone. The gate FAILS if EITHER floor is breached."
-  },
-  typography: {
-    dashReplacement: "hyphen",
-    styleMetrics: {
-      topFrequentTermsCount: 30,
-      minTermLength: 2,
-      furnitureMaxWords: 10,
-      furnitureShare: 0.8,
-      furnitureMinCount: 5,
-      furnitureCandidateMultiplier: 3
-    },
-    _comment: "dashReplacement is the default em/en-dash fix convention used by detect-ai-typography.py (values: hyphen|comma|colon|remove); overridable via --dash-replacement. topFrequentTermsCount/minTermLength configure extract-style-metrics.py's frequentTerms extraction. furnitureMaxWords/furnitureShare/furnitureMinCount drop structural furniture (table-of-contents lines and section headers) from frequentTerms: a term is furniture when at least furnitureShare of its occurrences fall in paragraphs of at most furnitureMaxWords words and it occurs at least furnitureMinCount times. Calibrated on a real 10-file corpus of 857 paragraphs with a 38-word median: the author's own name sits in 5-word ToC lines and scores 96%, subject vocabulary scores 3%, and the highest-scoring term that is kept scores 73% \u2014 so the 0.8 cutoff has margin on both sides. Only terms in contention for the reported list are judged \u2014 the top topFrequentTermsCount * furnitureCandidateMultiplier by raw count \u2014 because a share computed over a handful of occurrences has no resolution: \u05D1\u05F3 and \u05D0\u05F3, the same token doing the same job in the same two files, scored 0.80 and 0.50 on five and seven observations and split. Replaces a front-matter rule that inspected the first N paragraphs of each file and never fired, because these headers repeat throughout a document rather than opening it."
-  },
-  models: {
-    "proofread.find": {
-      provider: "gemini",
-      model: "gemini-3.8-flash",
-      maxOutputTokens: 8192,
-      concurrency: 1,
-      piModel: "openrouter/z-ai/glm-5.3"
-    },
-    "proofread.verify": {
-      provider: "gemini",
-      model: "gemini-3.8-flash",
-      maxOutputTokens: 8192,
-      concurrency: 1,
-      piModel: "openrouter/z-ai/glm-5.3"
-    },
-    "proofread.memo": {
-      provider: "gemini",
-      model: "gemini-3.8-flash",
-      maxOutputTokens: 8192,
-      concurrency: 1,
-      piModel: "openrouter/z-ai/glm-5.3"
-    },
-    "evidence.extract": {
-      provider: "gemini",
-      model: "gemini-3.8-flash",
-      maxOutputTokens: 8192,
-      concurrency: 1,
-      piModel: "openrouter/z-ai/glm-5.3"
-    },
-    "write.draft": {
-      provider: "gemini",
-      model: "gemini-3.8-flash",
-      maxOutputTokens: 8192,
-      concurrency: 1,
-      piModel: "openrouter/z-ai/glm-5.3"
-    },
-    "write.synthesize": {
-      provider: "gemini",
-      model: "gemini-3.8-flash",
-      maxOutputTokens: 8192,
-      concurrency: 1,
-      piModel: "openrouter/z-ai/glm-5.3"
-    },
-    "voice.moves": {
-      provider: "gemini",
-      model: "gemini-3.8-flash",
-      maxOutputTokens: 8192,
-      concurrency: 1,
-      piModel: "openrouter/z-ai/glm-5.3"
-    },
-    "revise.classify": {
-      provider: "gemini",
-      model: "gemini-3.8-flash",
-      maxOutputTokens: 8192,
-      concurrency: 1,
-      piModel: "openrouter/z-ai/glm-5.3"
-    },
-    ocr: {
-      provider: "gemini",
-      model: "gemini-3.8-flash",
-      maxOutputTokens: 8192,
-      concurrency: 1,
-      piModel: "openrouter/z-ai/glm-5.3"
-    },
-    edit: {
-      provider: "gemini",
-      model: "gemini-3.8-flash",
-      maxOutputTokens: 8192,
-      concurrency: 1,
-      piModel: "openrouter/z-ai/glm-5.3"
-    }
-  },
-  budget: {
-    proofread: {
-      maxTokens: 1e6,
-      maxUsd: 0.5,
-      _comment: "Token ceiling comfortably covers a long proofread run; the USD ceiling is the primary cost guard."
-    },
-    write: {
-      maxTokens: 5e6,
-      maxUsd: 3,
-      _comment: "Token ceiling covers multi-section drafting; the USD ceiling is the primary cost guard."
-    },
-    voiceMoves: {
-      maxTokens: 5e4,
-      maxUsd: 0.1,
-      _comment: "One call to derive qualitative voice moves."
-    },
-    jev: {
-      maxTokens: 1e5,
-      maxUsd: 0.25
-    }
-  },
-  jev: {
-    model: "jev-1.13.0",
-    threshold: 0.75,
-    points: {
-      "proofread.verify": {
-        mode: "shadow"
-      },
-      "proofread.triage": {
-        mode: "shadow"
-      },
-      "revise.classify": {
-        mode: "shadow"
-      },
-      "evidence.relevance": {
-        mode: "shadow"
-      },
-      "outline.support": {
-        mode: "shadow"
-      },
-      "write.audit_prescreen": {
-        mode: "shadow"
-      },
-      "write.voice_check": {
-        mode: "shadow"
-      },
-      "synthesize.needs_bridge": {
-        mode: "shadow"
-      },
-      "style.filler": {
-        mode: "shadow"
-      }
-    },
-    yesProbability: 0.5,
-    scoreMaximum: 3
-  },
-  judge: {
-    validationAttempts: 2
-  },
-  _piModelNote: "piModel = OpenRouter model for the isolated Pi judge. Must be a non-Claude, non-Gemini family (cross-family verification); taken from the author's Pi model roster (executor tier, machine-config/pi/model-roster.json). Runs in shadow until the Hebrew fixture shows parity."
-};
+import { readFileSync as readFileSync3 } from "node:fs";
+import { join as join5 } from "node:path";
 
 // src/routing.ts
+init_thresholds();
 var stepIds = ["proofread.find", "proofread.verify", "proofread.memo", "evidence.extract", "write.draft", "write.synthesize", "voice.moves", "revise.classify", "ocr", "edit"];
 var modelTable = thresholds_default.models;
 function routeFor(step) {
@@ -22659,7 +22681,7 @@ function routeFor(step) {
 }
 
 // src/voice.ts
-import { existsSync, mkdirSync as mkdirSync2, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { appendFileSync as appendFileSync2, existsSync, mkdirSync as mkdirSync2, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join as join2, resolve as resolve2, basename as basename3 } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -40779,9 +40801,21 @@ async function callGemini(req) {
 }
 
 // src/voice.ts
+init_thresholds();
 var dataOverride;
 function store() {
   return join2(dataOverride ?? dataDir(), "voice");
+}
+function appendVoicePair(pair, dataRoot) {
+  const dir = join2(dataRoot ?? dataOverride ?? dataDir(), "voice");
+  mkdirSync2(dir, { recursive: true });
+  appendFileSync2(join2(dir, "pairs.jsonl"), `${JSON.stringify(pair)}
+`, "utf8");
+}
+function writeVoiceStyleWords(value, dataRoot) {
+  const dir = join2(dataRoot ?? dataOverride ?? dataDir(), "voice");
+  mkdirSync2(dir, { recursive: true });
+  writeFileSync(join2(dir, "style-words.json"), JSON.stringify(value, null, 2), "utf8");
 }
 function readJsonl(path2) {
   if (!existsSync(path2)) return [];
@@ -40916,13 +40950,162 @@ function voiceSync(direction) {
 }
 
 // src/main.ts
+init_thresholds();
+
+// src/revise.ts
+import { appendFileSync as appendFileSync4, mkdirSync as mkdirSync4, readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { dirname, join as join4 } from "node:path";
+
+// src/decide.ts
+init_thresholds();
+import { appendFileSync as appendFileSync3, mkdirSync as mkdirSync3 } from "node:fs";
+import { join as join3 } from "node:path";
+
+// src/jev.ts
+async function askJev(input) {
+  const key = (process.env.JEV_API_KEY ?? "").trim();
+  if (!key) throw new Error("ERROR Jev: missing JEV_API_KEY");
+  const thresholds = (await Promise.resolve().then(() => (init_thresholds(), thresholds_exports))).default;
+  const response = await fetch("https://api.typesafe.ai/v1/systemone", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    // Request shape matches the working jev-ask client: choice questions carry `instructions` and a
+    // `criteria` map keyed by option (the API rejects `question`/`options`).
+    body: JSON.stringify({ state: input.context, questions: { q: jevQuestion(input) }, model: thresholds.jev.model })
+  });
+  if (!response.ok) throw new Error(`ERROR Jev: HTTP ${response.status}`);
+  const payload = await response.json();
+  const answer = payload.answers?.q;
+  if (!answer) throw new Error("ERROR Jev: missing answer");
+  const selected = typeof answer.choice === "string" ? answer.choice : typeof answer.noul === "number" ? answer.noul >= thresholds.jev.yesProbability ? "yes" : "no" : void 0;
+  const confidence = typeof answer.confidence === "number" ? answer.confidence : typeof answer.noul === "number" ? Math.max(answer.noul, 1 - answer.noul) : typeof answer.score === "number" ? answer.score / thresholds.jev.scoreMaximum : void 0;
+  if (selected === void 0) throw new Error("ERROR Jev: malformed answer");
+  if (confidence === void 0 || !Number.isFinite(confidence) || confidence < 0 || confidence > 1) throw new Error("ERROR Jev: missing or invalid confidence");
+  return { answer: selected, confidence };
+}
+function jevQuestion(input) {
+  return { type: "choice", instructions: input.question, criteria: Object.fromEntries(input.options.map((o) => [o, null])) };
+}
+
+// src/decide.ts
+var jevCall = askJev;
+var modeOverrides = /* @__PURE__ */ new Map();
+async function decide(req) {
+  const config = thresholds_default.jev;
+  const mode = modeOverrides.get(req.point) ?? config.points[req.point]?.mode ?? "off";
+  const enabled = Boolean((process.env.JEV_API_KEY ?? "").trim()) || jevCall !== askJev;
+  const activeMode = enabled ? mode : "off";
+  let jevResult = null;
+  let modelAnswer = null;
+  let answer;
+  let by = "model";
+  if (activeMode === "off") {
+    modelAnswer = await req.fallback();
+    answer = modelAnswer;
+  } else if (activeMode === "shadow") {
+    const [model, jev] = await Promise.all([req.fallback(), (jevCall?.(req) ?? Promise.resolve(null)).catch(() => null)]);
+    modelAnswer = model;
+    jevResult = jev;
+    answer = model;
+  } else {
+    jevResult = await (jevCall?.(req) ?? Promise.resolve(null)).catch(() => null);
+    if (jevResult && jevResult.confidence >= config.threshold && req.options.includes(jevResult.answer)) {
+      answer = jevResult.answer;
+      by = "jev";
+    } else {
+      modelAnswer = await req.fallback();
+      answer = modelAnswer;
+    }
+  }
+  const dir = join3(projectDir(), ".academic-helper", "runs", req.runId);
+  mkdirSync3(dir, { recursive: true });
+  appendFileSync3(join3(dir, "jev.jsonl"), `${JSON.stringify({ point: req.point, jevAnswer: jevResult?.answer ?? null, jevConfidence: jevResult?.confidence ?? null, modelAnswer, decidedBy: by })}
+`, "utf8");
+  return { answer, by, confidence: jevResult?.confidence ?? null };
+}
+
+// src/revise.ts
+init_thresholds();
+var dataOverride2;
+var confirm = async () => false;
+function voiceDir() {
+  return dataOverride2 ?? join4(dataDir(), "voice");
+}
+function append(file, row) {
+  mkdirSync4(dirname(file), { recursive: true });
+  appendFileSync4(file, `${JSON.stringify(row)}
+`, "utf8");
+}
+async function classify(items, runId2) {
+  const schema = { type: "OBJECT", properties: { items: { type: "ARRAY", items: { type: "OBJECT", properties: { id: { type: "STRING" }, category: { type: "STRING", enum: ["text_edit", "argument", "voice_signal", "plugin_defect"] }, proposal: { type: "OBJECT" } }, required: ["id", "category", "proposal"] } } }, required: ["items"] };
+  const fallback = async () => {
+    const caps = thresholds_default.budget.revise;
+    const result2 = await callGemini({ step: "revise.classify", system: "Classify review feedback accurately. Return JSON only.", parts: [JSON.stringify(items)], responseSchema: schema, runId: runId2, budget: new Budget(runId2, caps) });
+    return JSON.stringify(result2.json);
+  };
+  const result = await decide({ point: "revise.classify", question: "Classify each Word review item.", options: ["text_edit", "argument", "voice_signal", "plugin_defect"], context: JSON.stringify(items), runId: runId2, fallback });
+  const parsed = JSON.parse(result.answer);
+  if (typeof parsed !== "object" || parsed === null || !Array.isArray(parsed.items)) throw new Error("ERROR revise.classify: missing verdict");
+  return parsed;
+}
+function applyTextEdit(item) {
+  const file = item.proposal.file;
+  const before = item.proposal.before;
+  const after = item.proposal.after;
+  if (typeof file !== "string" || typeof before !== "string" || typeof after !== "string") return;
+  const target = join4(projectDir(), file);
+  const body = readFileSync2(target, "utf8");
+  if (!body.includes(before)) throw new Error(`ERROR revise.apply: anchor not found for ${item.id}`);
+  writeFileSync2(target, body.replace(before, after), "utf8");
+}
+async function applyPlan(plan) {
+  if (!dataOverride2) dataDir();
+  const applied = [];
+  const deferred = [];
+  const feedbackDir = join4(dataOverride2 ?? dataDir(), "feedback");
+  for (const item of plan.items) {
+    append(join4(dataOverride2 ?? dataDir(), "labels", "revise.classify.jsonl"), { point: "revise.classify", itemId: item.id, label: item.category });
+    if (typeof item.proposal.changeId === "string" && (item.proposal.label === "uphold" || item.proposal.label === "refute")) {
+      append(join4(dataOverride2 ?? dataDir(), "labels", "proofread.verify.jsonl"), { point: "proofread.verify", changeId: item.proposal.changeId, label: item.proposal.label });
+    }
+    if (item.category === "text_edit") {
+      applyTextEdit(item);
+      applied.push(item.id);
+    } else if (item.category === "argument") {
+      const file = join4(projectDir(), ".academic-helper", "revise-todo.md");
+      mkdirSync4(join4(projectDir(), ".academic-helper"), { recursive: true });
+      appendFileSync4(file, `
+- [ ] ${String(item.proposal.text ?? JSON.stringify(item.proposal))}
+`, "utf8");
+      deferred.push(item.id);
+    } else if (item.category === "plugin_defect") {
+      append(join4(feedbackDir, "ledger.jsonl"), { ts: (/* @__PURE__ */ new Date()).toISOString(), runId: plan.runId, step: String(item.proposal.step ?? "unknown"), item: item.proposal, authorWords: String(item.proposal.authorWords ?? ""), pluginVersion: plan.pluginVersion });
+      applied.push(item.id);
+    } else {
+      const accepted = await confirm([item]);
+      if (!accepted) {
+        deferred.push(item.id);
+        continue;
+      }
+      const dir = voiceDir();
+      mkdirSync4(dir, { recursive: true });
+      appendVoicePair({ before: String(item.proposal.before ?? ""), after: String(item.proposal.after ?? ""), source: plan.runId }, dataOverride2 ?? dataDir());
+      if (item.proposal.styleWords !== void 0) writeVoiceStyleWords(item.proposal.styleWords, dataOverride2 ?? dataDir());
+      if (item.proposal.terms !== void 0) writeFileSync2(join4(projectDir(), ".academic-helper", "terms.json"), JSON.stringify(item.proposal.terms, null, 2), "utf8");
+      applied.push(item.id);
+    }
+  }
+  return { applied, deferred };
+}
+
+// src/main.ts
 var args = setPathArguments(process.argv.slice(2));
 var [command, subcommand, runId] = args;
 if (command === "ledger" && subcommand === "show" && runId) {
   try {
     dataDir();
-    const file = join3(projectDir(), ".academic-helper", "runs", runId, "usage.jsonl");
-    const rows = readFileSync2(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    const file = join5(projectDir(), ".academic-helper", "runs", runId, "usage.jsonl");
+    const rows = readFileSync3(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
     const totals = /* @__PURE__ */ new Map();
     for (const row of rows) {
       const total = totals.get(row.step) ?? { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
@@ -40942,6 +41125,25 @@ if (command === "ledger" && subcommand === "show" && runId) {
   process.stdout.write(`Configured Gemini steps: ${stepIds.join(", ")}
 Live model verification requires GOOGLE_API_KEY.
 `);
+} else if (command === "revise") {
+  try {
+    dataDir();
+    projectDir();
+    const fileArg = args[args.indexOf(subcommand === "classify" ? "--items" : "--plan") + 1];
+    if (!fileArg) throw new Error("ERROR revise: --items/--plan path required");
+    const input = JSON.parse(readFileSync3(fileArg, "utf8"));
+    if (subcommand === "classify") {
+      if (!Array.isArray(input)) throw new Error("ERROR revise.classify: items must be an array");
+      process.stdout.write(`${JSON.stringify(await classify(input, args[args.indexOf("--run") + 1] ?? "revise"))}
+`);
+    } else if (subcommand === "apply") process.stdout.write(`${JSON.stringify(await applyPlan(input))}
+`);
+    else throw new Error("ERROR revise: expected classify or apply");
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : "ERROR revise: unknown failure"}
+`);
+    process.exitCode = 2;
+  }
 } else if (command === "voice") {
   try {
     dataDir();
