@@ -36,7 +36,7 @@
     "google_api_key": {
       "type": "string",
       "title": "Gemini API key",
-      "description": "Google AI Studio API key for the bundled Gemini MCP server (drafting, editing, synthesis, OCR). Free tier at https://aistudio.google.com/apikey. Stored securely (OS keychain / protected credentials file), never in plaintext settings.json. Optional — GOOGLE_API_KEY env var or .academic-helper/secrets.json still work if you skip this.",
+      "description": "Google AI Studio API key for the bundled Gemini MCP server (drafting, editing, synthesis, OCR). Free tier at https://aistudio.google.com/apikey. Stored securely (OS keychain / protected credentials file), never in plaintext settings.json. Optional — use the GOOGLE_API_KEY environment variable if you skip this.",
       "sensitive": true,
       "required": false
     },
