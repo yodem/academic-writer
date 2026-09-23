@@ -124,7 +124,7 @@
       "provider": "gemini",
       "model": "gemini-3.8-flash",
       "maxOutputTokens": 8192,
-      "concurrency": 1,
+      "concurrency": 4,
       "piModel": "openrouter/z-ai/glm-5.3"
     },
     "write.draft": {
@@ -253,5 +253,18 @@
     },
     "_comment": "Development-only defect clustering and Jev roster thresholds."
   },
-  "_piModelNote": "piModel = OpenRouter model for the isolated Pi judge. Must be a non-Claude, non-Gemini family (cross-family verification); taken from the author's Pi model roster (executor tier, machine-config/pi/model-roster.json). Runs in shadow until the Hebrew fixture shows parity."
+  "_piModelNote": "piModel = OpenRouter model for the isolated Pi judge. Must be a non-Claude, non-Gemini family (cross-family verification); taken from the author's Pi model roster (executor tier, machine-config/pi/model-roster.json). Runs in shadow until the Hebrew fixture shows parity.",
+  "evidence": {
+    "passagesPerSource": {
+      "core": {
+        "min": 12,
+        "max": 30
+      },
+      "other": {
+        "min": 4,
+        "max": 12
+      }
+    },
+    "_comment": "aw evidence build coverage targets per source. Live rehearsal 2026-09-23: with no target, Gemini returned 5 passages for a 12-page core text and 0 for Sefer Yetzirah, missing the article's opening dilemma. The core text (author-intent coreTextSourceId) gets dense coverage; every other source a smaller floor. Concurrency for evidence.extract is 4 (sources in parallel)."
+  }
 }

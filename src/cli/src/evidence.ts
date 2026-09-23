@@ -7,6 +7,7 @@ import { callGemini } from './gemini.ts';
 import { appendLedger } from './ledger.ts';
 import { dataDir, projectDir } from './paths.ts';
 import { routeFor } from './routing.ts';
+import thresholds from '../../thresholds.json' with { type: 'json' };
 import { fetchSefaria } from './sefaria.ts';
 import { decide } from './decide.ts';
 import evidenceSchema from '../../schemas/evidence.schema.json' with { type: 'json' };
@@ -19,7 +20,14 @@ type Stubs = { fetchCk: (id: string) => Promise<string>; fetchSefaria: typeof fe
 type BuildOptions = { sources: string[]; sefaria?: string[]; intent?: string; runId: string };
 type BuildResult = { sources: Source[]; passages: Passage[] };
 const sourceCache = new Map<string, string>();
-const prompt = 'Extract evidence passages from the supplied source for the author thesis. Use only the supplied author intent and source text. The intent JSON contains the thesis and must-use passages. Return passages that support, complicate, or contradict the thesis. Quotes must be exact substrings copied from the source text; never reconstruct, translate, or silently normalize a quote. Include a locator, a concise gloss, and relevance from 0 through 3. Return only useful passages; return an empty array when none qualify.';
+const prompt = (min: number, max: number, isCore: boolean): string => [
+  'Extract evidence passages from the supplied source for the author thesis. Use only the supplied author intent and source text.',
+  'The intent JSON contains the thesis in the author\'s words, the argument moves, the core text id and any must-use passages.',
+  `Return between ${min} and ${max} passages that support, complicate, illustrate or contradict the thesis or any of its moves.`,
+  isCore ? 'This source IS the author\'s core text: cover it densely. Include every passage that states a position the thesis depends on, every dilemma or argument the author will analyse, and the key definitions.' : 'Prefer passages that bear directly on a move.',
+  'Quotes must be exact substrings copied from the source text; never reconstruct, translate, or silently normalize a quote. Keep each quote to one or two sentences.',
+  'Include a locator (page/section as given in the text), a concise gloss, and relevance from 0 (tangential) through 3 (central).',
+].join(' ');
 const extractionSchema = { type: 'object', required: ['passages'], properties: { passages: evidenceSchema.properties.passages }, additionalProperties: false };
 const stubState: { value?: Partial<Stubs> } = {};
 
@@ -42,14 +50,36 @@ function cachedText(id: string): string | undefined {
   const path = join(root, entry, 'text.md');
   return existsSync(path) ? readFileSync(path, 'utf8') : undefined;
 }
+// `ck items get/read` output opens with the book title as a bold line and an Author section.
+export function ckMetadata(text: string): { title?: string; author?: string } {
+  const head = text.slice(0, 4000);
+  const title = head.match(/\*\*([^*\n]{2,200})\*\*/u)?.[1]?.trim();
+  const authorBlock = head.split(/^#+\s*(?:מחבר|Author)[^\n]*$/imu)[1];
+  const author = authorBlock?.match(/^\s*[-*]\s+([^·(\n]+)/mu)?.[1]?.trim();
+  return { title, author };
+}
+
+// The ck table of contents names the book reliably on the line before `ID: <id>`; the bold-line
+// heuristic misreads books whose first bold line is a list number (Sefer Yetzirah: "1.").
+export function titleFromToc(toc: string): string | undefined {
+  const lines = toc.split('\n').map((l) => l.replace(/^=+|=+$/gu, '').trim()).filter((l) => l && !/^=+$/u.test(l));
+  const idLine = lines.findIndex((l) => l.startsWith('ID:'));
+  const candidate = idLine > 0 ? lines[idLine - 1] : undefined;
+  return candidate?.replace(/^=+\s*|\s*=+$/gu, '').trim() || undefined;
+}
+async function ckTitle(id: string): Promise<string | undefined> {
+  try { const { stdout } = await execFileAsync('ck', ['items', 'toc', id], { maxBuffer: 8 * 1024 * 1024 }); return titleFromToc(stdout); } catch { return undefined; }
+}
+
 async function fetchCk(id: string): Promise<string> {
   const { stdout } = await execFileAsync('ck', ['items', 'read', `${id}:all`], { maxBuffer: 64 * 1024 * 1024 });
   return stdout;
 }
-async function extract(sourceId: string, text: string, intent: string, runId: string): Promise<ExtractResult> {
+async function extract(sourceId: string, text: string, intent: string, runId: string, isCore = false): Promise<ExtractResult> {
   if (stubState.value?.extract) return stubState.value.extract(sourceId, text, intent, runId);
+  const target = (thresholds.evidence.passagesPerSource as Record<'core' | 'other', { min: number; max: number }>)[isCore ? 'core' : 'other'];
   const result = await callGemini({
-    step: 'evidence.extract', runId, system: prompt,
+    step: 'evidence.extract', runId, system: prompt(target.min, target.max, isCore),
     parts: [`Author intent (thesis and must-use passages):\n${intent}`, `Source ${sourceId}:\n${text}`],
     responseSchema: extractionSchema,
   });
@@ -68,20 +98,28 @@ export async function buildEvidence(options: BuildOptions): Promise<BuildResult>
   dataDir();
   projectDir();
   const intent = options.intent ? readFileSync(options.intent, 'utf8') : '';
+  // The author's intent decides the core text and primary sources (live rehearsal 2026-09-23: every
+  // CandleKeep source defaulted to secondary / not-core, and titles were raw ids).
+  const intentJson = (() => { try { return JSON.parse(intent) as { coreTextSourceId?: string; primarySources?: string[] }; } catch { return {}; } })();
+  const intentCore = intentJson.coreTextSourceId ?? '';
+  const primaryIds = new Set(intentJson.primarySources ?? []);
   const tasks = [
     ...options.sources.map(async (id) => {
       const cached = sourceCache.get(id) ?? cachedText(id);
       const text = cached ?? await (stubState.value?.fetchCk ?? fetchCk)(id);
       sourceCache.set(id, text);
       cachePath(id, text);
-      return { id, title: id, author: '', role: 'secondary' as const, isCoreText: false, text };
+      const meta = ckMetadata(text);
+      const tocTitle = stubState.value?.fetchCk ? undefined : await ckTitle(id);
+      const isCoreText = id === intentCore;
+      return { id, title: tocTitle ?? meta.title ?? id, author: meta.author ?? '', role: (isCoreText || primaryIds.has(id) ? 'primary' : 'secondary') as 'primary' | 'secondary', isCoreText, text };
     }),
     ...(options.sefaria ?? []).map(async (reference) => {
       const id = `sefaria:${reference}`;
       const cached = cachedText(id);
       const result = cached === undefined ? await (stubState.value?.fetchSefaria ?? fetchSefaria)(reference) : { title: reference, author: '', text: cached };
       cachePath(id, result.text);
-      return { id, title: result.title, author: result.author, role: 'primary' as const, isCoreText: true, text: result.text };
+      return { id, title: result.title, author: result.author, role: 'primary' as const, isCoreText: id === intentCore, text: result.text };
     }),
   ];
   const fetched = await Promise.all(tasks);
@@ -94,7 +132,7 @@ export async function buildEvidence(options: BuildOptions): Promise<BuildResult>
       const index = next;
       next += 1;
       const source = fetched[index];
-      if (source) extracted[index] = { source, result: await extract(source.id, source.text, intent, options.runId) };
+      if (source) extracted[index] = { source, result: await extract(source.id, source.text, intent, options.runId, source.isCoreText) };
     }
   }));
   const sources: Source[] = fetched.map(({ text: _text, ...source }) => source);

@@ -37,3 +37,29 @@ test('an empty quote is rejected as not verbatim', async () => {
     assert.equal(r.passages.length, 0);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test('ck metadata: title from the bold line, author from the Author section', async () => {
+  const { ckMetadata } = await import('../src/evidence.ts');
+  const m = ckMetadata('# איך לקרוא ספר זה\n\n**יוסף בן שלום אשכנזי על קבלה** · Ra\'avad on Kabbalah\n\n## מחבר / Author\n\n- יוסף בן שלום אשכנזי (Yosef ben Sholom Ashkenazi) · RI\n');
+  assert.equal(m.title, 'יוסף בן שלום אשכנזי על קבלה');
+  assert.equal(m.author, 'יוסף בן שלום אשכנזי');
+});
+
+test('the intent core text is marked primary + isCoreText; others follow primarySources', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'aw-evidence-core-'));
+  setPathArguments(['--data-dir', join(root, 'd'), '--project-dir', join(root, 'p')]);
+  const { writeFileSync, mkdirSync } = await import('node:fs'); mkdirSync(join(root, 'p'), { recursive: true });
+  const intentPath = join(root, 'p', 'intent.json');
+  writeFileSync(intentPath, JSON.stringify({ thesis: 't', coreTextSourceId: 'c1', primarySources: ['p2'] }));
+  __stubs({ fetchCk: async (id: string) => `**Book ${id}**\n\nטקסט`, extract: async () => ({ passages: [] }) });
+  try {
+    const r = await buildEvidence({ sources: ['c1', 'p2', 's3'], intent: intentPath, runId: 'core' });
+    assert.deepEqual(r.sources.map((s) => [s.id, s.role, s.isCoreText]), [['c1', 'primary', true], ['p2', 'primary', false], ['s3', 'secondary', false]]);
+    assert.equal(r.sources[0]?.title, 'Book c1');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('title from ck toc: the line before ID', async () => {
+  const { titleFromToc } = await import('../src/evidence.ts');
+  assert.equal(titleFromToc('============\nSefer Yetzirah\nID: cmtbr5am34 | 6 pages\n====='), 'Sefer Yetzirah');
+});
