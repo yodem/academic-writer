@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["sources", "passages"],
+  "properties": {
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "author", "role", "isCoreText"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "author": { "type": "string" },
+          "role": { "enum": ["primary", "secondary"] },
+          "isCoreText": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "passages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "sourceId", "locator", "quote", "gloss", "relevance"],
+        "properties": {
+          "id": { "type": "string" },
+          "sourceId": { "type": "string" },
+          "locator": { "type": "string" },
+          "quote": { "type": "string" },
+          "gloss": { "type": "string" },
+          "relevance": { "type": "integer", "minimum": 0, "maximum": 3 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

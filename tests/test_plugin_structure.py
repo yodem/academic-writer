@@ -132,7 +132,6 @@ class TestSkills(unittest.TestCase):
                     # Allow agents that are used via subagent_type (general-purpose)
                     # Only check agents that should have dedicated .md files
                     if agent in (
-                        "deep-reader",
                         "architect",
                         "section-writer",
                         "auditor",
@@ -158,7 +157,6 @@ class TestAgents(unittest.TestCase):
 
     AGENTS_DIR = os.path.join(SRC_DIR, "agents")
     REQUIRED_AGENTS = [
-        "deep-reader.md",
         "architect.md",
         "section-writer.md",
         "auditor.md",
@@ -356,7 +354,6 @@ class TestClaudeMD(unittest.TestCase):
     def test_all_agents_listed_in_claude_md(self):
         text = _read(self.CLAUDE_MD)
         required_agents = [
-            "deep-reader",
             "architect",
             "section-writer",
             "auditor",
