@@ -1,3 +1,4 @@
+import { pluginRoot } from './pi.ts';
 import { setPathArguments, projectDir, dataDir } from './paths.ts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -12,6 +13,7 @@ import { draftAll } from './draft.ts';
 import { synthesizeAll } from './synthesize.ts';
 import { editText } from './edit.ts';
 import { ocrDocument } from './ocr.ts';
+import { docxSummary, generateDocx } from './docx.ts';
 
 const args = setPathArguments(process.argv.slice(2));
 const [command, subcommand, runId] = args;
@@ -132,6 +134,14 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
     if (!runId || !input || !['he','en','mixed'].includes(language ?? '') || (format && !['concise','detailed'].includes(format))) throw new Error('ERROR ocr: --input, --lang he|en|mixed, and --run are required; --format must be concise|detailed');
     process.stdout.write(`${JSON.stringify(await ocrDocument({ runId, input, language: language as 'he'|'en'|'mixed', pages: value('--pages'), format: format as 'concise'|'detailed'|undefined, out: value('--out') }))}\n`);
   } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : 'ERROR ocr: unknown failure'}\n`); process.exitCode = 1; }
+} else if (command === 'docx') {
+  try {
+    const value = (name: string): string | undefined => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
+    const runId = value('--run'); const outline = value('--outline'); const out = value('--out');
+    if (!runId || !outline || !out) throw new Error('ERROR docx: --outline, --run, and --out are required');
+    const result = generateDocx({ outlinePath: outline, runId, out, title: value('--title'), coverFile: value('--cover-file'), abstractFile: value('--abstract-file'), formatFile: value('--format-file'), projectDir: projectDir(), dataDir: dataDir(), pluginRoot: pluginRoot() });
+    process.stdout.write(`${docxSummary(result, out)}\n`);
+  } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : 'ERROR docx: unknown failure'}\n`); process.exitCode = 1; }
 } else {
   process.stderr.write('ERROR: expected aw models check, aw ledger show <runId>, aw evidence build, or aw decide <point>\n');
   process.exitCode = 2;

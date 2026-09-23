@@ -361,11 +361,11 @@ change what you do here.)
 
 ### W6: Output and handoff
 
-Follow the abstract, self-review, and DOCX output procedures in `references/write-completion.md` —
-build the final article from the (now synthesized) `drafts/<unitId>.md` files in outline order.
-Keep the audited text and citations intact; do not hand-edit prose at this stage.
-
-That procedure assembles the article and invokes `scripts/generate-docx.py` to write the `.docx`.
+Follow the abstract and self-review procedures in `references/write-completion.md`, then create the
+DOCX in code from the synthesized drafts in outline order. Keep the audited text and citations intact.
+Call `aw docx` with `--data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD"`, the outline, run id,
+output path, and optional title/cover/abstract/format JSON files. The command writes the article JSON
+under `.academic-helper/runs/<id>/article.json` and invokes `scripts/generate-docx.py`.
 
 After the DOCX is written, close the loop with the author: tell them to open the `.docx`, add Word
 comments or tracked changes anywhere they want something revisited, and then run

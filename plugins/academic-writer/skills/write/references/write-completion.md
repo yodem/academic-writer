@@ -99,17 +99,14 @@ Only **secondary** citations count toward the floor: primary sources are quoted 
 
 #### Step 9b: DOCX Output
 
-Write the article data to a JSON file, then run the standalone DOCX generator script:
-
-1. **Write the article JSON** using the `Write` tool to `/tmp/aw-article-data.json` — never inline
-   Python/heredoc (Hebrew text causes UTF-8 encoding errors in heredocs). Exact JSON schema and
-   population rules (footnote structuring, `format` object, `totalWords`, `isRtl`): see
-   `references/docx-generation.md#step-9b-docx-output--article-json-schema`.
-
-2. **Generate the DOCX:**
+Call `aw docx` to read synthesized draft units in outline order, structure `[^KEY]` markers as Word
+footnotes, and generate the article JSON in the run directory. Keep the abstract and self-review
+steps above. Pass optional JSON files for cover page, abstract, or format when populated.
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/generate-docx.py --input /tmp/aw-article-data.json --output "$DOCX_PATH"
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" docx \
+  --outline "$PWD/.academic-helper/outline.json" --run <run-id> --out "$DOCX_PATH" \
+  --title "ARTICLE_TITLE" --cover-file "$COVER_JSON" --abstract-file "$ABSTRACT_JSON" --format-file "$FORMAT_JSON"
 ```
 
 The script handles all RTL formatting, directional marks, citation parentheses splitting, and conditional section titles deterministically.

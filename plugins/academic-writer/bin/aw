@@ -323,9 +323,9 @@ var init_thresholds = __esm({
   }
 });
 
-// node_modules/retry/lib/retry_operation.js
+// ../../../../../../../src/cli/node_modules/retry/lib/retry_operation.js
 var require_retry_operation = __commonJS({
-  "node_modules/retry/lib/retry_operation.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/retry/lib/retry_operation.js"(exports, module) {
     function RetryOperation(timeouts, options) {
       if (typeof options === "boolean") {
         options = { forever: options };
@@ -458,9 +458,9 @@ var require_retry_operation = __commonJS({
   }
 });
 
-// node_modules/retry/lib/retry.js
+// ../../../../../../../src/cli/node_modules/retry/lib/retry.js
 var require_retry = __commonJS({
-  "node_modules/retry/lib/retry.js"(exports) {
+  "../../../../../../../src/cli/node_modules/retry/lib/retry.js"(exports) {
     var RetryOperation = require_retry_operation();
     exports.operation = function(options) {
       var timeouts = exports.timeouts(options);
@@ -544,16 +544,16 @@ var require_retry = __commonJS({
   }
 });
 
-// node_modules/retry/index.js
+// ../../../../../../../src/cli/node_modules/retry/index.js
 var require_retry2 = __commonJS({
-  "node_modules/retry/index.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/retry/index.js"(exports, module) {
     module.exports = require_retry();
   }
 });
 
-// node_modules/p-retry/index.js
+// ../../../../../../../src/cli/node_modules/p-retry/index.js
 var require_p_retry = __commonJS({
-  "node_modules/p-retry/index.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/p-retry/index.js"(exports, module) {
     "use strict";
     var retry = require_retry2();
     var networkErrorMsgs = [
@@ -587,7 +587,7 @@ var require_p_retry = __commonJS({
       return error;
     };
     var isNetworkError = (errorMessage) => networkErrorMsgs.includes(errorMessage);
-    var pRetry2 = (input, options) => new Promise((resolve6, reject) => {
+    var pRetry2 = (input, options) => new Promise((resolve7, reject) => {
       options = {
         onFailedAttempt: () => {
         },
@@ -597,7 +597,7 @@ var require_p_retry = __commonJS({
       const operation = retry.operation(options);
       operation.attempt(async (attemptNumber) => {
         try {
-          resolve6(await input(attemptNumber));
+          resolve7(await input(attemptNumber));
         } catch (error) {
           if (!(error instanceof Error)) {
             reject(new TypeError(`Non-error was thrown: "${error}". You should only throw errors.`));
@@ -630,9 +630,9 @@ var require_p_retry = __commonJS({
   }
 });
 
-// node_modules/extend/index.js
+// ../../../../../../../src/cli/node_modules/extend/index.js
 var require_extend = __commonJS({
-  "node_modules/extend/index.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/extend/index.js"(exports, module) {
     "use strict";
     var hasOwn2 = Object.prototype.hasOwnProperty;
     var toStr = Object.prototype.toString;
@@ -721,9 +721,9 @@ var require_extend = __commonJS({
   }
 });
 
-// node_modules/gaxios/package.json
+// ../../../../../../../src/cli/node_modules/gaxios/package.json
 var require_package = __commonJS({
-  "node_modules/gaxios/package.json"(exports, module) {
+  "../../../../../../../src/cli/node_modules/gaxios/package.json"(exports, module) {
     module.exports = {
       name: "gaxios",
       version: "7.3.1",
@@ -832,18 +832,18 @@ var require_package = __commonJS({
   }
 });
 
-// node_modules/gaxios/build/cjs/src/util.cjs
+// ../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/util.cjs
 var require_util = __commonJS({
-  "node_modules/gaxios/build/cjs/src/util.cjs"(exports, module) {
+  "../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/util.cjs"(exports, module) {
     "use strict";
     var pkg = require_package();
     module.exports = { pkg };
   }
 });
 
-// node_modules/gaxios/build/cjs/src/common.js
+// ../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/common.js
 var require_common = __commonJS({
-  "node_modules/gaxios/build/cjs/src/common.js"(exports) {
+  "../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/common.js"(exports) {
     "use strict";
     var __importDefault = exports && exports.__importDefault || function(mod) {
       return mod && mod.__esModule ? mod : { "default": mod };
@@ -1083,9 +1083,9 @@ var require_common = __commonJS({
   }
 });
 
-// node_modules/gaxios/build/cjs/src/retry.js
+// ../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/retry.js
 var require_retry3 = __commonJS({
-  "node_modules/gaxios/build/cjs/src/retry.js"(exports) {
+  "../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/retry.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getRetryConfig = getRetryConfig;
@@ -1131,8 +1131,8 @@ var require_retry3 = __commonJS({
       }
       const delay = getNextRetryDelay(config);
       err.config.retryConfig.currentRetryAttempt += 1;
-      const backoff = config.retryBackoff ? config.retryBackoff(err, delay) : new Promise((resolve6) => {
-        setTimeout(resolve6, delay);
+      const backoff = config.retryBackoff ? config.retryBackoff(err, delay) : new Promise((resolve7) => {
+        setTimeout(resolve7, delay);
       });
       if (config.onRetryAttempt) {
         await config.onRetryAttempt(err);
@@ -1188,9 +1188,9 @@ var require_retry3 = __commonJS({
   }
 });
 
-// node_modules/gaxios/build/cjs/src/interceptor.js
+// ../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/interceptor.js
 var require_interceptor = __commonJS({
-  "node_modules/gaxios/build/cjs/src/interceptor.js"(exports) {
+  "../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/interceptor.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GaxiosInterceptorManager = void 0;
@@ -1200,9 +1200,9 @@ var require_interceptor = __commonJS({
   }
 });
 
-// node_modules/ms/index.js
+// ../../../../../../../src/cli/node_modules/ms/index.js
 var require_ms = __commonJS({
-  "node_modules/ms/index.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/ms/index.js"(exports, module) {
     var s2 = 1e3;
     var m2 = s2 * 60;
     var h2 = m2 * 60;
@@ -1316,9 +1316,9 @@ var require_ms = __commonJS({
   }
 });
 
-// node_modules/debug/src/common.js
+// ../../../../../../../src/cli/node_modules/debug/src/common.js
 var require_common2 = __commonJS({
-  "node_modules/debug/src/common.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/debug/src/common.js"(exports, module) {
     function setup(env) {
       createDebug.debug = createDebug;
       createDebug.default = createDebug;
@@ -1493,9 +1493,9 @@ var require_common2 = __commonJS({
   }
 });
 
-// node_modules/debug/src/browser.js
+// ../../../../../../../src/cli/node_modules/debug/src/browser.js
 var require_browser = __commonJS({
-  "node_modules/debug/src/browser.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/debug/src/browser.js"(exports, module) {
     exports.formatArgs = formatArgs;
     exports.save = save;
     exports.load = load;
@@ -1663,9 +1663,9 @@ var require_browser = __commonJS({
   }
 });
 
-// node_modules/debug/src/node.js
+// ../../../../../../../src/cli/node_modules/debug/src/node.js
 var require_node = __commonJS({
-  "node_modules/debug/src/node.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/debug/src/node.js"(exports, module) {
     var tty = __require("tty");
     var util = __require("util");
     exports.init = init;
@@ -1837,9 +1837,9 @@ var require_node = __commonJS({
   }
 });
 
-// node_modules/debug/src/index.js
+// ../../../../../../../src/cli/node_modules/debug/src/index.js
 var require_src = __commonJS({
-  "node_modules/debug/src/index.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/debug/src/index.js"(exports, module) {
     if (typeof process === "undefined" || process.type === "renderer" || process.browser === true || process.__nwjs) {
       module.exports = require_browser();
     } else {
@@ -1848,9 +1848,9 @@ var require_src = __commonJS({
   }
 });
 
-// node_modules/agent-base/dist/helpers.js
+// ../../../../../../../src/cli/node_modules/agent-base/dist/helpers.js
 var require_helpers = __commonJS({
-  "node_modules/agent-base/dist/helpers.js"(exports) {
+  "../../../../../../../src/cli/node_modules/agent-base/dist/helpers.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -1908,8 +1908,8 @@ var require_helpers = __commonJS({
     function req(url, opts = {}) {
       const href = typeof url === "string" ? url : url.href;
       const req2 = (href.startsWith("https:") ? https2 : http3).request(url, opts);
-      const promise = new Promise((resolve6, reject) => {
-        req2.once("response", resolve6).once("error", reject).end();
+      const promise = new Promise((resolve7, reject) => {
+        req2.once("response", resolve7).once("error", reject).end();
       });
       req2.then = promise.then.bind(promise);
       return req2;
@@ -1918,9 +1918,9 @@ var require_helpers = __commonJS({
   }
 });
 
-// node_modules/agent-base/dist/index.js
+// ../../../../../../../src/cli/node_modules/agent-base/dist/index.js
 var require_dist = __commonJS({
-  "node_modules/agent-base/dist/index.js"(exports) {
+  "../../../../../../../src/cli/node_modules/agent-base/dist/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -2074,9 +2074,9 @@ var require_dist = __commonJS({
   }
 });
 
-// node_modules/https-proxy-agent/dist/parse-proxy-response.js
+// ../../../../../../../src/cli/node_modules/https-proxy-agent/dist/parse-proxy-response.js
 var require_parse_proxy_response = __commonJS({
-  "node_modules/https-proxy-agent/dist/parse-proxy-response.js"(exports) {
+  "../../../../../../../src/cli/node_modules/https-proxy-agent/dist/parse-proxy-response.js"(exports) {
     "use strict";
     var __importDefault = exports && exports.__importDefault || function(mod) {
       return mod && mod.__esModule ? mod : { "default": mod };
@@ -2086,7 +2086,7 @@ var require_parse_proxy_response = __commonJS({
     var debug_1 = __importDefault(require_src());
     var debug = (0, debug_1.default)("https-proxy-agent:parse-proxy-response");
     function parseProxyResponse(socket) {
-      return new Promise((resolve6, reject) => {
+      return new Promise((resolve7, reject) => {
         let buffersLength = 0;
         const buffers = [];
         function read() {
@@ -2152,7 +2152,7 @@ var require_parse_proxy_response = __commonJS({
           }
           debug("got proxy server response: %o %o", firstLine, headers);
           cleanup();
-          resolve6({
+          resolve7({
             connect: {
               statusCode,
               statusText,
@@ -2170,9 +2170,9 @@ var require_parse_proxy_response = __commonJS({
   }
 });
 
-// node_modules/https-proxy-agent/dist/index.js
+// ../../../../../../../src/cli/node_modules/https-proxy-agent/dist/index.js
 var require_dist2 = __commonJS({
-  "node_modules/https-proxy-agent/dist/index.js"(exports) {
+  "../../../../../../../src/cli/node_modules/https-proxy-agent/dist/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -2320,7 +2320,7 @@ var require_dist2 = __commonJS({
   }
 });
 
-// node_modules/data-uri-to-buffer/dist/index.js
+// ../../../../../../../src/cli/node_modules/data-uri-to-buffer/dist/index.js
 function dataUriToBuffer(uri) {
   if (!/^data:/i.test(uri)) {
     throw new TypeError('`uri` does not appear to be a Data URI (must begin with "data:")');
@@ -2359,14 +2359,14 @@ function dataUriToBuffer(uri) {
 }
 var dist_default;
 var init_dist = __esm({
-  "node_modules/data-uri-to-buffer/dist/index.js"() {
+  "../../../../../../../src/cli/node_modules/data-uri-to-buffer/dist/index.js"() {
     dist_default = dataUriToBuffer;
   }
 });
 
-// node_modules/web-streams-polyfill/dist/ponyfill.es2018.js
+// ../../../../../../../src/cli/node_modules/web-streams-polyfill/dist/ponyfill.es2018.js
 var require_ponyfill_es2018 = __commonJS({
-  "node_modules/web-streams-polyfill/dist/ponyfill.es2018.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/web-streams-polyfill/dist/ponyfill.es2018.js"(exports, module) {
     (function(global2, factory) {
       typeof exports === "object" && typeof module !== "undefined" ? factory(exports) : typeof define === "function" && define.amd ? define(["exports"], factory) : (global2 = typeof globalThis !== "undefined" ? globalThis : global2 || self, factory(global2.WebStreamsPolyfill = {}));
     })(exports, (function(exports2) {
@@ -2394,7 +2394,7 @@ var require_ponyfill_es2018 = __commonJS({
         return new originalPromise(executor);
       }
       function promiseResolvedWith(value) {
-        return newPromise((resolve6) => resolve6(value));
+        return newPromise((resolve7) => resolve7(value));
       }
       function promiseRejectedWith(reason) {
         return originalPromiseReject(reason);
@@ -2564,8 +2564,8 @@ var require_ponyfill_es2018 = __commonJS({
         return new TypeError("Cannot " + name + " a stream using a released reader");
       }
       function defaultReaderClosedPromiseInitialize(reader) {
-        reader._closedPromise = newPromise((resolve6, reject) => {
-          reader._closedPromise_resolve = resolve6;
+        reader._closedPromise = newPromise((resolve7, reject) => {
+          reader._closedPromise_resolve = resolve7;
           reader._closedPromise_reject = reject;
         });
       }
@@ -2739,8 +2739,8 @@ var require_ponyfill_es2018 = __commonJS({
           }
           let resolvePromise;
           let rejectPromise;
-          const promise = newPromise((resolve6, reject) => {
-            resolvePromise = resolve6;
+          const promise = newPromise((resolve7, reject) => {
+            resolvePromise = resolve7;
             rejectPromise = reject;
           });
           const readRequest = {
@@ -2845,8 +2845,8 @@ var require_ponyfill_es2018 = __commonJS({
           const reader = this._reader;
           let resolvePromise;
           let rejectPromise;
-          const promise = newPromise((resolve6, reject) => {
-            resolvePromise = resolve6;
+          const promise = newPromise((resolve7, reject) => {
+            resolvePromise = resolve7;
             rejectPromise = reject;
           });
           const readRequest = {
@@ -3865,8 +3865,8 @@ var require_ponyfill_es2018 = __commonJS({
           }
           let resolvePromise;
           let rejectPromise;
-          const promise = newPromise((resolve6, reject) => {
-            resolvePromise = resolve6;
+          const promise = newPromise((resolve7, reject) => {
+            resolvePromise = resolve7;
             rejectPromise = reject;
           });
           const readIntoRequest = {
@@ -4178,10 +4178,10 @@ var require_ponyfill_es2018 = __commonJS({
           wasAlreadyErroring = true;
           reason = void 0;
         }
-        const promise = newPromise((resolve6, reject) => {
+        const promise = newPromise((resolve7, reject) => {
           stream._pendingAbortRequest = {
             _promise: void 0,
-            _resolve: resolve6,
+            _resolve: resolve7,
             _reject: reject,
             _reason: reason,
             _wasAlreadyErroring: wasAlreadyErroring
@@ -4198,9 +4198,9 @@ var require_ponyfill_es2018 = __commonJS({
         if (state === "closed" || state === "errored") {
           return promiseRejectedWith(new TypeError(`The stream (in ${state} state) is not in the writable state and cannot be closed`));
         }
-        const promise = newPromise((resolve6, reject) => {
+        const promise = newPromise((resolve7, reject) => {
           const closeRequest = {
-            _resolve: resolve6,
+            _resolve: resolve7,
             _reject: reject
           };
           stream._closeRequest = closeRequest;
@@ -4213,9 +4213,9 @@ var require_ponyfill_es2018 = __commonJS({
         return promise;
       }
       function WritableStreamAddWriteRequest(stream) {
-        const promise = newPromise((resolve6, reject) => {
+        const promise = newPromise((resolve7, reject) => {
           const writeRequest = {
-            _resolve: resolve6,
+            _resolve: resolve7,
             _reject: reject
           };
           stream._writeRequests.push(writeRequest);
@@ -4831,8 +4831,8 @@ var require_ponyfill_es2018 = __commonJS({
         return new TypeError("Cannot " + name + " a stream using a released writer");
       }
       function defaultWriterClosedPromiseInitialize(writer) {
-        writer._closedPromise = newPromise((resolve6, reject) => {
-          writer._closedPromise_resolve = resolve6;
+        writer._closedPromise = newPromise((resolve7, reject) => {
+          writer._closedPromise_resolve = resolve7;
           writer._closedPromise_reject = reject;
           writer._closedPromiseState = "pending";
         });
@@ -4868,8 +4868,8 @@ var require_ponyfill_es2018 = __commonJS({
         writer._closedPromiseState = "resolved";
       }
       function defaultWriterReadyPromiseInitialize(writer) {
-        writer._readyPromise = newPromise((resolve6, reject) => {
-          writer._readyPromise_resolve = resolve6;
+        writer._readyPromise = newPromise((resolve7, reject) => {
+          writer._readyPromise_resolve = resolve7;
           writer._readyPromise_reject = reject;
         });
         writer._readyPromiseState = "pending";
@@ -4956,7 +4956,7 @@ var require_ponyfill_es2018 = __commonJS({
         source._disturbed = true;
         let shuttingDown = false;
         let currentWrite = promiseResolvedWith(void 0);
-        return newPromise((resolve6, reject) => {
+        return newPromise((resolve7, reject) => {
           let abortAlgorithm;
           if (signal !== void 0) {
             abortAlgorithm = () => {
@@ -5101,7 +5101,7 @@ var require_ponyfill_es2018 = __commonJS({
             if (isError) {
               reject(error);
             } else {
-              resolve6(void 0);
+              resolve7(void 0);
             }
             return null;
           }
@@ -5382,8 +5382,8 @@ var require_ponyfill_es2018 = __commonJS({
         let branch1;
         let branch2;
         let resolveCancelPromise;
-        const cancelPromise = newPromise((resolve6) => {
-          resolveCancelPromise = resolve6;
+        const cancelPromise = newPromise((resolve7) => {
+          resolveCancelPromise = resolve7;
         });
         function pullAlgorithm() {
           if (reading) {
@@ -5474,8 +5474,8 @@ var require_ponyfill_es2018 = __commonJS({
         let branch1;
         let branch2;
         let resolveCancelPromise;
-        const cancelPromise = newPromise((resolve6) => {
-          resolveCancelPromise = resolve6;
+        const cancelPromise = newPromise((resolve7) => {
+          resolveCancelPromise = resolve7;
         });
         function forwardReaderError(thisReader) {
           uponRejection(thisReader._closedPromise, (r2) => {
@@ -6255,8 +6255,8 @@ var require_ponyfill_es2018 = __commonJS({
           const writableHighWaterMark = ExtractHighWaterMark(writableStrategy, 1);
           const writableSizeAlgorithm = ExtractSizeAlgorithm(writableStrategy);
           let startPromise_resolve;
-          const startPromise = newPromise((resolve6) => {
-            startPromise_resolve = resolve6;
+          const startPromise = newPromise((resolve7) => {
+            startPromise_resolve = resolve7;
           });
           InitializeTransformStream(this, startPromise, writableHighWaterMark, writableSizeAlgorithm, readableHighWaterMark, readableSizeAlgorithm);
           SetUpTransformStreamDefaultControllerFromTransformer(this, transformer);
@@ -6349,8 +6349,8 @@ var require_ponyfill_es2018 = __commonJS({
         if (stream._backpressureChangePromise !== void 0) {
           stream._backpressureChangePromise_resolve();
         }
-        stream._backpressureChangePromise = newPromise((resolve6) => {
-          stream._backpressureChangePromise_resolve = resolve6;
+        stream._backpressureChangePromise = newPromise((resolve7) => {
+          stream._backpressureChangePromise_resolve = resolve7;
         });
         stream._backpressure = backpressure;
       }
@@ -6518,8 +6518,8 @@ var require_ponyfill_es2018 = __commonJS({
           return controller._finishPromise;
         }
         const readable = stream._readable;
-        controller._finishPromise = newPromise((resolve6, reject) => {
-          controller._finishPromise_resolve = resolve6;
+        controller._finishPromise = newPromise((resolve7, reject) => {
+          controller._finishPromise_resolve = resolve7;
           controller._finishPromise_reject = reject;
         });
         const cancelPromise = controller._cancelAlgorithm(reason);
@@ -6545,8 +6545,8 @@ var require_ponyfill_es2018 = __commonJS({
           return controller._finishPromise;
         }
         const readable = stream._readable;
-        controller._finishPromise = newPromise((resolve6, reject) => {
-          controller._finishPromise_resolve = resolve6;
+        controller._finishPromise = newPromise((resolve7, reject) => {
+          controller._finishPromise_resolve = resolve7;
           controller._finishPromise_reject = reject;
         });
         const flushPromise = controller._flushAlgorithm();
@@ -6576,8 +6576,8 @@ var require_ponyfill_es2018 = __commonJS({
           return controller._finishPromise;
         }
         const writable = stream._writable;
-        controller._finishPromise = newPromise((resolve6, reject) => {
-          controller._finishPromise_resolve = resolve6;
+        controller._finishPromise = newPromise((resolve7, reject) => {
+          controller._finishPromise_resolve = resolve7;
           controller._finishPromise_reject = reject;
         });
         const cancelPromise = controller._cancelAlgorithm(reason);
@@ -6639,9 +6639,9 @@ var require_ponyfill_es2018 = __commonJS({
   }
 });
 
-// node_modules/fetch-blob/streams.cjs
+// ../../../../../../../src/cli/node_modules/fetch-blob/streams.cjs
 var require_streams = __commonJS({
-  "node_modules/fetch-blob/streams.cjs"() {
+  "../../../../../../../src/cli/node_modules/fetch-blob/streams.cjs"() {
     var POOL_SIZE2 = 65536;
     if (!globalThis.ReadableStream) {
       try {
@@ -6685,7 +6685,7 @@ var require_streams = __commonJS({
   }
 });
 
-// node_modules/fetch-blob/index.js
+// ../../../../../../../src/cli/node_modules/fetch-blob/index.js
 async function* toIterator(parts, clone2 = true) {
   for (const part of parts) {
     if ("stream" in part) {
@@ -6722,7 +6722,7 @@ async function* toIterator(parts, clone2 = true) {
 }
 var import_streams, POOL_SIZE, _Blob, Blob3, fetch_blob_default;
 var init_fetch_blob = __esm({
-  "node_modules/fetch-blob/index.js"() {
+  "../../../../../../../src/cli/node_modules/fetch-blob/index.js"() {
     import_streams = __toESM(require_streams(), 1);
     POOL_SIZE = 65536;
     _Blob = class Blob2 {
@@ -6889,10 +6889,10 @@ var init_fetch_blob = __esm({
   }
 });
 
-// node_modules/fetch-blob/file.js
+// ../../../../../../../src/cli/node_modules/fetch-blob/file.js
 var _File, File3, file_default;
 var init_file = __esm({
-  "node_modules/fetch-blob/file.js"() {
+  "../../../../../../../src/cli/node_modules/fetch-blob/file.js"() {
     init_fetch_blob();
     _File = class File2 extends fetch_blob_default {
       #lastModified = 0;
@@ -6933,7 +6933,7 @@ var init_file = __esm({
   }
 });
 
-// node_modules/formdata-polyfill/esm.min.js
+// ../../../../../../../src/cli/node_modules/formdata-polyfill/esm.min.js
 function formDataToBlob(F2, B = fetch_blob_default) {
   var b = `${r()}${r()}`.replace(/\./g, "").slice(-28).padStart(32, "-"), c = [], p = `--${b}\r
 Content-Disposition: form-data; name="`;
@@ -6949,7 +6949,7 @@ Content-Type: ${v.type || "application/octet-stream"}\r
 }
 var t, i, h, r, m, f, e, x, FormData2;
 var init_esm_min = __esm({
-  "node_modules/formdata-polyfill/esm.min.js"() {
+  "../../../../../../../src/cli/node_modules/formdata-polyfill/esm.min.js"() {
     init_fetch_blob();
     init_file();
     ({ toStringTag: t, iterator: i, hasInstance: h } = Symbol);
@@ -7030,10 +7030,10 @@ var init_esm_min = __esm({
   }
 });
 
-// node_modules/node-fetch/src/errors/base.js
+// ../../../../../../../src/cli/node_modules/node-fetch/src/errors/base.js
 var FetchBaseError;
 var init_base = __esm({
-  "node_modules/node-fetch/src/errors/base.js"() {
+  "../../../../../../../src/cli/node_modules/node-fetch/src/errors/base.js"() {
     FetchBaseError = class extends Error {
       constructor(message, type) {
         super(message);
@@ -7050,10 +7050,10 @@ var init_base = __esm({
   }
 });
 
-// node_modules/node-fetch/src/errors/fetch-error.js
+// ../../../../../../../src/cli/node_modules/node-fetch/src/errors/fetch-error.js
 var FetchError;
 var init_fetch_error = __esm({
-  "node_modules/node-fetch/src/errors/fetch-error.js"() {
+  "../../../../../../../src/cli/node_modules/node-fetch/src/errors/fetch-error.js"() {
     init_base();
     FetchError = class extends FetchBaseError {
       /**
@@ -7072,10 +7072,10 @@ var init_fetch_error = __esm({
   }
 });
 
-// node_modules/node-fetch/src/utils/is.js
+// ../../../../../../../src/cli/node_modules/node-fetch/src/utils/is.js
 var NAME, isURLSearchParameters, isBlob, isAbortSignal, isDomainOrSubdomain, isSameProtocol;
 var init_is = __esm({
-  "node_modules/node-fetch/src/utils/is.js"() {
+  "../../../../../../../src/cli/node_modules/node-fetch/src/utils/is.js"() {
     NAME = Symbol.toStringTag;
     isURLSearchParameters = (object) => {
       return typeof object === "object" && typeof object.append === "function" && typeof object.delete === "function" && typeof object.get === "function" && typeof object.getAll === "function" && typeof object.has === "function" && typeof object.set === "function" && typeof object.sort === "function" && object[NAME] === "URLSearchParams";
@@ -7099,9 +7099,9 @@ var init_is = __esm({
   }
 });
 
-// node_modules/node-domexception/index.js
+// ../../../../../../../src/cli/node_modules/node-domexception/index.js
 var require_node_domexception = __commonJS({
-  "node_modules/node-domexception/index.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/node-domexception/index.js"(exports, module) {
     if (!globalThis.DOMException) {
       try {
         const { MessageChannel } = __require("worker_threads"), port = new MessageChannel().port1, ab = new ArrayBuffer();
@@ -7114,12 +7114,12 @@ var require_node_domexception = __commonJS({
   }
 });
 
-// node_modules/fetch-blob/from.js
+// ../../../../../../../src/cli/node_modules/fetch-blob/from.js
 import { statSync, createReadStream, promises as fs } from "node:fs";
-import { basename } from "node:path";
+import { basename as basename2 } from "node:path";
 var import_node_domexception, stat, blobFromSync, blobFrom, fileFrom, fileFromSync, fromBlob, fromFile, BlobDataItem;
 var init_from = __esm({
-  "node_modules/fetch-blob/from.js"() {
+  "../../../../../../../src/cli/node_modules/fetch-blob/from.js"() {
     import_node_domexception = __toESM(require_node_domexception(), 1);
     init_file();
     init_fetch_blob();
@@ -7139,7 +7139,7 @@ var init_from = __esm({
       size: stat3.size,
       lastModified: stat3.mtimeMs,
       start: 0
-    })], basename(path2), { type, lastModified: stat3.mtimeMs });
+    })], basename2(path2), { type, lastModified: stat3.mtimeMs });
     BlobDataItem = class _BlobDataItem {
       #path;
       #start;
@@ -7178,7 +7178,7 @@ var init_from = __esm({
   }
 });
 
-// node_modules/node-fetch/src/utils/multipart-parser.js
+// ../../../../../../../src/cli/node_modules/node-fetch/src/utils/multipart-parser.js
 var multipart_parser_exports = {};
 __export(multipart_parser_exports, {
   toFormData: () => toFormData
@@ -7272,7 +7272,7 @@ async function toFormData(Body2, ct) {
 }
 var s, S, f2, F, LF, CR, SPACE, HYPHEN, COLON, A, Z, lower, noop, MultipartParser;
 var init_multipart_parser = __esm({
-  "node_modules/node-fetch/src/utils/multipart-parser.js"() {
+  "../../../../../../../src/cli/node_modules/node-fetch/src/utils/multipart-parser.js"() {
     init_from();
     init_esm_min();
     s = 0;
@@ -7540,7 +7540,7 @@ var init_multipart_parser = __esm({
   }
 });
 
-// node_modules/node-fetch/src/body.js
+// ../../../../../../../src/cli/node_modules/node-fetch/src/body.js
 import Stream, { PassThrough } from "node:stream";
 import { types, deprecate, promisify } from "node:util";
 import { Buffer as Buffer2 } from "node:buffer";
@@ -7590,7 +7590,7 @@ async function consumeBody(data) {
 }
 var pipeline, INTERNALS, Body, clone, getNonSpecFormDataBoundary, extractContentType, getTotalBytes, writeToStream;
 var init_body = __esm({
-  "node_modules/node-fetch/src/body.js"() {
+  "../../../../../../../src/cli/node_modules/node-fetch/src/body.js"() {
     init_fetch_blob();
     init_esm_min();
     init_fetch_error();
@@ -7798,7 +7798,7 @@ var init_body = __esm({
   }
 });
 
-// node_modules/node-fetch/src/headers.js
+// ../../../../../../../src/cli/node_modules/node-fetch/src/headers.js
 import { types as types2 } from "node:util";
 import http from "node:http";
 function fromRawHeaders(headers = []) {
@@ -7821,7 +7821,7 @@ function fromRawHeaders(headers = []) {
 }
 var validateHeaderName, validateHeaderValue, Headers2;
 var init_headers = __esm({
-  "node_modules/node-fetch/src/headers.js"() {
+  "../../../../../../../src/cli/node_modules/node-fetch/src/headers.js"() {
     validateHeaderName = typeof http.validateHeaderName === "function" ? http.validateHeaderName : (name) => {
       if (!/^[\^`\-\w!#$%&'*+.|~]+$/.test(name)) {
         const error = new TypeError(`Header name must be a valid HTTP token [${name}]`);
@@ -7989,10 +7989,10 @@ var init_headers = __esm({
   }
 });
 
-// node_modules/node-fetch/src/utils/is-redirect.js
+// ../../../../../../../src/cli/node_modules/node-fetch/src/utils/is-redirect.js
 var redirectStatus, isRedirect;
 var init_is_redirect = __esm({
-  "node_modules/node-fetch/src/utils/is-redirect.js"() {
+  "../../../../../../../src/cli/node_modules/node-fetch/src/utils/is-redirect.js"() {
     redirectStatus = /* @__PURE__ */ new Set([301, 302, 303, 307, 308]);
     isRedirect = (code) => {
       return redirectStatus.has(code);
@@ -8000,10 +8000,10 @@ var init_is_redirect = __esm({
   }
 });
 
-// node_modules/node-fetch/src/response.js
+// ../../../../../../../src/cli/node_modules/node-fetch/src/response.js
 var INTERNALS2, Response2;
 var init_response = __esm({
-  "node_modules/node-fetch/src/response.js"() {
+  "../../../../../../../src/cli/node_modules/node-fetch/src/response.js"() {
     init_headers();
     init_body();
     init_is_redirect();
@@ -8126,10 +8126,10 @@ var init_response = __esm({
   }
 });
 
-// node_modules/node-fetch/src/utils/get-search.js
+// ../../../../../../../src/cli/node_modules/node-fetch/src/utils/get-search.js
 var getSearch;
 var init_get_search = __esm({
-  "node_modules/node-fetch/src/utils/get-search.js"() {
+  "../../../../../../../src/cli/node_modules/node-fetch/src/utils/get-search.js"() {
     getSearch = (parsedURL) => {
       if (parsedURL.search) {
         return parsedURL.search;
@@ -8141,7 +8141,7 @@ var init_get_search = __esm({
   }
 });
 
-// node_modules/node-fetch/src/utils/referrer.js
+// ../../../../../../../src/cli/node_modules/node-fetch/src/utils/referrer.js
 import { isIP } from "node:net";
 function stripURLForUseAsAReferrer(url, originOnly = false) {
   if (url == null) {
@@ -8270,7 +8270,7 @@ function parseReferrerPolicyFromHeader(headers) {
 }
 var ReferrerPolicy, DEFAULT_REFERRER_POLICY;
 var init_referrer = __esm({
-  "node_modules/node-fetch/src/utils/referrer.js"() {
+  "../../../../../../../src/cli/node_modules/node-fetch/src/utils/referrer.js"() {
     ReferrerPolicy = /* @__PURE__ */ new Set([
       "",
       "no-referrer",
@@ -8286,12 +8286,12 @@ var init_referrer = __esm({
   }
 });
 
-// node_modules/node-fetch/src/request.js
+// ../../../../../../../src/cli/node_modules/node-fetch/src/request.js
 import { format as formatUrl } from "node:url";
 import { deprecate as deprecate2 } from "node:util";
 var INTERNALS3, isRequest, doBadDataWarn, Request, getNodeRequestOptions;
 var init_request = __esm({
-  "node_modules/node-fetch/src/request.js"() {
+  "../../../../../../../src/cli/node_modules/node-fetch/src/request.js"() {
     init_headers();
     init_body();
     init_is();
@@ -8491,10 +8491,10 @@ var init_request = __esm({
   }
 });
 
-// node_modules/node-fetch/src/errors/abort-error.js
+// ../../../../../../../src/cli/node_modules/node-fetch/src/errors/abort-error.js
 var AbortError;
 var init_abort_error = __esm({
-  "node_modules/node-fetch/src/errors/abort-error.js"() {
+  "../../../../../../../src/cli/node_modules/node-fetch/src/errors/abort-error.js"() {
     init_base();
     AbortError = class extends FetchBaseError {
       constructor(message, type = "aborted") {
@@ -8504,7 +8504,7 @@ var init_abort_error = __esm({
   }
 });
 
-// node_modules/node-fetch/src/index.js
+// ../../../../../../../src/cli/node_modules/node-fetch/src/index.js
 var src_exports = {};
 __export(src_exports, {
   AbortError: () => AbortError,
@@ -8528,7 +8528,7 @@ import zlib from "node:zlib";
 import Stream2, { PassThrough as PassThrough2, pipeline as pump } from "node:stream";
 import { Buffer as Buffer3 } from "node:buffer";
 async function fetch2(url, options_) {
-  return new Promise((resolve6, reject) => {
+  return new Promise((resolve7, reject) => {
     const request = new Request(url, options_);
     const { parsedURL, options } = getNodeRequestOptions(request);
     if (!supportedSchemas.has(parsedURL.protocol)) {
@@ -8537,7 +8537,7 @@ async function fetch2(url, options_) {
     if (parsedURL.protocol === "data:") {
       const data = dist_default(request.url);
       const response2 = new Response2(data, { headers: { "Content-Type": data.typeFull } });
-      resolve6(response2);
+      resolve7(response2);
       return;
     }
     const send = (parsedURL.protocol === "https:" ? https : http2).request;
@@ -8659,7 +8659,7 @@ async function fetch2(url, options_) {
             if (responseReferrerPolicy) {
               requestOptions.referrerPolicy = responseReferrerPolicy;
             }
-            resolve6(fetch2(new Request(locationURL, requestOptions)));
+            resolve7(fetch2(new Request(locationURL, requestOptions)));
             finalize();
             return;
           }
@@ -8692,7 +8692,7 @@ async function fetch2(url, options_) {
       const codings = headers.get("Content-Encoding");
       if (!request.compress || request.method === "HEAD" || codings === null || response_.statusCode === 204 || response_.statusCode === 304) {
         response = new Response2(body, responseOptions);
-        resolve6(response);
+        resolve7(response);
         return;
       }
       const zlibOptions = {
@@ -8706,7 +8706,7 @@ async function fetch2(url, options_) {
           }
         });
         response = new Response2(body, responseOptions);
-        resolve6(response);
+        resolve7(response);
         return;
       }
       if (codings === "deflate" || codings === "x-deflate") {
@@ -8730,12 +8730,12 @@ async function fetch2(url, options_) {
             });
           }
           response = new Response2(body, responseOptions);
-          resolve6(response);
+          resolve7(response);
         });
         raw.once("end", () => {
           if (!response) {
             response = new Response2(body, responseOptions);
-            resolve6(response);
+            resolve7(response);
           }
         });
         return;
@@ -8747,11 +8747,11 @@ async function fetch2(url, options_) {
           }
         });
         response = new Response2(body, responseOptions);
-        resolve6(response);
+        resolve7(response);
         return;
       }
       response = new Response2(body, responseOptions);
-      resolve6(response);
+      resolve7(response);
     });
     writeToStream(request_, request).catch(reject);
   });
@@ -8790,7 +8790,7 @@ function fixResponseChunkedTransferBadEnding(request, errorCallback) {
 }
 var supportedSchemas;
 var init_src = __esm({
-  "node_modules/node-fetch/src/index.js"() {
+  "../../../../../../../src/cli/node_modules/node-fetch/src/index.js"() {
     init_dist();
     init_body();
     init_response();
@@ -8807,9 +8807,9 @@ var init_src = __esm({
   }
 });
 
-// node_modules/gaxios/build/cjs/src/gaxios.js
+// ../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/gaxios.js
 var require_gaxios = __commonJS({
-  "node_modules/gaxios/build/cjs/src/gaxios.js"(exports) {
+  "../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/gaxios.js"(exports) {
     "use strict";
     var __importDefault = exports && exports.__importDefault || function(mod) {
       return mod && mod.__esModule ? mod : { "default": mod };
@@ -9281,9 +9281,9 @@ Content-Type: ${partContentType}\r
   }
 });
 
-// node_modules/gaxios/build/cjs/src/index.js
+// ../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/index.js
 var require_src2 = __commonJS({
-  "node_modules/gaxios/build/cjs/src/index.js"(exports) {
+  "../../../../../../../src/cli/node_modules/gaxios/build/cjs/src/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -9320,9 +9320,9 @@ var require_src2 = __commonJS({
   }
 });
 
-// node_modules/bignumber.js/bignumber.js
+// ../../../../../../../src/cli/node_modules/bignumber.js/bignumber.js
 var require_bignumber = __commonJS({
-  "node_modules/bignumber.js/bignumber.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/bignumber.js/bignumber.js"(exports, module) {
     (function(globalObject) {
       "use strict";
       var BigNumber, isNumeric = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i, mathceil = Math.ceil, mathfloor = Math.floor, bignumberError = "[BigNumber Error] ", tooManyDigits = bignumberError + "Number primitive has more than 15 significant digits: ", BASE = 1e14, LOG_BASE = 14, MAX_SAFE_INTEGER = 9007199254740991, POWS_TEN = [1, 10, 100, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13], SQRT_BASE = 1e7, MAX = 1e9;
@@ -10671,9 +10671,9 @@ var require_bignumber = __commonJS({
   }
 });
 
-// node_modules/json-bigint/lib/stringify.js
+// ../../../../../../../src/cli/node_modules/json-bigint/lib/stringify.js
 var require_stringify = __commonJS({
-  "node_modules/json-bigint/lib/stringify.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/json-bigint/lib/stringify.js"(exports, module) {
     var BigNumber = require_bignumber();
     var JSON2 = module.exports;
     (function() {
@@ -10783,9 +10783,9 @@ var require_stringify = __commonJS({
   }
 });
 
-// node_modules/json-bigint/lib/parse.js
+// ../../../../../../../src/cli/node_modules/json-bigint/lib/parse.js
 var require_parse = __commonJS({
-  "node_modules/json-bigint/lib/parse.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/json-bigint/lib/parse.js"(exports, module) {
     var BigNumber = null;
     var suspectProtoRx = /(?:_|\\u005[Ff])(?:_|\\u005[Ff])(?:p|\\u0070)(?:r|\\u0072)(?:o|\\u006[Ff])(?:t|\\u0074)(?:o|\\u006[Ff])(?:_|\\u005[Ff])(?:_|\\u005[Ff])/;
     var suspectConstructorRx = /(?:c|\\u0063)(?:o|\\u006[Ff])(?:n|\\u006[Ee])(?:s|\\u0073)(?:t|\\u0074)(?:r|\\u0072)(?:u|\\u0075)(?:c|\\u0063)(?:t|\\u0074)(?:o|\\u006[Ff])(?:r|\\u0072)/;
@@ -11064,9 +11064,9 @@ var require_parse = __commonJS({
   }
 });
 
-// node_modules/json-bigint/index.js
+// ../../../../../../../src/cli/node_modules/json-bigint/index.js
 var require_json_bigint = __commonJS({
-  "node_modules/json-bigint/index.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/json-bigint/index.js"(exports, module) {
     var json_stringify = require_stringify().stringify;
     var json_parse = require_parse();
     module.exports = function(options) {
@@ -11080,9 +11080,9 @@ var require_json_bigint = __commonJS({
   }
 });
 
-// node_modules/gcp-metadata/build/src/gcp-residency.js
+// ../../../../../../../src/cli/node_modules/gcp-metadata/build/src/gcp-residency.js
 var require_gcp_residency = __commonJS({
-  "node_modules/gcp-metadata/build/src/gcp-residency.js"(exports) {
+  "../../../../../../../src/cli/node_modules/gcp-metadata/build/src/gcp-residency.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GCE_LINUX_BIOS_PATHS = void 0;
@@ -11135,9 +11135,9 @@ var require_gcp_residency = __commonJS({
   }
 });
 
-// node_modules/google-logging-utils/build/src/colours.js
+// ../../../../../../../src/cli/node_modules/google-logging-utils/build/src/colours.js
 var require_colours = __commonJS({
-  "node_modules/google-logging-utils/build/src/colours.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-logging-utils/build/src/colours.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Colours = void 0;
@@ -11196,9 +11196,9 @@ var require_colours = __commonJS({
   }
 });
 
-// node_modules/google-logging-utils/build/src/logging-utils.js
+// ../../../../../../../src/cli/node_modules/google-logging-utils/build/src/logging-utils.js
 var require_logging_utils = __commonJS({
-  "node_modules/google-logging-utils/build/src/logging-utils.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-logging-utils/build/src/logging-utils.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -11485,9 +11485,9 @@ var require_logging_utils = __commonJS({
   }
 });
 
-// node_modules/google-logging-utils/build/src/index.js
+// ../../../../../../../src/cli/node_modules/google-logging-utils/build/src/index.js
 var require_src3 = __commonJS({
-  "node_modules/google-logging-utils/build/src/index.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-logging-utils/build/src/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -11510,9 +11510,9 @@ var require_src3 = __commonJS({
   }
 });
 
-// node_modules/gcp-metadata/build/src/index.js
+// ../../../../../../../src/cli/node_modules/gcp-metadata/build/src/index.js
 var require_src4 = __commonJS({
-  "node_modules/gcp-metadata/build/src/index.js"(exports) {
+  "../../../../../../../src/cli/node_modules/gcp-metadata/build/src/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -11766,9 +11766,9 @@ var require_src4 = __commonJS({
   }
 });
 
-// node_modules/base64-js/index.js
+// ../../../../../../../src/cli/node_modules/base64-js/index.js
 var require_base64_js = __commonJS({
-  "node_modules/base64-js/index.js"(exports) {
+  "../../../../../../../src/cli/node_modules/base64-js/index.js"(exports) {
     "use strict";
     exports.byteLength = byteLength;
     exports.toByteArray = toByteArray;
@@ -11867,9 +11867,9 @@ var require_base64_js = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/crypto/shared.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/crypto/shared.js
 var require_shared = __commonJS({
-  "node_modules/google-auth-library/build/src/crypto/shared.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/crypto/shared.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.fromArrayBufferToHex = fromArrayBufferToHex;
@@ -11882,9 +11882,9 @@ var require_shared = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/crypto/browser/crypto.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/crypto/browser/crypto.js
 var require_crypto = __commonJS({
-  "node_modules/google-auth-library/build/src/crypto/browser/crypto.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/crypto/browser/crypto.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.BrowserCrypto = void 0;
@@ -11978,9 +11978,9 @@ var require_crypto = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/crypto/node/crypto.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/crypto/node/crypto.js
 var require_crypto2 = __commonJS({
-  "node_modules/google-auth-library/build/src/crypto/node/crypto.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/crypto/node/crypto.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.NodeCrypto = void 0;
@@ -12047,9 +12047,9 @@ var require_crypto2 = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/crypto/crypto.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/crypto/crypto.js
 var require_crypto3 = __commonJS({
-  "node_modules/google-auth-library/build/src/crypto/crypto.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/crypto/crypto.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -12085,9 +12085,9 @@ var require_crypto3 = __commonJS({
   }
 });
 
-// node_modules/safe-buffer/index.js
+// ../../../../../../../src/cli/node_modules/safe-buffer/index.js
 var require_safe_buffer = __commonJS({
-  "node_modules/safe-buffer/index.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/safe-buffer/index.js"(exports, module) {
     var buffer = __require("buffer");
     var Buffer4 = buffer.Buffer;
     function copyProps(src, dst) {
@@ -12143,9 +12143,9 @@ var require_safe_buffer = __commonJS({
   }
 });
 
-// node_modules/ecdsa-sig-formatter/src/param-bytes-for-alg.js
+// ../../../../../../../src/cli/node_modules/ecdsa-sig-formatter/src/param-bytes-for-alg.js
 var require_param_bytes_for_alg = __commonJS({
-  "node_modules/ecdsa-sig-formatter/src/param-bytes-for-alg.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/ecdsa-sig-formatter/src/param-bytes-for-alg.js"(exports, module) {
     "use strict";
     function getParamSize(keySize) {
       var result = (keySize / 8 | 0) + (keySize % 8 === 0 ? 0 : 1);
@@ -12167,9 +12167,9 @@ var require_param_bytes_for_alg = __commonJS({
   }
 });
 
-// node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js
+// ../../../../../../../src/cli/node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js
 var require_ecdsa_sig_formatter = __commonJS({
-  "node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js"(exports, module) {
     "use strict";
     var Buffer4 = require_safe_buffer().Buffer;
     var getParamBytesForAlg = require_param_bytes_for_alg();
@@ -12307,9 +12307,9 @@ var require_ecdsa_sig_formatter = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/util.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/util.js
 var require_util2 = __commonJS({
-  "node_modules/google-auth-library/build/src/util.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/util.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.LRUCache = void 0;
@@ -12422,9 +12422,9 @@ var require_util2 = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/package.json
+// ../../../../../../../src/cli/node_modules/google-auth-library/package.json
 var require_package2 = __commonJS({
-  "node_modules/google-auth-library/package.json"(exports, module) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/package.json"(exports, module) {
     module.exports = {
       name: "google-auth-library",
       version: "10.9.1",
@@ -12518,9 +12518,9 @@ var require_package2 = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/shared.cjs
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/shared.cjs
 var require_shared2 = __commonJS({
-  "node_modules/google-auth-library/build/src/shared.cjs"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/shared.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.USER_AGENT = exports.PRODUCT_NAME = exports.pkg = void 0;
@@ -12533,9 +12533,9 @@ var require_shared2 = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/authclient.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/authclient.js
 var require_authclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/authclient.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/authclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.AuthClient = exports.DEFAULT_EAGER_REFRESH_THRESHOLD_MILLIS = exports.DEFAULT_UNIVERSE = void 0;
@@ -12768,9 +12768,9 @@ var require_authclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/loginticket.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/loginticket.js
 var require_loginticket = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/loginticket.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/loginticket.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.LoginTicket = void 0;
@@ -12820,9 +12820,9 @@ var require_loginticket = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/oauth2client.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/oauth2client.js
 var require_oauth2client = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/oauth2client.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/oauth2client.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.OAuth2Client = exports.ClientAuthentication = exports.CertificateFormat = exports.CodeChallengeMethod = void 0;
@@ -13501,9 +13501,9 @@ var require_oauth2client = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/computeclient.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/computeclient.js
 var require_computeclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/computeclient.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/computeclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Compute = void 0;
@@ -13593,9 +13593,9 @@ var require_computeclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/idtokenclient.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/idtokenclient.js
 var require_idtokenclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/idtokenclient.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/idtokenclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.IdTokenClient = void 0;
@@ -13639,9 +13639,9 @@ var require_idtokenclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/envDetect.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/envDetect.js
 var require_envDetect = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/envDetect.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/envDetect.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GCPEnv = void 0;
@@ -13716,9 +13716,9 @@ var require_envDetect = __commonJS({
   }
 });
 
-// node_modules/jws/lib/data-stream.js
+// ../../../../../../../src/cli/node_modules/jws/lib/data-stream.js
 var require_data_stream = __commonJS({
-  "node_modules/jws/lib/data-stream.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/jws/lib/data-stream.js"(exports, module) {
     var Buffer4 = require_safe_buffer().Buffer;
     var Stream4 = __require("stream");
     var util = __require("util");
@@ -13764,9 +13764,9 @@ var require_data_stream = __commonJS({
   }
 });
 
-// node_modules/buffer-equal-constant-time/index.js
+// ../../../../../../../src/cli/node_modules/buffer-equal-constant-time/index.js
 var require_buffer_equal_constant_time = __commonJS({
-  "node_modules/buffer-equal-constant-time/index.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/buffer-equal-constant-time/index.js"(exports, module) {
     "use strict";
     var Buffer4 = __require("buffer").Buffer;
     var SlowBuffer = __require("buffer").SlowBuffer;
@@ -13798,9 +13798,9 @@ var require_buffer_equal_constant_time = __commonJS({
   }
 });
 
-// node_modules/jwa/index.js
+// ../../../../../../../src/cli/node_modules/jwa/index.js
 var require_jwa = __commonJS({
-  "node_modules/jwa/index.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/jwa/index.js"(exports, module) {
     var Buffer4 = require_safe_buffer().Buffer;
     var crypto2 = __require("crypto");
     var formatEcdsa = require_ecdsa_sig_formatter();
@@ -14022,9 +14022,9 @@ var require_jwa = __commonJS({
   }
 });
 
-// node_modules/jws/lib/tostring.js
+// ../../../../../../../src/cli/node_modules/jws/lib/tostring.js
 var require_tostring = __commonJS({
-  "node_modules/jws/lib/tostring.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/jws/lib/tostring.js"(exports, module) {
     var Buffer4 = __require("buffer").Buffer;
     module.exports = function toString(obj) {
       if (typeof obj === "string")
@@ -14036,9 +14036,9 @@ var require_tostring = __commonJS({
   }
 });
 
-// node_modules/jws/lib/sign-stream.js
+// ../../../../../../../src/cli/node_modules/jws/lib/sign-stream.js
 var require_sign_stream = __commonJS({
-  "node_modules/jws/lib/sign-stream.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/jws/lib/sign-stream.js"(exports, module) {
     var Buffer4 = require_safe_buffer().Buffer;
     var DataStream = require_data_stream();
     var jwa = require_jwa();
@@ -14111,9 +14111,9 @@ var require_sign_stream = __commonJS({
   }
 });
 
-// node_modules/jws/lib/verify-stream.js
+// ../../../../../../../src/cli/node_modules/jws/lib/verify-stream.js
 var require_verify_stream = __commonJS({
-  "node_modules/jws/lib/verify-stream.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/jws/lib/verify-stream.js"(exports, module) {
     var Buffer4 = require_safe_buffer().Buffer;
     var DataStream = require_data_stream();
     var jwa = require_jwa();
@@ -14226,9 +14226,9 @@ var require_verify_stream = __commonJS({
   }
 });
 
-// node_modules/jws/index.js
+// ../../../../../../../src/cli/node_modules/jws/index.js
 var require_jws = __commonJS({
-  "node_modules/jws/index.js"(exports) {
+  "../../../../../../../src/cli/node_modules/jws/index.js"(exports) {
     var SignStream = require_sign_stream();
     var VerifyStream = require_verify_stream();
     var ALGORITHMS = [
@@ -14259,9 +14259,9 @@ var require_jws = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/gtoken/jwsSign.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/jwsSign.js
 var require_jwsSign = __commonJS({
-  "node_modules/google-auth-library/build/src/gtoken/jwsSign.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/jwsSign.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.buildPayloadForJwsSign = buildPayloadForJwsSign;
@@ -14293,9 +14293,9 @@ var require_jwsSign = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/gtoken/getToken.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/getToken.js
 var require_getToken = __commonJS({
-  "node_modules/google-auth-library/build/src/gtoken/getToken.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/getToken.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getToken = getToken;
@@ -14337,9 +14337,9 @@ var require_getToken = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/gtoken/errorWithCode.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/errorWithCode.js
 var require_errorWithCode = __commonJS({
-  "node_modules/google-auth-library/build/src/gtoken/errorWithCode.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/errorWithCode.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ErrorWithCode = void 0;
@@ -14354,9 +14354,9 @@ var require_errorWithCode = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/gtoken/getCredentials.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/getCredentials.js
 var require_getCredentials = __commonJS({
-  "node_modules/google-auth-library/build/src/gtoken/getCredentials.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/getCredentials.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getCredentials = getCredentials;
@@ -14455,9 +14455,9 @@ var require_getCredentials = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/gtoken/tokenHandler.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/tokenHandler.js
 var require_tokenHandler = __commonJS({
-  "node_modules/google-auth-library/build/src/gtoken/tokenHandler.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/tokenHandler.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.TokenHandler = void 0;
@@ -14546,9 +14546,9 @@ var require_tokenHandler = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/gtoken/revokeToken.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/revokeToken.js
 var require_revokeToken = __commonJS({
-  "node_modules/google-auth-library/build/src/gtoken/revokeToken.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/revokeToken.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.revokeToken = revokeToken;
@@ -14564,9 +14564,9 @@ var require_revokeToken = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/gtoken/googleToken.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/googleToken.js
 var require_googleToken = __commonJS({
-  "node_modules/google-auth-library/build/src/gtoken/googleToken.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/gtoken/googleToken.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GoogleToken = void 0;
@@ -14670,9 +14670,9 @@ var require_googleToken = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/jwtaccess.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/jwtaccess.js
 var require_jwtaccess = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/jwtaccess.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/jwtaccess.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.JWTAccess = void 0;
@@ -14819,7 +14819,7 @@ var require_jwtaccess = __commonJS({
         }
       }
       fromStreamAsync(inputStream) {
-        return new Promise((resolve6, reject) => {
+        return new Promise((resolve7, reject) => {
           if (!inputStream) {
             reject(new Error("Must pass in a stream containing the service account auth settings."));
           }
@@ -14828,7 +14828,7 @@ var require_jwtaccess = __commonJS({
             try {
               const data = JSON.parse(s2);
               this.fromJSON(data);
-              resolve6();
+              resolve7();
             } catch (err) {
               reject(err);
             }
@@ -14840,9 +14840,9 @@ var require_jwtaccess = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/jwtclient.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/jwtclient.js
 var require_jwtclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/jwtclient.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/jwtclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.JWT = void 0;
@@ -15067,7 +15067,7 @@ var require_jwtclient = __commonJS({
         }
       }
       fromStreamAsync(inputStream) {
-        return new Promise((resolve6, reject) => {
+        return new Promise((resolve7, reject) => {
           if (!inputStream) {
             throw new Error("Must pass in a stream containing the service account auth settings.");
           }
@@ -15076,7 +15076,7 @@ var require_jwtclient = __commonJS({
             try {
               const data = JSON.parse(s2);
               this.fromJSON(data);
-              resolve6();
+              resolve7();
             } catch (e2) {
               reject(e2);
             }
@@ -15112,9 +15112,9 @@ var require_jwtclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/refreshclient.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/refreshclient.js
 var require_refreshclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/refreshclient.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/refreshclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.UserRefreshClient = exports.USER_REFRESH_ACCOUNT_TYPE = void 0;
@@ -15209,7 +15209,7 @@ var require_refreshclient = __commonJS({
         }
       }
       async fromStreamAsync(inputStream) {
-        return new Promise((resolve6, reject) => {
+        return new Promise((resolve7, reject) => {
           if (!inputStream) {
             return reject(new Error("Must pass in a stream containing the user refresh token."));
           }
@@ -15218,7 +15218,7 @@ var require_refreshclient = __commonJS({
             try {
               const data = JSON.parse(s2);
               this.fromJSON(data);
-              return resolve6();
+              return resolve7();
             } catch (err) {
               return reject(err);
             }
@@ -15240,9 +15240,9 @@ var require_refreshclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/impersonated.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/impersonated.js
 var require_impersonated = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/impersonated.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/impersonated.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Impersonated = exports.IMPERSONATED_ACCOUNT_TYPE = void 0;
@@ -15419,9 +15419,9 @@ var require_impersonated = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/oauth2common.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/oauth2common.js
 var require_oauth2common = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/oauth2common.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/oauth2common.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.OAuthClientAuthHandler = void 0;
@@ -15567,9 +15567,9 @@ var require_oauth2common = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/stscredentials.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/stscredentials.js
 var require_stscredentials = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/stscredentials.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/stscredentials.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.StsCredentials = void 0;
@@ -15655,9 +15655,9 @@ var require_stscredentials = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/baseexternalclient.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/baseexternalclient.js
 var require_baseexternalclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/baseexternalclient.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/baseexternalclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.BaseExternalAccountClient = exports.CLOUD_RESOURCE_MANAGER = exports.EXTERNAL_ACCOUNT_TYPE = exports.EXPIRATION_TIME_OFFSET = void 0;
@@ -16034,9 +16034,9 @@ var require_baseexternalclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/filesubjecttokensupplier.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/filesubjecttokensupplier.js
 var require_filesubjecttokensupplier = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/filesubjecttokensupplier.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/filesubjecttokensupplier.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.FileSubjectTokenSupplier = void 0;
@@ -16099,9 +16099,9 @@ var require_filesubjecttokensupplier = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/urlsubjecttokensupplier.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/urlsubjecttokensupplier.js
 var require_urlsubjecttokensupplier = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/urlsubjecttokensupplier.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/urlsubjecttokensupplier.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.UrlSubjectTokenSupplier = void 0;
@@ -16157,9 +16157,9 @@ var require_urlsubjecttokensupplier = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js
 var require_certificatesubjecttokensupplier = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.CertificateSubjectTokenSupplier = exports.InvalidConfigurationError = exports.CertificateSourceUnavailableError = exports.CERTIFICATE_CONFIGURATION_ENV_VARIABLE = void 0;
@@ -16341,9 +16341,9 @@ var require_certificatesubjecttokensupplier = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/identitypoolclient.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/identitypoolclient.js
 var require_identitypoolclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/identitypoolclient.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/identitypoolclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.IdentityPoolClient = void 0;
@@ -16453,9 +16453,9 @@ var require_identitypoolclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/awsrequestsigner.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/awsrequestsigner.js
 var require_awsrequestsigner = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/awsrequestsigner.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/awsrequestsigner.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.AwsRequestSigner = void 0;
@@ -16603,9 +16603,9 @@ ${credentialScope}
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js
 var require_defaultawssecuritycredentialssupplier = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DefaultAwsSecurityCredentialsSupplier = void 0;
@@ -16758,9 +16758,9 @@ var require_defaultawssecuritycredentialssupplier = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/awsclient.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/awsclient.js
 var require_awsclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/awsclient.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/awsclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.AwsClient = void 0;
@@ -16872,9 +16872,9 @@ var require_awsclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/executable-response.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/executable-response.js
 var require_executable_response = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/executable-response.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/executable-response.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.InvalidSubjectTokenError = exports.InvalidMessageFieldError = exports.InvalidCodeFieldError = exports.InvalidTokenTypeFieldError = exports.InvalidExpirationTimeFieldError = exports.InvalidSuccessFieldError = exports.InvalidVersionFieldError = exports.ExecutableResponseError = exports.ExecutableResponse = void 0;
@@ -17003,9 +17003,9 @@ var require_executable_response = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js
 var require_pluggable_auth_handler = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.PluggableAuthHandler = exports.ExecutableError = void 0;
@@ -17051,7 +17051,7 @@ var require_pluggable_auth_handler = __commonJS({
        * @return A promise that resolves with the executable response.
        */
       retrieveResponseFromExecutable(envMap) {
-        return new Promise((resolve6, reject) => {
+        return new Promise((resolve7, reject) => {
           const child = childProcess.spawn(this.commandComponents[0], this.commandComponents.slice(1), {
             env: { ...process.env, ...Object.fromEntries(envMap) }
           });
@@ -17073,7 +17073,7 @@ var require_pluggable_auth_handler = __commonJS({
               try {
                 const responseJson = JSON.parse(output);
                 const response = new executable_response_1.ExecutableResponse(responseJson);
-                return resolve6(response);
+                return resolve7(response);
               } catch (error) {
                 if (error instanceof executable_response_1.ExecutableResponseError) {
                   return reject(error);
@@ -17144,9 +17144,9 @@ var require_pluggable_auth_handler = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js
 var require_pluggable_auth_client = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.PluggableAuthClient = exports.ExecutableError = void 0;
@@ -17271,9 +17271,9 @@ var require_pluggable_auth_client = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/externalclient.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/externalclient.js
 var require_externalclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/externalclient.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/externalclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ExternalAccountClient = void 0;
@@ -17320,9 +17320,9 @@ var require_externalclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/externalAccountAuthorizedUserClient.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/externalAccountAuthorizedUserClient.js
 var require_externalAccountAuthorizedUserClient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/externalAccountAuthorizedUserClient.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/externalAccountAuthorizedUserClient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ExternalAccountAuthorizedUserClient = exports.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE = void 0;
@@ -17507,9 +17507,9 @@ var require_externalAccountAuthorizedUserClient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/gdchclient.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/gdchclient.js
 var require_gdchclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/gdchclient.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/gdchclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GdchClient = exports.GDCH_SERVICE_ACCOUNT_TYPE = void 0;
@@ -17790,9 +17790,9 @@ var require_gdchclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/googleauth.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/googleauth.js
 var require_googleauth = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/googleauth.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/googleauth.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GoogleAuth = exports.GoogleAuthExceptionMessages = void 0;
@@ -18265,7 +18265,7 @@ var require_googleauth = __commonJS({
         }
       }
       fromStreamAsync(inputStream, options) {
-        return new Promise((resolve6, reject) => {
+        return new Promise((resolve7, reject) => {
           if (!inputStream) {
             throw new Error("Must pass in a stream containing the Google auth settings.");
           }
@@ -18275,7 +18275,7 @@ var require_googleauth = __commonJS({
               try {
                 const data = JSON.parse(chunks.join(""));
                 const r2 = this._cacheClientFromJSON(data, options);
-                return resolve6(r2);
+                return resolve7(r2);
               } catch (err) {
                 if (!this.keyFilename)
                   throw err;
@@ -18285,7 +18285,7 @@ var require_googleauth = __commonJS({
                 });
                 this.cachedCredential = client;
                 this.setGapicJWTValues(client);
-                return resolve6(client);
+                return resolve7(client);
               }
             } catch (err) {
               return reject(err);
@@ -18321,17 +18321,17 @@ var require_googleauth = __commonJS({
        * Run the Google Cloud SDK command that prints the default project ID
        */
       async getDefaultServiceProjectId() {
-        return new Promise((resolve6) => {
+        return new Promise((resolve7) => {
           (0, child_process_1.exec)("gcloud config config-helper --format json", (err, stdout) => {
             if (!err && stdout) {
               try {
                 const projectId = JSON.parse(stdout).configuration.properties.core.project;
-                resolve6(projectId);
+                resolve7(projectId);
                 return;
               } catch (e2) {
               }
             }
-            resolve6(null);
+            resolve7(null);
           });
         });
       }
@@ -18598,9 +18598,9 @@ var require_googleauth = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/iam.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/iam.js
 var require_iam = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/iam.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/iam.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.IAMAuth = void 0;
@@ -18634,9 +18634,9 @@ var require_iam = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/downscopedclient.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/downscopedclient.js
 var require_downscopedclient = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/downscopedclient.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/downscopedclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DownscopedClient = exports.EXPIRATION_TIME_OFFSET = exports.MAX_ACCESS_BOUNDARY_RULES_COUNT = void 0;
@@ -18819,9 +18819,9 @@ var require_downscopedclient = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/auth/passthrough.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/passthrough.js
 var require_passthrough = __commonJS({
-  "node_modules/google-auth-library/build/src/auth/passthrough.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/auth/passthrough.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.PassThroughClient = void 0;
@@ -18864,9 +18864,9 @@ var require_passthrough = __commonJS({
   }
 });
 
-// node_modules/google-auth-library/build/src/index.js
+// ../../../../../../../src/cli/node_modules/google-auth-library/build/src/index.js
 var require_src5 = __commonJS({
-  "node_modules/google-auth-library/build/src/index.js"(exports) {
+  "../../../../../../../src/cli/node_modules/google-auth-library/build/src/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -19000,9 +19000,9 @@ var require_src5 = __commonJS({
   }
 });
 
-// node_modules/ws/lib/constants.js
+// ../../../../../../../src/cli/node_modules/ws/lib/constants.js
 var require_constants = __commonJS({
-  "node_modules/ws/lib/constants.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/ws/lib/constants.js"(exports, module) {
     "use strict";
     var BINARY_TYPES = ["nodebuffer", "arraybuffer", "fragments"];
     var hasBlob = typeof Blob !== "undefined";
@@ -19023,9 +19023,9 @@ var require_constants = __commonJS({
   }
 });
 
-// node_modules/ws/lib/buffer-util.js
+// ../../../../../../../src/cli/node_modules/ws/lib/buffer-util.js
 var require_buffer_util = __commonJS({
-  "node_modules/ws/lib/buffer-util.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/ws/lib/buffer-util.js"(exports, module) {
     "use strict";
     var { EMPTY_BUFFER } = require_constants();
     var FastBuffer = Buffer[Symbol.species];
@@ -19098,9 +19098,9 @@ var require_buffer_util = __commonJS({
   }
 });
 
-// node_modules/ws/lib/limiter.js
+// ../../../../../../../src/cli/node_modules/ws/lib/limiter.js
 var require_limiter = __commonJS({
-  "node_modules/ws/lib/limiter.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/ws/lib/limiter.js"(exports, module) {
     "use strict";
     var kDone = Symbol("kDone");
     var kRun = Symbol("kRun");
@@ -19148,9 +19148,9 @@ var require_limiter = __commonJS({
   }
 });
 
-// node_modules/ws/lib/permessage-deflate.js
+// ../../../../../../../src/cli/node_modules/ws/lib/permessage-deflate.js
 var require_permessage_deflate = __commonJS({
-  "node_modules/ws/lib/permessage-deflate.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/ws/lib/permessage-deflate.js"(exports, module) {
     "use strict";
     var zlib2 = __require("zlib");
     var bufferUtil = require_buffer_util();
@@ -19531,9 +19531,9 @@ var require_permessage_deflate = __commonJS({
   }
 });
 
-// node_modules/ws/lib/validation.js
+// ../../../../../../../src/cli/node_modules/ws/lib/validation.js
 var require_validation = __commonJS({
-  "node_modules/ws/lib/validation.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/ws/lib/validation.js"(exports, module) {
     "use strict";
     var { isUtf8 } = __require("buffer");
     var { hasBlob } = require_constants();
@@ -19732,9 +19732,9 @@ var require_validation = __commonJS({
   }
 });
 
-// node_modules/ws/lib/receiver.js
+// ../../../../../../../src/cli/node_modules/ws/lib/receiver.js
 var require_receiver = __commonJS({
-  "node_modules/ws/lib/receiver.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/ws/lib/receiver.js"(exports, module) {
     "use strict";
     var { Writable } = __require("stream");
     var PerMessageDeflate2 = require_permessage_deflate();
@@ -20355,9 +20355,9 @@ var require_receiver = __commonJS({
   }
 });
 
-// node_modules/ws/lib/sender.js
+// ../../../../../../../src/cli/node_modules/ws/lib/sender.js
 var require_sender = __commonJS({
-  "node_modules/ws/lib/sender.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/ws/lib/sender.js"(exports, module) {
     "use strict";
     var { Duplex } = __require("stream");
     var { randomFillSync } = __require("crypto");
@@ -20848,9 +20848,9 @@ var require_sender = __commonJS({
   }
 });
 
-// node_modules/ws/lib/event-target.js
+// ../../../../../../../src/cli/node_modules/ws/lib/event-target.js
 var require_event_target = __commonJS({
-  "node_modules/ws/lib/event-target.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/ws/lib/event-target.js"(exports, module) {
     "use strict";
     var { kForOnEventAttribute, kListener } = require_constants();
     var kCode = Symbol("kCode");
@@ -21077,9 +21077,9 @@ var require_event_target = __commonJS({
   }
 });
 
-// node_modules/ws/lib/extension.js
+// ../../../../../../../src/cli/node_modules/ws/lib/extension.js
 var require_extension = __commonJS({
-  "node_modules/ws/lib/extension.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/ws/lib/extension.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
     function push(dest, name, elem) {
@@ -21230,9 +21230,9 @@ var require_extension = __commonJS({
   }
 });
 
-// node_modules/ws/lib/websocket.js
+// ../../../../../../../src/cli/node_modules/ws/lib/websocket.js
 var require_websocket = __commonJS({
-  "node_modules/ws/lib/websocket.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/ws/lib/websocket.js"(exports, module) {
     "use strict";
     var EventEmitter = __require("events");
     var https2 = __require("https");
@@ -22126,9 +22126,9 @@ var require_websocket = __commonJS({
   }
 });
 
-// node_modules/ws/lib/stream.js
+// ../../../../../../../src/cli/node_modules/ws/lib/stream.js
 var require_stream = __commonJS({
-  "node_modules/ws/lib/stream.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/ws/lib/stream.js"(exports, module) {
     "use strict";
     var WebSocket2 = require_websocket();
     var { Duplex } = __require("stream");
@@ -22224,9 +22224,9 @@ var require_stream = __commonJS({
   }
 });
 
-// node_modules/ws/lib/subprotocol.js
+// ../../../../../../../src/cli/node_modules/ws/lib/subprotocol.js
 var require_subprotocol = __commonJS({
-  "node_modules/ws/lib/subprotocol.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/ws/lib/subprotocol.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
     function parse(header) {
@@ -22269,9 +22269,9 @@ var require_subprotocol = __commonJS({
   }
 });
 
-// node_modules/ws/lib/websocket-server.js
+// ../../../../../../../src/cli/node_modules/ws/lib/websocket-server.js
 var require_websocket_server = __commonJS({
-  "node_modules/ws/lib/websocket-server.js"(exports, module) {
+  "../../../../../../../src/cli/node_modules/ws/lib/websocket-server.js"(exports, module) {
     "use strict";
     var EventEmitter = __require("events");
     var http3 = __require("http");
@@ -22670,8 +22670,76 @@ var require_websocket_server = __commonJS({
   }
 });
 
+// src/pi.ts
+init_thresholds();
+import { spawn } from "node:child_process";
+import { basename, dirname, join, resolve } from "node:path";
+var spawnRunner = async (args2, systemPrompt) => {
+  const fullArgs = args2.map((arg) => arg === "__SYSTEM_PROMPT__" ? systemPrompt : arg);
+  return await new Promise((resolve7, reject) => {
+    const child = spawn("pi", fullArgs, { stdio: ["pipe", "pipe", "pipe"] });
+    child.stdin.end();
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8").on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.setEncoding("utf8").on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      try {
+        if (code !== 0) {
+          reject(new Error(stderr || `pi exited ${String(code)}`));
+          return;
+        }
+        const events = stdout.split("\n").filter(Boolean).map((line) => JSON.parse(line));
+        const final = events.filter((event2) => event2.type === "message_end").at(-1);
+        const message = final?.message;
+        if (!message) {
+          reject(new Error("missing final message_end event"));
+          return;
+        }
+        const finalText = (message.content ?? []).map((item) => item.text ?? "").join("");
+        resolve7({ finalText, usage: { in: message.usage?.input ?? 0, out: message.usage?.output ?? 0 } });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+};
+var runner = spawnRunner;
+var readyOverride;
+async function piReady() {
+  if (readyOverride !== void 0) return readyOverride;
+  return await new Promise((resolve7) => {
+    const child = spawn("pi", ["auth", "check", "--provider", "openrouter"], { stdio: "ignore" });
+    child.on("error", () => resolve7(false));
+    child.on("close", (code) => resolve7(code === 0));
+  });
+}
+async function callPi(step, prompt4, systemPrompt) {
+  const model = piModelFor(step);
+  const args2 = ["-p", "--mode", "json", "--no-session", "--no-tools", "--no-extensions", "--no-skills", "--no-context-files", "--no-prompt-templates", "--provider", "openrouter", "--model", model, "--system-prompt", "__SYSTEM_PROMPT__", "--skill", join(pluginRoot(), "pi-skills", "aw-judge"), prompt4];
+  return await runner(args2, systemPrompt);
+}
+function piModelFor(step) {
+  const modelTable2 = thresholds_default.models;
+  const model = modelTable2[step]?.piModel;
+  if (!model) throw new Error(`ERROR ${step}: no Pi model configured`);
+  return model;
+}
+function pluginRoot(argv1 = process.argv[1] ?? "") {
+  const bin = dirname(resolve(argv1));
+  if (basename(bin) === "bin") return dirname(bin);
+  const env = (process.env.CLAUDE_PLUGIN_ROOT ?? "").trim();
+  if (env) return env;
+  throw new Error("ERROR pi: cannot locate the plugin root (run aw from <plugin>/bin/aw)");
+}
+
 // src/paths.ts
-import { resolve } from "node:path";
+import { resolve as resolve2 } from "node:path";
 var dataArgument;
 var projectArgument;
 function setPathArguments(args2) {
@@ -22688,16 +22756,16 @@ function setPathArguments(args2) {
 }
 function dataDir() {
   if (!dataArgument) throw new Error("ERROR: --data-dir is required");
-  return resolve(dataArgument);
+  return resolve2(dataArgument);
 }
 function projectDir() {
   if (!projectArgument) throw new Error("ERROR: --project-dir is required");
-  return resolve(projectArgument);
+  return resolve2(projectArgument);
 }
 
 // src/main.ts
-import { readFileSync as readFileSync10 } from "node:fs";
-import { join as join11 } from "node:path";
+import { readFileSync as readFileSync11 } from "node:fs";
+import { join as join12 } from "node:path";
 
 // src/routing.ts
 init_thresholds();
@@ -22715,7 +22783,7 @@ import { spawn as spawn2 } from "node:child_process";
 import { createHash } from "node:crypto";
 import { join as join4, resolve as resolve3 } from "node:path";
 
-// node_modules/@google/genai/dist/node/index.mjs
+// ../../../../../../../src/cli/node_modules/@google/genai/dist/node/index.mjs
 var import_p_retry = __toESM(require_p_retry(), 1);
 var import_google_auth_library = __toESM(require_src5(), 1);
 import { createWriteStream } from "fs";
@@ -22724,7 +22792,7 @@ import { writeFile } from "fs/promises";
 import { Readable } from "node:stream";
 import { finished } from "node:stream/promises";
 
-// node_modules/ws/wrapper.mjs
+// ../../../../../../../src/cli/node_modules/ws/wrapper.mjs
 var import_stream = __toESM(require_stream(), 1);
 var import_extension = __toESM(require_extension(), 1);
 var import_permessage_deflate = __toESM(require_permessage_deflate(), 1);
@@ -22734,7 +22802,7 @@ var import_subprotocol = __toESM(require_subprotocol(), 1);
 var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 
-// node_modules/@google/genai/dist/node/index.mjs
+// ../../../../../../../src/cli/node_modules/@google/genai/dist/node/index.mjs
 import * as path$1 from "path";
 var _defaultBaseGeminiUrl = void 0;
 var _defaultBaseVertexUrl = void 0;
@@ -27907,14 +27975,14 @@ function __asyncValues(o) {
   }, i2);
   function verb(n) {
     i2[n] = o[n] && function(v) {
-      return new Promise(function(resolve6, reject) {
-        v = o[n](v), settle(resolve6, reject, v.done, v.value);
+      return new Promise(function(resolve7, reject) {
+        v = o[n](v), settle(resolve7, reject, v.done, v.value);
       });
     };
   }
-  function settle(resolve6, reject, d, v) {
+  function settle(resolve7, reject, d, v) {
     Promise.resolve(v).then(function(v2) {
-      resolve6({ value: v2, done: d });
+      resolve7({ value: v2, done: d });
     }, reject);
   }
 }
@@ -34357,8 +34425,8 @@ var LiveMusic = class {
     const url = `${websocketBaseUrl}/ws/google.ai.generativelanguage.${apiVersion}.GenerativeService.BidiGenerateMusic?key=${apiKey}`;
     let onopenResolve = () => {
     };
-    const onopenPromise = new Promise((resolve6) => {
-      onopenResolve = resolve6;
+    const onopenPromise = new Promise((resolve7) => {
+      onopenResolve = resolve7;
     });
     const callbacks = params.callbacks;
     const onopenAwaitedCallback = function() {
@@ -34598,8 +34666,8 @@ var Live = class {
     }
     let onopenResolve = () => {
     };
-    const onopenPromise = new Promise((resolve6) => {
-      onopenResolve = resolve6;
+    const onopenPromise = new Promise((resolve7) => {
+      onopenResolve = resolve7;
     });
     const callbacks = params.callbacks;
     const onopenAwaitedCallback = function() {
@@ -37664,7 +37732,7 @@ var safeJSON = (text) => {
     return void 0;
   }
 };
-var sleep$1 = (ms) => new Promise((resolve6) => setTimeout(resolve6, ms));
+var sleep$1 = (ms) => new Promise((resolve7) => setTimeout(resolve7, ms));
 function getDefaultFetch() {
   if (typeof fetch !== "undefined") {
     return fetch;
@@ -38512,8 +38580,8 @@ async function defaultParseResponse(client, props) {
 }
 var APIPromise = class _APIPromise extends Promise {
   constructor(client, responsePromise, parseResponse = defaultParseResponse) {
-    super((resolve6) => {
-      resolve6(null);
+    super((resolve7) => {
+      resolve7(null);
     });
     this.responsePromise = responsePromise;
     this.parseResponse = parseResponse;
@@ -40753,7 +40821,7 @@ function getApiKeyFromEnv() {
 
 // src/ledger.ts
 import { appendFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { join as join2 } from "node:path";
 init_thresholds();
 var AwError = class extends Error {
   code;
@@ -40766,9 +40834,9 @@ var AwError = class extends Error {
 };
 function appendLedger(row) {
   dataDir();
-  const dir = join(projectDir(), ".academic-helper", "runs", row.run_id);
+  const dir = join2(projectDir(), ".academic-helper", "runs", row.run_id);
   mkdirSync(dir, { recursive: true });
-  appendFileSync(join(dir, "usage.jsonl"), `${JSON.stringify(row)}
+  appendFileSync(join2(dir, "usage.jsonl"), `${JSON.stringify(row)}
 `, "utf8");
 }
 var Budget = class {
@@ -40831,74 +40899,6 @@ async function callGemini(req) {
   } finally {
     appendLedger({ run_id: req.runId, step: req.step, provider: "gemini", model: route.model, input_tokens: usage.in, output_tokens: usage.out, cost_usd: null, latency_ms: Date.now() - start, exit, same_family: false });
   }
-}
-
-// src/pi.ts
-init_thresholds();
-import { spawn } from "node:child_process";
-import { basename as basename3, dirname, join as join2, resolve as resolve2 } from "node:path";
-var spawnRunner = async (args2, systemPrompt) => {
-  const fullArgs = args2.map((arg) => arg === "__SYSTEM_PROMPT__" ? systemPrompt : arg);
-  return await new Promise((resolve6, reject) => {
-    const child = spawn("pi", fullArgs, { stdio: ["pipe", "pipe", "pipe"] });
-    child.stdin.end();
-    let stdout = "";
-    let stderr = "";
-    child.stdout.setEncoding("utf8").on("data", (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr.setEncoding("utf8").on("data", (chunk) => {
-      stderr += chunk;
-    });
-    child.on("error", reject);
-    child.on("close", (code) => {
-      try {
-        if (code !== 0) {
-          reject(new Error(stderr || `pi exited ${String(code)}`));
-          return;
-        }
-        const events = stdout.split("\n").filter(Boolean).map((line) => JSON.parse(line));
-        const final = events.filter((event2) => event2.type === "message_end").at(-1);
-        const message = final?.message;
-        if (!message) {
-          reject(new Error("missing final message_end event"));
-          return;
-        }
-        const finalText = (message.content ?? []).map((item) => item.text ?? "").join("");
-        resolve6({ finalText, usage: { in: message.usage?.input ?? 0, out: message.usage?.output ?? 0 } });
-      } catch (error) {
-        reject(error);
-      }
-    });
-  });
-};
-var runner = spawnRunner;
-var readyOverride;
-async function piReady() {
-  if (readyOverride !== void 0) return readyOverride;
-  return await new Promise((resolve6) => {
-    const child = spawn("pi", ["auth", "check", "--provider", "openrouter"], { stdio: "ignore" });
-    child.on("error", () => resolve6(false));
-    child.on("close", (code) => resolve6(code === 0));
-  });
-}
-async function callPi(step, prompt4, systemPrompt) {
-  const model = piModelFor(step);
-  const args2 = ["-p", "--mode", "json", "--no-session", "--no-tools", "--no-extensions", "--no-skills", "--no-context-files", "--no-prompt-templates", "--provider", "openrouter", "--model", model, "--system-prompt", "__SYSTEM_PROMPT__", "--skill", join2(pluginRoot(), "pi-skills", "aw-judge"), prompt4];
-  return await runner(args2, systemPrompt);
-}
-function piModelFor(step) {
-  const modelTable2 = thresholds_default.models;
-  const model = modelTable2[step]?.piModel;
-  if (!model) throw new Error(`ERROR ${step}: no Pi model configured`);
-  return model;
-}
-function pluginRoot(argv1 = process.argv[1] ?? "") {
-  const bin = dirname(resolve2(argv1));
-  if (basename3(bin) === "bin") return dirname(bin);
-  const env = (process.env.CLAUDE_PLUGIN_ROOT ?? "").trim();
-  if (env) return env;
-  throw new Error("ERROR pi: cannot locate the plugin root (run aw from <plugin>/bin/aw)");
 }
 
 // src/judge.ts
@@ -42322,14 +42322,106 @@ async function ocrDocument(options) {
   return output;
 }
 
+// src/docx.ts
+import { existsSync as existsSync7, mkdirSync as mkdirSync8, readFileSync as readFileSync10, writeFileSync as writeFileSync9 } from "node:fs";
+import { join as join11, resolve as resolve6 } from "node:path";
+import { spawnSync as spawnSync2 } from "node:child_process";
+function parseUnit(raw, unitId) {
+  const definitions = /* @__PURE__ */ new Map();
+  const body = [];
+  for (const line of raw.split(/\r?\n/u)) {
+    const def = line.match(/^\s*\[\^([^\]]+)\]:\s*(.*?)\s*$/u);
+    if (def) definitions.set(def[1], def[2]);
+    else body.push(line);
+  }
+  const paragraphs2 = [];
+  for (const part of body.join("\n").split(/\n\s*\n/u).map((p) => p.trim()).filter(Boolean)) {
+    const footnotes = [];
+    let text = "";
+    const marker = /\[\^([^\]]+)\]/gu;
+    let last = 0;
+    let match;
+    while (match = marker.exec(part)) {
+      text += part.slice(last, match.index);
+      const key = match[1];
+      const definition = definitions.get(key);
+      if (definition === void 0) throw new Error(`ERROR docx: footnote ${key} has no definition`);
+      const prior = text;
+      let length = Math.min(12, prior.length);
+      let anchor = prior.slice(-length);
+      while (length < prior.length && anchor && part.split(anchor).length - 1 !== 1) {
+        length += 1;
+        anchor = prior.slice(-length);
+      }
+      if (!anchor || part.split(anchor).length - 1 !== 1) throw new Error(`ERROR docx: footnote ${key} has no unique anchor`);
+      footnotes.push({ after: anchor, text: definition });
+      last = marker.lastIndex;
+    }
+    text += part.slice(last);
+    paragraphs2.push({ text: text.trim(), footnotes });
+  }
+  return paragraphs2;
+}
+function assembleArticle(outline, project, runId2, options) {
+  const sections = [];
+  let paragraphCount = 0;
+  let footnoteCount = 0;
+  const emit = (sectionTitle, units) => {
+    const paragraphs2 = units.flatMap((unit) => {
+      const path2 = join11(project, ".academic-helper", "drafts", `${unit.id}.md`);
+      if (!existsSync7(path2)) throw new Error(`ERROR docx: missing draft ${unit.id}`);
+      return parseUnit(readFileSync10(path2, "utf8"), unit.id);
+    });
+    paragraphCount += paragraphs2.length;
+    footnoteCount += paragraphs2.reduce((sum, p) => sum + p.footnotes.length, 0);
+    sections.push({ title: sectionTitle, paragraphs: paragraphs2 });
+  };
+  const inputSections = outline.sections ?? [];
+  if (inputSections.length) {
+    for (const section of inputSections) {
+      const units = section.units ?? [];
+      const intro = units.filter((u) => u.id === "intro" || u.id === "introduction");
+      const regular = units.filter((u) => !intro.includes(u) && u.id !== "conclusion");
+      const conclusion = units.filter((u) => u.id === "conclusion");
+      if (intro.length) emit(section.title ?? "", intro);
+      if (regular.length) emit(section.title ?? "", regular);
+      if (conclusion.length) emit(section.title ?? "", conclusion);
+    }
+  } else if (outline.units) emit("", outline.units);
+  const words = sections.flatMap((s2) => s2.paragraphs.map((p) => p.text)).join(" ").trim().split(/\s+/u).filter(Boolean).length;
+  const article = { title: options.title ?? outline.title ?? "", thesis: outline.thesis ?? null, sections, totalWords: words };
+  for (const [key, path2] of [["coverPage", options.coverFile], ["abstract", options.abstractFile], ["format", options.formatFile]]) {
+    if (path2) article[key] = JSON.parse(readFileSync10(path2, "utf8"));
+  }
+  return { article, sections: sections.length, paragraphs: paragraphCount, footnotes: footnoteCount, words };
+}
+function generateDocx(args2) {
+  void args2.dataDir;
+  const outline = JSON.parse(readFileSync10(args2.outlinePath, "utf8"));
+  const result = assembleArticle(outline, resolve6(args2.projectDir), args2.runId, args2);
+  const runDir = join11(args2.projectDir, ".academic-helper", "runs", args2.runId);
+  mkdirSync8(runDir, { recursive: true });
+  const jsonPath = join11(runDir, "article.json");
+  writeFileSync9(jsonPath, `${JSON.stringify(result.article, null, 2)}
+`, "utf8");
+  const script = join11(args2.pluginRoot, "scripts", "generate-docx.py");
+  const child = spawnSync2("python3", [script, "--input", jsonPath, "--output", args2.out], { stdio: "inherit" });
+  if (child.error) throw new Error(`ERROR docx: ${child.error.message}`);
+  if (child.status !== 0) throw new Error(`ERROR docx: generate-docx.py exited ${child.status ?? 1}`);
+  return { sections: result.sections, paragraphs: result.paragraphs, footnotes: result.footnotes, words: result.words };
+}
+function docxSummary(value, out) {
+  return JSON.stringify({ docx: out, ...value });
+}
+
 // src/main.ts
 var args = setPathArguments(process.argv.slice(2));
 var [command2, subcommand, runId] = args;
 if (command2 === "ledger" && subcommand === "show" && runId) {
   try {
     dataDir();
-    const file = join11(projectDir(), ".academic-helper", "runs", runId, "usage.jsonl");
-    const rows = readFileSync10(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    const file = join12(projectDir(), ".academic-helper", "runs", runId, "usage.jsonl");
+    const rows = readFileSync11(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
     const totals = /* @__PURE__ */ new Map();
     for (const row of rows) {
       const total = totals.get(row.step) ?? { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
@@ -42384,7 +42476,7 @@ Live model verification requires GOOGLE_API_KEY.
     projectDir();
     const fileArg = args[args.indexOf(subcommand === "classify" ? "--items" : "--plan") + 1];
     if (!fileArg) throw new Error("ERROR revise: --items/--plan path required");
-    const input = JSON.parse(readFileSync10(fileArg, "utf8"));
+    const input = JSON.parse(readFileSync11(fileArg, "utf8"));
     if (subcommand === "classify") {
       if (!Array.isArray(input)) throw new Error("ERROR revise.classify: items must be an array");
       process.stdout.write(`${JSON.stringify(await classify(input, args[args.indexOf("--run") + 1] ?? "revise"))}
@@ -42456,7 +42548,7 @@ Live model verification requires GOOGLE_API_KEY.
     const runId2 = value("--run");
     const outlinePath = value("--outline");
     if (!runId2 || !outlinePath) throw new Error("ERROR draft: --outline and --run are required");
-    const result = await draftAll(JSON.parse(readFileSync10(outlinePath, "utf8")), { runId: runId2, unit: value("--unit"), feedbackFile: value("--feedback-file") });
+    const result = await draftAll(JSON.parse(readFileSync11(outlinePath, "utf8")), { runId: runId2, unit: value("--unit"), feedbackFile: value("--feedback-file") });
     process.stdout.write(`${JSON.stringify({ drafted: result.drafted, failures: result.failures })}
 `);
     if (result.failures.length) process.exitCode = 2;
@@ -42487,7 +42579,7 @@ Live model verification requires GOOGLE_API_KEY.
     const runId2 = value("--run");
     const textFile = value("--text-file");
     const language = value("--lang");
-    const instruction = value("--instruction") ?? (value("--instruction-file") ? readFileSync10(value("--instruction-file"), "utf8") : void 0);
+    const instruction = value("--instruction") ?? (value("--instruction-file") ? readFileSync11(value("--instruction-file"), "utf8") : void 0);
     if (!runId2 || !textFile || !instruction || language !== "he" && language !== "en") throw new Error("ERROR edit: --text-file, --instruction or --instruction-file, --lang he|en, and --run are required");
     process.stdout.write(`${JSON.stringify(await editText({ runId: runId2, textFile, instruction, language, out: value("--out") }))}
 `);
@@ -42511,6 +42603,24 @@ Live model verification requires GOOGLE_API_KEY.
 `);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : "ERROR ocr: unknown failure"}
+`);
+    process.exitCode = 1;
+  }
+} else if (command2 === "docx") {
+  try {
+    const value = (name) => {
+      const i2 = args.indexOf(name);
+      return i2 >= 0 ? args[i2 + 1] : void 0;
+    };
+    const runId2 = value("--run");
+    const outline = value("--outline");
+    const out = value("--out");
+    if (!runId2 || !outline || !out) throw new Error("ERROR docx: --outline, --run, and --out are required");
+    const result = generateDocx({ outlinePath: outline, runId: runId2, out, title: value("--title"), coverFile: value("--cover-file"), abstractFile: value("--abstract-file"), formatFile: value("--format-file"), projectDir: projectDir(), dataDir: dataDir(), pluginRoot: pluginRoot() });
+    process.stdout.write(`${docxSummary(result, out)}
+`);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : "ERROR docx: unknown failure"}
 `);
     process.exitCode = 1;
   }
