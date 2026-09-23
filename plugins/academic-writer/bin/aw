@@ -225,10 +225,22 @@ var init_thresholds = __esm({
           maxUsd: 0.1,
           _comment: "One call to derive qualitative voice moves."
         },
+        revise: {
+          maxTokens: 1e5,
+          maxUsd: 0.25,
+          _comment: "One bounded classification pass for author review items."
+        },
         jev: {
           maxTokens: 1e5,
           maxUsd: 0.25
         }
+      },
+      awImprove: {
+        defectSimilarity: 0.5,
+        clusterMinimum: 2,
+        maxExamples: 5,
+        jevRoster: { labels: 100, agreement: 0.8, instability: 0.1 },
+        _comment: "Development-only defect clustering and Jev roster thresholds."
       },
       jev: {
         model: "jev-1.13.0",
@@ -9215,9 +9227,9 @@ Content-Type: ${partContentType}\r
        * @param append headers to append/overwrite with
        * @returns the base headers instance with merged `Headers`
        */
-      static mergeHeaders(base, ...append) {
+      static mergeHeaders(base, ...append2) {
         base = base instanceof Headers ? base : new Headers(base);
-        for (const headers of append) {
+        for (const headers of append2) {
           const add = headers instanceof Headers ? headers : new Headers(headers);
           add.forEach((value, key) => {
             key === "set-cookie" ? base.append(key, value) : base.set(key, value);
@@ -22655,8 +22667,8 @@ function projectDir() {
 }
 
 // src/main.ts
-import { readFileSync as readFileSync3 } from "node:fs";
-import { join as join5 } from "node:path";
+import { readFileSync as readFileSync4 } from "node:fs";
+import { join as join6 } from "node:path";
 
 // src/routing.ts
 init_thresholds();
@@ -41025,7 +41037,7 @@ async function buildEvidence(options) {
 }
 
 // src/voice.ts
-import { existsSync as existsSync2, mkdirSync as mkdirSync4, readFileSync as readFileSync2, readdirSync as readdirSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { appendFileSync as appendFileSync4, existsSync as existsSync2, mkdirSync as mkdirSync4, readFileSync as readFileSync2, readdirSync as readdirSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { createHash as createHash2 } from "node:crypto";
 import { join as join4, resolve as resolve2, basename as basename3 } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -41033,6 +41045,17 @@ init_thresholds();
 var dataOverride;
 function store() {
   return join4(dataOverride ?? dataDir(), "voice");
+}
+function appendVoicePair(pair, dataRoot) {
+  const dir = join4(dataRoot ?? dataOverride ?? dataDir(), "voice");
+  mkdirSync4(dir, { recursive: true });
+  appendFileSync4(join4(dir, "pairs.jsonl"), `${JSON.stringify(pair)}
+`, "utf8");
+}
+function writeVoiceStyleWords(value, dataRoot) {
+  const dir = join4(dataRoot ?? dataOverride ?? dataDir(), "voice");
+  mkdirSync4(dir, { recursive: true });
+  writeFileSync2(join4(dir, "style-words.json"), JSON.stringify(value, null, 2), "utf8");
 }
 function readJsonl(path2) {
   if (!existsSync2(path2)) return [];
@@ -41168,13 +41191,91 @@ function voiceSync(direction) {
 
 // src/main.ts
 init_thresholds();
+
+// src/revise.ts
+import { appendFileSync as appendFileSync5, mkdirSync as mkdirSync5, readFileSync as readFileSync3, writeFileSync as writeFileSync3 } from "node:fs";
+import { dirname, join as join5 } from "node:path";
+init_thresholds();
+var dataOverride2;
+var confirm = async () => false;
+function voiceDir() {
+  return dataOverride2 ?? join5(dataDir(), "voice");
+}
+function append(file, row) {
+  mkdirSync5(dirname(file), { recursive: true });
+  appendFileSync5(file, `${JSON.stringify(row)}
+`, "utf8");
+}
+async function classify(items, runId2) {
+  const schema = { type: "OBJECT", properties: { items: { type: "ARRAY", items: { type: "OBJECT", properties: { id: { type: "STRING" }, category: { type: "STRING", enum: ["text_edit", "argument", "voice_signal", "plugin_defect"] }, proposal: { type: "OBJECT" } }, required: ["id", "category", "proposal"] } } }, required: ["items"] };
+  const fallback = async () => {
+    const caps = thresholds_default.budget.revise;
+    const result2 = await callGemini({ step: "revise.classify", system: "Classify review feedback accurately. Return JSON only.", parts: [JSON.stringify(items)], responseSchema: schema, runId: runId2, budget: new Budget(runId2, caps) });
+    return JSON.stringify(result2.json);
+  };
+  const result = await decide({ point: "revise.classify", question: "Classify each Word review item.", options: ["text_edit", "argument", "voice_signal", "plugin_defect"], context: JSON.stringify(items), runId: runId2, fallback });
+  const parsed = JSON.parse(result.answer);
+  if (typeof parsed !== "object" || parsed === null || !Array.isArray(parsed.items)) throw new Error("ERROR revise.classify: missing verdict");
+  return parsed;
+}
+function applyTextEdit(item) {
+  const file = item.proposal.file;
+  const before = item.proposal.before;
+  const after = item.proposal.after;
+  if (typeof file !== "string" || typeof before !== "string" || typeof after !== "string") return;
+  const target = join5(projectDir(), file);
+  const body = readFileSync3(target, "utf8");
+  if (!body.includes(before)) throw new Error(`ERROR revise.apply: anchor not found for ${item.id}`);
+  writeFileSync3(target, body.replace(before, after), "utf8");
+}
+async function applyPlan(plan) {
+  if (!dataOverride2) dataDir();
+  const applied = [];
+  const deferred = [];
+  const feedbackDir = join5(dataOverride2 ?? dataDir(), "feedback");
+  for (const item of plan.items) {
+    append(join5(dataOverride2 ?? dataDir(), "labels", "revise.classify.jsonl"), { point: "revise.classify", itemId: item.id, label: item.category });
+    if (typeof item.proposal.changeId === "string" && (item.proposal.label === "uphold" || item.proposal.label === "refute")) {
+      append(join5(dataOverride2 ?? dataDir(), "labels", "proofread.verify.jsonl"), { point: "proofread.verify", changeId: item.proposal.changeId, label: item.proposal.label });
+    }
+    if (item.category === "text_edit") {
+      applyTextEdit(item);
+      applied.push(item.id);
+    } else if (item.category === "argument") {
+      const file = join5(projectDir(), ".academic-helper", "revise-todo.md");
+      mkdirSync5(join5(projectDir(), ".academic-helper"), { recursive: true });
+      appendFileSync5(file, `
+- [ ] ${String(item.proposal.text ?? JSON.stringify(item.proposal))}
+`, "utf8");
+      deferred.push(item.id);
+    } else if (item.category === "plugin_defect") {
+      append(join5(feedbackDir, "ledger.jsonl"), { ts: (/* @__PURE__ */ new Date()).toISOString(), runId: plan.runId, step: String(item.proposal.step ?? "unknown"), item: item.proposal, authorWords: String(item.proposal.authorWords ?? ""), pluginVersion: plan.pluginVersion });
+      applied.push(item.id);
+    } else {
+      const accepted = await confirm([item]);
+      if (!accepted) {
+        deferred.push(item.id);
+        continue;
+      }
+      const dir = voiceDir();
+      mkdirSync5(dir, { recursive: true });
+      appendVoicePair({ before: String(item.proposal.before ?? ""), after: String(item.proposal.after ?? ""), source: plan.runId }, dataOverride2 ?? dataDir());
+      if (item.proposal.styleWords !== void 0) writeVoiceStyleWords(item.proposal.styleWords, dataOverride2 ?? dataDir());
+      if (item.proposal.terms !== void 0) writeFileSync3(join5(projectDir(), ".academic-helper", "terms.json"), JSON.stringify(item.proposal.terms, null, 2), "utf8");
+      applied.push(item.id);
+    }
+  }
+  return { applied, deferred };
+}
+
+// src/main.ts
 var args = setPathArguments(process.argv.slice(2));
 var [command, subcommand, runId] = args;
 if (command === "ledger" && subcommand === "show" && runId) {
   try {
     dataDir();
-    const file = join5(projectDir(), ".academic-helper", "runs", runId, "usage.jsonl");
-    const rows = readFileSync3(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    const file = join6(projectDir(), ".academic-helper", "runs", runId, "usage.jsonl");
+    const rows = readFileSync4(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
     const totals = /* @__PURE__ */ new Map();
     for (const row of rows) {
       const total = totals.get(row.step) ?? { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
@@ -41194,6 +41295,25 @@ if (command === "ledger" && subcommand === "show" && runId) {
   process.stdout.write(`Configured Gemini steps: ${stepIds.join(", ")}
 Live model verification requires GOOGLE_API_KEY.
 `);
+} else if (command === "revise") {
+  try {
+    dataDir();
+    projectDir();
+    const fileArg = args[args.indexOf(subcommand === "classify" ? "--items" : "--plan") + 1];
+    if (!fileArg) throw new Error("ERROR revise: --items/--plan path required");
+    const input = JSON.parse(readFileSync4(fileArg, "utf8"));
+    if (subcommand === "classify") {
+      if (!Array.isArray(input)) throw new Error("ERROR revise.classify: items must be an array");
+      process.stdout.write(`${JSON.stringify(await classify(input, args[args.indexOf("--run") + 1] ?? "revise"))}
+`);
+    } else if (subcommand === "apply") process.stdout.write(`${JSON.stringify(await applyPlan(input))}
+`);
+    else throw new Error("ERROR revise: expected classify or apply");
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : "ERROR revise: unknown failure"}
+`);
+    process.exitCode = 2;
+  }
 } else if (command === "evidence" && subcommand === "build") {
   const value = (name) => {
     const position = args.indexOf(name);
