@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { stepIds } from './routing.ts';
 import { buildEvidence } from './evidence.ts';
+import { voiceBundle, voiceCandidates, voiceMigrate, voiceMoves, voiceSync } from './voice.ts';
+import thresholds from '../../thresholds.json' with { type: 'json' };
 
 const args = setPathArguments(process.argv.slice(2));
 const [command, subcommand, runId] = args;
@@ -31,6 +33,23 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : 'ERROR evidence.build: unknown failure'}\n`);
     process.exitCode = 1;
+  }
+} else if (command === 'voice') {
+  try {
+    dataDir();
+    projectDir();
+    if (subcommand === 'migrate') process.stdout.write(`${voiceMigrate(args[args.indexOf('--from') + 1] ?? projectDir())}\n`);
+    else if (subcommand === 'exemplars') process.stdout.write(`${JSON.stringify(voiceCandidates(args[args.indexOf('--corpus') + 1] ?? ''), null, 2)}\n`);
+    else if (subcommand === 'bundle') {
+      const bundle = await voiceBundle({ n: Number(args[args.indexOf('--n') + 1] ?? thresholds.voice.bundle.exemplars), pairs: Number(args[args.indexOf('--pairs') + 1] ?? thresholds.voice.bundle.pairs), runId: args[args.indexOf('--run-id') + 1] ?? 'default' });
+      process.stdout.write(`${bundle.path}\n`);
+    } else if (subcommand === 'moves') process.stdout.write(`${await voiceMoves(args[args.indexOf('--run-id') + 1] ?? 'voice-moves')}\n`);
+    else if (subcommand === 'push' || subcommand === 'pull') process.stdout.write(`${voiceSync(subcommand)}\n`);
+    else throw new Error('ERROR: expected aw voice migrate|exemplars|bundle|moves|push|pull');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'ERROR voice: unknown failure';
+    process.stderr.write(`${message}\n`);
+    process.exitCode = message.includes('no voice store') ? 3 : 2;
   }
 } else {
   process.stderr.write('ERROR: expected aw models check, aw ledger show <runId>, or aw evidence build\n');

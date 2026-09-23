@@ -39,11 +39,21 @@
       "minWordsPerArticle": 800
     },
     "exemplars": {
-          "count": 4,
-          "minWords": 40,
-          "maxWords": 150,
-          "maxPerFile": 1,
-          "_comment": "src/scripts/extract-voice-exemplars.py: how many real paragraphs from past-articles/ are shown to Gemini as few-shot voice examples, their word bounds, and at most maxPerFile per source article so no single paper dominates the voice. Measured 2026-09-15 on the author's finished Hebrew papers: mean paragraph 97-134 words, so 40-150 keeps typical body paragraphs and drops headings and footnote-length fragments (a whole-folder corpus reads shorter because course reflections pull the mean down). Gemini guidance: 2-5 examples; more rarely helps."
+      "count": 4,
+      "minWords": 40,
+      "maxWords": 150,
+      "maxPerFile": 1,
+      "_comment": "src/scripts/extract-voice-exemplars.py: how many real paragraphs from past-articles/ are shown to Gemini as few-shot voice examples, their word bounds, and at most maxPerFile per source article so no single paper dominates the voice. Measured 2026-09-15 on the author's finished Hebrew papers: mean paragraph 97-134 words, so 40-150 keeps typical body paragraphs and drops headings and footnote-length fragments (a whole-folder corpus reads shorter because course reflections pull the mean down). Gemini guidance: 2-5 examples; more rarely helps."
+    },
+    "bundle": {
+      "exemplars": 6,
+      "pairs": 2,
+      "maxPerSource": 1,
+      "maxRuleLines": 40
+    },
+    "selection": {
+      "min": 12,
+      "max": 20
     }
   },
   "proofread": {
@@ -84,73 +94,131 @@
       "provider": "gemini",
       "model": "gemini-3.8-flash",
       "maxOutputTokens": 8192,
-      "concurrency": 1
+      "concurrency": 1,
+      "piModel": "openrouter/z-ai/glm-5.3"
     },
     "proofread.verify": {
       "provider": "gemini",
       "model": "gemini-3.8-flash",
       "maxOutputTokens": 8192,
-      "concurrency": 1
+      "concurrency": 1,
+      "piModel": "openrouter/z-ai/glm-5.3"
     },
     "proofread.memo": {
       "provider": "gemini",
       "model": "gemini-3.8-flash",
       "maxOutputTokens": 8192,
-      "concurrency": 1
+      "concurrency": 1,
+      "piModel": "openrouter/z-ai/glm-5.3"
     },
     "evidence.extract": {
       "provider": "gemini",
       "model": "gemini-3.8-flash",
       "maxOutputTokens": 8192,
-      "concurrency": 1
+      "concurrency": 1,
+      "piModel": "openrouter/z-ai/glm-5.3"
     },
     "write.draft": {
       "provider": "gemini",
       "model": "gemini-3.8-flash",
       "maxOutputTokens": 8192,
-      "concurrency": 1
+      "concurrency": 1,
+      "piModel": "openrouter/z-ai/glm-5.3"
     },
     "write.synthesize": {
       "provider": "gemini",
       "model": "gemini-3.8-flash",
       "maxOutputTokens": 8192,
-      "concurrency": 1
+      "concurrency": 1,
+      "piModel": "openrouter/z-ai/glm-5.3"
     },
     "voice.moves": {
       "provider": "gemini",
       "model": "gemini-3.8-flash",
       "maxOutputTokens": 8192,
-      "concurrency": 1
+      "concurrency": 1,
+      "piModel": "openrouter/z-ai/glm-5.3"
     },
     "revise.classify": {
       "provider": "gemini",
       "model": "gemini-3.8-flash",
       "maxOutputTokens": 8192,
-      "concurrency": 1
+      "concurrency": 1,
+      "piModel": "openrouter/z-ai/glm-5.3"
     },
     "ocr": {
       "provider": "gemini",
       "model": "gemini-3.8-flash",
       "maxOutputTokens": 8192,
-      "concurrency": 1
+      "concurrency": 1,
+      "piModel": "openrouter/z-ai/glm-5.3"
     },
     "edit": {
       "provider": "gemini",
       "model": "gemini-3.8-flash",
       "maxOutputTokens": 8192,
-      "concurrency": 1
+      "concurrency": 1,
+      "piModel": "openrouter/z-ai/glm-5.3"
     }
   },
   "budget": {
     "proofread": {
       "maxTokens": 1000000,
-      "maxUsd": 0.50,
+      "maxUsd": 0.5,
       "_comment": "Token ceiling comfortably covers a long proofread run; the USD ceiling is the primary cost guard."
     },
     "write": {
       "maxTokens": 5000000,
-      "maxUsd": 3.00,
+      "maxUsd": 3.0,
       "_comment": "Token ceiling covers multi-section drafting; the USD ceiling is the primary cost guard."
+    },
+    "voiceMoves": {
+      "maxTokens": 50000,
+      "maxUsd": 0.1,
+      "_comment": "One call to derive qualitative voice moves."
+    },
+    "jev": {
+      "maxTokens": 100000,
+      "maxUsd": 0.25
     }
-  }
+  },
+  "jev": {
+    "model": "jev-1.13.0",
+    "threshold": 0.75,
+    "points": {
+      "proofread.verify": {
+        "mode": "shadow"
+      },
+      "proofread.triage": {
+        "mode": "shadow"
+      },
+      "revise.classify": {
+        "mode": "shadow"
+      },
+      "evidence.relevance": {
+        "mode": "shadow"
+      },
+      "outline.support": {
+        "mode": "shadow"
+      },
+      "write.audit_prescreen": {
+        "mode": "shadow"
+      },
+      "write.voice_check": {
+        "mode": "shadow"
+      },
+      "synthesize.needs_bridge": {
+        "mode": "shadow"
+      },
+      "style.filler": {
+        "mode": "shadow"
+      }
+    },
+    "yesProbability": 0.5,
+    "scoreMaximum": 3
+  },
+  "judge": {
+    "validationAttempts": 2
+  },
+  "_piModelNote": "piModel = OpenRouter model for the isolated Pi judge. Must be a non-Claude, non-Gemini family (cross-family verification); taken from the author's Pi model roster (executor tier, machine-config/pi/model-roster.json). Runs in shadow until the Hebrew fixture shows parity."
 }

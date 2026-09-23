@@ -8,6 +8,7 @@ import { appendLedger } from './ledger.ts';
 import { dataDir, projectDir } from './paths.ts';
 import { routeFor } from './routing.ts';
 import { fetchSefaria } from './sefaria.ts';
+import { decide } from './decide.ts';
 import evidenceSchema from '../../schemas/evidence.schema.json' with { type: 'json' };
 
 const execFileAsync = promisify(execFile);
@@ -101,8 +102,14 @@ export async function buildEvidence(options: BuildOptions): Promise<BuildResult>
   for (const { source, result } of extracted) {
     const cachedText = sourceCache.get(source.id) ?? source.text;
     for (const passage of result.passages) {
-      if (normalize(cachedText).includes(normalize(passage.quote))) passages.push(passage);
-      else event(options.runId, passage, 'quote_not_verbatim');
+      // An empty quote "occurs" in every text; reject it before the verbatim check.
+      if (!normalize(passage.quote) || !normalize(cachedText).includes(normalize(passage.quote))) { event(options.runId, passage, 'quote_not_verbatim'); continue; }
+      // Jev point evidence.relevance (shadow-first): the Gemini relevance is the fallback and,
+      // in shadow mode, the answer; Jev's view is logged for later labels (passages the outline uses).
+      const rated = await decide({ point: 'evidence.relevance', question: 'How relevant is this passage to the author thesis (0 = not relevant, 3 = central)?',
+        options: ['0', '1', '2', '3'], context: JSON.stringify({ thesis: intent, quote: passage.quote, gloss: passage.gloss }), runId: options.runId,
+        fallback: async () => String(passage.relevance) });
+      passages.push({ ...passage, relevance: Number(rated.answer) });
     }
   }
   const output: BuildResult = { sources, passages };

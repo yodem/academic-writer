@@ -26,3 +26,14 @@ test('non-verbatim quotes are dropped; cache hit skips refetch', async () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('an empty quote is rejected as not verbatim', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'aw-evidence-empty-'));
+  setPathArguments(['--data-dir', join(root, 'data'), '--project-dir', join(root, 'project')]);
+  __stubs({ fetchCk: async () => 'טקסט המקור המלא.', extract: async () => ({ passages: [
+    { id: 'e1', sourceId: 's9', locator: '1', quote: '   ', gloss: '', relevance: 1 } ] }) });
+  try {
+    const r = await buildEvidence({ sources: ['s9'], runId: 'empty' });
+    assert.equal(r.passages.length, 0);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

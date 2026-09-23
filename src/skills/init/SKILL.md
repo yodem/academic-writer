@@ -21,7 +21,7 @@ Invoke as `/academic-writer:init --quick` for a fast onboarding path. Quick mode
   including the `author_key` step), Phase 3.5 (Gemini Onboarding).
 - **Downgrades**: Style Analysis (Phase 2 Step 4) becomes narrative-only — no computational
   extraction, no Hebrew baseline fetch, no `extract-style-metrics.py`, and no Stage 1 voice
-  fingerprint chain (voice-miner → voice-distiller → voice-sync). The researcher can still describe
+  fingerprint chain (voice store migration and author-picked exemplars). The researcher can still describe
   their style in free text if they wish, but nothing is computed.
 - **Skips entirely**: Phase 3 (Research Sources) — `sources` is saved as `[]`.
 
@@ -288,11 +288,11 @@ script can't compute, then confirm the combined fingerprint with the researcher 
 they skip, the profile saves without a style fingerprint. Full question text, extraction commands,
 and the 25-dimension rubric: see `references/style-analysis.md`.
 
-Then, unless in `--quick` mode, run the **Stage 1 voice fingerprint** chain: `voice-miner` on
-`past-articles/` → check for `NEEDS CORPUS` → `voice-distiller --from-fingerprint` seeds
-`AUTHOR_VOICE.md` → `voice-sync push` (requires `author_key` already saved). The user is not
-required to run Stage 2 (`/academic-writer:voice`) before writing. Full step-by-step chain and
-failure handling: see `references/style-analysis.md#stage-1-voice-fingerprint`.
+Then, unless in `--quick` mode, reuse `${CLAUDE_PLUGIN_DATA}/voice/` when its `author_key` matches
+the current profile. If it does not match or no store exists, run `/academic-writer:voice` to migrate
+`AUTHOR_VOICE.md` and fingerprint material, scan `past-articles/`, and let the author select 12–20
+representative paragraphs. The store is shared across projects in the plugin data directory; the
+project records only the key and voice version.
 
 ---
 
@@ -303,7 +303,7 @@ writer for `/write`, `/edit`, and `/edit-section`. Claude remains the orchestrat
 auditor either way.
 
 If they decline, skip the rest of this phase and note Gemini disabled in the summary. If they
-accept: check for an existing `GOOGLE_API_KEY` (env or `.academic-helper/secrets.json`), walk
+accept: check for an existing `GOOGLE_API_KEY` (the environment or userConfig sensitive value), walk
 through creating and storing one if missing, live-probe it via `mcp__plugin_academic-writer_gemini-api__gemini_raw`
 (don't just trust the file/env check), note that a per-language calibration gate runs on first
 `/write`, and store the result in the `## Gemini` block of `profile.md` (Phase 4). Full question

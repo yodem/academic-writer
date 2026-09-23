@@ -583,3 +583,9 @@ class TestScriptSmoke(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRemovedVoiceAgents(unittest.TestCase):
+    def test_interview_agents_are_not_shipped(self):
+        for name in ("voice-interviewer.md", "voice-distiller.md", "voice-calibrator.md", "voice-miner.md"):
+            self.assertFalse(os.path.exists(os.path.join(SRC_DIR, "agents", name)), name)
