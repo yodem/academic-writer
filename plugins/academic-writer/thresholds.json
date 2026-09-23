@@ -64,6 +64,10 @@
     "refuteVotes": 3,
     "refuteMajority": 2,
     "refuteBudgetPerChunk": 12,
+    "wrongWordPass": {
+      "enabled": false,
+      "_comment": "Optional second finder call per chunk (src/cli/src/prompts/proofread-find-wrongword.md), focused only on real-word (wrong_word) errors the main finder pass tends to miss. DEFAULT OFF: doubles find-stage Gemini calls and its cost/recall tradeoff is unmeasured against a live key. Flip to true only after a live evals/proofread-recall run with it on."
+    },
     "_comment": "Proofread chunk target; execution and call budgets are configured under models and budget."
   },
   "citationFloor": {

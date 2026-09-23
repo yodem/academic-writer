@@ -114,6 +114,10 @@ var init_thresholds = __esm({
         refuteVotes: 3,
         refuteMajority: 2,
         refuteBudgetPerChunk: 12,
+        wrongWordPass: {
+          enabled: false,
+          _comment: "Optional second finder call per chunk (src/cli/src/prompts/proofread-find-wrongword.md), focused only on real-word (wrong_word) errors the main finder pass tends to miss. DEFAULT OFF: doubles find-stage Gemini calls and its cost/recall tradeoff is unmeasured against a live key. Flip to true only after a live evals/proofread-recall run with it on."
+        },
         _comment: "Proofread chunk target; execution and call budgets are configured under models and budget."
       },
       citationFloor: {
@@ -41005,18 +41009,29 @@ var proofread_verify_default = 'Judge proposed edits for meaning preservation. I
 // src/prompts/proofread-memo.md
 var proofread_memo_default = "Write a concise editorial memo on the article's clarity, argument flow, and venue fit. The global `editorial-checks.md` is always included; apply all of its checks. A supplied venue profile is optional and additive: it may tighten a check or add one, but never remove a global check. Keep language correction out of scope. Input includes article text, the global checks, and optional venue profile. Return plain text, make no invented claims; say \u201CNo major editorial concerns\u201D when appropriate.\n\nExamples:\n- Flag an undefined term such as **\u05EA\u05D5\u05D3\u05E2\u05D4 \u05E7\u05D5\u05DC\u05E7\u05D8\u05D9\u05D1\u05D9\u05EA** on first use.\n- Note a conclusion that introduces a new argument instead of resolving the thesis.\n- Identify a paragraph whose evidence does not support its stated claim.\n";
 
+// src/prompts/proofread-find-wrongword.md
+var proofread_find_wrongword_default = 'You are a focused Hebrew academic proofreader looking for ONE thing only: a real-word error \u2014 a spelling-valid Hebrew word that is wrong for its context because it is visually or phonetically close to the word the author meant. Do not report typos, punctuation, agreement, register, or any other issue; another pass already covers those. Every change you return must carry `"class":"wrong_word"`.\n\nInput is a chunk with absolute line numbers and optional author voice rules. Return only JSON {"changes":[{"id":string,"line":integer,"before":string,"after":string|null,"class":"wrong_word","meaningRisk":"low"|"medium"|"high"}]}.\n\nBefore flagging a word, check whether it is already correct where it stands \u2014 the same word may be right in one sentence and wrong in another; only flag the occurrence that is actually wrong. Never flag a word that has a sensible reading in its own sentence, even if it is a word you would flag elsewhere in the chunk.\n\nmeaningRisk for a wrong-word fix: use `low` when only one reading makes grammatical or semantic sense in that sentence, so the fix restores the author\'s meaning rather than risking it. Use `medium` when the flagged word and its replacement are both common, independently valid words in general Hebrew (not just in this sentence) and a reader could imagine a context \u2014 even if not this one \u2014 where the original was intended; treat this as the safer default whenever you are not certain.\n\nExamples:\n- \u05D4\u05D5\u05D0 \u05E0\u05D9\u05E1\u05D4 **\u05DC\u05D0\u05E8\u05D5\u05E1** \u05D0\u05EA \u05D4\u05E7\u05E9\u05E8 \u2192 \u05D4\u05D5\u05D0 \u05E0\u05D9\u05E1\u05D4 **\u05DC\u05D4\u05E8\u05D5\u05E1** \u05D0\u05EA \u05D4\u05E7\u05E9\u05E8 (\u05DC\u05D0\u05E8\u05D5\u05E1 has no sensible reading here \u2014 "wanted to betroth the relationship" doesn\'t parse as a claim; meaningRisk low). Elsewhere, "\u05D0\u05D9\u05DF \u05D1\u05DB\u05D5\u05D5\u05E0\u05EA\u05D9 \u05DC\u05D0\u05E8\u05D5\u05E1 \u05D0\u05EA \u05D1\u05EA\u05D5" is a correct use of \u05DC\u05D0\u05E8\u05D5\u05E1 (to betroth) and must NOT be flagged.\n- **\u05D4\u05D8\u05E2\u05D5\u05DF** \u05D4\u05DE\u05E8\u05DB\u05D6\u05D9 \u2192 **\u05D4\u05D8\u05D9\u05E2\u05D5\u05DF** \u05D4\u05DE\u05E8\u05DB\u05D6\u05D9 (\u05D4\u05D8\u05E2\u05D5\u05DF = "the loaded/charged [thing]" has no sensible reading next to "\u05D4\u05DE\u05E8\u05DB\u05D6\u05D9" in an argument\'s context; meaningRisk low).\n- \u05D4\u05DD **\u05D4\u05EA\u05E4\u05E9\u05E8\u05D5 \u05D0\u05DD** \u05D4\u05D4\u05E6\u05E2\u05D4 \u2192 \u05D4\u05DD **\u05D4\u05EA\u05E4\u05E9\u05E8\u05D5 \u05E2\u05DD** \u05D4\u05D4\u05E6\u05E2\u05D4 (\u05D0\u05DD and \u05E2\u05DD are both common, independently valid words in general Hebrew \u2014 a conditional "if" versus the preposition "with" \u2014 so even though this sentence only parses one way, treat the swap itself as meaningRisk medium).\n- \u05D4\u05D8\u05E7\u05E1\u05D8 **\u05DE\u05EA\u05D9\u05D9\u05D7\u05D3** \u05DC\u05E0\u05D5\u05E9\u05D0 \u05D6\u05D4 \u2192 \u05D4\u05D8\u05E7\u05E1\u05D8 **\u05DE\u05EA\u05D9\u05D9\u05D7\u05E1** \u05DC\u05E0\u05D5\u05E9\u05D0 \u05D6\u05D4 (\u05DE\u05EA\u05D9\u05D9\u05D7\u05D3 = "is devoted/sanctified to" has no sensible reading where the author is plainly saying the text "refers/relates to" the topic; meaningRisk low).\n\nWhen in doubt whether a word is a legitimate but unusual choice rather than an error, omit it \u2014 this pass exists to find the clear cases, not to guess.\n';
+
 // src/proofread.ts
+init_thresholds();
 var stubs = {};
+var wrongWordOverride;
+function wrongWordPassEnabled() {
+  if (wrongWordOverride !== void 0) return wrongWordOverride;
+  const block = thresholds_default.proofread?.wrongWordPass;
+  return Boolean(block?.enabled);
+}
 var findSchema = { type: "object", required: ["changes"], properties: { changes: { type: "array", items: { type: "object", required: ["id", "line", "before", "after", "class", "meaningRisk"], properties: { id: { type: "string" }, line: { type: "integer" }, before: { type: "string" }, after: { type: ["string", "null"] }, class: { type: "string" }, meaningRisk: { type: "string", enum: ["low", "medium", "high"] } } } } } };
 var verifySchema = { type: "object", required: ["verdicts"], properties: { verdicts: { type: "array", items: { type: "object", required: ["id", "verdict"], properties: { id: { type: "string" }, verdict: { type: "string", enum: ["uphold", "refute"] } } } } } };
-var prompt = (file) => file === "proofread-find.md" ? proofread_find_default : file === "proofread-verify.md" ? proofread_verify_default : proofread_memo_default;
+var prompt = (file) => file === "proofread-find.md" ? proofread_find_default : file === "proofread-verify.md" ? proofread_verify_default : file === "proofread-find-wrongword.md" ? proofread_find_wrongword_default : proofread_memo_default;
 function contractChange(change) {
   const typeMap = { wrong_word: "word", names_terms: "word", style_words: "word", agreement: "agreement", collocation: "collocation", syntax: "syntax", tense: "tense", register: "register", punctuation: "punctuation", typography: "typography", typo: "typo" };
   const type = typeMap[change.class] ?? "word";
   const stage = change.mustCatch || ["typo", "punctuation", "typography", "names_terms", "style_words"].includes(change.class) ? "mechanical" : "language";
   const skipReason = change.status === "refuted" ? "refuted" : change.status === "triaged-out" || change.after === null ? "comment-only" : change.status === "unverified" || change.meaningRisk !== "low" ? "meaning-risk" : change.skipReason;
   const applied = typeof change.applied === "boolean" ? change.applied : skipReason ? false : void 0;
-  return { change_id: createHash("sha256").update(`${stage}\0${change.line}\0${change.before}`).digest("hex").slice(0, 12), stage, line: change.line, type, level: ["typo", "punctuation", "typography"].includes(type) ? "letter" : type === "word" ? "word" : "sentence", before: change.before, after: change.after, rationale: typeof change.rationale === "string" ? change.rationale : "Proofread suggestion; compare with the surrounding context.", meaningRisk: change.meaningRisk, ...change.mustCatch ? { mustCatch: true } : {}, ...applied !== void 0 ? { applied } : {}, ...skipReason ? { skipReason } : {} };
+  const idSeed = `${stage}\0${change.line}\0${change.before}${typeof change.occurrence === "number" ? `\0${change.occurrence}` : ""}`;
+  return { change_id: createHash("sha256").update(idSeed).digest("hex").slice(0, 12), stage, line: change.line, type, level: ["typo", "punctuation", "typography"].includes(type) ? "letter" : type === "word" ? "word" : "sentence", before: change.before, after: change.after, rationale: typeof change.rationale === "string" ? change.rationale : "Proofread suggestion; compare with the surrounding context.", meaningRisk: change.meaningRisk, ...change.mustCatch ? { mustCatch: true } : {}, ...applied !== void 0 ? { applied } : {}, ...skipReason ? { skipReason } : {}, ...typeof change.occurrence === "number" ? { occurrence: change.occurrence } : {} };
 }
 async function command(bin, args2, cwd) {
   return await new Promise((resolvePromise, reject) => {
@@ -41073,7 +41088,14 @@ ${options.voiceRules ?? ""}
 Dictionary candidates (propose the correct spelling, or return none if a legitimate name/term):
 ${JSON.stringify(hspell)}
 ${chunk.text}`], responseSchema: findSchema, runId: options.runId, budget })).json;
-  const candidates = Array.isArray(raw) ? raw : raw.changes;
+  let candidates = Array.isArray(raw) ? raw : raw.changes;
+  if (wrongWordPassEnabled() && options.only !== "mechanical") {
+    const rawExtra = stubs.findWrongWord ? await stubs.findWrongWord(chunk) : (await callGemini({ step: "proofread.find", system: prompt("proofread-find-wrongword.md"), parts: [`Chunk ${chunk.index}; absolute lines ${chunk.startLine}-${chunk.endLine}
+${options.voiceRules ?? ""}
+${chunk.text}`], responseSchema: findSchema, runId: options.runId, budget })).json;
+    const extra = (Array.isArray(rawExtra) ? rawExtra : rawExtra.changes).filter((candidate) => candidate.class === "wrong_word").filter((candidate) => !candidates.some((primary) => primary.line === candidate.line && primary.before === candidate.before)).map((candidate) => ({ ...candidate, id: `ww${chunk.index}-${candidate.id}` }));
+    candidates = [...candidates, ...extra];
+  }
   const kept = [];
   for (const candidate of candidates) {
     const decision = await decide({ point: "proofread.triage", question: "Is this candidate a genuine proofread error?", options: ["keep", "discard"], context: JSON.stringify(candidate), runId: options.runId, fallback: async () => "keep" });

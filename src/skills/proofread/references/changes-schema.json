@@ -68,6 +68,11 @@
           "minimum": 1,
           "description": "1-based line number in PROOF_BASE, already offset-corrected for the chunk. Must be >= 1; a 0 is a contract violation, not 'unknown'."
         },
+        "occurrence": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Optional. The 1-based position of this change's `before` span among ALL occurrences of that exact text on `line` (counted the way re.finditer/str.find would, left to right, non-overlapping). Set only when the finder already knows which instance it means and the line can carry more than one (e.g. a capped style-word rule flagging the Nth use past its cap while an earlier, still-allowed use shares the line). apply-changes.py uses it to target that exact instance instead of reporting skipReason=\"ambiguous-match\"; absent, it falls back to the ordinary unique-match rule."
+        },
         "type": {
           "enum": [
             "typo",
