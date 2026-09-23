@@ -10,6 +10,7 @@ const cliTemp = mkdtempSync(join(tmpdir(), 'aw-cli-ledger-'));
 setPathArguments(['--data-dir', cliTemp, '--project-dir', cliTemp]);
 
 test('truncated reply is ERROR, never partial JSON', async () => {
+  process.env.GOOGLE_API_KEY = 'test-key';
   __setTransport(async () => ({ text: '{"a":', finishReason: 'MAX_TOKENS', usage: { in: 10, out: 5 } }));
   await assert.rejects(callGemini({ step: 'proofread.find', system: '', parts: ['x'], runId: 't' }),
     (e: unknown) => e instanceof Error && /ERROR.*proofread\.find.*MAX_TOKENS/.test(e.message));
