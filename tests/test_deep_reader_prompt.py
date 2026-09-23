@@ -1,14 +1,12 @@
-"""Regression tests for the 2026-05-02 mikdashim failure modes."""
+"""The retired deep-reader prompt is replaced by CLI evidence extraction."""
 from pathlib import Path
 
 DR = Path("src/agents/deep-reader.md")
 
-def test_deep_reader_has_chapter_enumeration_trigger():
-    text = DR.read_text(encoding="utf-8")
-    assert "לאורך הספרים" in text or "across all books" in text or "across both books" in text
-    assert "chapter_coverage" in text
+def test_deep_reader_prompt_is_retired():
+    assert not DR.exists()
 
-def test_deep_reader_chapter_coverage_schema():
-    text = DR.read_text(encoding="utf-8")
-    assert "covered" in text
-    assert "skipped-irrelevant" in text
+def test_research_skill_uses_verified_evidence_cli():
+    text = Path("src/skills/research/SKILL.md").read_text(encoding="utf-8")
+    assert "aw evidence build" in text
+    assert "evidence.json" in text

@@ -11231,7 +11231,7 @@ var require_logging_utils = __commonJS({
           // Also add an instance pointer back to us.
           instance: this,
           // And pull over the EventEmitter functionality.
-          on: (event, listener) => this.on(event, listener)
+          on: (event2, listener) => this.on(event2, listener)
         });
         this.func.debug = (...args2) => this.invokeSeverity(LogSeverity.DEBUG, ...args2);
         this.func.info = (...args2) => this.invokeSeverity(LogSeverity.INFO, ...args2);
@@ -20973,36 +20973,36 @@ var require_event_target = __commonJS({
         let wrapper;
         if (type === "message") {
           wrapper = function onMessage(data, isBinary) {
-            const event = new MessageEvent("message", {
+            const event2 = new MessageEvent("message", {
               data: isBinary ? data : data.toString()
             });
-            event[kTarget] = this;
-            callListener(handler, this, event);
+            event2[kTarget] = this;
+            callListener(handler, this, event2);
           };
         } else if (type === "close") {
           wrapper = function onClose(code, message) {
-            const event = new CloseEvent("close", {
+            const event2 = new CloseEvent("close", {
               code,
               reason: message.toString(),
               wasClean: this._closeFrameReceived && this._closeFrameSent
             });
-            event[kTarget] = this;
-            callListener(handler, this, event);
+            event2[kTarget] = this;
+            callListener(handler, this, event2);
           };
         } else if (type === "error") {
           wrapper = function onError(error) {
-            const event = new ErrorEvent("error", {
+            const event2 = new ErrorEvent("error", {
               error,
               message: error.message
             });
-            event[kTarget] = this;
-            callListener(handler, this, event);
+            event2[kTarget] = this;
+            callListener(handler, this, event2);
           };
         } else if (type === "open") {
           wrapper = function onOpen() {
-            const event = new Event("open");
-            event[kTarget] = this;
-            callListener(handler, this, event);
+            const event2 = new Event("open");
+            event2[kTarget] = this;
+            callListener(handler, this, event2);
           };
         } else {
           return;
@@ -21038,11 +21038,11 @@ var require_event_target = __commonJS({
       EventTarget,
       MessageEvent
     };
-    function callListener(listener, thisArg, event) {
+    function callListener(listener, thisArg, event2) {
       if (typeof listener === "object" && listener.handleEvent) {
-        listener.handleEvent.call(listener, event);
+        listener.handleEvent.call(listener, event2);
       } else {
-        listener.call(thisArg, event);
+        listener.call(thisArg, event2);
       }
     }
   }
@@ -21210,7 +21210,7 @@ var require_websocket = __commonJS({
     var http3 = __require("http");
     var net = __require("net");
     var tls = __require("tls");
-    var { randomBytes, createHash: createHash2 } = __require("crypto");
+    var { randomBytes, createHash: createHash3 } = __require("crypto");
     var { Duplex, Readable: Readable2 } = __require("stream");
     var { URL: URL2 } = __require("url");
     var PerMessageDeflate2 = require_permessage_deflate();
@@ -21878,7 +21878,7 @@ var require_websocket = __commonJS({
           abortHandshake(websocket, socket, "Invalid Upgrade header");
           return;
         }
-        const digest = createHash2("sha1").update(key + GUID).digest("base64");
+        const digest = createHash3("sha1").update(key + GUID).digest("base64");
         if (res.headers["sec-websocket-accept"] !== digest) {
           abortHandshake(websocket, socket, "Invalid Sec-WebSocket-Accept header");
           return;
@@ -22247,7 +22247,7 @@ var require_websocket_server = __commonJS({
     var EventEmitter = __require("events");
     var http3 = __require("http");
     var { Duplex } = __require("stream");
-    var { createHash: createHash2 } = __require("crypto");
+    var { createHash: createHash3 } = __require("crypto");
     var extension2 = require_extension();
     var PerMessageDeflate2 = require_permessage_deflate();
     var subprotocol2 = require_subprotocol();
@@ -22554,7 +22554,7 @@ var require_websocket_server = __commonJS({
           );
         }
         if (this._state > RUNNING) return abortHandshake(socket, 503);
-        const digest = createHash2("sha1").update(key + GUID).digest("base64");
+        const digest = createHash3("sha1").update(key + GUID).digest("base64");
         const headers = [
           "HTTP/1.1 101 Switching Protocols",
           "Upgrade: websocket",
@@ -22601,10 +22601,10 @@ var require_websocket_server = __commonJS({
     };
     module.exports = WebSocketServer2;
     function addListeners(server, map) {
-      for (const event of Object.keys(map)) server.on(event, map[event]);
+      for (const event2 of Object.keys(map)) server.on(event2, map[event2]);
       return function removeListeners() {
-        for (const event of Object.keys(map)) {
-          server.removeListener(event, map[event]);
+        for (const event2 of Object.keys(map)) {
+          server.removeListener(event2, map[event2]);
         }
       };
     }
@@ -22667,8 +22667,8 @@ function projectDir() {
 }
 
 // src/main.ts
-import { readFileSync as readFileSync3 } from "node:fs";
-import { join as join5 } from "node:path";
+import { readFileSync as readFileSync4 } from "node:fs";
+import { join as join6 } from "node:path";
 
 // src/routing.ts
 init_thresholds();
@@ -22680,11 +22680,12 @@ function routeFor(step) {
   return route;
 }
 
-// src/voice.ts
-import { appendFileSync as appendFileSync2, existsSync, mkdirSync as mkdirSync2, readFileSync, readdirSync, writeFileSync } from "node:fs";
+// src/evidence.ts
 import { createHash } from "node:crypto";
-import { join as join2, resolve as resolve2, basename as basename3 } from "node:path";
-import { execFileSync } from "node:child_process";
+import { appendFileSync as appendFileSync3, existsSync, mkdirSync as mkdirSync3, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify as promisify2 } from "node:util";
+import { join as join3 } from "node:path";
 
 // ../../../../../../../plugins/academic-writer/mcp/gemini-server/node_modules/@google/genai/dist/node/index.mjs
 var import_p_retry = __toESM(require_p_retry(), 1);
@@ -34268,13 +34269,13 @@ var McpCallableTool = class _McpCallableTool {
     return functionCallResponseParts;
   }
 };
-async function handleWebSocketMessage$1(apiClient, onmessage, event) {
+async function handleWebSocketMessage$1(apiClient, onmessage, event2) {
   const serverMessage = new LiveMusicServerMessage();
   let data;
-  if (event.data instanceof Blob) {
-    data = JSON.parse(await event.data.text());
+  if (event2.data instanceof Blob) {
+    data = JSON.parse(await event2.data.text());
   } else {
-    data = JSON.parse(event.data);
+    data = JSON.parse(event2.data);
   }
   Object.assign(serverMessage, data);
   onmessage(serverMessage);
@@ -34338,8 +34339,8 @@ var LiveMusic = class {
     const apiClient = this.apiClient;
     const websocketCallbacks = {
       onopen: onopenAwaitedCallback,
-      onmessage: (event) => {
-        void handleWebSocketMessage$1(apiClient, callbacks.onmessage, event);
+      onmessage: (event2) => {
+        void handleWebSocketMessage$1(apiClient, callbacks.onmessage, event2);
       },
       onerror: (_a2 = callbacks === null || callbacks === void 0 ? void 0 : callbacks.onerror) !== null && _a2 !== void 0 ? _a2 : function(e2) {
       },
@@ -34460,15 +34461,15 @@ function mapToHeaders$1(map) {
   return headers;
 }
 var FUNCTION_RESPONSE_REQUIRES_ID = "FunctionResponse request must have an `id` field from the response of a ToolCall.FunctionalCalls in Google AI.";
-async function handleWebSocketMessage(apiClient, onmessage, event) {
+async function handleWebSocketMessage(apiClient, onmessage, event2) {
   const serverMessage = new LiveServerMessage();
   let jsonData;
-  if (event.data instanceof Blob) {
-    jsonData = await event.data.text();
-  } else if (event.data instanceof ArrayBuffer) {
-    jsonData = new TextDecoder().decode(event.data);
+  if (event2.data instanceof Blob) {
+    jsonData = await event2.data.text();
+  } else if (event2.data instanceof ArrayBuffer) {
+    jsonData = new TextDecoder().decode(event2.data);
   } else {
-    jsonData = event.data;
+    jsonData = event2.data;
   }
   const data = JSON.parse(jsonData);
   if (apiClient.isVertexAI()) {
@@ -34581,8 +34582,8 @@ var Live = class {
     const apiClient = this.apiClient;
     const websocketCallbacks = {
       onopen: onopenAwaitedCallback,
-      onmessage: (event) => {
-        void handleWebSocketMessage(apiClient, callbacks.onmessage, event);
+      onmessage: (event2) => {
+        void handleWebSocketMessage(apiClient, callbacks.onmessage, event2);
       },
       onerror: (_a2 = callbacks === null || callbacks === void 0 ? void 0 : callbacks.onerror) !== null && _a2 !== void 0 ? _a2 : function(e2) {
       },
@@ -40800,166 +40801,23 @@ async function callGemini(req) {
   }
 }
 
-// src/voice.ts
-init_thresholds();
-var dataOverride;
-function store() {
-  return join2(dataOverride ?? dataDir(), "voice");
+// src/sefaria.ts
+async function fetchSefaria(reference) {
+  const response = await fetch(`https://www.sefaria.org/api/v3/texts/${encodeURIComponent(reference)}`);
+  if (!response.ok) throw new Error(`ERROR sefaria.fetch: HTTP ${response.status}`);
+  const payload = await response.json();
+  if (typeof payload !== "object" || payload === null) throw new Error("ERROR sefaria.fetch: invalid response");
+  const record = payload;
+  const flatten = (value) => Array.isArray(value) ? value.flatMap(flatten) : typeof value === "string" ? [value] : [];
+  const text = flatten(record.he).join("\n");
+  if (!text) throw new Error("ERROR sefaria.fetch: missing Hebrew text");
+  return { title: typeof record.ref === "string" ? record.ref : reference, author: "", text };
 }
-function appendVoicePair(pair, dataRoot) {
-  const dir = join2(dataRoot ?? dataOverride ?? dataDir(), "voice");
-  mkdirSync2(dir, { recursive: true });
-  appendFileSync2(join2(dir, "pairs.jsonl"), `${JSON.stringify(pair)}
-`, "utf8");
-}
-function writeVoiceStyleWords(value, dataRoot) {
-  const dir = join2(dataRoot ?? dataOverride ?? dataDir(), "voice");
-  mkdirSync2(dir, { recursive: true });
-  writeFileSync(join2(dir, "style-words.json"), JSON.stringify(value, null, 2), "utf8");
-}
-function readJsonl(path2) {
-  if (!existsSync(path2)) return [];
-  return readFileSync(path2, "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
-}
-function sha(content) {
-  return createHash("sha256").update(content).digest("hex");
-}
-function refreshVersion(dir) {
-  const profilePath = join2(dir, "profile.json");
-  const profile = JSON.parse(readFileSync(profilePath, "utf8"));
-  const names = ["exemplars.jsonl", "pairs.jsonl", "style-words.json", "rules.md"];
-  const version = sha(names.map((name) => existsSync(join2(dir, name)) ? readFileSync(join2(dir, name), "utf8") : "").join("\n"));
-  profile.voiceVersion = version;
-  writeFileSync(profilePath, JSON.stringify(profile, null, 2));
-  return version;
-}
-function paragraphs(text) {
-  return text.split(/\n\s*\n/).map((p) => p.replace(/^#+\s*/, "").trim()).filter(Boolean);
-}
-async function voiceBundle(options) {
-  const dir = store();
-  if (!existsSync(join2(dir, "profile.json"))) throw new AwError("ERROR", "voice.bundle", "exit 3 no voice store \u2014 run: aw voice pull (or /academic-writer:voice)");
-  const all = readJsonl(join2(dir, "exemplars.jsonl"));
-  const chosen = [];
-  const sources = /* @__PURE__ */ new Set();
-  const perSource = thresholds_default.voice.bundle.maxPerSource;
-  let seed = Number.parseInt(sha(options.runId).slice(0, 8), 16) || 1;
-  while (all.length && chosen.length < options.n) {
-    seed = seed * 1664525 + 1013904223 >>> 0;
-    const index = seed % all.length;
-    const item = all.splice(index, 1)[0];
-    const sourceCount = chosen.filter((exemplar) => exemplar.source === item?.source).length;
-    if (!item || sources.has(item.source) && sourceCount >= perSource) continue;
-    sources.add(item.source);
-    chosen.push(item);
-  }
-  const pairs = readJsonl(join2(dir, "pairs.jsonl")).slice(-options.pairs);
-  const out = join2(dir, `bundle-${sha(options.runId).slice(0, 12)}.json`);
-  writeFileSync(out, JSON.stringify({ exemplars: chosen, pairs, rules: readFileSync(join2(dir, "rules.md"), "utf8"), styleWords: JSON.parse(readFileSync(join2(dir, "style-words.json"), "utf8")) }, null, 2));
-  return { exemplars: chosen, pairs, path: out };
-}
-function voiceMigrate(from) {
-  const dir = store();
-  mkdirSync2(dir, { recursive: true });
-  const source = resolve2(from);
-  const author = readFileSync(join2(source, "AUTHOR_VOICE.md"), "utf8");
-  const fingerprintPath = join2(source, ".voice", "fingerprint.md");
-  const exemplarsPath = join2(source, ".academic-helper", "voice-exemplars.md");
-  const fingerprint = existsSync(fingerprintPath) ? readFileSync(fingerprintPath, "utf8") : "";
-  const rawExemplars = existsSync(exemplarsPath) ? readFileSync(exemplarsPath, "utf8") : "";
-  const version = sha(author + fingerprint + rawExemplars);
-  writeFileSync(join2(dir, "profile.json"), JSON.stringify({ schemaVersion: 1, voiceVersion: version, authorVoice: author, fingerprint }, null, 2));
-  const rows = paragraphs(rawExemplars).filter((p) => p !== "# Voice exemplars").map((text, index) => ({ id: `migrated-${index + 1}`, source: `migration-${index + 1}`, text }));
-  writeFileSync(join2(dir, "exemplars.jsonl"), rows.map((r2) => JSON.stringify(r2)).join("\n") + (rows.length ? "\n" : ""));
-  for (const file of ["pairs.jsonl", "CHANGELOG.jsonl"]) if (!existsSync(join2(dir, file))) writeFileSync(join2(dir, file), "");
-  if (!existsSync(join2(dir, "style-words.json"))) writeFileSync(join2(dir, "style-words.json"), JSON.stringify({ banned: [], capped: [], filler: [] }, null, 2));
-  if (!existsSync(join2(dir, "rules.md"))) writeFileSync(join2(dir, "rules.md"), author.split("\n").slice(0, thresholds_default.voice.bundle.maxRuleLines).join("\n"));
-  return dir;
-}
-function voiceCandidates(corpus) {
-  const files = readdirSync(resolve2(corpus), { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".md"));
-  return files.flatMap((file) => paragraphs(readFileSync(join2(resolve2(corpus), file.name), "utf8")).map((text, i2) => ({ id: `${basename3(file.name)}-${i2 + 1}`, source: file.name, text }))).filter((e2) => e2.text.split(/\s+/).length >= thresholds_default.voice.exemplars.minWords);
-}
-async function voiceMoves(runId2) {
-  const dir = store();
-  const profile = readFileSync(join2(dir, "profile.json"), "utf8");
-  const exemplars = readJsonl(join2(dir, "exemplars.jsonl"));
-  const result = await callGemini({ step: "voice.moves", system: `Describe concise reusable author writing moves. Return JSON with a rules string of no more than ${thresholds_default.voice.bundle.maxRuleLines} lines.`, parts: [profile, JSON.stringify(exemplars)], runId: runId2, budget: new Budget(runId2, thresholds_default.budget.voiceMoves), responseSchema: { type: "OBJECT", properties: { rules: { type: "STRING" } }, required: ["rules"] } });
-  const parsed = result.json;
-  if (typeof parsed.rules !== "string") throw new AwError("ERROR", "voice.moves", "missing rules verdict");
-  const rules = parsed.rules.split("\n").slice(0, thresholds_default.voice.bundle.maxRuleLines).join("\n");
-  writeFileSync(join2(dir, "rules.md"), rules + "\n");
-  refreshVersion(dir);
-  return rules;
-}
-function voiceSync(direction) {
-  const dir = store();
-  mkdirSync2(dir, { recursive: true });
-  try {
-    const profileText = readFileSync(join2(projectDir(), ".academic-helper", "profile.md"), "utf8");
-    const authorKey = /^author_key:\s*["']?([^\s"']+)/m.exec(profileText)?.[1];
-    if (!authorKey) throw new AwError("ERROR", `voice.${direction}`, "author_key missing from project profile");
-    const title = `Voice Store \u2014 ${authorKey}`;
-    const names = ["profile.json", "exemplars.jsonl", "pairs.jsonl", "style-words.json", "rules.md", "CHANGELOG.jsonl"];
-    const readStore = () => Object.fromEntries(names.map((name) => [name, existsSync(join2(dir, name)) ? readFileSync(join2(dir, name), "utf8") : ""]));
-    const writeStore = (files) => {
-      for (const name of names) writeFileSync(join2(dir, name), files[name] ?? "");
-    };
-    const local = readStore();
-    const previousVersion = (local["profile.json"] ? JSON.parse(local["profile.json"]) : {}).voiceVersion;
-    const currentVersion = refreshVersion(dir);
-    if (currentVersion !== previousVersion) writeFileSync(join2(dir, "CHANGELOG.jsonl"), `${local["CHANGELOG.jsonl"] ?? ""}${JSON.stringify({ voiceVersion: currentVersion, at: (/* @__PURE__ */ new Date()).toISOString() })}
-`);
-    local["profile.json"] = readFileSync(join2(dir, "profile.json"), "utf8");
-    local["CHANGELOG.jsonl"] = readFileSync(join2(dir, "CHANGELOG.jsonl"), "utf8");
-    const localProfile = local["profile.json"] ? JSON.parse(local["profile.json"]) : {};
-    const listingText = execFileSync("ck", ["items", "list", "--json"], { encoding: "utf8" });
-    const listing = JSON.parse(listingText);
-    const item = listing.items?.find((row) => row.title === title && typeof row.id === "string");
-    if (direction === "pull" && !item?.id) throw new AwError("ERROR", "voice.pull", "no CandleKeep voice store found");
-    let remote;
-    if (item?.id) {
-      const text = execFileSync("ck", ["items", "get", item.id], { encoding: "utf8" });
-      remote = JSON.parse(text);
-    }
-    if (direction === "pull") {
-      if (!remote) throw new AwError("ERROR", "voice.pull", "missing remote store");
-      const remoteProfile2 = remote["profile.json"] ? JSON.parse(remote["profile.json"]) : {};
-      const merged = { ...remote };
-      if (localProfile.voiceVersion && remoteProfile2.voiceVersion && localProfile.voiceVersion > remoteProfile2.voiceVersion) Object.assign(merged, local);
-      const changelog = [...new Set([...(remote["CHANGELOG.jsonl"] ?? "").split("\n"), ...(local["CHANGELOG.jsonl"] ?? "").split("\n")].filter(Boolean))].join("\n");
-      merged["CHANGELOG.jsonl"] = changelog ? `${changelog}
-` : "";
-      writeStore(merged);
-      return `voice pull: synchronized ${title}`;
-    }
-    const body = JSON.stringify(local, null, 2);
-    const remoteProfile = remote?.["profile.json"] ? JSON.parse(remote["profile.json"]) : {};
-    if (localProfile.voiceVersion && remoteProfile.voiceVersion && remoteProfile.voiceVersion > localProfile.voiceVersion && remote) {
-      local["CHANGELOG.jsonl"] = [...new Set([...(remote["CHANGELOG.jsonl"] ?? "").split("\n"), ...(local["CHANGELOG.jsonl"] ?? "").split("\n")].filter(Boolean))].join("\n") + "\n";
-    }
-    const file = join2(dir, ".candlekeep-voice.md");
-    writeFileSync(file, body);
-    if (item?.id) execFileSync("ck", ["items", "put", item.id, "-f", file], { encoding: "utf8" });
-    else execFileSync("ck", ["items", "import", file, "--title", title], { encoding: "utf8" });
-    return `voice push: synchronized ${title}`;
-  } catch (error) {
-    if (error instanceof AwError) throw error;
-    throw new AwError("ERROR", `voice.${direction}`, error instanceof Error ? error.message : "CandleKeep sync failed");
-  }
-}
-
-// src/main.ts
-init_thresholds();
-
-// src/revise.ts
-import { appendFileSync as appendFileSync4, mkdirSync as mkdirSync4, readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import { dirname, join as join4 } from "node:path";
 
 // src/decide.ts
 init_thresholds();
-import { appendFileSync as appendFileSync3, mkdirSync as mkdirSync3 } from "node:fs";
-import { join as join3 } from "node:path";
+import { appendFileSync as appendFileSync2, mkdirSync as mkdirSync2 } from "node:fs";
+import { join as join2 } from "node:path";
 
 // src/jev.ts
 async function askJev(input) {
@@ -41017,23 +40875,335 @@ async function decide(req) {
       answer = modelAnswer;
     }
   }
-  const dir = join3(projectDir(), ".academic-helper", "runs", req.runId);
-  mkdirSync3(dir, { recursive: true });
-  appendFileSync3(join3(dir, "jev.jsonl"), `${JSON.stringify({ point: req.point, jevAnswer: jevResult?.answer ?? null, jevConfidence: jevResult?.confidence ?? null, modelAnswer, decidedBy: by })}
+  const dir = join2(projectDir(), ".academic-helper", "runs", req.runId);
+  mkdirSync2(dir, { recursive: true });
+  appendFileSync2(join2(dir, "jev.jsonl"), `${JSON.stringify({ point: req.point, jevAnswer: jevResult?.answer ?? null, jevConfidence: jevResult?.confidence ?? null, modelAnswer, decidedBy: by })}
 `, "utf8");
   return { answer, by, confidence: jevResult?.confidence ?? null };
 }
 
+// ../schemas/evidence.schema.json
+var evidence_schema_default = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  type: "object",
+  required: ["sources", "passages"],
+  properties: {
+    sources: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "title", "author", "role", "isCoreText"],
+        properties: {
+          id: { type: "string" },
+          title: { type: "string" },
+          author: { type: "string" },
+          role: { enum: ["primary", "secondary"] },
+          isCoreText: { type: "boolean" }
+        },
+        additionalProperties: false
+      }
+    },
+    passages: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "sourceId", "locator", "quote", "gloss", "relevance"],
+        properties: {
+          id: { type: "string" },
+          sourceId: { type: "string" },
+          locator: { type: "string" },
+          quote: { type: "string" },
+          gloss: { type: "string" },
+          relevance: { type: "integer", minimum: 0, maximum: 3 }
+        },
+        additionalProperties: false
+      }
+    }
+  },
+  additionalProperties: false
+};
+
+// src/evidence.ts
+var execFileAsync = promisify2(execFile);
+var sourceCache = /* @__PURE__ */ new Map();
+var prompt = "Extract evidence passages from the supplied source for the author thesis. Use only the supplied author intent and source text. The intent JSON contains the thesis and must-use passages. Return passages that support, complicate, or contradict the thesis. Quotes must be exact substrings copied from the source text; never reconstruct, translate, or silently normalize a quote. Include a locator, a concise gloss, and relevance from 0 through 3. Return only useful passages; return an empty array when none qualify.";
+var extractionSchema = { type: "object", required: ["passages"], properties: { passages: evidence_schema_default.properties.passages }, additionalProperties: false };
+var stubState = {};
+function normalize(value) {
+  return value.normalize("NFC").replace(/\s+/gu, " ").trim();
+}
+function cachePath(id, text) {
+  const digest = createHash("sha256").update(text).digest("hex");
+  const directory = join3(dataDir(), "sources", `${encodeURIComponent(id)}@${digest}`);
+  mkdirSync3(directory, { recursive: true });
+  writeFileSync(join3(directory, "text.md"), text, "utf8");
+  return join3(directory, "text.md");
+}
+function cachedText(id) {
+  const root = join3(dataDir(), "sources");
+  if (!existsSync(root)) return void 0;
+  const prefix = `${encodeURIComponent(id)}@`;
+  const entry = readdirSync(root).find((name) => name.startsWith(prefix));
+  if (!entry) return void 0;
+  const path2 = join3(root, entry, "text.md");
+  return existsSync(path2) ? readFileSync(path2, "utf8") : void 0;
+}
+async function fetchCk(id) {
+  const { stdout } = await execFileAsync("ck", ["items", "read", `${id}:all`], { maxBuffer: 64 * 1024 * 1024 });
+  return stdout;
+}
+async function extract(sourceId, text, intent, runId2) {
+  if (stubState.value?.extract) return stubState.value.extract(sourceId, text, intent, runId2);
+  const result = await callGemini({
+    step: "evidence.extract",
+    runId: runId2,
+    system: prompt,
+    parts: [`Author intent (thesis and must-use passages):
+${intent}`, `Source ${sourceId}:
+${text}`],
+    responseSchema: extractionSchema
+  });
+  if (typeof result.json !== "object" || result.json === null || !Array.isArray(result.json.passages)) {
+    throw new Error("ERROR evidence.extract: missing passages");
+  }
+  return { passages: result.json.passages };
+}
+function event(runId2, record, reason) {
+  const path2 = join3(projectDir(), ".academic-helper", "runs", runId2, "events.jsonl");
+  mkdirSync3(join3(projectDir(), ".academic-helper", "runs", runId2), { recursive: true });
+  appendFileSync3(path2, `${JSON.stringify({ type: "evidence.quote_dropped", passageId: record.id, sourceId: record.sourceId, reason })}
+`, "utf8");
+}
+async function buildEvidence(options) {
+  dataDir();
+  projectDir();
+  const intent = options.intent ? readFileSync(options.intent, "utf8") : "";
+  const tasks = [
+    ...options.sources.map(async (id) => {
+      const cached = sourceCache.get(id) ?? cachedText(id);
+      const text = cached ?? await (stubState.value?.fetchCk ?? fetchCk)(id);
+      sourceCache.set(id, text);
+      cachePath(id, text);
+      return { id, title: id, author: "", role: "secondary", isCoreText: false, text };
+    }),
+    ...(options.sefaria ?? []).map(async (reference) => {
+      const id = `sefaria:${reference}`;
+      const cached = cachedText(id);
+      const result = cached === void 0 ? await (stubState.value?.fetchSefaria ?? fetchSefaria)(reference) : { title: reference, author: "", text: cached };
+      cachePath(id, result.text);
+      return { id, title: result.title, author: result.author, role: "primary", isCoreText: true, text: result.text };
+    })
+  ];
+  const fetched = await Promise.all(tasks);
+  const extracted = [];
+  let next = 0;
+  const concurrency = routeFor("evidence.extract").concurrency;
+  if (concurrency < 1) throw new Error("ERROR evidence.extract: configured concurrency must be positive");
+  await Promise.all(Array.from({ length: Math.min(concurrency, fetched.length) }, async () => {
+    while (next < fetched.length) {
+      const index = next;
+      next += 1;
+      const source = fetched[index];
+      if (source) extracted[index] = { source, result: await extract(source.id, source.text, intent, options.runId) };
+    }
+  }));
+  const sources = fetched.map(({ text: _text, ...source }) => source);
+  const passages = [];
+  for (const { source, result } of extracted) {
+    const cachedText2 = sourceCache.get(source.id) ?? source.text;
+    for (const passage of result.passages) {
+      if (!normalize(passage.quote) || !normalize(cachedText2).includes(normalize(passage.quote))) {
+        event(options.runId, passage, "quote_not_verbatim");
+        continue;
+      }
+      const rated = await decide({
+        point: "evidence.relevance",
+        question: "How relevant is this passage to the author thesis (0 = not relevant, 3 = central)?",
+        options: ["0", "1", "2", "3"],
+        context: JSON.stringify({ thesis: intent, quote: passage.quote, gloss: passage.gloss }),
+        runId: options.runId,
+        fallback: async () => String(passage.relevance)
+      });
+      passages.push({ ...passage, relevance: Number(rated.answer) });
+    }
+  }
+  const output = { sources, passages };
+  const target = join3(projectDir(), ".academic-helper", "evidence.json");
+  mkdirSync3(join3(projectDir(), ".academic-helper"), { recursive: true });
+  writeFileSync(target, `${JSON.stringify(output, null, 2)}
+`, "utf8");
+  appendLedger({ run_id: options.runId, step: "evidence.build", provider: "code", model: "code", input_tokens: 0, output_tokens: 0, cost_usd: 0, latency_ms: 0, exit: "OK", same_family: false });
+  return output;
+}
+
+// src/voice.ts
+import { appendFileSync as appendFileSync4, existsSync as existsSync2, mkdirSync as mkdirSync4, readFileSync as readFileSync2, readdirSync as readdirSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { createHash as createHash2 } from "node:crypto";
+import { join as join4, resolve as resolve2, basename as basename3 } from "node:path";
+import { execFileSync } from "node:child_process";
+init_thresholds();
+var dataOverride;
+function store() {
+  return join4(dataOverride ?? dataDir(), "voice");
+}
+function appendVoicePair(pair, dataRoot) {
+  const dir = join4(dataRoot ?? dataOverride ?? dataDir(), "voice");
+  mkdirSync4(dir, { recursive: true });
+  appendFileSync4(join4(dir, "pairs.jsonl"), `${JSON.stringify(pair)}
+`, "utf8");
+}
+function writeVoiceStyleWords(value, dataRoot) {
+  const dir = join4(dataRoot ?? dataOverride ?? dataDir(), "voice");
+  mkdirSync4(dir, { recursive: true });
+  writeFileSync2(join4(dir, "style-words.json"), JSON.stringify(value, null, 2), "utf8");
+}
+function readJsonl(path2) {
+  if (!existsSync2(path2)) return [];
+  return readFileSync2(path2, "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+}
+function sha(content) {
+  return createHash2("sha256").update(content).digest("hex");
+}
+function refreshVersion(dir) {
+  const profilePath = join4(dir, "profile.json");
+  const profile = JSON.parse(readFileSync2(profilePath, "utf8"));
+  const names = ["exemplars.jsonl", "pairs.jsonl", "style-words.json", "rules.md"];
+  const version = sha(names.map((name) => existsSync2(join4(dir, name)) ? readFileSync2(join4(dir, name), "utf8") : "").join("\n"));
+  profile.voiceVersion = version;
+  writeFileSync2(profilePath, JSON.stringify(profile, null, 2));
+  return version;
+}
+function paragraphs(text) {
+  return text.split(/\n\s*\n/).map((p) => p.replace(/^#+\s*/, "").trim()).filter(Boolean);
+}
+async function voiceBundle(options) {
+  const dir = store();
+  if (!existsSync2(join4(dir, "profile.json"))) throw new AwError("ERROR", "voice.bundle", "exit 3 no voice store \u2014 run: aw voice pull (or /academic-writer:voice)");
+  const all = readJsonl(join4(dir, "exemplars.jsonl"));
+  const chosen = [];
+  const sources = /* @__PURE__ */ new Set();
+  const perSource = thresholds_default.voice.bundle.maxPerSource;
+  let seed = Number.parseInt(sha(options.runId).slice(0, 8), 16) || 1;
+  while (all.length && chosen.length < options.n) {
+    seed = seed * 1664525 + 1013904223 >>> 0;
+    const index = seed % all.length;
+    const item = all.splice(index, 1)[0];
+    const sourceCount = chosen.filter((exemplar) => exemplar.source === item?.source).length;
+    if (!item || sources.has(item.source) && sourceCount >= perSource) continue;
+    sources.add(item.source);
+    chosen.push(item);
+  }
+  const pairs = readJsonl(join4(dir, "pairs.jsonl")).slice(-options.pairs);
+  const out = join4(dir, `bundle-${sha(options.runId).slice(0, 12)}.json`);
+  writeFileSync2(out, JSON.stringify({ exemplars: chosen, pairs, rules: readFileSync2(join4(dir, "rules.md"), "utf8"), styleWords: JSON.parse(readFileSync2(join4(dir, "style-words.json"), "utf8")) }, null, 2));
+  return { exemplars: chosen, pairs, path: out };
+}
+function voiceMigrate(from) {
+  const dir = store();
+  mkdirSync4(dir, { recursive: true });
+  const source = resolve2(from);
+  const author = readFileSync2(join4(source, "AUTHOR_VOICE.md"), "utf8");
+  const fingerprintPath = join4(source, ".voice", "fingerprint.md");
+  const exemplarsPath = join4(source, ".academic-helper", "voice-exemplars.md");
+  const fingerprint = existsSync2(fingerprintPath) ? readFileSync2(fingerprintPath, "utf8") : "";
+  const rawExemplars = existsSync2(exemplarsPath) ? readFileSync2(exemplarsPath, "utf8") : "";
+  const version = sha(author + fingerprint + rawExemplars);
+  writeFileSync2(join4(dir, "profile.json"), JSON.stringify({ schemaVersion: 1, voiceVersion: version, authorVoice: author, fingerprint }, null, 2));
+  const rows = paragraphs(rawExemplars).filter((p) => p !== "# Voice exemplars").map((text, index) => ({ id: `migrated-${index + 1}`, source: `migration-${index + 1}`, text }));
+  writeFileSync2(join4(dir, "exemplars.jsonl"), rows.map((r2) => JSON.stringify(r2)).join("\n") + (rows.length ? "\n" : ""));
+  for (const file of ["pairs.jsonl", "CHANGELOG.jsonl"]) if (!existsSync2(join4(dir, file))) writeFileSync2(join4(dir, file), "");
+  if (!existsSync2(join4(dir, "style-words.json"))) writeFileSync2(join4(dir, "style-words.json"), JSON.stringify({ banned: [], capped: [], filler: [] }, null, 2));
+  if (!existsSync2(join4(dir, "rules.md"))) writeFileSync2(join4(dir, "rules.md"), author.split("\n").slice(0, thresholds_default.voice.bundle.maxRuleLines).join("\n"));
+  return dir;
+}
+function voiceCandidates(corpus) {
+  const files = readdirSync2(resolve2(corpus), { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".md"));
+  return files.flatMap((file) => paragraphs(readFileSync2(join4(resolve2(corpus), file.name), "utf8")).map((text, i2) => ({ id: `${basename3(file.name)}-${i2 + 1}`, source: file.name, text }))).filter((e2) => e2.text.split(/\s+/).length >= thresholds_default.voice.exemplars.minWords);
+}
+async function voiceMoves(runId2) {
+  const dir = store();
+  const profile = readFileSync2(join4(dir, "profile.json"), "utf8");
+  const exemplars = readJsonl(join4(dir, "exemplars.jsonl"));
+  const result = await callGemini({ step: "voice.moves", system: `Describe concise reusable author writing moves. Return JSON with a rules string of no more than ${thresholds_default.voice.bundle.maxRuleLines} lines.`, parts: [profile, JSON.stringify(exemplars)], runId: runId2, budget: new Budget(runId2, thresholds_default.budget.voiceMoves), responseSchema: { type: "OBJECT", properties: { rules: { type: "STRING" } }, required: ["rules"] } });
+  const parsed = result.json;
+  if (typeof parsed.rules !== "string") throw new AwError("ERROR", "voice.moves", "missing rules verdict");
+  const rules = parsed.rules.split("\n").slice(0, thresholds_default.voice.bundle.maxRuleLines).join("\n");
+  writeFileSync2(join4(dir, "rules.md"), rules + "\n");
+  refreshVersion(dir);
+  return rules;
+}
+function voiceSync(direction) {
+  const dir = store();
+  mkdirSync4(dir, { recursive: true });
+  try {
+    const profileText = readFileSync2(join4(projectDir(), ".academic-helper", "profile.md"), "utf8");
+    const authorKey = /^author_key:\s*["']?([^\s"']+)/m.exec(profileText)?.[1];
+    if (!authorKey) throw new AwError("ERROR", `voice.${direction}`, "author_key missing from project profile");
+    const title = `Voice Store \u2014 ${authorKey}`;
+    const names = ["profile.json", "exemplars.jsonl", "pairs.jsonl", "style-words.json", "rules.md", "CHANGELOG.jsonl"];
+    const readStore = () => Object.fromEntries(names.map((name) => [name, existsSync2(join4(dir, name)) ? readFileSync2(join4(dir, name), "utf8") : ""]));
+    const writeStore = (files) => {
+      for (const name of names) writeFileSync2(join4(dir, name), files[name] ?? "");
+    };
+    const local = readStore();
+    const previousVersion = (local["profile.json"] ? JSON.parse(local["profile.json"]) : {}).voiceVersion;
+    const currentVersion = refreshVersion(dir);
+    if (currentVersion !== previousVersion) writeFileSync2(join4(dir, "CHANGELOG.jsonl"), `${local["CHANGELOG.jsonl"] ?? ""}${JSON.stringify({ voiceVersion: currentVersion, at: (/* @__PURE__ */ new Date()).toISOString() })}
+`);
+    local["profile.json"] = readFileSync2(join4(dir, "profile.json"), "utf8");
+    local["CHANGELOG.jsonl"] = readFileSync2(join4(dir, "CHANGELOG.jsonl"), "utf8");
+    const localProfile = local["profile.json"] ? JSON.parse(local["profile.json"]) : {};
+    const listingText = execFileSync("ck", ["items", "list", "--json"], { encoding: "utf8" });
+    const listing = JSON.parse(listingText);
+    const item = listing.items?.find((row) => row.title === title && typeof row.id === "string");
+    if (direction === "pull" && !item?.id) throw new AwError("ERROR", "voice.pull", "no CandleKeep voice store found");
+    let remote;
+    if (item?.id) {
+      const text = execFileSync("ck", ["items", "get", item.id], { encoding: "utf8" });
+      remote = JSON.parse(text);
+    }
+    if (direction === "pull") {
+      if (!remote) throw new AwError("ERROR", "voice.pull", "missing remote store");
+      const remoteProfile2 = remote["profile.json"] ? JSON.parse(remote["profile.json"]) : {};
+      const merged = { ...remote };
+      if (localProfile.voiceVersion && remoteProfile2.voiceVersion && localProfile.voiceVersion > remoteProfile2.voiceVersion) Object.assign(merged, local);
+      const changelog = [...new Set([...(remote["CHANGELOG.jsonl"] ?? "").split("\n"), ...(local["CHANGELOG.jsonl"] ?? "").split("\n")].filter(Boolean))].join("\n");
+      merged["CHANGELOG.jsonl"] = changelog ? `${changelog}
+` : "";
+      writeStore(merged);
+      return `voice pull: synchronized ${title}`;
+    }
+    const body = JSON.stringify(local, null, 2);
+    const remoteProfile = remote?.["profile.json"] ? JSON.parse(remote["profile.json"]) : {};
+    if (localProfile.voiceVersion && remoteProfile.voiceVersion && remoteProfile.voiceVersion > localProfile.voiceVersion && remote) {
+      local["CHANGELOG.jsonl"] = [...new Set([...(remote["CHANGELOG.jsonl"] ?? "").split("\n"), ...(local["CHANGELOG.jsonl"] ?? "").split("\n")].filter(Boolean))].join("\n") + "\n";
+    }
+    const file = join4(dir, ".candlekeep-voice.md");
+    writeFileSync2(file, body);
+    if (item?.id) execFileSync("ck", ["items", "put", item.id, "-f", file], { encoding: "utf8" });
+    else execFileSync("ck", ["items", "import", file, "--title", title], { encoding: "utf8" });
+    return `voice push: synchronized ${title}`;
+  } catch (error) {
+    if (error instanceof AwError) throw error;
+    throw new AwError("ERROR", `voice.${direction}`, error instanceof Error ? error.message : "CandleKeep sync failed");
+  }
+}
+
+// src/main.ts
+init_thresholds();
+
 // src/revise.ts
+import { appendFileSync as appendFileSync5, mkdirSync as mkdirSync5, readFileSync as readFileSync3, writeFileSync as writeFileSync3 } from "node:fs";
+import { dirname, join as join5 } from "node:path";
 init_thresholds();
 var dataOverride2;
 var confirm = async () => false;
 function voiceDir() {
-  return dataOverride2 ?? join4(dataDir(), "voice");
+  return dataOverride2 ?? join5(dataDir(), "voice");
 }
 function append(file, row) {
-  mkdirSync4(dirname(file), { recursive: true });
-  appendFileSync4(file, `${JSON.stringify(row)}
+  mkdirSync5(dirname(file), { recursive: true });
+  appendFileSync5(file, `${JSON.stringify(row)}
 `, "utf8");
 }
 async function classify(items, runId2) {
@@ -41053,33 +41223,33 @@ function applyTextEdit(item) {
   const before = item.proposal.before;
   const after = item.proposal.after;
   if (typeof file !== "string" || typeof before !== "string" || typeof after !== "string") return;
-  const target = join4(projectDir(), file);
-  const body = readFileSync2(target, "utf8");
+  const target = join5(projectDir(), file);
+  const body = readFileSync3(target, "utf8");
   if (!body.includes(before)) throw new Error(`ERROR revise.apply: anchor not found for ${item.id}`);
-  writeFileSync2(target, body.replace(before, after), "utf8");
+  writeFileSync3(target, body.replace(before, after), "utf8");
 }
 async function applyPlan(plan) {
   if (!dataOverride2) dataDir();
   const applied = [];
   const deferred = [];
-  const feedbackDir = join4(dataOverride2 ?? dataDir(), "feedback");
+  const feedbackDir = join5(dataOverride2 ?? dataDir(), "feedback");
   for (const item of plan.items) {
-    append(join4(dataOverride2 ?? dataDir(), "labels", "revise.classify.jsonl"), { point: "revise.classify", itemId: item.id, label: item.category });
+    append(join5(dataOverride2 ?? dataDir(), "labels", "revise.classify.jsonl"), { point: "revise.classify", itemId: item.id, label: item.category });
     if (typeof item.proposal.changeId === "string" && (item.proposal.label === "uphold" || item.proposal.label === "refute")) {
-      append(join4(dataOverride2 ?? dataDir(), "labels", "proofread.verify.jsonl"), { point: "proofread.verify", changeId: item.proposal.changeId, label: item.proposal.label });
+      append(join5(dataOverride2 ?? dataDir(), "labels", "proofread.verify.jsonl"), { point: "proofread.verify", changeId: item.proposal.changeId, label: item.proposal.label });
     }
     if (item.category === "text_edit") {
       applyTextEdit(item);
       applied.push(item.id);
     } else if (item.category === "argument") {
-      const file = join4(projectDir(), ".academic-helper", "revise-todo.md");
-      mkdirSync4(join4(projectDir(), ".academic-helper"), { recursive: true });
-      appendFileSync4(file, `
+      const file = join5(projectDir(), ".academic-helper", "revise-todo.md");
+      mkdirSync5(join5(projectDir(), ".academic-helper"), { recursive: true });
+      appendFileSync5(file, `
 - [ ] ${String(item.proposal.text ?? JSON.stringify(item.proposal))}
 `, "utf8");
       deferred.push(item.id);
     } else if (item.category === "plugin_defect") {
-      append(join4(feedbackDir, "ledger.jsonl"), { ts: (/* @__PURE__ */ new Date()).toISOString(), runId: plan.runId, step: String(item.proposal.step ?? "unknown"), item: item.proposal, authorWords: String(item.proposal.authorWords ?? ""), pluginVersion: plan.pluginVersion });
+      append(join5(feedbackDir, "ledger.jsonl"), { ts: (/* @__PURE__ */ new Date()).toISOString(), runId: plan.runId, step: String(item.proposal.step ?? "unknown"), item: item.proposal, authorWords: String(item.proposal.authorWords ?? ""), pluginVersion: plan.pluginVersion });
       applied.push(item.id);
     } else {
       const accepted = await confirm([item]);
@@ -41088,10 +41258,10 @@ async function applyPlan(plan) {
         continue;
       }
       const dir = voiceDir();
-      mkdirSync4(dir, { recursive: true });
+      mkdirSync5(dir, { recursive: true });
       appendVoicePair({ before: String(item.proposal.before ?? ""), after: String(item.proposal.after ?? ""), source: plan.runId }, dataOverride2 ?? dataDir());
       if (item.proposal.styleWords !== void 0) writeVoiceStyleWords(item.proposal.styleWords, dataOverride2 ?? dataDir());
-      if (item.proposal.terms !== void 0) writeFileSync2(join4(projectDir(), ".academic-helper", "terms.json"), JSON.stringify(item.proposal.terms, null, 2), "utf8");
+      if (item.proposal.terms !== void 0) writeFileSync3(join5(projectDir(), ".academic-helper", "terms.json"), JSON.stringify(item.proposal.terms, null, 2), "utf8");
       applied.push(item.id);
     }
   }
@@ -41104,8 +41274,8 @@ var [command, subcommand, runId] = args;
 if (command === "ledger" && subcommand === "show" && runId) {
   try {
     dataDir();
-    const file = join5(projectDir(), ".academic-helper", "runs", runId, "usage.jsonl");
-    const rows = readFileSync3(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    const file = join6(projectDir(), ".academic-helper", "runs", runId, "usage.jsonl");
+    const rows = readFileSync4(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
     const totals = /* @__PURE__ */ new Map();
     for (const row of rows) {
       const total = totals.get(row.step) ?? { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
@@ -41131,7 +41301,7 @@ Live model verification requires GOOGLE_API_KEY.
     projectDir();
     const fileArg = args[args.indexOf(subcommand === "classify" ? "--items" : "--plan") + 1];
     if (!fileArg) throw new Error("ERROR revise: --items/--plan path required");
-    const input = JSON.parse(readFileSync3(fileArg, "utf8"));
+    const input = JSON.parse(readFileSync4(fileArg, "utf8"));
     if (subcommand === "classify") {
       if (!Array.isArray(input)) throw new Error("ERROR revise.classify: items must be an array");
       process.stdout.write(`${JSON.stringify(await classify(input, args[args.indexOf("--run") + 1] ?? "revise"))}
@@ -41143,6 +41313,23 @@ Live model verification requires GOOGLE_API_KEY.
     process.stderr.write(`${error instanceof Error ? error.message : "ERROR revise: unknown failure"}
 `);
     process.exitCode = 2;
+  }
+} else if (command === "evidence" && subcommand === "build") {
+  const value = (name) => {
+    const position = args.indexOf(name);
+    return position >= 0 ? args[position + 1] : void 0;
+  };
+  const list = (name) => (value(name) ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+  const runIdValue = value("--run");
+  try {
+    if (!runIdValue) throw new Error("ERROR evidence.build: --run is required");
+    const result = await buildEvidence({ sources: list("--sources"), sefaria: list("--sefaria"), intent: value("--intent"), runId: runIdValue });
+    process.stdout.write(`${JSON.stringify({ sourceCount: result.sources.length, passageCount: result.passages.length })}
+`);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : "ERROR evidence.build: unknown failure"}
+`);
+    process.exitCode = 1;
   }
 } else if (command === "voice") {
   try {
@@ -41168,7 +41355,7 @@ Live model verification requires GOOGLE_API_KEY.
     process.exitCode = message.includes("no voice store") ? 3 : 2;
   }
 } else {
-  process.stderr.write("ERROR: expected aw models check or aw ledger show <runId>\n");
+  process.stderr.write("ERROR: expected aw models check, aw ledger show <runId>, or aw evidence build\n");
   process.exitCode = 2;
 }
 /*! Bundled license information:
