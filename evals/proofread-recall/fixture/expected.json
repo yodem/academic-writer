@@ -7,9 +7,9 @@
  "items": [
   {
    "class": "typo",
-   "context": "ביקש לארוס את התפיסה",
+   "context": "ביקש לארס את התפיסה",
    "fixed": "ביקש להרוס את התפיסה",
-   "before": "לארוס",
+   "before": "לארס",
    "after": "להרוס"
   },
   {
@@ -196,7 +196,7 @@
   }
  ],
  "protected": [
-  "אין בכוונתי לארוס את בתו",
+  "אין בכוונתי לארס את בתו",
   "״שכל״",
   "״ספר המורה נכתב בלשון ערבית ונעתק ללשון הקודש״",
   "ר׳ שלמה מן ההר",
@@ -204,5 +204,5 @@
   "כמו כן יש לשים לב",
   "יתרה מכך, קריאה זו"
  ],
- "_notes": "Synthetic prose written for this eval (not from any private corpus). Adversarial: typo between two geresh abbreviations (ר׳ ... עמ׳, para 6); 'לארוס' correct in one sentence and wrong in another (para 11); 'כמו כן' allowed once per paragraph (para 2, first kept); 'יתרה מכך' allowed once per chapter (first kept, para 10); a quotation with gershayim that must stay verbatim (para 13)."
+ "_notes": "Synthetic prose written for this eval (not from any private corpus). Adversarial: typo between two geresh abbreviations (ר׳ ... עמ׳, para 6); 'לארס' (Academy spelling of לְאָרֵס, to betroth) correct in one sentence and wrong in another (para 11); 'כמו כן' allowed once per paragraph (para 2, first kept); 'יתרה מכך' allowed once per chapter (first kept, para 10); a quotation with gershayim that must stay verbatim (para 13). Corrected 2026-09-23: the betrothal verb was first written 'לארוס', a misspelling the model rightly fixed; Academy full spelling is 'לארס'."
 }
