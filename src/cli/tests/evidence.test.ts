@@ -19,7 +19,8 @@ test('non-verbatim quotes are dropped; cache hit skips refetch', async () => {
   });
   try {
     const first = await buildEvidence({ sources: ['s1'], runId: 't' });
-    assert.deepEqual(first.passages.map((passage) => passage.id), ['p1']);
+    assert.deepEqual(first.passages.map((passage) => passage.quote), ['הנבואה היא שפע']);
+    assert.match(first.passages[0]!.id, /^s1-[0-9a-f]{8}$/);
     await buildEvidence({ sources: ['s1'], runId: 't2' });
     assert.equal(fetches, 1);
   } finally {
@@ -62,4 +63,26 @@ test('the intent core text is marked primary + isCoreText; others follow primary
 test('title from ck toc: the line before ID', async () => {
   const { titleFromToc } = await import('../src/evidence.ts');
   assert.equal(titleFromToc('============\nSefer Yetzirah\nID: cmtbr5am34 | 6 pages\n====='), 'Sefer Yetzirah');
+});
+
+test('passage ids are stable across rebuilds and unique across sources', async () => {
+  const { stablePassageId } = await import('../src/evidence.ts');
+  const a = stablePassageId('cmtbxarqt8pa9pc0jm1h297b4', 'הנבואה  היא שפע');
+  assert.equal(a, stablePassageId('cmtbxarqt8pa9pc0jm1h297b4', 'הנבואה היא שפע')); // whitespace-normalized
+  assert.notEqual(a, stablePassageId('cmtbr5am34lkppc0jx6i9i0hf', 'הנבואה היא שפע'));
+});
+
+test('a rebuild keeps previously extracted passages that are still verbatim', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'aw-evidence-merge-'));
+  setPathArguments(['--data-dir', join(root, 'd'), '--project-dir', join(root, 'p')]);
+  let call = 0;
+  __stubs({ fetchCk: async () => 'אלף בית גימל. דלת הא וו.', extract: async () => ({ passages: call++ === 0
+    ? [{ id: 'x', sourceId: 'merge-src', locator: '1', quote: 'אלף בית גימל', gloss: '', relevance: 3 }]
+    : [{ id: 'y', sourceId: 'merge-src', locator: '1', quote: 'דלת הא וו', gloss: '', relevance: 2 }] }) });
+  try {
+    const first = await buildEvidence({ sources: ['merge-src'], runId: 'm1' });
+    const second = await buildEvidence({ sources: ['merge-src'], runId: 'm2' });
+    assert.ok(second.passages.some((p) => p.id === first.passages[0]!.id));
+    assert.equal(second.passages.length, 2);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

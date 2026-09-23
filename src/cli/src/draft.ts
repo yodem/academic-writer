@@ -122,7 +122,11 @@ const HEBREW_LETTER = /[א-ת]/;
 function isAbbreviationGershayim(text: string, index: number): boolean {
   const prev = text[index - 1];
   const next = text[index + 1];
-  return Boolean(prev && next && HEBREW_LETTER.test(prev) && HEBREW_LETTER.test(next));
+  // An acronym's gershayim precede exactly ONE final letter (רמב״ם, ז״ל, ע״י). A quote opened after a
+  // prefix letter (ה״יש מאין״) has a longer word after it and IS a delimiter; treating it as an
+  // acronym broke the pairing of every later quote (live rehearsal 2026-09-23).
+  const after = text[index + 2];
+  return Boolean(prev && next && HEBREW_LETTER.test(prev) && HEBREW_LETTER.test(next) && !(after && HEBREW_LETTER.test(after)));
 }
 
 function pairDelimiters(text: string, char: string, filterAbbreviation: boolean): string[] {
@@ -151,15 +155,21 @@ function countOccurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1;
 }
 
-function runGates(unit: OutlineUnit, text: string, paragraphs: string[], ctx: { sourceKeys: Set<string>; evidenceQuotes: string[]; styleWords: StyleWords }): { gate: string; detail: string } | null {
+function runGates(unit: OutlineUnit, text: string, paragraphs: string[], ctx: { sourceKeys: Set<string>; evidenceQuotes: string[]; styleWords: StyleWords; quoteCheckText?: string }): { gate: string; detail: string } | null {
   const citations = extractCitationKeys(text);
   const badCitation = citations.find((key) => !ctx.sourceKeys.has(key));
   if (badCitation !== undefined) return { gate: 'citation-not-in-sources', detail: badCitation };
 
+  const quoteText = ctx.quoteCheckText ?? text;
+  const leftover = quoteText.match(/⟦Q:([^⟧\s]+)⟧/u);
+  if (leftover) return { gate: 'quote-not-in-evidence', detail: `unknown quote placeholder ${leftover[1]}` };
   const pool = ctx.evidenceQuotes.map(normalize).filter(Boolean);
-  for (const quote of extractQuotedSpans(text)) {
+  const termMaxWords = (thresholds.paragraph as { quotedTermMaxWords?: number }).quotedTermMaxWords ?? 0;
+  for (const quote of extractQuotedSpans(quoteText)) {
     const needle = normalize(quote);
     if (!needle) continue;
+    // A short span in quotation marks is a term or phrase ("יש מאין"), not a source quotation.
+    if (needle.split(' ').length <= termMaxWords) continue;
     if (!pool.some((passage) => passage.includes(needle))) return { gate: 'quote-not-in-evidence', detail: quote.slice(0, 80) };
   }
 
@@ -182,7 +192,8 @@ function runGates(unit: OutlineUnit, text: string, paragraphs: string[], ctx: { 
   // paragraph plan -- a unit the outline doesn't shape this way (e.g. the
   // flat test fixture's units) has no basis for a min/max word judgement.
   if (Array.isArray(unit.paragraphs)) {
-    const words = text.split(/\s+/).filter(Boolean).length;
+    // Count the author's prose: code-inserted verbatim quotes (a placeholder = one word) do not count.
+    const words = (ctx.quoteCheckText ?? text).split(/\s+/).filter(Boolean).length;
     // Bounds scale with the planned paragraph count (writerUnit min/max size the architect's units).
     const para = thresholds.paragraph as { wordFloor: number; wordCeiling: number; wordCeilingIntroConclusionBonus: number };
     const n = Math.max(1, unit.paragraphs.length);
@@ -253,11 +264,15 @@ function loadSourceKeys(): Set<string> {
   } catch { return new Set(); }
 }
 
-function withPassageKeys(sourceKeys: Set<string>): Set<string> {
+function withPassageKeys(given: Set<string>): Set<string> {
+  // evidence.json (aw evidence build) also lists its sources; the new flow may have no sources.json
+  // at all (live rehearsal 2026-09-23: every unit failed citation-not-in-sources for that reason).
+  const sourceKeys = new Set(given);
   const path = join(projectDir(), '.academic-helper', 'evidence.json');
   if (!existsSync(path)) return sourceKeys;
   try {
-    const raw = JSON.parse(readFileSync(path, 'utf8')) as { passages?: { id: string; sourceId: string }[] };
+    const raw = JSON.parse(readFileSync(path, 'utf8')) as { sources?: { id: string }[]; passages?: { id: string; sourceId: string }[] };
+    for (const source of raw.sources ?? []) sourceKeys.add(source.id);
     const keys = new Set(sourceKeys);
     for (const passage of raw.passages ?? []) if (sourceKeys.has(passage.sourceId)) keys.add(passage.id);
     return keys;
@@ -281,6 +296,49 @@ export function renderPassages(passages: EvidencePassage[]): string {
   return passages.length
     ? passages.map((p) => `[${p.id}] source=${p.sourceId}${p.locator ? ` locator=${p.locator}` : ''}\n  quote: ${p.quote}${p.gloss ? `\n  gloss: ${p.gloss}` : ''}`).join('\n')
     : '(none)';
+}
+
+function quoteIndex(): Map<string, string> {
+  const path = join(projectDir(), '.academic-helper', 'evidence.json');
+  if (!existsSync(path)) return new Map();
+  try {
+    const raw = JSON.parse(readFileSync(path, 'utf8')) as { passages?: { id: string; quote: string }[] };
+    return new Map((raw.passages ?? []).map((p) => [p.id, p.quote]));
+  } catch { return new Map(); }
+}
+
+// ⟦Q:id⟧ -> ״verbatim quote״ (Hebrew) or "quote"; an unknown id is left in place so the
+// quote gate reports it instead of silently dropping it.
+export function substituteQuotes(text: string, quotes: Map<string, string>): string {
+  return text.replace(/⟦Q:([^⟧\s]+)⟧([.,;:]?)/gu, (whole, id: string, after: string) => {
+    const quote = quotes.get(id);
+    if (quote === undefined) return whole;
+    // When the sentence punctuation follows the placeholder, drop the quote's own final mark so the
+    // result is `...״.` and not `....״.` (live rehearsal 2026-09-23).
+    const body = after ? quote.replace(/[.,;:]+\s*$/u, '') : quote;
+    return (/[\u0590-\u05FF]/u.test(body) ? `״${body}״` : `"${body}"`) + after;
+  });
+}
+
+// Footnote definitions for passage keys are rendered by code from evidence.json: `[^id]: Author, Title,
+// locator.` The model's own definitions were glosses with an English "Page 3" (live rehearsal).
+export function renderFootnotes(text: string, meta: Map<string, { author: string; title: string; locator: string }>): string {
+  return text.replace(/^\[\^([^\]]+)\]:.*$/gmu, (line, key: string) => {
+    const m = meta.get(key);
+    if (!m) return line;
+    const locator = m.locator.replace(/^Page\s+(\d+).*$/iu, 'עמ׳ $1');
+    return `[^${key}]: ${[m.author, m.title, locator].filter(Boolean).join(', ')}.`;
+  });
+}
+
+function footnoteMeta(): Map<string, { author: string; title: string; locator: string }> {
+  const path = join(projectDir(), '.academic-helper', 'evidence.json');
+  if (!existsSync(path)) return new Map();
+  try {
+    const raw = JSON.parse(readFileSync(path, 'utf8')) as { sources?: { id: string; title?: string; author?: string }[]; passages?: { id: string; sourceId: string; locator?: string }[] };
+    const src = new Map((raw.sources ?? []).map((x) => [x.id, x]));
+    return new Map((raw.passages ?? []).map((p) => [p.id, { author: src.get(p.sourceId)?.author ?? '', title: src.get(p.sourceId)?.title ?? '', locator: p.locator ?? '' }]));
+  } catch { return new Map(); }
 }
 
 function evidenceQuotesFor(unit: OutlineUnit): string[] {
@@ -358,7 +416,15 @@ export async function draftAll(outline: Outline, options: DraftAllOptions): Prom
     const evidenceQuotes = stubs.evidenceQuotes ?? evidenceQuotesFor(unit);
     const generate: GenFn = stubs.gen ?? ((u, preds) => realGenerate(u, preds, { outline, voice, evidenceQuotes, passagesText: renderPassages(evidencePassagesFor(unit)), feedback, budget, runId: options.runId }));
 
-    const text = await generate(unit, predecessors);
+    // Quotes are inserted by code from evidence.json: the model writes ⟦Q:id⟧ placeholders. This keeps
+    // every quote verbatim by construction and avoids Gemini's RECITATION stop on classical sources
+    // (live rehearsal 2026-09-23: U3 quoting Ashkenazi/Job aborted with finishReason RECITATION).
+    const raw = await generate(unit, predecessors);
+    const quotes = quoteIndex();
+    const text = renderFootnotes(substituteQuotes(raw, quotes), footnoteMeta());
+    // The quote gate checks only quotes the MODEL wrote: code-inserted quotes are verbatim by
+    // construction, and their own inner marks (וצא"ל) must not pair with marks in the prose.
+    const modelQuotesText = raw.replace(/⟦Q:([^⟧\s]+)⟧/gu, (whole, id: string) => (quotes.has(id) ? '⟨quote⟩' : whole));
     draftedText.set(unit.id, text);
     writeDraft(unit.id, text);
     drafted.push(unit.id);
@@ -389,7 +455,7 @@ export async function draftAll(outline: Outline, options: DraftAllOptions): Prom
       });
     }
 
-    const failure = runGates(unit, text, paragraphs, { sourceKeys, evidenceQuotes, styleWords: voice.styleWords });
+    const failure = runGates(unit, text, paragraphs, { sourceKeys, evidenceQuotes, styleWords: voice.styleWords, quoteCheckText: modelQuotesText });
     if (failure) failures.push({ unit: unit.id, gate: failure.gate, detail: failure.detail });
   }
 

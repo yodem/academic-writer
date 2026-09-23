@@ -7,6 +7,16 @@ Each unit's paragraphs, in draft order, with their 0-based paragraphIndex.
 {{units}}
 </units>
 
+<outline>
+The approved thesis and section claims. Transitions must carry this argument forward.
+{{outline}}
+</outline>
+
+<repetition>
+Paragraph openers that code found repeated across the article (word-for-word). Each listed occurrence beyond the first MUST be varied: propose an edit for it that opens differently while keeping its meaning. This overrides the preference for few edits.
+{{repetition}}
+</repetition>
+
 <instructions>
 Propose an edit only where a transition genuinely needs it: a paragraph boundary that reads abruptly, a phrase repeated heavily across two nearby paragraphs, or a voice drift within one paragraph. Do not propose an edit merely because you could rephrase something.
 

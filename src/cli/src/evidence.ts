@@ -33,6 +33,13 @@ const stubState: { value?: Partial<Stubs> } = {};
 
 export function __stubs(stubs: Partial<Stubs>): void { stubState.value = stubs; }
 
+// Passage ids are assigned by code: <source prefix>-<hash of the normalized quote>. Model-chosen ids changed on
+// every rebuild (breaking outlines that cite them) and collided across sources ("pass-1"); live rehearsal 2026-09-23.
+export function stablePassageId(sourceId: string, quote: string): string {
+  const prefix = sourceId.replace(/^sefaria:/u, 's-').replace(/[^\p{L}\p{N}-]/gu, '').slice(0, 8);
+  return `${prefix}-${createHash('sha256').update(normalize(quote)).digest('hex').slice(0, 8)}`;
+}
+
 function normalize(value: string): string { return value.normalize('NFC').replace(/\s+/gu, ' ').trim(); }
 function cachePath(id: string, text: string): string {
   const digest = createHash('sha256').update(text).digest('hex');
@@ -147,8 +154,26 @@ export async function buildEvidence(options: BuildOptions): Promise<BuildResult>
       const rated = await decide({ point: 'evidence.relevance', question: 'How relevant is this passage to the author thesis (0 = not relevant, 3 = central)?',
         options: ['0', '1', '2', '3'], context: JSON.stringify({ thesis: intent, quote: passage.quote, gloss: passage.gloss }), runId: options.runId,
         fallback: async () => String(passage.relevance) });
-      passages.push({ ...passage, relevance: Number(rated.answer) });
+      const id = stablePassageId(source.id, passage.quote);
+      if (passages.some((p) => p.id === id)) continue; // same quote extracted twice
+      passages.push({ ...passage, id, relevance: Number(rated.answer) });
     }
+  }
+  // Rebuilds MERGE into the existing evidence.json: extraction varies run to run, and an outline cites
+  // passage ids, so dropping a previously extracted (still verbatim) passage would orphan outline refs
+  // (live rehearsal 2026-09-23: 7 of the outline's passages were not re-extracted).
+  const previousPath = join(projectDir(), '.academic-helper', 'evidence.json');
+  if (existsSync(previousPath)) {
+    try {
+      const previous = JSON.parse(readFileSync(previousPath, 'utf8')) as BuildResult;
+      const texts = new Map(fetched.map((f) => [f.id, normalize(sourceCache.get(f.id) ?? f.text)]));
+      for (const p of previous.passages ?? []) {
+        if (passages.some((q) => q.id === p.id)) continue;
+        const text = texts.get(p.sourceId);
+        if (text === undefined || text.includes(normalize(p.quote))) passages.push(p); // keep unless now non-verbatim
+      }
+      for (const src of previous.sources ?? []) if (!sources.some((x) => x.id === src.id)) sources.push(src);
+    } catch { /* unreadable previous file: overwrite */ }
   }
   const output: BuildResult = { sources, passages };
   const target = join(projectDir(), '.academic-helper', 'evidence.json');

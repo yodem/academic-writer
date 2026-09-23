@@ -51,3 +51,10 @@ test('missing drafts directory is a named ERROR', async () => {
   __stubs({ gen: async () => [] });
   await assert.rejects(synthesizeAll({ runId: 'missing' }), /ERROR write\.synthesize/);
 });
+
+test('repeated paragraph openers are detected across units', async () => {
+  const { repeatedOpeners } = await import('../src/synthesize.ts');
+  const units = [{ id: 'A', paragraphs: ['אני טוען כי א', 'משהו אחר'] }, { id: 'B', paragraphs: ['אני טוען כי ב'] }, { id: 'C', paragraphs: ['אני טוען כי ג'] }];
+  const r = repeatedOpeners(units, 3, 3);
+  assert.equal(r.length, 1); assert.equal(r[0]?.opener, 'אני טוען כי'); assert.equal(r[0]?.at.length, 3);
+});

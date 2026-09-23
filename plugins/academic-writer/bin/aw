@@ -64,8 +64,9 @@ var init_thresholds = __esm({
       paragraph: {
         wordCeiling: 220,
         wordCeilingIntroConclusionBonus: 30,
-        _comment: "Soft word ceiling per paragraph. Introduction and conclusion paragraphs may exceed by wordCeilingIntroConclusionBonus words. wordFloor: minimum words for one drafted paragraph. The drafted-unit word gate is per planned paragraph (n x [wordFloor, wordCeiling]); writerUnit min/max bound the ARCHITECT's unit sizing, not a single draft (live run 2026-09-23: a 1-paragraph unit correctly drafted ~110 words failed a 300-word unit floor).",
-        wordFloor: 40
+        _comment: "Soft word ceiling per paragraph. Introduction and conclusion paragraphs may exceed by wordCeilingIntroConclusionBonus words. wordFloor: minimum words for one drafted paragraph. The drafted-unit word gate is per planned paragraph (n x [wordFloor, wordCeiling]); writerUnit min/max bound the ARCHITECT's unit sizing, not a single draft (live run 2026-09-23: a 1-paragraph unit correctly drafted ~110 words failed a 300-word unit floor). quotedTermMaxWords: a quoted span of at most this many words is treated as a term (scare quotes, e.g. \u05F4\u05D9\u05E9 \u05DE\u05D0\u05D9\u05DF\u05F4), not a source quotation, by the draft quote gate.",
+        wordFloor: 40,
+        quotedTermMaxWords: 3
       },
       writerUnit: {
         targetWords: 500,
@@ -316,6 +317,11 @@ var init_thresholds = __esm({
           }
         },
         _comment: "aw evidence build coverage targets per source. Live rehearsal 2026-09-23: with no target, Gemini returned 5 passages for a 12-page core text and 0 for Sefer Yetzirah, missing the article's opening dilemma. The core text (author-intent coreTextSourceId) gets dense coverage; every other source a smaller floor. Concurrency for evidence.extract is 4 (sources in parallel)."
+      },
+      synthesis: {
+        openerWords: 3,
+        repeatedOpenerMin: 3,
+        _comment: "aw synthesize: a paragraph opener (first openerWords words) used at least repeatedOpenerMin times across the article is passed to the synthesizer as a required variation (live rehearsal 2026-09-23: 7 units opened with the same phrase, 0 edits proposed)."
       }
     };
   }
@@ -41372,6 +41378,10 @@ var prompt2 = (min, max, isCore) => [
 ].join(" ");
 var extractionSchema = { type: "object", required: ["passages"], properties: { passages: evidence_schema_default.properties.passages }, additionalProperties: false };
 var stubState = {};
+function stablePassageId(sourceId, quote) {
+  const prefix = sourceId.replace(/^sefaria:/u, "s-").replace(/[^\p{L}\p{N}-]/gu, "").slice(0, 8);
+  return `${prefix}-${createHash2("sha256").update(normalize(quote)).digest("hex").slice(0, 8)}`;
+}
 function normalize(value) {
   return value.normalize("NFC").replace(/\s+/gu, " ").trim();
 }
@@ -41397,6 +41407,20 @@ function ckMetadata(text) {
   const authorBlock = head.split(/^#+\s*(?:מחבר|Author)[^\n]*$/imu)[1];
   const author = authorBlock?.match(/^\s*[-*]\s+([^·(\n]+)/mu)?.[1]?.trim();
   return { title, author };
+}
+function titleFromToc(toc) {
+  const lines = toc.split("\n").map((l) => l.replace(/^=+|=+$/gu, "").trim()).filter((l) => l && !/^=+$/u.test(l));
+  const idLine = lines.findIndex((l) => l.startsWith("ID:"));
+  const candidate = idLine > 0 ? lines[idLine - 1] : void 0;
+  return candidate?.replace(/^=+\s*|\s*=+$/gu, "").trim() || void 0;
+}
+async function ckTitle(id) {
+  try {
+    const { stdout } = await execFileAsync("ck", ["items", "toc", id], { maxBuffer: 8 * 1024 * 1024 });
+    return titleFromToc(stdout);
+  } catch {
+    return void 0;
+  }
 }
 async function fetchCk(id) {
   const { stdout } = await execFileAsync("ck", ["items", "read", `${id}:all`], { maxBuffer: 64 * 1024 * 1024 });
@@ -41445,8 +41469,9 @@ async function buildEvidence(options) {
       sourceCache.set(id, text);
       cachePath(id, text);
       const meta = ckMetadata(text);
+      const tocTitle = stubState.value?.fetchCk ? void 0 : await ckTitle(id);
       const isCoreText = id === intentCore;
-      return { id, title: meta.title ?? id, author: meta.author ?? "", role: isCoreText || primaryIds.has(id) ? "primary" : "secondary", isCoreText, text };
+      return { id, title: tocTitle ?? meta.title ?? id, author: meta.author ?? "", role: isCoreText || primaryIds.has(id) ? "primary" : "secondary", isCoreText, text };
     }),
     ...(options.sefaria ?? []).map(async (reference) => {
       const id = `sefaria:${reference}`;
@@ -41486,7 +41511,23 @@ async function buildEvidence(options) {
         runId: options.runId,
         fallback: async () => String(passage.relevance)
       });
-      passages.push({ ...passage, relevance: Number(rated.answer) });
+      const id = stablePassageId(source.id, passage.quote);
+      if (passages.some((p) => p.id === id)) continue;
+      passages.push({ ...passage, id, relevance: Number(rated.answer) });
+    }
+  }
+  const previousPath = join5(projectDir(), ".academic-helper", "evidence.json");
+  if (existsSync2(previousPath)) {
+    try {
+      const previous = JSON.parse(readFileSync3(previousPath, "utf8"));
+      const texts = new Map(fetched.map((f3) => [f3.id, normalize(sourceCache.get(f3.id) ?? f3.text)]));
+      for (const p of previous.passages ?? []) {
+        if (passages.some((q) => q.id === p.id)) continue;
+        const text = texts.get(p.sourceId);
+        if (text === void 0 || text.includes(normalize(p.quote))) passages.push(p);
+      }
+      for (const src of previous.sources ?? []) if (!sources.some((x2) => x2.id === src.id)) sources.push(src);
+    } catch {
     }
   }
   const output = { sources, passages };
@@ -41733,7 +41774,7 @@ import { join as join8 } from "node:path";
 init_thresholds();
 
 // src/prompts/write-draft.md
-var write_draft_default = "You are writing one unit of a scholarly article as its author, a Humanities researcher. The text you produce goes into the article under the author's name, so it must read as the author's own academic prose. Claude has already planned the argument, chosen the evidence, and will verify every citation after you; your job is the prose for exactly one unit of the plan.\n\nEverything you need follows in this order: the reference material for this unit (evidence, the predecessor units' finished text, and the outline), then the author's voice, then the task, and last the output contract.\n\n<evidence_passages>\nQuote from these verbatim when you quote at all. Do not invent, translate, or paraphrase a quotation \u2014 copy the exact characters. If nothing here is worth quoting, write without a quotation rather than approximate one.\n{{evidence_passages}}\n</evidence_passages>\n\n<predecessor_units>\nThe finished text of every unit this one depends on (or, for the introduction and conclusion, every body unit already drafted). Continue the argument from here \u2014 do not repeat what these units already established.\n{{predecessor_text}}\n</predecessor_units>\n\n<outline>\nThesis: {{thesis}}\n\nThis unit: {{unit_id}} (role: {{unit_role}})\nClaim: {{unit_claim}}\nParagraph plan (move / evidence assignment / bridge target for each paragraph):\n{{unit_plan}}\n\nFull outline (id + claim per unit), for context only \u2014 write only the unit above:\n{{outline_summary}}\n</outline>\n\n<voice>\nExemplar paragraphs in the author's own words:\n{{voice_exemplars}}\n\nBefore/after pairs showing how the author's voice has been corrected in past drafts:\n{{voice_pairs}}\n\nVoice rules:\n{{voice_rules}}\n</voice>\n\n<redraft_feedback>\n{{feedback}}\n</redraft_feedback>\n\n<task>\nWrite unit {{unit_id}} now, following its paragraph plan. Reproduce the author's voice from <voice>: the rhythm, how a claim is introduced, how evidence is framed. Where <voice> and your own instincts disagree, follow the author. Each paragraph advances its assigned move; after a quotation, give the author's own analysis of it. If <redraft_feedback> is not empty, it is the citation auditor's rejection of your previous draft of this unit \u2014 fix every issue it names.\n\n{{language_directive}}\n\nCitations: cite by writing a footnote marker `[^KEY]` immediately after the sentence it supports. KEY is EXACTLY the `id` of the evidence passage you rely on, as shown in <evidence_passages> (for example `[^p1]`) \u2014 never a number, never a title, never an id you did not see. At the end of the unit, after a blank line, add one footnote definition per marker you used, in the form `[^KEY]: <locator> \u2014 <one-line gloss of what it supports>`. Do not cite a passage you did not quote or rely on. Code rejects any other key.\n\nQuotations: every quotation must be copied verbatim, character for character, from <evidence_passages>. Mark a quotation with Hebrew gershayim (\u05F4\u2026\u05F4) for Hebrew text, or with standard double quotation marks for other languages. Never quote from <predecessor_units>, <outline>, or <voice> \u2014 those are reference material, not primary sources.\n</task>\n\n<output_contract>\nReturn plain prose only \u2014 the unit's paragraphs, separated by a single blank line, followed (if any citations were used) by a blank line and the footnote definitions. No markdown formatting (no `*`, `_`, `#`, backticks, headings, or bullet lists), no preamble, no commentary about what you wrote, no JSON. The first character of your response is the first character of the unit's first paragraph.\n</output_contract>\n";
+var write_draft_default = "You are writing one unit of a scholarly article as its author, a Humanities researcher. The text you produce goes into the article under the author's name, so it must read as the author's own academic prose. Claude has already planned the argument, chosen the evidence, and will verify every citation after you; your job is the prose for exactly one unit of the plan.\n\nEverything you need follows in this order: the reference material for this unit (evidence, the predecessor units' finished text, and the outline), then the author's voice, then the task, and last the output contract.\n\n<evidence_passages>\nDo NOT copy the quotations yourself. Where you want a quotation, write only its placeholder `\u27E6Q:ID\u27E7` (ID = the passage id, e.g. `\u27E6Q:p1\u27E7`) inside your sentence; code inserts the exact verbatim text with quotation marks. Never write the quoted words yourself.\n{{evidence_passages}}\n</evidence_passages>\n\n<predecessor_units>\nThe finished text of every unit this one depends on (or, for the introduction and conclusion, every body unit already drafted). Continue the argument from here \u2014 do not repeat what these units already established.\n{{predecessor_text}}\n</predecessor_units>\n\n<outline>\nThesis: {{thesis}}\n\nThis unit: {{unit_id}} (role: {{unit_role}})\nClaim: {{unit_claim}}\nParagraph plan (move / evidence assignment / bridge target for each paragraph):\n{{unit_plan}}\n\nFull outline (id + claim per unit), for context only \u2014 write only the unit above:\n{{outline_summary}}\n</outline>\n\n<voice>\nExemplar paragraphs in the author's own words:\n{{voice_exemplars}}\n\nBefore/after pairs showing how the author's voice has been corrected in past drafts:\n{{voice_pairs}}\n\nVoice rules:\n{{voice_rules}}\n</voice>\n\n<redraft_feedback>\n{{feedback}}\n</redraft_feedback>\n\n<task>\nWrite unit {{unit_id}} now, following its paragraph plan. Reproduce the author's voice from <voice>: the rhythm, how a claim is introduced, how evidence is framed. Where <voice> and your own instincts disagree, follow the author. Each paragraph advances its assigned move; after a quotation, give the author's own analysis of it. If <redraft_feedback> is not empty, it is the citation auditor's rejection of your previous draft of this unit \u2014 fix every issue it names.\n\n{{language_directive}}\n\nCitations: cite by writing a footnote marker `[^KEY]` immediately after the sentence it supports. KEY is EXACTLY the `id` of the evidence passage you rely on, as shown in <evidence_passages> (for example `[^p1]`) \u2014 never a number, never a title, never an id you did not see. At the end of the unit, after a blank line, add one footnote definition per marker you used, in the form `[^KEY]: <locator> \u2014 <one-line gloss of what it supports>`. Do not cite a passage you did not quote or rely on. Code rejects any other key.\n\nQuotations: never reproduce source text yourself. Write `\u27E6Q:ID\u27E7` where the quotation belongs, using an id from <evidence_passages>; code substitutes the verbatim quote (with \u05F4\u2026\u05F4 for Hebrew) and your footnote marker should follow the sentence as usual. Paraphrase in your own words is fine; quoted words must only come through placeholders. Never quote from <predecessor_units>, <outline>, or <voice>.\n</task>\n\n<output_contract>\nReturn plain prose only \u2014 the unit's paragraphs, separated by a single blank line, followed (if any citations were used) by a blank line and the footnote definitions. No markdown formatting (no `*`, `_`, `#`, backticks, headings, or bullet lists), no preamble, no commentary about what you wrote, no JSON. The first character of your response is the first character of the unit's first paragraph.\n</output_contract>\n";
 
 // src/draft.ts
 var stubs2 = {};
@@ -41797,7 +41838,8 @@ var HEBREW_LETTER = /[א-ת]/;
 function isAbbreviationGershayim(text, index) {
   const prev = text[index - 1];
   const next = text[index + 1];
-  return Boolean(prev && next && HEBREW_LETTER.test(prev) && HEBREW_LETTER.test(next));
+  const after = text[index + 2];
+  return Boolean(prev && next && HEBREW_LETTER.test(prev) && HEBREW_LETTER.test(next) && !(after && HEBREW_LETTER.test(after)));
 }
 function pairDelimiters(text, char, filterAbbreviation) {
   const positions = [];
@@ -41826,10 +41868,15 @@ function runGates(unit, text, paragraphs2, ctx) {
   const citations = extractCitationKeys(text);
   const badCitation = citations.find((key) => !ctx.sourceKeys.has(key));
   if (badCitation !== void 0) return { gate: "citation-not-in-sources", detail: badCitation };
+  const quoteText = ctx.quoteCheckText ?? text;
+  const leftover = quoteText.match(/⟦Q:([^⟧\s]+)⟧/u);
+  if (leftover) return { gate: "quote-not-in-evidence", detail: `unknown quote placeholder ${leftover[1]}` };
   const pool = ctx.evidenceQuotes.map(normalize2).filter(Boolean);
-  for (const quote of extractQuotedSpans(text)) {
+  const termMaxWords = thresholds_default.paragraph.quotedTermMaxWords ?? 0;
+  for (const quote of extractQuotedSpans(quoteText)) {
     const needle = normalize2(quote);
     if (!needle) continue;
+    if (needle.split(" ").length <= termMaxWords) continue;
     if (!pool.some((passage) => passage.includes(needle))) return { gate: "quote-not-in-evidence", detail: quote.slice(0, 80) };
   }
   for (const banned of ctx.styleWords.banned) {
@@ -41847,7 +41894,7 @@ function runGates(unit, text, paragraphs2, ctx) {
     }
   }
   if (Array.isArray(unit.paragraphs)) {
-    const words = text.split(/\s+/).filter(Boolean).length;
+    const words = (ctx.quoteCheckText ?? text).split(/\s+/).filter(Boolean).length;
     const para = thresholds_default.paragraph;
     const n = Math.max(1, unit.paragraphs.length);
     const bonus = unit.role === "intro" || unit.role === "conclusion" ? para.wordCeilingIntroConclusionBonus : 0;
@@ -41908,11 +41955,13 @@ function loadSourceKeys() {
     return /* @__PURE__ */ new Set();
   }
 }
-function withPassageKeys(sourceKeys) {
+function withPassageKeys(given) {
+  const sourceKeys = new Set(given);
   const path2 = join8(projectDir(), ".academic-helper", "evidence.json");
   if (!existsSync4(path2)) return sourceKeys;
   try {
     const raw = JSON.parse(readFileSync6(path2, "utf8"));
+    for (const source of raw.sources ?? []) sourceKeys.add(source.id);
     const keys = new Set(sourceKeys);
     for (const passage of raw.passages ?? []) if (sourceKeys.has(passage.sourceId)) keys.add(passage.id);
     return keys;
@@ -41935,6 +41984,43 @@ function renderPassages(passages) {
   return passages.length ? passages.map((p) => `[${p.id}] source=${p.sourceId}${p.locator ? ` locator=${p.locator}` : ""}
   quote: ${p.quote}${p.gloss ? `
   gloss: ${p.gloss}` : ""}`).join("\n") : "(none)";
+}
+function quoteIndex() {
+  const path2 = join8(projectDir(), ".academic-helper", "evidence.json");
+  if (!existsSync4(path2)) return /* @__PURE__ */ new Map();
+  try {
+    const raw = JSON.parse(readFileSync6(path2, "utf8"));
+    return new Map((raw.passages ?? []).map((p) => [p.id, p.quote]));
+  } catch {
+    return /* @__PURE__ */ new Map();
+  }
+}
+function substituteQuotes(text, quotes) {
+  return text.replace(/⟦Q:([^⟧\s]+)⟧([.,;:]?)/gu, (whole, id, after) => {
+    const quote = quotes.get(id);
+    if (quote === void 0) return whole;
+    const body = after ? quote.replace(/[.,;:]+\s*$/u, "") : quote;
+    return (/[\u0590-\u05FF]/u.test(body) ? `\u05F4${body}\u05F4` : `"${body}"`) + after;
+  });
+}
+function renderFootnotes(text, meta) {
+  return text.replace(/^\[\^([^\]]+)\]:.*$/gmu, (line, key) => {
+    const m2 = meta.get(key);
+    if (!m2) return line;
+    const locator = m2.locator.replace(/^Page\s+(\d+).*$/iu, "\u05E2\u05DE\u05F3 $1");
+    return `[^${key}]: ${[m2.author, m2.title, locator].filter(Boolean).join(", ")}.`;
+  });
+}
+function footnoteMeta() {
+  const path2 = join8(projectDir(), ".academic-helper", "evidence.json");
+  if (!existsSync4(path2)) return /* @__PURE__ */ new Map();
+  try {
+    const raw = JSON.parse(readFileSync6(path2, "utf8"));
+    const src = new Map((raw.sources ?? []).map((x2) => [x2.id, x2]));
+    return new Map((raw.passages ?? []).map((p) => [p.id, { author: src.get(p.sourceId)?.author ?? "", title: src.get(p.sourceId)?.title ?? "", locator: p.locator ?? "" }]));
+  } catch {
+    return /* @__PURE__ */ new Map();
+  }
 }
 function evidenceQuotesFor(unit) {
   const path2 = join8(projectDir(), ".academic-helper", "evidence.json");
@@ -41993,7 +42079,10 @@ async function draftAll(outline, options) {
     const predecessors = role === "body" ? (unit.dependsOn ?? []).filter((id) => draftedText.has(id)).map((id) => ({ id, text: draftedText.get(id) })) : bodyUnits.filter((u) => draftedText.has(u.id)).map((u) => ({ id: u.id, text: draftedText.get(u.id) }));
     const evidenceQuotes = stubs2.evidenceQuotes ?? evidenceQuotesFor(unit);
     const generate = stubs2.gen ?? ((u, preds) => realGenerate(u, preds, { outline, voice, evidenceQuotes, passagesText: renderPassages(evidencePassagesFor(unit)), feedback, budget, runId: options.runId }));
-    const text = await generate(unit, predecessors);
+    const raw = await generate(unit, predecessors);
+    const quotes = quoteIndex();
+    const text = renderFootnotes(substituteQuotes(raw, quotes), footnoteMeta());
+    const modelQuotesText = raw.replace(/⟦Q:([^⟧\s]+)⟧/gu, (whole, id) => quotes.has(id) ? "\u27E8quote\u27E9" : whole);
     draftedText.set(unit.id, text);
     writeDraft(unit.id, text);
     drafted.push(unit.id);
@@ -42018,7 +42107,7 @@ async function draftAll(outline, options) {
         fallback: async () => voiceCheckFallback(paragraph, voice.styleWords)
       });
     }
-    const failure = runGates(unit, text, paragraphs2, { sourceKeys, evidenceQuotes, styleWords: voice.styleWords });
+    const failure = runGates(unit, text, paragraphs2, { sourceKeys, evidenceQuotes, styleWords: voice.styleWords, quoteCheckText: modelQuotesText });
     if (failure) failures.push({ unit: unit.id, gate: failure.gate, detail: failure.detail });
   }
   return { drafted, failures, audit };
@@ -42027,9 +42116,10 @@ async function draftAll(outline, options) {
 // src/synthesize.ts
 import { existsSync as existsSync5, readFileSync as readFileSync7, readdirSync as readdirSync3, writeFileSync as writeFileSync6 } from "node:fs";
 import { join as join9 } from "node:path";
+init_thresholds();
 
 // src/prompts/write-synthesize.md
-var write_synthesize_default = 'You are the final-pass editor of a scholarly article, working as its author. Every unit was drafted separately; your job is to propose transition edits at paragraph boundaries \u2014 nothing else. Citations have already been verified, so nothing you propose may touch a citation or a quotation.\n\nYou will never see or return the whole article at once. You are given every unit\'s paragraphs, numbered, and you propose a small set of surgical edits: one paragraph\'s text, replaced with a version that bridges better to its neighbour. Everything else in the article is untouched by construction \u2014 you cannot rewrite a paragraph you don\'t name, and you cannot touch anything outside the paragraph you do name.\n\n<units>\nEach unit\'s paragraphs, in draft order, with their 0-based paragraphIndex.\n{{units}}\n</units>\n\n<instructions>\nPropose an edit only where a transition genuinely needs it: a paragraph boundary that reads abruptly, a phrase repeated heavily across two nearby paragraphs, or a voice drift within one paragraph. Do not propose an edit merely because you could rephrase something.\n\nFor each edit:\n- `unitId` and `paragraphIndex` must exactly identify one paragraph from `<units>`.\n- `before` must be copied EXACTLY, character for character, from that paragraph\'s text in `<units>` \u2014 this is how the edit gets verified and applied; if it does not match exactly, the edit is discarded.\n- `after` is the full replacement text for that paragraph.\n- `reason` is a one-line explanation.\n\nNEVER change, move, or remove any of the following inside `after`, even when editing the sentence around them:\n- a parenthetical citation: text inside `(...)` naming a work, an author, or a location, with or without a year (Hebrew citations normally carry no year, e.g. `(\u05DE\u05D7\u05D1\u05E8, \u05E2\u05DE\' 12)`)\n- a footnote marker `[^id]`, or a footnote definition line `[^id]: ...`\n- quoted material: text inside `" "`, `\u05F4 \u05F4`, or `" "`\n\nPropose at most one edit per paragraph. Return an empty `edits` array if no boundary needs one \u2014 that is the expected result far more often than not.\n</instructions>\n\nReturn a single JSON object and nothing else:\n\n{\n  "edits": [\n    { "unitId": "<unit id>", "paragraphIndex": 0, "before": "<exact current paragraph text>", "after": "<replacement paragraph text>", "reason": "<one line>" }\n  ]\n}\n';
+var write_synthesize_default = 'You are the final-pass editor of a scholarly article, working as its author. Every unit was drafted separately; your job is to propose transition edits at paragraph boundaries \u2014 nothing else. Citations have already been verified, so nothing you propose may touch a citation or a quotation.\n\nYou will never see or return the whole article at once. You are given every unit\'s paragraphs, numbered, and you propose a small set of surgical edits: one paragraph\'s text, replaced with a version that bridges better to its neighbour. Everything else in the article is untouched by construction \u2014 you cannot rewrite a paragraph you don\'t name, and you cannot touch anything outside the paragraph you do name.\n\n<units>\nEach unit\'s paragraphs, in draft order, with their 0-based paragraphIndex.\n{{units}}\n</units>\n\n<outline>\nThe approved thesis and section claims. Transitions must carry this argument forward.\n{{outline}}\n</outline>\n\n<repetition>\nParagraph openers that code found repeated across the article (word-for-word). Each listed occurrence beyond the first MUST be varied: propose an edit for it that opens differently while keeping its meaning. This overrides the preference for few edits.\n{{repetition}}\n</repetition>\n\n<instructions>\nPropose an edit only where a transition genuinely needs it: a paragraph boundary that reads abruptly, a phrase repeated heavily across two nearby paragraphs, or a voice drift within one paragraph. Do not propose an edit merely because you could rephrase something.\n\nFor each edit:\n- `unitId` and `paragraphIndex` must exactly identify one paragraph from `<units>`.\n- `before` must be copied EXACTLY, character for character, from that paragraph\'s text in `<units>` \u2014 this is how the edit gets verified and applied; if it does not match exactly, the edit is discarded.\n- `after` is the full replacement text for that paragraph.\n- `reason` is a one-line explanation.\n\nNEVER change, move, or remove any of the following inside `after`, even when editing the sentence around them:\n- a parenthetical citation: text inside `(...)` naming a work, an author, or a location, with or without a year (Hebrew citations normally carry no year, e.g. `(\u05DE\u05D7\u05D1\u05E8, \u05E2\u05DE\' 12)`)\n- a footnote marker `[^id]`, or a footnote definition line `[^id]: ...`\n- quoted material: text inside `" "`, `\u05F4 \u05F4`, or `" "`\n\nPropose at most one edit per paragraph. Return an empty `edits` array if no boundary needs one \u2014 that is the expected result far more often than not.\n</instructions>\n\nReturn a single JSON object and nothing else:\n\n{\n  "edits": [\n    { "unitId": "<unit id>", "paragraphIndex": 0, "before": "<exact current paragraph text>", "after": "<replacement paragraph text>", "reason": "<one line>" }\n  ]\n}\n';
 
 // src/synthesize.ts
 var stubs3 = {};
@@ -42059,9 +42149,40 @@ function splitParagraphs2(text) {
 function fillTemplate2(template, vars) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
 }
-async function realGenerate2(units, runId2, budget) {
+function repeatedOpeners(units, words, minCount) {
+  const seen = /* @__PURE__ */ new Map();
+  for (const u of units) u.paragraphs.forEach((text, paragraphIndex) => {
+    const opener = text.split(/\s+/).slice(0, words).join(" ");
+    if (!opener) return;
+    seen.set(opener, [...seen.get(opener) ?? [], { unitId: u.id, paragraphIndex }]);
+  });
+  return [...seen.entries()].filter(([, at]) => at.length >= minCount).map(([opener, at]) => ({ opener, at }));
+}
+function outlineOrder(path2) {
+  if (!path2) return [];
+  try {
+    const o = JSON.parse(readFileSync7(path2, "utf8"));
+    return (o.units ?? (o.sections ?? []).flatMap((x2) => x2.units ?? [])).map((u) => u.id);
+  } catch {
+    return [];
+  }
+}
+function outlineContext(path2) {
+  if (!path2) return "(no outline)";
+  try {
+    const o = JSON.parse(readFileSync7(path2, "utf8"));
+    return JSON.stringify({ thesis: o.thesis, sections: (o.sections ?? []).map((x2) => ({ id: x2.id, title: x2.title, claim: x2.claim })) }, null, 2);
+  } catch {
+    return "(no outline)";
+  }
+}
+async function realGenerate2(units, runId2, budget, outlinePath) {
+  const cfg = thresholds_default.synthesis;
+  const repeats = repeatedOpeners(units, cfg.openerWords, cfg.repeatedOpenerMin);
   const system = fillTemplate2(write_synthesize_default, {
-    units: JSON.stringify(units.map((u) => ({ unitId: u.id, paragraphs: u.paragraphs.map((text, paragraphIndex) => ({ paragraphIndex, text })) })), null, 2)
+    units: JSON.stringify(units.map((u) => ({ unitId: u.id, paragraphs: u.paragraphs.map((text, paragraphIndex) => ({ paragraphIndex, text })) })), null, 2),
+    outline: outlineContext(outlinePath),
+    repetition: repeats.length ? JSON.stringify(repeats, null, 2) : "(none)"
   });
   const result = await callGemini({ step: "write.synthesize", system, parts: ["Propose transition edits now. Return JSON only."], responseSchema: editsSchema, runId: runId2, budget });
   const json = result.json;
@@ -42076,10 +42197,15 @@ async function synthesizeAll(options) {
   if (!existsSync5(dir)) throw new AwError("ERROR", "write.synthesize", "no drafts directory \u2014 run aw draft first");
   const files = readdirSync3(dir).filter((f3) => f3.endsWith(".md")).sort();
   if (files.length === 0) throw new AwError("ERROR", "write.synthesize", "drafts directory is empty");
-  const units = files.map((file) => ({ id: file.replace(/\.md$/, ""), text: readFileSync7(join9(dir, file), "utf8") }));
+  const order = outlineOrder(options.outline);
+  const rank = (id) => {
+    const i2 = order.indexOf(id);
+    return i2 < 0 ? order.length : i2;
+  };
+  const units = files.map((file) => ({ id: file.replace(/\.md$/, ""), text: readFileSync7(join9(dir, file), "utf8") })).sort((a, b) => rank(a.id) - rank(b.id));
   const unitsWithParagraphs = units.map((u) => ({ id: u.id, paragraphs: splitParagraphs2(u.text) }));
   const budget = new Budget(options.runId, budgetFor("write"));
-  const generate = stubs3.gen ?? ((list) => realGenerate2(list, options.runId, budget));
+  const generate = stubs3.gen ?? ((list) => realGenerate2(list, options.runId, budget, options.outline));
   const proposed = await generate(unitsWithParagraphs);
   const byUnit = new Map(units.map((u) => [u.id, u]));
   const paragraphsByUnit = new Map(units.map((u) => [u.id, splitParagraphs2(u.text)]));

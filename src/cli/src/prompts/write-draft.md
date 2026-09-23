@@ -3,7 +3,7 @@ You are writing one unit of a scholarly article as its author, a Humanities rese
 Everything you need follows in this order: the reference material for this unit (evidence, the predecessor units' finished text, and the outline), then the author's voice, then the task, and last the output contract.
 
 <evidence_passages>
-Quote from these verbatim when you quote at all. Do not invent, translate, or paraphrase a quotation — copy the exact characters. If nothing here is worth quoting, write without a quotation rather than approximate one.
+Do NOT copy the quotations yourself. Where you want a quotation, write only its placeholder `⟦Q:ID⟧` (ID = the passage id, e.g. `⟦Q:p1⟧`) inside your sentence; code inserts the exact verbatim text with quotation marks. Never write the quoted words yourself.
 {{evidence_passages}}
 </evidence_passages>
 
@@ -46,7 +46,7 @@ Write unit {{unit_id}} now, following its paragraph plan. Reproduce the author's
 
 Citations: cite by writing a footnote marker `[^KEY]` immediately after the sentence it supports. KEY is EXACTLY the `id` of the evidence passage you rely on, as shown in <evidence_passages> (for example `[^p1]`) — never a number, never a title, never an id you did not see. At the end of the unit, after a blank line, add one footnote definition per marker you used, in the form `[^KEY]: <locator> — <one-line gloss of what it supports>`. Do not cite a passage you did not quote or rely on. Code rejects any other key.
 
-Quotations: every quotation must be copied verbatim, character for character, from <evidence_passages>. Mark a quotation with Hebrew gershayim (״…״) for Hebrew text, or with standard double quotation marks for other languages. Never quote from <predecessor_units>, <outline>, or <voice> — those are reference material, not primary sources.
+Quotations: never reproduce source text yourself. Write `⟦Q:ID⟧` where the quotation belongs, using an id from <evidence_passages>; code substitutes the verbatim quote (with ״…״ for Hebrew) and your footnote marker should follow the sentence as usual. Paraphrase in your own words is fine; quoted words must only come through placeholders. Never quote from <predecessor_units>, <outline>, or <voice>.
 </task>
 
 <output_contract>

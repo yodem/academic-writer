@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { callGemini } from './gemini.ts';
+import thresholds from '../../thresholds.json' with { type: 'json' };
 import { decide } from './decide.ts';
 import { projectDir } from './paths.ts';
 import { AwError, Budget, budgetFor } from './ledger.ts';
@@ -45,9 +46,41 @@ function fillTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? '');
 }
 
-async function realGenerate(units: UnitParagraphs[], runId: string, budget: Budget): Promise<Edit[]> {
+// Deterministic hint: paragraph openers repeated across the article. Live rehearsal 2026-09-23: 7 units
+// opened with "אני טוען כי" and synthesis proposed 0 edits; the model needs the pattern pointed out.
+export function repeatedOpeners(units: UnitParagraphs[], words: number, minCount: number): Array<{ opener: string; at: Array<{ unitId: string; paragraphIndex: number }> }> {
+  const seen = new Map<string, Array<{ unitId: string; paragraphIndex: number }>>();
+  for (const u of units) u.paragraphs.forEach((text, paragraphIndex) => {
+    const opener = text.split(/\s+/).slice(0, words).join(' ');
+    if (!opener) return;
+    seen.set(opener, [...(seen.get(opener) ?? []), { unitId: u.id, paragraphIndex }]);
+  });
+  return [...seen.entries()].filter(([, at]) => at.length >= minCount).map(([opener, at]) => ({ opener, at }));
+}
+
+export function outlineOrder(path: string | undefined): string[] {
+  if (!path) return [];
+  try {
+    const o = JSON.parse(readFileSync(path, 'utf8')) as { units?: Array<{ id: string }>; sections?: Array<{ units?: Array<{ id: string }> }> };
+    return (o.units ?? (o.sections ?? []).flatMap((x) => x.units ?? [])).map((u) => u.id);
+  } catch { return []; }
+}
+
+function outlineContext(path: string | undefined): string {
+  if (!path) return '(no outline)';
+  try {
+    const o = JSON.parse(readFileSync(path, 'utf8')) as { thesis?: string; sections?: Array<{ id: string; title?: string; claim?: string }> };
+    return JSON.stringify({ thesis: o.thesis, sections: (o.sections ?? []).map((x) => ({ id: x.id, title: x.title, claim: x.claim })) }, null, 2);
+  } catch { return '(no outline)'; }
+}
+
+async function realGenerate(units: UnitParagraphs[], runId: string, budget: Budget, outlinePath?: string): Promise<Edit[]> {
+  const cfg = thresholds.synthesis as { openerWords: number; repeatedOpenerMin: number };
+  const repeats = repeatedOpeners(units, cfg.openerWords, cfg.repeatedOpenerMin);
   const system = fillTemplate(SYNTHESIZE_PROMPT, {
     units: JSON.stringify(units.map((u) => ({ unitId: u.id, paragraphs: u.paragraphs.map((text, paragraphIndex) => ({ paragraphIndex, text })) })), null, 2),
+    outline: outlineContext(outlinePath),
+    repetition: repeats.length ? JSON.stringify(repeats, null, 2) : '(none)',
   });
   const result = await callGemini({ step: 'write.synthesize', system, parts: ['Propose transition edits now. Return JSON only.'], responseSchema: editsSchema, runId, budget });
   const json = result.json as { edits?: Edit[] } | null;
@@ -63,11 +96,16 @@ export async function synthesizeAll(options: SynthesizeOptions): Promise<Synthes
   const files = readdirSync(dir).filter((f) => f.endsWith('.md')).sort();
   if (files.length === 0) throw new AwError('ERROR', 'write.synthesize', 'drafts directory is empty');
 
-  const units = files.map((file) => ({ id: file.replace(/\.md$/, ''), text: readFileSync(join(dir, file), 'utf8') }));
+  // Article order comes from the outline (sections -> units), not from file names: alphabetical order put
+  // `conclusion` before `intro` (live rehearsal 2026-09-23). Units missing from the outline keep file order at the end.
+  const order = outlineOrder(options.outline);
+  const rank = (id: string): number => { const i = order.indexOf(id); return i < 0 ? order.length : i; };
+  const units = files.map((file) => ({ id: file.replace(/\.md$/, ''), text: readFileSync(join(dir, file), 'utf8') }))
+    .sort((a, b) => rank(a.id) - rank(b.id));
   const unitsWithParagraphs: UnitParagraphs[] = units.map((u) => ({ id: u.id, paragraphs: splitParagraphs(u.text) }));
 
   const budget = new Budget(options.runId, budgetFor('write'));
-  const generate = stubs.gen ?? ((list: UnitParagraphs[]) => realGenerate(list, options.runId, budget));
+  const generate = stubs.gen ?? ((list: UnitParagraphs[]) => realGenerate(list, options.runId, budget, options.outline));
   const proposed = await generate(unitsWithParagraphs);
 
   const byUnit = new Map(units.map((u) => [u.id, u]));
