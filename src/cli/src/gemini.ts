@@ -3,11 +3,12 @@ import { routeFor, type StepId } from './routing.ts';
 import { appendLedger, AwError, type Budget, type Usage } from './ledger.ts';
 
 type Response = { text: string; finishReason: string; usage: Usage };
-type Request = { step: StepId; system: string; parts: string[]; responseSchema?: object; runId: string; budget?: Budget };
+export type ImagePart = { inlineData: { mimeType: string; data: string } } | { fileData: { mimeType: string; fileUri: string } };
+type Request = { step: StepId; system: string; parts: Array<string | ImagePart>; responseSchema?: object; runId: string; budget?: Budget };
 type Transport = (request: Request & { model: string; key: string }) => Promise<Response>;
 let transport: Transport = async (request) => {
   const ai = new GoogleGenAI({ apiKey: request.key });
-  const result = await ai.models.generateContent({ model: request.model, contents: request.parts, config: { systemInstruction: request.system, responseMimeType: request.responseSchema ? 'application/json' : undefined, responseSchema: request.responseSchema } });
+  const result = await ai.models.generateContent({ model: request.model, contents: request.parts as never, config: { systemInstruction: request.system, responseMimeType: request.responseSchema ? 'application/json' : undefined, responseSchema: request.responseSchema } });
   return { text: result.text ?? '', finishReason: String(result.candidates?.[0]?.finishReason ?? ''), usage: { in: result.usageMetadata?.promptTokenCount ?? 0, out: result.usageMetadata?.candidatesTokenCount ?? 0 } };
 };
 export function __setTransport(value: Transport): void { transport = value; }
