@@ -23,3 +23,22 @@ def test_capped_word_beyond_cap_takes_replacement(tmp_path):
     out = json.loads(subprocess.check_output([sys.executable, ROOT/"src/scripts/must-catch.py", "--text", tmp_path/"a.md",
         "--style-words", tmp_path/"s.json", "--terms", tmp_path/"t.json", "--json"]))
     assert [c["after"] for c in out["changes"]] == ["נוסף על כך"]  # first use kept, second replaced
+    # Both occurrences share line 1: apply-changes.py cannot tell them apart
+    # by text alone, so the over-cap change must carry the 1-based position
+    # of THIS instance among all occurrences of the word on that line.
+    assert out["changes"][0]["line"] == 1
+    assert out["changes"][0]["occurrence"] == 2
+
+
+def test_capped_word_occurrence_is_position_on_its_own_line_when_alone(tmp_path):
+    (tmp_path/"a.md").write_text("כמו כן הוא טען.\nכמו כן הוא הוסיף.\n", encoding="utf-8")
+    (tmp_path/"s.json").write_text(json.dumps({"banned":[],"filler":[],
+        "capped":[{"word":"כמו כן","maxPer":"chapter","max":1,"replacement":"נוסף על כך"}]}), encoding="utf-8")
+    (tmp_path/"t.json").write_text(json.dumps({"canon":[]}), encoding="utf-8")
+    out = json.loads(subprocess.check_output([sys.executable, ROOT/"src/scripts/must-catch.py", "--text", tmp_path/"a.md",
+        "--style-words", tmp_path/"s.json", "--terms", tmp_path/"t.json", "--json"]))
+    # The capped rule always reports its position on the line -- harmless
+    # (and correctly resolved) when it is the line's only instance, and the
+    # field apply-changes.py needs when a sibling instance shares the line.
+    assert len(out["changes"]) == 1
+    assert out["changes"][0]["occurrence"] == 1
