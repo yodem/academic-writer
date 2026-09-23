@@ -3,7 +3,7 @@ name: setup
 description: "Friendly, guided first-run setup wizard for a non-engineer: one question at a time, gets your Gemini API key working with a live test, checks your Python tools, and shows you a sample paragraph before you're done. Use on first install, or anytime you want a fast guided re-check of your setup. Use when this skill's command or workflow is needed."
 user-invocable: true
 disable-model-invocation: true
-allowed-tools: [Bash, Read, Write, Glob, Grep, AskUserQuestion, mcp__plugin_academic-writer_gemini-api__gemini_raw]
+allowed-tools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.1.0"}
 ---
 
@@ -95,25 +95,16 @@ If "No, Claude only": skip to Step 4, note Gemini disabled in the closing summar
 
 ### 3b. Check for an existing key
 
-This shell-level check only sees two of the three possible sources — it cannot read the plugin's
-own secure configuration storage from inside this conversation (that lives in the OS keychain / a
-protected credentials file, resolved by the MCP server process, not this shell). Treat a `NO_KEY`
-result here as "nothing found at the shell level," not "no key configured anywhere" — the live test
-in 3d is the authoritative check regardless of which of the three sources supplied the key:
+The `aw` CLI (`plugins/academic-writer/bin/aw`) reads `GOOGLE_API_KEY` from its environment. A
+SessionStart hook exports the plugin's `google_api_key` option from the OS keychain, or the user can
+export the key in their shell. Check the current environment:
 
 ```bash
-if [ -n "$GOOGLE_API_KEY" ]; then
-  echo "Found GOOGLE_API_KEY in environment."
-elif [ -f .academic-helper/secrets.json ] && python3 -c "import json,sys; sys.exit(0 if json.load(open('.academic-helper/secrets.json')).get('GOOGLE_API_KEY') else 1)" 2>/dev/null; then
-  echo "Found GOOGLE_API_KEY in .academic-helper/secrets.json."
-else
-  echo "NO_KEY (at the shell level — may still be set via the plugin's own config; the live test in 3d will tell)"
-fi
+if [ -n "$GOOGLE_API_KEY" ]; then echo "Found GOOGLE_API_KEY in environment."; else echo "NO_KEY in environment; configure the plugin option or export it in your shell, then start a new session."; fi
 ```
 
-If a key was found, skip to 3d (live test) — no need to re-enter it. If `NO_KEY`, still try 3d once
-before assuming nothing is configured — a plugin-config key wouldn't show up in the check above but
-will work.
+If a key was found, continue to 3d. Otherwise configure the plugin option or shell variable and
+start a new session so the SessionStart hook can export the value.
 
 ### 3c. Get and store a key
 
@@ -137,11 +128,6 @@ AskUserQuestion(questions=[{
       "description": "Set GOOGLE_API_KEY in your shell profile — works across all your projects, but is not stored as securely as the plugin option above.",
       "markdown": "```\nexport GOOGLE_API_KEY=\"AIza...\"\n# add this line to ~/.zshrc or ~/.bashrc\n```"
     },
-    {
-      "label": "This project only",
-      "description": "Saved to .academic-helper/secrets.json — not shared with other projects, never committed to git.",
-      "markdown": "```\n.academic-helper/secrets.json\n{ \"GOOGLE_API_KEY\": \"AIza...\" }\n```"
-    }
   ],
   "multiSelect": false
 }])
@@ -152,45 +138,20 @@ AskUserQuestion(questions=[{
   configuration dialog), then ask them to confirm they've done it. Claude Code cannot open its own
   plugin-configuration dialog or run its own CLI from inside this conversation — same reason the
   environment-variable path below needs the user to act outside the chat. Once set this way, the key
-  is substituted into the bundled Gemini MCP server's environment automatically; nothing else needs
-  updating.
+  is exported as `GOOGLE_API_KEY` by the plugin's SessionStart hook at the start of a new session.
 - **Environment variable**: print the export line above for the user to run in their own terminal, then ask them to confirm they've done it and reopened their session — Claude Code cannot set their shell environment from inside this conversation.
-- **This project only**: ask them to paste the key, then write it with exactly the key name `GOOGLE_API_KEY` (never a different casing):
+The key is never written to a project file. The plugin option is stored in the OS keychain; the
+SessionStart hook exports it for `aw`. A shell-level `GOOGLE_API_KEY` also works.
+
+### 3d. Confirm the CLI is available
+
+The `aw` CLI needs the key only when it makes a Gemini request. Confirm the current configuration:
 
 ```bash
-mkdir -p .academic-helper
-python3 -c "
-import json, pathlib, os
-p = pathlib.Path('.academic-helper/secrets.json')
-data = json.loads(p.read_text()) if p.exists() else {}
-data['GOOGLE_API_KEY'] = os.environ['_PASTED_KEY']
-p.write_text(json.dumps(data, indent=2))
-import stat
-p.chmod(stat.S_IRUSR | stat.S_IWUSR)
-"
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" models check
 ```
 
-The pasted key is passed through an environment variable rather than typed directly into the command, so it never lands in shell history. Confirm `.academic-helper/secrets.json` is gitignored.
-
-All three paths keep working side by side — the MCP server checks the plugin configuration first,
-then the environment variable, then `.academic-helper/secrets.json`, so switching methods later
-(or having leftover config from an older setup) never breaks anything; the most-preferred source
-present just wins.
-
-### 3d. Live-test the key
-
-Actually call the tool — don't just check the file exists:
-
-```
-mcp__plugin_academic-writer_gemini-api__gemini_raw({
-  system: "Reply with exactly the word PONG and nothing else.",
-  prompt: "PING"
-})
-```
-
-- **Success** (response text contains "PONG"): "Your Gemini key works." Store `gemini.enabled = true`.
-- **`no_credentials` error**: "I couldn't find your key yet. If you just set the environment variable or plugin configuration, you'll need to restart Claude Code so the MCP server picks up the change, then run `/academic-writer:setup` again." Store `gemini.enabled = false`. See `references/troubleshooting.md` for more.
-- **Any other error**: "Your key didn't work — let's try again. It might be mistyped, or the key might not be activated yet." Offer to re-enter (back to 3c) or skip. See `references/troubleshooting.md` for common causes.
+- If the hook or shell provides `GOOGLE_API_KEY`, note that Gemini is configured; otherwise ask the user to configure one or continue without Gemini. See `references/troubleshooting.md` for errors from actual CLI runs.
 
 ---
 
@@ -251,8 +212,7 @@ AskUserQuestion(questions=[{
 ```
 
 Generate a 2-4 sentence paragraph on that topic, in `fieldOfStudy`'s general register, using whichever writer is configured:
-- If Gemini was enabled and passed the live test: call `mcp__plugin_academic-writer_gemini-api__gemini_raw` with a short system prompt asking for a 2-4 sentence academic-register paragraph on the topic.
-- Otherwise: write the paragraph yourself (Claude) directly in the conversation — no tool call needed.
+Write a 2-4 sentence paragraph yourself (Claude) directly in the conversation. The proof-of-life here checks the conversation workflow; Gemini is exercised when an `aw` command runs.
 
 Show the paragraph, then:
 

@@ -70,6 +70,10 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
   if [[ -d "$SRC_DIR/skills" ]]; then
     cp -R "$SRC_DIR/skills" "$PLUGIN_DIR/"
   fi
+  # Ship canonical JSON schemas beside the runtime scripts for gate.py.
+  if [[ -d "$SRC_DIR/schemas" ]]; then
+    cp -R "$SRC_DIR/schemas" "$PLUGIN_DIR/"
+  fi
   skill_count=$(find "$PLUGIN_DIR/skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
 
   # Copy Pi judge skills as a separate Pi skill directory.

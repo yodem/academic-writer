@@ -2,7 +2,7 @@
 
 ## Author intent
 
-`author-intent.json` is the author's source of truth. Validate it against `author-intent.schema.json` in this directory. Preserve `thesis` verbatim and use a source ID from the selected project sources as `coreTextSourceId`. `moves` records the author's argumentative moves. `mustUse` contains evidence passage IDs, and may be empty until evidence has been built and the author selects passages.
+`author-intent.json` is the author's source of truth. Validate it against `${CLAUDE_PLUGIN_ROOT}/schemas/author-intent.schema.json`. Preserve `thesis` verbatim and use a source ID from the selected project sources as `coreTextSourceId`. `moves` records the author's argumentative moves. `mustUse` contains evidence passage IDs, and may be empty until evidence has been built and the author selects passages.
 
 ## Evidence build
 
@@ -10,7 +10,7 @@
 
 ## Outline contract
 
-The architect writes this shape directly to `.academic-helper/outline.json`, following `outline.schema.json` in this directory:
+The architect writes this shape directly to `.academic-helper/outline.json`, following `${CLAUDE_PLUGIN_ROOT}/schemas/outline.schema.json`:
 
 ```json
 {

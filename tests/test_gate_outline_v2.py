@@ -88,15 +88,8 @@ def test_schema_violation_is_reported_not_crashed(tmp_path):
     assert payload["violations"]
 
 
-def test_schema_copies_in_write_skill_references_match_source_of_truth():
-    """gate.py resolves author-intent/outline schemas from src/schemas/ when it runs
-    from the repo, and falls back to skills/write/references/ when run from the built
-    plugin (plugins/academic-writer/scripts/gate.py has no schemas/ sibling -- see
-    scripts/build-plugins.sh). The two copies must never drift apart."""
-    for name in ("author-intent.schema.json", "outline.schema.json"):
-        source_of_truth = (ROOT / "src/schemas" / name).read_text(encoding="utf-8")
-        write_skill_copy = (ROOT / "src/skills/write/references" / name).read_text(encoding="utf-8")
-        assert source_of_truth == write_skill_copy, f"{name} has drifted between src/schemas/ and src/skills/write/references/"
+def test_built_plugin_contains_outline_schema():
+    assert (ROOT / "plugins/academic-writer/schemas/outline.schema.json").is_file()
 
 
 def test_semantic_checks_run_without_jsonschema(tmp_path):

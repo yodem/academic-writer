@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runProofread, __stubs, __setWrongWordPass } from '../src/proofread.js';
+import { runProofread, __stubs } from '../src/proofread.js';
 import { setPathArguments } from '../src/paths.js';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -75,79 +75,6 @@ test('find candidates retain the wrong_word class for contextual real-word error
   });
   await runProofread({ chunks: [{ id: 'c', index: 0, startLine: 1, endLine: 1, text: 'להתפשר אם' }], runId: 't-wrong-word', out: paths() });
   assert.equal(verifyClass, 'wrong_word');
-});
-
-test('wrong-word second pass stays off by default: no extra find call', async () => {
-  __setWrongWordPass(undefined); // the default that ships (thresholds.json > proofread.wrongWordPass.enabled: false)
-  let wrongWordCalls = 0;
-  __stubs({
-    find: async () => [],
-    findWrongWord: async () => { wrongWordCalls += 1; return []; },
-    mustCatch: async () => [],
-    verify: async () => [],
-    memo: async () => '',
-  });
-  await runProofread({ chunks: [{ id: 'c', index: 0, startLine: 1, endLine: 1, text: 'x' }], runId: 't-ww-off', out: paths() });
-  assert.equal(wrongWordCalls, 0);
-});
-
-test('wrong-word second pass, when flagged on, adds one call per chunk and its low-risk candidate reaches verified', async () => {
-  __setWrongWordPass(true);
-  try {
-    let wrongWordCalls = 0;
-    __stubs({
-      find: async () => [],
-      findWrongWord: async (chunk) => { wrongWordCalls += 1; return [{ id: 'w1', line: chunk.startLine, before: 'לארוס', after: 'להרוס', class: 'wrong_word', meaningRisk: 'low' }]; },
-      mustCatch: async () => [],
-      verify: async (changes) => changes.map((change) => ({ id: change.id, verdict: 'uphold' })),
-      memo: async () => '',
-    });
-    const result = await runProofread({ chunks: [{ id: 'c', index: 0, startLine: 1, endLine: 1, text: 'לארוס' }], runId: 't-ww-on', out: paths() });
-    assert.equal(wrongWordCalls, 1);
-    const merged = result.changes.find((change) => change.before === 'לארוס');
-    assert.equal(merged?.status, 'verified');
-    assert.equal(merged?.class, 'wrong_word');
-  } finally {
-    __setWrongWordPass(undefined);
-  }
-});
-
-test('wrong-word second-pass ids never collide with the primary pass ids from the same chunk', async () => {
-  __setWrongWordPass(true);
-  try {
-    __stubs({
-      find: async (chunk) => [{ id: 'c1', line: chunk.startLine, before: 'alpha', after: 'ALPHA', class: 'typo', meaningRisk: 'low' }],
-      findWrongWord: async (chunk) => [{ id: 'c1', line: chunk.startLine, before: 'beta', after: 'BETA', class: 'wrong_word', meaningRisk: 'low' }],
-      mustCatch: async () => [],
-      verify: async (changes) => changes.map((change) => ({ id: change.id, verdict: 'uphold' })),
-      memo: async () => '',
-    });
-    const result = await runProofread({ chunks: [{ id: 'c', index: 0, startLine: 1, endLine: 1, text: 'alpha beta' }], runId: 't-ww-collide', out: paths() });
-    const ids = result.changes.map((change) => change.id);
-    assert.equal(new Set(ids).size, ids.length, 'ids from the two passes must not collide');
-    assert.equal(result.changes.find((change) => change.before === 'alpha')?.status, 'verified');
-    assert.equal(result.changes.find((change) => change.before === 'beta')?.status, 'verified');
-  } finally {
-    __setWrongWordPass(undefined);
-  }
-});
-
-test('wrong-word second-pass candidate duplicating a primary-pass hit on the same span is dropped before verify', async () => {
-  __setWrongWordPass(true);
-  try {
-    let verifiedIds: string[] = [];
-    __stubs({
-      find: async (chunk) => [{ id: 'primary', line: chunk.startLine, before: 'לארוס', after: 'להרוס', class: 'wrong_word', meaningRisk: 'low' }],
-      findWrongWord: async (chunk) => [{ id: 'dup', line: chunk.startLine, before: 'לארוס', after: 'להרוס', class: 'wrong_word', meaningRisk: 'low' }],
-      mustCatch: async () => [],
-      verify: async (changes) => { verifiedIds = changes.map((change) => change.id); return changes.map((change) => ({ id: change.id, verdict: 'uphold' })); },
-      memo: async () => '',
-    });
-    await runProofread({ chunks: [{ id: 'c', index: 0, startLine: 1, endLine: 1, text: 'לארוס' }], runId: 't-ww-dup', out: paths() });
-    assert.equal(verifiedIds.length, 1);
-  } finally {
-    __setWrongWordPass(undefined);
-  }
 });
 
 test('a must-catch occurrence index survives contractChange into changes.json', async () => {
