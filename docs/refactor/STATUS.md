@@ -41,6 +41,9 @@ A full live run of the new `/write` path, with the author's real kabalah thesis 
 ## /write W6 in code: `aw docx` (F3, merged)
 The main session no longer assembles the article: `aw docx` reads the drafts in outline order, turns `[^KEY]` markers into native Word footnotes rendered from evidence metadata, and runs `generate-docx.py`. The live rehearsal produced a real DOCX: 5 sections, 14 paragraphs, 8 footnotes, RTL, no leaked markers or placeholders. The live run caught one defect (a URL-encoded plugin path broke on the repo's space); the smoke gate now builds a real `.docx` in a path with a space on every run.
 
+## `/revise` classify, live on the author's real reviewed draft (kabalah, 2026-09-23)
+43 items (16 comments, 10 replacements, 17 inserts and deletes) classified in 96 s: 27 text_edit, 14 argument, 1 voice_signal ("אני לא אוהב את השימוש במילה הזאת בכלל", correct), 1 plugin_defect. Two misfiles show the author-confirmation step is needed: "דרוש הסבר" was filed as plugin_defect (it is content), and "אתה אמור להשתמש בתרגום של מקבילי לא של אבן תיבון" was filed as argument (it is a plugin source-choice defect). Worth adding: the reviewer's identity (supervisor vs author) as a classifier input, and a "source/translation choice" hint for plugin_defect.
+
 ## Needs the author
 1. **Typo recall 0.77 vs 0.85:** Gemini flash misses real-word errors. Options: (a) accept; (b) a stronger model for the wrong_word class; (c) relax the apply gate for verified medium-risk wrong_word fixes.
 2. **Release:** merge `refactor/aw-step-engine` to `main`, push, then `claude plugin marketplace update academic-writer` and `claude plugin update academic-writer@academic-writer`. This also approves the MCP server retirement.
