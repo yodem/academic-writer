@@ -5,32 +5,33 @@
 """
 check-voice-populated.py
 
-Deterministic check for whether AUTHOR_VOICE.md is a real, usable voice profile
-or an unpopulated stub. See src/skills/voice/references/stub-definition.md for
-the full rationale — this script is the enforceable implementation of that
-definition, not a separate heuristic.
+Deterministic check for whether the academic-writer voice profile is real and
+usable, rather than an unpopulated stub. The preferred store is the shared plugin
+voice store at <data-dir>/voice/; legacy projects may still use AUTHOR_VOICE.md.
 
-A file is a STUB (exit 1) if either:
-  1. It is missing, OR
-  2. The title/`> Updated` line still contain the untouched template placeholders
-     (`<writer name>`, `<YYYY-MM-DD>`, `<plugin>`), OR
-  3. All four required sections are empty (only `_Empty.` / blank content), OR
-  4. Total word count across all section bodies is below the minimum-content floor
-     (default 20 words), even if some section is technically non-empty.
+A profile is POPULATED (exit 0) when either:
+  1. <data-dir>/voice/profile.json contains an authorVoice string that passes the
+     legacy AUTHOR_VOICE.md stub check, OR
+  2. <data-dir>/voice/rules.md and exemplars.jsonl are both present and non-empty,
+     OR
+  3. the legacy AUTHOR_VOICE.md file passes the stub check.
 
-A file is POPULATED (exit 0) only if none of the above hold.
+A profile is a STUB (exit 1) when neither the shared store nor the legacy file is
+usable. Unreadable/corrupt candidate files are usage/encoding errors (exit 2),
+because the write pipeline must fail closed when voice state cannot be verified.
 
 Usage:
-    python3 scripts/check-voice-populated.py [path] [--json] [--min-words N]
+    python3 scripts/check-voice-populated.py [path] [--json] [--min-words N] [--data-dir DIR]
 
-    path        Defaults to AUTHOR_VOICE.md in the current directory.
-    --json      Emit a machine-readable {"populated": bool, "reasons": [...], ...} payload.
+    path        Legacy AUTHOR_VOICE.md path. Defaults to AUTHOR_VOICE.md.
+    --data-dir Shared plugin data dir. Defaults to $CLAUDE_PLUGIN_DATA when set.
+    --json      Emit a machine-readable payload.
     --min-words Override the minimum total word-count floor (default: 20).
 
 Exit codes:
     0  populated (real, usable voice profile)
     1  stub (missing, untouched template, or below the content floor)
-    2  usage error (bad path argument, unreadable/non-UTF-8 file)
+    2  usage error (bad path argument, unreadable/non-UTF-8/corrupt candidate)
 
 Dependency-free (Python 3 stdlib only).
 """
@@ -39,9 +40,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 REQUIRED_SECTIONS = [
     "Core voice (cross-project)",
@@ -71,8 +74,9 @@ def split_sections(text: str) -> dict[str, str]:
     for line in lines:
         m = HEADING_RE.match(line)
         if m:
-            current = m.group(1).strip()
-            sections.setdefault(current, [])
+            heading = m.group(1).strip()
+            current = heading
+            sections.setdefault(heading, [])
             continue
         if current is not None:
             sections[current].append(line)
@@ -95,12 +99,12 @@ def section_word_count(body: str) -> int:
     return words
 
 
-def check(text: str, min_words: int = DEFAULT_MIN_WORDS) -> dict:
+def check(text: str, min_words: int = DEFAULT_MIN_WORDS) -> dict[str, Any]:
     reasons: list[str] = []
 
-    title_line = next((l for l in text.splitlines() if l.startswith("# ")), "")
+    title_line = next((line for line in text.splitlines() if line.startswith("# ")), "")
     updated_line = next(
-        (l for l in text.splitlines() if l.strip().startswith("> Updated")), ""
+        (line for line in text.splitlines() if line.strip().startswith("> Updated")), ""
     )
 
     placeholder_untouched = TITLE_PLACEHOLDER in title_line or any(
@@ -130,6 +134,96 @@ def check(text: str, min_words: int = DEFAULT_MIN_WORDS) -> dict:
     }
 
 
+def _read_text_strict(path: Path) -> str:
+    return path.read_text(encoding="utf-8", errors="strict")
+
+
+def _json_error(path: Path, error: Exception) -> dict[str, Any]:
+    return {"populated": None, "path": str(path), "error": str(error)}
+
+
+def check_voice_store(data_dir: Path | None, min_words: int) -> dict[str, Any] | None:
+    if data_dir is None:
+        return None
+    voice_dir = data_dir / "voice"
+    candidates = [
+        voice_dir / "profile.json",
+        voice_dir / "rules.md",
+        voice_dir / "exemplars.jsonl",
+    ]
+    if not any(path.exists() for path in candidates):
+        return None
+
+    profile_path = voice_dir / "profile.json"
+    if profile_path.exists():
+        try:
+            profile = json.loads(_read_text_strict(profile_path))
+        except (UnicodeDecodeError, json.JSONDecodeError, OSError) as e:
+            return {**_json_error(profile_path, e), "exit": 2}
+        if not isinstance(profile, dict):
+            return {"populated": None, "path": str(profile_path), "error": "profile.json must contain an object", "exit": 2}
+        author_voice = profile.get("authorVoice")
+        if isinstance(author_voice, str) and author_voice.strip():
+            result = check(author_voice, min_words=min_words)
+            if result["populated"]:
+                return {**result, "path": str(profile_path), "source": "voice_store.authorVoice", "exit": 0}
+
+    rules_path = voice_dir / "rules.md"
+    exemplars_path = voice_dir / "exemplars.jsonl"
+    try:
+        rules_present = rules_path.is_file() and bool(_read_text_strict(rules_path).strip())
+        exemplars_present = exemplars_path.is_file() and bool(_read_text_strict(exemplars_path).strip())
+    except (UnicodeDecodeError, OSError) as e:
+        bad_path = rules_path if rules_path.exists() else exemplars_path
+        return {**_json_error(bad_path, e), "exit": 2}
+    if rules_present and exemplars_present:
+        return {
+            "populated": True,
+            "path": str(voice_dir),
+            "source": "voice_store.rules_and_exemplars",
+            "reasons": [],
+            "populatedSections": None,
+            "totalWords": None,
+            "exit": 0,
+        }
+
+    return {
+        "populated": False,
+        "path": str(voice_dir),
+        "source": "voice_store",
+        "reasons": ["store_incomplete"],
+        "populatedSections": 0,
+        "totalWords": 0,
+        "exit": 1,
+    }
+
+
+def check_legacy_file(path: Path, min_words: int) -> dict[str, Any]:
+    if not path.is_file():
+        return {
+            "populated": False,
+            "path": str(path),
+            "source": "legacy_file",
+            "reasons": ["missing"],
+            "populatedSections": 0,
+            "totalWords": 0,
+            "exit": 1,
+        }
+
+    try:
+        text = _read_text_strict(path)
+    except UnicodeDecodeError as e:
+        return {**_json_error(path, e), "exit": 2}
+    except OSError as e:
+        return {**_json_error(path, e), "exit": 2}
+
+    result = check(text, min_words=min_words)
+    result["path"] = str(path)
+    result["source"] = "legacy_file"
+    result["exit"] = 0 if result["populated"] else 1
+    return result
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -141,56 +235,43 @@ def main(argv: list[str]) -> int:
     parser.add_argument(
         "--min-words", type=int, default=DEFAULT_MIN_WORDS, dest="min_words"
     )
+    parser.add_argument(
+        "--data-dir", default=os.environ.get("CLAUDE_PLUGIN_DATA"), dest="data_dir"
+    )
     args = parser.parse_args(argv)
 
     path = Path(args.path)
+    data_dir = Path(args.data_dir) if args.data_dir else None
 
-    if not path.is_file():
+    store_result = check_voice_store(data_dir, args.min_words)
+    legacy_result = check_legacy_file(path, args.min_words)
+
+    if store_result is not None and store_result["exit"] in (0, 2):
+        result = store_result
+    elif legacy_result["exit"] in (0, 2):
+        result = legacy_result
+    elif store_result is not None:
         result = {
-            "populated": False,
-            "path": str(path),
-            "reasons": ["missing"],
-            "populatedSections": 0,
-            "totalWords": 0,
+            **store_result,
+            "legacy": {k: v for k, v in legacy_result.items() if k != "exit"},
         }
-        if args.json:
-            print(json.dumps(result))
-        else:
-            print(f"STUB: {path} does not exist")
-        return 1
+    else:
+        result = legacy_result
 
-    try:
-        text = path.read_text(encoding="utf-8", errors="strict")
-    except UnicodeDecodeError as e:
-        if args.json:
-            print(
-                json.dumps(
-                    {
-                        "populated": None,
-                        "path": str(path),
-                        "error": f"not valid UTF-8: {e}",
-                    }
-                )
-            )
-        else:
-            print(f"ERROR: {path} is not valid UTF-8: {e}", file=sys.stderr)
-        return 2
-
-    result = check(text, min_words=args.min_words)
-    result["path"] = str(path)
+    exit_value = result.pop("exit", 2)
+    exit_code = exit_value if isinstance(exit_value, int) else 2
 
     if args.json:
         print(json.dumps(result))
     else:
-        if result["populated"]:
-            print(
-                f"POPULATED: {path} ({result['populatedSections']}/4 sections, "
-                f"{result['totalWords']} words)"
-            )
+        if exit_code == 0:
+            print(f"POPULATED: {result['path']} ({result.get('source', 'unknown')})")
+        elif exit_code == 1:
+            print(f"STUB: {result['path']} — reasons: {', '.join(result.get('reasons', []))}")
         else:
-            print(f"STUB: {path} — reasons: {', '.join(result['reasons'])}")
+            print(f"ERROR: {result['path']} could not be read/parsed: {result.get('error')}", file=sys.stderr)
 
-    return 0 if result["populated"] else 1
+    return exit_code
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 import tempfile
 import unittest
 
@@ -128,6 +129,41 @@ class TestCheckVoicePopulated(unittest.TestCase):
                 f.write(b"\xff\xfe not valid utf-8 \x80")
             proc = run_script(path)
             self.assertEqual(proc.returncode, 2)
+
+    def test_shared_voice_store_populated_without_project_file_passes(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir) / "data"
+            voice_dir = data_dir / "voice"
+            voice_dir.mkdir(parents=True)
+            (voice_dir / "profile.json").write_text(
+                json.dumps({"schemaVersion": 1, "authorVoice": PARTIAL_REAL}),
+                encoding="utf-8",
+            )
+            proc = run_script(
+                str(Path(tmpdir) / "missing" / "AUTHOR_VOICE.md"),
+                "--data-dir",
+                str(data_dir),
+                "--json",
+            )
+            self.assertEqual(proc.returncode, 0)
+            data = json.loads(proc.stdout)
+            self.assertTrue(data["populated"])
+            self.assertEqual(data["source"], "voice_store.authorVoice")
+
+    def test_neither_shared_store_nor_project_file_is_stub(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir) / "data"
+            (data_dir / "voice").mkdir(parents=True)
+            proc = run_script(
+                str(Path(tmpdir) / "missing" / "AUTHOR_VOICE.md"),
+                "--data-dir",
+                str(data_dir),
+                "--json",
+            )
+            self.assertEqual(proc.returncode, 1)
+            data = json.loads(proc.stdout)
+            self.assertFalse(data["populated"])
+            self.assertIn("missing", data["reasons"])
 
 
 if __name__ == "__main__":

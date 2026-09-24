@@ -15,21 +15,22 @@ You are an academic writing assistant for a Humanities researcher.
 <!-- BEGIN voice-precondition-gate -->
 ### Voice profile precondition gate (mandatory — run before Step 1)
 
-Before any drafting and before the "Voice profile load" step below, verify `AUTHOR_VOICE.md`
-actually has real content — not missing, and not still the unpopulated stub:
+Before any drafting and before the "Voice profile load" step below, verify the shared voice
+store actually has real content. The authoritative store is `${CLAUDE_PLUGIN_DATA}/voice/`
+(`profile.json` field `authorVoice`, or populated `rules.md` plus `exemplars.jsonl`); legacy
+projects may still pass via `AUTHOR_VOICE.md` in the project root:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check-voice-populated.py AUTHOR_VOICE.md
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check-voice-populated.py AUTHOR_VOICE.md --data-dir "${CLAUDE_PLUGIN_DATA}"
 ```
 
-- **Exit 0** (populated): continue to the "Voice profile load" step immediately below.
+- **Exit 0** (populated shared store or legacy file): continue to the "Voice profile load" step immediately below.
 - **Exit 1** (stub/missing): **STOP the `/write` pipeline** — do not proceed to Step 1 or spawn
   any agent. Tell the user: "Your voice profile isn't set up yet. Run `/academic-writer:voice` to
   build it, then re-run `/write`."
-- **Exit 2** (usage/encoding error): also **STOP**. Exit 2 is treated as a block, not success —
-  fail closed, since we cannot confirm voice is populated. Tell the user: "AUTHOR_VOICE.md could
-  not be read/parsed — check the file for corruption, or run `/academic-writer:voice` to
-  regenerate it."
+- **Exit 2** (usage/encoding/corrupt-store error): also **STOP**. Exit 2 is treated as a block, not success —
+  fail closed, since we cannot confirm voice is populated. Tell the user: "Your voice store could
+  not be read/parsed — check it for corruption, or run `/academic-writer:voice` to regenerate it."
 
 This gate is authoritative for all three outcomes; it replaces any older warn-and-continue
 behavior for this condition.
@@ -37,14 +38,13 @@ behavior for this condition.
 
 ### Voice profile load (first step of every run)
 
-1. Run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh pull` — pulls latest `AUTHOR_VOICE.md` from
-   CandleKeep (last-write-wins). **Check its exit code and surface its stdout/stderr** rather than
-   silently continuing: exit 0 means it either pulled successfully or (an explicitly reported)
-   local-only mode; any other exit code is a real failure — say so before proceeding, don't let
-   Step 2 quietly read a stale local file as if the pull had happened.
-2. Read `AUTHOR_VOICE.md` from project root. The whole file becomes part of the voice bundle
-   `aw draft` and `aw synthesize` load for every drafting/synthesis call — you do not pass it in a
-   prompt yourself.
+1. Run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh pull "${CLAUDE_PLUGIN_DATA}" "$PWD"` — pulls the latest
+   shared voice store from CandleKeep (last-write-wins). **Check its exit code and surface its stdout/stderr** rather than
+   silently continuing: exit 0 means it synchronized successfully; any other exit code is a real
+   failure — say so before proceeding, don't let Step 2 quietly read stale voice data as if the pull
+   had happened.
+2. Do not read `AUTHOR_VOICE.md` into the prompt. The shared voice bundle in `${CLAUDE_PLUGIN_DATA}/voice/`
+   is loaded by `aw draft` and `aw synthesize` for every drafting/synthesis call.
 3. The drafting prompt (`aw draft`'s `write-draft.md`) is written to weight `## Academic-specific`
    rules higher when they conflict with `## Core voice` rules; everything else applies as written.
 

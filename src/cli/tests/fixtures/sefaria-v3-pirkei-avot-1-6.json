@@ -1,0 +1,15 @@
+{
+  "ref": "Pirkei Avot 1:6",
+  "versions": [
+    {
+      "language": "en",
+      "versionTitle": "English Test Version",
+      "text": ["Joshua ben Perachiah and Nittai the Arbelite received from them."]
+    },
+    {
+      "language": "he",
+      "versionTitle": "Mishnah, Hebrew Test Version",
+      "text": [["יְהוֹשֻׁעַ בֶּן פְּרַחְיָה וְנִתַּאי הָאַרְבֵּלִי קִבְּלוּ מֵהֶם.", "יְהוֹשֻׁעַ בֶּן פְּרַחְיָה אוֹמֵר, <b>עֲשֵׂה לְךָ רַב</b>, וּקְנֵה לְךָ חָבֵר, וֶהֱוֵי דָן אֶת כָּל הָאָדָם לְכַף זְכוּת."]]
+    }
+  ]
+}
