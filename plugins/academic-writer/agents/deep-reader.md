@@ -160,8 +160,11 @@ This step is mandatory before Step 2 (the structured summary). The architect age
 
 For each major theme in the assignment (e.g. prayer, redemption, silence, intercession), run a cross-source search:
 
+The `ck` CLI has no search subcommand. Read each selected source once and grep the text locally:
+
 ```bash
-ck items search "THEME_KEYWORD" --limit 20
+ck items read "DOC_ID:all" --no-session > /tmp/src-DOC_ID.txt
+grep -n -i "THEME_KEYWORD" /tmp/src-DOC_ID.txt | head -20
 ```
 
 Collect every result. Flag themes that appear in sources you initially marked as having only PARTIAL COVERAGE or as GAPS — they may have more content than the targeted read revealed.
