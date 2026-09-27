@@ -133,7 +133,7 @@ def create_template_with_footnotes(template_path="footnote_template.docx"):
     spacing.set("{%s}after" % w_ns, "0")
     spacing.set("{%s}line" % w_ns, "240")
     spacing.set("{%s}lineRule" % w_ns, "auto")
-    etree.SubElement(fn_text_pPr, "{%s}jc" % w_ns).set("{%s}val" % w_ns, "right")
+    # No w:jc for RTL footnotes: jc=right in a bidi paragraph renders LEFT in Word.
     fn_text_rPr = etree.SubElement(fn_text_style, "{%s}rPr" % w_ns)
     etree.SubElement(fn_text_rPr, "{%s}sz" % w_ns).set("{%s}val" % w_ns, "20")
     etree.SubElement(fn_text_rPr, "{%s}szCs" % w_ns).set("{%s}val" % w_ns, "20")

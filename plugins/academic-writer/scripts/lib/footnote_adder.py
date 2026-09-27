@@ -113,8 +113,8 @@ class FootnoteAdder:
                 if self.is_rtl:
                     bidi_el = etree.SubElement(pPr, "{%s}bidi" % w_ns)
                     bidi_el.set("{%s}val" % w_ns, "1")
-                    jc_el = etree.SubElement(pPr, "{%s}jc" % w_ns)
-                    jc_el.set("{%s}val" % w_ns, "right")
+                    # No w:jc: in a <w:bidi/> paragraph Word renders jc="right" at the
+                    # LEFT margin; the bidi default (start) is the right margin.
 
                 # Footnote reference mark (superscript via FootnoteReference style)
                 r1 = etree.SubElement(p, "{%s}r" % w_ns)
