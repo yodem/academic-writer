@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Feature inventory for the academic-writer plugin. A checklist for future audits: each top-level feature lists its subfeatures, the source of truth, runtime status, and known issues. status: ok | partial | broken | missing. Regenerate/extend this file whenever features are added or removed.",
-  "generatedAt": "2026-08-09T10:12:00Z",
+  "generatedAt": "2026-10-01T00:00:00Z",
   "pluginVersion": "0.14.0",
   "features": [
     {
@@ -10,6 +10,8 @@
       "sources": [
         "src/skills/init/SKILL.md",
         "src/skills/setup/SKILL.md",
+        "src/skills/setup/references/gemini-key.md",
+        "src/skills/setup/references/dependencies.md",
         "src/skills/init/references/profile-schema.md",
         "src/skills/init/references/integration-setup.md"
       ],
@@ -22,9 +24,9 @@
         },
         {
           "id": "setup-quick",
-          "name": "setup skill — standalone interview-driven onboarding wizard (Gemini key incl. live-tested GOOGLE_API_KEY, Python deps, optional CandleKeep/NotebookLM detection, sample-paragraph checkpoint)",
+          "name": "setup skill — one-question-at-a-time first-run wizard (basics, dependency check, ask-before-install per tool, Gemini key walkthrough per OS with a live check after restart, sample paragraph)",
           "status": "ok",
-          "issue": "Reworked in commit 97594b9 (a3): setup is no longer a thin wrapper delegating to init --quick. It is user-invocable: true (src/skills/setup/SKILL.md:4) and a full independent 267-line, one-question-at-a-time wizard with its own preflight, Gemini key live-test via mcp__gemini-api__gemini_raw, and closing profile summary; init/SKILL.md:12 and setup/SKILL.md:13 cross-reference each other for the deeper vs quick path instead of one delegating to the other. Both remain safe to re-run and interoperate via the shared profile schema. Step 3 (Gemini API key) now offers plugin configuration (claude plugin install/config --config google_api_key=...) as the recommended, securely-stored option alongside the pre-existing env-var and secrets.json choices; init/SKILL.md Phase 3.5 mirrors the same three options for consistency."
+          "issue": "Rewritten in the 0.15.0 cycle: setup saves profile.md in Step 2 (the SessionStart hook exports GOOGLE_API_KEY only when it exists), installs each missing tool only after an AskUserQuestion 'Install', never asks for the key in chat, and stores it via plugin settings (keychain) or a shell/user environment variable. The key check is `aw models check` plus a curl to the Gemini models list with the key in a header. The old gemini_raw MCP probe and the .academic-helper/secrets.json option are gone (aw reads only GOOGLE_API_KEY). Open: setup's 'No, Claude only' choice leaves every aw model step (all Gemini-routed) unable to run."
         },
         {
           "id": "integration-detect",
@@ -52,58 +54,55 @@
     },
     {
       "id": "voice",
-      "name": "Voice subsystem (author style profile)",
+      "name": "Voice subsystem (one shared author voice store)",
       "sources": [
         "src/skills/voice/SKILL.md",
         "src/skills/voice/voice-sync.sh",
         "src/skills/voice/voice-migrate.sh",
-        "src/skills/voice/questions-academic.md",
-        "src/agents/voice-miner.md",
-        "src/agents/voice-distiller.md",
-        "src/agents/voice-calibrator.md",
-        "src/agents/voice-interviewer.md",
-        "AUTHOR_VOICE.md"
+        "src/cli/src/voice.ts",
+        "src/scripts/check-voice-populated.py",
+        "src/hooks/src/lifecycle/voice-pull.ts"
       ],
       "status": "partial",
       "subfeatures": [
         {
-          "id": "stage1-mine",
-          "name": "Stage 1: voice-miner reads corpus → fingerprint.md",
+          "id": "voice-migrate",
+          "name": "aw voice migrate: import AUTHOR_VOICE.md / fingerprint / exemplars into ${CLAUDE_PLUGIN_DATA}/voice",
           "status": "ok"
         },
         {
-          "id": "stage1-distill",
-          "name": "voice-distiller seeds AUTHOR_VOICE.md",
+          "id": "voice-exemplars",
+          "name": "aw voice exemplars: author picks thresholds.json voice.selection paragraphs from past-articles/",
           "status": "ok"
         },
         {
-          "id": "stage2-interview",
-          "name": "Stage 2: 7-session adversarial interview",
-          "status": "ok"
-        },
-        {
-          "id": "voice-calibrate",
-          "name": "voice-calibrator model comparison gate",
+          "id": "voice-moves",
+          "name": "aw voice moves: one Gemini call derives rules.md (writing moves)",
           "status": "ok"
         },
         {
           "id": "cross-project-share",
-          "name": "Share one author's voice across projects",
-          "status": "ok",
-          "issue": "Sync is now keyed by the stable author_key field in .academic-helper/profile.md (derived from the researcher's name during init, confirmed via AskUserQuestion); voice-sync.sh fails loudly (exit 1, no silent <unknown> fallback) if author_key is missing. Still CandleKeep-only for cross-project persistence, which is expected given the no-$HOME rule"
+          "name": "One voice store in the plugin data dir, shared by all projects and keyed by author_key",
+          "status": "ok"
         },
         {
           "id": "candlekeep-sync",
-          "name": "voice-sync.sh pull/push (last-write-wins)",
+          "name": "voice-sync.sh pull/push (last-write-wins, CHANGELOG.jsonl merge)",
           "status": "ok"
         },
         {
           "id": "legacy-migrate",
           "name": "voice-migrate.sh legacy AUTHOR_VOICE migration",
           "status": "ok"
+        },
+        {
+          "id": "write-voice-gate",
+          "name": "write stops unless check-voice-populated.py passes on AUTHOR_VOICE.md",
+          "status": "partial",
+          "notes": "unverified — needs an owner to confirm: the write gate checks a project-root AUTHOR_VOICE.md, while the voice skill writes its store to ${CLAUDE_PLUGIN_DATA}/voice and voiceMigrate reads AUTHOR_VOICE.md as input; it is not confirmed that a first-time author with no AUTHOR_VOICE.md can pass the gate by running /academic-writer:voice."
         }
       ],
-      "notes": "unverified — needs an owner to confirm what is missing. Every one of this feature's 7 listed subfeatures is status ok; no code, test, or doc found (grepped src/skills/voice/, src/agents/voice-*.md, docs/) identifies a concrete gap at the parent level beyond its children."
+      "notes": "Parent is partial because of the write-voice-gate subfeature (see its notes). The 7-session interview and the voice-miner/distiller/calibrator/interviewer agents were removed in 0.14.0."
     },
     {
       "id": "research",
@@ -111,13 +110,13 @@
       "sources": [
         "src/skills/research/SKILL.md",
         "src/skills/ideate/SKILL.md",
-        "src/agents/deep-reader.md"
+        "src/cli/src/evidence.ts"
       ],
       "status": "ok",
       "subfeatures": [
         {
-          "id": "deep-read",
-          "name": "deep-reader explores sources → sources.json registry",
+          "id": "evidence-build",
+          "name": "aw evidence build: verbatim-checked passages → .academic-helper/evidence.json (replaces the deep-reader agent)",
           "status": "ok"
         },
         {
@@ -155,7 +154,7 @@
           "name": "Mode B: structured outline + word/paragraph sizing",
           "status": "partial",
           "issue": "Sections exceeding thresholds.json writerUnit.maxWords are now decomposed into a units[] array of writer-unit subsections sized within writerUnit.minWords-maxWords (target writerUnit.targetWords), adjacent tiny units merged; decomposition is prompt-enforced (markdown agent instructions), not code-enforced",
-          "notes": "The units[] word-bound decomposition (thresholds.json writerUnit.minWords/maxWords/targetWords) is enforced only by prose instructions in src/agents/architect.md (lines ~91-101) — no script validates it and no such script exists under src/scripts/. src/skills/write/SKILL.md Step 5.5 (\"Argument Graph Validation\") checks orphan claims, depends_on cycles, and topological ordering, but never checks that a unit's word count actually falls in range or that adjacent tiny units were merged — verified by reading both files."
+          "notes": "The units[] word-bound decomposition (thresholds.json writerUnit.minWords/maxWords/targetWords) is enforced only by prose instructions in src/agents/architect.md (lines ~91-101) — no script validates it and no such script exists under src/scripts/. The current write flow validates the outline with `gate.py outline-v2` and checks drafted length with `aw draft`'s word-bounds gate; whether outline-time sizing and tiny-unit merging are checked anywhere is unverified."
         },
         {
           "id": "evidence-ownership",
@@ -248,7 +247,8 @@
       "id": "synthesis",
       "name": "Post-section synthesis + review",
       "sources": [
-        "src/agents/synthesizer.md",
+        "src/cli/src/synthesize.ts",
+        "src/cli/src/prompts/write-synthesize.md",
         "src/skills/review/SKILL.md",
         "src/skills/review/references/scorecard.json"
       ],
@@ -258,7 +258,7 @@
           "id": "coherence",
           "name": "Cross-section and unit-to-unit coherence/flow review",
           "status": "ok",
-          "issue": "synthesizer.md now checks Argument Graph Fidelity — that delivered prose actually advances each unit/section's declared claim, that depends_on dependencies are built upon in the text (not just declared in the outline), and that the thesis_link chain genuinely reaches the thesis in the final prose; also checks subsection-to-subsection (unit-to-unit) transitions within a section, not only section-to-section"
+          "issue": "Now aw synthesize: reads drafts in outline order and applies paragraph-level transition edits only, citations untouched (src/cli/src/synthesize.ts). The argument-graph fidelity checks described for the removed synthesizer agent are not confirmed in the current prompt."
         },
         {
           "id": "full-repetition",
@@ -276,7 +276,7 @@
           "status": "ok"
         }
       ],
-      "notes": "No automated test (pytest or e2e) exercises src/agents/synthesizer.md or src/skills/review/SKILL.md's scorecard logic — grepped tests/ and tests/e2e/ for 'synth' and 'review', 0 behavioral hits; tests/test_plugin_structure.py only checks that synthesizer.md exists and is on the agent whitelist, not that its coherence/repetition/abstract checks do anything correct."
+      "notes": "No automated test exercises src/skills/review/SKILL.md's scorecard logic; the synthesizer agent was replaced in 0.14.0 by aw synthesize (paragraph-level transition edits), whose coherence checks beyond transitions are unverified."
     },
     {
       "id": "anti-ai-references",
@@ -337,8 +337,8 @@
           "id": "citation-formats",
           "name": "inline-parenthetical / chicago / mla / apa",
           "status": "partial",
-          "issue": "Gemini prompt inline-parenthetical example uses (Author Year, page), contradicting Hebrew (name, עמ' N) no-year rule",
-          "notes": "The Hebrew no-year fix (\"(מחבר, עמ' N)\" vs \"(Author Year, page)\") landed only in plugins/academic-writer/mcp/gemini-server/src/tools/write_section.ts (verified by grep). gemini_edit and gemini_synthesize (src/tools/edit.ts, src/tools/synthesize.ts) contain no citation-style-aware prompt logic at all, so a synthesis or edit pass through Gemini does not enforce the same Hebrew no-year rule that write_section.ts now does."
+          "issue": "Hebrew inline-parenthetical citations omit the year ((מחבר, עמ' N)); coverage of that rule differs by prompt.",
+          "notes": "The Gemini MCP server named in earlier notes was removed in 0.14.0. write-synthesize.md recognises Hebrew no-year citations; write-draft.md cites with [^KEY] footnote markers and has no style-specific rule; aw edit only preserves citations. No test asserts the Hebrew no-year form in generated output."
         }
       ]
     },

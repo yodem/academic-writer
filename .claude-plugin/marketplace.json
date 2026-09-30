@@ -8,13 +8,13 @@
     "name": "Yotam Fromm"
   },
   "metadata": {
-    "description": "Academic writing plugin with 6 agents, 15 skills, and TypeScript hooks for citation-verified article generation.",
+    "description": "Academic writing plugin for Humanities researchers: citation-verified articles in Hebrew or English, delivered as Word files.",
     "pluginRoot": "./plugins"
   },
   "plugins": [
     {
       "name": "academic-writer",
-      "description": "AI-first academic writing assistant — 6 agents, 15 skills, TypeScript hooks for Humanities researchers.",
+      "description": "AI-first academic writing assistant for Humanities researchers: drafts in your voice from your own sources, checks every citation, and delivers a .docx you can revise from Word comments.",
       "version": "0.14.0",
       "author": {
         "name": "Yotam Fromm"

@@ -1,196 +1,106 @@
-# Academic Writer — First-Time User Flow
+# Academic Writer: your first session
 
-A step-by-step guide for a professor using Academic Writer for the first time.
-
----
-
-## Overview
-
-The first session has two phases:
-
-1. **Setup** (`/academic-writer-init`) — one-time profile creation (~15 minutes)
-2. **Write** (`/academic-writer`) — write your first article (30–60 minutes depending on length)
-
-You only run `/academic-writer-init` once. After that, just use `/academic-writer` whenever you want to write.
+A step-by-step walkthrough for a researcher using Academic Writer for the first time, from install to a first Word draft. The same steps, with more detail on each, are in the offline guide: type `/academic-writer:intro` in Claude Code.
 
 ---
 
-## Phase 1: Setup
+## Before you start
 
-Setup has two parts:
-1. **`npx academic-writer-setup`** — interactive CLI in your terminal (2 minutes)
-2. **`/academic-writer-init`** — Claude analyzes your writing style (10 minutes)
+- **Claude Code** installed ([claude.com/claude-code](https://claude.com/claude-code)).
+- **A Google account**, for a free Gemini API key. Setup shows you how to get it.
+- **Microsoft Word** or a compatible program.
+- Optional but recommended: **5 to 10 of your published papers** (PDF or Word), so the plugin can learn your style, and **your source texts** as PDFs.
 
-### Before you start
-
-Gather these:
-- **5–10 of your published papers** (PDF or DOCX) — the system analyzes these to learn your writing style
-- **Your research source PDFs** — the books and articles you cite in your work
-
-### Part A: Interactive CLI (`npx academic-writer-setup`)
-
-Run this in the Academic Helper folder:
-
-```bash
-npx academic-writer-setup
-```
-
-An interactive terminal wizard walks you through with arrow-key prompts:
-
-#### 1. Field of study
-
-Example: "Early Modern Jewish Philosophy" or "Ottoman Palestine History". Be specific.
-
-#### 2. Article language
-
-Hebrew, English, or another language. This is enforced throughout — the system flags any foreign-language text that sneaks into your prose.
-
-#### 3. Citation style
-
-| Option | Format | Best for |
-|--------|--------|----------|
-| Inline Parenthetical | (Author, Title, p. N) in text | Hebrew articles |
-| Chicago/Turabian | Footnotes | English Humanities |
-| MLA | In-text citations | Literature |
-| APA | Author-date | Social sciences |
-
-#### 4. Data services
-
-The CLI auto-detects which tools you have installed and lets you toggle them:
-
-| Tool | What it does | Required? |
-|------|-------------|-----------|
-| **Candlekeep** | Cloud library for your source PDFs | Recommended |
-| **Cognetivy** | Tracks every step (audit trail) | Recommended |
-
-You can change these later with `/academic-writer-update-tools`.
-
-The CLI creates your folders (`past-articles/`, `.academic-writer/`) and saves a starter profile.
-
-### Part B: Style Analysis (`/academic-writer-init`)
-
-Now open Claude Code in this folder. Drop 5–10 of your published papers into `past-articles/`, then run:
-
-```
-/academic-writer-init
-```
-
-Claude reads your papers and builds a **Style Fingerprint** — a detailed profile of how you write:
-
-- Sentence length and structure patterns
-- Vocabulary and academic register
-- How you build paragraphs (topic sentence, evidence, analysis)
-- Your tone and authorial stance
-- Transition phrases you prefer
-- Citation density and integration style
-- How you open and close articles
-- 5 representative excerpts as style targets
-
-**You review the fingerprint** and can correct anything before it's saved.
-
-If you enabled Candlekeep, Claude also helps you index your research sources:
-- Upload your source PDFs: `ck items add your-source.pdf`
-- The system enriches each document (extracts title, author, table of contents)
-
-When done, your profile is complete. Run `/academic-writer` whenever you're ready to write.
+Plan on about ten minutes for setup, a little more for init, and 30 to 60 minutes for a first article, depending on length.
 
 ---
 
-## Phase 2: Writing Your First Article (`/academic-writer`)
+## 1. Install (once)
 
-### The conversational phase (you + AI together)
+In Claude Code, type each line and press Enter:
 
-#### Step 1: Describe your topic
+```text
+/plugin marketplace add yodem/academic-writer
+/plugin install academic-writer@yodem
+```
 
-Tell the system what you want to write about. Be as detailed or as vague as you like — it will ask follow-up questions.
+Quit Claude Code and open it again **inside your research folder**. The plugin keeps one profile per folder, so always start Claude Code from the same folder for the same project.
 
-#### Step 2: Select sources
+---
 
-The system shows your indexed sources. Pick which ones are relevant for this article (by name, number, or "all").
+## 2. Setup: `/academic-writer:setup`
 
-#### Step 3: Deep read
+A short conversation, one question at a time.
 
-An AI agent reads through your selected sources, mapping:
-- Key arguments and claims
-- Available evidence
-- Gaps in the material
-- Connections between sources
+1. **Your field, article language and citation style.** Styles offered: Inline Parenthetical (common for Hebrew), Chicago / Turabian, MLA and APA. Setup saves a starter profile to `.academic-helper/profile.md` right away.
+2. **A check of the tools the plugin needs.** You see a table of what is found and what is missing: Python 3, its add-ons, the Hebrew spelling checker hspell (Hebrew writers only), and the optional CandleKeep and NotebookLM. For each missing piece, setup says what it is for and **asks before installing it**. Python itself and Homebrew you install yourself; setup gives numbered steps for your system. Skipping something never blocks setup.
+3. **Gemini.** Setup explains what Gemini is, that your article text is sent to Google when it is on, and why the key must not be pasted into the chat. If you say yes, it walks you through getting a free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) and storing it, either in the plugin settings (`/plugin` → **Installed** → **academic-writer** → **Configure** → **google_api_key**, kept in your keychain) or as an environment variable.
+4. **Restart.** Quit Claude Code, open it again in the same folder, run `/academic-writer:setup` again and choose **Check my Gemini key**. Setup tests the key without sending any article text.
+5. **A sample paragraph**, so you can see the tone, and a summary table of what is ready.
 
-This happens automatically. You wait for results.
+Gemini is technically optional, but in this version drafting, evidence extraction, proofreading and OCR all run on Gemini. Without a key, those steps stop with a "missing Google API key" message.
 
-#### Step 4: Thesis proposals
+---
 
-Based on what the deep reader found, the system proposes 2–3 possible thesis statements. You:
-- Pick one
-- Modify one
-- Or state your own
+## 3. Your style and sources: `/academic-writer:init`
 
-#### Step 5: Outline
+Put your published papers into the `past-articles` folder that setup created, then run `/academic-writer:init`.
 
-The system generates a structured outline with section titles, roles, and suggested sources per section. You can:
-- Reorder sections
-- Add or remove sections
-- Adjust the scope
+- It asks your full name (used as the key for your voice profile), confirms field, language and citation style, and which languages you want abstracts in.
+- It reads your papers and builds a **style fingerprint**: sentence length and structure, vocabulary and register, how you build paragraphs, your tone and stance, preferred transitions, citation density, and how you open and close. **You review it and correct anything** before it is saved.
+- It sets up your **voice profile** (a set of 12 to 20 paragraphs from your papers that you pick as examples of your writing), or reuses the one you already have. The voice profile is shared by all your projects.
+- If you use CandleKeep, it helps you add and list your sources.
 
-When you're satisfied, say "go" or "looks good."
+`/academic-writer:init --quick` does a faster version: no computed style analysis, no voice setup, no sources.
 
-### The autonomous phase (AI writes, you wait)
+Before your first article, `/academic-writer:write` checks that your voice profile exists. If it does not, it asks you to run `/academic-writer:voice`.
 
-#### Step 6: Source ingestion
+---
 
-Selected sources are synced to the search engine for fast retrieval during writing.
+## 4. Your first article: `/academic-writer:write`
 
-#### Step 7: Parallel section writing
+**The conversation (you decide):**
 
-One AI agent writes each section **simultaneously**. Every single paragraph goes through a 7-step quality pipeline:
+1. Describe the topic and choose the language.
+2. Pick the sources for this article.
+3. State your thesis in your own words. If you used `/academic-writer:ideate` first, its research brief is the starting point.
+4. The plugin extracts **verified evidence**: passages whose quotations match the source word for word. You can mark passages that must appear.
+5. Shape the outline together. You approve each section's claim; drafting does not start until every claim is approved.
 
-| # | Check | What happens |
-|---|-------|-------------|
-| 1 | **Draft** | Searches your sources, writes using ONLY retrieved evidence |
-| 2 | **Style compliance** | Scores against your fingerprint on 10 dimensions, fixes deviations |
-| 3 | **Hebrew grammar** | Checks grammar, spelling, academic register |
-| 4 | **Academic language** | Upgrades vocabulary, checks linking word usage |
-| 5 | **Language purity** | Removes any embedded foreign-language text |
-| 6 | **Repetition check** | Catches repeated words, phrases, and arguments |
-| 7 | **Citation audit** | Verifies every citation against your actual sources (hard gate — fails if unverified) |
+**The drafting (the plugin works, you wait):**
 
-If a citation can't be verified, the paragraph is rewritten (up to 3 attempts). Nothing fabricated makes it through.
+6. Gemini drafts each section in dependency order, in your style, with the introduction and conclusion last. Automatic checks reject any draft that cites a source not on your list, quotes text not in the verified evidence, or breaks your style rules or length limits.
+7. Claude checks every paragraph's citations. Failed paragraphs are rewritten; any that still fail after the allowed attempts are marked `[NEEDS REVIEW]` and named in the final report.
+8. A synthesis pass adds transitions between paragraphs. It never rewrites a paragraph and never changes a citation.
+9. You get a `.docx` with Word footnotes. Claude tells you where it is.
 
-#### Step 8: Synthesis
+**Then:**
 
-A final editor reviews the complete article for:
-- Argument coherence across sections
-- Logical flow and transitions
-- Full-article style compliance
-- Cross-section repetition
-- Introduction and conclusion conventions
-
-#### Step 9: Output
-
-The finished article is saved as a `.docx` file on your Desktop with your preferred formatting (font, size, spacing, margins, RTL).
-
-You receive a quality report showing every check that was applied.
+10. Open it in Word, add comments or tracked changes, save, and run `/academic-writer:revise`. It groups your comments, asks you to confirm each group, updates the article and makes a new Word file.
 
 ---
 
 ## After your first article
 
-| Command | When to use |
-|---------|------------|
-| `/academic-writer` | Write another article |
-| `/academic-writer-edit` | Revise a previously written article |
-| `/academic-writer-edit-section` | Quick fix for a single section |
-| `/academic-writer-research` | Ask questions about your sources |
-| `/academic-writer-health` | Check if everything is working |
-| `/academic-writer-update-tools` | Add or remove integrations |
-| `/academic-writer-update-field` | Change your field of study |
+| Command | When to use it |
+|---|---|
+| `/academic-writer:write` | Start another article. |
+| `/academic-writer:revise` | Fold your Word comments back into the article. |
+| `/academic-writer:edit` | Larger revisions: several passages, tone, structure, evidence. |
+| `/academic-writer:edit-section` | A quick fix to one section. |
+| `/academic-writer:proofread` | A final typo, language and editorial pass before submission. |
+| `/academic-writer:review` | A six-dimension scorecard of the finished article. |
+| `/academic-writer:research` | Check a claim or explore a topic in your sources. |
+| `/academic-writer:health` | Check that everything still works, with a fix for anything missing. |
+| `/academic-writer:help` | The short command list. |
+
+To change your field or turn CandleKeep or NotebookLM on or off, ask in plain words ("change my field to ...", "turn on CandleKeep"); Claude updates the profile.
 
 ---
 
-## What you can trust
+## What you can rely on
 
-1. **No fabricated citations** — every claim is verified against your actual sources
-2. **No invented page numbers** — confirmed via search + direct document reads
-3. **Your voice** — every paragraph checked against your style fingerprint
-4. **Full transparency** — every step logged to Cognetivy audit trail
-5. **Your data stays local** — past articles are never uploaded anywhere
+1. **Citations come from your sources.** Drafts may quote only verified passages, code checks reject unknown sources and unverified quotes, and Claude audits every paragraph. Anything still unresolved is marked for you, never passed silently.
+2. **Your thesis is yours.** The plugin records it exactly as you wrote it and does not draft until you approve the outline.
+3. **Your original files are not overwritten.** Proofreading writes a separate corrected copy; revise makes a new Word file.
+4. **You know what leaves your computer.** Conversation and the text Claude reads go to Anthropic; with Gemini on, drafted text and the source passages it uses go to Google. Details: the Privacy section of the [README](../README.md#privacy).

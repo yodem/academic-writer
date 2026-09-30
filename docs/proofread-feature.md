@@ -1,5 +1,14 @@
 # Proofread (הגהה) feature — build record
 
+> **Historical record.** This page documents how the proofread feature was designed and built in
+> 2026-06 to 2026-09. It is not a description of the current code. Since 0.14.0,
+> `/academic-writer:proofread` runs the `aw proofread` pipeline (`src/cli/src/proofread.ts`): a
+> deterministic must-catch pass, a Gemini finder, a batched meaning check, and an editorial memo,
+> writing `proofed.md`, `report.md`, `memo.md` and `changes.json` to an output folder, plus
+> `proofed.docx` with real tracked changes for Word input (`src/scripts/build-tracked-docx.py`).
+> The `proofreader` and `section-writer` agents named below were removed in 0.14.0. For current
+> behaviour, read `src/skills/proofread/SKILL.md`.
+
 **Date:** 2026-06-07 · **Version:** proofread skill v0.1.0
 **Decision:** Option A (markdown report) + mechanical-only, per user.
 **Modeled on:** `hebrew-book-producer`'s proof subsystem (`/proof` → `proofreader` agent → `changes-schema` → DOCX suggestions).
@@ -75,7 +84,9 @@ Two parallel ork reviewers (code-quality + system-design) ran against the workin
 
 Re-verified after fixes: `npm run build` → exit 0; `python3 tests/test_plugin_structure.py` → 26 tests pass.
 
-## Future upgrade path (Option B, not built)
+## Future upgrade path (Option B, not built at the time)
+
+> Since built: `changes.json` (`src/skills/proofread/references/changes-schema.json`) and native Word tracked changes via `src/scripts/build-tracked-docx.py`.
 
 `changes.json` schema + DOCX native tracked-changes renderer + `/apply` accept/reject round-trip. Feasible — `generate-docx.py` already manipulates raw OXML (`OxmlElement`), so Word `w:ins`/`w:del`/comments are reachable with the existing `python-docx` + `lxml` stack. Only the report-rendering layer would change; the `proofreader` agent's output is already a structured change list.
 

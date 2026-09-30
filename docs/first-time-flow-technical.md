@@ -1,342 +1,133 @@
-# Academic Writer — First-Time Flow (Technical Reference)
+# First-time flow: technical reference
 
-Machine-readable specification of the first-time user flow. For AI agents, plugin developers, and automated testing.
-
----
-
-## Flow Diagram
-
-```
-npx academic-writer-setup       (interactive CLI — runs in terminal, no Claude needed)
-    |
-    v
-[CLI Step 1] Prompt: fieldOfStudy (text input, min 3 chars)
-    |
-    v
-[CLI Step 2] Prompt: targetLanguage (select: Hebrew | English | other)
-    |
-    v
-[CLI Step 3] Prompt: citationStyle (select: inline-parenthetical | chicago | mla | apa)
-    |
-    v
-[CLI Step 4] Auto-detect tools (ck, cognetivy)
-    |           Prompt: multiselect which to enable
-    v
-[CLI Output] mkdir past-articles/ .academic-writer/ .cognetivy/
-    |          Write .academic-writer/profile.json (starter — no fingerprint yet)
-    |          Print: "Now run /academic-writer-init in Claude Code"
-    v
-
-/academic-writer-init            (runs in Claude Code — analyzes writing style)
-    |
-    v
-[Step 0] Check existing profile (from CLI) → load or start fresh
-    |
-    v
-[Step 3] User drops 5-10 papers into past-articles/
-    |    Read PDFs/DOCX → extract text
-    |    Analyze → build styleFingerprint (25 dimensions, 8 categories)
-    |    Analyze → build articleStructure (sections, intro/conclusion conventions, paragraph formula)
-    |    Present to user → user reviews and corrects
-    v
-[Step 4] If candlekeep.enabled:
-    |        User uploads sources: ck items add <file>
-    |        List (shelf-scoped): ck items list --shelf
-    |        Build sources[] array (id, title, type)
-    |    Else:
-    |        sources = []
-    v
-[Step 5] Update .academic-writer/profile.json
-    |    Adds: styleFingerprint, articleStructure, sources
-    |    Preserves: fieldOfStudy, targetLanguage, citationStyle,
-    |               outputFormatPreferences, tools (from CLI)
-    v
-[Confirmation] Print summary → user is ready for /academic-writer
-
-========================================================================
-
-/academic-writer
-    |
-    v
-[Load] Read .academic-writer/profile.json
-    |   If missing → STOP, tell user: /academic-writer-init
-    |   Extract: styleFingerprint, tools, articleStructure, citationStyle
-    |   Print fingerprint summary
-    v
-[Cognetivy] If tools.cognetivy.enabled:
-    |            cognetivy run start → store RUN_ID
-    |            All subsequent steps log to RUN_ID
-    v
-
-=== PHASE 1: CONVERSATIONAL (human-in-the-loop) ===
-
-[Step 1: Subject]
-    |   Ask user: topic, angle, ideas
-    |   Ask user: targetLanguage for this article
-    |   Log: step_completed/subject_selection
-    v
-[Step 2: Source Selection]
-    |   If candlekeep.enabled:
-    |       ck items list [--shelf <active>] --json
-    |   Else:
-    |       Use profile.sources[]
-    |   Present list → user picks sources
-    |   Store: selectedSourceIds[]
-    |   Log: step_completed/source_selection
-    v
-[Step 3: Deep Read]
-    |   SPAWN: Agent tool → deep-reader subagent
-    |       Input: subject, selectedSourceIds, runId, tools
-    |       deep-reader queries:
-    |           If candlekeep.enabled: ck items read "ID:pages"
-    |       Output: retrieved passages, evidence map, gaps
-    |   WAIT for deep-reader to return
-    |   Log: step_completed/deep_read
-    v
-[Step 4: Thesis Proposal]
-    |   SPAWN: Agent tool → architect subagent
-    |       Input: subject, deep read results, runId, targetLanguage
-    |       Output: 2-3 thesis proposals with supporting sources
-    |   Present to user → user picks/modifies/writes own
-    |   Store: approvedThesis
-    |   Log: step_completed/thesis_proposal
-    v
-[Step 5: Outline]
-    |   SPAWN: Agent tool → architect subagent (again)
-    |       Input: approvedThesis, deep read results, runId, articleStructure
-    |       Output: structured outline (sections with titles, roles, sources, paragraph counts)
-    |   Present to user → user reorders/adds/removes
-    |   Loop until user approves ("go", "looks good")
-    |   Store: approvedOutline
-    |   Log: step_completed/outline
-    v
-
-=== PHASE 2: AUTONOMOUS (no human input) ===
-
-[Step 6: Parallel Section Writing]
-    |   FOR EACH section in approvedOutline:
-    |       SPAWN: Agent tool → section-writer subagent (ALL in parallel)
-    |           Input: {
-    |               section, sectionIndex, totalSections, thesis,
-    |               styleFingerprint (COMPLETE object),
-    |               articleStructure, citationStyle, targetLanguage,
-    |               linkingWords (from words.txt), runId, tools,
-    |               priorSectionTexts, outlineOverview
-    |           }
-    |
-    |   EACH section-writer runs PER PARAGRAPH:
-    |       Skill 1: DRAFT
-    |           Read relevant Candlekeep passages (MANDATORY)
-    |           Write paragraph using ONLY retrieved content
-    |           Log: section_N_p_M_draft
-    |       Skill 2: STYLE COMPLIANCE
-    |           Score paragraph on 10 fingerprint dimensions
-    |           Compare to representativeExcerpts
-    |           Fix deviations (target: avg >= 4/5)
-    |           Log: section_N_p_M_style_compliance
-    |       Skill 3: HEBREW GRAMMAR
-    |           Check grammar, spelling, punctuation, academic register
-    |           Log: section_N_p_M_hebrew_grammar
-    |       Skill 4: ACADEMIC LANGUAGE & LINKING WORDS
-    |           Upgrade colloquial vocabulary
-    |           Check linking word usage (from words.txt categories)
-    |           Ensure 2+ linking words per 3+ sentence paragraph
-    |           Log: section_N_p_M_academic_language
-    |       Skill 5: LANGUAGE PURITY
-    |           Detect ALL embedded foreign-language terms
-    |           Replace with target-language equivalent, transliteration, or footnote
-    |           Log: section_N_p_M_language_purity
-    |       Skill 6: REPETITION CHECK
-    |           Check words, phrases, arguments vs. priorSectionTexts + prior paragraphs
-    |           Fix with synonyms or restructuring
-    |           Log: section_N_p_M_repetition_check
-    |       Skill 7: CITATION AUDIT (HARD GATE)
-    |           SPAWN: Agent tool → auditor subagent
-    |               Input: paragraph, runId, sectionIndex, paragraphIndex, tools
-    |               Auditor verifies EVERY citation:
-    |                   If candlekeep.enabled: ck items read "ID:page-page"
-    |               Output: PASS or REJECT (with reason)
-    |           If REJECT:
-    |               Rewrite paragraph → re-run skills 1-7 (max 3 attempts)
-    |               If still failing after 3 → flag for researcher review
-    |           Log: section_N_p_M_citation_audit
-    |
-    |   WAIT for all section-writers to complete
-    |   Collect: allSectionTexts[]
-    v
-[Step 8: Synthesis]
-    |   SPAWN: Agent tool → synthesizer subagent
-    |       Input: allSectionTexts, thesis, styleFingerprint (COMPLETE),
-    |              articleStructure, linkingWords, runId, tools
-    |
-    |   Phase A — Synthesis Review (node: synthesize):
-    |       Check introduction structure (opens with "במאמר זה", has roadmap)
-    |       Check conclusion structure (opens with "לסיכום", recaps, widens)
-    |       Argument coherence across sections
-    |       Logical flow and transitions
-    |       Full-article fingerprint compliance (all dimensions)
-    |       Academic language + linking words (full article)
-    |       RTL punctuation (Hebrew)
-    |       Redundancies and gaps
-    |       Language purity (final sweep)
-    |       SURGICAL EDITS ONLY — never rewrite full paragraphs
-    |       NEVER change or remove citations
-    |
-    |   Phase B — Repetition Check (node: synthesize_repetition_check):
-    |       Cross-section argument repetition
-    |       Cross-section phrase repetition (5+ words)
-    |       Opening sentence pattern repetition
-    |       Transition phrase reuse (max 2x per article)
-    |       Evidence reuse (same source for same purpose)
-    |
-    |   Output: revised article + revision notes
-    v
-[Step 9: DOCX Output]
-    |   Read profile.outputFormatPreferences (or defaults):
-    |       Font: David (Hebrew) / Times New Roman (English)
-    |       Body: 11pt, Heading: 13pt, Title: 16pt
-    |       Line spacing: 1.5, Margins: 1", Alignment: justify
-    |       RTL: true (Hebrew) / false (English)
-    |   Generate .docx via python-docx:
-    |       Title (bold, centered) → thesis (italic, centered) → sections → page numbers
-    |   Save to ~/Desktop/<subject>.docx
-    |   Log: step_completed/docx_output
-    |   Log: run_completed
-    |   Print quality report to user
-    v
-[DONE]
-```
+What happens, in code, between installing the plugin and the first `.docx`. For plugin developers and anyone debugging a first run. The researcher-facing version is [first-time-flow.md](first-time-flow.md). This page describes version 0.14.0 plus the unreleased changes in [CHANGELOG.md](../CHANGELOG.md); the source files named below are authoritative when they disagree with it.
 
 ---
 
-## Data Flow
+## Components
 
-```
-profile.json ──────────────────────────────────────────────┐
-    |                                                       |
-    ├── styleFingerprint ─→ section-writer (per paragraph)  |
-    |                    ─→ synthesizer (full article)       |
-    ├── articleStructure ─→ architect (outline)              |
-    |                    ─→ section-writer (intro/conclusion)|
-    |                    ─→ synthesizer (structure check)    |
-    ├── citationStyle ───→ section-writer, auditor          |
-    ├── targetLanguage ──→ ALL agents                       |
-    ├── tools ───────────→ ALL agents (skip disabled tools) |
-    └── sources[] ───────→ source selection (Step 2)        |
-                                                            |
-words.txt (linking words) ─→ section-writer (Skill 4)      |
-                           ─→ synthesizer (language check)  |
-                                                            |
-Candlekeep (ck CLI) ───────→ deep-reader, section-writer,  |
-                              auditor, source selection     |
-                                                            |
-Cognetivy (cognetivy CLI) ──→ ALL steps log events ────────┘
-```
+| Piece | Where | Role |
+|---|---|---|
+| Skills | `src/skills/<name>/SKILL.md` | The conversation. User-invocable skills become `/academic-writer:<name>` commands; `learn`, `present`, `update-field` and `update-tools` are `user-invocable: false` and are reached by plain-language requests. |
+| `aw` CLI | `src/cli/src/*.ts`, shipped as `plugins/academic-writer/bin/aw` | Every model call and deterministic step, invoked from Bash. All model steps route to Gemini (`thresholds.json > models`) and need `GOOGLE_API_KEY`. |
+| Agents | `src/agents/architect.md`, `src/agents/auditor.md` | `architect` writes the outline; `auditor` is the citation hard gate. No other agents ship. |
+| Hooks | `src/hooks/hooks.json`, `src/hooks/src/lifecycle/*.ts` | Profile-scoped: each one is a no-op in a project without `.academic-helper/profile.md`. |
+| Scripts | `src/scripts/*.py` | Deterministic gates (`gate.py`), DOCX generation (`generate-docx.py`), proofread helpers, style metrics. |
+| Thresholds | `src/thresholds.json` | Every numeric limit and model id. Copied into `.academic-helper/` by setup. |
+
+There is no MCP server, no dynamic workflow runner, and no section-writer, synthesizer or deep-reader agent; 0.14.0 removed them.
 
 ---
 
-## Agent Spawn Map
+## Install and session start
 
-```
-/academic-writer (main skill)
-    |
-    ├── Agent tool → deep-reader          (1 instance, sequential)
-    ├── Agent tool → architect            (2 calls: thesis, then outline)
-    ├── Agent tool → section-writer x N   (N instances, ALL PARALLEL)
-    |       |
-    |       └── Agent tool → auditor      (1 per paragraph, sequential within section)
-    |
-    └── Agent tool → synthesizer          (1 instance, after all sections complete)
+```text
+/plugin marketplace add yodem/academic-writer
+/plugin install academic-writer@yodem
 ```
 
-**Parallelism rules:**
-- Section-writers: ALL spawn in a single response (parallel)
-- Auditors: One per paragraph within each section-writer (sequential)
-- Everything else: Sequential (each waits for previous to complete)
+On every `SessionStart`, in this order (see `src/hooks/hooks.json`):
+
+1. `lifecycle/session-env` receives `${user_config.google_api_key}` and `${user_config.jev_api_key}` and, **only if `.academic-helper/profile.md` exists**, appends `export GOOGLE_API_KEY=...` (and `JEV_API_KEY`) to Claude Code's session env file. Unset options that arrive as the literal placeholder text are ignored.
+2. `lifecycle/session-dashboard` prints the dashboard.
+3. `lifecycle/voice-pull` runs `skills/voice/voice-sync.sh pull` (non-fatal on failure).
+4. `skills/voice/voice-migrate.sh` migrates legacy voice files.
+
+Other hooks: `SubagentStart` → `subagent-start` (adds the citation-verification rules and the current `rewriteCycles.max` to the `auditor`'s context, and to no other subagent); `Stop` → `notify-stop` and `gate-enforce` (blocks ending the turn while a gate listed in the run's `requiredGates` is failing or missing); `SessionEnd` → `session-end-log`.
+
+`aw` reads the key only from `GOOGLE_API_KEY` (`src/cli/src/gemini.ts`); `.academic-helper/secrets.json` is not a key source.
 
 ---
 
-## Profile Schema (profile.json)
+## `/academic-writer:setup` (`src/skills/setup/SKILL.md`)
 
-```
-{
-  fieldOfStudy: string,
-  targetLanguage: "Hebrew" | "English" | string,
-  citationStyle: "inline-parenthetical" | "chicago" | "mla" | "apa",
-  outputFormatPreferences: {
-    font: string,
-    bodySize: number,
-    titleSize: number,
-    headingSize: number,
-    lineSpacing: number,
-    marginInches: number,
-    alignment: "justify",
-    rtl: boolean
-  },
-  styleFingerprint: {
-    sentenceLevel: { averageLength, structureVariety, commonOpeners, passiveVoice, passiveVoiceExamples },
-    vocabularyAndRegister: { complexity, registerLevel, fieldJargon, hebrewConventions },
-    paragraphStructure: { pattern, averageLength, argumentProgression, evidenceIntroduction, evidenceAnalysis },
-    toneAndVoice: { descriptors[], authorStance, commonHedges[], commonAssertions[], engagementWithScholars },
-    transitions: { preferred: { addition[], contrast[], causation[], exemplification[], conclusion[] }, sectionBridging },
-    citations: { density, footnotesPerParagraph, integrationStyle, quoteLengthPreference },
-    rhetoricalPatterns: { common[], openingMoves, closingMoves },
-    representativeExcerpts: string[]   // 5 VERBATIM passages from past articles
-  },
-  articleStructure: {
-    typicalSections: string[],
-    introduction: { openingPattern, elements[], elementOrder, includesRoadmap, typicalLength },
-    conclusion: { openingPattern, elements[], elementOrder, typicalLength, closingPattern },
-    paragraphParts: { typicalFormula, topicSentence, evidencePresentation, analysisType, closingMove },
-    sectionTransitions: { pattern, usesTransitionalParagraphs, usesExplicitSignposting }
-  },
-  tools: {
-    candlekeep: { enabled: boolean, version?: string },
-    cognetivy: { enabled: boolean, version?: string }
-  },
-  sources: [{ id: string, title: string, type: string }],
-  createdAt: ISO-8601,
-  updatedAt: ISO-8601
-}
-```
+`disable-model-invocation: true`: it runs only when typed.
+
+| Step | What happens | Writes |
+|---|---|---|
+| 0 Preflight | `mkdir -p past-articles .academic-helper .academic-helper/logs`; copies `thresholds.json`. If a profile exists, offers "Check my Gemini key" (jump to 5f) or a full re-check. | folders |
+| 2 Basics | `fieldOfStudy`, `targetLanguage`, `citationStyle` (`inline-parenthetical` / `chicago` / `mla` / `apa`). **Saves the profile immediately**, because `session-env` exports the key only when the profile exists. | `.academic-helper/profile.md` |
+| 3 Detection | Runs the detection lines in `references/dependencies.md` and `references/python-deps.md` in parallel; shows a found / missing table. | none |
+| 4 Tools | For each missing item: one-sentence explanation, `AskUserQuestion`, install only on "Install", re-detect. `python3 -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema`; `brew install hspell` (Hebrew, macOS); `brew tap CandleKeepAgents/candlekeep && brew install candlekeep-cli`; `npm install -g notebooklm-mcp-cli`. Python and Homebrew get per-OS steps for the researcher; sign-ins (`! ck auth login`, `! nlm login`) are typed by the researcher. | none |
+| 5 Gemini | Explains the key and the data flow, asks. Storage: plugin settings (`/plugin` → Installed → academic-writer → Configure → `google_api_key`, OS keychain) or a shell/user environment variable. Then restart. 5f runs `aw models check` (no network) and a `curl` to the Gemini models list with the key in the `x-goog-api-key` header (never printed, no article text). | `## Gemini` block |
+| 6 Sample | 2 to 4 sentences written by Claude in the researcher's register. | none |
+| 7–8 | Summary table; offers `/academic-writer:intro`, `/academic-writer:write`, `/academic-writer:init`. | profile |
+
+Reference files: `src/skills/setup/references/{dependencies,python-deps,gemini-key,troubleshooting}.md`.
 
 ---
 
-## Error States & Recovery
+## `/academic-writer:init` (`src/skills/init/SKILL.md`)
+
+`disable-model-invocation: true`. Phases: 0 Preflight (incl. the Python add-ons check) → 1 Integration detection (CandleKeep, NotebookLM) → 2 Profile (full name and `author_key`, field, language, citation style, abstract languages, writing style) → 3.5 Gemini onboarding (same reference as setup) → 3 Research sources (CandleKeep, shelf-scoped) → 4 Save profile.
+
+- Style analysis: `extract-style-metrics.py` for computed metrics, then a qualitative pass; the researcher confirms the fingerprint before it is saved (`references/style-analysis.md`).
+- Voice: reuses `${CLAUDE_PLUGIN_DATA}/voice/` when its `author_key` matches; otherwise runs `/academic-writer:voice`.
+- `--quick` runs phases 0, 1, 2 and 3.5; style analysis becomes narrative-only, and sources are saved as `[]`.
+- Profile format: YAML frontmatter (`name`, `author_key`, `fieldOfStudy`, `citationStyle`, `targetLanguage`, `abstractLanguages`, `analyzedArticles`, `createdAt`, `updatedAt`) plus `## Tools`, `## Output Format Preferences`, `## Style Fingerprint`, `## Article Structure`, `## Sources` and `## Gemini` JSON sections. Field-by-field: `src/skills/init/references/profile-schema.md`.
+
+---
+
+## `/academic-writer:write` (`src/skills/write/SKILL.md`)
+
+Every `aw` call takes `--project-dir` and `--data-dir "${CLAUDE_PLUGIN_DATA}"` (required; `src/cli/src/paths.ts`) and one `--run <run-id>` shared by the whole article.
+
+```text
+Voice gate      python3 scripts/check-voice-populated.py AUTHOR_VOICE.md
+                exit 0 → continue; exit 1 or 2 → STOP, ask for /academic-writer:voice
+Voice load      voice-sync.sh pull "${CLAUDE_PLUGIN_DATA}" "$PWD"
+Profile         cat .academic-helper/profile.md   (missing → ask for /academic-writer:init)
+Guard           articles/<slug>.md exists → hand off to /academic-writer:edit
+Steps 1–2       subject, language, length, optional user draft; source selection
+                (ck items list, shelf-scoped); optional NotebookLM background (never cited)
+W0 Intent       thesis in the author's words → .academic-helper/author-intent.json
+W1 Evidence     aw evidence build → .academic-helper/evidence.json
+                (only passages whose quotes match the source verbatim)
+W2 Outline      architect agent → .academic-helper/outline.json; author approves each claim;
+                aw decide outline.support (advisory, logged);
+                python3 scripts/gate.py outline-v2 … must exit 0
+W3 Draft        aw draft (background) → .academic-helper/drafts/<unitId>.md
+                body units in dependsOn order, intro and conclusion last;
+                code gates: citation-not-in-sources, quote-not-in-evidence,
+                style-banned, style-capped, word-bounds (exit 2 → redraft)
+W4 Audit        one auditor subagent per unit, in parallel; FAIL/PARTIAL →
+                aw draft --unit <id> --feedback-file …; after rewriteCycles.max
+                attempts the paragraph ships tagged [NEEDS REVIEW: …]
+W5 Synthesize   aw synthesize: paragraph-level transition edits only, citations untouched
+W6 Output       abstract and self-review (references/write-completion.md);
+                aw docx → .academic-helper/runs/<id>/article.json → scripts/generate-docx.py
+Handoff         author comments in Word → /academic-writer:revise
+```
+
+The auditor is the only mandatory hard gate and always runs. Jev decision points (`aw decide`, `write.audit_prescreen`, `write.voice_check`, `synthesize.needs_bridge`) are logged signals in shadow mode; none replaces the auditor or the author's approval.
+
+---
+
+## Files a first run creates
+
+| Path | Created by |
+|---|---|
+| `past-articles/`, `.academic-helper/logs/`, `.academic-helper/thresholds.json` | setup / init preflight |
+| `.academic-helper/profile.md` | setup Step 2, completed by init Phase 4 |
+| `.academic-helper/research-brief.md` | ideate (optional) |
+| `.academic-helper/author-intent.json`, `evidence.json`, `outline.json`, `drafts/` | write W0–W3 |
+| `.academic-helper/runs/<id>/usage.jsonl` | every `aw` model call (`aw ledger show <run>` summarizes) |
+| `.academic-helper/runs/<id>/article.json` and the `.docx` | write W6 |
+| `${CLAUDE_PLUGIN_DATA}/voice/` | voice / init; shared by all projects, synced to CandleKeep |
+
+---
+
+## Error states and recovery
 
 | State | Cause | Recovery |
-|-------|-------|----------|
-| No profile | Never ran setup | Run `npx academic-writer-setup` then `/academic-writer-init` |
-| Empty past-articles/ | No papers provided | Add 5-10 PDFs/DOCX, re-run init |
-| Candlekeep not authenticated | CLI installed but not logged in | `ck auth logout && ck auth login` |
-| Cognetivy not initialized | CLI installed but no workspace | `timeout 5 cognetivy init --workspace-only` in project dir |
-| Citation audit fails 3x | Source doesn't contain claimed info | Paragraph flagged for researcher review |
-| Style fingerprint is flat/legacy | Old init format | Re-run `/academic-writer-init` |
+|---|---|---|
+| No profile | Setup never ran in this folder, or Claude Code was started elsewhere | `/academic-writer:setup` in the research folder |
+| `missing Google API key` from `aw` | No key stored, no restart since storing it, or no profile when the session started | `/academic-writer:setup` → "Check my Gemini key"; restart in the research folder |
+| Write stops at the voice gate | `AUTHOR_VOICE.md` missing, a stub, or unreadable | `/academic-writer:voice` |
+| `gate.py outline-v2` exit 1 | An unapproved claim or an outline that does not match intent or evidence | Revise the outline or approvals, rerun the gate |
+| `aw draft` exit 2 | A unit failed a code gate | Redraft that unit with a feedback file (counts as a rewrite cycle) |
+| Paragraph tagged `[NEEDS REVIEW]` | Still failed the audit after `rewriteCycles.max` attempts | Check it by hand; named in the W6 report |
+| Missing Python package | Add-ons not installed | `/academic-writer:setup`, or the pip line above |
+| CandleKeep not signed in | CLI installed, no login | `! ck auth login` |
 
----
-
-## Skill & Agent File Locations
-
-```
-.claude/
-├── agents/
-|   ├── deep-reader.md        # tools: Bash, Read, Grep, Glob
-|   ├── architect.md          # tools: Bash, Read, Grep, Glob
-|   ├── section-writer.md     # tools: Bash, Read, Grep, Glob, Agent
-|   ├── auditor.md            # tools: Bash, Read, Grep, Glob
-|   └── synthesizer.md        # tools: Bash, Read, Grep, Glob
-└── skills/
-    ├── academic-writer/SKILL.md
-    ├── academic-writer-init/SKILL.md
-    ├── academic-writer-edit/SKILL.md
-    ├── academic-writer-edit-section/SKILL.md
-    ├── academic-writer-research/SKILL.md
-    ├── academic-writer-health/SKILL.md
-    ├── academic-writer-help/SKILL.md
-    ├── academic-writer-update-field/SKILL.md
-    └── academic-writer-update-tools/SKILL.md
-```
-
-All agents use YAML frontmatter (`name`, `description`, `tools`, `model: opus`).
-All skills use YAML frontmatter (`name`, `description`, `user-invocable: true`).
-Skills invoke agents via explicit `Agent tool` language — not prose-style references.
+`/academic-writer:health` checks the profile, key, tools and sources and prints a fix line for each.

@@ -1,202 +1,211 @@
-# Academic Writer — Claude Code Plugin
+# Academic Writer
 
-AI-first academic writing assistant for Humanities researchers. Writes rigorously cited, style-matched articles and exports them as `.docx` files.
+Academic Writer is a plugin (an add-on) for Claude Code that helps humanities researchers write scholarly articles in Hebrew or English. You talk with Claude in plain language. The plugin takes you from a rough topic to a footnoted Word file: it reads the sources you choose, helps you settle a thesis and an outline, drafts in your own style, checks every citation against your sources, and then folds your Word comments back into the text.
 
----
-
-## What It Does
-
-- **Writes in your voice** — analyzes your past articles to extract your style, then applies it to new work
-- **Guided workflow** — subject → sources → thesis → outline → write → review → export
-- **Parallel processing** — all sections written simultaneously for speed
-- **Citation-verified** — every claim checked against your source library; nothing fabricated
-- **Anti-AI filter** — every paragraph scored on 5 dimensions to eliminate generic AI writing patterns
-- **Quality gate** — 6-dimension self-review scorecard before export; score below 40/60 triggers your review
-- **Abstract generation** — automatic תקציר with optional dual-language support
-- **Session dashboard** — shows your profile, article count, and tool status at startup
+A fuller, step-by-step version of this page ships with the plugin as an offline guide. After installing, type `/academic-writer:intro` to open it in your browser (it works offline).
 
 ---
 
-## Get Started in 3 Steps
+## What you need
 
-1. **Install the plugin** — optionally pass your Gemini key at install time (see below), or set it up during Step 2's wizard instead:
-   ```bash
-   claude plugin install academic-writer --scope project
-   ```
-2. **Run `/academic-writer:setup`** and follow the wizard — a short guided conversation, one question at a time, that gets your Gemini key working (and proves it with a live test), checks your Python tools, and shows you one sample paragraph before you're done.
-3. **Run `/academic-writer:write`** to start your first real article.
+| What | Why | Cost |
+|---|---|---|
+| **Claude Code** | The program the plugin runs inside. Download it from [claude.com/claude-code](https://claude.com/claude-code). | Included in a Claude plan that has Claude Code |
+| **A Gemini API key** | An API key is a long password that lets the plugin use Google's Gemini AI. Setup walks you through getting one from your own Google account. See [Your Gemini key](#your-gemini-key). | Free tier available |
+| **Microsoft Word** (or a compatible program) | To read the finished `.docx` and mark it up with comments and tracked changes. LibreOffice opens the file too, but Word handles comments and tracked changes best. | Your existing copy |
 
-Want the full setup — style analysis from past articles, research source indexing? Run `/academic-writer:init` instead (see Quick Start below).
+Also useful:
 
-### Configuring your Gemini API key
-
-The plugin's bundled Gemini MCP server (drafting, editing, synthesis, OCR) resolves an API key from
-three sources, in this order — set whichever fits, or several at once, since the most-preferred
-present one just wins:
-
-1. **Plugin configuration (recommended)** — stored securely by Claude Code itself (OS keychain, or a
-   protected credentials file where no keychain is available), never plaintext in a settings file:
-   ```bash
-   claude plugin install academic-writer --scope project --config google_api_key="AIza..."
-   # already installed?
-   claude plugin config academic-writer --config google_api_key="AIza..."
-   ```
-2. **`GOOGLE_API_KEY` environment variable** — works across all your projects, set in your shell profile.
-3. **`.academic-helper/secrets.json`** (project-local, gitignored) — `{ "GOOGLE_API_KEY": "AIza..." }`.
-
-`/academic-writer:setup` walks through all three interactively and live-tests the result either way.
+- **Python 3**, a free program the plugin uses to read PDFs and build Word files. Macs and most Linux computers already have it. Setup checks for it and asks before installing the small add-ons it needs.
+- **5 to 10 of your published articles** (PDF or Word), so the plugin can learn how you write.
+- **Your source texts** as PDFs or Word files. The optional CandleKeep library (an online bookshelf for your sources) lets the plugin search and quote them page by page.
 
 ---
 
-## Quick Start
+## Install
 
-### 1. Install the Plugin
+You install once. Open Claude Code and type these two lines, pressing Enter after each:
 
-From the folder where you do your research:
-
-```bash
-claude plugin install academic-writer --scope project
+```text
+/plugin marketplace add yodem/academic-writer
+/plugin install academic-writer@yodem
 ```
 
-> If you get "marketplace not found", register it first:
-> ```bash
-> claude plugin marketplace add ~/.claude/plugins/marketplaces/academic-writer
-> ```
+The first line tells Claude Code where to find the plugin (a *marketplace* is a list of plugins; this one is called `yodem`). The second installs it. Then quit Claude Code and open it again so the new commands appear.
 
-### 2. Initialize Your Profile
+If you prefer a regular terminal window, the same two steps are:
 
 ```bash
-/academic-writer:init
+claude plugin marketplace add yodem/academic-writer
+claude plugin install academic-writer@yodem
 ```
 
-One-time setup. You'll be asked for:
-- Your field of study
-- Citation style (Inline Parenthetical / Chicago / MLA / APA)
-- 5–10 past articles for style analysis (place them in `past-articles/`)
-- Which integrations to enable
-
-Your profile is saved to `.academic-writer/profile.json` and loaded automatically.
-
-### 3. Write Your First Article
-
-```bash
-/academic-writer:write
-```
+**How to open a terminal:** on a Mac, press Cmd+Space, type `Terminal`, press Enter. On Windows, open the Start menu and type `Terminal` or `PowerShell`. On most Linux systems, press Ctrl+Alt+T. Then move to your research folder (type `cd `, drag the folder into the window, press Enter) and type `claude`. Everything the plugin creates for a project stays in that folder.
 
 ---
 
-## Writing Workflow
+## First steps
 
-**You do (conversational):**
-1. Describe the topic
-2. Select relevant sources
-3. Review the deep-read summary
-4. Choose a thesis (2–3 options)
-5. Refine the outline together
-6. Approve
+Run these inside Claude Code, started in your research folder.
 
-**Plugin does (automated):**
-7. Writes all sections in parallel — each paragraph through an 8-step pipeline (draft → style → grammar → academic language → language purity → anti-AI → repetition → citation audit)
-8. Synthesizes for coherence and style
-9. Generates the תקציר (abstract)
-10. Runs 6-dimension self-review scorecard
-11. Exports as `.docx`
+1. **`/academic-writer:intro`** opens the full guide in your web browser.
+2. **`/academic-writer:setup`** is a short guided conversation, one question at a time, about ten minutes. It asks your field, article language and citation style; checks the tools the plugin needs and **asks your permission before installing anything**; walks you through getting and safely storing a free Gemini key, then tests it; and writes one short sample paragraph. After you store the key, setup asks you to restart Claude Code once and choose **Check my Gemini key**.
+3. **`/academic-writer:init`** (recommended) builds your full profile. Put 5 to 10 of your published articles in the `past-articles` folder that setup created first. Init reads them, shows you what it learned about your style so you can correct it, and helps you connect your source library.
+4. **`/academic-writer:write`** starts your first article.
+
+Running setup or init again later is safe: they update your profile and never erase it.
+
+---
+
+## How writing an article works
+
+`/academic-writer:write` has a conversation part, where you make every decision about the argument, and a drafting part the plugin runs on its own.
+
+1. **Your voice.** Before anything else, write checks that your voice profile (the examples and writing habits drafts should follow) exists. If it does not, it stops and asks you to run `/academic-writer:voice`.
+2. **Topic and language.** Say what you want to write about and in which language.
+3. **Sources.** You pick the sources for this article from the ones you made available.
+4. **Your thesis.** You state the thesis in your own words; the plugin records it exactly as you wrote it.
+5. **Verified evidence.** The plugin reads the chosen sources and keeps only passages whose quotations match the source word for word. These are the only passages the draft may quote or cite.
+6. **Outline.** Together you shape the sections. You approve each section's claim; nothing is drafted until every claim is approved.
+7. **Drafting.** Gemini drafts the article from the approved outline, section by section, in your style, with the introduction and conclusion written last. Automatic checks reject any draft that cites a source not on your list, quotes text that is not in the verified passages, or breaks your style rules.
+8. **Citation check.** Claude then checks every paragraph's citations against your sources. A paragraph that fails is rewritten. If it still fails after the allowed number of attempts, it is marked `[NEEDS REVIEW]` and named in the final report so you know exactly what to check.
+9. **Word file.** You get a `.docx` with real Word footnotes. Claude tells you where it saved it.
+10. **Your comments.** Open it in Word, add comments or tracked changes wherever you want something changed, save and close.
+11. **Revise.** Run `/academic-writer:revise`. It reads your comments and tracked changes, groups them, asks you to confirm each group, updates the text and makes a new Word file. With your agreement, it also learns from your rewrites so later drafts sound more like you. Repeat steps 10 and 11 as often as you like.
+
+Before you submit, run `/academic-writer:proofread` for a typo, language and editorial pass (the original is never changed; you get a corrected copy, a report and an editorial memo), and `/academic-writer:review` for a scorecard of the article's structure, argument and citations.
 
 ---
 
 ## Commands
 
+Type any of these in Claude Code. You can also describe what you want in your own words ("proofread my article"), and Claude picks the right command for most requests. Setup, init and voice run only when you type them, because they change your settings.
+
 | Command | What it does |
-|---------|-------------|
-| `/academic-writer:write` | Write a new article |
-| `/academic-writer:init` | One-time setup: profile, citation style, style fingerprint |
-| `/academic-writer:ideate` | Brainstorm research questions with 5W1H and gap analysis |
-| `/academic-writer:learn` | Scan new past articles and update your style fingerprint |
-| `/academic-writer:review` | Score a completed article on 6 quality dimensions |
-| `/academic-writer:present` | Generate conference outlines, journal abstracts, book chapter proposals |
-| `/academic-writer:research` | Research a topic using your indexed sources |
-| `/academic-writer:edit` | Edit a previously written article |
-| `/academic-writer:edit-section` | Quick edit of a single section |
-| `/academic-writer:revise` | Read your Word comments and tracked changes: apply edits, learn your voice from your rewrites, log plugin defects |
-| `/academic-writer:voice` | Build or update your one shared voice (exemplars you pick, style words, writing moves) |
-| `/academic-writer:ocr` | OCR a scanned PDF or image (or a directory of them) into clean text |
-| `/academic-writer:proofread` | Pre-submission proofread: deterministic must-catch pass (your terms, names, style words), Gemini finder, cross-family verify, tracked-changes .docx |
-| `/academic-writer:update-field` | Change your field of study |
-| `/academic-writer:update-tools` | Add or remove integrations |
-| `/academic-writer:health` | Check all integrations and profile status |
-| `/academic-writer:help` | Show plugin info |
+|---|---|
+| `/academic-writer:intro` | Open the full guide in your web browser. |
+| `/academic-writer:setup` | First-run setup: tools, Gemini key, a sample paragraph. Asks before installing anything. |
+| `/academic-writer:init` | Full onboarding: your profile, your writing style from past articles, your source library. |
+| `/academic-writer:write` | Write a new article, step by step, ending with a Word file. |
+| `/academic-writer:revise` | Read your Word comments and tracked changes and update the article. |
+| `/academic-writer:edit` | Revise an article you already drafted: several passages, tone, structure, argument order or evidence. |
+| `/academic-writer:edit-section` | Quick revision of one section: rewrite, expand, shorten, fix citations or style. |
+| `/academic-writer:proofread` | Proofread a finished article (Markdown or Word): a corrected copy, a report and an editorial memo. |
+| `/academic-writer:review` | Score a finished article on six dimensions and show concrete findings. |
+| `/academic-writer:research` | Investigate a topic or check a claim against your sources; only word-for-word verified quotations come back. |
+| `/academic-writer:ideate` | Turn a vague topic into a sharp research question; saves a research brief that write reads. |
+| `/academic-writer:ocr` | Turn a scanned PDF or photographed page (or a folder of them) into plain text. |
+| `/academic-writer:voice` | Build or update your voice profile: exemplar paragraphs you choose and your writing habits. |
+| `/academic-writer:health` | Check that everything is ready, with a plain-language fix for anything missing. |
+| `/academic-writer:help` | A short list of every command and the three steps to get started. |
+
+A few more things the plugin can do have no command of their own. Ask for them in plain words:
+
+- **Learn from new papers or your corrections**: "I added new papers to past-articles, update my voice."
+- **Follow-on materials**: "Make a conference talk outline (or a journal abstract, or a chapter proposal) from this article."
+- **Change your field of study**: "Change my field in my profile to ..."
+- **Connect or disconnect CandleKeep or NotebookLM**: "Turn on CandleKeep in my profile."
 
 ---
 
-## Integrations
+## Your Gemini key
 
-All integrations are optional. Choose which to enable during `/academic-writer:init`.
+**What it is.** Gemini is Google's AI model. In this version, the plugin's own drafting tool (`aw`) sends every drafting, evidence-extraction (used by write and research), synthesis, editing, proofreading, OCR and voice-analysis step to Gemini, while Claude runs the conversation and checks every citation.
 
-| Tool | What it does | Setup |
-|------|-------------|-------|
-| **Candlekeep** | Cloud document library for source PDFs | [github.com/CandleKeepAgents/candlekeep-cli](https://github.com/CandleKeepAgents/candlekeep-cli) |
-| **NotebookLM** | AI-powered source Q&A, audio overviews, study guides | [github.com/jacob-bd/notebooklm-mcp-cli](https://github.com/jacob-bd/notebooklm-mcp-cli) |
+**Is it optional?** Setup lets you answer "No, Claude only", and nothing is then sent to Google. But the steps listed above stop with a "missing Google API key" error without a key, so in practice you need one to write, research, proofread or OCR.
+
+**Cost.** Google's free tier is enough for normal use, and creating a key normally needs no credit card. Get one at [aistudio.google.com/apikey](https://aistudio.google.com/apikey); it starts with `AIza`.
+
+**Where to keep it.** Never paste the key into the Claude chat: the conversation is saved, so a key there could be read later. Use one of these:
+
+1. **Plugin settings (recommended).** In Claude Code, type `/plugin`, open **Installed**, choose **academic-writer**, then **Configure**, and paste the key into **google_api_key**. Claude Code keeps it in your computer's keychain (on Linux, a protected credentials file), not in a plain settings file. At the start of each session the plugin passes it on to its tools, but only in a research folder that already has a profile (`.academic-helper/profile.md`), which setup creates.
+2. **An environment variable.** Set `GOOGLE_API_KEY` in your shell profile (macOS/Linux) or as a user environment variable (Windows). This also works for other tools on your computer. `/academic-writer:setup` shows the exact steps for your system.
+
+Either way, the key is picked up only when a **new** Claude Code session starts. The plugin reads nothing else: a `.academic-helper/secrets.json` file is not used.
 
 ---
 
-## File Structure (Your Project)
+## Privacy
 
+- **Anthropic (Claude).** Your conversation with Claude, and the text Claude reads to help you (your drafts, the source passages it checks), go to Anthropic, as with any use of Claude Code.
+- **Google (Gemini).** With a Gemini key, the text being drafted, edited, proofread or summarised, the source passages it relies on, and any scanned pages you ask it to read are sent to Google. On Google's free tier, Google may use what you send to improve its products. Check Google's current terms, and consider a paid key for unpublished work you consider sensitive.
+- **CandleKeep (optional).** Only the sources you choose to upload are stored there. If you use CandleKeep, your voice profile is also synced there so it follows you between computers.
+- **Jev (advanced, off by default).** Only if you enter the optional `jev_api_key` setting, the question and context at a few decision points are also sent to the Jev service. In this version its answers are only logged and never change your results. Most users should leave it empty.
+- **Your keys.** Saved through the plugin settings, the key is kept in your keychain. The plugin never prints it or writes it into your research folder.
+
+**What stays on your computer, and where:**
+
+| Where | What |
+|---|---|
+| `.academic-helper/` in your research folder | This project's working files: your profile (`profile.md`), the source list, the outline, drafts, verified evidence and a log of each run. |
+| `past-articles/`, `ocr-output/` and your `.docx` files, in your research folder | Your published articles, text from scanned pages, and the finished articles. |
+| The plugin's data folder, `~/.claude/plugins/data/` (the folder whose name starts with `academic-writer`) | Your voice data, shared by all your projects, and a small log of plugin mistakes you flagged during revise. |
+
+Folders whose names start with a dot are hidden by default. On a Mac, press Cmd+Shift+. in Finder; on Windows, choose View, then Show, then Hidden items in File Explorer.
+
+**Uninstalling deletes the plugin's data folder, including your voice data**, unless you keep it:
+
+```bash
+claude plugin uninstall academic-writer@yodem --keep-data
 ```
-your-research-folder/
-├── past-articles/         ← Drop your published papers here (PDFs or DOCXs)
-├── ocr-output/            ← Extracted text from /academic-writer:ocr
-├── .academic-writer/
-│   ├── profile.json       ← Your profile (auto-created)
-│   ├── research-brief.md  ← Output from /academic-writer:ideate
-│   └── logs/              ← Session logs
-└── articles/              ← Output .docx files
-```
+
+Your research folders, drafts and Word files are never touched by uninstalling.
 
 ---
 
 ## Troubleshooting
 
-**"No profile found"** — run `/academic-writer:init` first.
+Start with **`/academic-writer:health`**. It checks your profile, key, tools and sources, and tells you in plain words what to fix. Its report contains no keys, so you can share it when asking for help.
 
-**"Candlekeep not detected"** — install the CLI:
-```bash
-brew tap CandleKeepAgents/candlekeep && brew install candlekeep-cli
-ck auth login
-```
+- **The `/academic-writer:` commands do not appear.** Quit Claude Code completely and open it again. Then type `/plugin` and check that academic-writer is listed and enabled. If not, repeat the two install lines.
+- **"missing Google API key" or "API key not valid".** Run `/academic-writer:setup` again and choose to check the Gemini key. After saving a key, start a new Claude Code session in your research folder.
+- **"No profile found".** Make sure you started Claude Code inside your research folder. In a new folder, run `/academic-writer:setup` first.
+- **Write stops and asks for your voice profile.** Run `/academic-writer:voice`, then run write again.
+- **The Word file is not created, or a "missing Python package" message.** Run `/academic-writer:setup`; it offers to install the add-ons. To do it yourself: `python3 -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema`.
+- **Proofreading a Word file fails.** The proofread command converts `.docx` files with `pandoc`, a free document converter, which setup does not install. Install it from [pandoc.org/installing.html](https://pandoc.org/installing.html), or proofread a Markdown copy.
+- **Hebrew looks reversed in the Claude Code window.** That is only the display; the Word file is laid out right to left.
 
-**Articles won't export to .docx** — install the Python dependency:
-```bash
-pip install python-docx
-```
-
-**Plugin behaves strangely after an update** — clear the cache and reinstall:
-```bash
-rm -rf ~/.claude/plugins/cache/academic-writer
-claude plugin install academic-writer --scope project
-```
+Still stuck? Open an issue at [github.com/yodem/academic-writer/issues](https://github.com/yodem/academic-writer/issues) and include the output of `/academic-writer:health`.
 
 ---
 
-## For Developers
+## Updating
 
-Source files live in `src/` — never edit `plugins/` directly (it is generated by `npm run build` and committed to git).
+In a terminal (or through `/plugin` in Claude Code), then restart Claude Code:
 
 ```bash
-# Edit source files, then:
-npm run build
-claude plugin install academic-writer --scope project  # from your research folder
-# Restart Claude Code
+claude plugin marketplace update yodem
+claude plugin update academic-writer@yodem
 ```
 
-**Versioning is automatic.** Every push to `main` triggers CI that bumps the patch version, rebuilds, commits the updated `plugins/` output, tags the release, and creates a GitHub Release. Do not bump versions manually.
+Refreshing the marketplace alone does not update an installed plugin; run both lines. Updating keeps your profile, drafts and voice data. See [CHANGELOG.md](CHANGELOG.md) for what changed.
+
+---
+
+## For contributors
+
+Source lives in `src/`. Never edit `plugins/` directly: `npm run build` generates it from `src/` and `manifests/`, and the output is committed.
+
+```bash
+npm run build                           # assemble plugins/academic-writer/ from src/
+npm run build:hooks                     # rebuild only the TypeScript hooks
+npm run typecheck                       # strict TypeScript check on src/hooks/
+python3 -m pytest -q tests              # full test suite
+python3 tests/test_plugin_structure.py  # structural integrity tests
+bash scripts/check-no-private-refs.sh   # privacy gate
+python3 scripts/version-sync.py --check # version agrees in every registered location
+npm run clean                           # wipe plugins/ and src/hooks/dist/
+```
+
+- **Privacy gate.** The repository is public. `scripts/check-no-private-refs.sh` fails if a tracked file carries a personal identifier (home paths, private emails, internal host names) or if internal dev-state paths are tracked. It runs in CI and in pytest.
+- **Generated guide blocks.** The command table and version stamp in `src/guide/index.html` and the command list in `src/skills/help/SKILL.md` are generated from skill frontmatter by `scripts/gen-guide.py`, which the build runs. Edit the text around the `guide:` markers, never inside them; `python3 scripts/gen-guide.py --check` reports drift.
+- **Thresholds.** Numeric limits live only in `src/thresholds.json`.
+- **Versions and releases.** Bump with `python3 scripts/version-sync.py --bump patch|minor|major` in the same commit that writes the CHANGELOG section. The Release workflow is started by hand; it verifies and tags what is committed and does not bump anything.
+
+Project conventions for Claude Code sessions are in [CLAUDE.md](CLAUDE.md).
 
 ---
 
 ## License
 
-MIT
-
-## Support
-
-- Plugin issues: [github.com/yodem/academic-writer](https://github.com/yodem/academic-writer)
-- Candlekeep: [github.com/CandleKeepAgents/candlekeep-cli](https://github.com/CandleKeepAgents/candlekeep-cli)
+MIT. Source and issues: [github.com/yodem/academic-writer](https://github.com/yodem/academic-writer).

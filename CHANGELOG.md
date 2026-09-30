@@ -6,7 +6,22 @@ All notable changes to the academic-writer plugin are documented here.
 
 - Add an opt-in Jev shadow scorer for proofread `meaningRisk` labels that writes only to `.academic-helper/jev-shadow.jsonl`.
 
-## [0.14.0] — 2026-09-23 (prepared on `refactor/aw-step-engine`; not released)
+### Added
+- **`/academic-writer:intro`** opens a bundled, offline HTML guide in your browser: what the plugin does, install, first run, your first article, where files live, privacy, troubleshooting, updating and uninstalling. Its command table and version stamp are generated from skill frontmatter at build time (`scripts/gen-guide.py`), so the guide always matches the installed version.
+
+### Changed
+- **Setup and init ask before installing anything.** Each missing tool (Python add-ons, hspell, CandleKeep, NotebookLM) is explained in one sentence and installed only after you say yes; tools only you can install (Python, Homebrew) get numbered steps for your system. Setup now also checks `jsonschema`.
+- **Gemini key walkthrough per operating system.** Setup and init explain what the key is and what is sent to Google, never ask for the key in the chat, show how to store it in the plugin settings (keychain) or as an environment variable on macOS, Windows or Linux, and check it with a live call after the restart. Setup saves your profile before the restart and offers "Check my Gemini key" when you come back. The `.academic-helper/secrets.json` option is gone, because the code never read it.
+- **Shorter `/academic-writer:help`** with a command list generated from the skills themselves.
+- **Skills, agents and Gemini prompts rewritten to current best practice**: plain descriptions with "Use when" triggers, no references to removed agents, `AskUserQuestion` calls within the four-option limit, and the auditor reading citation details from `evidence.json` when there is no `sources.json`.
+- `/academic-writer:ideate` no longer creates `.academic-helper/`; only setup and init do.
+- `/academic-writer:health` gives update commands for the `yodem` marketplace (`claude plugin marketplace update yodem`, then `claude plugin update academic-writer@yodem`) and a plain fix line for each tool.
+- README rewritten for researchers: what you need, install, first steps, how writing works now, the commands you can type, the Gemini key, privacy, troubleshooting and updating.
+
+### Removed
+- Two prompt files the code never loaded, and personal identifiers and internal development files from the public repository. The privacy gate (`scripts/check-no-private-refs.sh`) now also blocks usernames, personal email addresses, internal host names and internal dev-state paths.
+
+## [0.14.0] — 2026-09-23
 ### Changed: the architecture
 - **`aw` CLI replaces the Gemini MCP server and the dynamic workflows.** Every model call and deterministic step runs through `plugins/academic-writer/bin/aw`, invoked from Bash (the MCP client's ~60 s timeout and 25k-token cap no longer apply). Every call is logged to `.academic-helper/runs/<id>/usage.jsonl`; `aw ledger show <run>` summarizes it. Budgets and model ids live only in `thresholds.json`.
 - **Proofread** (`aw proofread`): a deterministic must-catch pass (your names/terms canon, banned and capped style words, hspell), a Gemini-flash finder on line-numbered chunks with text anchoring, a batched cross-family verify, and application in code. Measured on the adversarial Hebrew fixture: names/terms 1.00, style words 1.00, no edits inside quotations, typos 0.77, and **0 Claude tokens** (about 13k Gemini tokens for 1,244 words). Before, a single article's proofread cost 98M tokens.
