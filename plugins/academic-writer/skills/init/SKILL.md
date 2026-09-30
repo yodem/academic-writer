@@ -144,7 +144,7 @@ AskUserQuestion(questions=[{
   "header": "Install TOOL_NAME?",
   "options": [
     {"label": "Install", "description": "I'll run one install command, then you sign in once in your browser."},
-    {"label": "Skip", "description": "I'll leave it off; you can add it later with /academic-writer:update-tools."}
+    {"label": "Skip", "description": "I'll leave it off; you can add it later by asking me to add or remove integrations."}
   ],
   "multiSelect": false
 }])
@@ -468,7 +468,7 @@ AskUserQuestion(questions=[{
     {
       "label": "I'm done for now",
       "description": "Profile saved. Run /academic-writer:write anytime to start writing.",
-      "markdown": "```\nProfile saved to:\n  .academic-helper/profile.md\n\nKey commands:\n  /academic-writer:write         ← write an article\n  /academic-writer:health       ← check everything\n  /academic-writer:intro        ← open the guide\n  /academic-writer:update-tools ← change integrations\n```"
+      "markdown": "```\nProfile saved to:\n  .academic-helper/profile.md\n\nKey commands:\n  /academic-writer:write         ← write an article\n  /academic-writer:health       ← check everything\n  /academic-writer:intro        ← open the guide\n  "add CandleKeep" ← just ask to change integrations\n```"
     }
   ],
   "multiSelect": false

@@ -15,38 +15,41 @@ Talk to the researcher in plain language. When you mention a technical step (for
 **Preflight**: If the researcher has not run `/academic-writer:setup` yet, ask them to run it first. It connects the Gemini key (Google's AI model, which writes the drafts) and the Python tools in a few guided questions.
 
 <!-- BEGIN voice-precondition-gate -->
-### Voice profile precondition gate (mandatory — run before Step 1)
+### Voice precondition gate (run before Step 1)
 
-Before any drafting and before the "Voice profile load" step below, verify `AUTHOR_VOICE.md`
-actually has real content — not missing, and not still the unpopulated stub:
+Drafts are written to sound like the author's voice store in `${CLAUDE_PLUGIN_DATA}/voice/` (built by `/academic-writer:voice`, shared by all projects). Check it in code before anything else:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check-voice-populated.py AUTHOR_VOICE.md
+V="${CLAUDE_PLUGIN_DATA}/voice"
+if [ -f "$V/profile.json" ] && [ -s "$V/exemplars.jsonl" ]; then echo VOICE_READY
+elif [ -f "$V/profile.json" ]; then echo VOICE_EMPTY
+elif [ -f AUTHOR_VOICE.md ] && python3 "${CLAUDE_PLUGIN_ROOT}/scripts/check-voice-populated.py" AUTHOR_VOICE.md; then echo VOICE_LEGACY
+else echo VOICE_MISSING; fi
 ```
 
-- **Exit 0** (populated): continue to the "Voice profile load" step immediately below.
-- **Exit 1** (stub/missing): **STOP the `/write` pipeline** — do not proceed to Step 1 or spawn
-  any agent. Tell the user: "Your voice profile isn't set up yet. Run `/academic-writer:voice` to
-  build it, then re-run `/write`."
-- **Exit 2** (usage/encoding error): also **STOP**. Exit 2 is treated as a block, not success —
-  fail closed, since we cannot confirm voice is populated. Tell the user: "AUTHOR_VOICE.md could
-  not be read/parsed — check the file for corruption, or run `/academic-writer:voice` to
-  regenerate it."
+- **VOICE_READY**: continue to "Voice profile load".
+- **VOICE_LEGACY** (an older `AUTHOR_VOICE.md` in this folder): tell the author you will import it, run `"${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" voice migrate --from "$PWD"`, then continue.
+- **VOICE_EMPTY** or **VOICE_MISSING**: the drafts would come out in a generic academic voice. Ask:
 
-This gate is authoritative for all three outcomes; it replaces any older warn-and-continue
-behavior for this condition.
+```python
+AskUserQuestion(questions=[{
+  "question": "I don't have your writing voice yet, so drafts would sound generic. Build it first?",
+  "header": "Your voice",
+  "options": [
+    {"label": "Build my voice first", "description": "Run /academic-writer:voice (about 10 minutes; uses 3 or more of your past articles in past-articles/). Then run /academic-writer:write again."},
+    {"label": "Write without it for now", "description": "Drafts use a neutral scholarly voice. You can build your voice later and revise."}
+  ],
+  "multiSelect": false
+}])
+```
+
+  On "Build my voice first", stop here. On "Write without it", for VOICE_MISSING first create an empty store with the same `voice migrate --from "$PWD"` command (drafting needs the store to exist), then continue and mention in the closing summary that no voice profile was used.
 <!-- END voice-precondition-gate -->
 
 ### Voice profile load (first step of every run)
 
-1. Run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh pull "${CLAUDE_PLUGIN_DATA}" "$PWD"` — pulls latest `AUTHOR_VOICE.md` from
-   CandleKeep (last-write-wins). **Check its exit code and surface its stdout/stderr** rather than
-   silently continuing: exit 0 means it either pulled successfully or (an explicitly reported)
-   local-only mode; any other exit code is a real failure — say so before proceeding, don't let
-   Step 2 quietly read a stale local file as if the pull had happened.
-2. Read `AUTHOR_VOICE.md` from project root. The whole file becomes part of the voice bundle
-   `aw draft` and `aw synthesize` load for every drafting/synthesis call — you do not pass it in a
-   prompt yourself.
+1. Only if the profile has CandleKeep enabled (`candlekeep.enabled: true`): run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh pull "${CLAUDE_PLUGIN_DATA}" "$PWD"` to fetch the latest voice store from CandleKeep. Check its exit code and show its output: a non-zero exit is a real failure, so say so plainly before continuing with the local copy. Without CandleKeep, skip this step; the local store is the only copy.
+2. `aw draft` and `aw synthesize` load the voice bundle (chosen exemplars, rewrite pairs, writing rules, style words) from the store themselves — you do not paste voice text into a prompt.
 3. The drafting prompt (`aw draft`'s `write-draft.md`) is written to weight `## Academic-specific`
    rules higher when they conflict with `## Core voice` rules; everything else applies as written.
 

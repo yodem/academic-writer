@@ -126,7 +126,7 @@ updatedAt: ISO_TIMESTAMP
 `targetLanguage: Hebrew` example earlier in this doc) — Gemini defaults on for the language the
 profile is being created for, so projects that never run `/write`'s model-comparison check (e.g.
 `proofread`-only or `edit`-only projects) still route to Gemini. `enabled: false` (no
-`approvedLanguages`/`models` keys) if the researcher chose "No, Claude only".
+`approvedLanguages`/`models` keys) if the researcher chose "Not now" for Gemini.
 
 ### Choosing the model
 

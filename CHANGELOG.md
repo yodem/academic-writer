@@ -4,9 +4,10 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
-- Add an opt-in Jev shadow scorer for proofread `meaningRisk` labels that writes only to `.academic-helper/jev-shadow.jsonl`.
+## [0.15.0] — 2026-10-01
 
 ### Added
+- An opt-in Jev shadow scorer for proofread `meaningRisk` labels that writes only to `.academic-helper/jev-shadow.jsonl`.
 - **`/academic-writer:intro`** opens a bundled, offline HTML guide in your browser: what the plugin does, install, first run, your first article, where files live, privacy, troubleshooting, updating and uninstalling. Its command table and version stamp are generated from skill frontmatter at build time (`scripts/gen-guide.py`), so the guide always matches the installed version.
 
 ### Changed
@@ -17,6 +18,13 @@ All notable changes to the academic-writer plugin are documented here.
 - `/academic-writer:ideate` no longer creates `.academic-helper/`; only setup and init do.
 - `/academic-writer:health` gives update commands for the `yodem` marketplace (`claude plugin marketplace update yodem`, then `claude plugin update academic-writer@yodem`) and a plain fix line for each tool.
 - README rewritten for researchers: what you need, install, first steps, how writing works now, the commands you can type, the Gemini key, privacy, troubleshooting and updating.
+
+### Fixed (first-time authors)
+- **A new author could not get past `/write`'s voice check.** The check looked for `AUTHOR_VOICE.md` in the project, but `/academic-writer:voice` saves to the plugin data folder, and `aw voice migrate` crashed when no `AUTHOR_VOICE.md` existed. The gate now checks the real voice store, imports an older `AUTHOR_VOICE.md` if one is there, and otherwise asks whether to build the voice first or write in a neutral voice for now. `voice migrate` starts an empty store when there is nothing to import.
+- `/write` and `/voice` sync with CandleKeep only when CandleKeep is enabled, so authors without it no longer see a sync error on every run.
+- `voice-sync.sh` falls back to the public marketplace's data folder (`academic-writer-yodem`).
+- Setup's "Claude only" choice promised more than the code does: drafting, proofreading and OCR need the Gemini key. The choice is now "Not now" and says which commands will ask for the key later.
+- `/proofread` checks for pandoc (needed to read Word files) and asks before installing it.
 
 ### Removed
 - Two prompt files the code never loaded, and personal identifiers and internal development files from the public repository. The privacy gate (`scripts/check-no-private-refs.sh`) now also blocks usernames, personal email addresses, internal host names and internal dev-state paths.

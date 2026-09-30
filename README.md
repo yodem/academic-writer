@@ -61,7 +61,7 @@ Running setup or init again later is safe: they update your profile and never er
 
 `/academic-writer:write` has a conversation part, where you make every decision about the argument, and a drafting part the plugin runs on its own.
 
-1. **Your voice.** Before anything else, write checks that your voice profile (the examples and writing habits drafts should follow) exists. If it does not, it stops and asks you to run `/academic-writer:voice`.
+1. **Your voice.** Before anything else, write checks that your voice profile (the examples and writing habits drafts should follow) exists. If it does not, it asks whether to build it first with `/academic-writer:voice` (about 10 minutes, using 3 or more of your past articles) or to write in a neutral scholarly voice for now.
 2. **Topic and language.** Say what you want to write about and in which language.
 3. **Sources.** You pick the sources for this article from the ones you made available.
 4. **Your thesis.** You state the thesis in your own words; the plugin records it exactly as you wrote it.
@@ -112,7 +112,7 @@ A few more things the plugin can do have no command of their own. Ask for them i
 
 **What it is.** Gemini is Google's AI model. In this version, the plugin's own drafting tool (`aw`) sends every drafting, evidence-extraction (used by write and research), synthesis, editing, proofreading, OCR and voice-analysis step to Gemini, while Claude runs the conversation and checks every citation.
 
-**Is it optional?** Setup lets you answer "No, Claude only", and nothing is then sent to Google. But the steps listed above stop with a "missing Google API key" error without a key, so in practice you need one to write, research, proofread or OCR.
+**Is it optional?** Setup lets you answer "Not now", and nothing is then sent to Google. Planning and review still work, but the steps listed above need the key, so in practice you need one to write, research, proofread or OCR. Setup tells you this when you choose.
 
 **Cost.** Google's free tier is enough for normal use, and creating a key normally needs no credit card. Get one at [aistudio.google.com/apikey](https://aistudio.google.com/apikey); it starts with `AIza`.
 
@@ -160,7 +160,7 @@ Start with **`/academic-writer:health`**. It checks your profile, key, tools and
 - **The `/academic-writer:` commands do not appear.** Quit Claude Code completely and open it again. Then type `/plugin` and check that academic-writer is listed and enabled. If not, repeat the two install lines.
 - **"missing Google API key" or "API key not valid".** Run `/academic-writer:setup` again and choose to check the Gemini key. After saving a key, start a new Claude Code session in your research folder.
 - **"No profile found".** Make sure you started Claude Code inside your research folder. In a new folder, run `/academic-writer:setup` first.
-- **Write stops and asks for your voice profile.** Run `/academic-writer:voice`, then run write again.
+- **Write asks about your voice profile.** Choose "Build my voice first" and run `/academic-writer:voice`, or continue without it and build it later.
 - **The Word file is not created, or a "missing Python package" message.** Run `/academic-writer:setup`; it offers to install the add-ons. To do it yourself: `python3 -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema`.
 - **Proofreading a Word file fails.** The proofread command converts `.docx` files with `pandoc`, a free document converter, which setup does not install. Install it from [pandoc.org/installing.html](https://pandoc.org/installing.html), or proofread a Markdown copy.
 - **Hebrew looks reversed in the Claude Code window.** That is only the display; the Word file is laid out right to left.

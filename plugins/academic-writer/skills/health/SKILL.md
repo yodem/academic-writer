@@ -167,7 +167,7 @@ Show a clean summary table:
 > | Past Articles | ✓ [N] files / ✗ Empty | PDF: [n], DOCX: [n] |
 > | Python + add-ons | ✓ Ready / ✗ [what's missing] | Python [version] |
 > | Hebrew spelling | ✓ / ⚠ Missing / — Not needed | |
-> | Gemini key | ✓ Works / ✗ [problem] / — Claude only | |
+> | Gemini key | ✓ Works / ✗ [problem] / — Not set up (needed to write, proofread, read scans) | |
 > | Candlekeep | ✓ Connected / ✗ Error / — Disabled | [N] items |
 > | NotebookLM | ✓ Connected / ✗ Not found / — Disabled | [N] notebooks |
 > | Plugin agents | ✓ Both present / ✗ Missing [list] | 2/2 |

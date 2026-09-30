@@ -139,3 +139,13 @@ def test_no_removed_gemini_mcp_tool_in_onboarding():
     for skill in ("setup", "init", "health"):
         for path in (SKILLS / skill).rglob("*.md"):
             assert "gemini_raw" not in path.read_text(encoding="utf-8"), path
+
+
+def test_write_voice_gate_lets_a_first_time_author_through():
+    """A new author has no voice store and no AUTHOR_VOICE.md. /write must check the
+    store /voice actually writes, and offer to continue rather than dead-end."""
+    text = (ROOT / "src" / "skills" / "write" / "SKILL.md").read_text(encoding="utf-8")
+    gate = text.split("<!-- BEGIN voice-precondition-gate -->")[1].split("<!-- END voice-precondition-gate -->")[0]
+    assert "${CLAUDE_PLUGIN_DATA}/voice" in gate
+    assert "VOICE_MISSING" in gate and "AskUserQuestion" in gate
+    assert "Write without it" in gate and "voice migrate" in gate

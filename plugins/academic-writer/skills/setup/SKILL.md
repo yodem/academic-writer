@@ -264,17 +264,17 @@ the chat. Then:
 
 ```python
 AskUserQuestion(questions=[{
-  "question": "Would you like to use Gemini?",
-  "header": "Gemini (optional)",
+  "question": "Set up your free Gemini key now? Drafting, proofreading and reading scans run on Gemini.",
+  "header": "Gemini key",
   "options": [
     {"label": "Yes, set it up", "description": "About five minutes: get a free key, store it safely, restart once."},
-    {"label": "No, Claude only", "description": "Nothing is sent to Google. You can add Gemini later by running setup again."}
+    {"label": "Not now", "description": "Nothing is sent to Google. Planning, research and review still work, but writing drafts, proofreading and reading scans need the key. Run setup again any time to add it."}
   ],
   "multiSelect": false
 }])
 ```
 
-"No, Claude only" → record `gemini.enabled: false` and go to Step 6.
+"Not now" → record `gemini.enabled: false`, tell the researcher in one sentence which commands will ask for the key later (`write`, `edit`, `proofread`, `ocr`), and go to Step 6.
 
 ### 5b. Already set?
 
@@ -363,7 +363,7 @@ every existing field. Show:
 > | Python and its add-ons | ✓ Ready / ⚠ [what's missing and the one-line fix] |
 > | Hebrew spelling (hspell) | ✓ / skipped / not available on Windows / not needed |
 > | CandleKeep / NotebookLM | ✓ / skipped (optional) |
-> | Gemini | ✓ Key works / ⚠ [problem in plain words] / — Claude only |
+> | Gemini | ✓ Key works / ⚠ [problem in plain words] / — Not set up yet (needed to write, proofread, read scans) |
 > | Sample paragraph | ✓ Looked good / noted: [feedback] |
 
 ---

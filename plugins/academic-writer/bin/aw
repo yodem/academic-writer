@@ -41608,7 +41608,8 @@ function voiceMigrate(from) {
   const dir = store();
   mkdirSync5(dir, { recursive: true });
   const source = resolve4(from);
-  const author = readFileSync4(join6(source, "AUTHOR_VOICE.md"), "utf8");
+  const authorPath = join6(source, "AUTHOR_VOICE.md");
+  const author = existsSync3(authorPath) ? readFileSync4(authorPath, "utf8") : "";
   const fingerprintPath = join6(source, ".voice", "fingerprint.md");
   const exemplarsPath = join6(source, ".academic-helper", "voice-exemplars.md");
   const fingerprint = existsSync3(fingerprintPath) ? readFileSync4(fingerprintPath, "utf8") : "";

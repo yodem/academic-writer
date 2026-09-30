@@ -1,6 +1,6 @@
 {
   "name": "academic-writer",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as .docx files.",
   "author": {
     "name": "Yotam Fromm",
@@ -22,14 +22,14 @@
     "google_api_key": {
       "type": "string",
       "title": "Gemini API key",
-      "description": "Google AI Studio API key for the bundled `aw` CLI (drafting, editing, synthesis, OCR). Free tier at https://aistudio.google.com/apikey. Stored securely (OS keychain / protected credentials file), never in plaintext settings.json. Bridged to the `aw` binary via the plugin's SessionStart hook (exported as GOOGLE_API_KEY). Optional — use the GOOGLE_API_KEY environment variable directly if you skip this.",
+      "description": "Your free Google Gemini API key, used by the plugin's drafting, evidence, proofreading and OCR steps. Get one at https://aistudio.google.com/apikey; /academic-writer:setup walks you through it. Kept in your operating system's keychain, never in a plain settings file. Takes effect in a new Claude Code session. Leave empty if you set GOOGLE_API_KEY in your environment instead.",
       "sensitive": true,
       "required": false
     },
     "jev_api_key": {
       "type": "string",
       "title": "Jev (TypeSafe) API key",
-      "description": "Optional. Enables Jev shadow/cascade judgments at plugin decision points. Stored securely (OS keychain), never in plaintext settings.",
+      "description": "Advanced and optional: most users should leave this empty. A Jev (TypeSafe) API key for experimental decision-scoring. In this version every Jev point runs in shadow mode: its answers are only logged and never change your results, but when a key is set the question and context at those points are also sent to the Jev service. Kept in your operating system's keychain.",
       "sensitive": true,
       "required": false
     }

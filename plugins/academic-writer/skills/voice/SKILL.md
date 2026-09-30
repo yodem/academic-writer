@@ -19,13 +19,15 @@ Run `aw --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" voice migrate --
 
 ## Choose exemplars
 
-Run `aw --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" voice exemplars --corpus "$PWD/past-articles"`. Show each candidate paragraph with its source paper. Ask the author to pick the number of finished-paper paragraphs set in `thresholds.json > voice.selection` (12 to 20 by default). Save only the chosen ones as JSONL records in `voice/exemplars.jsonl`, each with a stable id, the source paper name and the text. Ask before replacing earlier selections.
+Run `aw --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" voice exemplars --corpus "$PWD/past-articles"`. If `past-articles/` is missing or empty, stop and ask the author to copy 3 or more of their published articles (.docx, .pdf, .md or .txt) into a `past-articles` folder inside this project, then run this command again. Show each candidate paragraph with its source paper. Ask the author to pick the number of finished-paper paragraphs set in `thresholds.json > voice.selection` (12 to 20 by default). Save only the chosen ones as JSONL records in `voice/exemplars.jsonl`, each with a stable id, the source paper name and the text. Ask before replacing earlier selections.
 
 ## Derive moves
 
 Run `aw --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" voice moves --run-id "voice-moves"`. This makes one Gemini call and writes `rules.md`, a short list of the author's characteristic writing moves. Go through the rules with the author and adjust any they do not recognise. The maximum number of lines is set in `thresholds.json > voice.bundle.maxRuleLines`.
 
-## Sync
+## Sync (only with CandleKeep)
+
+Skip this section unless the profile has CandleKeep enabled (`candlekeep.enabled: true`); without it, the store in the plugin data folder is the only copy, and uninstalling the plugin without `--keep-data` deletes it — say so once.
 
 Run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh push "${CLAUDE_PLUGIN_DATA}" "$PWD"` to save local changes to CandleKeep. Run `voice-sync.sh pull "${CLAUDE_PLUGIN_DATA}" "$PWD"` only when the author explicitly asks for a pull, because a pull replaces local changes. The wrapper runs `aw --data-dir … --project-dir … voice push` / `voice pull` with both required paths.
 

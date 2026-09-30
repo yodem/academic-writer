@@ -58,7 +58,9 @@ export async function voiceBundle(options: { n: number; pairs: number; runId: st
 export function voiceMigrate(from: string): string {
   const dir = store(); mkdirSync(dir, { recursive: true });
   const source = resolve(from);
-  const author = readFileSync(join(source, 'AUTHOR_VOICE.md'), 'utf8');
+  // A first-time author has no legacy voice file; start an empty store they fill with exemplars.
+  const authorPath = join(source, 'AUTHOR_VOICE.md');
+  const author = existsSync(authorPath) ? readFileSync(authorPath, 'utf8') : '';
   const fingerprintPath = join(source, '.voice', 'fingerprint.md');
   const exemplarsPath = join(source, '.academic-helper', 'voice-exemplars.md');
   const fingerprint = existsSync(fingerprintPath) ? readFileSync(fingerprintPath, 'utf8') : '';

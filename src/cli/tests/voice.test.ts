@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { voiceBundle, __setDataDir } from '../src/voice.js';
@@ -22,4 +22,14 @@ test('bundle takes at most one exemplar per source paper', async () => {
   __setDataDir(d);
   const b = await voiceBundle({ n: 6, pairs: 2, runId: 't' });
   assert.equal(new Set(b.exemplars.map(e => e.source)).size, b.exemplars.length);
+});
+
+test('migrate with no AUTHOR_VOICE.md creates an empty store a first-time author can draft from', async () => {
+  const { voiceMigrate } = await import('../src/voice.js');
+  const data = mkdtempSync(join(tmpdir(), 'aw-')); __setDataDir(data);
+  const project = mkdtempSync(join(tmpdir(), 'aw-proj-'));
+  const dir = voiceMigrate(project);
+  assert.ok(existsSync(join(dir, 'profile.json')));
+  const b = await voiceBundle({ n: 3, pairs: 0, runId: 'fresh' });
+  assert.equal(b.exemplars.length, 0);
 });

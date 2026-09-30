@@ -33,7 +33,9 @@ The command validates its list of changes before applying them. The same check c
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" changes-schema "proofread-output/changes.json" --json
 ```
 
-For a Word document, convert it to Markdown with `pandoc` first, run `aw proofread` on that Markdown, then build a Word file with tracked changes from the original and the corrected text:
+For a Word document, convert it to Markdown with `pandoc` first, run `aw proofread` on that Markdown, then build a Word file with tracked changes from the original and the corrected text.
+
+Check for pandoc first with `command -v pandoc`. If it is missing, explain in one sentence that pandoc is a free converter that reads Word files, then ask with AskUserQuestion ("Install pandoc now?" — "Yes, install it" / "Skip — I'll give you a .md or .txt file instead"). Only on yes, install it: macOS `brew install pandoc` (needs Homebrew; if `brew` is missing, give the researcher the download link https://pandoc.org/installing.html instead), Windows `winget install --id JohnMacFarlane.Pandoc -e`, Linux `sudo apt install pandoc`. Report the result in plain words.
 
 ```bash
 pandoc "path/to/article.docx" -t markdown -o "proofread-output/article.md"

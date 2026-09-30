@@ -20,16 +20,16 @@ AskUserQuestion(questions=[{
       "markdown": "```\nGemini ON\n─────────\n→ Faster, lower-cost drafting\n→ Per-language calibration gate runs\n   on first /write in each language\n→ Auditor still runs on Claude\n```"
     },
     {
-      "label": "No, Claude only",
-      "description": "Nothing is sent to Google; Claude writes and reviews everything.",
-      "markdown": "```\nClaude only\n───────────\n→ No external API needed\n→ You can enable Gemini later via init\n```"
+      "label": "Not now",
+      "description": "Nothing is sent to Google. Planning and review still work; writing drafts, proofreading and reading scans need the key, so they will ask for it later.",
+      "markdown": "```\nNot now\n───────\n→ Nothing sent to Google\n→ Drafting, proofreading and OCR wait for a key\n→ Add it later with /academic-writer:setup\n```"
     }
   ],
   "multiSelect": false
 }])
 ```
 
-### If "No, Claude only"
+### If "Not now"
 
 Skip the rest of this phase. Note in summary that Gemini is disabled.
 
@@ -93,5 +93,5 @@ still gets Gemini:
 }
 ```
 
-If the researcher chose "No, Claude only": `enabled: false`, `approvedLanguages: []` (Gemini
+If the researcher chose "Not now": `enabled: false`, `approvedLanguages: []` (Gemini
 is off entirely, so there is nothing to approve).

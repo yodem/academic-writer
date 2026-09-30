@@ -27,7 +27,7 @@
 > - **Cost:** Google's free tier is enough for normal use, and creating a key normally needs no
 >   credit card.
 > - **Privacy:** when Gemini is on, the text of your article and the source passages it uses are
->   sent to Google to be processed. If a text must not leave your computer, choose Claude only.
+>   sent to Google to be processed. If a text must not leave your computer, don't run the drafting, proofreading or scan-reading commands on it.
 > - **Safety:** please don't paste the key into this chat. Everything typed in the chat is saved in
 >   the conversation history, so a key there could be read later. I'll show you a safe place to put
 >   it instead."

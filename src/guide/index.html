@@ -118,7 +118,7 @@ footer { margin-top: 48px; color: var(--muted); font-size: .9rem; border-top: 1p
 <header class="hero">
   <h1>Academic Writer: the full guide</h1>
   <p>A writing assistant for humanities researchers. It helps you write a scholarly article in your own voice, using only the sources you choose, and hands you a Word file.</p>
-  <span class="version">Version <!-- guide:version:start -->0.14.0<!-- guide:version:end --></span>
+  <span class="version">Version <!-- guide:version:start -->0.15.0<!-- guide:version:end --></span>
 </header>
 
 <nav class="toc" aria-label="Contents">
@@ -159,7 +159,7 @@ footer { margin-top: 48px; color: var(--muted); font-size: .9rem; border-top: 1p
   <thead><tr><th scope="col">What</th><th scope="col">Why</th><th scope="col">Cost</th></tr></thead>
   <tbody>
     <tr><td><strong>Claude Code</strong></td><td>The program the plugin runs inside. It comes with a Claude subscription that includes Claude Code. Download it from <a href="https://claude.com/claude-code">claude.com/claude-code</a>.</td><td>Your Claude plan</td></tr>
-    <tr><td><strong>A Gemini API key</strong></td><td>An <em>API key</em> is a long password that lets the plugin use Google's Gemini AI, which does much of the drafting, editing and text recognition. You get one from your own Google account in about two minutes; setup shows you how.</td><td>Free tier available</td></tr>
+    <tr><td><strong>A Gemini API key</strong></td><td>An <em>API key</em> is a long password that lets the plugin use Google's Gemini AI, which does the drafting, proofreading and text recognition (these commands need the key). You get one from your own Google account in about two minutes; setup shows you how.</td><td>Free tier available</td></tr>
     <tr><td><strong>Microsoft Word</strong></td><td>To read the finished article and to mark it up with comments and tracked changes. LibreOffice also opens the file, but Word handles comments and tracked changes best.</td><td>Your existing copy</td></tr>
   </tbody>
 </table></div>
@@ -315,7 +315,7 @@ claude plugin install academic-writer@yodem</code></pre></div>
 <details>
   <summary>"Missing Python package" or the Word file is not created</summary>
   <p>Run <code>/academic-writer:setup</code>; it checks the helper packages and offers to install them for you. If you prefer to do it yourself, paste this into a terminal:</p>
-  <div class="cmd"><pre><code>python3 -m pip install python-docx lxml pdfplumber pymupdf</code></pre></div>
+  <div class="cmd"><pre><code>python3 -m pip install python-docx lxml pdfplumber pymupdf jsonschema</code></pre></div>
   <p>If the computer says <code>python3</code> was not found, install Python 3 from <a href="https://www.python.org/downloads/">python.org/downloads</a> (on Windows, tick "Add Python to PATH" during installation), then try again.</p>
 </details>
 <details>
