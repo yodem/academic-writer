@@ -11,8 +11,8 @@ src/hooks/node_modules/
 .cognetivy/workflows/
 past-articles/
 
-# Node
-node_modules/
+# Node (no trailing slash: also matches a node_modules symlink, as worktrees use)
+node_modules
 
 # OS
 .DS_Store

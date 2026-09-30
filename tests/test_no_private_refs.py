@@ -94,6 +94,29 @@ class TestExtendedIdentityRules(unittest.TestCase):
                      "^node_modules/", r"^\.claude/settings\.json$"):
             self.assertIn(frag, text)
 
+    def test_tracked_path_patterns_match_planted_paths(self):
+        """Each untracked location must actually be matched by a TRACKED_PATH_DENY regex."""
+        with open(SCRIPT, encoding="utf-8") as fh:
+            text = fh.read()
+        block = text.split("TRACKED_PATH_DENY=(", 1)[1].split("\n)", 1)[0]
+        patterns = [ln.strip().strip("'").split("::", 1)[0]
+                    for ln in block.splitlines() if ln.strip().startswith("'")]
+        planted = [".team/state.md", "docs/refactor/STATUS.md", "docs/superpowers/plans/x.md",
+                   "docs/audits/a.md", "docs/reviews/r.md", "docs/plans/p.md",
+                   "docs/benchmarks/b.md", "node_modules/.package-lock.json",
+                   ".claude/settings.json"]
+        for path in planted:
+            with self.subTest(path=path):
+                hit = any(subprocess.run(["grep", "-qE", "--", pat], input=path + "\n",
+                                         text=True).returncode == 0 for pat in patterns)
+                self.assertTrue(hit, f"no TRACKED_PATH_DENY rule matches {path}")
+        # and a shipped guide doc must not be caught
+        for ok in ("docs/first-time-flow.md", ".claude/rules/antipatterns.md"):
+            with self.subTest(ok=ok):
+                hit = any(subprocess.run(["grep", "-qE", "--", pat], input=ok + "\n",
+                                         text=True).returncode == 0 for pat in patterns)
+                self.assertFalse(hit, f"{ok} wrongly denied")
+
     def test_internal_paths_are_untracked_and_ignored(self):
         tracked = subprocess.run(
             ["git", "ls-files", ".team", "node_modules", ".claude/settings.json",
