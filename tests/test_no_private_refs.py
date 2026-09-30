@@ -50,6 +50,92 @@ class TestNoPrivateRefs(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout)
 
 
+def _run_with_planted(text, name="_private_ref_probe.md"):
+    planted = os.path.join(REPO, "docs", name)
+    with open(planted, "w", encoding="utf-8") as fh:
+        fh.write(text + "\n")
+    try:
+        env = os.environ.copy()
+        env["CHECK_NO_PRIVATE_REFS_EXTRA_FILES"] = os.path.relpath(planted, REPO)
+        return subprocess.run(["bash", SCRIPT], cwd=REPO, env=env, capture_output=True, text=True)
+    finally:
+        os.unlink(planted)
+
+
+class TestExtendedIdentityRules(unittest.TestCase):
+    """Each identity rule must fail on a planted string (VER-08) and allow safe ones."""
+
+    CASES = [
+        ("session path -Users-yotamfromm-dev", "maintainer username slug"),
+        ("contact someone@sefaria.org", "work email domain"),
+        ("mail jane.doe@gmail.com", "personal email address"),
+        ("ssh dev-server", "dev-server host name"),
+        ("host box.tail1234.ts.net", "tailscale host name"),
+        ("Tailscale box", "tailscale host name"),
+        ("see .team/state.md", "internal team handoff state path"),
+    ]
+
+    def test_each_rule_fires_on_a_planted_string(self):
+        for text, reason in self.CASES:
+            with self.subTest(text=text):
+                proc = _run_with_planted(text)
+                self.assertNotEqual(proc.returncode, 0, f"not caught: {text}")
+                self.assertIn(reason, proc.stdout)
+
+    def test_safe_strings_pass(self):
+        safe = "Author: Yotam Fromm. Mail you@example.com or noreply@anthropic.com."
+        proc = _run_with_planted(safe)
+        self.assertEqual(proc.returncode, 0, proc.stdout)
+
+    def test_tracked_path_deny_covers_every_untracked_dir(self):
+        with open(SCRIPT, encoding="utf-8") as fh:
+            text = fh.read()
+        for frag in (r"^\.team/", "refactor|superpowers|audits|reviews|plans|benchmarks",
+                     "^node_modules/", r"^\.claude/settings\.json$"):
+            self.assertIn(frag, text)
+
+    def test_tracked_path_patterns_match_planted_paths(self):
+        """Each untracked location must actually be matched by a TRACKED_PATH_DENY regex."""
+        with open(SCRIPT, encoding="utf-8") as fh:
+            text = fh.read()
+        block = text.split("TRACKED_PATH_DENY=(", 1)[1].split("\n)", 1)[0]
+        patterns = [ln.strip().strip("'").split("::", 1)[0]
+                    for ln in block.splitlines() if ln.strip().startswith("'")]
+        planted = [".team/state.md", "docs/refactor/STATUS.md", "docs/superpowers/plans/x.md",
+                   "docs/audits/a.md", "docs/reviews/r.md", "docs/plans/p.md",
+                   "docs/benchmarks/b.md", "node_modules/.package-lock.json",
+                   ".claude/settings.json"]
+        for path in planted:
+            with self.subTest(path=path):
+                hit = any(subprocess.run(["grep", "-qE", "--", pat], input=path + "\n",
+                                         text=True).returncode == 0 for pat in patterns)
+                self.assertTrue(hit, f"no TRACKED_PATH_DENY rule matches {path}")
+        # and a shipped guide doc must not be caught
+        for ok in ("docs/first-time-flow.md", ".claude/rules/antipatterns.md"):
+            with self.subTest(ok=ok):
+                hit = any(subprocess.run(["grep", "-qE", "--", pat], input=ok + "\n",
+                                         text=True).returncode == 0 for pat in patterns)
+                self.assertFalse(hit, f"{ok} wrongly denied")
+
+    def test_internal_paths_are_untracked_and_ignored(self):
+        tracked = subprocess.run(
+            ["git", "ls-files", ".team", "node_modules", ".claude/settings.json",
+             "docs/refactor", "docs/superpowers", "docs/audits", "docs/reviews",
+             "docs/plans", "docs/benchmarks"],
+            cwd=REPO, capture_output=True, text=True, check=True).stdout.split()
+        self.assertEqual(tracked, [])
+        with open(os.path.join(REPO, ".gitignore"), encoding="utf-8") as fh:
+            ignore = fh.read()
+        for entry in (".team/", "docs/refactor/", "docs/superpowers/", "docs/audits/",
+                      "docs/reviews/", "docs/plans/", "docs/benchmarks/", ".claude/settings.json"):
+            self.assertIn(entry, ignore)
+
+    def test_guide_html_is_not_ignored(self):
+        for p in ("src/guide/index.html", "plugins/academic-writer/guide/index.html"):
+            proc = subprocess.run(["git", "check-ignore", "-q", p], cwd=REPO)
+            self.assertEqual(proc.returncode, 1, f"{p} must not be gitignored")
+
+
 if __name__ == "__main__":
     unittest.main()
 

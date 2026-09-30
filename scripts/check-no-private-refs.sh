@@ -33,6 +33,12 @@ IDENTITY_DENY=(
   '\.claude/plans/::path to a private local plan file'
   'claude-obsidian::path to the private personal wiki vault'
   'bikoret-musarit::filename of an unpublished article'
+  'yotamfromm::maintainer username slug (also catches -Users-yotamfromm- session paths)'
+  '@sefaria\.org::work email domain'
+  '[A-Za-z0-9._%+-]+@(gmail|googlemail|outlook|hotmail|yahoo|icloud|me|proton|protonmail)\.[a-z]+::personal email address (use example.com or noreply)'
+  'dev-server::maintainer dev-server host name'
+  '[Tt]ailscale|\.ts\.net::tailscale host name'
+  '\.team/state::internal team handoff state path'
 )
 
 # Applied to SHIPPED files only — stricter, because these are installed by users.
@@ -53,6 +59,10 @@ TRACKED_PATH_DENY=(
   '^past-articles/::the maintainer'"'"'s own article corpus'
   '^logs/::local run logs'
   '^pitch-::the maintainer'"'"'s own pitch drafts'
+  '^\.team/::internal team handoff state'
+  '^docs/(refactor|superpowers|audits|reviews|plans|benchmarks)/::internal dev-process docs'
+  '^node_modules/::vendored dependencies'
+  '^\.claude/settings\.json$::maintainer permission settings'
 )
 
 status=0
