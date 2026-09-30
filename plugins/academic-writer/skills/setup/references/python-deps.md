@@ -1,54 +1,37 @@
-# Python Dependency Check (setup Step 4)
+# Python packages check
 
-> Loaded on demand by `setup` Step 4.
+> Loaded on demand by `setup` Step 4b, `init` Phase 0 and `health`.
 
-Academic Writer's Python-side scripts (style-metrics extraction, DOCX export, PDF/DOCX text
-reading) rely on four packages. Import names differ from package names for two of them — note
-`pymupdf` installs as the package `pymupdf` but imports as `fitz`.
+Python packages are small add-ons that teach Python new skills. Academic Writer needs five of
+them. Two have a different name when installed than when used — `python-docx` is used as `docx`,
+and `pymupdf` is used as `fitz`.
 
-| Package (pip install name) | Import name | Used for |
+| Package (install name) | Used as | What it does for you |
 |---|---|---|
-| `python-docx` | `docx` | Reading/writing `.docx` files |
-| `lxml` | `lxml` | XML parsing backing `python-docx` |
-| `pdfplumber` | `pdfplumber` | Extracting text from PDFs |
-| `pymupdf` | `fitz` | PDF rendering/OCR-adjacent handling |
+| `python-docx` | `docx` | Reads your Word files and builds the finished `.docx` |
+| `lxml` | `lxml` | Helps `python-docx` read the inside of Word files |
+| `pdfplumber` | `pdfplumber` | Pulls the text out of PDF articles for style analysis |
+| `pymupdf` | `fitz` | Checks whether a scanned PDF already has a text layer (OCR) |
+| `jsonschema` | `jsonschema` | Checks the proofreader's list of corrections is well formed |
 
-## Check script
-
-Run once, idempotent, safe to re-run:
+## Check (changes nothing, safe to repeat)
 
 ```bash
 python3 -c "
 import importlib
-mods = {'python-docx': 'docx', 'lxml': 'lxml', 'pdfplumber': 'pdfplumber', 'pymupdf': 'fitz'}
+mods = {'python-docx': 'docx', 'lxml': 'lxml', 'pdfplumber': 'pdfplumber', 'pymupdf': 'fitz', 'jsonschema': 'jsonschema'}
 missing = []
 for pkg, mod in mods.items():
     try:
         importlib.import_module(mod)
     except ImportError:
         missing.append(pkg)
-if missing:
-    print('MISSING:' + ','.join(missing))
-else:
-    print('ALL_PRESENT')
+print('MISSING:' + ','.join(missing) if missing else 'ALL_PRESENT')
 "
 ```
 
-## Install command
+## Install (only after the researcher says yes)
 
-If the check reports `MISSING:...`, install everything in one shot (installing all four is fine
-even if only some are missing — idempotent, no harm re-installing present ones):
-
-```bash
-pip3 install python-docx lxml pdfplumber pymupdf
-```
-
-If `pip3` is not found, try `python3 -m pip install python-docx lxml pdfplumber pymupdf`.
-
-## Known gap: no requirements.txt
-
-There is no `requirements.txt`, `pyproject.toml`, or any other Python dependency manifest anywhere
-in this repo — these four packages are only ever referenced ad hoc, inline, in skill scripts. This
-setup wizard's check-and-install step is currently the only place dependency installation is
-walked through interactively. Not a blocker, just a gap worth knowing about if you're debugging a
-"module not found" error outside of this wizard (e.g. running `extract-style-metrics.py` directly).
+The install command itself lives in the skill step that asks first (`setup` Step 4b, `init`
+Phase 0). It installs all five packages for the current user only; re-installing one that is
+already present does no harm. If it fails, see `troubleshooting.md`.

@@ -20,8 +20,6 @@ If `abstractLanguages` is not set in the profile, default to `[targetLanguage]` 
 
 Store the abstract(s) for inclusion in the DOCX output.
 
-Log completion:
-
 ---
 
 ### Step 8.7: Self-Review (Quality Gate)
@@ -40,8 +38,6 @@ Present the scorecard to the researcher.
 
 **If score is below the self-review threshold defined in `thresholds.json` (default 40/60)**, ask whether to proceed or address issues first (using `AskUserQuestion`).
 **If score meets or exceeds the threshold (default 40/60)**, show the scorecard and continue to DOCX output.
-
-Log completion:
 
 ---
 

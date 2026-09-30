@@ -2,7 +2,7 @@
 
 Reference for detecting and fixing AI-generated writing patterns in English academic prose.
 
-Patterns here have **named numeric caps per article**. The section-writer's repetition check and the synthesizer's full-article sweep both enforce these caps. A pattern is not forbidden — it is capped. The cap is the total count allowed across the entire article, not per paragraph.
+Patterns here have **named numeric caps per article**. They are writing guidance, not a scored gate: the auditor enforces the zero-cap Section G rule (uncited factual claims), `aw draft` enforces the banned and capped words in `style-words.json`, and `aw synthesize` varies repeated paragraph openers. A pattern is not forbidden — it is capped. The cap is the total count allowed across the entire article, not per paragraph.
 
 ## English AI Pattern List
 
@@ -131,6 +131,6 @@ Use these dimensions to **read** the paragraph, not to score it. **Do not assign
 ## Application Order
 
 1. **Typography Tier 1** (auto-fix em-dashes, straight quotes).
-2. **Per-paragraph scan** (section-writer Skill 6) — catch formulaic openers, inflated language, and structural tells in the paragraph in isolation.
-3. **Per-paragraph cross-scan** (section-writer Skill 7) — check named patterns against `priorSectionTexts` so the cap is enforced across already-written sections.
-4. **Full-article sweep** (synthesizer) — count every named pattern across the finished article. For each pattern exceeding its cap, rewrite the overflow instances.
+2. **Per-paragraph scan** (when reviewing or editing a draft) — catch formulaic openers, inflated language, and structural tells in the paragraph in isolation.
+3. **Per-paragraph cross-scan** — check named patterns against the already-written sections so the cap is enforced across the article.
+4. **Full-article sweep** (`aw synthesize` for repeated openers; `/academic-writer:review` for the rest) — count every named pattern across the finished article. For each pattern exceeding its cap, rewrite the overflow instances.

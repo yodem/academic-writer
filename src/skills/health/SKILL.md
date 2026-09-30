@@ -22,7 +22,7 @@ grep -m1 '"version"' "${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json"
 ```
 
 If it is older than the version the author expects, tell them to run
-`claude plugin marketplace update academic-writer` and then `claude plugin update academic-writer@academic-writer`
+`claude plugin marketplace update yodem` and then `claude plugin update academic-writer@yodem`
 (a marketplace refresh alone does not update an installed plugin).
 
 ## 1. Profile Check
@@ -150,7 +150,7 @@ ls "${CLAUDE_PLUGIN_ROOT}/agents/"*.md 2>/dev/null
 
 Verify both exist: `architect.md` (plans the argument and outline) and `auditor.md` (checks every
 citation). If one is missing, the install is damaged: "Reinstall the plugin
-(`claude plugin update academic-writer@academic-writer`)."
+(`claude plugin update academic-writer@yodem`)."
 
 ---
 

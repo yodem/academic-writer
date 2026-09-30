@@ -55,7 +55,7 @@ export function piModelFor(step: string): string {
   return model;
 }
 
-// Bash subprocesses get no CLAUDE_PLUGIN_ROOT (docs/refactor/runtime-facts.md): derive it from
+// Bash subprocesses get no CLAUDE_PLUGIN_ROOT (a documented Claude Code runtime fact): derive it from
 // this binary's location, <root>/bin/aw.
 export function pluginRoot(argv1: string = process.argv[1] ?? ''): string {
   const bin = dirname(resolve(argv1));

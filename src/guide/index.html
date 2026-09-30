@@ -244,19 +244,19 @@ claude plugin install academic-writer@yodem</code></pre></div>
 <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
 <tbody>
 <tr><td><code>/academic-writer:intro</code></td><td>Open the full guide in your web browser: what the plugin does, setup, your first article, privacy and troubleshooting.</td></tr>
-<tr><td><code>/academic-writer:setup</code></td><td>Friendly, guided first-run setup wizard for a non-engineer: one question at a time, gets your Gemini API key working with a live test, checks your Python tools, and shows you a sample paragraph before you&#x27;re done.</td></tr>
-<tr><td><code>/academic-writer:init</code></td><td>First-time setup for the Academic Writer.</td></tr>
-<tr><td><code>/academic-writer:write</code></td><td>Write a new academic article.</td></tr>
-<tr><td><code>/academic-writer:revise</code></td><td>Read Word comments and tracked changes, confirm grouped revisions, and update article and feedback stores.</td></tr>
-<tr><td><code>/academic-writer:edit</code></td><td>Edit a previously written article — revise sections, fix citations, adjust tone, restructure arguments, or rewrite passages.</td></tr>
-<tr><td><code>/academic-writer:edit-section</code></td><td>Quick edit of a single section — rewrite, expand, cut, fix citations, or adjust style.</td></tr>
-<tr><td><code>/academic-writer:proofread</code></td><td>Use when a finished article needs deterministic typo, language, and editorial proofreading with a visible corrected copy and report.</td></tr>
-<tr><td><code>/academic-writer:review</code></td><td>Self-review quality gate — scores a completed article on 6 dimensions (structure, argument logic, citation completeness, source coverage, writing quality, academic conventions) and presents a scorecard before final output.</td></tr>
-<tr><td><code>/academic-writer:research</code></td><td>Use when investigating a topic or checking claims against indexed sources.</td></tr>
-<tr><td><code>/academic-writer:ideate</code></td><td>Guided research ideation — brainstorm research questions using 5W1H, gap analysis, and structured framing.</td></tr>
-<tr><td><code>/academic-writer:ocr</code></td><td>OCR a scanned PDF or image (or a directory of them) into clean plain-text markdown via the bundled Gemini vision tool.</td></tr>
-<tr><td><code>/academic-writer:voice</code></td><td>Manage the shared author voice store: migrate, choose exemplars, derive writing moves, and sync it.</td></tr>
-<tr><td><code>/academic-writer:health</code></td><td>Check the health of all Academic Writer integrations — profile, Candlekeep, RAG, past articles, and source index.</td></tr>
+<tr><td><code>/academic-writer:setup</code></td><td>Friendly first-run setup for researchers with no technical background: checks each tool Academic Writer needs, explains it in one sentence, asks before installing anything, walks you through getting and safely storing a free Gemini key, and ends with a sample paragraph.</td></tr>
+<tr><td><code>/academic-writer:init</code></td><td>Full onboarding for Academic Writer: builds your researcher profile, learns your writing style from past articles, connects your research library, and offers Gemini.</td></tr>
+<tr><td><code>/academic-writer:write</code></td><td>Write a new academic article with the author, step by step: topic, sources, verified evidence, the author&#x27;s thesis, an approved outline, drafting, a citation audit and a Word file.</td></tr>
+<tr><td><code>/academic-writer:revise</code></td><td>Read the Word comments and tracked changes the author left on a generated draft, group them, confirm each group, then update the article and the voice and feedback stores.</td></tr>
+<tr><td><code>/academic-writer:edit</code></td><td>Revise an article you already drafted: several passages at once, tone, structure, argument order or evidence.</td></tr>
+<tr><td><code>/academic-writer:edit-section</code></td><td>Quick revision of one section of an existing article: rewrite, expand, shorten, fix its citations or adjust its style.</td></tr>
+<tr><td><code>/academic-writer:proofread</code></td><td>Proofread a finished article (Markdown or Word) for typos, wrong words, grammar and editorial issues, producing a corrected copy, a report and an editorial memo without touching the original.</td></tr>
+<tr><td><code>/academic-writer:review</code></td><td>Score a completed article on six dimensions (structure, argument logic, citation completeness, source coverage, writing quality, academic conventions) and show a scorecard with concrete findings.</td></tr>
+<tr><td><code>/academic-writer:research</code></td><td>Investigate a topic or check a claim against the author&#x27;s indexed sources, returning only passages whose quotations were verified word for word.</td></tr>
+<tr><td><code>/academic-writer:ideate</code></td><td>Guided brainstorming that turns a vague topic into a sharp research question, using who/what/when/where/why/how, a gap check against the author&#x27;s sources and a choice of approach; saves a research brief that /academic-writer:write reads.</td></tr>
+<tr><td><code>/academic-writer:ocr</code></td><td>Turn a scanned PDF or photographed page (or a folder of them) into plain text with the bundled Gemini reading tool; pages that already contain text are extracted directly.</td></tr>
+<tr><td><code>/academic-writer:voice</code></td><td>Build or update the author&#x27;s voice profile: import older voice files, choose exemplar paragraphs from past papers, derive writing rules and sync them to CandleKeep.</td></tr>
+<tr><td><code>/academic-writer:health</code></td><td>Check that Academic Writer is ready to use — your profile, the tools it needs (Python and its add-ons, Hebrew spelling, CandleKeep, NotebookLM), the Gemini key and past articles — with a plain-language fix for anything missing.</td></tr>
 <tr><td><code>/academic-writer:help</code></td><td>A short list of every command and the three steps to get started.</td></tr>
 </tbody>
 </table>

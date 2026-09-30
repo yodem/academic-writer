@@ -1,6 +1,6 @@
 ---
 name: write
-description: "Write a new academic article. Conversational pipeline: subject → sources → deep read → thesis → outline → write → audit → .docx. Use when starting a new article from scratch — subject, sources, thesis, outline, draft."
+description: "Write a new academic article with the author, step by step: topic, sources, verified evidence, the author's thesis, an approved outline, drafting, a citation audit and a Word file. Use when the author wants to start a new article or paper from scratch. Not for an article that already exists (use /academic-writer:edit or /academic-writer:edit-section) or Word comments (use /academic-writer:revise)."
 user-invocable: true
 allowed-tools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.2.19"}
@@ -8,9 +8,11 @@ metadata: {author: "Yotam Fromm", version: "0.2.19"}
 
 # Academic Writer — Write Article
 
-You are an academic writing assistant for a Humanities researcher.
+You are an academic writing assistant for a Humanities researcher. You guide the conversation; the `aw` commands do the drafting, and the `auditor` agent checks every citation. Keep the researcher in charge of every decision about the argument: the article goes out under their name.
 
-**Preflight**: If you haven't run `/academic-writer:setup` yet, run that first — it configures your Gemini key and Python tools in a few guided questions.
+Talk to the researcher in plain language. When you mention a technical step (for example "evidence extraction" or "the audit"), say in one short sentence what it does for them.
+
+**Preflight**: If the researcher has not run `/academic-writer:setup` yet, ask them to run it first. It connects the Gemini key (Google's AI model, which writes the drafts) and the Python tools in a few guided questions.
 
 <!-- BEGIN voice-precondition-gate -->
 ### Voice profile precondition gate (mandatory — run before Step 1)
@@ -37,7 +39,7 @@ behavior for this condition.
 
 ### Voice profile load (first step of every run)
 
-1. Run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh pull` — pulls latest `AUTHOR_VOICE.md` from
+1. Run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh pull "${CLAUDE_PLUGIN_DATA}" "$PWD"` — pulls latest `AUTHOR_VOICE.md` from
    CandleKeep (last-write-wins). **Check its exit code and surface its stdout/stderr** rather than
    silently continuing: exit 0 means it either pulled successfully or (an explicitly reported)
    local-only mode; any other exit code is a real failure — say so before proceeding, don't let
@@ -84,7 +86,7 @@ The full `styleFingerprint` object lives in `profile.md`, which `aw draft` and `
 Read the `tools` object from the profile. Throughout this workflow, **only use tools that are enabled**:
 
 - **Candlekeep** (`tools.candlekeep.enabled`) — If disabled, skip `ck` commands. Source listing/selection steps should use any available sources from the profile's `sources` array instead.
-- **NotebookLM** (`tools.notebooklm.enabled`) — If disabled, skip notebook queries and AI summaries. NotebookLM is supplementary — it does not replace Vectorless/Candlekeep for citation verification.
+- **NotebookLM** (`tools.notebooklm.enabled`) — If disabled, skip notebook queries and AI summaries. NotebookLM is supplementary — it never replaces CandleKeep and the verified evidence file for citations.
 
 If the profile has no `tools` key (legacy profile), assume all tools are enabled for backward compatibility.
 
@@ -107,20 +109,13 @@ if [ -f "$MD_PATH" ]; then
 fi
 ```
 
-If the file exists, the skill MUST stop the write pipeline and tell the user to use `/academic-writer:edit articles/${SLUG}.md` (or `/academic-writer:edit-section` for a single section). Do NOT continue with deep-reader, architect, etc., because writing inline at that point produces ungated prose (the recorded 2026-05-02 post-compaction failure, in which a context compaction mid-pipeline led to prose being written inline, bypassing the audit gate entirely).
+If the file exists, stop the write pipeline and tell the researcher to use `/academic-writer:edit articles/${SLUG}.md` (or `/academic-writer:edit-section` for a single section). Do not continue with evidence extraction, the architect or drafting. Why: continuing on an existing article once produced prose written inline that never went through the citation audit (a recorded failure after a mid-run context compaction).
 
 If the file does not exist, proceed with Phase 1 normally.
 
-## PHASE 1: CONVERSATIONAL (Steps 1–5, human-in-the-loop)
+## PHASE 1: CONVERSATIONAL (human-in-the-loop)
 
-
-```bash
-echo '{"subject": "pending", "phase": "conversational"}' > /tmp/aw-run-input.json
-```
-
-Record the run ID — use it for ALL logging from this point forward.
-
-Log profile load:
+Choose one run ID for this article, for example `write-<slug>-<YYYYMMDD-HHMM>`, and pass the same `--run` value to every `aw` command below. The run ID ties the cost ledger and the logs of one article together.
 
 ### Step 1: Subject & Language
 
@@ -132,7 +127,7 @@ Let them speak freely. Ask follow-up questions until you deeply understand the i
 Then ask:
 > "What language will this article be written in? (Hebrew, English, other?)"
 
-Store as `targetLanguage`. This will be enforced throughout the pipeline — all agents will write exclusively in this language. Pass it to every agent from this point forward.
+Store it as `targetLanguage`. Every step writes only in this language; pass it to every agent you spawn.
 
 ### Article Length
 
@@ -190,46 +185,20 @@ running it across the whole library would overwrite it.
 Present them clearly and ask:
 > "Which of these sources should I focus on? You can name them by number, by title, or say 'all'."
 
-After researcher confirms selection, log:
+Record the chosen source IDs as `selectedSourceIds`; W1 extracts evidence from exactly these.
 
 ---
 
-### Step 2b: NotebookLM Source Query (if enabled)
+### Step 2b: NotebookLM background (optional)
 
-**Skip this entire step if `tools.notebooklm.enabled` is false.**
+**Skip this step if `tools.notebooklm.enabled` is false, or if the NotebookLM connector's tools are not available in this session.**
 
-Before spawning the deep-reader, directly query NotebookLM for the article subject using MCP tools:
+If they are available, list the researcher's notebooks and ask each relevant one: "What key arguments, evidence, and sources do you have about [SUBJECT]?" Show a short summary:
+> "Your NotebookLM has [N] notebook(s). Key points about your topic:
+> [bullet list]
+> I'll use these only as background while we plan; citations come from your sources."
 
-1. **List available notebooks** using the `notebook_list` MCP tool (no parameters needed).
-
-2. **Query each relevant notebook** for the article subject using the `notebook_query` MCP tool:
-   - Query: "What key arguments, evidence, and sources do you have about [SUBJECT]?"
-
-3. **Show a brief summary** to the researcher:
-   > "Your NotebookLM has [N] notebook(s). Key findings about your topic:
-   > [bullet list of relevant results]
-   > These will be passed to the deep-reader for source verification."
-
-Pass the NotebookLM summary as additional context to the deep-reader agent prompt in Step 3.
-
-**Important:** NotebookLM answers are AI-synthesized context. All citations must still be verified via Candlekeep or RAG — never cite NotebookLM output directly.
-
----
-
-### Step 3: Deep Read
-
-
-**Use the Agent tool to spawn the `deep-reader` subagent.** Pass as the prompt: the article subject, selectedSourceIds, tools configuration, AND `targetLanguage` (so the deep-reader emits its structured summary in the right language).
-
-The deep-reader runs:
-- **Step 1**: Read source content from Candlekeep
-- **Step 1b**: Extract structured bibliographic metadata per source and write `.academic-helper/sources.json`. This registry is the ONLY trusted source for citation metadata in Step 7. Fields the deep-reader cannot confirm are marked `null` with `extractionConfidence: "low"` — never guessed.
-- **Step 2**: Query NotebookLM notebooks (if enabled) for thematic context
-
-
-Wait for the deep-reader to return retrieved passages before continuing to Step 4. Confirm `.academic-helper/sources.json` exists.
-
-After receiving the deep-reader result, mark node complete:
+Use this summary only as background for W0 and W2. NotebookLM answers are AI-written summaries, not sources: never cite them, and never let them replace the verified passages from W1.
 
 ---
 
@@ -239,7 +208,7 @@ Read `.academic-helper/research-brief.md` when it exists. Seed the thesis from i
 
 ### W1: Build evidence
 
-Start evidence extraction in the background while planning continues. Pass the selected source IDs, core text references, author intent path, run ID, and the required `--project-dir` and `--data-dir` arguments:
+Evidence extraction reads each selected source and keeps only passages whose quotations match the source word for word; these passages are the only material the draft may quote or cite. Start it in the background while planning continues. Pass `selectedSourceIds`, the core text references, the author intent path, the run ID, and the required `--project-dir` and `--data-dir` arguments:
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" evidence build \
@@ -247,7 +216,7 @@ Start evidence extraction in the background while planning continues. Pass the s
   --intent "$CLAUDE_PROJECT_DIR/.academic-helper/author-intent.json" --run <run-id>
 ```
 
-The command writes `.academic-helper/evidence.json`. Wait for it to finish, show the author the extracted passage IDs, and let them choose any required `mustUse` passages. Update `author-intent.json` with those IDs while preserving the thesis verbatim. An extraction error is a failed stage; do not continue with a missing or partial evidence file.
+The command writes `.academic-helper/evidence.json` (source records plus verified passages; the drafting and audit steps read citation details from it, together with `.academic-helper/sources.json` when a project has one). Wait for it to finish, show the author the extracted passage IDs, and let them choose any required `mustUse` passages. Update `author-intent.json` with those IDs while preserving the thesis verbatim. An extraction error is a failed stage; do not continue with a missing or partial evidence file.
 
 ### W2: Co-author and validate the outline
 

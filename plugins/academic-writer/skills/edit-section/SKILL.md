@@ -1,20 +1,27 @@
 ---
 name: edit-section
-description: "Quick edit of a single section — rewrite, expand, cut, fix citations, or adjust style. Faster than full article edit. Use when changing one specific section only — faster than full edit."
+description: "Quick revision of one section of an existing article: rewrite, expand, shorten, fix its citations or adjust its style. Use when the author points at a single section or passage to change. Not for article-wide changes (use /academic-writer:edit), Word comments (use /academic-writer:revise) or typo checks (use /academic-writer:proofread)."
 user-invocable: true
-allowed-tools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion, ]
+allowed-tools: [Bash, Read, Write, Glob, Grep, Agent, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.2.19"}
 ---
 
 # Academic Writer — Edit Section
 
-Use this command for one focused section. For article-wide changes, use `/academic-writer:edit`.
+Revise one focused section. For changes across the whole article, hand off to `/academic-writer:edit`.
 
-Read the selected section, preserve its citations, and ask for an instruction if none was provided. Write the section and instruction to temporary files inside the project. Run:
+1. Read the section the author chose. If it is unclear which one, list the article's headings and ask.
+2. If the author gave no instruction, ask what they want: rewrite, expand, shorten, fix a citation, or change the style.
+3. Write the section and the instruction to temporary files inside the project, then run:
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" edit \
   --text-file <section-file> --instruction-file <instruction-file> --lang <he|en> --run <run-id> --out <output-file>
 ```
 
-Use `--instruction <text>` for a short instruction. Choose `--lang` from the project profile or ask the author. Review the returned `revised_text` and output file before applying it. If factual claims or citations changed, send all paragraphs in the section to the `auditor` in one batched call. Only PASS paragraphs with their `taggedText` may replace the accepted text; correct and re-audit failures.
+- For a short instruction you may use `--instruction <text>` instead.
+- Take `--lang` from `.academic-helper/profile.md`, or ask the author.
+
+4. Read the returned `revised_text` and the output file. Show the author the before/after before applying it.
+5. Keep the section's citations unless the author asked to change them. If a factual claim or citation changed, send every paragraph of the section to the `auditor` agent in one batched call: the auditor is the only gate that checks citations against the real sources.
+6. Replace the accepted text only with PASS paragraphs and their `taggedText`. Correct and re-audit any FAIL or PARTIAL paragraph first.

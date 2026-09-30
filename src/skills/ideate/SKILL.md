@@ -150,11 +150,9 @@ The automatic "Other" choice lets the researcher write their own question instea
 
 Write a `research-brief.md` file that feeds directly into `/academic-writer:write`:
 
-```bash
-mkdir -p .academic-helper
-```
+If `.academic-helper/` does not exist yet, the plugin is not set up in this folder: tell the researcher to run `/academic-writer:setup` first (only setup and init create that folder), and show the brief in the chat meanwhile so nothing is lost.
 
-Use the `Write` tool to create `.academic-helper/research-brief.md`:
+Otherwise, use the `Write` tool to create `.academic-helper/research-brief.md`:
 
 ```markdown
 # Research Brief

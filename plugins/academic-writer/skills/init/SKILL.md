@@ -1,17 +1,24 @@
 ---
 name: init
-description: "First-time setup for the Academic Writer. Configures researcher profile, analyzes writing style from past articles, indexes research sources, and offers Gemini onboarding. Supports a --quick flag for a fast path. Use on first install, when redoing onboarding from scratch, or when the user wants a quick onboarding (pass --quick). Use when this skill's command or workflow is needed."
+description: "Full onboarding for Academic Writer: builds your researcher profile, learns your writing style from past articles, connects your research library, and offers Gemini. Asks before installing anything. Use when you want the plugin to learn your voice and sources, when redoing onboarding from scratch, or for a fast pass with --quick."
 user-invocable: true
 disable-model-invocation: true
-allowed-tools: [Bash, Read, Write, Glob, Grep, AskUserQuestion, mcp__plugin_academic-writer_gemini-api__gemini_raw]
-metadata: {author: "Yotam Fromm", version: "0.3.0"}
+allowed-tools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
+metadata: {author: "Yotam Fromm", version: "0.4.0"}
 ---
 
 # Academic Writer — Initialization Wizard
 
 Personalized onboarding that creates your researcher profile, detects available integrations, analyzes your writing style, indexes your research sources, and optionally wires up Gemini as a prose writer.
 
-**Preflight**: If you haven't run `/academic-writer:setup` yet, run that first — it configures your Gemini key and Python tools in a few guided questions.
+You are talking to a humanities researcher who may have no technical background. Use plain words,
+explain any technical term in one line, and match their language (Hebrew or English). **Never run
+an install command until the researcher has said yes in an `AskUserQuestion` for that tool**, and
+never ask for an API key in the chat (chat history is saved, so a key there could be read later).
+
+**Preflight**: If you haven't run `/academic-writer:setup` yet, run that first — it checks every
+tool, sets up your Gemini key, and shows a sample paragraph. For a guided tour of all commands, run
+`/academic-writer:intro`.
 
 ## Quick Mode
 
@@ -26,12 +33,8 @@ Invoke as `/academic-writer:init --quick` for a fast onboarding path. Quick mode
 - **Skips entirely**: Phase 3 (Research Sources) — `sources` is saved as `[]`.
 
 Everywhere below, a phase or step marked "(skipped in --quick mode)" does not run when `--quick` is
-passed. Everything else runs identically in both modes. `--quick` is one way to get a fast
-onboarding; `/academic-writer:setup` (see `${CLAUDE_PLUGIN_ROOT}/skills/setup/SKILL.md`) is another
-— a friendlier, single-question-at-a-time wizard aimed at non-engineers, covering key setup (with a
-live test), Python tooling, and a sample-paragraph checkpoint. Both are standalone and safe to
-run any time; use whichever fits — `setup` for the fastest guided path, `init` (full or `--quick`)
-for the deeper profile and style analysis.
+passed; everything else runs identically. `setup` and `init` are both safe to re-run: `setup` is
+the short guided check, `init` (full or `--quick`) builds the deeper profile and style analysis.
 
 ## The Phases
 
@@ -55,6 +58,35 @@ mkdir -p past-articles .academic-helper .academic-helper/logs && cp -n "${CLAUDE
 ```
 
 Profile schema, file format, and legacy migration script: see `references/profile-schema.md`.
+
+### Python add-ons check
+
+Style analysis reads your past articles with a few Python add-ons. Check them (changes nothing):
+run the check in `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/python-deps.md`. If Python itself
+is missing, give the numbered steps from
+`${CLAUDE_PLUGIN_ROOT}/skills/setup/references/dependencies.md § Python 3` and note that style
+analysis will be skipped until it is installed. If only add-ons are missing:
+
+```python
+AskUserQuestion(questions=[{
+  "question": "To read your past articles I need a few free Python add-ons (missing: MISSING_LIST). May I install them now?",
+  "header": "Python add-ons",
+  "options": [
+    {"label": "Install", "description": "One command, usually under a minute. Installs for your user account only."},
+    {"label": "Skip for now", "description": "Style analysis from PDF/Word files will be skipped."}
+  ],
+  "multiSelect": false
+}])
+```
+
+Only on "Install":
+
+```bash
+python3 -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema
+```
+
+Re-run the check and report the result in one plain sentence. Failures: see
+`${CLAUDE_PLUGIN_ROOT}/skills/setup/references/troubleshooting.md`.
 
 Check for existing profile:
 
@@ -103,6 +135,38 @@ Per-tool detection commands, AskUserQuestion blocks, and port-fallback logic: se
 
 After running detection (parallel batch), store the tool selection as the `tools` object for Phase 4.
 
+If the researcher selects a tool that was not found, explain what it is for in one sentence (from
+`${CLAUDE_PLUGIN_ROOT}/skills/setup/references/dependencies.md`) and ask before installing:
+
+```python
+AskUserQuestion(questions=[{
+  "question": "TOOL_NAME isn't installed yet. May I install it now?",
+  "header": "Install TOOL_NAME?",
+  "options": [
+    {"label": "Install", "description": "I'll run one install command, then you sign in once in your browser."},
+    {"label": "Skip", "description": "I'll leave it off; you can add it later with /academic-writer:update-tools."}
+  ],
+  "multiSelect": false
+}])
+```
+
+Only on "Install", run the matching command: CandleKeep on macOS with Homebrew,
+
+```bash
+brew tap CandleKeepAgents/candlekeep && brew install candlekeep-cli
+```
+
+or NotebookLM when `npm` is available,
+
+```bash
+npm install -g notebooklm-mcp-cli
+```
+
+On other systems, or when Homebrew/npm is missing, give the researcher the numbered steps from
+`dependencies.md` instead. Then ask them to sign in themselves by typing `! ck auth login` or
+`! nlm login` (it opens their browser), re-run detection, and report the result plainly. A tool
+that could not be installed is saved as disabled.
+
 ---
 
 ## Phase 2: Researcher Profile
@@ -122,7 +186,7 @@ AskUserQuestion(questions=[{
 
 Derive `author_key` as a kebab-case slug of the name: lowercase, trim, replace runs of
 whitespace/punctuation with a single hyphen, strip leading/trailing hyphens. Example:
-"Yotam Fromm" → `yotam-fromm`.
+"Dana Levi" → `dana-levi`.
 
 ```bash
 python3 -c "
@@ -303,12 +367,13 @@ writer for `/write`, `/edit`, and `/edit-section`. Claude remains the orchestrat
 auditor either way.
 
 If they decline, skip the rest of this phase and note Gemini disabled in the summary. If they
-accept: check for an existing `GOOGLE_API_KEY` (the environment or userConfig sensitive value), walk
-through creating and storing one if missing, live-probe it via `mcp__plugin_academic-writer_gemini-api__gemini_raw`
-(don't just trust the file/env check), note that a per-language calibration gate runs on first
-`/write`, and store the result in the `## Gemini` block of `profile.md` (Phase 4). Full question
-text, exact commands, and error handling for each sub-step: see
-`references/gemini-onboarding.md`.
+accept: check whether `GOOGLE_API_KEY` is already set (never print it); if not, walk them through
+getting a key at https://aistudio.google.com/apikey and storing it in the plugin settings
+(`/plugin` → Installed → academic-writer → Configure → `google_api_key`, kept in the keychain) or a
+shell profile, then restart and run the live check. Explain that article text is sent to Google
+when Gemini is on. Store the result in the `## Gemini` block of `profile.md` (Phase 4). Steps and
+wording: `references/gemini-onboarding.md`, which uses
+`${CLAUDE_PLUGIN_ROOT}/skills/setup/references/gemini-key.md`.
 
 ---
 
@@ -393,13 +458,17 @@ AskUserQuestion(questions=[{
       "markdown": "```\nWrite Article\n─────────────\n→ /academic-writer:write\n→ Conversational pipeline:\n   subject → sources → thesis\n   → outline → write → .docx\n```"
     },
     {
+      "label": "Read the guide",
+      "description": "Open the illustrated guide in your browser: /academic-writer:intro"
+    },
+    {
       "label": "Check system health",
-      "description": "Run /academic-writer:health to verify everything is working.",
+      "description": "Run /academic-writer:health to verify everything is working."
     },
     {
       "label": "I'm done for now",
       "description": "Profile saved. Run /academic-writer:write anytime to start writing.",
-      "markdown": "```\nProfile saved to:\n  .academic-helper/profile.md\n\nKey commands:\n  /academic-writer:write         ← write an article\n  /academic-writer:health  ← check everything\n  /academic-writer:update-tools ← change integrations\n```"
+      "markdown": "```\nProfile saved to:\n  .academic-helper/profile.md\n\nKey commands:\n  /academic-writer:write         ← write an article\n  /academic-writer:health       ← check everything\n  /academic-writer:intro        ← open the guide\n  /academic-writer:update-tools ← change integrations\n```"
     }
   ],
   "multiSelect": false

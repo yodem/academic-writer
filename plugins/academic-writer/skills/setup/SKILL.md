@@ -1,21 +1,33 @@
 ---
 name: setup
-description: "Friendly, guided first-run setup wizard for a non-engineer: one question at a time, gets your Gemini API key working with a live test, checks your Python tools, and shows you a sample paragraph before you're done. Use on first install, or anytime you want a fast guided re-check of your setup. Use when this skill's command or workflow is needed."
+description: "Friendly first-run setup for researchers with no technical background: checks each tool Academic Writer needs, explains it in one sentence, asks before installing anything, walks you through getting and safely storing a free Gemini key, and ends with a sample paragraph. Use when you have just installed the plugin, when something seems missing, or when you want to add Gemini later."
 user-invocable: true
 disable-model-invocation: true
 allowed-tools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
-metadata: {author: "Yotam Fromm", version: "0.1.0"}
+metadata: {author: "Yotam Fromm", version: "0.2.0"}
 ---
 
 # Academic Writer — Setup Wizard
 
-A short, guided conversation that gets you ready to write. One question at a time — no forms, no jargon left unexplained. By the end you'll have a working Gemini connection (tested live, not just saved), your Python tools checked, and one sample paragraph to look at before we call it done.
+You are guiding a humanities researcher, often with no programming background, through first-run
+setup. Speak plainly and warmly, one question at a time. Every technical word gets a one-line
+explanation the first time it appears. Match the researcher's language: if they write in Hebrew,
+answer in Hebrew.
 
-Want the deeper onboarding instead — analyzing your past articles for your writing voice, indexing your research library? See "Cross-reference" at the end; both commands are safe to run any time, including again later.
+Two rules hold for the whole wizard:
 
-## Known gap
+1. **Ask before you install.** Run an install command only after the researcher chose "Install" in
+   an `AskUserQuestion` for that specific tool. Report the result in one plain sentence.
+2. **Never ask for the Gemini key in the chat.** Chat messages are saved in the conversation
+   history, so a key typed there could be read later. The key goes into Claude Code's plugin
+   settings (the keychain) or the researcher's own shell profile — never into a message or a file
+   you write.
 
-Hooks in this repo ship as built output only (`plugins/academic-writer/hooks/dist/*.mjs`) — there is no editable hook source for an automatic "nudge me when `.academic-helper/` is missing" SessionStart check. (There IS a SessionStart hook already wired — `session-dashboard` — but it shows a dashboard, it does not detect/create `.academic-helper/` or point new users at setup.) So today, onboarding relies on this SKILL.md's own text, plus the preflight lines added to `write` and `init`, rather than an automatic hook nudge. See `references/troubleshooting.md` for more.
+Reference files (read when the step says so):
+- `references/dependencies.md` — what each tool is for, detection commands, per-OS steps.
+- `references/python-deps.md` — the Python package check.
+- `references/gemini-key.md` — getting, storing and checking the Gemini key.
+- `references/troubleshooting.md` — what to do when something fails.
 
 ---
 
@@ -25,35 +37,63 @@ Run silently before saying anything:
 
 ```bash
 mkdir -p past-articles .academic-helper .academic-helper/logs && cp -n "${CLAUDE_PLUGIN_ROOT}/thresholds.json" .academic-helper/ 2>/dev/null || true
-```
-
-```bash
 cat .academic-helper/profile.md 2>/dev/null && echo "EXISTS" || echo "NOT_FOUND"
 ```
 
-If a profile already exists, say so briefly and note it's safe to re-run setup — it'll update, not wipe, existing fields. Continue either way.
-
----
-
-## Step 1 — Warm welcome
-
-> "Hi! I'm going to help you get Academic Writer ready to use. This will take a few minutes — I'll ask you one short question at a time, nothing to configure by hand. No technical background needed."
-
----
-
-## Step 2 — The basics (1-2 questions only)
-
-Keep this minimal — this is not the full profile from `/academic-writer:init`, just enough to write a sample paragraph later.
+If a profile exists, ask:
 
 ```python
 AskUserQuestion(questions=[{
-  "question": "What's your field of study?",
+  "question": "You've run setup here before. Where should we start?",
+  "header": "Welcome back",
+  "options": [
+    {"label": "Check my Gemini key", "description": "Pick up after a restart — jump straight to testing the key."},
+    {"label": "Check everything again", "description": "Re-run the whole check. Your saved answers are kept, not wiped."}
+  ],
+  "multiSelect": false
+}])
+```
+
+"Check my Gemini key" → jump to Step 5f. Otherwise continue.
+
+---
+
+## Step 1 — Welcome
+
+> "Hi! I'll get Academic Writer ready for you. It takes about ten minutes. I'll ask one short
+> question at a time, explain anything technical, and I won't install anything without asking you
+> first."
+
+---
+
+## Step 2 — The basics
+
+Just enough to write a sample paragraph; `/academic-writer:init` builds the full profile later.
+
+```python
+AskUserQuestion(questions=[{
+  "question": "What's your field of study? (For example: Medieval Hebrew Poetry, Early Modern History)",
   "header": "Field of study",
   "options": []
 }])
 ```
 
 Store as `fieldOfStudy`.
+
+```python
+AskUserQuestion(questions=[{
+  "question": "Which language will you write your articles in?",
+  "header": "Article language",
+  "options": [
+    {"label": "Hebrew", "description": "Right-to-left; I'll also offer a Hebrew spelling checker."},
+    {"label": "English", "description": "Left-to-right."},
+    {"label": "Other", "description": "You'll type the language name."}
+  ],
+  "multiSelect": false
+}])
+```
+
+Store as `targetLanguage`.
 
 ```python
 AskUserQuestion(questions=[{
@@ -69,184 +109,280 @@ AskUserQuestion(questions=[{
 }])
 ```
 
-Map: Inline → `inline-parenthetical`, Chicago → `chicago`, MLA → `mla`, APA → `apa`. Store as `citationStyle`.
+Map: Inline → `inline-parenthetical`, Chicago → `chicago`, MLA → `mla`, APA → `apa`. Store as
+`citationStyle`.
+
+**Save the profile now**, before anything else: write `.academic-helper/profile.md` with these
+three fields (format: `${CLAUDE_PLUGIN_ROOT}/skills/init/references/profile-schema.md`), keeping
+every field an earlier profile already had. The plugin's start-up hook only passes the Gemini key
+on in a project that has this file, so it must exist before the restart in Step 5.
 
 ---
 
-## Step 3 — Gemini API key
+## Step 3 — What I'll check
 
-### 3a. Explain in plain language
+Run all detection lines from `references/dependencies.md` and the package check from
+`references/python-deps.md` in one parallel batch (they change nothing). Then show a short table
+built from the results — the tool, what it is for in one phrase, and ✓ found / ✗ missing /
+optional — for: Python 3, the Python packages, hspell (Hebrew writers only), CandleKeep,
+NotebookLM, and the Gemini key (✓ when `GOOGLE_API_KEY` is set; never print its value).
 
-> "Academic Writer can use Google's Gemini AI to help draft your paragraphs, with Claude always checking the citations and quality. To use Gemini, you need an **API key** — think of it as a password that lets this tool talk to Gemini on your behalf, tied to your own free Google account. This is optional: you can skip it and just use Claude."
+> "Here's what I'll go through. Anything already ✓ we skip. For each missing piece I'll tell you
+> what it's for and ask before installing."
+
+---
+
+## Step 4 — One tool at a time
+
+Handle each missing item in this order. For each: say what it is for in one sentence (the
+sentences are in `references/dependencies.md`), ask, act, then re-run its detection line and report
+in plain words. A skipped or failed item never blocks setup; note it for the summary.
+
+### 4a. Python 3 (the researcher installs it)
+
+If Python is missing, Claude cannot install it. Give the numbered steps for their system from
+`references/dependencies.md § Python 3`, then stop here: the rest of setup needs Python, and the
+researcher must restart Claude Code after installing. Tell them to run `/academic-writer:setup`
+again afterwards.
+
+### 4b. Python packages (Claude installs after asking)
+
+Skip if the check printed `ALL_PRESENT`. Otherwise:
 
 ```python
 AskUserQuestion(questions=[{
-  "question": "Would you like to set up Gemini now?",
-  "header": "Optional — Gemini",
+  "question": "Academic Writer needs a few free Python add-ons to open Word and PDF files and build your finished document (missing: MISSING_LIST). May I install them now?",
+  "header": "Python add-ons",
   "options": [
-    {"label": "Yes, set it up", "description": "I'll walk you through getting a free key and test it live."},
-    {"label": "No, Claude only", "description": "Skip this — you can add it later by running setup again."}
+    {"label": "Install", "description": "One command, usually under a minute. Installs for your user account only."},
+    {"label": "Skip for now", "description": "Reading PDFs and building the .docx won't work until they're installed."}
   ],
   "multiSelect": false
 }])
 ```
 
-If "No, Claude only": skip to Step 4, note Gemini disabled in the closing summary.
-
-### 3b. Check for an existing key
-
-The `aw` CLI (`plugins/academic-writer/bin/aw`) reads `GOOGLE_API_KEY` from its environment. A
-SessionStart hook exports the plugin's `google_api_key` option from the OS keychain, or the user can
-export the key in their shell. Check the current environment:
+Only on "Install":
 
 ```bash
-if [ -n "$GOOGLE_API_KEY" ]; then echo "Found GOOGLE_API_KEY in environment."; else echo "NO_KEY in environment; configure the plugin option or export it in your shell, then start a new session."; fi
+python3 -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema
 ```
 
-If a key was found, continue to 3d. Otherwise configure the plugin option or shell variable and
-start a new session so the SessionStart hook can export the value.
+Re-run the package check. On failure, read `references/troubleshooting.md § pip install failures`
+and explain the fix before offering a retry (any retry with a different command is asked again).
 
-### 3c. Get and store a key
+### 4c. Homebrew (macOS, only if hspell or CandleKeep is wanted)
 
-> "Here's how to get a free key:
-> 1. Open https://aistudio.google.com/apikey in your browser
-> 2. Sign in with a Google account
-> 3. Click 'Create API key' and copy it (it starts with `AIza...`)"
+Homebrew needs the Mac password, so the researcher installs it: give the numbered steps from
+`references/dependencies.md § Homebrew`. Offer this only when the researcher wants hspell or
+CandleKeep and `BREW_MISSING`.
+
+### 4d. hspell — Hebrew spelling checker (Hebrew writers only)
+
+Skip unless `targetLanguage` is Hebrew and hspell is missing. On Windows, say it has no Windows
+version and that proofreading simply skips that check; move on. On Linux, give the researcher the
+`! sudo apt install hspell` line from the reference (it needs their password). On macOS with
+Homebrew:
 
 ```python
 AskUserQuestion(questions=[{
-  "question": "Where should I keep your key?",
-  "header": "Key storage",
+  "question": "hspell is a free Hebrew spelling dictionary. The proofreader uses it to catch typos that are easy to miss. Install it?",
+  "header": "Hebrew spelling",
   "options": [
-    {
-      "label": "Plugin configuration (recommended)",
-      "description": "Stored securely by Claude Code itself (OS keychain, or a protected credentials file) — never plaintext in a settings file.",
-      "markdown": "```\nclaude plugin install academic-writer --scope project \\\n  --config google_api_key=\"AIza...\"\n\n# Already installed? Reconfigure any time via the\n# /plugin manager (Manage plugins -> academic-writer)\n# or:\nclaude plugin config academic-writer \\\n  --config google_api_key=\"AIza...\"\n```"
-    },
-    {
-      "label": "Environment variable",
-      "description": "Set GOOGLE_API_KEY in your shell profile — works across all your projects, but is not stored as securely as the plugin option above.",
-      "markdown": "```\nexport GOOGLE_API_KEY=\"AIza...\"\n# add this line to ~/.zshrc or ~/.bashrc\n```"
-    },
+    {"label": "Install", "description": "Uses Homebrew; takes about a minute."},
+    {"label": "Skip", "description": "Proofreading still works, with one fewer safety net."}
   ],
   "multiSelect": false
 }])
 ```
 
-- **Plugin configuration (recommended)**: print the `claude plugin install`/`claude plugin config`
-  command above for the user to run in their own terminal (or point them at the `/plugin` manager's
-  configuration dialog), then ask them to confirm they've done it. Claude Code cannot open its own
-  plugin-configuration dialog or run its own CLI from inside this conversation — same reason the
-  environment-variable path below needs the user to act outside the chat. Once set this way, the key
-  is exported as `GOOGLE_API_KEY` by the plugin's SessionStart hook at the start of a new session.
-- **Environment variable**: print the export line above for the user to run in their own terminal, then ask them to confirm they've done it and reopened their session — Claude Code cannot set their shell environment from inside this conversation.
-The key is never written to a project file. The plugin option is stored in the OS keychain; the
-SessionStart hook exports it for `aw`. A shell-level `GOOGLE_API_KEY` also works.
-
-### 3d. Confirm the CLI is available
-
-The `aw` CLI needs the key only when it makes a Gemini request. Confirm the current configuration:
+Only on "Install":
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/bin/aw" models check
+brew install hspell
 ```
 
-- If the hook or shell provides `GOOGLE_API_KEY`, note that Gemini is configured; otherwise ask the user to configure one or continue without Gemini. See `references/troubleshooting.md` for errors from actual CLI runs.
+### 4e. CandleKeep — your research library (optional)
 
----
-
-## Step 4 — Python tools check
-
-Academic Writer uses four Python packages for reading Word docs and PDFs: `python-docx`, `lxml`, `pdfplumber`, and `pymupdf`. Full check script, install commands, and the "no requirements.txt" note: see `references/python-deps.md`.
-
-Run the check from that reference file, then:
+Skip if found. Explain it in one sentence (reference), then:
 
 ```python
 AskUserQuestion(questions=[{
-  "question": "Some Python tools Academic Writer needs aren't installed yet. Install them now?",
-  "header": "Python tools",
+  "question": "CandleKeep is an online library for your source PDFs, so I can search and quote them with exact pages. Set it up?",
+  "header": "CandleKeep (optional)",
   "options": [
-    {"label": "Yes, install them", "description": "Runs one pip3 install command — takes a few seconds."},
-    {"label": "Skip for now", "description": "You'll be prompted again the first time a feature needs them."}
+    {"label": "Install", "description": "On a Mac I install it with Homebrew; you then sign in once in your browser."},
+    {"label": "Skip", "description": "You can add it later by running setup again."}
   ],
   "multiSelect": false
 }])
 ```
 
-(Only ask this if something was actually missing — if the check reports everything present, skip straight to Step 5 with a one-line confirmation.)
+Only on "Install", on macOS with Homebrew:
 
----
-
-## Step 5 — Optional: CandleKeep + NotebookLM
-
-Reuses the same detection approach as `/academic-writer:init` Phase 1 (see `${CLAUDE_PLUGIN_ROOT}/skills/init/references/integration-setup.md`):
-
-```python
-# PARALLEL — launch both at once
-Bash(command="command -v ck >/dev/null 2>&1 && echo 'DETECTED' || echo 'NOT_DETECTED'")
-Bash(command="command -v nlm >/dev/null 2>&1 && nlm login --check 2>/dev/null && echo 'DETECTED' || echo 'NOT_DETECTED'")
+```bash
+brew tap CandleKeepAgents/candlekeep && brew install candlekeep-cli
 ```
 
-If either is detected, briefly offer to enable it (mirroring init's Phase 1 options). **If neither is available or configured, do not block or error** — just print:
+On Windows/Linux, point to the install page in the reference instead. Then ask the researcher to
+sign in themselves by typing `! ck auth login` (it opens their browser).
 
-> "CandleKeep (research library) and NotebookLM (source Q&A) aren't set up yet — that's fine, they're optional. You can add them anytime by running `/academic-writer:setup` or `/academic-writer:init` again."
+### 4f. NotebookLM — source Q&A (optional)
 
----
-
-## Step 6 — Sample paragraph checkpoint
-
-This is a lightweight proof-of-life, not a full pipeline run.
-
-Ask for (or pick, if they'd rather skip) a trivial micro-topic:
+Skip if found, or if `npm` is missing (say it's optional and can be added later). Otherwise:
 
 ```python
 AskUserQuestion(questions=[{
-  "question": "Let's generate one short sample paragraph to make sure everything's working. Give me a small topic (or I'll pick a generic one).",
+  "question": "NotebookLM is Google's tool for asking questions about a set of sources; I can use it as a second research assistant. Install its connector?",
+  "header": "NotebookLM (optional)",
+  "options": [
+    {"label": "Install", "description": "One command; you then sign in with Google once."},
+    {"label": "Skip", "description": "Nothing else depends on it."}
+  ],
+  "multiSelect": false
+}])
+```
+
+Only on "Install":
+
+```bash
+npm install -g notebooklm-mcp-cli
+```
+
+Then ask the researcher to type `! nlm login` to sign in (it opens their browser).
+
+---
+
+## Step 5 — Gemini
+
+Read `references/gemini-key.md` now; it is the source for every sentence and command below.
+
+### 5a. Explain and ask
+
+Say the "What to tell the researcher" text from the reference: what Gemini and an API key are, the
+free tier, that article text is sent to Google when Gemini is on, and why the key must not go in
+the chat. Then:
+
+```python
+AskUserQuestion(questions=[{
+  "question": "Would you like to use Gemini?",
+  "header": "Gemini (optional)",
+  "options": [
+    {"label": "Yes, set it up", "description": "About five minutes: get a free key, store it safely, restart once."},
+    {"label": "No, Claude only", "description": "Nothing is sent to Google. You can add Gemini later by running setup again."}
+  ],
+  "multiSelect": false
+}])
+```
+
+"No, Claude only" → record `gemini.enabled: false` and go to Step 6.
+
+### 5b. Already set?
+
+```bash
+[ -n "${GOOGLE_API_KEY:-}" ] && echo "KEY_PRESENT" || echo "NO_KEY"
+```
+
+`KEY_PRESENT` → go to 5f.
+
+### 5c. Get a key (the researcher does this)
+
+Give the numbered steps from `references/gemini-key.md § Getting a key`, starting at
+https://aistudio.google.com/apikey. Wait for them to say they have copied it.
+
+### 5d. Store the key (the researcher does this)
+
+Ask where to keep it with the `AskUserQuestion` in `references/gemini-key.md § Storing the key`,
+then give the numbered steps for their choice:
+
+- **Plugin settings (recommended):** `/plugin` → **Installed** → **academic-writer** →
+  **Configure** → paste into **google_api_key**. Claude Code keeps it in the operating system's
+  keychain (the built-in password store), never in a plain settings file.
+- **Shell profile:** the macOS, Windows or Linux steps from the reference.
+
+### 5e. Restart
+
+> "Now quit Claude Code completely and open it again in this same folder, then type
+> `/academic-writer:setup` and choose **Check my Gemini key**. Your answers so far are saved."
+
+Stop the wizard here until they come back.
+
+### 5f. Check the key
+
+Run the two checks in `references/gemini-key.md § Checking the key` (`aw models check`, then the
+live check, which never prints the key and sends no article text). Tell the researcher the
+matching plain-language line from the result table. Record `gemini.enabled: true` and
+`approvedLanguages: [targetLanguage]` in the profile if they want Gemini, even when the check
+failed — note the failure in the summary.
+
+---
+
+## Step 6 — Sample paragraph
+
+A quick proof that the conversation works, not a full article.
+
+```python
+AskUserQuestion(questions=[{
+  "question": "Let's write one short sample paragraph. Give me a small topic, or I'll pick one.",
   "header": "Sample paragraph",
   "options": [
     {"label": "I'll give a topic", "description": "Type a short topic, e.g. \"the printing press\"."},
-    {"label": "Pick one for me", "description": "I'll use a generic placeholder topic."}
+    {"label": "Pick one for me", "description": "I'll choose a general topic in your field."}
   ],
   "multiSelect": false
 }])
 ```
 
-Generate a 2-4 sentence paragraph on that topic, in `fieldOfStudy`'s general register, using whichever writer is configured:
-Write a 2-4 sentence paragraph yourself (Claude) directly in the conversation. The proof-of-life here checks the conversation workflow; Gemini is exercised when an `aw` command runs.
-
-Show the paragraph, then:
+Write 2–4 sentences yourself on that topic, in the register of `fieldOfStudy` and in
+`targetLanguage`. Say that real articles cite sources and follow their own voice, which
+`/academic-writer:init` learns from past articles. Then:
 
 ```python
 AskUserQuestion(questions=[{
-  "question": "Does this look right — the kind of tone and quality you'd expect?",
+  "question": "Does this look like the tone you'd expect?",
   "header": "Does this look right?",
   "options": [
     {"label": "Yes, looks good", "description": "Setup is complete."},
-    {"label": "Not quite", "description": "Tell me what's off — this won't block setup, just noting it for later."}
+    {"label": "Not quite", "description": "Tell me what's off — I'll note it; it doesn't block anything."}
   ],
   "multiSelect": false
 }])
 ```
 
-Either answer completes setup — this is a checkpoint, not a gate. If "Not quite," note their feedback in the closing summary as something to revisit (e.g. via `/academic-writer:init`'s fuller style analysis).
+Either answer completes setup.
 
 ---
 
-## Step 7 — Save profile + closing summary
+## Step 7 — Save and summarize
 
-Write or update `.academic-helper/profile.md` with the fields gathered above (`fieldOfStudy`, `citationStyle`, `gemini` block), preserving any existing fields from a prior profile (name, targetLanguage, style fingerprint, sources, etc. — do not clear them). Use the same schema as `/academic-writer:init` (see `${CLAUDE_PLUGIN_ROOT}/skills/init/references/profile-schema.md`) so both commands stay interoperable.
+Update `.academic-helper/profile.md` with the `## Gemini` block and anything else gathered, keeping
+every existing field. Show:
 
-Show a short summary:
+> | Item | Status |
+> |------|--------|
+> | Field / language / citation style | [values] |
+> | Python and its add-ons | ✓ Ready / ⚠ [what's missing and the one-line fix] |
+> | Hebrew spelling (hspell) | ✓ / skipped / not available on Windows / not needed |
+> | CandleKeep / NotebookLM | ✓ / skipped (optional) |
+> | Gemini | ✓ Key works / ⚠ [problem in plain words] / — Claude only |
+> | Sample paragraph | ✓ Looked good / noted: [feedback] |
 
-> | Setting | Value |
-> |---------|-------|
-> | Field | [fieldOfStudy] |
-> | Citation style | [citationStyle] |
-> | Gemini | ✓ Enabled & tested / — Not enabled |
-> | Python tools | ✓ Ready / ⚠ Some missing (see references/python-deps.md) |
-> | CandleKeep / NotebookLM | [enabled tools, or "not set up — optional"] |
-> | Sample paragraph | ✓ Looked good / noted feedback |
+---
 
-> "You're set up. Run `/academic-writer:write` to start your first real article.
->
-> **Cross-reference**: Want the fuller onboarding — style analysis from your past articles, indexing your research sources? Run `/academic-writer:init` any time. Re-running either `setup` or `init` later is always safe — they update your profile, they don't wipe it."
+## Step 8 — What next
+
+```python
+AskUserQuestion(questions=[{
+  "question": "You're set up. What would you like to do next?",
+  "header": "Next step",
+  "options": [
+    {"label": "Show me the guide", "description": "Opens the illustrated guide in your browser: /academic-writer:intro"},
+    {"label": "Start an article", "description": "Begin writing now: /academic-writer:write"},
+    {"label": "Teach it my style", "description": "Fuller onboarding from your past articles: /academic-writer:init"},
+    {"label": "I'm done for now", "description": "Everything is saved. Run /academic-writer:help any time for the command list."}
+  ],
+  "multiSelect": false
+}])
+```
+
+Tell them which command to type for their choice. Re-running `setup` or `init` later is always
+safe: they update the profile, they never wipe it.
