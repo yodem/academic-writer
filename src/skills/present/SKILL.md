@@ -1,6 +1,6 @@
 ---
 name: present
-description: "Post-article deliverables — generate conference presentation outlines, journal submission summaries, and book chapter proposals from a completed article. Use after publishing an article when you need conference/journal/proposal deliverables. Use when this skill's command or workflow is needed."
+description: "Turn a finished article into follow-on materials: a conference talk outline, a journal submission abstract with keywords, a book chapter proposal, and (with NotebookLM) an audio overview or study guide. Use when the author asks for a talk, abstract, proposal or study materials based on an article they completed."
 user-invocable: false
 allowed-tools: [Bash, Read, Write, Glob, Grep, AskUserQuestion, mcp__notebooklm-mcp__notebook_create, mcp__notebooklm-mcp__source_add, mcp__notebooklm-mcp__studio_create, mcp__notebooklm-mcp__studio_status, mcp__notebooklm-mcp__download_artifact]
 metadata: {author: "Yotam Fromm", version: "0.2.23"}
@@ -8,7 +8,7 @@ metadata: {author: "Yotam Fromm", version: "0.2.23"}
 
 # Academic Writer — Post-Article Deliverables
 
-Generate presentation materials and submission documents from a completed article.
+Generate presentation materials and submission documents from a completed article. Everything you write must come from the article itself: do not add claims, sources or findings the article does not contain, because the author will present these materials under their name.
 
 ## Load Profile
 
@@ -24,57 +24,29 @@ Extract `targetLanguage` and `fieldOfStudy`.
 ls articles/*.md 2>/dev/null
 ```
 
-If multiple articles exist:
-```python
-AskUserQuestion(questions=[{
-  "question": "Which article would you like to create deliverables for?",
-  "header": "Select Article",
-  "options": []
-}])
-```
+If there is more than one article, list them and ask which one to use (by number or name). With up to four articles you may offer them as `AskUserQuestion` options; with more, ask in plain conversation.
 
 Read the selected article with the `Read` tool. Extract its thesis, section structure, and key arguments.
 
 ## Select Deliverable
 
+`AskUserQuestion` allows at most four options, so offer these (multi-select; NotebookLM extras are offered afterwards, only when enabled):
+
 ```python
 AskUserQuestion(questions=[{
   "question": "What would you like to generate from this article?",
-  "header": "Deliverable Type",
+  "header": "Deliverable",
   "options": [
-    {
-      "label": "Conference Presentation Outline",
-      "description": "20-30 minute talk outline with argument flow",
-      "markdown": "```\nConference Presentation\n───────────────────────\nOutput: Structured outline for oral delivery\nLength: 20-30 min talk (~2500 words spoken)\nFocus:  Argument flow, not full text\nFormat: Markdown with speaker notes\n```"
-    },
-    {
-      "label": "Journal Submission Abstract",
-      "description": "Structured abstract for journal submission",
-      "markdown": "```\nJournal Abstract\n────────────────\nOutput: 150-300 word abstract\nParts:  Topic, method, findings, contribution\nFormat: Ready to paste into submission form\n```"
-    },
-    {
-      "label": "Book Chapter Proposal",
-      "description": "Proposal to develop this article into a book chapter",
-      "markdown": "```\nBook Chapter Proposal\n─────────────────────\nOutput: 1-2 page proposal\nParts:  Chapter summary, fit with volume,\n        expanded scope, bibliography\nFormat: Markdown\n```"
-    },
-    {
-      "label": "Audio Overview (NotebookLM)",
-      "description": "AI-generated audio summary / podcast of the article",
-      "markdown": "```\nAudio Overview\n──────────────\nOutput: Audio podcast discussing the article\nFormat: AI-generated conversational audio\nNeeds:  NotebookLM enabled in profile\n```"
-    },
-    {
-      "label": "Study Guide (NotebookLM)",
-      "description": "Structured study guide from article content",
-      "markdown": "```\nStudy Guide\n───────────\nOutput: Key concepts, questions, summaries\nFormat: Markdown study guide\nNeeds:  NotebookLM enabled in profile\n```"
-    },
-    {
-      "label": "All of the above",
-      "description": "Generate all deliverables (NotebookLM items only if enabled)"
-    }
+    {"label": "Conference talk", "description": "Outline for a 20-30 minute talk, with speaker notes and likely questions"},
+    {"label": "Journal abstract", "description": "150-300 word structured abstract plus 5-7 keywords, ready to paste"},
+    {"label": "Chapter proposal", "description": "1-2 page proposal to grow this article into a book chapter"},
+    {"label": "NotebookLM extras", "description": "Audio overview or study guide (needs NotebookLM enabled)"}
   ],
   "multiSelect": true
 }])
 ```
+
+If "NotebookLM extras" is chosen, ask which of the two (audio overview, study guide, or both).
 
 ## Conference Presentation Outline
 
@@ -161,9 +133,9 @@ Save to `articles/[article-name]-chapter-proposal.md`.
 
 ## Audio Overview (NotebookLM)
 
-**Skip if `tools.notebooklm.enabled` is false.** Tell the researcher: "Enable NotebookLM with `/academic-writer:update-tools` to generate audio overviews."
+**Skip if `tools.notebooklm.enabled` is false.** Tell the researcher: "NotebookLM isn't turned on yet. Ask me to update your tools and I'll help you connect it; then I can make an audio overview."
 
-> **If the NotebookLM MCP server is not connected, skip this whole section and say so** — these two branches are optional deliverables, not part of the core output. Check for the tools before starting; do not half-run the sequence.
+> **If the NotebookLM tools (`mcp__notebooklm-mcp__*`, supplied by the separate NotebookLM connector the author installs) are not available, skip this whole section and say so** — these two branches are optional deliverables, not part of the core output. Check for the tools before starting; do not half-run the sequence.
 
 1. **Create a notebook** for this article using the `mcp__notebooklm-mcp__notebook_create` MCP tool with the article title
 2. **Add the article** as a source using the `mcp__notebooklm-mcp__source_add` MCP tool (paste the article markdown content)
@@ -171,11 +143,11 @@ Save to `articles/[article-name]-chapter-proposal.md`.
 4. **Check status** using the `mcp__notebooklm-mcp__studio_status` MCP tool — audio generation may take a few minutes
 5. **Download** the audio file using the `mcp__notebooklm-mcp__download_artifact` MCP tool when ready
 
-Save notification: "Audio overview is being generated. Check status with `nlm studio status`."
+Tell the author: "Your audio overview is being generated; it can take a few minutes. I'll check on it, or you can ask me later." When it is ready, download it next to the article in `articles/`.
 
 ## Study Guide (NotebookLM)
 
-**Skip if `tools.notebooklm.enabled` is false.** Tell the researcher: "Enable NotebookLM with `/academic-writer:update-tools` to generate study guides."
+**Skip if `tools.notebooklm.enabled` is false.** Tell the researcher: "NotebookLM isn't turned on yet. Ask me to update your tools and I'll help you connect it; then I can make a study guide."
 
 1. **Reuse the notebook** created for Audio Overview, or create one if it doesn't exist
 2. **Generate study guide** using the `mcp__notebooklm-mcp__studio_create` MCP tool with type "study guide"

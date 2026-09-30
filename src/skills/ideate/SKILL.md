@@ -1,6 +1,6 @@
 ---
 name: ideate
-description: "Guided research ideation — brainstorm research questions using 5W1H, gap analysis, and structured framing. Outputs a research brief that feeds into /academic-writer:write. Use when you have a vague topic and need help framing a research question."
+description: "Guided brainstorming that turns a vague topic into a sharp research question, using who/what/when/where/why/how, a gap check against the author's sources and a choice of approach; saves a research brief that /academic-writer:write reads. Use when the author has a topic but no clear question or thesis yet. Not for drafting (use /academic-writer:write)."
 user-invocable: true
 allowed-tools: [Bash, Read, Write, Glob, Grep, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.2.23"}
@@ -8,7 +8,7 @@ metadata: {author: "Yotam Fromm", version: "0.2.23"}
 
 # Academic Writer — Research Ideation
 
-Guided ideation flow that helps researchers formulate strong research questions before writing.
+Help the researcher turn a topic into a clear, answerable research question before any writing starts. Work as a thinking partner: propose, ask, and let the researcher choose. The brief you save becomes the starting point of `/academic-writer:write`, so the thesis direction must be in the researcher's own words.
 
 ## Load Profile
 
@@ -22,15 +22,9 @@ Extract `fieldOfStudy`, `targetLanguage`, and `tools` configuration.
 
 ## Step 1: Topic Exploration
 
-Ask the researcher:
+Ask the researcher in plain conversation (this is an open question, so do not use `AskUserQuestion`, which needs fixed options):
 
-```python
-AskUserQuestion(questions=[{
-  "question": "What topic or area are you thinking about exploring? This can be vague — we'll sharpen it together.",
-  "header": "Step 1 — Topic Exploration",
-  "options": []
-}])
-```
+> "What topic or area are you thinking about exploring? This can be vague — we'll sharpen it together."
 
 Show examples relevant to their `fieldOfStudy`:
 > "Examples:
@@ -96,53 +90,29 @@ Present the gap analysis:
 >
 > These gaps could be fertile ground for a research question."
 
-Log:
+If CandleKeep is not enabled, ask the researcher which sources they know on the topic and do the gap analysis from their answer. Never invent sources.
 
 ---
 
 ## Step 4: Approach Framing
 
-Present Humanities-appropriate research approaches:
+Ask which kind of study fits. `AskUserQuestion` allows at most four options and always adds an "Other" choice for free text, so offer these four:
 
 ```python
 AskUserQuestion(questions=[{
   "question": "What kind of study fits your topic best?",
-  "header": "Step 4 — Research Approach",
+  "header": "Approach",
   "options": [
-    {
-      "label": "Textual Analysis",
-      "description": "Close reading of a specific text or corpus",
-      "markdown": "```\nTextual Analysis\n────────────────\nFocus: One or more primary texts\nMethod: Close reading, literary/philological analysis\nOutput: New interpretation or reading\nBest for: Discovering meaning in texts\n```"
-    },
-    {
-      "label": "Comparative Study",
-      "description": "Comparing two or more texts, figures, or traditions",
-      "markdown": "```\nComparative Study\n─────────────────\nFocus: Two+ texts, thinkers, or traditions\nMethod: Systematic comparison on defined axes\nOutput: Reveals connections or tensions\nBest for: Cross-cultural or cross-period analysis\n```"
-    },
-    {
-      "label": "Historical Survey",
-      "description": "Tracing the development of an idea, practice, or text over time",
-      "markdown": "```\nHistorical Survey\n─────────────────\nFocus: An idea or practice across time\nMethod: Chronological analysis with sources\nOutput: Developmental narrative\nBest for: Showing change over time\n```"
-    },
-    {
-      "label": "Conceptual Analysis",
-      "description": "Analyzing a philosophical, theological, or cultural concept",
-      "markdown": "```\nConceptual Analysis\n───────────────────\nFocus: A concept or term\nMethod: Definition, usage mapping, critical analysis\nOutput: Clarified or redefined concept\nBest for: Philosophical and theological work\n```"
-    },
-    {
-      "label": "Reception History",
-      "description": "How a text or idea was received, interpreted, and transformed",
-      "markdown": "```\nReception History\n─────────────────\nFocus: How a text was read across generations\nMethod: Track interpretive traditions\nOutput: Map of readings and their contexts\nBest for: Exegetical and hermeneutical studies\n```"
-    },
-    {
-      "label": "Other",
-      "description": "Describe your own approach",
-      "markdown": "```\nCustom Approach\n───────────────\n→ Describe your methodology\n→ I'll help frame it\n```"
-    }
+    {"label": "Textual analysis", "description": "Close reading of a specific text or corpus to offer a new interpretation"},
+    {"label": "Comparative study", "description": "Comparing two or more texts, thinkers or traditions on defined points"},
+    {"label": "History or reception", "description": "Tracing how an idea, practice or text developed, or how it was read over time"},
+    {"label": "Conceptual analysis", "description": "Defining and analysing a philosophical, theological or cultural concept"}
   ],
   "multiSelect": false
 }])
 ```
+
+If the researcher picks "Other", ask them to describe their method and help frame it.
 
 ---
 
@@ -161,17 +131,18 @@ Present and ask:
 ```python
 AskUserQuestion(questions=[{
   "question": "Here are three research questions I've formulated. Which one excites you?",
-  "header": "Research Questions",
+  "header": "Question",
   "options": [
     {"label": "Question 1", "description": "SHORT_SUMMARY_1"},
     {"label": "Question 2", "description": "SHORT_SUMMARY_2"},
     {"label": "Question 3", "description": "SHORT_SUMMARY_3"},
-    {"label": "I want to refine one", "description": "Tell me which to adjust"},
-    {"label": "None — let me describe my own", "description": "Free-text input"}
+    {"label": "Refine one", "description": "Tell me which to adjust"}
   ],
   "multiSelect": false
 }])
 ```
+
+The automatic "Other" choice lets the researcher write their own question instead; accept it verbatim.
 
 ---
 
@@ -222,8 +193,6 @@ Use the `Write` tool to create `.academic-helper/research-brief.md`:
 *Generated by /academic-writer:ideate on [DATE]*
 *Feed this into /academic-writer:write to start writing.*
 ```
-
-Log completion:
 
 ## Completion
 

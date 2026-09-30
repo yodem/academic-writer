@@ -1,6 +1,6 @@
 ---
 name: update-tools
-description: "Add, remove, or reconfigure integrations (Candlekeep, NotebookLM). Use when adding/removing integrations after initial setup."
+description: "Turn the optional integrations (CandleKeep source library, NotebookLM) on or off after setup and record the change in the profile. Use when the author wants to connect, disconnect or re-check CandleKeep or NotebookLM without redoing the full setup (/academic-writer:init)."
 user-invocable: false
 allowed-tools: [Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.2.23"}
@@ -8,7 +8,12 @@ metadata: {author: "Yotam Fromm", version: "0.2.23"}
 
 # Academic Writer — Update Tools
 
-Modify which integrations are enabled without re-running the full initialization.
+Change which optional integrations are enabled, without re-running the full setup. In plain words for the author:
+
+- **CandleKeep** is the library where the author's sources are stored and read page by page; the citation checker relies on it.
+- **NotebookLM** is Google's notebook tool; the plugin uses it only for optional extras (background summaries, audio overviews, study guides), never as a citation source.
+
+Only mark a tool enabled after it is detected, because the other skills trust this setting and would otherwise fail midway.
 
 ## Load Current Profile
 
@@ -56,7 +61,7 @@ Show a table with current status and detection:
 ## Process Changes
 
 For each tool the user wants to **enable**:
-1. If not detected, show the setup URL and walk them through installation
+1. If not detected, show the setup URL and walk the author through installation step by step, in plain language
 2. Re-run the detection command to confirm
 3. Only mark as enabled once detected
 
@@ -153,11 +158,11 @@ print("Tools updated successfully.")
 PYTHON
 ```
 
-Replace `TOOL_CONFIG` with the actual tools dict, e.g.:
-```json
+Replace `TOOL_CONFIG` with the actual tools as a Python dict literal (Python spells booleans `True`/`False`; a JSON `true` would crash the script), e.g.:
+```python
 {
-  "candlekeep": { "enabled": true, "version": "detected" },
-  "notebooklm": { "enabled": true, "version": "detected" }
+  "candlekeep": {"enabled": True, "version": "detected"},
+  "notebooklm": {"enabled": False, "version": None}
 }
 ```
 
@@ -168,4 +173,4 @@ Replace `TOOL_CONFIG` with the actual tools dict, e.g.:
 > [list each tool with ✓/✗ status]
 >
 > These changes take effect immediately for `/academic-writer:write`.
-> If you enabled Candlekeep and haven't indexed sources yet, run `/academic-writer:init` to add them."
+> If you enabled CandleKeep and haven't added sources yet, run `/academic-writer:init` to add them."
