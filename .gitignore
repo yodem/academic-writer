@@ -27,6 +27,12 @@ logs/
 # Local-only docs and HTML playgrounds (not part of plugin distribution)
 *.html
 
+# The bundled user guide IS shipped, despite the *.html rule above
+!src/guide/
+!src/guide/**
+!plugins/academic-writer/guide/
+!plugins/academic-writer/guide/**
+
 # .claude - ignore runtime/session state; commit hooks, skills, and config
 .claude/.comm-style-counter
 .claude/.satisfaction-counter
@@ -92,3 +98,13 @@ pitch-*.md
 
 # ALE run dirs and task worktrees (local)
 .ale/runs/
+
+# --- Internal dev-process state (maintainer-only; not part of the shareable plugin) ---
+.team/
+docs/refactor/
+docs/superpowers/
+docs/audits/
+docs/reviews/
+docs/plans/
+docs/benchmarks/
+.claude/settings.json
