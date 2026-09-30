@@ -1,7 +1,7 @@
 # Gemini Onboarding Detail (Phase 3.5)
 
-> Read this when you reach Phase 3.5 (Gemini Onboarding) in SKILL.md. It has the full key-check,
-> key-creation, live-probe, and settings-storage procedure.
+> Read this when you reach Phase 3.5 (Gemini Onboarding) in SKILL.md. The key procedure itself is
+> shared with `setup` in `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/gemini-key.md`.
 
 ## Phase 3.5: Gemini Onboarding
 
@@ -16,12 +16,12 @@ AskUserQuestion(questions=[{
   "options": [
     {
       "label": "Yes, enable Gemini",
-      "description": "Requires a Google AI Studio API key (free tier available).",
+      "description": "Needs a free Google AI Studio key. Your article text is sent to Google for drafting.",
       "markdown": "```\nGemini ON\n─────────\n→ Faster, lower-cost drafting\n→ Per-language calibration gate runs\n   on first /write in each language\n→ Auditor still runs on Claude\n```"
     },
     {
       "label": "No, Claude only",
-      "description": "Today's behavior — Claude writes and reviews everything.",
+      "description": "Nothing is sent to Google; Claude writes and reviews everything.",
       "markdown": "```\nClaude only\n───────────\n→ No external API needed\n→ You can enable Gemini later via init\n```"
     }
   ],
@@ -35,94 +35,41 @@ Skip the rest of this phase. Note in summary that Gemini is disabled.
 
 ### If "Yes, enable Gemini"
 
-#### Step 3.5.a — Check for existing key
+All key handling follows `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/gemini-key.md` (read it
+now). In short: the plugin's `aw` command reads only the `GOOGLE_API_KEY` environment variable. The
+plugin setting `google_api_key` is kept in the operating system's keychain and copied into that
+variable by the start-up hook at the start of each session, in projects that have
+`.academic-helper/profile.md`. A `.academic-helper/secrets.json` file is not read.
 
-This only checks the two shell-visible sources — the plugin's own secure configuration option
-(preferred; see 3.5.b) is resolved by the MCP server process and isn't visible to this shell check.
-`NO_KEY` here means "not found at the shell level," not "not configured anywhere" — 3.5.c's live
-probe is authoritative:
-
-```bash
-if [ -n "$GOOGLE_API_KEY" ]; then
-  echo "Found GOOGLE_API_KEY in environment."
-elif [ -f .academic-helper/secrets.json ] && python3 -c "import json,sys; sys.exit(0 if json.load(open('.academic-helper/secrets.json')).get('GOOGLE_API_KEY') else 1)" 2>/dev/null; then
-  echo "Found GOOGLE_API_KEY in .academic-helper/secrets.json."
-else
-  echo "NO_KEY (at the shell level — try the 3.5.c probe before assuming nothing is configured)"
-fi
-```
-
-#### Step 3.5.b — If NO_KEY, walk through key creation
-
-> "To get a Google AI Studio API key:
-> 1. Open https://aistudio.google.com/apikey in your browser
-> 2. Sign in with a Google account
-> 3. Click 'Create API key' — copy the key (it begins with `AIza...`)
-> 4. Free tier covers typical academic-writer usage."
-
-Ask how to store the key:
-
-```python
-AskUserQuestion(questions=[{
-  "question": "Where should I store your Gemini API key?",
-  "header": "Key storage",
-  "options": [
-    {
-      "label": "Plugin configuration (recommended)",
-      "description": "Stored securely by Claude Code (OS keychain / protected credentials file) — never plaintext.",
-      "markdown": "```\nclaude plugin install academic-writer --scope project \\\n  --config google_api_key=\"AIza...\"\n\n# Already installed? Reconfigure via the /plugin\n# manager, or:\nclaude plugin config academic-writer \\\n  --config google_api_key=\"AIza...\"\n```"
-    },
-    {
-      "label": "Environment variable",
-      "description": "Set GOOGLE_API_KEY in your shell profile. Survives across projects.",
-      "markdown": "```\nexport GOOGLE_API_KEY=\"AIza...\"\n# add to ~/.zshrc or ~/.bashrc\n```"
-    },
-    {
-      "label": "Project-local secrets file",
-      "description": ".academic-helper/secrets.json (gitignored, this project only).",
-      "markdown": "```\n.academic-helper/secrets.json\n──────────────────────────────\n{ \"GOOGLE_API_KEY\": \"AIza...\" }\n→ Already in .gitignore\n```"
-    }
-  ],
-  "multiSelect": false
-}])
-```
-
-- **Plugin configuration path**: print the `claude plugin install`/`claude plugin config` command (or point at the `/plugin` manager) for the user to run outside this conversation, then ask them to confirm and restart Claude Code. You cannot run this on their behalf or open the config dialog from inside Claude Code.
-- **Env var path**: print the export command for the user to run. Then ask them to confirm they've set it and reopened the session so Claude Code picks up the env. You cannot set their shell env from inside Claude Code.
-- **Secrets file path**: ask them to paste the key, then:
+#### Step 3.5.a — Check for an existing key
 
 ```bash
-mkdir -p .academic-helper
-python3 -c "
-import json, pathlib, os
-p = pathlib.Path('.academic-helper/secrets.json')
-data = json.loads(p.read_text()) if p.exists() else {}
-data['GOOGLE_API_KEY'] = os.environ['_PASTED_KEY']
-p.write_text(json.dumps(data, indent=2))
-import stat
-p.chmod(stat.S_IRUSR | stat.S_IWUSR)
-"
+[ -n "${GOOGLE_API_KEY:-}" ] && echo "KEY_PRESENT" || echo "NO_KEY"
 ```
 
-(Pass the pasted key via env var to avoid leaking it through shell history.) Confirm `.academic-helper/secrets.json` is gitignored.
+`KEY_PRESENT` → go to 3.5.c. Never print the key.
 
-All three paths coexist — the server checks the plugin configuration first, then the environment
-variable, then the secrets file, so picking one doesn't disturb whichever else may already be set.
+#### Step 3.5.b — If NO_KEY, get and store one
 
-#### Step 3.5.c — Probe the key
+1. Say the plain-language explanation from `gemini-key.md` (what an API key is, free tier,
+   article text is sent to Google when Gemini is on, why the key must never be pasted in the
+   chat).
+2. Give the numbered steps to create a key at https://aistudio.google.com/apikey.
+3. Ask where to keep it (the `AskUserQuestion` in `gemini-key.md § Storing the key`) and give
+   the steps for the choice: `/plugin` → **Installed** → **academic-writer** → **Configure** →
+   `google_api_key` (recommended, kept in the keychain), or the macOS / Windows / Linux shell
+   profile steps.
+4. Make sure `.academic-helper/profile.md` exists (write the Phase 2 fields now if Phase 4 has not
+   run yet), so the start-up hook passes the key on after the restart.
+5. Ask the researcher to quit and reopen Claude Code in this folder, then run
+   `/academic-writer:setup` and choose **Check my Gemini key**, or re-run `/academic-writer:init`
+   and choose Update. Finish the remaining init phases first if they prefer; the key check can
+   wait.
 
-Run a one-shot probe through the MCP server to verify the key works end-to-end:
+#### Step 3.5.c — Check the key
 
-```
-mcp__plugin_academic-writer_gemini-api__gemini_raw({
-  system: "Reply with exactly the word PONG and nothing else.",
-  prompt: "PING"
-})
-```
-
-- On success (returned `text` contains "PONG"): print "✓ Gemini API key verified."
-- On `{ error: { code: "no_credentials" } }`: print "Key not detected by the MCP server. If you just set the plugin configuration or the env var, restart Claude Code so the server inherits it. Re-run `/academic-writer:init` after restart."
-- On any other error: print the error and tell the user Gemini will not be available until resolved.
+Run the two checks in `gemini-key.md § Checking the key` (`aw models check`, then the live check
+that sends no article text) and give the researcher the matching plain-language line.
 
 #### Step 3.5.d — Note the opt-out check
 
