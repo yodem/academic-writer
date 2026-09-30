@@ -21,13 +21,13 @@ AskUserQuestion(questions=[{
   "options": [
     {
       "label": "Candlekeep",
-      "description": "✓ Detected  (or ✗ Not found — install from github.com/romiluz13/candlekeep)",
+      "description": "✓ Detected  (or ✗ Not found — I can install it after asking)",
       "markdown": "```\nCandlekeep\n──────────\nType:    CLI (ck)\nWhat:    Cloud document library\nBest for: Storing and searching your source PDFs\nStatus:  ✓ Detected\n```"
     },
     {
       "label": "NotebookLM",
-      "description": "✓ Detected  (or ✗ Not found — run: npm install -g notebooklm-mcp-cli)",
-      "markdown": "```\nNotebookLM\n──────────\nType:    MCP server (nlm CLI)\nWhat:    AI-powered source Q&A, audio overviews,\n         study guides, research discovery\nStatus:  ✓ Detected\n\nSetup (if not installed):\n  npm install -g notebooklm-mcp-cli\n  nlm login\n```"
+      "description": "✓ Detected  (or ✗ Not found — I can install it after asking)",
+      "markdown": "```\nNotebookLM\n──────────\nType:    MCP server (nlm CLI)\nWhat:    AI-powered source Q&A, audio overviews,\n         study guides, research discovery\nStatus:  ✓ Detected\n```"
     }
   ],
   "multiSelect": true
@@ -36,5 +36,5 @@ AskUserQuestion(questions=[{
 
 **Rules:**
 - Pre-check options that were detected.
-- If a tool is not detected and the researcher selects it, show the setup URL and walk them through installation. Re-run detection after they confirm, before proceeding.
+- If a tool is not detected and the researcher selects it, follow the ask-before-install step in `SKILL.md` Phase 1. Re-run detection before proceeding.
 - Store final selection as the `tools` object (used in Phase 4).
