@@ -38,9 +38,9 @@ Paragraph 2 text...
 
 ## Step 9b: DOCX Output — article JSON schema
 
-Write the article data to a JSON file, then run the standalone DOCX generator script:
+`aw docx` (W6 in SKILL.md) builds this JSON from the synthesized drafts in code, writes it to `.academic-helper/runs/<id>/article.json` and runs `scripts/generate-docx.py` for you. The schema below is what it writes; use it only to read or check that file, or when you must regenerate a Word file by hand with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/generate-docx.py" --input <article.json> --output <file.docx>`. Keep any hand-written JSON inside the project (never `/tmp`), so the run's files stay together.
 
-1. **Write the article JSON** using the Write tool to `/tmp/aw-article-data.json`. Use this exact schema — do NOT write inline Python to construct it:
+1. **Article JSON schema**:
 
 ```json
 {

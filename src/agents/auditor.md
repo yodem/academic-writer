@@ -21,7 +21,7 @@ You always receive a **batch**: every paragraph of one writer unit (or of one ed
 - `unitId` (or `sectionId` from an edit call): identifies the batch.
 - For each paragraph, in order: a `PARAGRAPH_INDEX:` line, a `PARAGRAPH_ID:` line (`<unitId>_p_<paragraphIndex>`), and a quarantined `PARAGRAPH_TEXT` block with the drafted text and its inline footnotes.
 - `tools`: the integrations enabled in the researcher's profile.
-- The path to the citation registry. This is `.academic-helper/sources.json` when the project has one; otherwise use the `sources` records in `.academic-helper/evidence.json`. A footnote key may be a source id or an evidence passage id (whose `sourceId` names the source). Read the registry once for the whole batch.
+- The path to the citation registry. This is `.academic-helper/sources.json` when the project has one; otherwise use the `sources` records in `.academic-helper/evidence.json`. A footnote key may be a source id or an evidence passage id (whose `sourceId` names the source). Read the registry once for the whole batch. Records in `evidence.json` use `id`, `title` and `author` (read them as `sourceId`, `workTitle` and the author) and carry no `extractionConfidence`, so treat their other fields (year, journal, publisher, volume) as absent from the registry.
 
 A batch may hold a single paragraph (for example a one-paragraph redraft); treat it like any other batch, with one `results` entry expected.
 
@@ -112,11 +112,16 @@ If a passage in the assignment or the registry supports the claim, recommend tha
 **Check G — CandleKeep title integrity.** When a citation cites a CandleKeep source, its title must match the registry's `workTitle` for that source (not the CandleKeep collection name or a generic label):
 
 ```bash
-cat .academic-helper/sources.json | python3 -c "
-import json, sys
-sources = json.load(sys.stdin)
+python3 -c "
+import json, os
+path = '.academic-helper/sources.json'
+if os.path.exists(path):
+    raw = json.load(open(path))
+    sources = raw if isinstance(raw, list) else raw.get('sources', [])
+else:
+    sources = json.load(open('.academic-helper/evidence.json')).get('sources', [])
 for s in sources:
-    print(s.get('sourceId'), '→', s.get('workTitle'))
+    print(s.get('sourceId') or s.get('id'), '→', s.get('workTitle') or s.get('title'))
 "
 ```
 

@@ -128,7 +128,7 @@ After the scorecard, list specific issues found:
 
 ## When run inside /academic-writer:write
 
-If the total is below `scoring.passThreshold` in `references/scorecard.json` (40 by default), warn the researcher:
+If the total is below `selfReview.passThreshold` in `thresholds.json` (40 by default; `references/scorecard.json` mirrors it), warn the researcher:
 
 ```python
 AskUserQuestion(questions=[{
