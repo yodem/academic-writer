@@ -66,9 +66,17 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
   PLUGIN_DIR="$PLUGINS_DIR/$PLUGIN_NAME"
   mkdir -p "$PLUGIN_DIR/.claude-plugin"
 
+  # Regenerate the command lists in the HTML guide and the help skill from skill
+  # frontmatter (and stamp the version), so they can never drift from the skills.
+  python3 "$PROJECT_ROOT/scripts/gen-guide.py"
+
   # Copy skills
   if [[ -d "$SRC_DIR/skills" ]]; then
     cp -R "$SRC_DIR/skills" "$PLUGIN_DIR/"
+  fi
+  # Ship the offline HTML guide opened by /academic-writer:intro.
+  if [[ -d "$SRC_DIR/guide" ]]; then
+    cp -R "$SRC_DIR/guide" "$PLUGIN_DIR/"
   fi
   # Ship canonical JSON schemas beside the runtime scripts for gate.py.
   if [[ -d "$SRC_DIR/schemas" ]]; then
@@ -190,6 +198,10 @@ for plugin_dir in "$PLUGINS_DIR"/*; do
   fi
   if [[ ! -f "$plugin_dir/hooks/hooks.json" ]]; then
     echo -e "${RED}  $plugin_name: Missing hooks/hooks.json${NC}"
+    errors=$((errors + 1))
+  fi
+  if [[ ! -f "$plugin_dir/guide/index.html" ]]; then
+    echo -e "${RED}  $plugin_name: Missing guide/index.html${NC}"
     errors=$((errors + 1))
   fi
   if [[ ! -x "$plugin_dir/bin/aw" ]]; then
