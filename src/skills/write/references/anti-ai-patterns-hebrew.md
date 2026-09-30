@@ -82,7 +82,7 @@ The model often inserts a "wrap-up" sentence that summarises a figure, motif, or
 - Inferred dating, dimensions, or material-culture claims that go beyond what the verse itself states.
 
 **Action when detected:**
-1. If the claim CAN be supported from a source the deep-reader read or from `sources.json`, add the inline citation.
+1. If the claim CAN be supported from a passage in `evidence.json` or a source in `sources.json`, add the inline citation.
 2. If it cannot, either remove the sentence or replace the claim with `[NEEDS REVIEW: source for "<claim>"]` and surface it to the researcher in the self-review report.
 3. **Never paraphrase the claim more cautiously and leave it in.** Cautious phrasing of an unsourced assertion is still an unsourced assertion.
 

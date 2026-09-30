@@ -1,14 +1,16 @@
 ---
 name: update-field
-description: "Update your field of study in the Academic Writer profile. Use when changing your research field without redoing full setup."
+description: "Change the research field recorded in the author's Academic Writer profile, keeping every other setting. Use when the author says their field or specialisation has changed and does not want to redo the full setup (/academic-writer:init)."
 user-invocable: false
-allowed-tools: [Read, Write, Edit, AskUserQuestion]
+allowed-tools: [Bash, Read, Write, Edit, AskUserQuestion]
+model: haiku
+effort: low
 metadata: {author: "Yotam Fromm", version: "0.2.23"}
 ---
 
 # Academic Writer — Update Field of Study
 
-Quick update to your research field without re-running the full initialization.
+Change the `fieldOfStudy` in `.academic-helper/profile.md` without re-running the full setup. The field steers terminology and examples in later drafts, so record it in the author's own words.
 
 ## Load Current Profile
 
@@ -40,7 +42,7 @@ Record their answer.
 
 ## Update Profile
 
-Update the profile JSON with the new field while keeping all other settings intact:
+Update the profile's frontmatter (the header block between the `---` lines) with the new field, keeping every other setting intact. Replace `NEW_FIELD_HERE` with the author's answer:
 
 ```bash
 python3 << 'PYTHON'
@@ -77,7 +79,7 @@ PYTHON
 
 ## Confirm
 
-Show the updated profile:
+Tell the author:
 > "Done! Your field is now: **[new field]**
 >
 > Your citation style and writing style remain unchanged.

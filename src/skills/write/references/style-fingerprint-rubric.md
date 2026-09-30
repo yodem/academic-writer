@@ -1,6 +1,6 @@
 # Style Fingerprint Compliance Rubric (10 dimensions)
 
-> Loaded on demand by the section-writer per-paragraph pipeline (Skill 2). Pass threshold is `compliance ≥ 0.70`. Threshold for individual dimensions: `thresholds.json:styleFingerprint.passThreshold` (default 7/10).
+> Reference for judging whether a paragraph matches the author's style fingerprint (used when reviewing drafts, e.g. by `/academic-writer:review` dimension 5, and when the author asks why a paragraph sounds off). Pass threshold is `compliance ≥ 0.70`. Threshold for individual dimensions: `thresholds.json:styleFingerprint.passThreshold` (default 7/10).
 
 ## Layers
 

@@ -1,6 +1,6 @@
 ---
 name: review
-description: "Self-review quality gate — scores a completed article on 6 dimensions (structure, argument logic, citation completeness, source coverage, writing quality, academic conventions) and presents a scorecard before final output. Use after writing to score the article on quality dimensions before publication. Use when this skill's command or workflow is needed."
+description: "Score a completed article on six dimensions (structure, argument logic, citation completeness, source coverage, writing quality, academic conventions) and show a scorecard with concrete findings. Use when the author wants an assessment before submitting, or as the self-review step of /academic-writer:write. Not for fixing typos (use /academic-writer:proofread) or making changes (use /academic-writer:edit)."
 user-invocable: true
 allowed-tools: [Bash, Read, Glob, Grep, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.2.24"}
@@ -8,12 +8,12 @@ metadata: {author: "Yotam Fromm", version: "0.2.24"}
 
 # Academic Writer — Article Self-Review
 
-A structured quality gate that scores a completed article on 6 dimensions and presents a scorecard to the researcher.
+Score a completed article on six dimensions and show the researcher a scorecard. Be a fair, specific reviewer: every score needs a concrete finding tied to a place in the article, because a bare number gives the researcher nothing to act on. Review only; do not change the article.
 
-## When to Use
+## When this runs
 
-- Automatically invoked as Step 8.7 in the write-article pipeline (between Synthesis and DOCX Output)
-- Can be run standalone on any article: `/academic-writer:review`
+- As the self-review step of `/academic-writer:write` (after synthesis, before the Word file), described in `write/references/write-completion.md`.
+- On its own, on any article, when the researcher runs `/academic-writer:review`.
 
 ## Load Profile
 
@@ -35,7 +35,7 @@ ls articles/*.md 2>/dev/null
 
 Read the selected article with the `Read` tool.
 
-When invoked as a pipeline step, the article text is passed directly.
+When run as a step of `/academic-writer:write`, the article text is passed to you directly.
 
 ## Scorecard rubric
 
@@ -126,14 +126,14 @@ After the scorecard, list specific issues found:
 > 1. [Dimension] — [what works well]
 > 2. ...
 
-## When Run as Pipeline Step (Step 8.7)
+## When run inside /academic-writer:write
 
-If the score is below 40, warn the researcher:
+If the total is below `scoring.passThreshold` in `references/scorecard.json` (40 by default), warn the researcher:
 
 ```python
 AskUserQuestion(questions=[{
   "question": "The article scored NN/60 on self-review. Some issues were found. How would you like to proceed?",
-  "header": "Self-Review Results",
+  "header": "Self-review",
   "options": [
     {"label": "Continue to DOCX output", "description": "Generate the document as-is. You can edit later."},
     {"label": "Show me the issues", "description": "Review the detailed findings before proceeding."},
@@ -143,5 +143,5 @@ AskUserQuestion(questions=[{
 }])
 ```
 
-If score is 40+, show the scorecard and continue to DOCX output automatically.
+If the total meets the threshold, show the scorecard and continue to the Word output automatically.
 

@@ -1,16 +1,18 @@
 ---
 name: ocr
-description: "OCR a scanned PDF or image (or a directory of them) into clean plain-text markdown via the bundled Gemini vision tool. Skips Gemini entirely for born-digital pages (extracted directly). Use when you have a scanned source — an old article, a photographed archival page, a screenshot of a source — and want its text extracted before using it in research or writing. Takes a path to a file or directory as its argument."
+description: "Turn a scanned PDF or photographed page (or a folder of them) into plain text with the bundled Gemini reading tool; pages that already contain text are extracted directly. Use when the author has a scan, photo or screenshot of a source and needs its text before research or writing. Takes a file or folder path."
 user-invocable: true
-allowed-tools: [Bash, Read, Write, Glob, Bash]
+allowed-tools: [Bash, Read, Write, Glob]
 metadata: {author: "Yotam Fromm", version: "0.1.0"}
 ---
 
 # Academic Writer — OCR
 
-Transcribe a PDF, image, or directory of supported files with `aw ocr`. OCR preserves the source text; it does not correct or paraphrase it. Ask for a path if the author did not provide one. Choose `he`, `en`, or `mixed` from the profile, or ask when unclear.
+OCR (optical character recognition) reads the text out of a scanned or photographed page. Transcribe a PDF, an image, or a folder of them with `aw ocr`. OCR copies the source text exactly: it never corrects, modernises or paraphrases it, because the text may later be quoted as evidence.
 
-Write output under a project-local `ocr-output/` directory and run:
+1. If the author gave no path, ask for the file or folder.
+2. Choose the language: `he`, `en` or `mixed`. Take it from `.academic-helper/profile.md`, or ask when the source language is unclear.
+3. Write the output under a project folder named `ocr-output/`, and run:
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" ocr \
@@ -18,4 +20,9 @@ Write output under a project-local `ocr-output/` directory and run:
   --format concise --out <project-local-output.md>
 ```
 
-Use `--pages <range>` when processing a specific page range and `--format detailed` when detailed output is requested. The command returns page records with born-digital status, confidence, and notes; surface these faithfully. For a directory, process each file sequentially and write a separate output file per document. Never overwrite the source. Report errors and uncertain or skipped pages explicitly.
+- Add `--pages <range>` to process only some pages.
+- Use `--format detailed` when the author wants notes on layout, footnotes and tables.
+- For a folder, process one file at a time and write a separate output file for each document.
+
+4. The command returns one record per page with whether the page already had digital text, a confidence level and notes. Report these faithfully: tell the author which pages were low-confidence, skipped or failed, so they know which pages to check against the original.
+5. Never overwrite the source file.
