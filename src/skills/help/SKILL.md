@@ -81,5 +81,5 @@ This table is generated from the plugin itself, so it is always complete.
 Your drafts and settings stay in your research folder (in a hidden folder named `.academic-helper`).
 Your writing-style data lives in the plugin's own data folder on your computer. The text you work on
 is sent to Anthropic (Claude) and, if you set up a Gemini key, to Google, only to do the writing
-and checking you asked for. Your key is stored in your computer's secure keychain, not in a
-plain file.
+and checking you asked for. When you save your key through the plugin's settings (setup does this),
+it is stored in your computer's secure keychain, not in a plain file.
