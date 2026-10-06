@@ -4,6 +4,13 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-10-06
+
+### Added
+- **`/academic-writer:ingest`** uploads a single article or chapter into your Trove (CandleKeep) source library with its **printed page numbers preserved**, so citations name the printed page and never the library's sequential page. Every upload gets a hinted table of contents (up to 3 sentences per page) and a **page-1 "How to read and cite this book" guide** with the bibliographic record, the page-marker rule, and ready-made footnote templates in three citation styles (Chicago notes-bibliography, the Hebrew academic convention, and MLA or APA chosen from your profile's citation style). Scans and photos go through `/academic-writer:ocr`, with checks for upside-down scans, one page per call, and silently truncated "high-confidence" pages. A mandatory read-back (page count, hints, guide page, printed markers) must pass before the upload is called done, and an existing book is never deleted or overwritten without your explicit confirmation.
+- **`/academic-writer:ingest-book`** uploads a whole book — a large or scanned PDF, a multi-volume set, or an EPUB — as one library book with a **nested, clickable table of contents** where every entry jumps to its real page and carries a content hint, plus the same page-1 citation guide and read-back. Multi-volume sets are merged with a printed→library page crosswalk verified against live content, and a book whose sidebar is an unusable flat list of "page N" entries can be repaired with the same enrich step.
+- `write` and `research` now point at the two ingest skills when a source you want is not yet in the library.
+
 ## [0.15.0] — 2026-10-01
 
 ### Added

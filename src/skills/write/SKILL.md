@@ -185,6 +185,8 @@ running it across the whole library would overwrite it.
 
 **If Candlekeep is NOT enabled**, use the `sources` array from the profile (indexed during init) to present available sources. If the sources array is empty, ask the researcher to describe their sources manually.
 
+If a source the author wants to use is **not yet in Trove** (CandleKeep), stop and point them at the ingest skills instead of working from an unindexed file: a single article or chapter → `/academic-writer:ingest`, a whole book (multi-volume, scanned, EPUB, 100+ pages) → `/academic-writer:ingest-book`. They upload it with its printed page numbers preserved so citations can name the printed page.
+
 Present them clearly and ask:
 > "Which of these sources should I focus on? You can name them by number, by title, or say 'all'."
 

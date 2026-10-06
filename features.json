@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Feature inventory for the academic-writer plugin. A checklist for future audits: each top-level feature lists its subfeatures, the source of truth, runtime status, and known issues. status: ok | partial | broken | missing. Regenerate/extend this file whenever features are added or removed.",
   "generatedAt": "2026-10-01T00:00:00Z",
-  "pluginVersion": "0.15.0",
+  "pluginVersion": "0.16.0",
   "features": [
     {
       "id": "onboarding",
@@ -132,6 +132,33 @@
         {
           "id": "ideate",
           "name": "Frame a research question",
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "id": "ingest",
+      "name": "Source ingestion into Trove (CandleKeep)",
+      "sources": [
+        "src/skills/ingest/SKILL.md",
+        "src/skills/ingest/references/reading-page-template.md",
+        "src/skills/ingest-book/SKILL.md",
+        "src/skills/ingest-book/references/toc-mechanism.md",
+        "src/skills/ingest-book/references/epub-sources.md",
+        "src/skills/ingest-book/scripts/extract_pdf.py",
+        "src/skills/ingest-book/scripts/build_crosswalk.py",
+        "src/skills/ingest-book/scripts/build_toc_enrich.py"
+      ],
+      "status": "ok",
+      "subfeatures": [
+        {
+          "id": "ingest-article",
+          "name": "/academic-writer:ingest — single article or chapter with printed page numbers preserved, hinted contents, page-1 reading-and-citation guide (Chicago + Hebrew + profile style), aw ocr with orientation/truncation handling, mandatory read-back",
+          "status": "ok"
+        },
+        {
+          "id": "ingest-book",
+          "name": "/academic-writer:ingest-book — whole book/multi-volume/scanned PDF/EPUB as one book with nested navigable ToC metadata (hints on every entry), crosswalk from printed pages, mandatory read-back; repairs a flat ToC",
           "status": "ok"
         }
       ]

@@ -55,6 +55,8 @@ Slash commands are auto-generated from skills with `user-invocable: true`. To ad
 | `/academic-writer:init` | init | Full onboarding (first install); pass `--quick` for fast onboarding |
 | `/academic-writer:setup` | setup | Guided first-run wizard (Gemini key, Python tools, sample paragraph) — slash-command only (`disable-model-invocation: true`, so Claude will not auto-invoke it) |
 | `/academic-writer:research` | research | Investigate a topic |
+| `/academic-writer:ingest` | ingest | Upload one article or chapter to the source library with printed page numbers and a citation guide |
+| `/academic-writer:ingest-book` | ingest-book | Upload a whole book (multi-volume, scanned, EPUB) with a navigable hinted table of contents |
 | `/academic-writer:ideate` | ideate | Frame a research question |
 | `/academic-writer:review` | review | Score an article before submission |
 | `/academic-writer:health` | health | Check integration health |

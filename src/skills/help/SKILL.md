@@ -4,7 +4,7 @@ description: "Short, plain-language overview of Academic Writer and its commands
 user-invocable: true
 allowed-tools: [Read]
 model: haiku
-metadata: {author: "Yotam Fromm", version: "0.15.0", summary: "A short list of every command and the three steps to get started."}
+metadata: {author: "Yotam Fromm", version: "0.16.0", summary: "A short list of every command and the three steps to get started."}
 ---
 
 # Academic Writer — Help
@@ -57,6 +57,8 @@ This table is generated from the plugin itself, so it is always complete.
 | `/academic-writer:research` | Investigate a topic or check a claim against the author's indexed sources, returning only passages whose quotations were verified word for word. |
 | `/academic-writer:ideate` | Guided brainstorming that turns a vague topic into a sharp research question, using who/what/when/where/why/how, a gap check against the author's sources and a choice of approach; saves a research brief that /academic-writer:write reads. |
 | `/academic-writer:ocr` | Turn a scanned PDF or photographed page (or a folder of them) into plain text with the bundled Gemini reading tool; pages that already contain text are extracted directly. |
+| `/academic-writer:ingest` | Upload one article or chapter to the source library with printed page numbers, hinted contents and a citation guide. |
+| `/academic-writer:ingest-book` | Upload a whole book (multi-volume, scanned or EPUB) to the source library with a navigable hinted table of contents and a citation guide. |
 | `/academic-writer:voice` | Build or update the author's voice profile: import older voice files, choose exemplar paragraphs from past papers, derive writing rules and sync them to CandleKeep. |
 | `/academic-writer:health` | Check that Academic Writer is ready to use — your profile, the tools it needs (Python and its add-ons, Hebrew spelling, CandleKeep, NotebookLM), the Gemini key and past articles — with a plain-language fix for anything missing. |
 | `/academic-writer:help` | A short list of every command and the three steps to get started. |

@@ -118,7 +118,7 @@ footer { margin-top: 48px; color: var(--muted); font-size: .9rem; border-top: 1p
 <header class="hero">
   <h1>Academic Writer: the full guide</h1>
   <p>A writing assistant for humanities researchers. It helps you write a scholarly article in your own voice, using only the sources you choose, and hands you a Word file.</p>
-  <span class="version">Version <!-- guide:version:start -->0.15.0<!-- guide:version:end --></span>
+  <span class="version">Version <!-- guide:version:start -->0.16.0<!-- guide:version:end --></span>
 </header>
 
 <nav class="toc" aria-label="Contents">
@@ -255,6 +255,8 @@ claude plugin install academic-writer@yodem</code></pre></div>
 <tr><td><code>/academic-writer:research</code></td><td>Investigate a topic or check a claim against the author&#x27;s indexed sources, returning only passages whose quotations were verified word for word.</td></tr>
 <tr><td><code>/academic-writer:ideate</code></td><td>Guided brainstorming that turns a vague topic into a sharp research question, using who/what/when/where/why/how, a gap check against the author&#x27;s sources and a choice of approach; saves a research brief that /academic-writer:write reads.</td></tr>
 <tr><td><code>/academic-writer:ocr</code></td><td>Turn a scanned PDF or photographed page (or a folder of them) into plain text with the bundled Gemini reading tool; pages that already contain text are extracted directly.</td></tr>
+<tr><td><code>/academic-writer:ingest</code></td><td>Upload one article or chapter to the source library with printed page numbers, hinted contents and a citation guide.</td></tr>
+<tr><td><code>/academic-writer:ingest-book</code></td><td>Upload a whole book (multi-volume, scanned or EPUB) to the source library with a navigable hinted table of contents and a citation guide.</td></tr>
 <tr><td><code>/academic-writer:voice</code></td><td>Build or update the author&#x27;s voice profile: import older voice files, choose exemplar paragraphs from past papers, derive writing rules and sync them to CandleKeep.</td></tr>
 <tr><td><code>/academic-writer:health</code></td><td>Check that Academic Writer is ready to use — your profile, the tools it needs (Python and its add-ons, Hebrew spelling, CandleKeep, NotebookLM), the Gemini key and past articles — with a plain-language fix for anything missing.</td></tr>
 <tr><td><code>/academic-writer:help</code></td><td>A short list of every command and the three steps to get started.</td></tr>

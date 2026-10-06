@@ -4,7 +4,7 @@ description: "Opens the full illustrated Academic Writer guide (a page bundled w
 user-invocable: true
 disable-model-invocation: false
 allowed-tools: [Bash]
-metadata: {author: "Yotam Fromm", version: "0.15.0", summary: "Open the full guide in your web browser: what the plugin does, setup, your first article, privacy and troubleshooting."}
+metadata: {author: "Yotam Fromm", version: "0.16.0", summary: "Open the full guide in your web browser: what the plugin does, setup, your first article, privacy and troubleshooting."}
 ---
 
 # Academic Writer — Open the guide

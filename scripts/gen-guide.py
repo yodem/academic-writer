@@ -33,7 +33,8 @@ PREFIX = "/academic-writer:"
 # Anything not listed here is appended alphabetically.
 ORDER = [
     "intro", "setup", "init", "write", "revise", "edit", "edit-section",
-    "proofread", "review", "research", "ideate", "ocr", "voice", "health", "help",
+    "proofread", "review", "research", "ideate", "ocr",
+    "ingest", "ingest-book", "voice", "health", "help",
 ]
 
 
@@ -173,7 +174,7 @@ def load_commands(root: Path) -> list[tuple[str, str]]:
     cmds = []
     for path in sorted((root / "src/skills").glob("*/SKILL.md")):
         fm = parse_frontmatter(path.read_text(encoding="utf-8"))
-        if fm.get("user-invocable") is not True:
+        if not fm.get("user-invocable"):  # parser yields actual bools (true/false only)
             continue
         name = str(fm.get("name") or path.parent.name)
         cmds.append((name, summary_for(fm)))
@@ -210,7 +211,10 @@ def replace_between(text: str, start: str, end: str, body: str, label: str) -> s
 
 
 def render(root: Path) -> dict[Path, str]:
-    version = json.loads((root / "manifests/academic-writer.json").read_text(encoding="utf-8"))["version"]
+    try:
+        version = json.loads((root / "manifests/academic-writer.json").read_text(encoding="utf-8"))["version"]
+    except (OSError, json.JSONDecodeError, KeyError) as exc:
+        raise SystemExit(f"gen-guide: cannot read plugin version from manifest: {exc}") from exc
     cmds = load_commands(root)
     guide = root / "src/guide/index.html"
     help_md = root / "src/skills/help/SKILL.md"
@@ -226,7 +230,7 @@ def render(root: Path) -> dict[Path, str]:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(description=(__doc__ or "Regenerate the guide and help command lists.").splitlines()[0])
     ap.add_argument("--check", action="store_true", help="exit 1 if a target file would change")
     ap.add_argument("--root", default=str(Path(__file__).resolve().parent.parent))
     args = ap.parse_args(argv)

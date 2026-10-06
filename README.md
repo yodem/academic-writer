@@ -93,6 +93,8 @@ Type any of these in Claude Code. You can also describe what you want in your ow
 | `/academic-writer:proofread` | Proofread a finished article (Markdown or Word): a corrected copy, a report and an editorial memo. |
 | `/academic-writer:review` | Score a finished article on six dimensions and show concrete findings. |
 | `/academic-writer:research` | Investigate a topic or check a claim against your sources; only word-for-word verified quotations come back. |
+| `/academic-writer:ingest` | Upload a single article or chapter to your source library, keeping its printed page numbers and adding a citation guide. |
+| `/academic-writer:ingest-book` | Upload a whole book (multi-volume, scanned or EPUB) with a clickable table of contents that jumps to the right page. |
 | `/academic-writer:ideate` | Turn a vague topic into a sharp research question; saves a research brief that write reads. |
 | `/academic-writer:ocr` | Turn a scanned PDF or photographed page (or a folder of them) into plain text. |
 | `/academic-writer:voice` | Build or update your voice profile: exemplar paragraphs you choose and your writing habits. |
