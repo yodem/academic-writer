@@ -70,7 +70,7 @@ This is a primary text, so it can also be cited by its internal structure:
 ## Hebrew template
 
 ```markdown
-# כיצד לקרוא ולצטטספר זה
+# כיצד לקרוא ולצטט ספר זה
 
 ## רשומה ביבליוגרפית
 **מחבר:** [שם המחבר המלא]
