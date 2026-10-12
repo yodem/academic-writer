@@ -76,6 +76,8 @@ Drop greetings, small talk, audio/Zoom trouble, jokes, banter, unsupported perso
 
 Key every step on the book's current structure (`trove items toc <book_id> --json --no-session`), never on whether this is the first lesson.
 
+**Resume, don't repeat.** Before writing anything for a queue job, look up its lesson in the course JSON by `lesson_key`. If that lesson already has a `trove_page`, the page exists: do not append it again. Skip to step 5 (rebuild the ToC with that page nested), then step 6's `check-lesson`, and archive the job only when it exits 0. If it still fails, leave the job queued and log the reason.
+
 1. If the book has no page-1 course index (a `Course · <course name>` page), append one first: course details from the course JSON, a `> Load this page when:` line, what the course is about, and a units list.
 2. If the ToC has no level-1 `תמלולי שיעורים` entry, append a `# תמלולי שיעורים` entry page explaining the course (subject, lecturer, central questions), how lesson pages are built, and their limits. If it exists but its course explanation is still a placeholder, rewrite that page once the first lesson gives enough to explain the course.
 3. Append the lesson page with `trove items append <book_id> -f <page.md> --no-session`, then read the ToC to get its page number. Add a dated line to the changelog page if the manuscript has one, and add the lesson to the units list on page 1 and on the entry page.
