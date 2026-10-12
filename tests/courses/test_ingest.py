@@ -258,3 +258,15 @@ def test_ingest_given_source_id_skips_source_count_guard(tmp_path):
     assert result["source_id"] == "existing-source"
     assert not any(command[1:3] == ["source", "list"] for command in calls)
     assert not any(command[1:3] == ["source", "add"] for command in calls)
+
+
+def test_ingest_treats_appended_lesson_as_already_ingested(tmp_path):
+    audio = tmp_path / "appended.m4a"
+    audio.write_bytes(b"appended bytes")
+    digest = hashlib.sha256(b"appended bytes").hexdigest()
+    registry = make_registry(tmp_path, lessons=[{"date": "2026-10-12", "lesson_key": "2026-10-12-1204", "audio_sha256": digest, "source_id": "src", "trove_page": 3, "status": "appended"}])
+    runner, calls = runner_for(tmp_path)
+    result = courses.ingest_recording(registry, audio, course_slug="sample", lesson_date="2026-10-12", runner=runner)
+    assert result["status"] == "already ingested"
+    assert calls == []
+    assert len(json.loads((registry.directory / "sample.json").read_text(encoding="utf-8"))["lessons"]) == 1

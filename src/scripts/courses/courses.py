@@ -269,7 +269,7 @@ def ingest_recording(
     with _locked_course(registry.directory, slug) as locked:
         stored_course = locked.payload
         matching = next((x for x in stored_course.get("lessons", []) if x.get("audio_sha256") == digest), None)
-        if matching and matching.get("status", "done") in {"queued", "done"}:
+        if matching and matching.get("status", "done") in {"queued", "appended", "done"}:
             return {"status": "already ingested", "slug": slug, "date": matching.get("date", day), "lesson_key": matching.get("lesson_key"), "audio_sha256": digest}
         found = matching if matching and matching.get("status") == "pending_transcript" else None
         if found:
