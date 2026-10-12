@@ -33,6 +33,8 @@ Write a single Hebrew Markdown page with exactly one top-level heading:
 ```markdown
 # שיעור <n> · <date> · <course name>
 
+> Load this page when: working on the <date> lesson of <course name> — its arguments, positions, questions or assignments.
+
 - קורס: <course name>
 - מרצה: <lecturer as configured>
 - תאריך: <date>
@@ -44,11 +46,11 @@ Write a single Hebrew Markdown page with exactly one top-level heading:
 <3–6 sentences: topic, central movement, and where the lesson ended>
 
 ## מהלך השיעור
-1. [HH:MM] <opening/admin only when it matters>
-2. [HH:MM] <topic/text, argument development, and transitions in order>
+1. <opening/admin only when it matters>
+2. <topic/text, argument development, and transitions in order>
 
 ## טענות וטיעונים
-- **<claim>** — <supporting steps>; <holder>. “<short grounding quote>” [HH:MM].
+- **<claim>** — <supporting steps>; <holder>. “<short grounding quote>”.
 
 ## עמדות ודוברים
 - **<speaker/position>** — <position and context>. Name a student only when the name is said aloud; otherwise use סטודנט/סטודנטית. Present unknown-speaker statements as opinions, not facts.
@@ -66,9 +68,9 @@ Write a single Hebrew Markdown page with exactly one top-level heading:
 - <texts and thinkers mentioned>
 ```
 
-Keep timestamps in the flow and claims. Quotes ground claims; keep each quote short (about 20 words maximum), and drop any claim without a supporting transcript span. Preserve all assignments, next-week readings, deadlines, exam details, and course requirements even when they were brief or administrative. Use “לא הוזכרו” only when none occurred. Distinguish the lecturer (the voice that leads, explains, and assigns), named thinkers/texts, students, and unidentified speakers. Sarcasm becomes its literal claim only when clear; otherwise omit it.
+NotebookLM transcripts carry no timestamps, so the flow is ordered, not timed; never invent clock times. Quotes ground claims; keep each quote short (about 20 words maximum), and drop any claim without a supporting transcript span. Preserve all assignments, next-week readings, deadlines, exam details, and course requirements even when they were brief or administrative. Use “לא הוזכרו” only when none occurred. Distinguish the lecturer (the voice that leads, explains, and assigns), named thinkers/texts, students, and unidentified speakers. Sarcasm becomes its literal claim only when clear; otherwise omit it.
 
-Drop greetings, small talk, audio/Zoom trouble, jokes, banter, unsupported personal anecdotes, false starts, and repeated restatements. Do not invent facts, names, quotes, timestamps, or duration. If no reliable timestamp is available for a point, mark it לא צוין.
+Drop greetings, small talk, audio/Zoom trouble, jokes, banter, unsupported personal anecdotes, false starts, and repeated restatements. Do not invent facts, names, quotes, timestamps, or duration; write לא צוין for a duration the metadata does not give.
 
 ## Append and rebuild the ToC
 
