@@ -81,7 +81,7 @@ Key every step on the book's current structure (`trove items toc <book_id> --jso
 3. Append the lesson page with `trove items append <book_id> -f <page.md> --no-session`, then read the ToC to get its page number. Add a dated line to the changelog page if the manuscript has one, and add the lesson to the units list on page 1 and on the entry page.
 4. To change an existing page use `trove items put <book_id>:<page> -f <file> --expect-version <V> --no-session`, where `V` is `currentVersion` from `trove items history <book_id> --json --no-session` read just before the put.
 5. **Last**, rebuild the sidebar with `trove items enrich <book_id> --toc '<full-json-array>' --no-session`. Both `append` and `put` regenerate the sidebar from headings and flatten it, so this step always comes after every content write. Send the complete array (it replaces the sidebar): page-1 index level 1, `תמלולי שיעורים` level 1, each lesson level 2 directly after it in date order titled `שיעור <n> · <date>`, then every other existing page at its level. Never delete pages.
-6. Record the lesson with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" lesson-done <slug> <lesson_key> --page <N>`, then verify with `courses.py check-lesson <slug> <date>` (exit 0 = done and nested). Only then move the queue file to `queue/done/`.
+6. Record the lesson with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" lesson-done <slug> <lesson_key> --page <N>`, then verify that lesson with `courses.py check-lesson <slug> <lesson_key>` (exit 0 = done and nested). Only then move the queue file to `queue/done/`.
 
 ## Report and unattended behavior
 

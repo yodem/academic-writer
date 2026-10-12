@@ -561,11 +561,18 @@ LESSONS_ENTRY = "תמלולי שיעורים"
 
 
 def check_lesson(registry: Registry, slug: str, date: str, runner: Callable[..., Any] = subprocess.run) -> list[str]:
-    """Return problems for a lesson that should be done and nested under the lessons entry."""
+    """Return problems for a lesson that should be done and nested under the lessons entry.
+
+    ``date`` is either an exact lesson key (``YYYY-MM-DD-HHMM[-n]``), which checks that one
+    lesson, or a bare date, which checks every lesson recorded on that day.
+    """
     course = registry.courses.get(slug)
     if course is None:
         return [f"unknown course: {slug}"]
-    lessons = [item for item in course.get("lessons", []) if str(item.get("date", "")) == date or str(item.get("lesson_key", "")).startswith(date)]
+    if len(date) > 10:
+        lessons = [item for item in course.get("lessons", []) if str(item.get("lesson_key", "")) == date]
+    else:
+        lessons = [item for item in course.get("lessons", []) if str(item.get("date", "")) == date or str(item.get("lesson_key", "")).startswith(date)]
     if not lessons:
         return [f"{slug}: no lesson recorded for {date}"]
     problems: list[str] = []
@@ -634,7 +641,7 @@ def main(argv: list[str] | None = None) -> int:
     done.add_argument("--page", type=int, required=True)
     check = sub.add_parser("check-lesson", help="verify a lesson is done and nested under the lessons entry in Trove")
     check.add_argument("slug")
-    check.add_argument("date", help="YYYY-MM-DD")
+    check.add_argument("date", help="lesson key (YYYY-MM-DD-HHMM) for one lesson, or YYYY-MM-DD for every lesson that day")
     args = parser.parse_args(argv)
     try:
         if args.command == "import-docx":
@@ -670,6 +677,10 @@ def main(argv: list[str] | None = None) -> int:
             result = lemida.daily(registry, dry_run=args.dry_run)
             if args.json:
                 print(json.dumps(result, ensure_ascii=False))
+            else:
+                print("Pending queue jobs:")
+                for item in result.get("queue", []):
+                    print(item)
             return int(result.get("exit_code", 0))
         if args.command == "map":
             when = recording_time(args.audio, timezone_name=registry.term.get("timezone", "Asia/Jerusalem"))

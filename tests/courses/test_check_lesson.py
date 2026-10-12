@@ -46,3 +46,13 @@ def test_not_nested(tmp_path):
 def test_missing_lesson(tmp_path):
     reg = _registry(tmp_path, [])
     assert "no lesson recorded" in courses.check_lesson(reg, "c1", "2026-01-05", runner=_runner(TOC))[0]
+
+
+def test_exact_key_ignores_other_queued_lesson_same_day(tmp_path):
+    lessons = [
+        {"date": "2026-01-05", "lesson_key": "2026-01-05-1204", "status": "done", "trove_page": 3},
+        {"date": "2026-01-05", "lesson_key": "2026-01-05-1610", "status": "queued", "trove_page": None},
+    ]
+    reg = _registry(tmp_path, lessons)
+    assert courses.check_lesson(reg, "c1", "2026-01-05-1204", runner=_runner(TOC)) == []
+    assert "not done" in courses.check_lesson(reg, "c1", "2026-01-05", runner=_runner(TOC))[0]

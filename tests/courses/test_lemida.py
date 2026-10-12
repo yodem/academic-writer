@@ -175,13 +175,20 @@ def test_daily_scan_boundary_compares_instants_with_term_timezone(tmp_path):
     assert result["voice_memos"]["processed"] == []
 
 
-def test_daily_cli_parses_and_runs(monkeypatch, tmp_path):
-    """Regression: the `daily` CLI read args.json without defining the flag."""
+
+def test_daily_cli_json_is_valid_json(monkeypatch, tmp_path, capsys):
+    """The real daily routine with --json must print exactly one JSON document."""
+    import json as _json
     import courses as courses_mod
     import lemida as lemida_mod
-    (tmp_path / "term.json").write_text('{"term": "T"}', encoding="utf-8")
+    memos = tmp_path / "memos"
+    memos.mkdir()
+    (tmp_path / "term.json").write_text(_json.dumps({"term": "T", "voice_memos_dir": str(memos), "state": {"last_voice_memo_scan": "2026-01-01T00:00:00+02:00"}}), encoding="utf-8")
+    (tmp_path / "queue").mkdir()
+    (tmp_path / "queue" / "c1-2026-01-05-1204.json").write_text("{}", encoding="utf-8")
     monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(tmp_path))
-    monkeypatch.setenv("ACADEMIC_TERM", "")
-    monkeypatch.setattr(lemida_mod, "daily", lambda registry, dry_run=False: {"exit_code": 0})
-    assert courses_mod.main(["--term", ".", "daily", "--dry-run"]) == 0
+    monkeypatch.setattr(lemida_mod, "lemida_sync", lambda registry, **kw: {"courses": [], "errors": []})
     assert courses_mod.main(["--term", ".", "daily", "--dry-run", "--json"]) == 0
+    out = capsys.readouterr().out
+    data = _json.loads(out)
+    assert data["queue"]

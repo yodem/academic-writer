@@ -252,8 +252,5 @@ def daily(registry: courses.Registry, *, dry_run: bool = False, runner: Callable
         report["exit_code"] = 5 if "token missing" in str(exc).lower() else 2
     if not completed:
         report["exit_code"] = 1
-    print("Pending queue jobs:")
-    for item in report["queue"]:
-        print(item)
     _write_report(registry, day, report)
     return report
