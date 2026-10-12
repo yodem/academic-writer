@@ -56,3 +56,14 @@ def test_exact_key_ignores_other_queued_lesson_same_day(tmp_path):
     reg = _registry(tmp_path, lessons)
     assert courses.check_lesson(reg, "c1", "2026-01-05-1204", runner=_runner(TOC)) == []
     assert "not done" in courses.check_lesson(reg, "c1", "2026-01-05", runner=_runner(TOC))[0]
+
+
+def test_legacy_key_field(tmp_path):
+    reg = _registry(tmp_path, [{"date": "2026-01-05", "key": "2026-01-05-1204", "status": "done", "trove_page": 3}])
+    assert courses.check_lesson(reg, "c1", "2026-01-05-1204", runner=_runner(TOC)) == []
+
+
+def test_rejects_partial_selectors(tmp_path):
+    reg = _registry(tmp_path, [{"date": "2026-01-05", "lesson_key": "2026-01-05-1204", "status": "done", "trove_page": 3}])
+    for bad in ("", "2026", "2026-01", "2026-01-05-12"):
+        assert "invalid lesson selector" in courses.check_lesson(reg, "c1", bad, runner=_runner(TOC))[0]

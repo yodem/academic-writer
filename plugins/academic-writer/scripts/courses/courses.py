@@ -569,17 +569,22 @@ def check_lesson(registry: Registry, slug: str, date: str, runner: Callable[...,
     course = registry.courses.get(slug)
     if course is None:
         return [f"unknown course: {slug}"]
-    if len(date) > 10:
-        lessons = [item for item in course.get("lessons", []) if str(item.get("lesson_key", "")) == date]
+    def key_of(item: dict[str, Any]) -> str:
+        return str(item.get("lesson_key", item.get("key", "")))
+
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}-\d{4}(?:-\d+)?", date):
+        lessons = [item for item in course.get("lessons", []) if key_of(item) == date]
+    elif re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+        lessons = [item for item in course.get("lessons", []) if str(item.get("date", "")) == date or key_of(item).startswith(date + "-")]
     else:
-        lessons = [item for item in course.get("lessons", []) if str(item.get("date", "")) == date or str(item.get("lesson_key", "")).startswith(date)]
+        return [f"invalid lesson selector {date!r}: use YYYY-MM-DD or YYYY-MM-DD-HHMM"]
     if not lessons:
         return [f"{slug}: no lesson recorded for {date}"]
     problems: list[str] = []
     pages = []
     for lesson in lessons:
         if lesson.get("status") != "done" or not lesson.get("trove_page"):
-            problems.append(f"{slug}: lesson {lesson.get('lesson_key', date)} is not done (status={lesson.get('status')!r}, trove_page={lesson.get('trove_page')!r})")
+            problems.append(f"{slug}: lesson {key_of(lesson) or date} is not done (status={lesson.get('status')!r}, trove_page={lesson.get('trove_page')!r})")
         else:
             pages.append(int(lesson["trove_page"]))
     if problems:
