@@ -81,3 +81,30 @@ def test_lesson_done_records_appended_then_done(tmp_path):
     import pytest
     with pytest.raises(ValueError):
         courses.mark_lesson_done(reg, "c1", "2026-01-05-1204", 3, status="bogus")
+
+
+def _book_runner(text):
+    def run(cmd, **kwargs):
+        assert cmd[:3] == ["trove", "items", "get"]
+        return subprocess.CompletedProcess(cmd, 0, text, "")
+    return run
+
+
+BOOK = """# Course · Course
+intro
+# תמלולי שיעורים
+entry
+# שיעור 01 · 2026-01-05
+- מפתח שיעור: 2026-01-05-0000-2
+body
+# שיעור 02 · 2026-01-05
+- מפתח שיעור: 2026-01-05-0000
+body
+"""
+
+
+def test_find_lesson_page_exact_key_not_prefix(tmp_path):
+    reg = _registry(tmp_path, [])
+    assert courses.find_lesson_page(reg, "c1", "2026-01-05-0000", runner=_book_runner(BOOK)) == 4
+    assert courses.find_lesson_page(reg, "c1", "2026-01-05-0000-2", runner=_book_runner(BOOK)) == 3
+    assert courses.find_lesson_page(reg, "c1", "2026-01-05-1204", runner=_book_runner(BOOK)) is None

@@ -563,6 +563,29 @@ def parse_docx(path: Path) -> list[dict[str, Any]]:
 
 
 
+LESSON_KEY_PREFIX = "- מפתח שיעור: "
+
+
+def find_lesson_page(registry: Registry, slug: str, lesson_key: str, runner: Callable[..., Any] = subprocess.run) -> int | None:
+    """Return the Trove page whose header carries exactly this lesson key, or None."""
+    course = registry.courses.get(slug)
+    if course is None:
+        raise ValueError(f"unknown course: {slug}")
+    if not course.get("book_id"):
+        raise ValueError(f"{slug}: missing book_id")
+    result = runner(["trove", "items", "get", str(course["book_id"]), "--no-session"], check=True, text=True, capture_output=True)
+    page = 0
+    found = None
+    for line in result.stdout.splitlines():
+        if line.startswith("# "):
+            page += 1
+        elif line.strip() == LESSON_KEY_PREFIX + lesson_key:
+            if found is not None and found != page:
+                raise ValueError(f"{slug}: lesson key {lesson_key} appears on pages {found} and {page}")
+            found = page
+    return found
+
+
 LESSONS_ENTRY = "תמלולי שיעורים"
 
 
@@ -651,6 +674,9 @@ def main(argv: list[str] | None = None) -> int:
     done.add_argument("lesson_key")
     done.add_argument("--page", type=int, required=True)
     done.add_argument("--status", choices=["appended", "done"], default="done", help="appended = page written, not yet verified")
+    find = sub.add_parser("find-lesson-page", help="print the Trove page whose header carries exactly this lesson key")
+    find.add_argument("slug")
+    find.add_argument("lesson_key")
     check = sub.add_parser("check-lesson", help="verify a lesson is done and nested under the lessons entry in Trove")
     check.add_argument("slug")
     check.add_argument("date", help="lesson key (YYYY-MM-DD-HHMM) for one lesson, or YYYY-MM-DD for every lesson that day")
@@ -665,6 +691,13 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(stubs, ensure_ascii=False, indent=2))
             return 0
         registry = registry_from_args(args)
+        if args.command == "find-lesson-page":
+            found = find_lesson_page(registry, args.slug, args.lesson_key)
+            if found is None:
+                print(f"{args.slug}: no page carries lesson key {args.lesson_key}")
+                return 3
+            print(found)
+            return 0
         if args.command == "check-lesson":
             problems = check_lesson(registry, args.slug, args.date)
             for problem in problems:
