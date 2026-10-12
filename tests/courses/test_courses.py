@@ -67,6 +67,79 @@ def test_validate_reports_missing_resource_id(tmp_path):
     assert any("missing notebook_id" in x for x in courses.validate_registry(registry, runner))
 
 
+def test_validate_rclone_uses_subject_folder_id(tmp_path):
+    registry = make_registry(tmp_path)
+    commands = []
+
+    def runner(command, **kwargs):
+        commands.append(command)
+        if command[0] == "nlm": output = [{"id": "note-1", "title": "Course Name"}]
+        elif command[0] == "trove": output = [{"id": "book-1", "title": "Personal · T · Course Name"}]
+        else: output = [{"ID": "drive-1", "Name": "Course Name"}]
+        return subprocess.CompletedProcess(command, 0, json.dumps(output), "")
+
+    courses.validate_registry(registry, runner)
+    rclone = next(command for command in commands if command[0] == "rclone")
+    assert rclone[rclone.index("--drive-root-folder-id") + 1] == "subject-1"
+
+
+def test_validate_template_error_is_reported_and_does_not_abort(tmp_path):
+    registry = make_registry(tmp_path)
+    registry.term["naming"] = {"drive": "{name}", "notebook": "{missing}", "manuscript": "Personal · {term} · {name}"}
+    registry.courses["term"] = {"slug": "term", "name": "Term", "term": "course-value"}
+    outputs = {
+        "nlm": [{"id": "note-1", "title": "Course Name"}],
+        "trove": [{"id": "book-1", "title": "Personal · T · Course Name"}],
+        "rclone": [{"ID": "drive-1", "Name": "Course Name"}],
+    }
+
+    def runner(command, **kwargs):
+        key = "nlm" if command[0] == "nlm" else "trove" if command[0] == "trove" else "rclone"
+        return subprocess.CompletedProcess(command, 0, json.dumps(outputs[key]), "")
+
+    problems = courses.validate_registry(registry, runner)
+    assert any(problem.startswith("term: naming template error:") for problem in problems)
+    assert any(problem.startswith("sample: naming template error:") for problem in problems)
+
+
+def test_import_docx_continuation_extends_previous_stub_end(tmp_path):
+    docx = tmp_path / "continued.docx"
+    doc = Element(courses.W + "document")
+    body = SubElement(doc, courses.W + "body")
+    table = SubElement(body, courses.W + "tbl")
+    row = SubElement(table, courses.W + "tr")
+    _cell(row, "שעה")
+    _cell(row, "יום שני")
+    row = SubElement(table, courses.W + "tr")
+    _cell(row, "12:00-14:00")
+    course = _cell(row, "31182-02\nפילוסופיה של הרגשות\nד״ר נועם הופר")
+    props = course.find("./" + courses.W + "tcPr")
+    if props is None:
+        props = SubElement(course, courses.W + "tcPr")
+    SubElement(props, courses.W + "vMerge", {courses.W + "val": "restart"})
+    row = SubElement(table, courses.W + "tr")
+    _cell(row, "14:00-16:00")
+    continuation = _cell(row, "")
+    props = continuation.find("./" + courses.W + "tcPr")
+    if props is None:
+        props = SubElement(continuation, courses.W + "tcPr")
+    SubElement(props, courses.W + "vMerge")
+    with zipfile.ZipFile(docx, "w") as zf:
+        zf.writestr("word/document.xml", tostring(doc))
+
+    stubs = courses.parse_docx(docx)
+    assert len(stubs) == 1
+    assert stubs[0]["slots"][0]["start"] == "12:00"
+    assert stubs[0]["slots"][0]["end"] == "16:00"
+
+
+def test_main_bad_zip_file_exits_two_with_error(tmp_path, capsys):
+    broken = tmp_path / "broken.docx"
+    broken.write_text("not a docx", encoding="utf-8")
+    assert courses.main(["import-docx", str(broken)]) == 2
+    assert "error:" in capsys.readouterr().err
+
+
 def _cell(row, text, span=1):
     tc = SubElement(row, courses.W + "tc")
     if span > 1:

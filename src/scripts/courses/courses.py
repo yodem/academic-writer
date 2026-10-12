@@ -13,10 +13,12 @@ import os
 import re
 import subprocess
 import sys
+from datetime import date, datetime, time, timedelta, timezone
 import unicodedata
 import zipfile
 from pathlib import Path
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 from xml.etree import ElementTree as ET
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
@@ -61,6 +63,83 @@ def registry_from_args(args: argparse.Namespace) -> Registry:
     return Registry(_term_dir(root, args.term))
 
 
+WEEKDAYS = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
+VOICE_MEMO_RE = re.compile(r"^(\d{8}) (\d{6})(?:\.[^.]+)?$")
+
+
+def recording_time(path: Path, birth_time: float | None = None, timezone_name: str = "Asia/Jerusalem") -> datetime:
+    """Return recording creation time in the configured local timezone.
+
+    Voice Memo timestamps are local wall times. Other files use their birth
+    time when available, falling back to mtime, both interpreted as instants.
+    ``birth_time`` is injectable to keep the platform-dependent path testable.
+    """
+    tz = ZoneInfo(timezone_name)
+    match = VOICE_MEMO_RE.fullmatch(path.name)
+    if match:
+        parsed = datetime.strptime("".join(match.groups()), "%Y%m%d%H%M%S")
+        return parsed.replace(tzinfo=tz)
+    if birth_time is None:
+        stat = path.stat()
+        birth_time = getattr(stat, "st_birthtime", stat.st_mtime)
+    return datetime.fromtimestamp(birth_time, tz=timezone.utc).astimezone(tz)
+
+
+def _semester_dates(term: dict[str, Any], semester: str) -> tuple[date, date] | None:
+    semesters = term.get("semesters", {})
+    config = semesters.get(semester) if isinstance(semesters, dict) else None
+    if not isinstance(config, dict):
+        return None
+    start = config.get("start", config.get("start_date"))
+    end = config.get("end", config.get("end_date"))
+    if not start or not end:
+        return None
+    return date.fromisoformat(str(start)), date.fromisoformat(str(end))
+
+
+def _in_semester(term: dict[str, Any], semester: str, day: date) -> bool:
+    labels = ("A", "B") if semester.lower() == "yearly" else (semester,)
+    for label in labels:
+        dates = _semester_dates(term, label)
+        if dates and dates[0] <= day <= dates[1]:
+            return True
+    return False
+
+
+def map_recording(registry: Registry, when: datetime) -> tuple[str | None, str | None]:
+    """Map a recording start time to a course slug, or explain why it cannot."""
+    tz = ZoneInfo(registry.term.get("timezone", "Asia/Jerusalem"))
+    local_when = when.replace(tzinfo=tz) if when.tzinfo is None else when.astimezone(tz)
+    weekday = local_when.weekday()
+    matches: list[str] = []
+    had_day = False
+    had_semester = False
+    for slug, course in registry.courses.items():
+        for slot in course.get("slots", []):
+            slot_day = slot.get("day")
+            if WEEKDAYS.get(str(slot_day)) != weekday:
+                continue
+            had_day = True
+            semester = str(slot.get("semester", ""))
+            if not _in_semester(registry.term, semester, local_when.date()):
+                continue
+            had_semester = True
+            start = datetime.combine(local_when.date(), time.fromisoformat(slot["start"]), tz)
+            end = datetime.combine(local_when.date(), time.fromisoformat(slot["end"]), tz)
+            if start - timedelta(minutes=15) <= local_when <= end + timedelta(minutes=30):
+                matches.append(slug)
+    matches = sorted(set(matches))
+    if len(matches) == 1:
+        return matches[0], None
+    if len(matches) > 1:
+        return None, f"ambiguous: {', '.join(matches)}"
+    if had_day and not had_semester:
+        return None, "outside configured semester dates"
+    if had_semester:
+        return None, "outside course slot window"
+    return None, "no course slot matches this weekday and semester"
+
+
 def _json_from_command(command: list[str], runner: Callable[..., Any]) -> Any:
     result = runner(command, check=True, text=True, capture_output=True)
     return json.loads(result.stdout)
@@ -94,11 +173,15 @@ def validate_registry(registry: Registry, runner: Callable[..., Any] = subproces
     subject_map = registry.term.get("drive_subject_folders", {})
     naming = registry.term.get("naming", {})
     for slug, course in registry.courses.items():
-        expected = {
-            "drive": naming.get("drive", "{name}").format(**course, term=registry.term.get("term", "")),
-            "notebook": naming.get("notebook", "{name}").format(**course, term=registry.term.get("term", "")),
-            "manuscript": naming.get("manuscript", "{name}").format(**course, term=registry.term.get("term", "")),
-        }
+        context = {**course, "term": registry.term.get("term", "")}
+        try:
+            expected = {
+                key: naming.get(key, "{name}").format_map(context)
+                for key in ("drive", "notebook", "manuscript")
+            }
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            problems.append(f"{slug}: naming template error: {exc}")
+            continue
         for key in ("drive_folder_id", "notebook_id", "manuscript_id"):
             if not course.get(key):
                 problems.append(f"{slug}: missing {key}")
@@ -210,6 +293,7 @@ def parse_docx(path: Path) -> list[dict[str, Any]]:
             col += 1
     stubs: list[dict[str, Any]] = []
     carry: dict[int, str] = {}
+    last_stub_by_subcolumn: dict[int, int] = {}
     for row in expanded[1:]:
         row_text = " ".join(c["text"] for c in row if c and c["text"])
         time_match = re.search(r"(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})", row_text)
@@ -228,6 +312,11 @@ def parse_docx(path: Path) -> list[dict[str, Any]]:
                     continue
                 if subcol > first and row[subcol - 1] is cell:
                     continue
+                if cell and cell["merge"] and cell["continuation"]:
+                    previous = last_stub_by_subcolumn.get(subcol)
+                    if previous is not None:
+                        stubs[previous]["slots"][0]["end"] = end
+                    continue
                 same_cell_span = 1
                 while subcol + same_cell_span < last and row[subcol + same_cell_span] is cell:
                     same_cell_span += 1
@@ -245,6 +334,9 @@ def parse_docx(path: Path) -> list[dict[str, Any]]:
                 lecturer = next((line for line in lines if re.search(r"פרופ|ד״ר|ד׳ר|ד'ר|דוקטור", line)), "")
                 day = next((d for d, pattern in [("Sun", "ראשון|א׳|א'"), ("Mon", "שני|ב׳|ב'"), ("Tue", "שלישי|ג׳|ג'"), ("Wed", "רביעי|ד׳|ד'"), ("Thu", "חמישי|ה׳|ה'"), ("Fri", "שישי|ו׳|ו'")] if re.search(pattern, day_label)), day_label)
                 stubs.append({"code": code_match.group(0) if code_match else None, "name": name, "lecturer": lecturer or None, "credits": next((re.search(r"\d+(?:\.\d+)?\s*נ[״׳']?ז", line).group(0) for line in lines if re.search(r"\d+(?:\.\d+)?\s*נ[״׳']?ז", line)), None), "slots": [{"day": day, "start": start, "end": end, "semester": semester}]})
+                stub_index = len(stubs) - 1
+                for offset in range(same_cell_span):
+                    last_stub_by_subcolumn[subcol + offset] = stub_index
     return stubs
 
 
@@ -258,6 +350,9 @@ def main(argv: list[str] | None = None) -> int:
     imp.add_argument("docx", type=Path)
     imp.add_argument("--out", type=Path, help="directory to write one JSON stub per course")
     imp.add_argument("--dry-run", action="store_true", help="print stubs without writing")
+    mapping = sub.add_parser("map", help="map an audio recording to a configured course")
+    mapping.add_argument("audio", type=Path)
+    mapping.add_argument("--json", action="store_true", help="emit a JSON result")
     args = parser.parse_args(argv)
     try:
         if args.command == "import-docx":
@@ -269,6 +364,16 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(stubs, ensure_ascii=False, indent=2))
             return 0
         registry = registry_from_args(args)
+        if args.command == "map":
+            when = recording_time(args.audio, timezone_name=registry.term.get("timezone", "Asia/Jerusalem"))
+            slug, reason = map_recording(registry, when)
+            if args.json:
+                print(json.dumps({"slug": slug, "reason": reason, "when": when.isoformat()}, ensure_ascii=False))
+            elif slug:
+                print(slug)
+            else:
+                print(reason)
+            return 0 if slug else 3
         problems = validate_registry(registry)
         if args.json:
             print(json.dumps({"valid": not problems, "mismatches": problems}, ensure_ascii=False))
@@ -278,7 +383,7 @@ def main(argv: list[str] | None = None) -> int:
             if not problems:
                 print(f"Validated {len(registry.courses)} courses")
         return 1 if problems else 0
-    except (OSError, ValueError, KeyError, json.JSONDecodeError, subprocess.SubprocessError) as exc:
+    except (OSError, ValueError, KeyError, json.JSONDecodeError, subprocess.SubprocessError, zipfile.BadZipFile, ET.ParseError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
