@@ -8,6 +8,7 @@ they can be reviewed and edited without installing a package.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -164,11 +165,41 @@ def _source_id(payload: Any) -> str:
     raise ValueError("NotebookLM source add response did not contain a source id")
 
 
-def _atomic_json(path: Path, payload: Any) -> None:
+def _atomic_write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as stream:
+        temporary = Path(stream.name)
+        stream.write(content)
+        stream.flush()
+        os.fsync(stream.fileno())
     os.replace(temporary, path)
+
+
+def _atomic_json(path: Path, payload: Any) -> None:
+    _atomic_write(path, json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+
+
+def _locked_course(directory: Path, slug: str):
+    """Lock the registry before reading/modifying one course record."""
+    class LockedCourse:
+        def __enter__(self):
+            self.lock = (directory / ".lock").open("a+")
+            fcntl.flock(self.lock.fileno(), fcntl.LOCK_EX)
+            self.path = directory / f"{slug}.json"
+            self.payload = json.loads(self.path.read_text(encoding="utf-8"))
+            return self
+        def __exit__(self, *exc):
+            fcntl.flock(self.lock.fileno(), fcntl.LOCK_UN)
+            self.lock.close()
+    return LockedCourse()
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def ingest_recording(
@@ -182,7 +213,7 @@ def ingest_recording(
     runner: Callable[..., Any] = subprocess.run,
     birth_time: float | None = None,
 ) -> dict[str, Any]:
-    """Upload audio to NotebookLM and store its transcript and digest job."""
+    """Upload audio to NotebookLM and persist a resumable lesson record."""
     audio = Path(audio).expanduser()
     if not audio.is_file():
         raise IngestError(f"audio file not found: {audio}")
@@ -202,77 +233,118 @@ def ingest_recording(
         date.fromisoformat(day)
     except ValueError as exc:
         raise IngestError(f"invalid lesson date: {day}") from exc
-    digest = hashlib.sha256(audio.read_bytes()).hexdigest()
-    if any(item.get("audio_sha256") == digest for item in course.get("lessons", [])):
-        return {"status": "already ingested", "slug": slug, "date": day, "audio_sha256": digest}
+    digest = _file_sha256(audio)
     notebook_id = course.get("notebook_id")
     if not notebook_id:
         raise IngestError(f"{slug}: missing notebook_id")
     if dry_run:
         return {"status": "dry run", "slug": slug, "date": day, "audio_sha256": digest, "notebook_id": notebook_id}
 
-    upload_path = audio
-    temporary_audio: Path | None = None
-    if audio.suffix.lower() in {".mp4", ".mov", ".mkv", ".webm"}:
-        fd, temporary_name = tempfile.mkstemp(suffix=".m4a", prefix="academic-course-")
-        os.close(fd)
-        temporary_audio = Path(temporary_name)
-        try:
-            runner(["ffmpeg", "-y", "-i", str(audio), "-vn", "-ac", "1", "-c:a", "aac", "-b:a", "64k", str(temporary_audio)], check=True, text=True, capture_output=True)
-        except subprocess.SubprocessError as exc:
-            temporary_audio.unlink(missing_ok=True)
-            raise IngestError(f"ffmpeg audio extraction failed: {exc}") from exc
-        upload_path = temporary_audio
-    try:
-        listed = _json_from_command(["nlm", "source", "list", str(notebook_id)], runner)
-        sources = _as_list(listed, "sources", "items")
-        limit = int(registry.term.get("notebook_source_limit", 45))
-        if len(sources) >= limit:
-            raise IngestError(f"NotebookLM notebook has {len(sources)} sources; configured limit is {limit}", 4)
-        if source_id:
-            selected_source = str(source_id)
+    # Explicit date-only input carries no time, so use 0000. Otherwise derive
+    # the stable lesson key from the recording's local start time.
+    hm = "0000" if lesson_date else when.strftime("%H%M")
+    lesson_base = f"{day}-{hm}"
+    lessons_root = registry.directory / "lessons" / slug
+    lessons_root.mkdir(parents=True, exist_ok=True)
+    with _locked_course(registry.directory, slug) as locked:
+        stored_course = locked.payload
+        matching = next((x for x in stored_course.get("lessons", []) if x.get("audio_sha256") == digest), None)
+        if matching and matching.get("status") == "queued":
+            return {"status": "already ingested", "slug": slug, "date": matching.get("date", day), "lesson_key": matching.get("lesson_key"), "audio_sha256": digest}
+        found = matching if matching and matching.get("status") == "pending_transcript" else None
+        if found:
+            lesson_key = found.get("lesson_key") or found.get("key")
+            selected_source = str(found.get("source_id"))
+            lesson_dir = lessons_root / lesson_key
+            reuse_pending = True
         else:
-            title = f"{day} שיעור"
-            added = _json_from_command(["nlm", "source", "add", str(notebook_id), "--file", str(upload_path), "--title", title, "--wait", "--wait-timeout", "3600", "--json"], runner)
-            selected_source = _source_id(added)
+            lesson_dir = lessons_root / lesson_base
+            suffix = 2
+            while lesson_dir.exists():
+                lesson_dir = lessons_root / f"{lesson_base}-{suffix}"
+                suffix += 1
+            lesson_dir.mkdir()
+            lesson_key = lesson_dir.name
+            reuse_pending = False
+            selected_source = str(source_id) if source_id else ""
+    if reuse_pending:
+        pass
+    else:
+        upload_path = audio
+        temporary_audio: Path | None = None
+        if audio.suffix.lower() in {".mp4", ".mov", ".mkv", ".webm"}:
+            fd, temporary_name = tempfile.mkstemp(suffix=".m4a", prefix="academic-course-")
+            os.close(fd)
+            temporary_audio = Path(temporary_name)
+            try:
+                try:
+                    runner(["ffmpeg", "-y", "-i", str(audio), "-vn", "-ac", "1", "-c:a", "aac", "-b:a", "64k", str(temporary_audio)], check=True, text=True, capture_output=True)
+                except FileNotFoundError as exc:
+                    raise IngestError("ffmpeg is required to extract audio from video; install ffmpeg and retry") from exc
+                except subprocess.SubprocessError as exc:
+                    raise IngestError(f"ffmpeg audio extraction failed: {exc}") from exc
+                upload_path = temporary_audio
+                listed = _json_from_command(["nlm", "source", "list", str(notebook_id)], runner) if not source_id else []
+                sources = _as_list(listed, "sources", "items") if not source_id else []
+                limit = int(registry.term.get("notebook_source_limit", 45))
+                if not source_id and len(sources) >= limit:
+                    raise IngestError(f"NotebookLM notebook has {len(sources)} sources; configured limit is {limit}", 4)
+                if not selected_source:
+                    added = _json_from_command(["nlm", "source", "add", str(notebook_id), "--file", str(upload_path), "--title", f"{lesson_key} שיעור", "--wait", "--wait-timeout", "3600", "--json"], runner)
+                    selected_source = _source_id(added)
+            finally:
+                temporary_audio.unlink(missing_ok=True)
+        else:
+            if not source_id:
+                listed = _json_from_command(["nlm", "source", "list", str(notebook_id)], runner)
+                sources = _as_list(listed, "sources", "items")
+                limit = int(registry.term.get("notebook_source_limit", 45))
+                if len(sources) >= limit:
+                    raise IngestError(f"NotebookLM notebook has {len(sources)} sources; configured limit is {limit}", 4)
+            if not selected_source:
+                added = _json_from_command(["nlm", "source", "add", str(notebook_id), "--file", str(upload_path), "--title", f"{lesson_key} שיעור", "--wait", "--wait-timeout", "3600", "--json"], runner)
+                selected_source = _source_id(added)
+        # Persist upload completion immediately, before asking NotebookLM for
+        # transcript content, and reread under the exclusive registry lock.
+        meta_path = lesson_dir / "meta.json"
+        meta = {"slug": slug, "date": day, "lesson_key": lesson_key, "audio_path": str(audio.resolve()), "audio_sha256": digest, "source_id": selected_source, "notebook_id": str(notebook_id), "status": "upload_done"}
+        _atomic_json(meta_path, meta)
+        with _locked_course(registry.directory, slug) as locked:
+            stored_course = locked.payload
+            lessons = list(stored_course.get("lessons", []))
+            if not any(x.get("audio_sha256") == digest and x.get("status") == "pending_transcript" for x in lessons):
+                lessons.append({"date": day, "lesson_key": lesson_key, "audio_sha256": digest, "source_id": selected_source, "trove_page": None, "status": "pending_transcript"})
+                stored_course["lessons"] = lessons
+                _atomic_json(locked.path, stored_course)
+    try:
         content_result = _json_from_command(["nlm", "content", "source", selected_source], runner)
         transcript = content_result.get("content") if isinstance(content_result, dict) else None
         if not isinstance(transcript, str):
             raise IngestError("NotebookLM transcript response has no string content")
-    except IngestError:
-        raise
-    except (ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
-        raise IngestError(f"NotebookLM ingest failed: {exc}") from exc
-    finally:
-        if temporary_audio:
-            temporary_audio.unlink(missing_ok=True)
+    except (IngestError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
+        raise IngestError(f"NotebookLM transcript failed for source_id {selected_source}: {exc}") from exc
 
-    lesson_dir = registry.directory / "lessons" / slug / day
-    lesson_dir.mkdir(parents=True, exist_ok=True)
     transcript_path = lesson_dir / "transcript.txt"
-    meta_path = lesson_dir / "meta.json"
-    transcript_path.write_text(transcript, encoding="utf-8")
+    _atomic_write(transcript_path, transcript)
     local_day = datetime.fromisoformat(day).date()
     weekday = next((name for name, number in WEEKDAYS.items() if number == local_day.weekday()), local_day.strftime("%a"))
-    meta = {
-        "slug": slug, "date": day, "weekday": weekday, "audio_path": str(audio.resolve()),
-        "audio_sha256": digest, "source_id": selected_source, "notebook_id": str(notebook_id),
-        "transcript_words": len(transcript.split()), "created_at": datetime.now(ZoneInfo(timezone_name)).isoformat(),
-    }
+    meta_path = lesson_dir / "meta.json"
+    if meta_path.exists():
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    else:
+        meta = {"slug": slug, "date": day, "lesson_key": lesson_key, "audio_path": str(audio.resolve()), "audio_sha256": digest, "source_id": selected_source, "notebook_id": str(notebook_id), "status": "upload_done"}
+    meta.update({"weekday": weekday, "transcript_words": len(transcript.split()), "created_at": datetime.now(ZoneInfo(timezone_name)).isoformat(), "status": "queued"})
     _atomic_json(meta_path, meta)
-    lessons = list(course.get("lessons", []))
-    lessons.append({"date": day, "audio_sha256": digest, "source_id": selected_source, "trove_page": None})
-    course_path = registry.directory / f"{slug}.json"
-    stored_course = json.loads(course_path.read_text(encoding="utf-8"))
-    stored_course["lessons"] = lessons
-    _atomic_json(course_path, stored_course)
-    queue_path = registry.directory / "queue" / f"{slug}-{day}.json"
-    _atomic_json(queue_path, {
-        "slug": slug, "date": day, "transcript_path": str(transcript_path), "meta_path": str(meta_path),
-        "manuscript_id": course.get("manuscript_id"), "book_id": course.get("book_id"),
-        "course_name": course.get("name"), "lecturer": course.get("lecturer"),
-    })
-    return {"status": "ingested", "slug": slug, "date": day, "source_id": selected_source, "transcript_path": str(transcript_path), "queue_path": str(queue_path)}
+    queue_path = registry.directory / "queue" / f"{slug}-{lesson_key}.json"
+    _atomic_json(queue_path, {"slug": slug, "date": day, "lesson_key": lesson_key, "transcript_path": str(transcript_path), "meta_path": str(meta_path), "manuscript_id": course.get("manuscript_id"), "book_id": course.get("book_id"), "course_name": course.get("name"), "lecturer": course.get("lecturer")})
+    with _locked_course(registry.directory, slug) as locked:
+        stored_course = locked.payload
+        for entry in stored_course.get("lessons", []):
+            if entry.get("lesson_key") == lesson_key:
+                entry["status"] = "queued"
+                break
+        _atomic_json(locked.path, stored_course)
+    return {"status": "ingested", "slug": slug, "date": day, "lesson_key": lesson_key, "source_id": selected_source, "transcript_path": str(transcript_path), "queue_path": str(queue_path)}
 
 
 def _as_list(value: Any, *keys: str) -> list[dict[str, Any]]:
@@ -483,6 +555,12 @@ def main(argv: list[str] | None = None) -> int:
     mapping = sub.add_parser("map", help="map an audio recording to a configured course")
     mapping.add_argument("audio", type=Path)
     mapping.add_argument("--json", action="store_true", help="emit a JSON result")
+    lemida_sync_parser = sub.add_parser("lemida-sync", help="sync course resources from Lemida")
+    lemida_sync_parser.add_argument("--course", help="limit sync to one course slug")
+    lemida_sync_parser.add_argument("--dry-run", action="store_true")
+    lemida_sync_parser.add_argument("--json", action="store_true")
+    daily_parser = sub.add_parser("daily", help="scan Voice Memos, sync Lemida, and show pending lesson jobs")
+    daily_parser.add_argument("--dry-run", action="store_true")
     ingest = sub.add_parser("ingest", help="upload a lesson recording and save its NotebookLM transcript")
     ingest.add_argument("audio", type=Path)
     ingest.add_argument("--course", help="course slug (otherwise map from recording time)")
@@ -501,6 +579,20 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(stubs, ensure_ascii=False, indent=2))
             return 0
         registry = registry_from_args(args)
+        if args.command in {"lemida-sync", "daily"}:
+            import lemida
+            if args.command == "lemida-sync":
+                result = lemida.lemida_sync(registry, slug=args.course, dry_run=args.dry_run)
+                if args.json:
+                    print(json.dumps(result, ensure_ascii=False))
+                else:
+                    for error in result.get("errors", []):
+                        print(f"{error['slug']}: {error['error']}", file=sys.stderr)
+                return 2 if result.get("errors") else 0
+            result = lemida.daily(registry, dry_run=args.dry_run)
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False))
+            return int(result.get("exit_code", 0))
         if args.command == "map":
             when = recording_time(args.audio, timezone_name=registry.term.get("timezone", "Asia/Jerusalem"))
             slug, reason = map_recording(registry, when)
