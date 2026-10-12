@@ -202,8 +202,14 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def mark_lesson_done(registry: Registry, slug: str, lesson_key: str, page: int) -> dict[str, Any]:
-    """Record a lesson's Trove page under the course lock."""
+def mark_lesson_done(registry: Registry, slug: str, lesson_key: str, page: int, status: str = "done") -> dict[str, Any]:
+    """Record a lesson's Trove page under the course lock.
+
+    ``status="appended"`` records the page right after it is written, before the ToC is
+    rebuilt and verified, so an interrupted run resumes instead of appending it again.
+    """
+    if status not in {"appended", "done"}:
+        raise ValueError(f"invalid lesson status: {status}")
     if slug not in registry.courses:
         raise ValueError(f"unknown course: {slug}")
     with _locked_course(registry.directory, slug) as locked:
@@ -211,7 +217,7 @@ def mark_lesson_done(registry: Registry, slug: str, lesson_key: str, page: int) 
         if lesson is None:
             raise ValueError(f"unknown lesson key for {slug}: {lesson_key}")
         lesson["trove_page"] = page
-        lesson["status"] = "done"
+        lesson["status"] = status
         _atomic_json(locked.path, locked.payload)
         return dict(lesson)
 
@@ -583,7 +589,7 @@ def check_lesson(registry: Registry, slug: str, date: str, runner: Callable[...,
     problems: list[str] = []
     pages = []
     for lesson in lessons:
-        if lesson.get("status") != "done" or not lesson.get("trove_page"):
+        if lesson.get("status") not in {"appended", "done"} or not lesson.get("trove_page"):
             problems.append(f"{slug}: lesson {key_of(lesson) or date} is not done (status={lesson.get('status')!r}, trove_page={lesson.get('trove_page')!r})")
         else:
             pages.append(int(lesson["trove_page"]))
@@ -644,6 +650,7 @@ def main(argv: list[str] | None = None) -> int:
     done.add_argument("slug")
     done.add_argument("lesson_key")
     done.add_argument("--page", type=int, required=True)
+    done.add_argument("--status", choices=["appended", "done"], default="done", help="appended = page written, not yet verified")
     check = sub.add_parser("check-lesson", help="verify a lesson is done and nested under the lessons entry in Trove")
     check.add_argument("slug")
     check.add_argument("date", help="lesson key (YYYY-MM-DD-HHMM) for one lesson, or YYYY-MM-DD for every lesson that day")
@@ -666,7 +673,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{args.slug} {args.date}: lesson done and nested under {LESSONS_ENTRY}")
             return 1 if problems else 0
         if args.command == "lesson-done":
-            lesson = mark_lesson_done(registry, args.slug, args.lesson_key, args.page)
+            lesson = mark_lesson_done(registry, args.slug, args.lesson_key, args.page, status=args.status)
             print(json.dumps(lesson, ensure_ascii=False))
             return 0
         if args.command in {"lemida-sync", "daily"}:

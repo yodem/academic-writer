@@ -67,3 +67,17 @@ def test_rejects_partial_selectors(tmp_path):
     reg = _registry(tmp_path, [{"date": "2026-01-05", "lesson_key": "2026-01-05-1204", "status": "done", "trove_page": 3}])
     for bad in ("", "2026", "2026-01", "2026-01-05-12"):
         assert "invalid lesson selector" in courses.check_lesson(reg, "c1", bad, runner=_runner(TOC))[0]
+
+
+def test_appended_lesson_verifies_before_done(tmp_path):
+    reg = _registry(tmp_path, [{"date": "2026-01-05", "lesson_key": "2026-01-05-1204", "status": "appended", "trove_page": 3}])
+    assert courses.check_lesson(reg, "c1", "2026-01-05-1204", runner=_runner(TOC)) == []
+
+
+def test_lesson_done_records_appended_then_done(tmp_path):
+    reg = _registry(tmp_path, [{"date": "2026-01-05", "lesson_key": "2026-01-05-1204", "status": "queued", "trove_page": None}])
+    assert courses.mark_lesson_done(reg, "c1", "2026-01-05-1204", 3, status="appended")["status"] == "appended"
+    assert courses.mark_lesson_done(reg, "c1", "2026-01-05-1204", 3)["status"] == "done"
+    import pytest
+    with pytest.raises(ValueError):
+        courses.mark_lesson_done(reg, "c1", "2026-01-05-1204", 3, status="bogus")

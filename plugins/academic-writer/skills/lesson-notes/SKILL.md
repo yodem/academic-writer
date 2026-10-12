@@ -40,6 +40,7 @@ Write a single Hebrew Markdown page with exactly one top-level heading:
 - תאריך: <date>
 - משך: <duration, or לא צוין>
 - מקור: NotebookLM · <notebook title> · <source id>
+- מפתח שיעור: <lesson_key>
 - איכות תמלול: תמלול NotebookLM בעברית, ללא תוויות דוברים; קטעים לא ברורים סומנו [לא ברור].
 
 ## תקציר
@@ -76,14 +77,14 @@ Drop greetings, small talk, audio/Zoom trouble, jokes, banter, unsupported perso
 
 Key every step on the book's current structure (`trove items toc <book_id> --json --no-session`), never on whether this is the first lesson.
 
-**Resume, don't repeat.** Before writing anything for a queue job, look up its lesson in the course JSON by `lesson_key`. If that lesson already has a `trove_page`, the page exists: do not append it again. Skip to step 5 (rebuild the ToC with that page nested), then step 6's `check-lesson`, and archive the job only when it exits 0. If it still fails, leave the job queued and log the reason.
+**Resume, don't repeat.** Every lesson page carries its key in the header block (`- מפתח שיעור: <lesson_key>`). Before writing anything for a queue job, look up its lesson in the course JSON by `lesson_key`; if it has no `trove_page`, also search the book (`trove items get <book_id> --no-session | grep -n '<lesson_key>'`) in case an earlier run appended it without recording it. If either finds the page, do not append it again: record it with `lesson-done ... --status appended` if needed. Skip to step 5 (rebuild the ToC with that page nested), then step 6's `check-lesson`, and archive the job only when it exits 0. If it still fails, leave the job queued and log the reason.
 
 1. If the book has no page-1 course index (a `Course · <course name>` page), append one first: course details from the course JSON, a `> Load this page when:` line, what the course is about, and a units list.
 2. If the ToC has no level-1 `תמלולי שיעורים` entry, append a `# תמלולי שיעורים` entry page explaining the course (subject, lecturer, central questions), how lesson pages are built, and their limits. If it exists but its course explanation is still a placeholder, rewrite that page once the first lesson gives enough to explain the course.
-3. Append the lesson page with `trove items append <book_id> -f <page.md> --no-session`, then read the ToC to get its page number. Add a dated line to the changelog page if the manuscript has one, and add the lesson to the units list on page 1 and on the entry page.
+3. Append the lesson page with `trove items append <book_id> -f <page.md> --no-session`, read the ToC to get its page number, and record it at once with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" lesson-done <slug> <lesson_key> --page <N> --status appended`. Add a dated line to the changelog page if the manuscript has one, and add the lesson to the units list on page 1 and on the entry page.
 4. To change an existing page use `trove items put <book_id>:<page> -f <file> --expect-version <V> --no-session`, where `V` is `currentVersion` from `trove items history <book_id> --json --no-session` read just before the put.
 5. **Last**, rebuild the sidebar with `trove items enrich <book_id> --toc '<full-json-array>' --no-session`. Both `append` and `put` regenerate the sidebar from headings and flatten it, so this step always comes after every content write. Send the complete array (it replaces the sidebar): page-1 index level 1, `תמלולי שיעורים` level 1, each lesson level 2 directly after it in date order titled `שיעור <n> · <date>`, then every other existing page at its level. Never delete pages.
-6. Record the lesson with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" lesson-done <slug> <lesson_key> --page <N>`, then verify that lesson with `courses.py check-lesson <slug> <lesson_key>` (exit 0 = done and nested). Only then move the queue file to `queue/done/`.
+6. Verify that lesson with `courses.py check-lesson <slug> <lesson_key>` (exit 0 = nested), then mark it done with `courses.py lesson-done <slug> <lesson_key> --page <N>` and only then move the queue file to `queue/done/`.
 
 ## Report and unattended behavior
 
