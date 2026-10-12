@@ -639,6 +639,14 @@ def check_lesson(registry: Registry, slug: str, date: str, runner: Callable[...,
     for page in pages:
         if page not in child_pages:
             problems.append(f"{slug}: lesson page {page} is not a level-2 entry under {LESSONS_ENTRY!r}")
+    if problems or len(date) <= 10:
+        return problems
+    try:
+        actual = find_lesson_page(registry, slug, date, runner=runner)
+    except Exception as exc:
+        return [f"{slug}: could not confirm page identity: {exc}"]
+    if actual not in pages:
+        problems.append(f"{slug}: recorded page {pages} does not carry lesson key {date} (found on {actual})")
     return problems
 
 

@@ -13,8 +13,11 @@ def _registry(tmp_path, lessons):
     return courses.Registry(tmp_path)
 
 
-def _runner(toc):
+def _runner(toc, book=None):
     def run(cmd, **kwargs):
+        if cmd[:3] == ["trove", "items", "get"]:
+            text = book if book is not None else "# a\n# b\n# c\n- מפתח שיעור: 2026-01-05-1204\n# d\n"
+            return subprocess.CompletedProcess(cmd, 0, text, "")
         assert cmd[:3] == ["trove", "items", "toc"]
         return subprocess.CompletedProcess(cmd, 0, json.dumps({"items": [{"id": "book-1", "toc": toc}]}), "")
     return run
@@ -108,3 +111,10 @@ def test_find_lesson_page_exact_key_not_prefix(tmp_path):
     assert courses.find_lesson_page(reg, "c1", "2026-01-05-0000", runner=_book_runner(BOOK)) == 4
     assert courses.find_lesson_page(reg, "c1", "2026-01-05-0000-2", runner=_book_runner(BOOK)) == 3
     assert courses.find_lesson_page(reg, "c1", "2026-01-05-1204", runner=_book_runner(BOOK)) is None
+
+
+
+def test_exact_key_rejects_page_of_another_lesson(tmp_path):
+    reg = _registry(tmp_path, [{"date": "2026-01-05", "lesson_key": "2026-01-05-1204", "status": "appended", "trove_page": 3}])
+    other = "# a\n# b\n# c\n- מפתח שיעור: 2026-01-05-1610\n# d\n"
+    assert "does not carry lesson key" in courses.check_lesson(reg, "c1", "2026-01-05-1204", runner=_runner(TOC, other))[0]
