@@ -5,11 +5,13 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 import courses
 
@@ -50,6 +52,17 @@ def changed_modules(modules: list[dict[str, Any]], seen: dict[str, Any]) -> list
     return result
 
 
+def _flatten_modules(contents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Accept Moodle's section list and the older flat module-list shape."""
+    flattened: list[dict[str, Any]] = []
+    for item in contents:
+        if isinstance(item.get("modules"), list):
+            flattened.extend(module for module in item["modules"] if isinstance(module, dict))
+        elif "id" in item or "cmid" in item:
+            flattened.append(item)
+    return flattened
+
+
 def moodle_course_contents(base_url: str, token: str, course_id: Any, *, opener: Callable[..., Any] = urllib.request.urlopen) -> list[dict[str, Any]]:
     url = base_url.rstrip("/") + "/webservice/rest/server.php"
     body = urllib.parse.urlencode({"wstoken": token, "wsfunction": "core_course_get_contents", "courseid": str(course_id), "moodlewsrestformat": "json"}).encode()
@@ -73,11 +86,22 @@ def download_file(url: str, token: str, destination: Path, *, opener: Callable[.
     query.append(("token", token))
     authorized = urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, urllib.parse.urlencode(query), parts.fragment))
     destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
     try:
         with opener(authorized, timeout=60) as response:
-            destination.write_bytes(response.read())
+            with tempfile.NamedTemporaryFile(mode="wb", dir=destination.parent, prefix=f".{destination.name}.", suffix=".tmp", delete=False) as output:
+                temporary = Path(output.name)
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+                output.flush()
+                os.fsync(output.fileno())
+        os.replace(temporary, destination)
     except Exception as exc:
-        destination.unlink(missing_ok=True)
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
         raise LemidaError(f"download failed: {_redact(exc)}") from exc
     return destination
 
@@ -111,7 +135,7 @@ def sync_course(registry: courses.Registry, slug: str, *, runner: Callable[..., 
     token = _token(registry.term, runner)
     if fetch_contents is None:
         fetch_contents = lambda base_url, auth, cid: moodle_course_contents(base_url, auth, cid)
-    modules = fetch_contents(config.get("base_url", ""), token, course["lemida_course_id"])
+    modules = _flatten_modules(fetch_contents(config.get("base_url", ""), token, course["lemida_course_id"]))
     seen = dict(course.get("lemida_seen", {}))
     changed = changed_modules(modules, seen)
     root = Path(registry.term.get("local_root", registry.directory / "files")).expanduser()
@@ -143,9 +167,9 @@ def sync_course(registry: courses.Registry, slug: str, *, runner: Callable[..., 
         except Exception as exc:
             raise LemidaError(f"{slug} module {cmid} ({title}) failed: {_redact(exc)}") from exc
         if not dry_run:
-            latest = json.loads((registry.directory / f"{slug}.json").read_text(encoding="utf-8"))
-            latest.setdefault("lemida_seen", {})[cmid] = stamp
-            courses._atomic_json(registry.directory / f"{slug}.json", latest)
+            with courses._locked_course(registry.directory, slug) as locked:
+                locked.payload.setdefault("lemida_seen", {})[cmid] = stamp
+                courses._atomic_json(locked.path, locked.payload)
             seen[cmid] = stamp
     return {"slug": slug, "status": "dry-run" if dry_run else "synced", "processed": processed}
 
@@ -183,7 +207,12 @@ def daily(registry: courses.Registry, *, dry_run: bool = False, runner: Callable
     term = json.loads(term_path.read_text(encoding="utf-8"))
     state = term.setdefault("state", {})
     last = state.get("last_voice_memo_scan") or term.get("semesters", {}).get("A", {}).get("start") or "1970-01-01"
-    boundary = datetime.fromisoformat(str(last)).replace(tzinfo=None)
+    term_tz = ZoneInfo(term.get("timezone", "Asia/Jerusalem"))
+    boundary = datetime.fromisoformat(str(last))
+    if boundary.tzinfo is None:
+        boundary = boundary.replace(tzinfo=term_tz)
+    else:
+        boundary = boundary.astimezone(term_tz)
     memo_dir = Path(term.get("voice_memos_dir", "~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings")).expanduser()
     scan = {"processed": [], "unmatched": [], "errors": []}
     completed = True
@@ -191,7 +220,7 @@ def daily(registry: courses.Registry, *, dry_run: bool = False, runner: Callable
         for audio in sorted(memo_dir.glob("*.m4a")):
             try:
                 when = courses.recording_time(audio, timezone_name=term.get("timezone", "Asia/Jerusalem"))
-                if when.replace(tzinfo=None) <= boundary:
+                if when.astimezone(term_tz) <= boundary:
                     continue
                 slug, reason = courses.map_recording(registry, when)
                 if not slug:
@@ -221,6 +250,8 @@ def daily(registry: courses.Registry, *, dry_run: bool = False, runner: Callable
     except LemidaError as exc:
         report["errors"].append(str(exc))
         report["exit_code"] = 5 if "token missing" in str(exc).lower() else 2
+    if not completed:
+        report["exit_code"] = 1
     print("Pending queue jobs:")
     for item in report["queue"]:
         print(item)

@@ -34,6 +34,15 @@ def test_registry_loads_term_and_course(tmp_path):
     assert registry.courses["sample"]["name"] == "Course  Name"
 
 
+def test_mark_lesson_done_records_page_under_lock(tmp_path):
+    registry = make_registry(tmp_path)
+    registry.courses["sample"]["lessons"] = [{"lesson_key": "2026-10-12-1200", "status": "queued", "trove_page": None}]
+    (registry.directory / "sample.json").write_text(json.dumps(registry.courses["sample"]))
+    saved = courses.mark_lesson_done(registry, "sample", "2026-10-12-1200", 7)
+    assert saved["status"] == "done" and saved["trove_page"] == 7
+    assert json.loads((registry.directory / "sample.json").read_text())["lessons"][0] == saved
+
+
 def test_validate_pass_and_fail_with_injected_runner(tmp_path):
     registry = make_registry(tmp_path)
     outputs = {

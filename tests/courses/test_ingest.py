@@ -83,6 +83,17 @@ def test_ingest_deduplicates_before_notebook_calls(tmp_path):
     assert calls == []
 
 
+def test_ingest_treats_pre_status_lesson_as_already_ingested(tmp_path):
+    audio = tmp_path / "legacy.m4a"
+    audio.write_bytes(b"legacy bytes")
+    digest = hashlib.sha256(b"legacy bytes").hexdigest()
+    registry = make_registry(tmp_path, lessons=[{"date": "2026-10-12", "lesson_key": "2026-10-12-0000", "audio_sha256": digest, "source_id": "old-source", "trove_page": 12}])
+    runner, calls = runner_for(tmp_path)
+    result = courses.ingest_recording(registry, audio, course_slug="sample", lesson_date="2026-10-12", runner=runner)
+    assert result["status"] == "already ingested"
+    assert calls == []
+
+
 def test_ingest_stops_at_configured_notebook_limit(tmp_path):
     registry = make_registry(tmp_path)
     audio = tmp_path / "lesson.m4a"

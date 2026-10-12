@@ -202,6 +202,20 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def mark_lesson_done(registry: Registry, slug: str, lesson_key: str, page: int) -> dict[str, Any]:
+    """Record a lesson's Trove page under the course lock."""
+    if slug not in registry.courses:
+        raise ValueError(f"unknown course: {slug}")
+    with _locked_course(registry.directory, slug) as locked:
+        lesson = next((item for item in locked.payload.get("lessons", []) if item.get("lesson_key", item.get("key")) == lesson_key), None)
+        if lesson is None:
+            raise ValueError(f"unknown lesson key for {slug}: {lesson_key}")
+        lesson["trove_page"] = page
+        lesson["status"] = "done"
+        _atomic_json(locked.path, locked.payload)
+        return dict(lesson)
+
+
 def ingest_recording(
     registry: Registry,
     audio: Path,
@@ -249,7 +263,7 @@ def ingest_recording(
     with _locked_course(registry.directory, slug) as locked:
         stored_course = locked.payload
         matching = next((x for x in stored_course.get("lessons", []) if x.get("audio_sha256") == digest), None)
-        if matching and matching.get("status") == "queued":
+        if matching and matching.get("status", "done") in {"queued", "done"}:
             return {"status": "already ingested", "slug": slug, "date": matching.get("date", day), "lesson_key": matching.get("lesson_key"), "audio_sha256": digest}
         found = matching if matching and matching.get("status") == "pending_transcript" else None
         if found:
@@ -568,6 +582,10 @@ def main(argv: list[str] | None = None) -> int:
     ingest.add_argument("--date", help="lesson date (YYYY-MM-DD)")
     ingest.add_argument("--dry-run", action="store_true", help="show the selected course without uploading")
     ingest.add_argument("--json", action="store_true", help="emit a JSON result")
+    done = sub.add_parser("lesson-done", help="record the Trove page for a completed lesson")
+    done.add_argument("slug")
+    done.add_argument("lesson_key")
+    done.add_argument("--page", type=int, required=True)
     args = parser.parse_args(argv)
     try:
         if args.command == "import-docx":
@@ -579,6 +597,10 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(stubs, ensure_ascii=False, indent=2))
             return 0
         registry = registry_from_args(args)
+        if args.command == "lesson-done":
+            lesson = mark_lesson_done(registry, args.slug, args.lesson_key, args.page)
+            print(json.dumps(lesson, ensure_ascii=False))
+            return 0
         if args.command in {"lemida-sync", "daily"}:
             import lemida
             if args.command == "lemida-sync":

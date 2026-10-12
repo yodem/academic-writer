@@ -30,17 +30,20 @@ def registry(tmp_path, **overrides):
 
 def test_module_classification_and_diff_fixture():
     fixture = [
-        {"id": 1, "modname": "resource", "name": "Slides", "contents": [{"mimetype": "application/pdf", "timemodified": 10}]},
-        {"id": 2, "modname": "resource", "name": "Lecture", "contents": [{"mimetype": "audio/mpeg", "timemodified": 11}]},
-        {"id": 3, "modname": "zoom", "name": "Meeting", "contents": []},
-        {"id": 4, "modname": "videostream", "name": "Class", "contents": []},
+        {"id": 1, "name": "Week 1", "modules": [
+            {"id": 1, "modname": "resource", "name": "Slides", "contents": [{"mimetype": "application/pdf", "timemodified": 10}]},
+            {"id": 2, "modname": "folder", "name": "Readings", "contents": [{"mimetype": "application/pdf", "timemodified": 12}]},
+        ]},
+        {"id": 2, "name": "Week 2", "modules": [
+            {"id": 3, "modname": "zoom", "name": "Meeting", "contents": []},
+            {"id": 4, "modname": "resource", "name": "Lecture video", "contents": [{"mimetype": "video/mp4", "timemodified": 13}]},
+        ]},
     ]
-    assert lemida.classify_module(fixture[0]) == "resource"
-    assert lemida.classify_module(fixture[1]) == "recording"
-    assert lemida.classify_module(fixture[2]) == "report-only"
-    assert lemida.classify_module(fixture[3]) == "recording"
-    assert [m["id"] for m in lemida.changed_modules(fixture, {"1": 10})] == [2, 3, 4]
-    assert lemida.changed_modules([fixture[0]], {"1": 9}) == [fixture[0]]
+    flat = lemida._flatten_modules(fixture)
+    assert [lemida.classify_module(m) for m in flat] == ["resource", "resource", "report-only", "recording"]
+    assert [m["id"] for m in lemida.changed_modules(flat, {"1": 10})] == [2, 3, 4]
+    assert lemida.changed_modules([flat[0]], {"1": 9}) == [flat[0]]
+    assert lemida._flatten_modules(flat) == flat
 
 
 def test_download_adds_token_and_redacts_error(tmp_path, monkeypatch):
@@ -48,7 +51,8 @@ def test_download_adds_token_and_redacts_error(tmp_path, monkeypatch):
     class Response:
         def __enter__(self): return self
         def __exit__(self, *args): pass
-        def read(self): return b"file"
+        def __init__(self): self.chunks = iter([b"fi", b"le", b""])
+        def read(self, size): return next(self.chunks)
     def open_url(request, timeout=0):
         seen["url"] = request if isinstance(request, str) else request.full_url
         return Response()
@@ -80,7 +84,7 @@ def test_moodle_error_json_is_failure():
 
 def test_seen_updates_only_after_module_actions_succeed(tmp_path):
     reg = registry(tmp_path)
-    data = [{"id": 9, "modname": "page", "name": "Info", "contents": []}]
+    data = [{"id": 1, "name": "Section", "modules": [{"id": 9, "modname": "page", "name": "Info", "contents": []}]}]
     def request(*args, **kwargs): return data
     def runner(command, **kwargs):
         if command[0] == "security": return subprocess.CompletedProcess(command, 0, "token-value\n", "")
@@ -89,6 +93,23 @@ def test_seen_updates_only_after_module_actions_succeed(tmp_path):
     stored = json.loads((reg.directory / "sample.json").read_text())
     assert stored["lemida_seen"] == {"9": 0}
     assert report["processed"][0]["name"] == "Info"
+
+    # A concurrent registry update must survive the locked seen write.
+    (reg.directory / "sample.json").write_text(json.dumps({"slug": "sample", "lemida_course_id": 42, "lemida_seen": {"other": 7}, "drive_folder_id": "drive-1"}))
+    concurrent_update = {"done": False}
+    def racing_runner(command, **kwargs):
+        if command[0] == "security" and not concurrent_update["done"]:
+            concurrent_update["done"] = True
+            path = reg.directory / "sample.json"
+            latest = json.loads(path.read_text())
+            latest["concurrent_update"] = "kept"
+            path.write_text(json.dumps(latest))
+            return subprocess.CompletedProcess(command, 0, "token-value\n", "")
+        return runner(command, **kwargs)
+    lemida.sync_course(reg, "sample", runner=racing_runner, fetch_contents=lambda *a: [{"id": 11, "modname": "page", "name": "Info 2", "contents": []}], report_date="2026-10-12")
+    stored = json.loads((reg.directory / "sample.json").read_text())
+    assert stored["lemida_seen"] == {"other": 7, "11": 0}
+    assert stored["concurrent_update"] == "kept"
 
     (reg.directory / "sample.json").write_text(json.dumps({"slug": "sample", "lemida_course_id": 42, "lemida_seen": {}, "drive_folder_id": "drive-1"}))
     def fail_action(*args, **kwargs): raise RuntimeError("failed")
@@ -120,3 +141,35 @@ def test_daily_scans_memos_then_handles_missing_token(tmp_path):
     term = json.loads((reg.directory / "term.json").read_text())
     assert term["state"]["last_voice_memo_scan"]
     assert (reg.directory / "logs/lemida-2026-10-12.json").exists()
+
+
+def test_daily_scan_failure_still_runs_lms_and_exits_one(tmp_path, monkeypatch):
+    memo_dir = tmp_path / "memos"
+    memo_dir.mkdir()
+    (memo_dir / "20261012 120422.m4a").write_bytes(b"memo")
+    reg = registry(tmp_path)
+    sync_calls = []
+    def fail_time(*args, **kwargs): raise OSError("scan stat failed")
+    monkeypatch.setattr(courses, "recording_time", fail_time)
+    def run_sync(*args, **kwargs):
+        sync_calls.append(True)
+        return {"errors": []}
+    result = lemida.daily(reg, sync=run_sync, report_date="2026-10-12")
+    assert sync_calls == [True]
+    assert result["exit_code"] == 1
+    assert "scan stat failed" in result["voice_memos"]["errors"][0]["error"]
+
+
+def test_daily_scan_boundary_compares_instants_with_term_timezone(tmp_path):
+    memo_dir = tmp_path / "memos"
+    memo_dir.mkdir()
+    (memo_dir / "20261012 120000.m4a").write_bytes(b"memo")
+    reg = registry(tmp_path)
+    term_path = reg.directory / "term.json"
+    term = json.loads(term_path.read_text())
+    term["state"] = {"last_voice_memo_scan": "2026-10-12T12:00:00+03:00"}
+    term_path.write_text(json.dumps(term))
+    calls = []
+    result = lemida.daily(reg, sync=lambda *a, **k: {"errors": []}, ingest=lambda *a, **k: calls.append(a), report_date="2026-10-12")
+    assert calls == []
+    assert result["voice_memos"]["processed"] == []

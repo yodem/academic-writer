@@ -539,6 +539,61 @@
           "status": "ok"
         }
       ]
+    },
+    {
+      "id": "course-management",
+      "name": "Academic course management",
+      "sources": [
+        "src/skills/courses/SKILL.md",
+        "src/scripts/courses/courses.py",
+        "src/scripts/courses/lemida.py",
+        "tests/courses/"
+      ],
+      "status": "ok",
+      "subfeatures": [
+        {
+          "id": "term-setup",
+          "name": "Schedule import and per-course Drive, NotebookLM, and Trove resource registry",
+          "status": "ok"
+        },
+        {
+          "id": "resource-validation",
+          "name": "Resource ID and expected-name validation",
+          "status": "ok"
+        },
+        {
+          "id": "lemida-sync",
+          "name": "Moodle/Lemida course resource sync",
+          "status": "ok"
+        },
+        {
+          "id": "daily-scan",
+          "name": "Voice Memos scan and pending lesson queue",
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "id": "lesson-transcription",
+      "name": "Structured lesson notes",
+      "sources": [
+        "src/skills/lesson-notes/SKILL.md",
+        "src/scripts/courses/courses.py",
+        "tests/courses/"
+      ],
+      "status": "ok",
+      "subfeatures": [
+        {
+          "id": "notebooklm-transcript",
+          "name": "Recording ingest and NotebookLM transcript queue",
+          "status": "ok"
+        },
+        {
+          "id": "trove-lesson-pages",
+          "name": "Structured lesson pages with nested ToC and registry page tracking",
+          "status": "ok"
+        }
+      ]
     }
   ]
 }
