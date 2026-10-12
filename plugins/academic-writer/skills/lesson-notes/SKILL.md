@@ -68,17 +68,20 @@ Write a single Hebrew Markdown page with exactly one top-level heading:
 - <texts and thinkers mentioned>
 ```
 
-NotebookLM transcripts carry no timestamps, so the flow is ordered, not timed; never invent clock times. Quotes ground claims; keep each quote short (about 20 words maximum), and drop any claim without a supporting transcript span. Preserve all assignments, next-week readings, deadlines, exam details, and course requirements even when they were brief or administrative. Use “לא הוזכרו” only when none occurred. Distinguish the lecturer (the voice that leads, explains, and assigns), named thinkers/texts, students, and unidentified speakers. Sarcasm becomes its literal claim only when clear; otherwise omit it.
+NotebookLM transcripts carry no timestamps, so the flow is ordered, not timed; never invent clock times. Quotes ground claims; keep each quote short (about 20 words maximum) and as transcribed, correcting only obvious transcription slips (a doubled word, a swapped letter) without changing content; drop any claim without a supporting transcript span. Name a thinker, study or text only when the transcript names it or the reference is unambiguous. Preserve all assignments, next-week readings, deadlines, exam details, and course requirements even when they were brief or administrative. Use “לא הוזכרו” only when none occurred. Distinguish the lecturer (the voice that leads, explains, and assigns), named thinkers/texts, students, and unidentified speakers. Sarcasm becomes its literal claim only when clear; otherwise omit it.
 
 Drop greetings, small talk, audio/Zoom trouble, jokes, banter, unsupported personal anecdotes, false starts, and repeated restatements. Do not invent facts, names, quotes, timestamps, or duration; write לא צוין for a duration the metadata does not give.
 
 ## Append and rebuild the ToC
 
-1. Append the lesson page with `trove items append <book_id> -f <page.md> --no-session`, then read the ToC again to get the new page number.
-2. On the first lesson only, also append `# תמלולי שיעורים` as a parent entry page. Explain the course from its JSON, course index, and lesson: subject, lecturer, central questions, how lesson pages are constructed, and their limits. This entry page and page 1 course index are level 1; each lesson is level 2 beneath this entry.
-3. Rebuild the sidebar with `trove items enrich <book_id> --toc '<full-json-array>' --no-session`. Send the complete ToC array every time because this replaces the sidebar. Preserve every existing page and level-1 entry; order lesson entries by date and title them `שיעור <n> · <date>`. Never delete pages.
-4. If updating any existing page with `trove items put`, pass `--expect-version` using the version just read. If manuscript instructions require a changelog page, append a concise changelog line.
-5. Update the lesson registry record (`trove_page`, status `done`) with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" lesson-done <slug> <lesson_key> --page <N>`. Move the completed queue file to `queue/done/`.
+Key every step on the book's current structure (`trove items toc <book_id> --json --no-session`), never on whether this is the first lesson.
+
+1. If the book has no page-1 course index (a `Course · <course name>` page), append one first: course details from the course JSON, a `> Load this page when:` line, what the course is about, and a units list.
+2. If the ToC has no level-1 `תמלולי שיעורים` entry, append a `# תמלולי שיעורים` entry page explaining the course (subject, lecturer, central questions), how lesson pages are built, and their limits. If it exists but its course explanation is still a placeholder, rewrite that page once the first lesson gives enough to explain the course.
+3. Append the lesson page with `trove items append <book_id> -f <page.md> --no-session`, then read the ToC to get its page number. Add a dated line to the changelog page if the manuscript has one, and add the lesson to the units list on page 1 and on the entry page.
+4. To change an existing page use `trove items put <book_id>:<page> -f <file> --expect-version <V> --no-session`, where `V` is `currentVersion` from `trove items history <book_id> --json --no-session` read just before the put.
+5. **Last**, rebuild the sidebar with `trove items enrich <book_id> --toc '<full-json-array>' --no-session`. Both `append` and `put` regenerate the sidebar from headings and flatten it, so this step always comes after every content write. Send the complete array (it replaces the sidebar): page-1 index level 1, `תמלולי שיעורים` level 1, each lesson level 2 directly after it in date order titled `שיעור <n> · <date>`, then every other existing page at its level. Never delete pages.
+6. Record the lesson with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" lesson-done <slug> <lesson_key> --page <N>`, then verify with `courses.py check-lesson <slug> <date>` (exit 0 = done and nested). Only then move the queue file to `queue/done/`.
 
 ## Report and unattended behavior
 
