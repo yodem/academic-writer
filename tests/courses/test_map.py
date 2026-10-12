@@ -68,3 +68,35 @@ def test_between_semesters_is_unmatched(tmp_path):
 def test_voice_memo_filename_is_local_wall_time(tmp_path):
     path = tmp_path / "20261012 120422.m4a"
     assert courses.recording_time(path, birth_time=0) == local("2026-10-12T12:04:22")
+
+
+def test_voice_memo_filename_accepts_id_suffix(tmp_path):
+    path = tmp_path / "20260105 120412-ABC.m4a"
+    assert courses.recording_time(path, birth_time=0) == datetime(2026, 1, 5, 12, 4, 12, tzinfo=TZ)
+
+
+def test_map_cli_unmatched_has_prefix_and_exit_three(tmp_path, monkeypatch, capsys):
+    reg = registry(tmp_path)
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(reg.directory))
+    audio = tmp_path / "20261012 190000.m4a"
+    audio.touch()
+    assert courses.main(["map", str(audio)]) == 3
+    assert capsys.readouterr().out.startswith("unmatched: ")
+
+
+def test_map_cli_ambiguous_reports_slugs_and_exit_three(tmp_path, monkeypatch, capsys):
+    reg = registry(tmp_path)
+    extra = {"slug": "other", "slots": [{"day": "Mon", "start": "12:00", "end": "14:00", "semester": "yearly"}]}
+    (reg.directory / "other.json").write_text(json.dumps(extra), encoding="utf-8")
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(reg.directory))
+    audio = tmp_path / "20261012 120400.m4a"
+    audio.touch()
+    assert courses.main(["map", str(audio)]) == 3
+    assert capsys.readouterr().out.strip() == "ambiguous: other, regashot"
+
+
+def test_import_docx_cli_bad_file_exits_two(tmp_path, capsys):
+    broken = tmp_path / "broken.docx"
+    broken.write_text("not a docx", encoding="utf-8")
+    assert courses.main(["import-docx", str(broken)]) == 2
+    assert "error:" in capsys.readouterr().err
