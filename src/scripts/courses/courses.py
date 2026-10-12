@@ -556,6 +556,51 @@ def parse_docx(path: Path) -> list[dict[str, Any]]:
     return stubs
 
 
+
+LESSONS_ENTRY = "תמלולי שיעורים"
+
+
+def check_lesson(registry: Registry, slug: str, date: str, runner: Callable[..., Any] = subprocess.run) -> list[str]:
+    """Return problems for a lesson that should be done and nested under the lessons entry."""
+    course = registry.courses.get(slug)
+    if course is None:
+        return [f"unknown course: {slug}"]
+    lessons = [item for item in course.get("lessons", []) if str(item.get("date", "")) == date or str(item.get("lesson_key", "")).startswith(date)]
+    if not lessons:
+        return [f"{slug}: no lesson recorded for {date}"]
+    problems: list[str] = []
+    pages = []
+    for lesson in lessons:
+        if lesson.get("status") != "done" or not lesson.get("trove_page"):
+            problems.append(f"{slug}: lesson {lesson.get('lesson_key', date)} is not done (status={lesson.get('status')!r}, trove_page={lesson.get('trove_page')!r})")
+        else:
+            pages.append(int(lesson["trove_page"]))
+    if problems:
+        return problems
+    book_id = course.get("book_id")
+    if not book_id:
+        return [f"{slug}: missing book_id"]
+    try:
+        data = _json_from_command(["trove", "items", "toc", str(book_id), "--json", "--no-session"], runner)
+    except Exception as exc:
+        return [f"{slug}: Trove ToC lookup failed: {exc}"]
+    items = data.get("items", []) if isinstance(data, dict) else data
+    toc = items[0].get("toc", []) if items else []
+    parent_index = next((i for i, entry in enumerate(toc) if normalise_name(str(entry.get("title", ""))) == LESSONS_ENTRY and entry.get("level") == 1), None)
+    if parent_index is None:
+        return [f"{slug}: ToC has no level-1 entry {LESSONS_ENTRY!r}"]
+    children = []
+    for entry in toc[parent_index + 1:]:
+        if entry.get("level", 1) <= 1:
+            break
+        children.append(entry)
+    child_pages = {entry.get("page") for entry in children if entry.get("level") == 2}
+    for page in pages:
+        if page not in child_pages:
+            problems.append(f"{slug}: lesson page {page} is not a level-2 entry under {LESSONS_ENTRY!r}")
+    return problems
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--term", help="term directory name (defaults to ACADEMIC_TERM or the sole configured term)")
@@ -586,6 +631,9 @@ def main(argv: list[str] | None = None) -> int:
     done.add_argument("slug")
     done.add_argument("lesson_key")
     done.add_argument("--page", type=int, required=True)
+    check = sub.add_parser("check-lesson", help="verify a lesson is done and nested under the lessons entry in Trove")
+    check.add_argument("slug")
+    check.add_argument("date", help="YYYY-MM-DD")
     args = parser.parse_args(argv)
     try:
         if args.command == "import-docx":
@@ -597,6 +645,13 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(stubs, ensure_ascii=False, indent=2))
             return 0
         registry = registry_from_args(args)
+        if args.command == "check-lesson":
+            problems = check_lesson(registry, args.slug, args.date)
+            for problem in problems:
+                print(problem)
+            if not problems:
+                print(f"{args.slug} {args.date}: lesson done and nested under {LESSONS_ENTRY}")
+            return 1 if problems else 0
         if args.command == "lesson-done":
             lesson = mark_lesson_done(registry, args.slug, args.lesson_key, args.page)
             print(json.dumps(lesson, ensure_ascii=False))
