@@ -620,6 +620,7 @@ def main(argv: list[str] | None = None) -> int:
     lemida_sync_parser.add_argument("--json", action="store_true")
     daily_parser = sub.add_parser("daily", help="scan Voice Memos, sync Lemida, and show pending lesson jobs")
     daily_parser.add_argument("--dry-run", action="store_true")
+    daily_parser.add_argument("--json", action="store_true", help="emit the run result as JSON")
     ingest = sub.add_parser("ingest", help="upload a lesson recording and save its NotebookLM transcript")
     ingest.add_argument("audio", type=Path)
     ingest.add_argument("--course", help="course slug (otherwise map from recording time)")

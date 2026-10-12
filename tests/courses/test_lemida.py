@@ -173,3 +173,15 @@ def test_daily_scan_boundary_compares_instants_with_term_timezone(tmp_path):
     result = lemida.daily(reg, sync=lambda *a, **k: {"errors": []}, ingest=lambda *a, **k: calls.append(a), report_date="2026-10-12")
     assert calls == []
     assert result["voice_memos"]["processed"] == []
+
+
+def test_daily_cli_parses_and_runs(monkeypatch, tmp_path):
+    """Regression: the `daily` CLI read args.json without defining the flag."""
+    import courses as courses_mod
+    import lemida as lemida_mod
+    (tmp_path / "term.json").write_text('{"term": "T"}', encoding="utf-8")
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(tmp_path))
+    monkeypatch.setenv("ACADEMIC_TERM", "")
+    monkeypatch.setattr(lemida_mod, "daily", lambda registry, dry_run=False: {"exit_code": 0})
+    assert courses_mod.main(["--term", ".", "daily", "--dry-run"]) == 0
+    assert courses_mod.main(["--term", ".", "daily", "--dry-run", "--json"]) == 0
