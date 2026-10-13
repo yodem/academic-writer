@@ -766,13 +766,17 @@ def add_source(
     transcript: bool = False,
     lesson_date: str | None = None,
     lesson_time: str | None = None,
+    kind: str | None = None,
 ) -> dict[str, Any]:
     """Copy a course file to Drive and NotebookLM and queue its Trove job (resumable).
 
     Recordings and transcripts are sources too: they are snapshotted, copied to Drive and
     recorded with ``kind="media"``, then handed to ``ingest_recording``; their Trove home
-    is the lesson page.
+    is the lesson page. ``kind`` is "media" or "document"; None picks by extension. An explicit
+    "media" accepts any filename (ffmpeg probes the content, not the name).
     """
+    if kind not in (None, "media", "document"):
+        raise IngestError(f"invalid kind: {kind}")
     file = Path(file).expanduser()
     if not file.is_file():
         raise IngestError(f"file not found: {file}")
@@ -783,12 +787,15 @@ def add_source(
     # one registration at a time per course: dedupe check through queue job are one critical section
     with _registration_lock(registry.directory, course_slug):
         return _add_source_locked(registry, file, course_slug, title=title, origin=origin, origin_ref=origin_ref, runner=runner,
-                                  transcript=transcript, lesson_date=lesson_date, lesson_time=lesson_time)
+                                  transcript=transcript, lesson_date=lesson_date, lesson_time=lesson_time, kind=kind)
 
 
 def _add_source_locked(registry: Registry, file: Path, course_slug: str, *, title: str | None, origin: str, origin_ref: str | None,
-                       runner: Callable[..., Any], transcript: bool, lesson_date: str | None, lesson_time: str | None) -> dict[str, Any]:
-    if transcript or file.suffix.lower() in MEDIA_EXTENSIONS:
+                       runner: Callable[..., Any], transcript: bool, lesson_date: str | None, lesson_time: str | None,
+                       kind: str | None = None) -> dict[str, Any]:
+    if kind is None:
+        kind = "media" if file.suffix.lower() in MEDIA_EXTENSIONS else "document"
+    if transcript or kind == "media":
         return _add_media_source(registry, file, course_slug, title=title, origin=origin, origin_ref=origin_ref, runner=runner,
                                  transcript=transcript, lesson_date=lesson_date, lesson_time=lesson_time)
     sha = _file_sha256(file)
@@ -850,6 +857,10 @@ def _add_media_source(registry: Registry, file: Path, course_slug: str, *, title
         raise IngestError("--transcript requires --date")
     sha = _file_sha256(file)
     sha8 = sha[:8]
+    if not transcript and not lesson_date:
+        # the original's own start time, read before snapshotting (the snapshot has neither name nor birth time)
+        when = recording_time(file, timezone_name=registry.term.get("timezone", "Asia/Jerusalem"))
+        lesson_date, lesson_time = when.date().isoformat(), when.strftime("%H%M")
     with _locked_course(registry.directory, course_slug) as locked:
         course = locked.payload
         existing = next((s for s in course.get("sources", []) if s.get("sha256") == sha), None)
@@ -871,8 +882,8 @@ def _add_media_source(registry: Registry, file: Path, course_slug: str, *, title
         _update_source(registry, course_slug, sha, sha8=sha8, title=title, file=str(snapshot.resolve()), origin=origin, origin_ref=origin_ref,
                        kind="media", drive=True, notebook_source_id=None, lesson_key=None, trove=None, status="drive_done",
                        added_at=datetime.now(timezone.utc).isoformat())
-    # the original (not the snapshot) keeps its birth time for the recording's own start time
-    result = ingest_recording(registry, file, course_slug=course_slug, lesson_date=lesson_date, lesson_time=lesson_time,
+    # ingest the immutable snapshot; date and time were fixed above from the caller or the original
+    result = ingest_recording(registry, snapshot, course_slug=course_slug, lesson_date=lesson_date, lesson_time=lesson_time,
                               runner=runner, transcript_file=transcript)
     lesson_key = result.get("lesson_key")
     source_id = result.get("source_id")
@@ -1125,23 +1136,24 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command in {"lemida-sync", "daily"}:
             import lemida
-            if args.command == "lemida-sync":
-                result = lemida.lemida_sync(registry, slug=args.course, dry_run=args.dry_run)
+            with lemida.run_lock(registry):
+                if args.command == "lemida-sync":
+                    result = lemida.lemida_sync(registry, slug=args.course, dry_run=args.dry_run)
+                    if args.json:
+                        print(json.dumps(result, ensure_ascii=False))
+                    else:
+                        for error in result.get("errors", []):
+                            print(f"{error['slug']}: {error['error']}", file=sys.stderr)
+                    return 2 if result.get("errors") else 0
+                result = lemida.daily(registry, dry_run=args.dry_run)
                 if args.json:
                     print(json.dumps(result, ensure_ascii=False))
                 else:
-                    for error in result.get("errors", []):
-                        print(f"{error['slug']}: {error['error']}", file=sys.stderr)
-                return 2 if result.get("errors") else 0
-            result = lemida.daily(registry, dry_run=args.dry_run)
-            if args.json:
-                print(json.dumps(result, ensure_ascii=False))
-            else:
-                print(f"Report: {result['report_md']}" if result.get("report_md") else "Report: (none)")
-                print("Pending queue jobs:")
-                for item in result.get("queue", []):
-                    print(item)
-            return int(result.get("exit_code", 0))
+                    print(f"Report: {result['report_md']}" if result.get("report_md") else "Report: (none)")
+                    print("Pending queue jobs:")
+                    for item in result.get("queue", []):
+                        print(item)
+                return int(result.get("exit_code", 0))
         if args.command == "map":
             when = recording_time(args.audio, timezone_name=registry.term.get("timezone", "Asia/Jerusalem"))
             slug, reason = map_recording(registry, when)

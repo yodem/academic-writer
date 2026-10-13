@@ -442,7 +442,7 @@ def test_forum_media_attachment_uses_post_created_local_time(tmp_path):
     posts = {11: {"posts": [{"id": 901, "subject": "rec", "timecreated": created, "message": "",
                              "attachments": [{"filename": "lesson.m4a", "fileurl": "https://moodle.example/p/lesson.m4a"}]}]}, 12: {"posts": []}}
     seen = []
-    def fake_add(registry_, file, course_slug, title=None, origin="other", origin_ref=None, runner=None, lesson_date=None, lesson_time=None):
+    def fake_add(registry_, file, course_slug, title=None, origin="other", origin_ref=None, runner=None, lesson_date=None, lesson_time=None, kind=None):
         seen.append((lesson_date, lesson_time))
         return {"status": "added"}
     lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=fake_download,
@@ -456,7 +456,7 @@ def test_recording_module_uses_module_local_date_and_time(tmp_path):
     modules = [{"id": 5, "name": "Lesson recording", "modname": "resource", "contents": [
         {"fileurl": "https://moodle.example/p/rec.m4a", "filename": "rec.m4a", "mimetype": "audio/mp4", "timemodified": stamp}]}]
     calls = []
-    def fake_add(registry_, file, course_slug, title=None, origin="other", origin_ref=None, runner=None, lesson_date=None, lesson_time=None):
+    def fake_add(registry_, file, course_slug, title=None, origin="other", origin_ref=None, runner=None, lesson_date=None, lesson_time=None, kind=None):
         calls.append((Path(file).name, origin_ref, lesson_date, lesson_time))
         return {"status": "added"}
     ingest = lambda *a, **k: (_ for _ in ()).throw(AssertionError("recordings must not bypass add_source"))
@@ -586,3 +586,35 @@ def test_markdown_report_lists_memo_errors_and_unmatched(tmp_path):
     assert "broken.m4a" in text and "cannot read" in text
     assert "unmatched.m4a" in text
     assert result["voice_memos"]["unmatched"][0]["file"] == "unmatched.m4a"
+
+
+def test_second_run_exits_six_without_touching_state(monkeypatch, tmp_path, capsys):
+    import fcntl
+    import courses as courses_mod
+    reg = registry(tmp_path)
+    ran = []
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(tmp_path))
+    monkeypatch.setattr(lemida, "lemida_sync", lambda *a, **kw: ran.append(1) or {"courses": [], "errors": []})
+    before = sorted(p.relative_to(reg.directory).as_posix() for p in reg.directory.rglob("*") if p.name != ".lemida-run.lock")
+    holder = (reg.directory / ".lemida-run.lock").open("a+")
+    fcntl.flock(holder.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        for command in (["daily", "--dry-run"], ["lemida-sync", "--dry-run"]):
+            assert courses_mod.main(["--term", "term", *command]) == 6
+            assert "another Lemida run is in progress" in capsys.readouterr().err
+    finally:
+        holder.close()
+    after = sorted(p.relative_to(reg.directory).as_posix() for p in reg.directory.rglob("*") if p.name != ".lemida-run.lock")
+    assert after == before and ran == []
+    assert courses_mod.main(["--term", "term", "lemida-sync", "--dry-run", "--json"]) == 0 and ran == [1]  # free lock: the run proceeds
+
+
+def test_recording_is_added_with_kind_media_regardless_of_filename(tmp_path):
+    reg = registry(tmp_path)
+    seen = []
+    def fake_add(registry_, target, slug, **kwargs):
+        seen.append((target.name, kwargs))
+        return {"status": "ingested"}
+    lemida._add_downloaded(reg, "sample", "stream.bin", "https://x/f", "t", download=lambda u, t, d: d.write_bytes(b"x"),
+                           add_source=fake_add, origin_ref="cm:1", runner=None, stamp=1760000000, force_lesson_time=True)
+    assert seen[0][0] == "stream.bin" and seen[0][1]["kind"] == "media" and seen[0][1]["lesson_date"]

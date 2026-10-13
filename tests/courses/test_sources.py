@@ -210,7 +210,7 @@ def test_media_add_source_copies_to_drive_records_and_delegates(tmp_path, monkey
     assert result["status"] == "ingested" and result["lesson_key"] == "2026-10-12-1204"
     copies = fake.of("rclone", "copyto")
     assert len(copies) == 1 and copies[0][4:] == ["--drive-root-folder-id", "folder-1"] and copies[0][3].startswith("gdrive:")
-    assert calls[0][0] == audio and calls[0][1]["course_slug"] == "sample"
+    assert calls[0][0] != audio and calls[0][0].parent.name == "sample" and calls[0][0].parent.parent.name == "sources" and calls[0][1]["course_slug"] == "sample"
     assert calls[0][1]["lesson_date"] == "2026-10-12" and calls[0][1]["lesson_time"] == "1204" and calls[0][1]["transcript_file"] is False
     record = reload(registry)["sources"][0]
     assert record["kind"] == "media" and record["drive"] is True and record["lesson_key"] == "2026-10-12-1204"
@@ -415,3 +415,47 @@ def test_second_add_source_waits_for_registration_lock_then_dedupes(tmp_path):
     assert results[0]["status"] == "already added"
     assert not second.of("nlm", "source", "add") and not second.of("rclone", "copyto")
     assert len(first.of("nlm", "source", "add")) == 1
+
+
+class RecordingFake(Fake):
+    def __call__(self, command, **kwargs):
+        if command[:3] == ["nlm", "content", "source"]:
+            self.calls.append(command)
+            return subprocess.CompletedProcess(command, 0, json.dumps({"content": "words of the lesson"}), "")
+        return super().__call__(command, **kwargs)
+
+
+def test_explicit_media_kind_accepts_any_filename_real_ingest(tmp_path):
+    registry = make_registry(tmp_path)
+    stream = tmp_path / "stream.bin"
+    stream.write_bytes(b"opaque recording bytes")
+    result = courses.add_source(registry, stream, "sample", origin="lemida", runner=RecordingFake(), kind="media",
+                                lesson_date="2026-10-12", lesson_time="1204")
+    assert result["status"] == "ingested" and result["lesson_key"] == "2026-10-12-1204"
+    queued = sorted(p.name for p in (registry.directory / "queue").glob("*.json"))
+    assert queued == ["sample-2026-10-12-1204.json"]
+    assert list((registry.directory / "queue" / "sources").glob("*.json")) == []
+    assert reload(registry)["sources"][0]["kind"] == "media"
+
+
+def test_auto_kind_for_unknown_extension_is_document_and_bad_kind_rejected(tmp_path):
+    registry = make_registry(tmp_path)
+    stream = tmp_path / "stream.bin"
+    stream.write_bytes(b"opaque")
+    result = courses.add_source(registry, stream, "sample", runner=Fake())
+    assert result["status"] == "added" and list((registry.directory / "queue" / "sources").glob("*.json"))
+    with pytest.raises(courses.IngestError, match="invalid kind"):
+        courses.add_source(registry, stream, "sample", runner=Fake(), kind="video")
+
+
+def test_media_ingests_snapshot_and_original_time_survives_deletion(tmp_path):
+    registry = make_registry(tmp_path)
+    original = tmp_path / "20261012 120430-ABCDEF12.m4a"
+    original.write_bytes(b"voice memo bytes")
+    result = courses.add_source(registry, original, "sample", origin="recording", runner=RecordingFake())
+    original.unlink()
+    assert result["lesson_key"] == "2026-10-12-1204" and result["date"] == "2026-10-12"
+    snapshot = Path(reload(registry)["sources"][0]["file"])
+    meta = json.loads((registry.directory / "lessons" / "sample" / "2026-10-12-1204" / "meta.json").read_text())
+    assert Path(meta["audio_path"]) == snapshot.resolve() and snapshot.is_file() and snapshot.parent.name == "sample"
+    assert meta["audio_path"] != str(original.resolve())

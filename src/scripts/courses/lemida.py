@@ -1,6 +1,8 @@
 """Offline-testable Moodle/Lemida synchronization and daily scan helpers."""
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import html
 import json
 import os
@@ -203,7 +205,7 @@ def _add_downloaded(registry: courses.Registry, slug: str, filename: str, url: s
     except BaseException:
         shutil.rmtree(scratch, ignore_errors=True)
         raise
-    extra: dict[str, str] = {}
+    extra: dict[str, str] = {"kind": "media"} if force_lesson_time else {}
     if stamp and (force_lesson_time or target.suffix.lower() in courses.MEDIA_EXTENSIONS):
         # a downloaded temp file has no meaningful creation time: use the Lemida timestamp
         extra["lesson_date"], extra["lesson_time"] = _local_day_time(registry, stamp)
@@ -402,6 +404,21 @@ def commit_notifications(registry: courses.Registry, fresh: list[dict[str, Any]]
 
 
 _RUN_MARK = "<!-- lemida-run:{run} -->"
+@contextlib.contextmanager
+def run_lock(registry: courses.Registry):
+    """Exclusive, non-blocking Lemida run lock: a second run exits 6 before touching any state or report."""
+    registry.directory.mkdir(parents=True, exist_ok=True)
+    handle = (registry.directory / ".lemida-run.lock").open("a+")
+    try:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            raise courses.IngestError("another Lemida run is in progress", 6)
+        yield
+    finally:
+        handle.close()  # closing releases the lock
+
+
 _RUN_MARK_RE = re.compile(r"^<!-- lemida-run:(\S+) -->$", re.M)
 
 
