@@ -129,15 +129,15 @@ def test_daily_scans_memos_then_handles_missing_token(tmp_path):
     memo.write_bytes(b"memo")
     reg = registry(tmp_path)
     calls = []
-    def fake_ingest(registry, audio, **kwargs):
-        calls.append((audio, kwargs["course_slug"], kwargs["lesson_date"]))
+    def fake_add(registry, audio, slug, **kwargs):
+        calls.append((audio, slug, kwargs["lesson_date"], kwargs["lesson_time"], kwargs["origin"]))
         return {"status": "ingested", "slug": "sample"}
     def runner(command, **kwargs):
         if command[0] == "security": raise subprocess.CalledProcessError(1, command, stderr="not found")
         return subprocess.CompletedProcess(command, 0, "", "")
-    result = lemida.daily(reg, runner=runner, ingest=fake_ingest, report_date="2026-10-12")
+    result = lemida.daily(reg, runner=runner, add_source=fake_add, report_date="2026-10-12")
     assert result["exit_code"] == 5
-    assert calls == [(memo, "sample", "2026-10-12")]
+    assert calls == [(memo, "sample", "2026-10-12", "1204", "recording")]
     term = json.loads((reg.directory / "term.json").read_text())
     assert term["state"]["last_voice_memo_scan"]
     assert (reg.directory / "logs/lemida-2026-10-12.json").exists()
@@ -170,7 +170,7 @@ def test_daily_scan_boundary_compares_instants_with_term_timezone(tmp_path):
     term["state"] = {"last_voice_memo_scan": "2026-10-12T12:00:00+03:00"}
     term_path.write_text(json.dumps(term))
     calls = []
-    result = lemida.daily(reg, sync=lambda *a, **k: {"errors": []}, ingest=lambda *a, **k: calls.append(a), report_date="2026-10-12")
+    result = lemida.daily(reg, sync=lambda *a, **k: {"errors": []}, add_source=lambda *a, **k: calls.append(a), report_date="2026-10-12")
     assert calls == []
     assert result["voice_memos"]["processed"] == []
 
@@ -260,7 +260,7 @@ def test_forum_attachment_goes_through_add_source_and_seen_advances(tmp_path):
 
 
 def test_seen_posts_are_skipped_and_failed_attachment_does_not_advance(tmp_path):
-    reg = registry(tmp_path, lemida_seen_posts={"901": NOW, "902": NOW - 5000})
+    reg = registry(tmp_path, lemida_seen_posts={"901": NOW, "902": NOW - 5000}, lemida_seen_discussions={"11": NOW, "12": NOW - 5000})
     calls = []
     result = lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=fake_download,
                                 api=moodle_api(calls, POSTS), add_source=lambda *a, **k: (_ for _ in ()).throw(AssertionError("no")), report_date="d")
@@ -390,3 +390,59 @@ def test_legacy_discussion_keyed_state_does_not_crash_and_reprocesses(tmp_path):
     assert added == ["lemida-forum-11 - exam info.pdf"]
     stored = json.loads((reg.directory / "sample.json").read_text())
     assert stored["lemida_seen_posts"] == {"901": NOW, "902": NOW - 5000} and stored["lemida_posts_format"] == 2
+
+
+def test_root_post_timestamp_is_not_a_discussion_checkpoint(tmp_path):
+    reg = registry(tmp_path, lemida_posts_format=2, lemida_seen_posts={"901": NOW, "902": NOW - 5000})
+    calls = []
+    lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=fake_download,
+                       api=moodle_api(calls, POSTS), add_source=lambda *a, **k: {"status": "already added"}, report_date="d")
+    assert sorted(c[1]["discussionid"] for c in calls if c[0] == "mod_forum_get_discussion_posts") == ["11", "12"]
+
+
+def test_reply_attachment_failure_is_retried_next_run(tmp_path):
+    reg = registry(tmp_path)
+    def thread(reply_attachment):
+        return {11: {"posts": [
+            {"id": 901, "subject": "root", "timecreated": NOW - 10, "message": "", "attachments": [{"filename": "root.pdf", "fileurl": "https://moodle.example/p/root.pdf"}]},
+            {"id": 903, "subject": "re", "timecreated": NOW, "message": "", "attachments": [{"filename": "reply.pdf", "fileurl": "https://moodle.example/p/reply.pdf"}]}]},
+            12: {"posts": []}}
+    added = []
+    def flaky_add(registry_, file, course_slug, title=None, origin="other", origin_ref=None, runner=None):
+        added.append(Path(file).name)
+        if "reply" in Path(file).name and added.count(Path(file).name) == 1:
+            raise courses.IngestError("notebook full")
+        return {"status": "added"}
+    kwargs = dict(runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=fake_download, add_source=flaky_add, report_date="d")
+    first = lemida.sync_course(reg, "sample", api=moodle_api(posts_by_discussion=thread(True)), **kwargs)
+    assert first["errors"]
+    stored = json.loads((reg.directory / "sample.json").read_text())
+    assert stored["lemida_seen_posts"] == {"901": NOW - 10} and "11" not in stored.get("lemida_seen_discussions", {})
+    reg = courses.Registry(reg.directory)
+    calls = []
+    second = lemida.sync_course(reg, "sample", api=moodle_api(calls, thread(True)), **kwargs)
+    assert not second["errors"]
+    assert [c[1]["discussionid"] for c in calls if c[0] == "mod_forum_get_discussion_posts"] == ["11", "12"]
+    assert added == ["lemida-forum-11 - root.pdf", "lemida-forum-11 - reply.pdf", "lemida-forum-11 - reply.pdf"]
+    stored = json.loads((reg.directory / "sample.json").read_text())
+    assert stored["lemida_seen_posts"]["903"] == NOW and stored["lemida_seen_discussions"]["11"] == NOW
+
+
+def test_forum_attachment_temp_file_kept_on_failure_removed_on_success(tmp_path):
+    reg = registry(tmp_path)
+    downloaded = []
+    def recording_download(url, token, destination):
+        downloaded.append(destination)
+        return fake_download(url, token, destination)
+    def failing_add(*a, **k): raise courses.IngestError("boom")
+    lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=recording_download,
+                       api=moodle_api(posts_by_discussion=POSTS), add_source=failing_add, report_date="d")
+    assert downloaded and all(p.is_file() for p in downloaded)
+    for p in downloaded:
+        p.unlink()
+    downloaded.clear()
+    (tmp_path / "ok").mkdir()
+    reg = registry(tmp_path / "ok")
+    lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=recording_download,
+                       api=moodle_api(posts_by_discussion=POSTS), add_source=lambda *a, **k: {"status": "added"}, report_date="d")
+    assert downloaded and not any(p.exists() for p in downloaded)

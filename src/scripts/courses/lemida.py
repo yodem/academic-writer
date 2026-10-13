@@ -5,6 +5,7 @@ import html
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import urllib.parse
@@ -169,6 +170,21 @@ def _default_api(base_url: str, token: str, function: str, params: dict[str, Any
     return moodle_call(base_url, token, function, params)
 
 
+def _add_downloaded(registry: courses.Registry, slug: str, filename: str, url: str, token: str, *, download: Callable[..., Any],
+                    add_source: Callable[..., Any], origin_ref: str, runner: Callable[..., Any]) -> Any:
+    """Download to a temp dir and register as a source; the original is removed only after add_source succeeded."""
+    scratch = Path(tempfile.mkdtemp(prefix="lemida-"))
+    try:
+        target = scratch / filename
+        download(url, token, target)
+    except BaseException:
+        shutil.rmtree(scratch, ignore_errors=True)
+        raise
+    result = add_source(registry, target, slug, title=None, origin="lemida", origin_ref=origin_ref, runner=runner)
+    shutil.rmtree(scratch, ignore_errors=True)  # a failed add_source keeps the original for the next look
+    return result
+
+
 def _sync_forums(registry: courses.Registry, slug: str, course: dict[str, Any], *, base_url: str, token: str, api: Callable[..., Any],
                  download: Callable[..., Any], add_source: Callable[..., Any], runner: Callable[..., Any], root: Path,
                  dry_run: bool, announcements: list[dict[str, Any]], errors: list[str]) -> None:
@@ -198,7 +214,8 @@ def _sync_forums(registry: courses.Registry, slug: str, course: dict[str, Any], 
         for discussion in discussions:
             did = str(discussion.get("discussion", discussion.get("id", "")))
             stamp = int(discussion.get("timemodified", 0) or 0)
-            newest = seen_discussions.get(did, seen_posts.get(str(discussion.get("id", "")), None))
+            # only the per-discussion checkpoint (written after every fetched post succeeded) proves completeness
+            newest = seen_discussions.get(did)
             if not did or (newest is not None and stamp <= newest):
                 continue
             try:
@@ -224,10 +241,8 @@ def _sync_forums(registry: courses.Registry, slug: str, course: dict[str, Any], 
                         if dry_run:
                             record["result"] = "dry-run"
                         else:
-                            with tempfile.TemporaryDirectory(prefix="lemida-") as scratch:
-                                target = Path(scratch) / f"lemida-forum-{did} - {name}"
-                                download(str(item.get("fileurl", "")), token, target)
-                                result = add_source(registry, target, slug, title=None, origin="lemida", origin_ref=f"forum:{did}", runner=runner)
+                            result = _add_downloaded(registry, slug, f"lemida-forum-{did} - {name}", str(item.get("fileurl", "")), token,
+                                                     download=download, add_source=add_source, origin_ref=f"forum:{did}", runner=runner)
                             record["result"] = result.get("status", "added") if isinstance(result, dict) else "added"
                             if isinstance(result, dict) and result.get("file"):
                                 record["file"] = str(result["file"])
@@ -319,10 +334,8 @@ def sync_course(registry: courses.Registry, slug: str, *, runner: Callable[..., 
                         ingest(registry, target, course_slug=slug, lesson_date=local_day, runner=runner)
                         outcomes.append({"filename": filename, "result": "ingested"})
                     else:
-                        with tempfile.TemporaryDirectory(prefix="lemida-") as scratch:
-                            target = Path(scratch) / f"lemida-cm{cmid} - {filename}"
-                            download(str(fileurl), token, target)
-                            result = add_source(registry, target, slug, title=None, origin="lemida", origin_ref=f"cm:{cmid}", runner=runner)
+                        result = _add_downloaded(registry, slug, f"lemida-cm{cmid} - {filename}", str(fileurl), token,
+                                                 download=download, add_source=add_source, origin_ref=f"cm:{cmid}", runner=runner)
                         outcomes.append({"filename": filename, "result": result.get("status", "added") if isinstance(result, dict) else "added"})
             entry = {"cmid": cmid, "name": title, "type": kind, "timemodified": stamp}
             if outcomes:
@@ -466,7 +479,7 @@ def _queue(registry: courses.Registry) -> list[str]:
 
 def daily(registry: courses.Registry, *, dry_run: bool = False, runner: Callable[..., Any] = subprocess.run,
           ingest: Callable[..., Any] | None = None, report_date: str | None = None,
-          sync: Callable[..., Any] | None = None) -> dict[str, Any]:
+          sync: Callable[..., Any] | None = None, add_source: Callable[..., Any] | None = None) -> dict[str, Any]:
     day = report_date or date.today().isoformat()
     term_path = registry.directory / "term.json"
     term = json.loads(term_path.read_text(encoding="utf-8"))
@@ -492,7 +505,10 @@ def daily(registry: courses.Registry, *, dry_run: bool = False, runner: Callable
                     scan["unmatched"].append({"file": audio.name, "reason": reason})
                     continue
                 if not dry_run:
-                    result = (ingest or courses.ingest_recording)(registry, audio, course_slug=slug, lesson_date=when.date().isoformat(), runner=runner)
+                    local = when.astimezone(term_tz)
+                    # a memo is a source too: Drive + NotebookLM + its lesson, keeping the recording's own date and time
+                    result = (add_source or courses.add_source)(registry, audio, slug, origin="recording", runner=runner,
+                                                                lesson_date=local.date().isoformat(), lesson_time=local.strftime("%H%M"))
                     scan["processed"].append({"file": audio.name, "result": result})
             except Exception as exc:
                 completed = False

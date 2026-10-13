@@ -181,18 +181,105 @@ def test_missing_drive_folder_is_error(tmp_path):
         courses.add_source(registry, pdf(tmp_path), "sample", runner=Fake())
 
 
-def test_audio_delegates_to_ingest(tmp_path, monkeypatch):
-    registry = make_registry(tmp_path)
-    seen = {}
+def media_registry(tmp_path, **overrides):
+    return make_registry(tmp_path, **overrides)
+
+
+def fake_ingest_factory(registry, calls=None, status="queued"):
     def fake_ingest(reg, audio, **kwargs):
-        seen.update(audio=audio, kwargs=kwargs)
-        return {"status": "ingested"}
-    monkeypatch.setattr(courses, "ingest_recording", fake_ingest)
+        if calls is not None:
+            calls.append((audio, kwargs))
+        sha = courses._file_sha256(Path(audio))
+        path = reg.directory / "sample.json"
+        data = json.loads(path.read_text())
+        data.setdefault("lessons", []).append({"lesson_key": "2026-10-12-1204", "date": "2026-10-12", "audio_sha256": sha,
+                                               "source_id": "src-9", "trove_page": 6 if status in {"done", "appended"} else None, "status": status})
+        path.write_text(json.dumps(data))
+        return {"status": "ingested", "slug": "sample", "date": "2026-10-12", "lesson_key": "2026-10-12-1204", "source_id": "src-9"}
+    return fake_ingest
+
+
+def test_media_add_source_copies_to_drive_records_and_delegates(tmp_path, monkeypatch):
+    registry = make_registry(tmp_path)
+    calls = []
+    monkeypatch.setattr(courses, "ingest_recording", fake_ingest_factory(registry, calls))
     audio = tmp_path / "lesson.m4a"
     audio.write_bytes(b"a")
     fake = Fake()
-    assert courses.add_source(registry, audio, "sample", runner=fake) == {"status": "ingested"}
-    assert seen["kwargs"]["course_slug"] == "sample" and fake.calls == []
+    result = courses.add_source(registry, audio, "sample", origin="recording", runner=fake, lesson_date="2026-10-12", lesson_time="1204")
+    assert result["status"] == "ingested" and result["lesson_key"] == "2026-10-12-1204"
+    copies = fake.of("rclone", "copyto")
+    assert len(copies) == 1 and copies[0][4:] == ["--drive-root-folder-id", "folder-1"] and copies[0][3].startswith("gdrive:")
+    assert calls[0][0] == audio and calls[0][1]["course_slug"] == "sample"
+    assert calls[0][1]["lesson_date"] == "2026-10-12" and calls[0][1]["lesson_time"] == "1204" and calls[0][1]["transcript_file"] is False
+    record = reload(registry)["sources"][0]
+    assert record["kind"] == "media" and record["drive"] is True and record["lesson_key"] == "2026-10-12-1204"
+    assert record["notebook_source_id"] == "src-9" and Path(record["file"]).is_file()
+    assert fake.of("nlm") == []  # NotebookLM upload belongs to ingest_recording
+
+
+def test_transcript_add_source_passes_through_and_needs_date(tmp_path, monkeypatch):
+    registry = make_registry(tmp_path)
+    calls = []
+    monkeypatch.setattr(courses, "ingest_recording", fake_ingest_factory(registry, calls))
+    text = tmp_path / "t.txt"
+    text.write_text("transcript", encoding="utf-8")
+    with pytest.raises(courses.IngestError, match="--date"):
+        courses.add_source(registry, text, "sample", runner=Fake(), transcript=True)
+    courses.add_source(registry, text, "sample", runner=Fake(), transcript=True, lesson_date="2026-10-12", lesson_time="1204")
+    assert calls[0][1]["transcript_file"] is True and reload(registry)["sources"][0]["kind"] == "media"
+
+
+def test_media_add_source_resumes_without_second_drive_copy(tmp_path, monkeypatch):
+    registry = make_registry(tmp_path)
+    audio = tmp_path / "lesson.m4a"
+    audio.write_bytes(b"a")
+    def failing(*a, **k): raise courses.IngestError("nlm down")
+    monkeypatch.setattr(courses, "ingest_recording", failing)
+    fake = Fake()
+    with pytest.raises(courses.IngestError):
+        courses.add_source(registry, audio, "sample", runner=fake)
+    assert reload(registry)["sources"][0]["drive"] is True
+    monkeypatch.setattr(courses, "ingest_recording", fake_ingest_factory(registry))
+    courses.add_source(registry, audio, "sample", runner=fake)
+    assert len(fake.of("rclone", "copyto")) == 1 and reload(registry)["sources"][0]["notebook_source_id"] == "src-9"
+
+
+def media_checked(tmp_path, monkeypatch, status, **fake_kwargs):
+    registry = make_registry(tmp_path)
+    monkeypatch.setattr(courses, "ingest_recording", fake_ingest_factory(registry, status=status))
+    audio = tmp_path / "lesson.m4a"
+    audio.write_bytes(b"a")
+    courses.add_source(registry, audio, "sample", runner=Fake())
+    registry = courses.Registry(registry.directory)
+    name = Path(reload(registry)["sources"][0]["file"]).name
+    toc = [{"level": 1, "title": "תמלולי שיעורים", "page": 5}, {"level": 2, "title": "2026-10-12", "page": 6}]
+    defaults = dict(drive=[name], nlm_list=[{"id": "src-9"}], toc=toc)
+    defaults.update(fake_kwargs)
+    fake = Fake(**defaults)
+    original = fake.__call__
+    def with_find(command, **kwargs):
+        if command[:3] == ["trove", "items", "get"]:
+            return subprocess.CompletedProcess(command, 0, "# a\n# b\n# c\n# d\n# e\n# f\n" + courses.LESSON_KEY_PREFIX + "2026-10-12-1204\n", "")
+        return original(command, **kwargs)
+    return courses.check_source(registry, "sample", runner=with_find)
+
+
+def test_check_source_media_passes(tmp_path, monkeypatch):
+    assert media_checked(tmp_path, monkeypatch, "done") == []
+
+
+def test_check_source_media_fails_when_missing_in_drive_or_notebook_or_lesson(tmp_path, monkeypatch):
+    problems = media_checked(tmp_path, monkeypatch, "done", drive=[], nlm_list=[])
+    assert any("not in the Drive folder" in p for p in problems) and any("not in the notebook" in p for p in problems)
+    (tmp_path / "b").mkdir()
+    problems = media_checked(tmp_path / "b", monkeypatch, "done", toc=[{"level": 1, "title": "תמלולי שיעורים", "page": 5}])
+    assert any("lesson page 6 is not a level-2 entry" in p for p in problems)
+
+
+def test_check_source_media_pending_lesson(tmp_path, monkeypatch):
+    problems = media_checked(tmp_path, monkeypatch, "queued")
+    assert len(problems) == 1 and "lesson pending" in problems[0]
 
 
 def done_source(tmp_path, registry=None, **extra):

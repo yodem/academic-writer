@@ -250,11 +250,11 @@ def ingest_recording(
     if not audio.is_file():
         raise IngestError(f"{'transcript' if transcript_file else 'audio'} file not found: {audio}")
     timezone_name = registry.term.get("timezone", "Asia/Jerusalem")
+    if lesson_time is not None and not re.fullmatch(r"([01]\d|2[0-3])[0-5]\d", lesson_time):
+        raise IngestError(f"invalid lesson time (expected HHMM): {lesson_time}")
     if transcript_file:
         if not course_slug or not lesson_date:
             raise IngestError("--transcript requires --course and --date")
-        if lesson_time is not None and not re.fullmatch(r"([01]\d|2[0-3])[0-5]\d", lesson_time):
-            raise IngestError(f"invalid lesson time (expected HHMM): {lesson_time}")
         when = None
     else:
         when = recording_time(audio, birth_time=birth_time, timezone_name=timezone_name)
@@ -281,10 +281,10 @@ def ingest_recording(
 
     # Explicit date-only input carries no time, so use 0000. Otherwise derive
     # the stable lesson key from the recording's local start time.
-    if transcript_file:
+    if transcript_file or lesson_date:
         hm = lesson_time or "0000"
     else:
-        hm = "0000" if lesson_date else when.strftime("%H%M")
+        hm = when.strftime("%H%M")
     lesson_base = f"{day}-{hm}"
     lessons_root = registry.directory / "lessons" / slug
     lessons_root.mkdir(parents=True, exist_ok=True)
@@ -749,8 +749,16 @@ def add_source(
     origin: str = "other",
     origin_ref: str | None = None,
     runner: Callable[..., Any] = subprocess.run,
+    transcript: bool = False,
+    lesson_date: str | None = None,
+    lesson_time: str | None = None,
 ) -> dict[str, Any]:
-    """Copy a course file to Drive and NotebookLM and queue its Trove job (resumable)."""
+    """Copy a course file to Drive and NotebookLM and queue its Trove job (resumable).
+
+    Recordings and transcripts are sources too: they are snapshotted, copied to Drive and
+    recorded with ``kind="media"``, then handed to ``ingest_recording``; their Trove home
+    is the lesson page.
+    """
     file = Path(file).expanduser()
     if not file.is_file():
         raise IngestError(f"file not found: {file}")
@@ -758,8 +766,9 @@ def add_source(
         raise IngestError(f"unknown course: {course_slug}")
     if origin not in ORIGINS:
         raise IngestError(f"invalid origin: {origin}")
-    if file.suffix.lower() in MEDIA_EXTENSIONS:
-        return ingest_recording(registry, file, course_slug=course_slug, runner=runner)
+    if transcript or file.suffix.lower() in MEDIA_EXTENSIONS:
+        return _add_media_source(registry, file, course_slug, title=title, origin=origin, origin_ref=origin_ref, runner=runner,
+                                 transcript=transcript, lesson_date=lesson_date, lesson_time=lesson_time)
     sha = _file_sha256(file)
     sha8 = sha[:8]
     with _locked_course(registry.directory, course_slug) as locked:
@@ -811,6 +820,49 @@ def add_source(
     })
     entry = _update_source(registry, course_slug, sha, status="queued")
     return {"status": "added", "slug": course_slug, "sha8": sha8, "title": title, "notebook_source_id": entry.get("notebook_source_id"), "queue_path": str(job_path), "file": str(file.resolve())}
+
+
+def _add_media_source(registry: Registry, file: Path, course_slug: str, *, title: str | None, origin: str, origin_ref: str | None,
+                      runner: Callable[..., Any], transcript: bool, lesson_date: str | None, lesson_time: str | None) -> dict[str, Any]:
+    if transcript and not lesson_date:
+        raise IngestError("--transcript requires --date")
+    sha = _file_sha256(file)
+    sha8 = sha[:8]
+    with _locked_course(registry.directory, course_slug) as locked:
+        course = locked.payload
+        existing = next((s for s in course.get("sources", []) if s.get("sha256") == sha), None)
+    if existing and existing.get("status") in {"queued", "done"} and existing.get("lesson_key"):
+        return {"status": "already added", "slug": course_slug, "sha8": sha8, "title": existing.get("title"),
+                "lesson_key": existing.get("lesson_key"), "source_status": existing.get("status"), "file": existing.get("file")}
+    title = title or (existing or {}).get("title") or _default_title(file)
+    recorded = Path(str((existing or {}).get("file") or ""))
+    snapshot = recorded if existing and existing.get("file") and recorded.is_file() else _snapshot_source(registry, course_slug, file, sha8)
+    if not (existing and existing.get("drive")):
+        folder = course.get("drive_folder_id")
+        if not folder:
+            raise IngestError(f"{course_slug}: missing drive_folder_id")
+        remote = registry.term.get("drive_remote", "gdrive")
+        try:
+            runner(["rclone", "copyto", str(snapshot), f"{remote}:{snapshot.name}", "--drive-root-folder-id", str(folder)], check=True, text=True, capture_output=True)
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise IngestError(f"Drive copy failed: {exc}") from exc
+        _update_source(registry, course_slug, sha, sha8=sha8, title=title, file=str(snapshot.resolve()), origin=origin, origin_ref=origin_ref,
+                       kind="media", drive=True, notebook_source_id=None, lesson_key=None, trove=None, status="drive_done",
+                       added_at=datetime.now(timezone.utc).isoformat())
+    # the original (not the snapshot) keeps its birth time for the recording's own start time
+    result = ingest_recording(registry, file, course_slug=course_slug, lesson_date=lesson_date, lesson_time=lesson_time,
+                              runner=runner, transcript_file=transcript)
+    lesson_key = result.get("lesson_key")
+    source_id = result.get("source_id")
+    if not (lesson_key and source_id):
+        with _locked_course(registry.directory, course_slug) as locked:
+            lesson = next((x for x in locked.payload.get("lessons", []) if x.get("audio_sha256") == sha), {})
+        lesson_key = lesson_key or lesson.get("lesson_key")
+        source_id = source_id or lesson.get("source_id")
+    _update_source(registry, course_slug, sha, kind="media", lesson_key=lesson_key, notebook_source_id=str(source_id) if source_id else None, status="queued")
+    merged = dict(result)
+    merged.update({"sha8": sha8, "title": title, "file": str(snapshot.resolve())})
+    return merged
 
 
 def _select_source(course: dict[str, Any], slug: str, sha8: str) -> dict[str, Any]:
@@ -894,6 +946,17 @@ def check_source(registry: Registry, slug: str, sha8: str | None = None, runner:
             problems.append(f"{label}: no NotebookLM source recorded")
         elif notebook_ids is not None and str(source_id) not in notebook_ids:
             problems.append(f"{label}: NotebookLM source {source_id} is not in the notebook")
+        if source.get("kind") == "media":
+            # its Trove home is the lesson page, verified by check_lesson
+            lesson_key = source.get("lesson_key")
+            lesson = next((x for x in course.get("lessons", []) if x.get("lesson_key", x.get("key")) == lesson_key), None) if lesson_key else None
+            if lesson is None:
+                problems.append(f"{label}: no lesson recorded (lesson_key={lesson_key!r})")
+            elif lesson.get("status") not in {"appended", "done"}:
+                problems.append(f"{label}: lesson pending (lesson {lesson_key} status={lesson.get('status')!r}, not verified)")
+            else:
+                problems.extend(f"{label}: {problem}" for problem in check_lesson(registry, slug, str(lesson_key), runner=runner))
+            continue
         trove = source.get("trove")
         if source.get("status") != "done" or not isinstance(trove, dict) or not trove.get("book_id"):
             problems.append(f"{label}: Trove not done (status={source.get('status')!r}, trove={trove!r})")
@@ -983,6 +1046,9 @@ def main(argv: list[str] | None = None) -> int:
     add.add_argument("--title")
     add.add_argument("--origin", choices=ORIGINS, default="other")
     add.add_argument("--origin-ref")
+    add.add_argument("--transcript", action="store_true", help="the file is a text lesson transcript (needs --date)")
+    add.add_argument("--date", help="lesson date (YYYY-MM-DD) for a recording or transcript")
+    add.add_argument("--time", help="lesson start time HHMM (default 0000 when --date is given)")
     add.add_argument("--json", action="store_true")
     sdone = sub.add_parser("source-done", help="record the Trove location of a source")
     sdone.add_argument("slug")
@@ -1017,7 +1083,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{args.slug} {args.date}: lesson done and nested under {LESSONS_ENTRY}")
             return 1 if problems else 0
         if args.command == "add-source":
-            result = add_source(registry, args.file, args.course, title=args.title, origin=args.origin, origin_ref=args.origin_ref)
+            result = add_source(registry, args.file, args.course, title=args.title, origin=args.origin, origin_ref=args.origin_ref,
+                                transcript=args.transcript, lesson_date=args.date, lesson_time=args.time)
             print(json.dumps(result, ensure_ascii=False) if args.json else f"{result['status']}: {result.get('title', result.get('slug'))}")
             return 0
         if args.command == "source-done":
