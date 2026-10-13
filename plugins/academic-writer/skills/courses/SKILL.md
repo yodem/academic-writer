@@ -77,7 +77,7 @@ Copyrighted readings stay in the user's own Drive, NotebookLM and Trove.
 4. **Lemida notifications** for the token's user, newer than `state.last_notification_time` in `term.json` (subject, link, time, read flag). The state advances only after a successful run.
 5. **Queued lesson jobs** left for `lesson-notes --pending`.
 
-A failure for one course, forum, post or notification never stops the others, and seen-state advances only for what succeeded. The run writes `logs/lemida-<date>.json` (full data) and a readable `logs/lemida-<date>.md` (new announcements per course, new notifications, new content, errors); `daily` prints the `.md` path, and `daily --json` prints one JSON document.
+A failure for one course, forum, post or notification never stops the others, and seen-state advances only for what succeeded. Each run writes its own `logs/lemida-<date>-<HHMMSS>.json` (full data) and `.md` (new announcements per course, new notifications, new content, errors) before any seen-state advances, and appends a section to the same-day digest `logs/lemida-<date>.md`; a course that fails for any reason is recorded as an error and the next course still runs; `daily` prints the `.md` path, and `daily --json` prints one JSON document.
 
 To configure a Lemida token, the user obtains a mobile-app token while signed into their LMS at its `admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=<n>&urlscheme=moodlemobile` endpoint, follows the redirect's base64 `token=` value, and decodes `site_id:::token`. Have the user type it into their keychain (never ask them to paste it into chat):
 

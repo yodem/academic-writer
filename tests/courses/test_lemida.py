@@ -141,7 +141,7 @@ def test_daily_scans_memos_then_handles_missing_token(tmp_path):
     assert calls == [(memo, "sample", "2026-10-12", "1204", "recording")]
     term = json.loads((reg.directory / "term.json").read_text())
     assert term["state"]["last_voice_memo_scan"]
-    assert (reg.directory / "logs/lemida-2026-10-12.json").exists()
+    assert len(list((reg.directory / "logs").glob("lemida-2026-10-12-*.json"))) == 1
 
 
 def test_daily_scan_failure_still_runs_lms_and_exits_one(tmp_path, monkeypatch):
@@ -329,7 +329,7 @@ def test_one_course_failing_does_not_block_another_and_md_written(tmp_path):
     assert [a["course"] for a in report["announcements"]] == ["other", "other"]
     assert any(e["slug"] == "sample" and "boom" in e["error"] for e in report["errors"])
     assert report["notifications"][0]["subject"] == "Hello"
-    saved = json.loads((reg.directory / "logs/lemida-2026-10-13.json").read_text())
+    saved = json.loads(next((reg.directory / "logs").glob("lemida-2026-10-13-*.json")).read_text())
     assert saved["announcements"] and saved["notifications"]
     md = (reg.directory / "logs/lemida-2026-10-13.md").read_text(encoding="utf-8")
     assert "Exam date" in md and "exam info.pdf" in md and "Hello" in md and "boom" in md and "token-value" not in md
@@ -342,7 +342,7 @@ def test_daily_report_carries_announcements_and_md(tmp_path):
     result = lemida.daily(reg, sync=stub, report_date="2026-10-13")
     assert result["announcements"][0]["subject"] == "S"
     assert Path(result["report_md"]).read_text(encoding="utf-8").count("S") >= 1
-    assert json.loads((reg.directory / "logs/lemida-2026-10-13.json").read_text())["announcements"]
+    assert json.loads(next((reg.directory / "logs").glob("lemida-2026-10-13-*.json")).read_text())["announcements"]
 
 
 def test_edited_older_post_in_updated_discussion_is_processed_and_unchanged_skipped(tmp_path):
@@ -456,9 +456,113 @@ def test_recording_module_uses_module_local_date_and_time(tmp_path):
     modules = [{"id": 5, "name": "Lesson recording", "modname": "resource", "contents": [
         {"fileurl": "https://moodle.example/p/rec.m4a", "filename": "rec.m4a", "mimetype": "audio/mp4", "timemodified": stamp}]}]
     calls = []
+    def fake_add(registry_, file, course_slug, title=None, origin="other", origin_ref=None, runner=None, lesson_date=None, lesson_time=None):
+        calls.append((Path(file).name, origin_ref, lesson_date, lesson_time))
+        return {"status": "added"}
+    ingest = lambda *a, **k: (_ for _ in ()).throw(AssertionError("recordings must not bypass add_source"))
     lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: modules, download=fake_download,
-                       ingest=lambda registry_, target, **kw: calls.append(kw), api=no_forums, report_date="d")
-    assert calls and calls[0]["lesson_date"] == "2026-10-12" and calls[0]["lesson_time"] == "0230"
+                       ingest=ingest, api=no_forums, add_source=fake_add, report_date="d")
+    assert calls == [("lemida-cm5 - rec.m4a", "cm:5", "2026-10-12", "0230")]
+    assert json.loads((reg.directory / "sample.json").read_text())["lemida_seen"] == {"5": stamp}
+
+
+def test_recording_module_by_modname_without_media_extension_still_gets_date_and_time(tmp_path):
+    reg = registry(tmp_path)
+    stamp = int(datetime(2026, 10, 11, 9, 0, tzinfo=timezone.utc).timestamp())
+    modules = [{"id": 6, "name": "Stream", "modname": "kalvidres", "contents": [
+        {"fileurl": "https://moodle.example/p/stream.bin", "filename": "stream.bin", "timemodified": stamp}]}]
+    calls = []
+    def fake_add(registry_, file, course_slug, **kw):
+        calls.append(kw)
+        return {"status": "added"}
+    lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: modules, download=fake_download, api=no_forums, add_source=fake_add)
+    assert calls[0]["lesson_date"] == "2026-10-11" and calls[0]["lesson_time"] == "1200"
+
+
+def test_recording_module_stays_unseen_when_add_source_fails(tmp_path):
+    reg = registry(tmp_path)
+    modules = [{"id": 5, "name": "Rec", "modname": "videostream", "contents": [
+        {"fileurl": "https://moodle.example/p/rec.mp4", "filename": "rec.mp4", "mimetype": "video/mp4", "timemodified": 50}]}]
+    def failing_add(*a, **k): raise RuntimeError("drive down")
+    result = lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: modules, download=fake_download, api=no_forums, add_source=failing_add)
+    assert result["errors"] and "module 5" in result["errors"][0]
+    assert json.loads((reg.directory / "sample.json").read_text())["lemida_seen"] == {}
+
+
+def test_two_runs_same_day_keep_both_in_digest_and_separate_files(tmp_path):
+    reg = registry(tmp_path)
+    def run(subject):
+        posts = {11: {"posts": [{"id": 900 + len(subject), "subject": subject, "timecreated": NOW, "timemodified": NOW, "message": "m"}]}, 12: {"posts": []}}
+        return lemida.lemida_sync(reg, runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=fake_download,
+                                  api=moodle_api(posts_by_discussion=posts), add_source=lambda *a, **k: {"status": "added"}, report_date="2026-10-13")
+    first = run("First")
+    path = reg.directory / "sample.json"
+    stored = json.loads(path.read_text())
+    stored["lemida_seen_discussions"] = {}  # let the same discussion surface again in the second run
+    path.write_text(json.dumps(stored))
+    second = run("Second1")
+    logs = reg.directory / "logs"
+    assert len(list(logs.glob("lemida-2026-10-13-??????.json"))) == 2 and len(list(logs.glob("lemida-2026-10-13-??????.md"))) == 2
+    assert first["run"] != second["run"]
+    digest = (logs / "lemida-2026-10-13.md").read_text(encoding="utf-8")
+    assert "First" in digest and "Second1" in digest and digest.count("lemida-run:") == 2
+
+
+def test_report_json_is_written_before_checkpoint_advances(tmp_path, monkeypatch):
+    reg = registry(tmp_path)
+    order = []
+    real_report, real_apply = lemida._write_report, lemida.apply_checkpoints
+    monkeypatch.setattr(lemida, "_write_report", lambda *a, **k: (order.append("report"), real_report(*a, **k))[1])
+    monkeypatch.setattr(lemida, "apply_checkpoints", lambda *a, **k: (order.append("checkpoint"), real_apply(*a, **k))[1])
+    lemida.lemida_sync(reg, runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=fake_download,
+                       api=moodle_api(posts_by_discussion=POSTS), add_source=lambda *a, **k: {"status": "added"}, report_date="2026-10-13")
+    assert order[0] == "report" and "checkpoint" in order
+    assert json.loads((reg.directory / "sample.json").read_text())["lemida_seen_posts"]
+
+
+def test_oserror_in_one_course_checkpoint_write_is_isolated(tmp_path, monkeypatch):
+    reg = registry(tmp_path)
+    other = {"slug": "other", "name": "Other", "lemida_course_id": 43, "lemida_seen": {}, "drive_folder_id": "d2", "notebook_id": "n2",
+             "slots": [{"day": "Tue", "start": "10:00", "end": "12:00", "semester": "A"}]}
+    (reg.directory / "other.json").write_text(json.dumps(other))
+    reg = courses.Registry(reg.directory)
+    real = courses._atomic_json
+    def flaky(path, payload):
+        if Path(path).name == "sample.json":
+            raise OSError("disk full token=SECRETVALUE")
+        return real(path, payload)
+    monkeypatch.setattr(courses, "_atomic_json", flaky)
+    notes = [{"subject": "Hello", "contexturl": "", "timecreated": NOW, "read": True}]
+    report = lemida.lemida_sync(reg, runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=fake_download,
+                                api=moodle_api(posts_by_discussion=POSTS, notifications=notes),
+                                add_source=lambda *a, **k: {"status": "added"}, report_date="2026-10-13")
+    assert any(e["slug"] == "sample" and "disk full" in e["error"] for e in report["errors"])
+    assert {c["slug"] for c in report["courses"]} == {"sample", "other"}
+    assert json.loads((reg.directory / "other.json").read_text())["lemida_seen_posts"]
+    assert report["notifications"][0]["subject"] == "Hello"
+    assert next((reg.directory / "logs").glob("lemida-2026-10-13-*.json")).exists() and Path(report["report_md"]).exists()
+    # exit code through daily reflects the error
+    (tmp_path / "memos").mkdir()
+    daily = lemida.daily(reg, runner=SECRET_RUNNER, sync=lambda *a, **k: lemida.lemida_sync(reg, runner=SECRET_RUNNER, fetch_contents=lambda *x: [], download=fake_download,
+                         api=moodle_api(posts_by_discussion=POSTS), add_source=lambda *x, **y: {"status": "added"}, report_date="2026-10-14"), report_date="2026-10-14")
+    assert daily["exit_code"] == 2
+
+
+def test_exception_in_sync_course_is_recorded_and_loop_continues(tmp_path, monkeypatch):
+    reg = registry(tmp_path)
+    other = {"slug": "other", "name": "Other", "lemida_course_id": 43, "lemida_seen": {}, "drive_folder_id": "d2", "notebook_id": "n2",
+             "slots": [{"day": "Tue", "start": "10:00", "end": "12:00", "semester": "A"}]}
+    (reg.directory / "other.json").write_text(json.dumps(other))
+    reg = courses.Registry(reg.directory)
+    real = lemida.sync_course
+    def boom(registry_, slug, **kw):
+        if slug == "sample":
+            raise OSError("write failed")
+        return real(registry_, slug, **kw)
+    monkeypatch.setattr(lemida, "sync_course", boom)
+    report = lemida.lemida_sync(reg, runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=fake_download,
+                                add_source=lambda *a, **k: {"status": "added"}, api=moodle_api(posts_by_discussion=POSTS), report_date="d")
+    assert report["errors"] == [{"slug": "sample", "error": "write failed"}] and [c["slug"] for c in report["courses"]] == ["other"]
 
 
 def test_markdown_report_lists_memo_errors_and_unmatched(tmp_path):

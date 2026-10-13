@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 import urllib.parse
 import urllib.request
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
@@ -175,8 +175,26 @@ def _local_day_time(registry: courses.Registry, stamp: Any) -> tuple[str, str]:
     return local.date().isoformat(), local.strftime("%H%M")
 
 
+def _record_checkpoint(registry: courses.Registry, slug: str, field: str, key: str, value: int,
+                       pending: list[tuple[str, str, int]] | None) -> None:
+    """Write one seen-state checkpoint now, or queue it so the caller can persist its report first."""
+    if pending is not None:
+        pending.append((field, key, value))
+        return
+    apply_checkpoints(registry, slug, [(field, key, value)])
+
+
+def apply_checkpoints(registry: courses.Registry, slug: str, pending: list[tuple[str, str, int]]) -> None:
+    if not pending:
+        return
+    with courses._locked_course(registry.directory, slug) as locked:
+        for field, key, value in pending:
+            locked.payload.setdefault(field, {})[key] = value
+        courses._atomic_json(locked.path, locked.payload)
+
+
 def _add_downloaded(registry: courses.Registry, slug: str, filename: str, url: str, token: str, *, download: Callable[..., Any],
-                    add_source: Callable[..., Any], origin_ref: str, runner: Callable[..., Any], stamp: Any = None) -> Any:
+                    add_source: Callable[..., Any], origin_ref: str, runner: Callable[..., Any], stamp: Any = None, force_lesson_time: bool = False) -> Any:
     """Download to a temp dir and register as a source; the original is removed only after add_source succeeded."""
     scratch = Path(tempfile.mkdtemp(prefix="lemida-"))
     try:
@@ -186,7 +204,7 @@ def _add_downloaded(registry: courses.Registry, slug: str, filename: str, url: s
         shutil.rmtree(scratch, ignore_errors=True)
         raise
     extra: dict[str, str] = {}
-    if stamp and target.suffix.lower() in courses.MEDIA_EXTENSIONS:
+    if stamp and (force_lesson_time or target.suffix.lower() in courses.MEDIA_EXTENSIONS):
         # a downloaded temp file has no meaningful creation time: use the Lemida timestamp
         extra["lesson_date"], extra["lesson_time"] = _local_day_time(registry, stamp)
     result = add_source(registry, target, slug, title=None, origin="lemida", origin_ref=origin_ref, runner=runner, **extra)
@@ -196,7 +214,8 @@ def _add_downloaded(registry: courses.Registry, slug: str, filename: str, url: s
 
 def _sync_forums(registry: courses.Registry, slug: str, course: dict[str, Any], *, base_url: str, token: str, api: Callable[..., Any],
                  download: Callable[..., Any], add_source: Callable[..., Any], runner: Callable[..., Any], root: Path,
-                 dry_run: bool, announcements: list[dict[str, Any]], errors: list[str]) -> None:
+                 dry_run: bool, announcements: list[dict[str, Any]], errors: list[str],
+                 pending: list[tuple[str, str, int]] | None = None) -> None:
     try:
         forums = api(base_url, token, "mod_forum_get_forums_by_courses", {"courseids[0]": course["lemida_course_id"]})
         if not isinstance(forums, list):
@@ -267,21 +286,19 @@ def _sync_forums(registry: courses.Registry, slug: str, course: dict[str, Any], 
                 if failed:
                     discussion_failed = True
                 elif not dry_run:
-                    with courses._locked_course(registry.directory, slug) as locked:
-                        locked.payload.setdefault("lemida_seen_posts", {})[pid] = post_time
-                        courses._atomic_json(locked.path, locked.payload)
+                    _record_checkpoint(registry, slug, "lemida_seen_posts", pid, post_time, pending)
                     seen_posts[pid] = post_time
             if not discussion_failed and not dry_run and posts:
-                with courses._locked_course(registry.directory, slug) as locked:
-                    locked.payload.setdefault("lemida_seen_discussions", {})[did] = newest_post
-                    courses._atomic_json(locked.path, locked.payload)
+                _record_checkpoint(registry, slug, "lemida_seen_discussions", did, newest_post, pending)
                 seen_discussions[did] = newest_post
 
 
 def sync_course(registry: courses.Registry, slug: str, *, runner: Callable[..., Any] = subprocess.run,
                 fetch_contents: Callable[..., Any] | None = None, download: Callable[..., Any] = download_file,
                 ingest: Callable[..., Any] | None = None, dry_run: bool = False, report_date: str | None = None,
-                api: Callable[..., Any] | None = None, add_source: Callable[..., Any] | None = None) -> dict[str, Any]:
+                api: Callable[..., Any] | None = None, add_source: Callable[..., Any] | None = None,
+                pending: list[tuple[str, str, int]] | None = None) -> dict[str, Any]:
+    """Sync one course. With ``pending`` given, seen-state writes are queued there instead of written."""
     course = registry.courses[slug]
     if not course.get("lemida_course_id"):
         return {"slug": slug, "status": "skipped", "reason": "missing lemida_course_id", "processed": [], "announcements": [], "errors": []}
@@ -296,8 +313,7 @@ def sync_course(registry: courses.Registry, slug: str, *, runner: Callable[..., 
     announcements: list[dict[str, Any]] = []
     processed: list[dict[str, Any]] = []
     root = Path(registry.term.get("local_root", registry.directory / "files")).expanduser()
-    if ingest is None:
-        ingest = courses.ingest_recording
+    # ``ingest`` is accepted for compatibility but unused: recordings go through add_source like every other file
     try:
         modules = _flatten_modules(fetch_contents(base_url, token, course["lemida_course_id"]))
     except Exception as exc:
@@ -319,17 +335,10 @@ def sync_course(registry: courses.Registry, slug: str, *, runner: Callable[..., 
                     filename = _safe_name(Path(urllib.parse.urlsplit(str(fileurl)).path).name or title)
                     if dry_run:
                         continue
-                    if kind == "recording":
-                        target = root / slug / "lemida" / filename
-                        download(str(fileurl), token, target)
-                        local_day, local_hm = _local_day_time(registry, stamp)
-                        ingest(registry, target, course_slug=slug, lesson_date=local_day, lesson_time=local_hm, runner=runner)
-                        outcomes.append({"filename": filename, "result": "ingested"})
-                    else:
-                        result = _add_downloaded(registry, slug, f"lemida-cm{cmid} - {filename}", str(fileurl), token,
-                                                 download=download, add_source=add_source, origin_ref=f"cm:{cmid}", runner=runner,
-                                                 stamp=stamp)
-                        outcomes.append({"filename": filename, "result": result.get("status", "added") if isinstance(result, dict) else "added"})
+                    result = _add_downloaded(registry, slug, f"lemida-cm{cmid} - {filename}", str(fileurl), token,
+                                             download=download, add_source=add_source, origin_ref=f"cm:{cmid}", runner=runner,
+                                             stamp=stamp, force_lesson_time=(kind == "recording"))
+                    outcomes.append({"filename": filename, "result": result.get("status", "added") if isinstance(result, dict) else "added"})
             entry = {"cmid": cmid, "name": title, "type": kind, "timemodified": stamp}
             if outcomes:
                 entry["files"] = outcomes
@@ -338,9 +347,7 @@ def sync_course(registry: courses.Registry, slug: str, *, runner: Callable[..., 
             errors.append(f"{slug} module {cmid} ({title}) failed: {_redact(exc)}")
             continue
         if not dry_run:
-            with courses._locked_course(registry.directory, slug) as locked:
-                locked.payload.setdefault("lemida_seen", {})[cmid] = stamp
-                courses._atomic_json(locked.path, locked.payload)
+            _record_checkpoint(registry, slug, "lemida_seen", cmid, stamp, pending)
     # forums read the freshly written course JSON so seen-state merges correctly
     fresh = dict(course)
     try:
@@ -348,13 +355,17 @@ def sync_course(registry: courses.Registry, slug: str, *, runner: Callable[..., 
     except (OSError, ValueError):
         pass
     _sync_forums(registry, slug, fresh, base_url=base_url, token=token, api=api, download=download, add_source=add_source,
-                 runner=runner, root=root, dry_run=dry_run, announcements=announcements, errors=errors)
+                 runner=runner, root=root, dry_run=dry_run, announcements=announcements, errors=errors, pending=pending)
     return {"slug": slug, "status": "dry-run" if dry_run else "synced", "processed": processed, "announcements": announcements, "errors": errors}
 
 
 def sync_notifications(registry: courses.Registry, *, runner: Callable[..., Any] = subprocess.run, api: Callable[..., Any] | None = None,
-                       dry_run: bool = False) -> list[dict[str, Any]]:
-    """Return the user's Lemida notifications newer than term.json state.last_notification_time."""
+                       dry_run: bool = False, commit: bool = True) -> list[dict[str, Any]]:
+    """Return the user's Lemida notifications newer than term.json state.last_notification_time.
+
+    With ``commit=False`` the checkpoint is not written; the caller persists its report, then calls
+    ``commit_notifications``.
+    """
     config = registry.term.get("lemida", {})
     base_url = config.get("base_url", "")
     token = _token(registry.term, runner)
@@ -378,15 +389,36 @@ def sync_notifications(registry: courses.Registry, *, runner: Callable[..., Any]
             "contexturl": str(item.get("contexturl") or ""), "timecreated": created,
             "created": _iso(created), "read": bool(item.get("read")),
         })
-    if fresh and not dry_run:
-        latest = json.loads(term_path.read_text(encoding="utf-8"))
-        latest.setdefault("state", {})["last_notification_time"] = max(n["timecreated"] for n in fresh)
-        courses._atomic_json(term_path, latest)
+    if fresh and not dry_run and commit:
+        commit_notifications(registry, fresh)
     return fresh
 
 
-def _write_report(registry: courses.Registry, day: str, report: dict[str, Any]) -> None:
-    courses._atomic_json(registry.directory / "logs" / f"lemida-{day}.json", report)
+def commit_notifications(registry: courses.Registry, fresh: list[dict[str, Any]]) -> None:
+    term_path = registry.directory / "term.json"
+    latest = json.loads(term_path.read_text(encoding="utf-8"))
+    latest.setdefault("state", {})["last_notification_time"] = max(n["timecreated"] for n in fresh)
+    courses._atomic_json(term_path, latest)
+
+
+_RUN_MARK = "<!-- lemida-run:{run} -->"
+_RUN_MARK_RE = re.compile(r"^<!-- lemida-run:(\S+) -->$", re.M)
+
+
+def _new_run_id(registry: courses.Registry, day: str) -> str:
+    """HHMMSS of now, bumped by seconds until no report of that day already uses it."""
+    when = datetime.now()
+    logs = registry.directory / "logs"
+    while True:
+        run = when.strftime("%H%M%S")
+        if not (logs / f"lemida-{day}-{run}.json").exists() and not (logs / f"lemida-{day}-{run}.md").exists():
+            return run
+        when += timedelta(seconds=1)
+
+
+def _write_report(registry: courses.Registry, day: str, report: dict[str, Any], run: str) -> None:
+    """Persist this run's own JSON (never shared with another run)."""
+    courses._atomic_json(registry.directory / "logs" / f"lemida-{day}-{run}.json", report)
 
 
 def report_markdown(report: dict[str, Any]) -> str:
@@ -439,37 +471,71 @@ def report_markdown(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _write_markdown(registry: courses.Registry, day: str, report: dict[str, Any]) -> Path:
-    path = registry.directory / "logs" / f"lemida-{day}.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(report_markdown(report), encoding="utf-8")
-    return path
+def _write_markdown(registry: courses.Registry, day: str, report: dict[str, Any], run: str) -> Path:
+    """Write the run's own .md and add/replace its section in the same-day digest (one section per run)."""
+    logs = registry.directory / "logs"
+    logs.mkdir(parents=True, exist_ok=True)
+    body = report_markdown(report)
+    courses._atomic_write(logs / f"lemida-{day}-{run}.md", body)
+    digest = logs / f"lemida-{day}.md"
+    sections: list[tuple[str, str]] = []
+    if digest.exists():
+        parts = _RUN_MARK_RE.split(digest.read_text(encoding="utf-8"))
+        # parts: [preamble, run1, text1, run2, text2, ...]; a digest without markers is kept as one legacy section
+        if len(parts) == 1:
+            if parts[0].strip():
+                sections.append(("legacy", parts[0]))
+        else:
+            sections = [(parts[i], parts[i + 1]) for i in range(1, len(parts) - 1, 2)]
+    sections = [(r, t) for r, t in sections if r != run] + [(run, "\n" + body)]
+    text = "\n".join(_RUN_MARK.format(run=r) + "\n" + t.strip("\n") + "\n" for r, t in sections)
+    courses._atomic_write(digest, text)
+    return digest
 
 
 def lemida_sync(registry: courses.Registry, *, slug: str | None = None, dry_run: bool = False,
                 runner: Callable[..., Any] = subprocess.run, fetch_contents: Callable[..., Any] | None = None,
                 download: Callable[..., Any] = download_file, ingest: Callable[..., Any] | None = None,
                 report_date: str | None = None, api: Callable[..., Any] | None = None,
-                add_source: Callable[..., Any] | None = None) -> dict[str, Any]:
+                add_source: Callable[..., Any] | None = None, run_id: str | None = None) -> dict[str, Any]:
     day = report_date or date.today().isoformat()
+    run = run_id or _new_run_id(registry, day)
     targets = [slug] if slug else [key for key, value in registry.courses.items() if value.get("lemida_course_id")]
-    report: dict[str, Any] = {"date": day, "courses": [], "announcements": [], "notifications": [], "errors": []}
+    report: dict[str, Any] = {"date": day, "run": run, "courses": [], "announcements": [], "notifications": [], "errors": []}
+    checkpoints: dict[str, list[tuple[str, str, int]]] = {}
     for target in targets:
+        pending: list[tuple[str, str, int]] = []
         try:
             result = sync_course(registry, target, runner=runner, fetch_contents=fetch_contents, download=download, ingest=ingest,
-                                 dry_run=dry_run, report_date=day, api=api, add_source=add_source)
-            report["courses"].append(result)
-            report["announcements"].extend(result.get("announcements", []))
-            report["errors"].extend({"slug": target, "error": message} for message in result.get("errors", []))
-        except LemidaError as exc:
-            report["errors"].append({"slug": target, "error": str(exc)})
+                                 dry_run=dry_run, report_date=day, api=api, add_source=add_source, pending=pending)
+        except Exception as exc:  # one course never stops the others, whatever failed (including OSError)
+            report["errors"].append({"slug": target, "error": _redact(exc)})
+            continue
+        checkpoints[target] = pending
+        report["courses"].append(result)
+        report["announcements"].extend(result.get("announcements", []))
+        report["errors"].extend({"slug": target, "error": message} for message in result.get("errors", []))
+    notifications_ok = False
     if targets:
         try:
-            report["notifications"] = sync_notifications(registry, runner=runner, api=api, dry_run=dry_run)
+            report["notifications"] = sync_notifications(registry, runner=runner, api=api, dry_run=dry_run, commit=False)
+            notifications_ok = True
         except Exception as exc:
             report["errors"].append({"slug": "(notifications)", "error": _redact(exc)})
-    _write_report(registry, day, report)
-    report["report_md"] = str(_write_markdown(registry, day, report))
+    # results are persisted before any checkpoint acknowledges them
+    _write_report(registry, day, report, run)
+    for target, pending in checkpoints.items():
+        try:
+            apply_checkpoints(registry, target, pending)
+        except Exception as exc:
+            report["errors"].append({"slug": target, "error": _redact(exc)})
+    if notifications_ok and report["notifications"] and not dry_run:
+        try:
+            commit_notifications(registry, report["notifications"])
+        except Exception as exc:
+            report["errors"].append({"slug": "(notifications)", "error": _redact(exc)})
+    _write_report(registry, day, report, run)
+    report["report_md"] = str(_write_markdown(registry, day, report, run))
     return report
 
 
@@ -482,6 +548,7 @@ def daily(registry: courses.Registry, *, dry_run: bool = False, runner: Callable
           ingest: Callable[..., Any] | None = None, report_date: str | None = None,
           sync: Callable[..., Any] | None = None, add_source: Callable[..., Any] | None = None) -> dict[str, Any]:
     day = report_date or date.today().isoformat()
+    run = _new_run_id(registry, day)
     term_path = registry.directory / "term.json"
     term = json.loads(term_path.read_text(encoding="utf-8"))
     state = term.setdefault("state", {})
@@ -524,7 +591,7 @@ def daily(registry: courses.Registry, *, dry_run: bool = False, runner: Callable
     if sync is None:
         sync = lemida_sync
     try:
-        report["lemida"] = sync(registry, dry_run=dry_run, runner=runner, ingest=ingest, report_date=day)
+        report["lemida"] = sync(registry, dry_run=dry_run, runner=runner, ingest=ingest, report_date=day, run_id=run)
         sync_errors = report["lemida"].get("errors", []) if isinstance(report["lemida"], dict) else []
         if sync_errors:
             report["errors"].extend(item.get("error", str(item)) if isinstance(item, dict) else str(item) for item in sync_errors)
@@ -537,8 +604,8 @@ def daily(registry: courses.Registry, *, dry_run: bool = False, runner: Callable
     inner = report["lemida"] if isinstance(report["lemida"], dict) else {}
     report["announcements"] = inner.get("announcements", [])
     report["notifications"] = inner.get("notifications", [])
-    _write_report(registry, day, report)
+    _write_report(registry, day, report, run)
     markdown = dict(inner)
     markdown.update({"date": day, "errors": report["errors"], "voice_memos": scan})
-    report["report_md"] = str(_write_markdown(registry, day, markdown))
+    report["report_md"] = str(_write_markdown(registry, day, markdown, run))
     return report
