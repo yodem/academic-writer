@@ -259,3 +259,9 @@ def test_check_source_big_source_missing_pointer(tmp_path):
 def test_check_source_big_source_empty_book(tmp_path):
     problems, _, _ = checked(tmp_path, trove="big-book:1", other_toc=[])
     assert len(problems) == 1 and "empty ToC" in problems[0]
+
+
+def test_entry_label_ignores_hint():
+    import courses as c
+    assert c.entry_label("חומרי קריאה - רשימת המקורות") == "חומרי קריאה"
+    assert c.entry_label("תמלולי שיעורים") == "תמלולי שיעורים"

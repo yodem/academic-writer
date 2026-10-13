@@ -35,6 +35,11 @@ def normalise_name(value: str) -> str:
     return " ".join(value.split())
 
 
+def entry_label(title: object) -> str:
+    """The label part of a hinted ToC title ("<label> - <hint>")."""
+    return normalise_name(str(title).split(" - ", 1)[0])
+
+
 def _term_dir(root: Path, term: str | None = None) -> Path:
     if term is None:
         term = os.environ.get("ACADEMIC_TERM")
@@ -627,7 +632,7 @@ def check_lesson(registry: Registry, slug: str, date: str, runner: Callable[...,
         return [f"{slug}: Trove ToC lookup failed: {exc}"]
     items = data.get("items", []) if isinstance(data, dict) else data
     toc = items[0].get("toc", []) if items else []
-    parent_index = next((i for i, entry in enumerate(toc) if normalise_name(str(entry.get("title", ""))) == LESSONS_ENTRY and entry.get("level") == 1), None)
+    parent_index = next((i for i, entry in enumerate(toc) if entry_label(entry.get("title", "")) == LESSONS_ENTRY and entry.get("level") == 1), None)
     if parent_index is None:
         return [f"{slug}: ToC has no level-1 entry {LESSONS_ENTRY!r}"]
     children = []
@@ -850,7 +855,7 @@ def check_source(registry: Registry, slug: str, sha8: str | None = None, runner:
         except Exception as exc:
             problems.append(f"{label}: Trove ToC lookup failed: {exc}")
             continue
-        parent = next((i for i, e in enumerate(course_toc) if e.get("level") == 1 and normalise_name(str(e.get("title", ""))) == READINGS_ENTRY), None)
+        parent = next((i for i, e in enumerate(course_toc) if e.get("level") == 1 and entry_label(e.get("title", "")) == READINGS_ENTRY), None)
         if parent is None:
             problems.append(f"{label}: course ToC has no level-1 entry {READINGS_ENTRY!r}")
             continue
@@ -865,7 +870,7 @@ def check_source(registry: Registry, slug: str, sha8: str | None = None, runner:
                 problems.append(f"{label}: page {trove.get('page')} is not a level-2 entry under {READINGS_ENTRY!r}")
         else:
             wanted = normalise_name(str(source.get("title", "")))
-            if not any(normalise_name(str(e.get("title", ""))) == wanted for e in children):
+            if not any(entry_label(e.get("title", "")) == wanted for e in children):
                 problems.append(f"{label}: no level-2 pointer titled {wanted!r} under {READINGS_ENTRY!r}")
             try:
                 if not _toc_of(str(trove["book_id"]), runner):
