@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -666,6 +667,23 @@ def _default_title(path: Path) -> str:
     return stem or path.stem
 
 
+def _snapshot_source(registry: Registry, slug: str, file: Path, sha8: str) -> Path:
+    """Copy a source into a content-addressed, never-overwritten snapshot and return its path."""
+    safe = re.sub(r"[\\/\x00-\x1f]", "_", file.name).strip().lstrip(".") or "file"
+    snapshot = registry.directory / "sources" / slug / f"{sha8}-{safe}"
+    if not snapshot.exists():
+        snapshot.parent.mkdir(parents=True, exist_ok=True)
+        handle, temporary = tempfile.mkstemp(dir=snapshot.parent, prefix=f".{sha8}.", suffix=".tmp")
+        os.close(handle)
+        try:
+            shutil.copyfile(file, temporary)
+            os.replace(temporary, snapshot)
+        except BaseException:
+            Path(temporary).unlink(missing_ok=True)
+            raise
+    return snapshot
+
+
 def _source_kind(path: Path) -> str:
     return {".pdf": "pdf", ".docx": "docx", ".pptx": "pptx"}.get(path.suffix.lower(), "other")
 
@@ -719,8 +737,13 @@ def add_source(
         course = locked.payload
         existing = next((s for s in course.get("sources", []) if s.get("sha256") == sha), None)
     if existing and existing.get("status") in {"queued", "done"}:
-        return {"status": "already added", "slug": course_slug, "sha8": sha8, "title": existing.get("title"), "source_status": existing.get("status")}
+        return {"status": "already added", "slug": course_slug, "sha8": sha8, "title": existing.get("title"), "source_status": existing.get("status"), "file": existing.get("file")}
     title = title or (existing or {}).get("title") or _default_title(file)
+    recorded = Path(str((existing or {}).get("file") or ""))
+    if existing and existing.get("file") and recorded.is_file():
+        file = recorded  # an earlier attempt already recorded its bytes; keep that path
+    else:
+        file = _snapshot_source(registry, course_slug, file, sha8)
     need_drive = not (existing and existing.get("drive"))
     need_nlm = not (existing and existing.get("notebook_source_id"))
     notebook_id = course.get("notebook_id")
@@ -758,7 +781,7 @@ def add_source(
         "book_id": course.get("book_id"), "manuscript_id": course.get("manuscript_id"), "course_name": course.get("name"),
     })
     entry = _update_source(registry, course_slug, sha, status="queued")
-    return {"status": "added", "slug": course_slug, "sha8": sha8, "title": title, "notebook_source_id": entry.get("notebook_source_id"), "queue_path": str(job_path)}
+    return {"status": "added", "slug": course_slug, "sha8": sha8, "title": title, "notebook_source_id": entry.get("notebook_source_id"), "queue_path": str(job_path), "file": str(file.resolve())}
 
 
 def _select_source(course: dict[str, Any], slug: str, sha8: str) -> dict[str, Any]:
@@ -868,6 +891,11 @@ def check_source(registry: Registry, slug: str, sha8: str | None = None, runner:
         if str(trove["book_id"]) == str(course["book_id"]):
             if trove.get("page") not in {e.get("page") for e in children}:
                 problems.append(f"{label}: page {trove.get('page')} is not a level-2 entry under {READINGS_ENTRY!r}")
+            else:
+                wanted = normalise_name(str(source.get("title", "")))
+                at_page = [normalise_name(str(e.get("title", ""))) for e in children if e.get("page") == trove.get("page")]
+                if not any(t == wanted or t.startswith(wanted + " - ") for t in at_page):
+                    problems.append(f"{label}: level-2 entry at page {trove.get('page')} is {at_page[0]!r}, not titled {wanted!r}")
         else:
             wanted = normalise_name(str(source.get("title", "")))
             if not any(normalise_name(str(e.get("title", ""))) == wanted or normalise_name(str(e.get("title", ""))).startswith(wanted + " - ") for e in children):

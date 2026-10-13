@@ -82,16 +82,40 @@ def test_add_source_argv_job_and_record(tmp_path):
     result = courses.add_source(registry, path, "sample", origin="lemida", origin_ref="mod/42", runner=fake)
     sha = hashlib.sha256(path.read_bytes()).hexdigest()
     assert result["status"] == "added"
-    assert fake.of("rclone", "copyto") == [["rclone", "copyto", str(path), "mydrive:01 - Reading One.pdf", "--drive-root-folder-id", "folder-1"]]
-    assert fake.of("nlm", "source", "add") == [["nlm", "source", "add", "nb-1", "--file", str(path), "--title", "Reading One", "--wait", "--json"]]
+    snap = registry.directory / "sources" / "sample" / f"{sha[:8]}-01 - Reading One.pdf"
+    assert snap.read_bytes() == path.read_bytes()
+    assert fake.of("rclone", "copyto") == [["rclone", "copyto", str(snap), f"mydrive:{snap.name}", "--drive-root-folder-id", "folder-1"]]
+    assert fake.of("nlm", "source", "add") == [["nlm", "source", "add", "nb-1", "--file", str(snap), "--title", "Reading One", "--wait", "--json"]]
     record = reload(registry)["sources"][0]
+    assert record["file"] == str(snap.resolve())
     assert record["sha256"] == sha and record["sha8"] == sha[:8]
     assert (record["title"], record["origin"], record["origin_ref"]) == ("Reading One", "lemida", "mod/42")
     assert record["drive"] is True and record["notebook_source_id"] == "src-1" and record["trove"] is None
     assert record["status"] == "queued" and record["added_at"]
     job = json.loads((registry.directory / "queue/sources" / f"sample-{sha[:8]}.json").read_text())
-    assert job == {"slug": "sample", "sha8": sha[:8], "title": "Reading One", "file": str(path.resolve()), "pages": 7,
+    assert job == {"slug": "sample", "sha8": sha[:8], "title": "Reading One", "file": str(snap.resolve()), "pages": 7,
                    "kind": "pdf", "book_id": "book-1", "manuscript_id": "ms-1", "course_name": "Sample Course"}
+
+
+def test_same_name_different_bytes_make_two_snapshots_and_jobs(tmp_path):
+    registry = make_registry(tmp_path)
+    first = pdf(tmp_path, "reading.pdf", b"%PDF first")
+    courses.add_source(registry, first, "sample", runner=Fake())
+    first.write_bytes(b"%PDF second version")
+    courses.add_source(registry, first, "sample", runner=Fake())
+    jobs = [json.loads(p.read_text()) for p in sorted((registry.directory / "queue/sources").glob("*.json"))]
+    assert len(jobs) == 2 and len({j["file"] for j in jobs}) == 2
+    assert sorted(Path(j["file"]).read_bytes() for j in jobs) == [b"%PDF first", b"%PDF second version"]
+    assert len(list((registry.directory / "sources" / "sample").iterdir())) == 2
+
+
+def test_identical_bytes_readded_dedupe_without_new_snapshot(tmp_path):
+    registry = make_registry(tmp_path)
+    courses.add_source(registry, pdf(tmp_path, "a.pdf", b"%PDF same"), "sample", runner=Fake())
+    fake = Fake()
+    result = courses.add_source(registry, pdf(tmp_path, "b.pdf", b"%PDF same"), "sample", runner=fake)
+    assert result["status"] == "already added" and fake.calls == []
+    assert len(list((registry.directory / "sources" / "sample").iterdir())) == 1
 
 
 def test_default_title_strips_prefixes_and_non_pdf_has_no_pages(tmp_path):
@@ -176,7 +200,7 @@ def done_source(tmp_path, registry=None, **extra):
     registry = registry or make_registry(tmp_path)
     courses.add_source(registry, path, "sample", runner=Fake())
     sha8 = reload(registry)["sources"][0]["sha8"]
-    return registry, path, sha8
+    return registry, Path(reload(registry)["sources"][0]["file"]), sha8
 
 
 def test_source_done_moves_job(tmp_path):
@@ -201,7 +225,7 @@ def checked(tmp_path, trove="book-1:4", **fake_kwargs):
 def test_check_source_passes_and_uses_expected_argv(tmp_path):
     problems, registry, sha8 = checked(tmp_path)
     assert problems == []
-    fake = Fake(drive=["01 - Reading One.pdf"], nlm_list=[{"id": "src-1"}])
+    fake = Fake(drive=[Path(reload(registry)["sources"][0]["file"]).name], nlm_list=[{"id": "src-1"}])
     courses.check_source(registry, "sample", runner=fake)
     assert ["rclone", "lsjson", "gdrive:", "--drive-root-folder-id", "folder-1", "--files-only"] in fake.calls
     assert ["trove", "items", "toc", "book-1", "--json", "--no-session"] in fake.calls
@@ -240,6 +264,17 @@ def test_check_source_requires_done(tmp_path):
     registry = courses.Registry(registry.directory)
     problems = courses.check_source(registry, "sample", sha8, runner=Fake(drive=[path.name], nlm_list=[{"id": "src-1"}]))
     assert len(problems) == 1 and "not done" in problems[0]
+
+
+def test_check_source_small_source_entry_must_be_titled_for_source(tmp_path):
+    toc = [dict(e) for e in TOC]
+    toc[1]["title"] = "Another Reading - hint"
+    problems, _, _ = checked(tmp_path, toc=toc)
+    assert len(problems) == 1 and "not titled" in problems[0]
+    toc[1]["title"] = "Reading One - hint"
+    (tmp_path / "ok").mkdir()
+    problems, _, _ = checked(tmp_path / "ok", toc=toc)
+    assert problems == []
 
 
 def test_check_source_big_source_pointer(tmp_path):

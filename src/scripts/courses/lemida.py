@@ -17,6 +17,9 @@ from zoneinfo import ZoneInfo
 import courses
 
 
+POSTS_FORMAT = 2
+
+
 class LemidaError(RuntimeError):
     pass
 
@@ -176,7 +179,9 @@ def _sync_forums(registry: courses.Registry, slug: str, course: dict[str, Any], 
     except Exception as exc:
         errors.append(f"{slug} forums failed: {_redact(exc)}")
         return
-    seen_posts = dict(course.get("lemida_seen_posts", {}))
+    modern = course.get("lemida_posts_format") == POSTS_FORMAT
+    seen_posts = {str(k): int(v or 0) for k, v in dict(course.get("lemida_seen_posts", {})).items()}
+    seen_discussions = {str(k): int(v or 0) for k, v in dict(course.get("lemida_seen_discussions", {})).items()}
     for forum in forums:
         forum_name = str(forum.get("name", forum.get("id", "")))
         try:
@@ -186,57 +191,84 @@ def _sync_forums(registry: courses.Registry, slug: str, course: dict[str, Any], 
         except Exception as exc:
             errors.append(f"{slug} forum {forum_name} failed: {_redact(exc)}")
             continue
+        if not modern:
+            # the pre-per-post format keyed this map by discussion id: those keys are not post ids
+            for discussion in discussions:
+                seen_posts.pop(str(discussion.get("discussion", discussion.get("id", ""))), None)
         for discussion in discussions:
             did = str(discussion.get("discussion", discussion.get("id", "")))
             stamp = int(discussion.get("timemodified", 0) or 0)
-            previous = seen_posts.get(did)
-            if not did or (previous is not None and stamp <= int(previous or 0)):
+            newest = seen_discussions.get(did, seen_posts.get(str(discussion.get("id", "")), None))
+            if not did or (newest is not None and stamp <= newest):
                 continue
-            previous_time = int(previous or 0)
             try:
                 payload = api(base_url, token, "mod_forum_get_discussion_posts", {"discussionid": did})
                 posts = payload.get("posts", []) if isinstance(payload, dict) else []
-                entries = []
-                failed = False
-                for post in posts:
-                    if previous is not None and int(post.get("timecreated", 0) or 0) <= previous_time:
-                        continue
-                    attachments = []
-                    for item in post.get("attachments", []) or []:
-                        name = _safe_name(item.get("filename", ""))
-                        record = {"filename": name, "mimetype": item.get("mimetype", "")}
-                        target = root / slug / "sources" / f"lemida-forum-{did} - {name}"
-                        try:
-                            if dry_run:
-                                record["result"] = "dry-run"
-                            else:
-                                download(str(item.get("fileurl", "")), token, target)
-                                result = add_source(registry, target, slug, title=None, origin="lemida", origin_ref=f"forum:{did}", runner=runner)
-                                record["result"] = result.get("status", "added") if isinstance(result, dict) else "added"
-                                record["file"] = str(target)
-                        except Exception as exc:
-                            failed = True
-                            record["result"] = "error"
-                            record["error"] = _redact(exc)
-                            errors.append(f"{slug} forum {did} attachment {name} failed: {_redact(exc)}")
-                        attachments.append(record)
-                    entries.append({
-                        "course": slug, "forum": forum_name, "discussion_id": did,
-                        "subject": str(post.get("subject") or discussion.get("name") or ""),
-                        "author": _author(post) or str(discussion.get("userfullname", "")),
-                        "created": _iso(post.get("timecreated")), "timecreated": int(post.get("timecreated", 0) or 0),
-                        "excerpt": _plain_excerpt(post.get("message")), "attachments": attachments,
-                    })
             except Exception as exc:
                 errors.append(f"{slug} forum discussion {did} failed: {_redact(exc)}")
                 continue
-            announcements.extend(entries)
-            if failed or dry_run:
-                continue
-            with courses._locked_course(registry.directory, slug) as locked:
-                locked.payload.setdefault("lemida_seen_posts", {})[did] = stamp
-                courses._atomic_json(locked.path, locked.payload)
-            seen_posts[did] = stamp
+            discussion_failed = False
+            newest_post = 0
+            for post in posts:
+                pid = str(post.get("id", ""))
+                post_time = int(post.get("timemodified", 0) or post.get("timecreated", 0) or 0)
+                newest_post = max(newest_post, post_time)
+                if not pid or (pid in seen_posts and post_time <= seen_posts[pid]):
+                    continue
+                failed = False
+                attachments = []
+                for item in post.get("attachments", []) or []:
+                    name = _safe_name(item.get("filename", ""))
+                    record = {"filename": name, "mimetype": item.get("mimetype", "")}
+                    try:
+                        if dry_run:
+                            record["result"] = "dry-run"
+                        else:
+                            with tempfile.TemporaryDirectory(prefix="lemida-") as scratch:
+                                target = Path(scratch) / f"lemida-forum-{did} - {name}"
+                                download(str(item.get("fileurl", "")), token, target)
+                                result = add_source(registry, target, slug, title=None, origin="lemida", origin_ref=f"forum:{did}", runner=runner)
+                            record["result"] = result.get("status", "added") if isinstance(result, dict) else "added"
+                            if isinstance(result, dict) and result.get("file"):
+                                record["file"] = str(result["file"])
+                    except Exception as exc:
+                        failed = True
+                        record["result"] = "error"
+                        record["error"] = _redact(exc)
+                        errors.append(f"{slug} forum {did} attachment {name} failed: {_redact(exc)}")
+                    attachments.append(record)
+                announcements.append({
+                    "course": slug, "forum": forum_name, "discussion_id": did, "post_id": pid,
+                    "subject": str(post.get("subject") or discussion.get("name") or ""),
+                    "author": _author(post) or str(discussion.get("userfullname", "")),
+                    "created": _iso(post.get("timecreated")), "timecreated": int(post.get("timecreated", 0) or 0),
+                    "excerpt": _plain_excerpt(post.get("message")), "attachments": attachments,
+                })
+                if failed:
+                    discussion_failed = True
+                elif not dry_run:
+                    with courses._locked_course(registry.directory, slug) as locked:
+                        _mark_modern(locked.payload, discussions)
+                        locked.payload.setdefault("lemida_seen_posts", {})[pid] = post_time
+                        courses._atomic_json(locked.path, locked.payload)
+                    seen_posts[pid] = post_time
+                    modern = True
+            if not discussion_failed and not dry_run and posts:
+                with courses._locked_course(registry.directory, slug) as locked:
+                    _mark_modern(locked.payload, discussions)
+                    locked.payload.setdefault("lemida_seen_discussions", {})[did] = newest_post
+                    courses._atomic_json(locked.path, locked.payload)
+                seen_discussions[did] = newest_post
+                modern = True
+
+
+def _mark_modern(payload: dict[str, Any], discussions: list[dict[str, Any]]) -> None:
+    """Switch a course to the per-post format, dropping legacy discussion-keyed entries."""
+    if payload.get("lemida_posts_format") == POSTS_FORMAT:
+        return
+    legacy = {str(d.get("discussion", d.get("id", ""))) for d in discussions}
+    payload["lemida_seen_posts"] = {k: v for k, v in dict(payload.get("lemida_seen_posts", {})).items() if str(k) not in legacy}
+    payload["lemida_posts_format"] = POSTS_FORMAT
 
 
 def sync_course(registry: courses.Registry, slug: str, *, runner: Callable[..., Any] = subprocess.run,
@@ -287,9 +319,10 @@ def sync_course(registry: courses.Registry, slug: str, *, runner: Callable[..., 
                         ingest(registry, target, course_slug=slug, lesson_date=local_day, runner=runner)
                         outcomes.append({"filename": filename, "result": "ingested"})
                     else:
-                        target = root / slug / "sources" / f"lemida-cm{cmid} - {filename}"
-                        download(str(fileurl), token, target)
-                        result = add_source(registry, target, slug, title=None, origin="lemida", origin_ref=f"cm:{cmid}", runner=runner)
+                        with tempfile.TemporaryDirectory(prefix="lemida-") as scratch:
+                            target = Path(scratch) / f"lemida-cm{cmid} - {filename}"
+                            download(str(fileurl), token, target)
+                            result = add_source(registry, target, slug, title=None, origin="lemida", origin_ref=f"cm:{cmid}", runner=runner)
                         outcomes.append({"filename": filename, "result": result.get("status", "added") if isinstance(result, dict) else "added"})
             entry = {"cmid": cmid, "name": title, "type": kind, "timemodified": stamp}
             if outcomes:

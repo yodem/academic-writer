@@ -73,7 +73,7 @@ Copyrighted readings stay in the user's own Drive, NotebookLM and Trove.
 
 1. **Voice Memos** since `state.last_voice_memo_scan`: each recording is mapped from its timestamp to a configured course slot and ingested. Out-of-slot, ambiguous, or out-of-semester recordings need human review; never guess. The scan boundary advances only after the scan completes.
 2. **Lemida content**, for every course with a `lemida_course_id`: new or changed resources and folders are downloaded and routed through `add-source` (origin `lemida`, ref `cm:<cmid>`); recordings go to ingest. Seen state is `lemida_seen`.
-3. **Lemida announcements and forums**, same courses: forums are listed, discussions newer than `lemida_seen_posts` are read, and post attachments are downloaded to `<local_root>/<slug>/sources/` and routed through `add-source` (ref `forum:<discussionid>`). Each announcement is reported with subject, author, date, a 300-character excerpt and where its attachments went.
+3. **Lemida announcements and forums**, same courses: forums are listed, posts are tracked individually in `lemida_seen_posts` (unseen or edited posts are processed), and attachments are downloaded to a temporary path and routed through `add-source` (ref `forum:<discussionid>`). Each announcement is reported with subject, author, date, a 300-character excerpt and where its attachments went.
 4. **Lemida notifications** for the token's user, newer than `state.last_notification_time` in `term.json` (subject, link, time, read flag). The state advances only after a successful run.
 5. **Queued lesson jobs** left for `lesson-notes --pending`.
 
