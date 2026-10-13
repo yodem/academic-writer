@@ -2,7 +2,7 @@
 name: lesson-notes
 description: "Use when processing a course recording into a structured Hebrew lesson note, or when resuming queued NotebookLM lesson transcripts with --pending."
 user-invocable: true
-allowedTools: [Bash, Read, Write, AskUserQuestion]
+allowed-tools: [Bash, Read, Write, AskUserQuestion]
 metadata: {author: "Academic Writer", version: "0.1.0"}
 ---
 

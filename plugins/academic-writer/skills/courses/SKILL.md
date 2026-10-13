@@ -2,7 +2,7 @@
 name: courses
 description: "Use when setting up an academic term from a schedule, validating course resources, syncing your LMS (Moodle) materials, or running the daily course scan."
 user-invocable: true
-allowedTools: [Bash, Read, Write, AskUserQuestion]
+allowed-tools: [Bash, Read, Write, AskUserQuestion]
 metadata: {author: "Academic Writer", version: "0.1.0"}
 ---
 
