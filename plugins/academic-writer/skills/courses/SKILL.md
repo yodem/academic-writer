@@ -51,6 +51,22 @@ Use `courses.py lemida-sync --dry-run` to preview API changes when a Lemida toke
 
 For scanned readings, use Claude vision OCR: render with `pdftoppm -r 150`, then inspect the PNG pages. Do not use Gemini for course readings. For Google Docs, export native DOCX and convert with `pandoc`. When extracting Hebrew from two-column pages, join columns right to left and preserve reading order. Flag unclear text instead of silently reconstructing it.
 
+## Course sources
+
+Every source (a Lemida file, an email attachment, a recording) follows one contract. Each reaches Drive, NotebookLM and Trove, and `check-source` proves it.
+
+1. **Register.** `courses.py add-source <file> --course <slug> [--title T] [--origin lemida|email|recording|other] [--origin-ref R]`. It dedupes by sha256, copies the file to the course Drive folder, adds it to the course notebook (exit 4 when the notebook is at its source limit), and writes a Trove job under `queue/sources/`. A rerun resumes from the missing step. Audio and video go to the lesson `ingest` instead.
+2. **Extract the text** (read the job file for `kind` and `pages`). docx: `pandoc`. Born-digital PDF: `pdftotext` per page, keeping the printed page numbers. Scanned PDF (no text layer): `pdftoppm -r 150` and Claude vision, never Gemini. pptx: slide text from the pptx XML. Hebrew RTL two-column pages: join right column, then left. Flag unclear text instead of reconstructing it.
+3. **Place it in Trove.**
+   - **40 pages or fewer:** pages go in the course book under a level-1 `חומרי קריאה` entry page (create it if missing). One level-2 entry per source, titled with the source title and a one-line content hint. Level-3 hinted entries for its sections. The source's first page opens with `> Load this page when:` and a short reading guide: the thesis or claims, the structure, and how to cite by printed page.
+   - **More than 40 pages:** its own Trove book through `/academic-writer:ingest-book` (nested hinted ToC, page-1 reading guide), plus a hinted level-2 pointer page in the course book, titled with the source title.
+   - **A source and its translation are a pair:** ingest both and cross-link them in their guides.
+   - Links that cannot be downloaded (licensed viewers, the library catalogue) and assignments go on the course page as notes.
+4. **Rebuild the course book ToC last** with `enrich`; `append` and `put` flatten the sidebar. Take the version from `trove items history --json`.
+5. **Close.** `courses.py source-done <slug> <sha8> --trove <book_id>:<page>`, then `courses.py check-source <slug> --sha <sha8>`. It exits 0 only when the file is in Drive, the source is in NotebookLM, and Trove nests the source under `חומרי קריאה`. A course with no sources prints "no sources".
+
+Copyrighted readings stay in the user's own Drive, NotebookLM and Trove.
+
 ## Daily scan
 
 `courses.py daily` scans Voice Memos since `state.last_voice_memo_scan`, maps each recording from its timestamp to a configured course slot, syncs changed Lemida resources, and reports queued lesson jobs. Out-of-slot, ambiguous, or out-of-semester recordings need human review; never guess. A scan boundary advances only after the Voice Memos scan completes.

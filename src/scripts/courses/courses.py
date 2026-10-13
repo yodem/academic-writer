@@ -650,6 +650,231 @@ def check_lesson(registry: Registry, slug: str, date: str, runner: Callable[...,
     return problems
 
 
+MEDIA_EXTENSIONS = {".m4a", ".mp3", ".wav", ".mp4", ".mov", ".mkv", ".webm"}
+READINGS_ENTRY = "חומרי קריאה"
+TITLE_PREFIX_RE = re.compile(r"^(?:\d+|email-\d{4}-\d{2}-\d{2})\s*-\s*")
+ORIGINS = ("lemida", "email", "recording", "other")
+
+
+def _default_title(path: Path) -> str:
+    stem = TITLE_PREFIX_RE.sub("", path.stem).strip()
+    return stem or path.stem
+
+
+def _source_kind(path: Path) -> str:
+    return {".pdf": "pdf", ".docx": "docx", ".pptx": "pptx"}.get(path.suffix.lower(), "other")
+
+
+def _pdf_pages(path: Path, runner: Callable[..., Any]) -> int | None:
+    if path.suffix.lower() != ".pdf":
+        return None
+    try:
+        result = runner(["pdfinfo", str(path)], check=True, text=True, capture_output=True)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    match = re.search(r"^Pages:\s*(\d+)", str(result.stdout), re.MULTILINE)
+    return int(match.group(1)) if match else None
+
+
+def _update_source(registry: Registry, slug: str, sha: str, **fields: Any) -> dict[str, Any]:
+    """Merge fields into one recorded source under the course lock (fresh re-read)."""
+    with _locked_course(registry.directory, slug) as locked:
+        sources = locked.payload.setdefault("sources", [])
+        entry = next((s for s in sources if s.get("sha256") == sha), None)
+        if entry is None:
+            entry = {"sha256": sha}
+            sources.append(entry)
+        entry.update(fields)
+        _atomic_json(locked.path, locked.payload)
+        return dict(entry)
+
+
+def add_source(
+    registry: Registry,
+    file: Path,
+    course_slug: str,
+    title: str | None = None,
+    origin: str = "other",
+    origin_ref: str | None = None,
+    runner: Callable[..., Any] = subprocess.run,
+) -> dict[str, Any]:
+    """Copy a course file to Drive and NotebookLM and queue its Trove job (resumable)."""
+    file = Path(file).expanduser()
+    if not file.is_file():
+        raise IngestError(f"file not found: {file}")
+    if course_slug not in registry.courses:
+        raise IngestError(f"unknown course: {course_slug}")
+    if origin not in ORIGINS:
+        raise IngestError(f"invalid origin: {origin}")
+    if file.suffix.lower() in MEDIA_EXTENSIONS:
+        return ingest_recording(registry, file, course_slug=course_slug, runner=runner)
+    sha = _file_sha256(file)
+    sha8 = sha[:8]
+    with _locked_course(registry.directory, course_slug) as locked:
+        course = locked.payload
+        existing = next((s for s in course.get("sources", []) if s.get("sha256") == sha), None)
+    if existing and existing.get("status") in {"queued", "done"}:
+        return {"status": "already added", "slug": course_slug, "sha8": sha8, "title": existing.get("title"), "source_status": existing.get("status")}
+    title = title or (existing or {}).get("title") or _default_title(file)
+    need_drive = not (existing and existing.get("drive"))
+    need_nlm = not (existing and existing.get("notebook_source_id"))
+    notebook_id = course.get("notebook_id")
+    if need_nlm:
+        if not notebook_id:
+            raise IngestError(f"{course_slug}: missing notebook_id")
+        listed = _json_from_command(["nlm", "source", "list", str(notebook_id)], runner)
+        limit = int(registry.term.get("notebook_source_limit", 45))
+        count = len(_as_list(listed, "sources", "items"))
+        if count >= limit:
+            raise IngestError(f"NotebookLM notebook has {count} sources; configured limit is {limit}", 4)
+    if need_drive:
+        folder = course.get("drive_folder_id")
+        if not folder:
+            raise IngestError(f"{course_slug}: missing drive_folder_id")
+        remote = registry.term.get("drive_remote", "gdrive")
+        try:
+            runner(["rclone", "copyto", str(file), f"{remote}:{file.name}", "--drive-root-folder-id", str(folder)], check=True, text=True, capture_output=True)
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise IngestError(f"Drive copy failed: {exc}") from exc
+        _update_source(registry, course_slug, sha, sha8=sha8, title=title, file=str(file.resolve()), origin=origin, origin_ref=origin_ref,
+                       drive=True, notebook_source_id=None, trove=None, status="drive_done",
+                       added_at=datetime.now(timezone.utc).isoformat())
+    if need_nlm:
+        added = _json_from_command(["nlm", "source", "add", str(notebook_id), "--file", str(file), "--title", title, "--wait", "--json"], runner)
+        if isinstance(added, dict) and added.get("source_id"):
+            source_id = str(added["source_id"])
+        else:
+            source_id = _source_id(added)
+        _update_source(registry, course_slug, sha, notebook_source_id=source_id, status="uploaded")
+    job_path = registry.directory / "queue" / "sources" / f"{course_slug}-{sha8}.json"
+    _atomic_json(job_path, {
+        "slug": course_slug, "sha8": sha8, "title": title, "file": str(file.resolve()),
+        "pages": _pdf_pages(file, runner), "kind": _source_kind(file),
+        "book_id": course.get("book_id"), "manuscript_id": course.get("manuscript_id"), "course_name": course.get("name"),
+    })
+    entry = _update_source(registry, course_slug, sha, status="queued")
+    return {"status": "added", "slug": course_slug, "sha8": sha8, "title": title, "notebook_source_id": entry.get("notebook_source_id"), "queue_path": str(job_path)}
+
+
+def _select_source(course: dict[str, Any], slug: str, sha8: str) -> dict[str, Any]:
+    matches = [s for s in course.get("sources", []) if str(s.get("sha256", "")).startswith(sha8)]
+    if not matches:
+        raise ValueError(f"{slug}: no source with sha {sha8}")
+    if len(matches) > 1:
+        raise ValueError(f"{slug}: sha prefix {sha8} is ambiguous")
+    return matches[0]
+
+
+def source_done(registry: Registry, slug: str, sha8: str, trove: str) -> dict[str, Any]:
+    """Record the Trove location (``book_id:page``) of a source and retire its job."""
+    if slug not in registry.courses:
+        raise ValueError(f"unknown course: {slug}")
+    book_id, separator, page_text = trove.rpartition(":")
+    if not separator or not book_id or not page_text.isdigit():
+        raise ValueError(f"invalid --trove {trove!r}: use <book_id>:<page>")
+    with _locked_course(registry.directory, slug) as locked:
+        entry = _select_source(locked.payload, slug, sha8)
+        entry["trove"] = {"book_id": book_id, "page": int(page_text)}
+        entry["status"] = "done"
+        _atomic_json(locked.path, locked.payload)
+        result = dict(entry)
+    job = registry.directory / "queue" / "sources" / f"{slug}-{result['sha256'][:8]}.json"
+    if job.is_file():
+        done_dir = job.parent / "done"
+        done_dir.mkdir(parents=True, exist_ok=True)
+        os.replace(job, done_dir / job.name)
+    return result
+
+
+def _toc_of(book_id: str, runner: Callable[..., Any]) -> list[dict[str, Any]]:
+    data = _json_from_command(["trove", "items", "toc", str(book_id), "--json", "--no-session"], runner)
+    items = data.get("items", []) if isinstance(data, dict) else data
+    return items[0].get("toc", []) if items else []
+
+
+def check_source(registry: Registry, slug: str, sha8: str | None = None, runner: Callable[..., Any] = subprocess.run) -> list[str]:
+    """Return one problem per missing home (Drive, NotebookLM, Trove) of each selected source."""
+    course = registry.courses.get(slug)
+    if course is None:
+        return [f"unknown course: {slug}"]
+    sources = course.get("sources", [])
+    if sha8:
+        try:
+            sources = [_select_source(course, slug, sha8)]
+        except ValueError as exc:
+            return [str(exc)]
+    if not sources:
+        return []
+    problems: list[str] = []
+    drive_names: set[str] | None = None
+    notebook_ids: set[str] | None = None
+    course_toc: list[dict[str, Any]] | None = None
+    folder = course.get("drive_folder_id")
+    remote = registry.term.get("drive_remote", "gdrive")
+    if not folder:
+        problems.append(f"{slug}: missing drive_folder_id")
+    else:
+        try:
+            listing = _json_from_command(["rclone", "lsjson", f"{remote}:", "--drive-root-folder-id", str(folder), "--files-only"], runner)
+            drive_names = {str(item.get("Name", item.get("Path", ""))) for item in _as_list(listing, "files", "items")}
+        except Exception as exc:
+            problems.append(f"{slug}: Drive listing failed: {exc}")
+    if course.get("notebook_id"):
+        try:
+            listing = _json_from_command(["nlm", "source", "list", str(course["notebook_id"])], runner)
+            notebook_ids = {str(item.get("id", item.get("source_id", ""))) for item in _as_list(listing, "sources", "items")}
+        except Exception as exc:
+            problems.append(f"{slug}: NotebookLM listing failed: {exc}")
+    else:
+        problems.append(f"{slug}: missing notebook_id")
+    for source in sources:
+        label = f"{slug} {str(source.get('sha256', ''))[:8]} ({source.get('title')})"
+        name = Path(str(source.get("file", ""))).name
+        if drive_names is not None and name not in drive_names:
+            problems.append(f"{label}: {name!r} is not in the Drive folder")
+        source_id = source.get("notebook_source_id")
+        if not source_id:
+            problems.append(f"{label}: no NotebookLM source recorded")
+        elif notebook_ids is not None and str(source_id) not in notebook_ids:
+            problems.append(f"{label}: NotebookLM source {source_id} is not in the notebook")
+        trove = source.get("trove")
+        if source.get("status") != "done" or not isinstance(trove, dict) or not trove.get("book_id"):
+            problems.append(f"{label}: Trove not done (status={source.get('status')!r}, trove={trove!r})")
+            continue
+        if not course.get("book_id"):
+            problems.append(f"{label}: course has no book_id")
+            continue
+        try:
+            if course_toc is None:
+                course_toc = _toc_of(str(course["book_id"]), runner)
+        except Exception as exc:
+            problems.append(f"{label}: Trove ToC lookup failed: {exc}")
+            continue
+        parent = next((i for i, e in enumerate(course_toc) if e.get("level") == 1 and normalise_name(str(e.get("title", ""))) == READINGS_ENTRY), None)
+        if parent is None:
+            problems.append(f"{label}: course ToC has no level-1 entry {READINGS_ENTRY!r}")
+            continue
+        children = []
+        for entry in course_toc[parent + 1:]:
+            if entry.get("level", 1) <= 1:
+                break
+            if entry.get("level") == 2:
+                children.append(entry)
+        if str(trove["book_id"]) == str(course["book_id"]):
+            if trove.get("page") not in {e.get("page") for e in children}:
+                problems.append(f"{label}: page {trove.get('page')} is not a level-2 entry under {READINGS_ENTRY!r}")
+        else:
+            wanted = normalise_name(str(source.get("title", "")))
+            if not any(normalise_name(str(e.get("title", ""))) == wanted for e in children):
+                problems.append(f"{label}: no level-2 pointer titled {wanted!r} under {READINGS_ENTRY!r}")
+            try:
+                if not _toc_of(str(trove["book_id"]), runner):
+                    problems.append(f"{label}: Trove book {trove['book_id']} has an empty ToC")
+            except Exception as exc:
+                problems.append(f"{label}: Trove book {trove['book_id']} ToC lookup failed: {exc}")
+    return problems
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--term", help="term directory name (defaults to ACADEMIC_TERM or the sole configured term)")
@@ -688,6 +913,20 @@ def main(argv: list[str] | None = None) -> int:
     check = sub.add_parser("check-lesson", help="verify a lesson is done and nested under the lessons entry in Trove")
     check.add_argument("slug")
     check.add_argument("date", help="lesson key (YYYY-MM-DD-HHMM) for one lesson, or YYYY-MM-DD for every lesson that day")
+    add = sub.add_parser("add-source", help="copy a course file to Drive and NotebookLM and queue its Trove job")
+    add.add_argument("file", type=Path)
+    add.add_argument("--course", required=True)
+    add.add_argument("--title")
+    add.add_argument("--origin", choices=ORIGINS, default="other")
+    add.add_argument("--origin-ref")
+    add.add_argument("--json", action="store_true")
+    sdone = sub.add_parser("source-done", help="record the Trove location of a source")
+    sdone.add_argument("slug")
+    sdone.add_argument("sha8")
+    sdone.add_argument("--trove", required=True, help="<book_id>:<page>")
+    csrc = sub.add_parser("check-source", help="verify sources are in Drive, NotebookLM and nested in Trove")
+    csrc.add_argument("slug")
+    csrc.add_argument("--sha", help="check only the source with this sha prefix")
     args = parser.parse_args(argv)
     try:
         if args.command == "import-docx":
@@ -712,6 +951,20 @@ def main(argv: list[str] | None = None) -> int:
                 print(problem)
             if not problems:
                 print(f"{args.slug} {args.date}: lesson done and nested under {LESSONS_ENTRY}")
+            return 1 if problems else 0
+        if args.command == "add-source":
+            result = add_source(registry, args.file, args.course, title=args.title, origin=args.origin, origin_ref=args.origin_ref)
+            print(json.dumps(result, ensure_ascii=False) if args.json else f"{result['status']}: {result.get('title', result.get('slug'))}")
+            return 0
+        if args.command == "source-done":
+            print(json.dumps(source_done(registry, args.slug, args.sha8, args.trove), ensure_ascii=False))
+            return 0
+        if args.command == "check-source":
+            problems = check_source(registry, args.slug, args.sha)
+            for problem in problems:
+                print(problem)
+            if not problems:
+                print(f"{args.slug}: all sources verified" if registry.courses.get(args.slug, {}).get("sources") else f"{args.slug}: no sources")
             return 1 if problems else 0
         if args.command == "lesson-done":
             lesson = mark_lesson_done(registry, args.slug, args.lesson_key, args.page, status=args.status)
