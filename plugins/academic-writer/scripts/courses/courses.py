@@ -870,7 +870,7 @@ def check_source(registry: Registry, slug: str, sha8: str | None = None, runner:
                 problems.append(f"{label}: page {trove.get('page')} is not a level-2 entry under {READINGS_ENTRY!r}")
         else:
             wanted = normalise_name(str(source.get("title", "")))
-            if not any(entry_label(e.get("title", "")) == wanted for e in children):
+            if not any(normalise_name(str(e.get("title", ""))) == wanted or normalise_name(str(e.get("title", ""))).startswith(wanted + " - ") for e in children):
                 problems.append(f"{label}: no level-2 pointer titled {wanted!r} under {READINGS_ENTRY!r}")
             try:
                 if not _toc_of(str(trove["book_id"]), runner):

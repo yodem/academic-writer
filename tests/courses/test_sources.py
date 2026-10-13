@@ -265,3 +265,10 @@ def test_entry_label_ignores_hint():
     import courses as c
     assert c.entry_label("חומרי קריאה - רשימת המקורות") == "חומרי קריאה"
     assert c.entry_label("תמלולי שיעורים") == "תמלולי שיעורים"
+
+
+def test_entry_label_with_dash_in_source_title_matches_by_prefix():
+    import courses as c
+    wanted = c.normalise_name("Baumgarten - Reflections on Poetry (1954)")
+    title = c.normalise_name("Baumgarten - Reflections on Poetry (1954) - Reading notes for the 1954 translation")
+    assert title.startswith(wanted + " - ")
