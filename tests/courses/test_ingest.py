@@ -270,3 +270,64 @@ def test_ingest_treats_appended_lesson_as_already_ingested(tmp_path):
     assert result["status"] == "already ingested"
     assert calls == []
     assert len(json.loads((registry.directory / "sample.json").read_text(encoding="utf-8"))["lessons"]) == 1
+
+
+def test_transcript_file_ingest_uploads_text_and_uses_file_as_transcript(tmp_path):
+    registry = make_registry(tmp_path)
+    txt = tmp_path / "zoom.txt"
+    txt.write_text("[00:00:01] Dr Example: shalom class\n", encoding="utf-8")
+    runner, calls = runner_for(tmp_path)
+
+    result = courses.ingest_recording(registry, txt, course_slug="sample", lesson_date="2026-10-12", lesson_time="1215", transcript_file=True, runner=runner)
+
+    assert result["lesson_key"] == "2026-10-12-1215"
+    lesson_dir = registry.directory / "lessons/sample/2026-10-12-1215"
+    assert (lesson_dir / "transcript.txt").read_text(encoding="utf-8") == txt.read_text(encoding="utf-8")
+    meta = json.loads((lesson_dir / "meta.json").read_text())
+    assert meta["transcript_source"] == "file"
+    assert meta["audio_sha256"] == hashlib.sha256(txt.read_bytes()).hexdigest()
+    add = [c for c in calls if c[1:3] == ["source", "add"]]
+    assert add == [["nlm", "source", "add", "notebook-1", "--file", str(txt), "--title", "2026-10-12-1215 תמלול שיעור", "--wait", "--json"]]
+    assert not any(c[1:3] == ["content", "source"] for c in calls)
+    assert (registry.directory / "queue/sample-2026-10-12-1215.json").exists()
+    assert json.loads((registry.directory / "sample.json").read_text())["lessons"][0]["source_id"] == "source-1"
+
+
+def test_transcript_file_defaults_time_and_audio_meta_says_notebooklm(tmp_path):
+    registry = make_registry(tmp_path)
+    txt = tmp_path / "t.txt"
+    txt.write_text("words here", encoding="utf-8")
+    runner, _ = runner_for(tmp_path)
+    assert courses.ingest_recording(registry, txt, course_slug="sample", lesson_date="2026-10-12", transcript_file=True, runner=runner)["lesson_key"] == "2026-10-12-0000"
+    audio = tmp_path / "a.m4a"
+    audio.write_bytes(b"audio")
+    courses.ingest_recording(registry, audio, course_slug="sample", lesson_date="2026-10-12", runner=runner)
+    meta = json.loads((registry.directory / "lessons/sample/2026-10-12-0000-2/meta.json").read_text())
+    assert meta["transcript_source"] == "notebooklm"
+
+
+def test_transcript_file_requires_course_and_date(tmp_path):
+    registry = make_registry(tmp_path)
+    txt = tmp_path / "t.txt"
+    txt.write_text("x", encoding="utf-8")
+    runner, calls = runner_for(tmp_path)
+    for kwargs in ({"lesson_date": "2026-10-12"}, {"course_slug": "sample"}):
+        try:
+            courses.ingest_recording(registry, txt, transcript_file=True, runner=runner, **kwargs)
+        except courses.IngestError as exc:
+            assert "--course and --date" in str(exc)
+        else:
+            raise AssertionError("expected IngestError")
+    assert calls == []
+
+
+def test_transcript_file_dedupes_on_rerun(tmp_path):
+    registry = make_registry(tmp_path)
+    txt = tmp_path / "t.txt"
+    txt.write_text("same words", encoding="utf-8")
+    runner, calls = runner_for(tmp_path)
+    kwargs = dict(course_slug="sample", lesson_date="2026-10-12", transcript_file=True, runner=runner)
+    courses.ingest_recording(registry, txt, **kwargs)
+    before = len(calls)
+    assert courses.ingest_recording(registry, txt, **kwargs)["status"] == "already ingested"
+    assert len(calls) == before

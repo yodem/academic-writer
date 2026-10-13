@@ -238,13 +238,26 @@ def ingest_recording(
     dry_run: bool = False,
     runner: Callable[..., Any] = subprocess.run,
     birth_time: float | None = None,
+    transcript_file: bool = False,
+    lesson_time: str | None = None,
 ) -> dict[str, Any]:
-    """Upload audio to NotebookLM and persist a resumable lesson record."""
+    """Upload audio to NotebookLM and persist a resumable lesson record.
+
+    With ``transcript_file=True`` the file is a text transcript: it needs an explicit
+    course and date, is uploaded as a text source, and is its own transcript.
+    """
     audio = Path(audio).expanduser()
     if not audio.is_file():
-        raise IngestError(f"audio file not found: {audio}")
+        raise IngestError(f"{'transcript' if transcript_file else 'audio'} file not found: {audio}")
     timezone_name = registry.term.get("timezone", "Asia/Jerusalem")
-    when = recording_time(audio, birth_time=birth_time, timezone_name=timezone_name)
+    if transcript_file:
+        if not course_slug or not lesson_date:
+            raise IngestError("--transcript requires --course and --date")
+        if lesson_time is not None and not re.fullmatch(r"([01]\d|2[0-3])[0-5]\d", lesson_time):
+            raise IngestError(f"invalid lesson time (expected HHMM): {lesson_time}")
+        when = None
+    else:
+        when = recording_time(audio, birth_time=birth_time, timezone_name=timezone_name)
     if course_slug:
         if course_slug not in registry.courses:
             raise IngestError(f"unknown course: {course_slug}")
@@ -268,7 +281,10 @@ def ingest_recording(
 
     # Explicit date-only input carries no time, so use 0000. Otherwise derive
     # the stable lesson key from the recording's local start time.
-    hm = "0000" if lesson_date else when.strftime("%H%M")
+    if transcript_file:
+        hm = lesson_time or "0000"
+    else:
+        hm = "0000" if lesson_date else when.strftime("%H%M")
     lesson_base = f"{day}-{hm}"
     lessons_root = registry.directory / "lessons" / slug
     lessons_root.mkdir(parents=True, exist_ok=True)
@@ -298,7 +314,17 @@ def ingest_recording(
     else:
         upload_path = audio
         temporary_audio: Path | None = None
-        if audio.suffix.lower() in {".mp4", ".mov", ".mkv", ".webm"}:
+        if transcript_file:
+            if not source_id:
+                listed = _json_from_command(["nlm", "source", "list", str(notebook_id)], runner)
+                sources = _as_list(listed, "sources", "items")
+                limit = int(registry.term.get("notebook_source_limit", 45))
+                if len(sources) >= limit:
+                    raise IngestError(f"NotebookLM notebook has {len(sources)} sources; configured limit is {limit}", 4)
+            if not selected_source:
+                added = _json_from_command(["nlm", "source", "add", str(notebook_id), "--file", str(audio), "--title", f"{lesson_key} תמלול שיעור", "--wait", "--json"], runner)
+                selected_source = _source_id(added)
+        elif audio.suffix.lower() in {".mp4", ".mov", ".mkv", ".webm"}:
             fd, temporary_name = tempfile.mkstemp(suffix=".m4a", prefix="academic-course-")
             os.close(fd)
             temporary_audio = Path(temporary_name)
@@ -342,13 +368,16 @@ def ingest_recording(
                 lessons.append({"date": day, "lesson_key": lesson_key, "audio_sha256": digest, "source_id": selected_source, "trove_page": None, "status": "pending_transcript"})
                 stored_course["lessons"] = lessons
                 _atomic_json(locked.path, stored_course)
-    try:
-        content_result = _json_from_command(["nlm", "content", "source", selected_source], runner)
-        transcript = content_result.get("content") if isinstance(content_result, dict) else None
-        if not isinstance(transcript, str):
-            raise IngestError("NotebookLM transcript response has no string content")
-    except (IngestError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
-        raise IngestError(f"NotebookLM transcript failed for source_id {selected_source}: {exc}") from exc
+    if transcript_file:
+        transcript = audio.read_text(encoding="utf-8")
+    else:
+        try:
+            content_result = _json_from_command(["nlm", "content", "source", selected_source], runner)
+            transcript = content_result.get("content") if isinstance(content_result, dict) else None
+            if not isinstance(transcript, str):
+                raise IngestError("NotebookLM transcript response has no string content")
+        except (IngestError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
+            raise IngestError(f"NotebookLM transcript failed for source_id {selected_source}: {exc}") from exc
 
     transcript_path = lesson_dir / "transcript.txt"
     _atomic_write(transcript_path, transcript)
@@ -359,7 +388,7 @@ def ingest_recording(
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
     else:
         meta = {"slug": slug, "date": day, "lesson_key": lesson_key, "audio_path": str(audio.resolve()), "audio_sha256": digest, "source_id": selected_source, "notebook_id": str(notebook_id), "status": "upload_done"}
-    meta.update({"weekday": weekday, "transcript_words": len(transcript.split()), "created_at": datetime.now(ZoneInfo(timezone_name)).isoformat(), "status": "queued"})
+    meta.update({"weekday": weekday, "transcript_words": len(transcript.split()), "transcript_source": "file" if transcript_file else "notebooklm", "created_at": datetime.now(ZoneInfo(timezone_name)).isoformat(), "status": "queued"})
     _atomic_json(meta_path, meta)
     queue_path = registry.directory / "queue" / f"{slug}-{lesson_key}.json"
     _atomic_json(queue_path, {"slug": slug, "date": day, "lesson_key": lesson_key, "transcript_path": str(transcript_path), "meta_path": str(meta_path), "manuscript_id": course.get("manuscript_id"), "book_id": course.get("book_id"), "course_name": course.get("name"), "lecturer": course.get("lecturer")})
@@ -928,11 +957,13 @@ def main(argv: list[str] | None = None) -> int:
     daily_parser = sub.add_parser("daily", help="scan Voice Memos, sync Lemida, and show pending lesson jobs")
     daily_parser.add_argument("--dry-run", action="store_true")
     daily_parser.add_argument("--json", action="store_true", help="emit the run result as JSON")
-    ingest = sub.add_parser("ingest", help="upload a lesson recording and save its NotebookLM transcript")
+    ingest = sub.add_parser("ingest", help="upload a lesson recording (or, with --transcript, a text transcript) and save its transcript")
     ingest.add_argument("audio", type=Path)
     ingest.add_argument("--course", help="course slug (otherwise map from recording time)")
     ingest.add_argument("--source-id", help="reuse an existing NotebookLM source")
     ingest.add_argument("--date", help="lesson date (YYYY-MM-DD)")
+    ingest.add_argument("--transcript", action="store_true", help="the file is a text transcript (needs --course and --date), not a recording")
+    ingest.add_argument("--time", help="lesson start time HHMM (with --transcript; default 0000)")
     ingest.add_argument("--dry-run", action="store_true", help="show the selected course without uploading")
     ingest.add_argument("--json", action="store_true", help="emit a JSON result")
     done = sub.add_parser("lesson-done", help="record the Trove page for a completed lesson")
@@ -1035,7 +1066,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"unmatched: {reason}")
             return 0 if slug else 3
         if args.command == "ingest":
-            result = ingest_recording(registry, args.audio, course_slug=args.course, source_id=args.source_id, lesson_date=args.date, dry_run=args.dry_run)
+            result = ingest_recording(registry, args.audio, course_slug=args.course, source_id=args.source_id, lesson_date=args.date, dry_run=args.dry_run, transcript_file=args.transcript, lesson_time=args.time)
             if args.json:
                 print(json.dumps(result, ensure_ascii=False))
             elif result["status"] == "already ingested":
