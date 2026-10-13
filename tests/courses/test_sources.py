@@ -394,3 +394,24 @@ def test_entry_label_with_dash_in_source_title_matches_by_prefix():
     wanted = c.normalise_name("Baumgarten - Reflections on Poetry (1954)")
     title = c.normalise_name("Baumgarten - Reflections on Poetry (1954) - Reading notes for the 1954 translation")
     assert title.startswith(wanted + " - ")
+
+
+def test_second_add_source_waits_for_registration_lock_then_dedupes(tmp_path):
+    import threading
+    import time
+    registry = make_registry(tmp_path)
+    path = pdf(tmp_path)
+    first, second = Fake(), Fake()
+    results = []
+    with courses._registration_lock(registry.directory, "sample"):
+        thread = threading.Thread(target=lambda: results.append(courses.add_source(registry, path, "sample", runner=second)))
+        thread.start()
+        time.sleep(0.3)
+        assert thread.is_alive() and not second.calls  # blocked on the per-course lock, nothing uploaded
+        courses._add_source_locked(registry, path, "sample", title=None, origin="other", origin_ref=None, runner=first,
+                                   transcript=False, lesson_date=None, lesson_time=None)
+    thread.join(5)
+    assert not thread.is_alive()
+    assert results[0]["status"] == "already added"
+    assert not second.of("nlm", "source", "add") and not second.of("rclone", "copyto")
+    assert len(first.of("nlm", "source", "add")) == 1

@@ -18,7 +18,6 @@ from zoneinfo import ZoneInfo
 import courses
 
 
-POSTS_FORMAT = 2
 
 
 class LemidaError(RuntimeError):
@@ -170,8 +169,14 @@ def _default_api(base_url: str, token: str, function: str, params: dict[str, Any
     return moodle_call(base_url, token, function, params)
 
 
+def _local_day_time(registry: courses.Registry, stamp: Any) -> tuple[str, str]:
+    """Local (term timezone) date and HHMM of a Moodle timestamp."""
+    local = datetime.fromtimestamp(int(stamp or 0), timezone.utc).astimezone(ZoneInfo(registry.term.get("timezone", "Asia/Jerusalem")))
+    return local.date().isoformat(), local.strftime("%H%M")
+
+
 def _add_downloaded(registry: courses.Registry, slug: str, filename: str, url: str, token: str, *, download: Callable[..., Any],
-                    add_source: Callable[..., Any], origin_ref: str, runner: Callable[..., Any]) -> Any:
+                    add_source: Callable[..., Any], origin_ref: str, runner: Callable[..., Any], stamp: Any = None) -> Any:
     """Download to a temp dir and register as a source; the original is removed only after add_source succeeded."""
     scratch = Path(tempfile.mkdtemp(prefix="lemida-"))
     try:
@@ -180,7 +185,11 @@ def _add_downloaded(registry: courses.Registry, slug: str, filename: str, url: s
     except BaseException:
         shutil.rmtree(scratch, ignore_errors=True)
         raise
-    result = add_source(registry, target, slug, title=None, origin="lemida", origin_ref=origin_ref, runner=runner)
+    extra: dict[str, str] = {}
+    if stamp and target.suffix.lower() in courses.MEDIA_EXTENSIONS:
+        # a downloaded temp file has no meaningful creation time: use the Lemida timestamp
+        extra["lesson_date"], extra["lesson_time"] = _local_day_time(registry, stamp)
+    result = add_source(registry, target, slug, title=None, origin="lemida", origin_ref=origin_ref, runner=runner, **extra)
     shutil.rmtree(scratch, ignore_errors=True)  # a failed add_source keeps the original for the next look
     return result
 
@@ -195,7 +204,6 @@ def _sync_forums(registry: courses.Registry, slug: str, course: dict[str, Any], 
     except Exception as exc:
         errors.append(f"{slug} forums failed: {_redact(exc)}")
         return
-    modern = course.get("lemida_posts_format") == POSTS_FORMAT
     seen_posts = {str(k): int(v or 0) for k, v in dict(course.get("lemida_seen_posts", {})).items()}
     seen_discussions = {str(k): int(v or 0) for k, v in dict(course.get("lemida_seen_discussions", {})).items()}
     for forum in forums:
@@ -207,10 +215,6 @@ def _sync_forums(registry: courses.Registry, slug: str, course: dict[str, Any], 
         except Exception as exc:
             errors.append(f"{slug} forum {forum_name} failed: {_redact(exc)}")
             continue
-        if not modern:
-            # the pre-per-post format keyed this map by discussion id: those keys are not post ids
-            for discussion in discussions:
-                seen_posts.pop(str(discussion.get("discussion", discussion.get("id", ""))), None)
         for discussion in discussions:
             did = str(discussion.get("discussion", discussion.get("id", "")))
             stamp = int(discussion.get("timemodified", 0) or 0)
@@ -242,7 +246,8 @@ def _sync_forums(registry: courses.Registry, slug: str, course: dict[str, Any], 
                             record["result"] = "dry-run"
                         else:
                             result = _add_downloaded(registry, slug, f"lemida-forum-{did} - {name}", str(item.get("fileurl", "")), token,
-                                                     download=download, add_source=add_source, origin_ref=f"forum:{did}", runner=runner)
+                                                     download=download, add_source=add_source, origin_ref=f"forum:{did}", runner=runner,
+                                                     stamp=post.get("timecreated"))
                             record["result"] = result.get("status", "added") if isinstance(result, dict) else "added"
                             if isinstance(result, dict) and result.get("file"):
                                 record["file"] = str(result["file"])
@@ -263,27 +268,14 @@ def _sync_forums(registry: courses.Registry, slug: str, course: dict[str, Any], 
                     discussion_failed = True
                 elif not dry_run:
                     with courses._locked_course(registry.directory, slug) as locked:
-                        _mark_modern(locked.payload, discussions)
                         locked.payload.setdefault("lemida_seen_posts", {})[pid] = post_time
                         courses._atomic_json(locked.path, locked.payload)
                     seen_posts[pid] = post_time
-                    modern = True
             if not discussion_failed and not dry_run and posts:
                 with courses._locked_course(registry.directory, slug) as locked:
-                    _mark_modern(locked.payload, discussions)
                     locked.payload.setdefault("lemida_seen_discussions", {})[did] = newest_post
                     courses._atomic_json(locked.path, locked.payload)
                 seen_discussions[did] = newest_post
-                modern = True
-
-
-def _mark_modern(payload: dict[str, Any], discussions: list[dict[str, Any]]) -> None:
-    """Switch a course to the per-post format, dropping legacy discussion-keyed entries."""
-    if payload.get("lemida_posts_format") == POSTS_FORMAT:
-        return
-    legacy = {str(d.get("discussion", d.get("id", ""))) for d in discussions}
-    payload["lemida_seen_posts"] = {k: v for k, v in dict(payload.get("lemida_seen_posts", {})).items() if str(k) not in legacy}
-    payload["lemida_posts_format"] = POSTS_FORMAT
 
 
 def sync_course(registry: courses.Registry, slug: str, *, runner: Callable[..., Any] = subprocess.run,
@@ -330,12 +322,13 @@ def sync_course(registry: courses.Registry, slug: str, *, runner: Callable[..., 
                     if kind == "recording":
                         target = root / slug / "lemida" / filename
                         download(str(fileurl), token, target)
-                        local_day = datetime.fromtimestamp(stamp, timezone.utc).astimezone().date().isoformat()
-                        ingest(registry, target, course_slug=slug, lesson_date=local_day, runner=runner)
+                        local_day, local_hm = _local_day_time(registry, stamp)
+                        ingest(registry, target, course_slug=slug, lesson_date=local_day, lesson_time=local_hm, runner=runner)
                         outcomes.append({"filename": filename, "result": "ingested"})
                     else:
                         result = _add_downloaded(registry, slug, f"lemida-cm{cmid} - {filename}", str(fileurl), token,
-                                                 download=download, add_source=add_source, origin_ref=f"cm:{cmid}", runner=runner)
+                                                 download=download, add_source=add_source, origin_ref=f"cm:{cmid}", runner=runner,
+                                                 stamp=stamp)
                         outcomes.append({"filename": filename, "result": result.get("status", "added") if isinstance(result, dict) else "added"})
             entry = {"cmid": cmid, "name": title, "type": kind, "timemodified": stamp}
             if outcomes:
@@ -431,8 +424,16 @@ def report_markdown(report: dict[str, Any]) -> str:
         lines.append("אין תוכן חדש.")
     lines += ["", "## שגיאות", ""]
     errors = report.get("errors", []) or []
-    if not errors:
+    memo_errors = (report.get("voice_memos") or {}).get("errors", []) or []
+    unmatched = (report.get("voice_memos") or {}).get("unmatched", []) or []
+    if not errors and not memo_errors:
         lines.append("אין שגיאות.")
+    for err in memo_errors:
+        lines.append(f"- Voice Memos {err.get('file', '')}: {err.get('error', '')}".replace("  ", " "))
+    if unmatched:
+        lines += ["", "## הקלטות ללא התאמה", ""]
+        lines += [f"- {item.get('file', '')}: {item.get('reason', '')}" for item in unmatched]
+        lines.append("")
     for err in errors:
         lines.append(f"- {err.get('slug', '') + ': ' if isinstance(err, dict) and err.get('slug') else ''}{err.get('error', err) if isinstance(err, dict) else err}")
     return "\n".join(lines) + "\n"
@@ -538,6 +539,6 @@ def daily(registry: courses.Registry, *, dry_run: bool = False, runner: Callable
     report["notifications"] = inner.get("notifications", [])
     _write_report(registry, day, report)
     markdown = dict(inner)
-    markdown.update({"date": day, "errors": report["errors"]})
+    markdown.update({"date": day, "errors": report["errors"], "voice_memos": scan})
     report["report_md"] = str(_write_markdown(registry, day, markdown))
     return report

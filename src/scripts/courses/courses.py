@@ -200,6 +200,20 @@ def _locked_course(directory: Path, slug: str):
     return LockedCourse()
 
 
+def _registration_lock(directory: Path, slug: str):
+    """Exclusive per-course lock held for a whole add_source call (separate from the short JSON-write lock)."""
+    class RegistrationLock:
+        def __enter__(self):
+            directory.mkdir(parents=True, exist_ok=True)
+            self.lock = (directory / f".{slug}.register.lock").open("a+")
+            fcntl.flock(self.lock.fileno(), fcntl.LOCK_EX)
+            return self
+        def __exit__(self, *exc):
+            fcntl.flock(self.lock.fileno(), fcntl.LOCK_UN)
+            self.lock.close()
+    return RegistrationLock()
+
+
 def _file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -766,6 +780,14 @@ def add_source(
         raise IngestError(f"unknown course: {course_slug}")
     if origin not in ORIGINS:
         raise IngestError(f"invalid origin: {origin}")
+    # one registration at a time per course: dedupe check through queue job are one critical section
+    with _registration_lock(registry.directory, course_slug):
+        return _add_source_locked(registry, file, course_slug, title=title, origin=origin, origin_ref=origin_ref, runner=runner,
+                                  transcript=transcript, lesson_date=lesson_date, lesson_time=lesson_time)
+
+
+def _add_source_locked(registry: Registry, file: Path, course_slug: str, *, title: str | None, origin: str, origin_ref: str | None,
+                       runner: Callable[..., Any], transcript: bool, lesson_date: str | None, lesson_time: str | None) -> dict[str, Any]:
     if transcript or file.suffix.lower() in MEDIA_EXTENSIONS:
         return _add_media_source(registry, file, course_slug, title=title, origin=origin, origin_ref=origin_ref, runner=runner,
                                  transcript=transcript, lesson_date=lesson_date, lesson_time=lesson_time)

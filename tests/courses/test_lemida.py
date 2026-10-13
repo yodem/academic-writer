@@ -2,6 +2,7 @@ import json
 import subprocess
 import sys
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from urllib.error import URLError
 
@@ -256,7 +257,7 @@ def test_forum_attachment_goes_through_add_source_and_seen_advances(tmp_path):
     assert first["attachments"][0]["result"] == "added"
     stored = json.loads((reg.directory / "sample.json").read_text())
     assert stored["lemida_seen_posts"] == {"901": NOW, "902": NOW - 5000}
-    assert stored["lemida_posts_format"] == 2
+    assert "lemida_posts_format" not in stored
 
 
 def test_seen_posts_are_skipped_and_failed_attachment_does_not_advance(tmp_path):
@@ -345,7 +346,7 @@ def test_daily_report_carries_announcements_and_md(tmp_path):
 
 
 def test_edited_older_post_in_updated_discussion_is_processed_and_unchanged_skipped(tmp_path):
-    reg = registry(tmp_path, lemida_posts_format=2, lemida_seen_posts={"901": NOW - 100, "950": NOW - 90},
+    reg = registry(tmp_path, lemida_seen_posts={"901": NOW - 100, "950": NOW - 90},
                    lemida_seen_discussions={"11": NOW - 90, "12": NOW - 5000})
     posts = {11: {"posts": [
         {"id": 901, "subject": "Exam date", "author": {"fullname": "A"}, "timecreated": NOW - 100, "timemodified": NOW, "message": "edited",
@@ -379,21 +380,8 @@ def test_failed_attachment_leaves_only_that_post_unseen(tmp_path):
     assert "11" not in stored.get("lemida_seen_discussions", {})
 
 
-def test_legacy_discussion_keyed_state_does_not_crash_and_reprocesses(tmp_path):
-    reg = registry(tmp_path, lemida_seen_posts={"11": NOW, "12": NOW - 5000})
-    added = []
-    def fake_add(registry_, file, course_slug, title=None, origin="other", origin_ref=None, runner=None):
-        added.append(Path(file).name)
-        return {"status": "already added"}
-    lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=fake_download,
-                       api=moodle_api(posts_by_discussion=POSTS), add_source=fake_add, report_date="d")
-    assert added == ["lemida-forum-11 - exam info.pdf"]
-    stored = json.loads((reg.directory / "sample.json").read_text())
-    assert stored["lemida_seen_posts"] == {"901": NOW, "902": NOW - 5000} and stored["lemida_posts_format"] == 2
-
-
 def test_root_post_timestamp_is_not_a_discussion_checkpoint(tmp_path):
-    reg = registry(tmp_path, lemida_posts_format=2, lemida_seen_posts={"901": NOW, "902": NOW - 5000})
+    reg = registry(tmp_path, lemida_seen_posts={"901": NOW, "902": NOW - 5000})
     calls = []
     lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=fake_download,
                        api=moodle_api(calls, POSTS), add_source=lambda *a, **k: {"status": "already added"}, report_date="d")
@@ -446,3 +434,51 @@ def test_forum_attachment_temp_file_kept_on_failure_removed_on_success(tmp_path)
     lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=recording_download,
                        api=moodle_api(posts_by_discussion=POSTS), add_source=lambda *a, **k: {"status": "added"}, report_date="d")
     assert downloaded and not any(p.exists() for p in downloaded)
+
+
+def test_forum_media_attachment_uses_post_created_local_time(tmp_path):
+    reg = registry(tmp_path)
+    created = int(datetime(2026, 10, 11, 14, 5, tzinfo=ZoneInfo("Asia/Jerusalem")).timestamp())
+    posts = {11: {"posts": [{"id": 901, "subject": "rec", "timecreated": created, "message": "",
+                             "attachments": [{"filename": "lesson.m4a", "fileurl": "https://moodle.example/p/lesson.m4a"}]}]}, 12: {"posts": []}}
+    seen = []
+    def fake_add(registry_, file, course_slug, title=None, origin="other", origin_ref=None, runner=None, lesson_date=None, lesson_time=None):
+        seen.append((lesson_date, lesson_time))
+        return {"status": "added"}
+    lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=fake_download,
+                       api=moodle_api(posts_by_discussion=posts), add_source=fake_add, report_date="d")
+    assert seen == [("2026-10-11", "1405")]
+
+
+def test_recording_module_uses_module_local_date_and_time(tmp_path):
+    reg = registry(tmp_path)
+    stamp = int(datetime(2026, 10, 11, 23, 30, tzinfo=timezone.utc).timestamp())  # 02:30 next day in Jerusalem (UTC+3)
+    modules = [{"id": 5, "name": "Lesson recording", "modname": "resource", "contents": [
+        {"fileurl": "https://moodle.example/p/rec.m4a", "filename": "rec.m4a", "mimetype": "audio/mp4", "timemodified": stamp}]}]
+    calls = []
+    lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: modules, download=fake_download,
+                       ingest=lambda registry_, target, **kw: calls.append(kw), api=no_forums, report_date="d")
+    assert calls and calls[0]["lesson_date"] == "2026-10-12" and calls[0]["lesson_time"] == "0230"
+
+
+def test_markdown_report_lists_memo_errors_and_unmatched(tmp_path):
+    reg = registry(tmp_path)
+    memos = tmp_path / "memos"
+    memos.mkdir()
+    (memos / "unmatched.m4a").write_bytes(b"x")
+    (memos / "broken.m4a").write_bytes(b"y")
+    def fake_time(audio, **kw):
+        if audio.name == "broken.m4a":
+            raise RuntimeError("cannot read")
+        return datetime(2026, 10, 14, 3, 0, tzinfo=ZoneInfo("Asia/Jerusalem"))
+    import pytest
+    mp = pytest.MonkeyPatch()
+    mp.setattr(courses, "recording_time", fake_time)
+    try:
+        result = lemida.daily(reg, sync=lambda *a, **k: {"errors": [], "announcements": [], "notifications": []}, report_date="2026-10-13")
+    finally:
+        mp.undo()
+    text = Path(result["report_md"]).read_text(encoding="utf-8")
+    assert "broken.m4a" in text and "cannot read" in text
+    assert "unmatched.m4a" in text
+    assert result["voice_memos"]["unmatched"][0]["file"] == "unmatched.m4a"
