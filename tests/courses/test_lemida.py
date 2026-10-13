@@ -28,6 +28,10 @@ def registry(tmp_path, **overrides):
     return courses.Registry(directory)
 
 
+def no_forums(base_url, token, function, params):
+    return [] if function == "mod_forum_get_forums_by_courses" else {}
+
+
 def test_module_classification_and_diff_fixture():
     fixture = [
         {"id": 1, "name": "Week 1", "modules": [
@@ -89,7 +93,7 @@ def test_seen_updates_only_after_module_actions_succeed(tmp_path):
     def runner(command, **kwargs):
         if command[0] == "security": return subprocess.CompletedProcess(command, 0, "token-value\n", "")
         raise AssertionError(command)
-    report = lemida.sync_course(reg, "sample", runner=runner, fetch_contents=request, report_date="2026-10-12")
+    report = lemida.sync_course(reg, "sample", runner=runner, fetch_contents=request, api=no_forums, report_date="2026-10-12")
     stored = json.loads((reg.directory / "sample.json").read_text())
     assert stored["lemida_seen"] == {"9": 0}
     assert report["processed"][0]["name"] == "Info"
@@ -106,19 +110,15 @@ def test_seen_updates_only_after_module_actions_succeed(tmp_path):
             path.write_text(json.dumps(latest))
             return subprocess.CompletedProcess(command, 0, "token-value\n", "")
         return runner(command, **kwargs)
-    lemida.sync_course(reg, "sample", runner=racing_runner, fetch_contents=lambda *a: [{"id": 11, "modname": "page", "name": "Info 2", "contents": []}], report_date="2026-10-12")
+    lemida.sync_course(reg, "sample", runner=racing_runner, fetch_contents=lambda *a: [{"id": 11, "modname": "page", "name": "Info 2", "contents": []}], api=no_forums, report_date="2026-10-12")
     stored = json.loads((reg.directory / "sample.json").read_text())
     assert stored["lemida_seen"] == {"other": 7, "11": 0}
     assert stored["concurrent_update"] == "kept"
 
     (reg.directory / "sample.json").write_text(json.dumps({"slug": "sample", "lemida_course_id": 42, "lemida_seen": {}, "drive_folder_id": "drive-1"}))
     def fail_action(*args, **kwargs): raise RuntimeError("failed")
-    try:
-        lemida.sync_course(reg, "sample", runner=runner, fetch_contents=lambda *a: [{"id": 10, "modname": "resource", "name": "PDF", "contents": [{"mimetype": "application/pdf", "timemodified": 2, "fileurl": "https://x/f"}]}], download=fail_action, report_date="2026-10-12")
-    except lemida.LemidaError:
-        pass
-    else:
-        raise AssertionError("expected action error")
+    failed = lemida.sync_course(reg, "sample", runner=runner, fetch_contents=lambda *a: [{"id": 10, "modname": "resource", "name": "PDF", "contents": [{"mimetype": "application/pdf", "timemodified": 2, "fileurl": "https://x/f"}]}], download=fail_action, api=no_forums, report_date="2026-10-12")
+    assert failed["errors"] and "module 10" in failed["errors"][0]
     assert json.loads((reg.directory / "sample.json").read_text())["lemida_seen"] == {}
 
 
@@ -192,3 +192,152 @@ def test_daily_cli_json_is_valid_json(monkeypatch, tmp_path, capsys):
     out = capsys.readouterr().out
     data = _json.loads(out)
     assert data["queue"]
+
+
+# ---- forums, notifications and the report -------------------------------------------------
+
+SECRET_RUNNER = lambda command, **kwargs: subprocess.CompletedProcess(command, 0, "token-value\n", "")
+NOW = 1_760_000_000
+
+
+def moodle_api(calls=None, posts_by_discussion=None, notifications=None, fail_course=None):
+    posts_by_discussion = posts_by_discussion or {}
+
+    def api(base_url, token, function, params):
+        if calls is not None:
+            calls.append((function, dict(params)))
+        if function == "mod_forum_get_forums_by_courses":
+            if params["courseids[0]"] == fail_course:
+                raise lemida.LemidaError("Moodle error boom")
+            return [{"id": 7, "course": params["courseids[0]"], "name": "Announcements", "type": "news"}]
+        if function == "mod_forum_get_forum_discussions":
+            return {"discussions": [
+                {"id": 901, "discussion": 11, "name": "Exam date", "timemodified": NOW, "userfullname": "Dr. Example"},
+                {"id": 902, "discussion": 12, "name": "Old news", "timemodified": NOW - 5000, "userfullname": "Dr. Example"},
+            ], "warnings": []}
+        if function == "mod_forum_get_discussion_posts":
+            return posts_by_discussion[int(params["discussionid"])]
+        if function == "core_webservice_get_site_info":
+            return {"userid": 55, "username": "student"}
+        if function == "message_popup_get_popup_notifications":
+            return {"notifications": notifications or [], "unreadcount": 1}
+        raise AssertionError(function)
+    return api
+
+
+POSTS = {
+    11: {"posts": [{"id": 901, "subject": "Exam date", "author": {"id": 3, "fullname": "Dr. Example"},
+                    "timecreated": NOW, "message": "<p>The exam is on <b>Monday</b>.</p><p>&amp; bring a pen</p>",
+                    "attachments": [{"filename": "exam info.pdf", "fileurl": "https://moodle.example/webservice/pluginfile.php/9/mod_forum/attachment/1/exam%20info.pdf", "mimetype": "application/pdf"}]}]},
+    12: {"posts": [{"id": 902, "subject": "Old news", "author": {"fullname": "Dr. Example"}, "timecreated": NOW - 5000, "message": "old", "attachments": []}]},
+}
+
+
+def fake_download(url, token, destination):
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(b"%PDF-1.4 fake")
+    return destination
+
+
+def test_forum_attachment_goes_through_add_source_and_seen_advances(tmp_path):
+    reg = registry(tmp_path)
+    added = []
+    def fake_add(registry_, file, course_slug, title=None, origin="other", origin_ref=None, runner=None):
+        added.append((Path(file).name, course_slug, origin, origin_ref, Path(file).read_bytes()))
+        return {"status": "added"}
+    api = moodle_api(posts_by_discussion=POSTS)
+    result = lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=fake_download, api=api, add_source=fake_add, report_date="2026-10-13")
+    assert added == [("lemida-forum-11 - exam info.pdf", "sample", "lemida", "forum:11", b"%PDF-1.4 fake")]
+    assert (tmp_path / "files/sample/sources/lemida-forum-11 - exam info.pdf").exists()
+    subjects = [a["subject"] for a in result["announcements"]]
+    assert subjects == ["Exam date", "Old news"]
+    first = result["announcements"][0]
+    assert first["author"] == "Dr. Example" and "The exam is on Monday" in first["excerpt"] and "<" not in first["excerpt"]
+    assert first["attachments"][0]["result"] == "added"
+    stored = json.loads((reg.directory / "sample.json").read_text())
+    assert stored["lemida_seen_posts"] == {"11": NOW, "12": NOW - 5000}
+
+
+def test_seen_posts_are_skipped_and_failed_attachment_does_not_advance(tmp_path):
+    reg = registry(tmp_path, lemida_seen_posts={"11": NOW, "12": NOW - 5000})
+    calls = []
+    result = lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=fake_download,
+                                api=moodle_api(calls, POSTS), add_source=lambda *a, **k: (_ for _ in ()).throw(AssertionError("no")), report_date="d")
+    assert result["announcements"] == []
+    assert not [c for c in calls if c[0] == "mod_forum_get_discussion_posts"]
+
+    (tmp_path / "second").mkdir()
+    reg = registry(tmp_path / "second", lemida_seen_posts={})
+    def failing_add(*a, **k): raise courses.IngestError("notebook full")
+    result = lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=fake_download,
+                                api=moodle_api(posts_by_discussion=POSTS), add_source=failing_add, report_date="d")
+    assert result["errors"] and "notebook full" in result["errors"][0]
+    stored = json.loads((reg.directory / "sample.json").read_text())
+    assert stored["lemida_seen_posts"] == {"12": NOW - 5000}
+    assert result["announcements"][0]["attachments"][0]["result"] == "error"
+
+
+def test_content_files_use_add_source_with_cm_ref(tmp_path):
+    reg = registry(tmp_path)
+    added = []
+    data = [{"id": 1, "modules": [{"id": 5, "modname": "resource", "name": "Slides", "contents": [
+        {"filename": "s.pdf", "fileurl": "https://moodle.example/pluginfile.php/1/s.pdf", "mimetype": "application/pdf", "timemodified": 20}]}]}]
+    lemida.sync_course(reg, "sample", runner=SECRET_RUNNER, fetch_contents=lambda *a: data, download=fake_download, api=no_forums,
+                       add_source=lambda r, f, s, **k: added.append((Path(f).name, k["origin"], k["origin_ref"])) or {"status": "added"})
+    assert added == [("lemida-cm5 - s.pdf", "lemida", "cm:5")]
+    assert json.loads((reg.directory / "sample.json").read_text())["lemida_seen"] == {"5": 20}
+
+
+def test_notifications_filtered_by_time_and_state_advances(tmp_path):
+    reg = registry(tmp_path)
+    term_path = reg.directory / "term.json"
+    term = json.loads(term_path.read_text())
+    term["state"] = {"last_notification_time": NOW - 100}
+    term_path.write_text(json.dumps(term))
+    notes = [
+        {"id": 1, "subject": "New grade", "contexturl": "https://moodle.example/mod/assign/view.php?id=3", "timecreated": NOW, "read": False},
+        {"id": 2, "subject": "Older", "contexturl": "https://moodle.example/x", "timecreated": NOW - 100, "read": True},
+    ]
+    calls = []
+    fresh = lemida.sync_notifications(reg, runner=SECRET_RUNNER, api=moodle_api(calls, notifications=notes))
+    assert [n["subject"] for n in fresh] == ["New grade"] and fresh[0]["read"] is False
+    popup = [p for f, p in calls if f == "message_popup_get_popup_notifications"][0]
+    assert popup["useridto"] == 55 and popup["limit"] == 50 and popup["newestfirst"] == 1
+    assert json.loads(term_path.read_text())["state"]["last_notification_time"] == NOW
+    assert lemida.sync_notifications(reg, runner=SECRET_RUNNER, api=moodle_api(notifications=notes)) == []
+
+
+def test_notification_state_not_advanced_on_failure_or_dry_run(tmp_path):
+    reg = registry(tmp_path)
+    notes = [{"subject": "n", "contexturl": "", "timecreated": NOW, "read": False}]
+    lemida.sync_notifications(reg, runner=SECRET_RUNNER, api=moodle_api(notifications=notes), dry_run=True)
+    assert "last_notification_time" not in json.loads((reg.directory / "term.json").read_text()).get("state", {})
+
+
+def test_one_course_failing_does_not_block_another_and_md_written(tmp_path):
+    reg = registry(tmp_path)
+    other = {"slug": "other", "name": "Other", "lemida_course_id": 43, "lemida_seen": {}, "drive_folder_id": "d2", "notebook_id": "n2",
+             "slots": [{"day": "Tue", "start": "10:00", "end": "12:00", "semester": "A"}]}
+    (reg.directory / "other.json").write_text(json.dumps(other))
+    reg = courses.Registry(reg.directory)
+    notes = [{"subject": "Hello", "contexturl": "https://moodle.example/n", "timecreated": NOW, "read": True}]
+    report = lemida.lemida_sync(reg, runner=SECRET_RUNNER, fetch_contents=lambda *a: [], download=fake_download,
+                                api=moodle_api(posts_by_discussion=POSTS, notifications=notes, fail_course=42),
+                                add_source=lambda *a, **k: {"status": "added"}, report_date="2026-10-13")
+    assert [a["course"] for a in report["announcements"]] == ["other", "other"]
+    assert any(e["slug"] == "sample" and "boom" in e["error"] for e in report["errors"])
+    assert report["notifications"][0]["subject"] == "Hello"
+    saved = json.loads((reg.directory / "logs/lemida-2026-10-13.json").read_text())
+    assert saved["announcements"] and saved["notifications"]
+    md = (reg.directory / "logs/lemida-2026-10-13.md").read_text(encoding="utf-8")
+    assert "Exam date" in md and "exam info.pdf" in md and "Hello" in md and "boom" in md and "token-value" not in md
+
+
+def test_daily_report_carries_announcements_and_md(tmp_path):
+    reg = registry(tmp_path)
+    (tmp_path / "memos").mkdir()
+    stub = lambda *a, **k: {"errors": [], "announcements": [{"course": "sample", "subject": "S", "author": "A", "created": "2026-10-13T00:00:00", "excerpt": "e", "attachments": []}], "notifications": []}
+    result = lemida.daily(reg, sync=stub, report_date="2026-10-13")
+    assert result["announcements"][0]["subject"] == "S"
+    assert Path(result["report_md"]).read_text(encoding="utf-8").count("S") >= 1
+    assert json.loads((reg.directory / "logs/lemida-2026-10-13.json").read_text())["announcements"]

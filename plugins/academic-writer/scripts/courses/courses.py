@@ -989,6 +989,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.json:
                 print(json.dumps(result, ensure_ascii=False))
             else:
+                print(f"Report: {result['report_md']}" if result.get("report_md") else "Report: (none)")
                 print("Pending queue jobs:")
                 for item in result.get("queue", []):
                     print(item)

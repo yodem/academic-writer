@@ -1,6 +1,7 @@
 """Offline-testable Moodle/Lemida synchronization and daily scan helpers."""
 from __future__ import annotations
 
+import html
 import json
 import os
 import re
@@ -63,9 +64,13 @@ def _flatten_modules(contents: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return flattened
 
 
-def moodle_course_contents(base_url: str, token: str, course_id: Any, *, opener: Callable[..., Any] = urllib.request.urlopen) -> list[dict[str, Any]]:
+def moodle_call(base_url: str, token: str, function: str, params: dict[str, Any] | None = None, *,
+                opener: Callable[..., Any] = urllib.request.urlopen) -> Any:
+    """Call one Moodle web-service function and return its decoded JSON."""
     url = base_url.rstrip("/") + "/webservice/rest/server.php"
-    body = urllib.parse.urlencode({"wstoken": token, "wsfunction": "core_course_get_contents", "courseid": str(course_id), "moodlewsrestformat": "json"}).encode()
+    fields = {"wstoken": token, "wsfunction": function, "moodlewsrestformat": "json"}
+    fields.update({key: str(value) for key, value in (params or {}).items()})
+    body = urllib.parse.urlencode(fields).encode()
     request = urllib.request.Request(url, data=body, method="POST", headers={"Content-Type": "application/x-www-form-urlencoded"})
     try:
         with opener(request, timeout=60) as response:
@@ -74,6 +79,11 @@ def moodle_course_contents(base_url: str, token: str, course_id: Any, *, opener:
         raise LemidaError(f"Moodle request failed: {_redact(exc)}") from exc
     if isinstance(payload, dict) and payload.get("exception"):
         raise LemidaError(f"Moodle error {payload.get('errorcode', '')}: {_redact(payload.get('message', 'request failed'))}")
+    return payload
+
+
+def moodle_course_contents(base_url: str, token: str, course_id: Any, *, opener: Callable[..., Any] = urllib.request.urlopen) -> list[dict[str, Any]]:
+    payload = moodle_call(base_url, token, "core_course_get_contents", {"courseid": course_id}, opener=opener)
     if not isinstance(payload, list):
         raise LemidaError("Moodle returned an unexpected course contents response")
     return payload
@@ -125,72 +135,294 @@ def _module_time(module: dict[str, Any]) -> int:
     return max((int(x.get("timemodified", 0) or 0) for x in module.get("contents", []) or []), default=0)
 
 
+def _plain_excerpt(message: Any, limit: int = 300) -> str:
+    text = re.sub(r"(?is)<(script|style).*?</\1>", " ", str(message or ""))
+    text = re.sub(r"(?i)<br\s*/?>|</p>|</div>|</li>", "\n", text)
+    text = html.unescape(re.sub(r"<[^>]+>", "", text))
+    text = re.sub(r"\s+", " ", text).strip()
+    return text if len(text) <= limit else text[:limit].rstrip() + "..."
+
+
+def _safe_name(name: str) -> str:
+    cleaned = re.sub(r"[\\/\x00-\x1f]", "_", str(name)).strip().lstrip(".")
+    return cleaned or "file"
+
+
+def _iso(stamp: Any) -> str:
+    try:
+        return datetime.fromtimestamp(int(stamp), timezone.utc).isoformat()
+    except (TypeError, ValueError, OverflowError, OSError):
+        return ""
+
+
+def _author(post: dict[str, Any]) -> str:
+    author = post.get("author")
+    if isinstance(author, dict) and author.get("fullname"):
+        return str(author["fullname"])
+    return str(post.get("userfullname") or post.get("authorfullname") or "")
+
+
+def _default_api(base_url: str, token: str, function: str, params: dict[str, Any]) -> Any:
+    return moodle_call(base_url, token, function, params)
+
+
+def _sync_forums(registry: courses.Registry, slug: str, course: dict[str, Any], *, base_url: str, token: str, api: Callable[..., Any],
+                 download: Callable[..., Any], add_source: Callable[..., Any], runner: Callable[..., Any], root: Path,
+                 dry_run: bool, announcements: list[dict[str, Any]], errors: list[str]) -> None:
+    try:
+        forums = api(base_url, token, "mod_forum_get_forums_by_courses", {"courseids[0]": course["lemida_course_id"]})
+        if not isinstance(forums, list):
+            raise LemidaError("unexpected forums response")
+    except Exception as exc:
+        errors.append(f"{slug} forums failed: {_redact(exc)}")
+        return
+    seen_posts = dict(course.get("lemida_seen_posts", {}))
+    for forum in forums:
+        forum_name = str(forum.get("name", forum.get("id", "")))
+        try:
+            listing = api(base_url, token, "mod_forum_get_forum_discussions",
+                          {"forumid": forum["id"], "sortorder": -1, "page": 0, "perpage": 50})
+            discussions = listing.get("discussions", []) if isinstance(listing, dict) else []
+        except Exception as exc:
+            errors.append(f"{slug} forum {forum_name} failed: {_redact(exc)}")
+            continue
+        for discussion in discussions:
+            did = str(discussion.get("discussion", discussion.get("id", "")))
+            stamp = int(discussion.get("timemodified", 0) or 0)
+            previous = seen_posts.get(did)
+            if not did or (previous is not None and stamp <= int(previous or 0)):
+                continue
+            previous_time = int(previous or 0)
+            try:
+                payload = api(base_url, token, "mod_forum_get_discussion_posts", {"discussionid": did})
+                posts = payload.get("posts", []) if isinstance(payload, dict) else []
+                entries = []
+                failed = False
+                for post in posts:
+                    if previous is not None and int(post.get("timecreated", 0) or 0) <= previous_time:
+                        continue
+                    attachments = []
+                    for item in post.get("attachments", []) or []:
+                        name = _safe_name(item.get("filename", ""))
+                        record = {"filename": name, "mimetype": item.get("mimetype", "")}
+                        target = root / slug / "sources" / f"lemida-forum-{did} - {name}"
+                        try:
+                            if dry_run:
+                                record["result"] = "dry-run"
+                            else:
+                                download(str(item.get("fileurl", "")), token, target)
+                                result = add_source(registry, target, slug, title=None, origin="lemida", origin_ref=f"forum:{did}", runner=runner)
+                                record["result"] = result.get("status", "added") if isinstance(result, dict) else "added"
+                                record["file"] = str(target)
+                        except Exception as exc:
+                            failed = True
+                            record["result"] = "error"
+                            record["error"] = _redact(exc)
+                            errors.append(f"{slug} forum {did} attachment {name} failed: {_redact(exc)}")
+                        attachments.append(record)
+                    entries.append({
+                        "course": slug, "forum": forum_name, "discussion_id": did,
+                        "subject": str(post.get("subject") or discussion.get("name") or ""),
+                        "author": _author(post) or str(discussion.get("userfullname", "")),
+                        "created": _iso(post.get("timecreated")), "timecreated": int(post.get("timecreated", 0) or 0),
+                        "excerpt": _plain_excerpt(post.get("message")), "attachments": attachments,
+                    })
+            except Exception as exc:
+                errors.append(f"{slug} forum discussion {did} failed: {_redact(exc)}")
+                continue
+            announcements.extend(entries)
+            if failed or dry_run:
+                continue
+            with courses._locked_course(registry.directory, slug) as locked:
+                locked.payload.setdefault("lemida_seen_posts", {})[did] = stamp
+                courses._atomic_json(locked.path, locked.payload)
+            seen_posts[did] = stamp
+
+
 def sync_course(registry: courses.Registry, slug: str, *, runner: Callable[..., Any] = subprocess.run,
                 fetch_contents: Callable[..., Any] | None = None, download: Callable[..., Any] = download_file,
-                ingest: Callable[..., Any] | None = None, dry_run: bool = False, report_date: str | None = None) -> dict[str, Any]:
+                ingest: Callable[..., Any] | None = None, dry_run: bool = False, report_date: str | None = None,
+                api: Callable[..., Any] | None = None, add_source: Callable[..., Any] | None = None) -> dict[str, Any]:
     course = registry.courses[slug]
     if not course.get("lemida_course_id"):
-        return {"slug": slug, "status": "skipped", "reason": "missing lemida_course_id", "processed": []}
+        return {"slug": slug, "status": "skipped", "reason": "missing lemida_course_id", "processed": [], "announcements": [], "errors": []}
     config = registry.term.get("lemida", {})
+    base_url = config.get("base_url", "")
     token = _token(registry.term, runner)
+    api = api or _default_api
+    add_source = add_source or courses.add_source
     if fetch_contents is None:
-        fetch_contents = lambda base_url, auth, cid: moodle_course_contents(base_url, auth, cid)
-    modules = _flatten_modules(fetch_contents(config.get("base_url", ""), token, course["lemida_course_id"]))
-    seen = dict(course.get("lemida_seen", {}))
-    changed = changed_modules(modules, seen)
+        fetch_contents = lambda url, auth, cid: moodle_course_contents(url, auth, cid)
+    errors: list[str] = []
+    announcements: list[dict[str, Any]] = []
+    processed: list[dict[str, Any]] = []
     root = Path(registry.term.get("local_root", registry.directory / "files")).expanduser()
-    drive_remote = registry.term.get("drive_remote", "gdrive")
-    processed = []
     if ingest is None:
         ingest = courses.ingest_recording
+    try:
+        modules = _flatten_modules(fetch_contents(base_url, token, course["lemida_course_id"]))
+    except Exception as exc:
+        errors.append(f"{slug} contents failed: {_redact(exc)}")
+        modules = []
+    changed = changed_modules(modules, dict(course.get("lemida_seen", {})))
     for module in changed:
         kind = classify_module(module)
         title = str(module.get("name", module.get("id", "(unnamed)")))
         cmid = str(module.get("id", module.get("cmid", "")))
         stamp = _module_time(module)
         try:
+            outcomes = []
             if kind in {"resource", "recording"}:
                 for content in module.get("contents", []) or []:
                     fileurl = content.get("fileurl")
                     if not fileurl:
                         continue
-                    filename = Path(urllib.parse.urlsplit(str(fileurl)).path).name or title
-                    target = root / slug / "lemida" / filename
-                    if not dry_run:
+                    filename = _safe_name(Path(urllib.parse.urlsplit(str(fileurl)).path).name or title)
+                    if dry_run:
+                        continue
+                    if kind == "recording":
+                        target = root / slug / "lemida" / filename
                         download(str(fileurl), token, target)
-                        if kind == "recording":
-                            local_day = datetime.fromtimestamp(stamp, timezone.utc).astimezone().date().isoformat()
-                            ingest(registry, target, course_slug=slug, lesson_date=local_day, runner=runner)
-                        else:
-                            runner(["rclone", "copy", str(target), f"{drive_remote}:", "--drive-root-folder-id", str(course.get("drive_folder_id", ""))], check=True, text=True, capture_output=True)
-            processed.append({"cmid": cmid, "name": title, "type": kind, "timemodified": stamp})
+                        local_day = datetime.fromtimestamp(stamp, timezone.utc).astimezone().date().isoformat()
+                        ingest(registry, target, course_slug=slug, lesson_date=local_day, runner=runner)
+                        outcomes.append({"filename": filename, "result": "ingested"})
+                    else:
+                        target = root / slug / "sources" / f"lemida-cm{cmid} - {filename}"
+                        download(str(fileurl), token, target)
+                        result = add_source(registry, target, slug, title=None, origin="lemida", origin_ref=f"cm:{cmid}", runner=runner)
+                        outcomes.append({"filename": filename, "result": result.get("status", "added") if isinstance(result, dict) else "added"})
+            entry = {"cmid": cmid, "name": title, "type": kind, "timemodified": stamp}
+            if outcomes:
+                entry["files"] = outcomes
+            processed.append(entry)
         except Exception as exc:
-            raise LemidaError(f"{slug} module {cmid} ({title}) failed: {_redact(exc)}") from exc
+            errors.append(f"{slug} module {cmid} ({title}) failed: {_redact(exc)}")
+            continue
         if not dry_run:
             with courses._locked_course(registry.directory, slug) as locked:
                 locked.payload.setdefault("lemida_seen", {})[cmid] = stamp
                 courses._atomic_json(locked.path, locked.payload)
-            seen[cmid] = stamp
-    return {"slug": slug, "status": "dry-run" if dry_run else "synced", "processed": processed}
+    # forums read the freshly written course JSON so seen-state merges correctly
+    fresh = dict(course)
+    try:
+        fresh.update(json.loads((registry.directory / f"{slug}.json").read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        pass
+    _sync_forums(registry, slug, fresh, base_url=base_url, token=token, api=api, download=download, add_source=add_source,
+                 runner=runner, root=root, dry_run=dry_run, announcements=announcements, errors=errors)
+    return {"slug": slug, "status": "dry-run" if dry_run else "synced", "processed": processed, "announcements": announcements, "errors": errors}
+
+
+def sync_notifications(registry: courses.Registry, *, runner: Callable[..., Any] = subprocess.run, api: Callable[..., Any] | None = None,
+                       dry_run: bool = False) -> list[dict[str, Any]]:
+    """Return the user's Lemida notifications newer than term.json state.last_notification_time."""
+    config = registry.term.get("lemida", {})
+    base_url = config.get("base_url", "")
+    token = _token(registry.term, runner)
+    api = api or _default_api
+    info = api(base_url, token, "core_webservice_get_site_info", {})
+    user_id = info.get("userid") if isinstance(info, dict) else None
+    if user_id is None:
+        raise LemidaError("could not determine the Lemida user id")
+    term_path = registry.directory / "term.json"
+    term = json.loads(term_path.read_text(encoding="utf-8"))
+    last = int(term.get("state", {}).get("last_notification_time", 0) or 0)
+    payload = api(base_url, token, "message_popup_get_popup_notifications", {"useridto": user_id, "newestfirst": 1, "limit": 50, "offset": 0})
+    items = payload.get("notifications", []) if isinstance(payload, dict) else []
+    fresh = []
+    for item in items:
+        created = int(item.get("timecreated", 0) or 0)
+        if created <= last:
+            continue
+        fresh.append({
+            "subject": str(item.get("subject") or item.get("shortenedsubject") or ""),
+            "contexturl": str(item.get("contexturl") or ""), "timecreated": created,
+            "created": _iso(created), "read": bool(item.get("read")),
+        })
+    if fresh and not dry_run:
+        latest = json.loads(term_path.read_text(encoding="utf-8"))
+        latest.setdefault("state", {})["last_notification_time"] = max(n["timecreated"] for n in fresh)
+        courses._atomic_json(term_path, latest)
+    return fresh
 
 
 def _write_report(registry: courses.Registry, day: str, report: dict[str, Any]) -> None:
     courses._atomic_json(registry.directory / "logs" / f"lemida-{day}.json", report)
 
 
+def report_markdown(report: dict[str, Any]) -> str:
+    lines = [f"# דוח למידה {report.get('date', '')}", ""]
+    lines += ["## הודעות חדשות בקורסים", ""]
+    announcements = report.get("announcements", []) or []
+    if not announcements:
+        lines += ["אין הודעות חדשות.", ""]
+    for slug in sorted({a.get("course", "") for a in announcements}):
+        lines += [f"### {slug}", ""]
+        for item in (a for a in announcements if a.get("course") == slug):
+            lines.append(f"- **{item.get('subject', '')}** ({item.get('author', '')}, {item.get('created', '')[:10]})")
+            if item.get("excerpt"):
+                lines.append(f"  - {item['excerpt']}")
+            for att in item.get("attachments", []):
+                where = att.get("file") or att.get("error") or att.get("result", "")
+                lines.append(f"  - קובץ: {att.get('filename', '')} -> {att.get('result', '')} ({where})")
+        lines.append("")
+    lines += ["## התראות חדשות", ""]
+    notes = report.get("notifications", []) or []
+    if not notes:
+        lines += ["אין התראות חדשות.", ""]
+    for note in notes:
+        flag = "נקרא" if note.get("read") else "לא נקרא"
+        lines.append(f"- {note.get('subject', '')} ({note.get('created', '')[:10]}, {flag}) {note.get('contexturl', '')}".rstrip())
+    lines.append("")
+    lines += ["## תוכן חדש", ""]
+    any_content = False
+    for entry in report.get("courses", []) or []:
+        for module in entry.get("processed", []):
+            any_content = True
+            files = ", ".join(f"{f['filename']} ({f['result']})" for f in module.get("files", []))
+            lines.append(f"- {entry.get('slug', '')}: {module.get('name', '')} [{module.get('type', '')}]" + (f" - {files}" if files else ""))
+    if not any_content:
+        lines.append("אין תוכן חדש.")
+    lines += ["", "## שגיאות", ""]
+    errors = report.get("errors", []) or []
+    if not errors:
+        lines.append("אין שגיאות.")
+    for err in errors:
+        lines.append(f"- {err.get('slug', '') + ': ' if isinstance(err, dict) and err.get('slug') else ''}{err.get('error', err) if isinstance(err, dict) else err}")
+    return "\n".join(lines) + "\n"
+
+
+def _write_markdown(registry: courses.Registry, day: str, report: dict[str, Any]) -> Path:
+    path = registry.directory / "logs" / f"lemida-{day}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(report_markdown(report), encoding="utf-8")
+    return path
+
+
 def lemida_sync(registry: courses.Registry, *, slug: str | None = None, dry_run: bool = False,
                 runner: Callable[..., Any] = subprocess.run, fetch_contents: Callable[..., Any] | None = None,
                 download: Callable[..., Any] = download_file, ingest: Callable[..., Any] | None = None,
-                report_date: str | None = None) -> dict[str, Any]:
+                report_date: str | None = None, api: Callable[..., Any] | None = None,
+                add_source: Callable[..., Any] | None = None) -> dict[str, Any]:
     day = report_date or date.today().isoformat()
     targets = [slug] if slug else [key for key, value in registry.courses.items() if value.get("lemida_course_id")]
-    report: dict[str, Any] = {"date": day, "courses": [], "errors": []}
+    report: dict[str, Any] = {"date": day, "courses": [], "announcements": [], "notifications": [], "errors": []}
     for target in targets:
         try:
-            report["courses"].append(sync_course(registry, target, runner=runner, fetch_contents=fetch_contents, download=download, ingest=ingest, dry_run=dry_run, report_date=day))
+            result = sync_course(registry, target, runner=runner, fetch_contents=fetch_contents, download=download, ingest=ingest,
+                                 dry_run=dry_run, report_date=day, api=api, add_source=add_source)
+            report["courses"].append(result)
+            report["announcements"].extend(result.get("announcements", []))
+            report["errors"].extend({"slug": target, "error": message} for message in result.get("errors", []))
         except LemidaError as exc:
             report["errors"].append({"slug": target, "error": str(exc)})
+    if targets:
+        try:
+            report["notifications"] = sync_notifications(registry, runner=runner, api=api, dry_run=dry_run)
+        except Exception as exc:
+            report["errors"].append({"slug": "(notifications)", "error": _redact(exc)})
     _write_report(registry, day, report)
+    report["report_md"] = str(_write_markdown(registry, day, report))
     return report
 
 
@@ -252,5 +484,11 @@ def daily(registry: courses.Registry, *, dry_run: bool = False, runner: Callable
         report["exit_code"] = 5 if "token missing" in str(exc).lower() else 2
     if not completed:
         report["exit_code"] = 1
+    inner = report["lemida"] if isinstance(report["lemida"], dict) else {}
+    report["announcements"] = inner.get("announcements", [])
+    report["notifications"] = inner.get("notifications", [])
     _write_report(registry, day, report)
+    markdown = dict(inner)
+    markdown.update({"date": day, "errors": report["errors"]})
+    report["report_md"] = str(_write_markdown(registry, day, markdown))
     return report
