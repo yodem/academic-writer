@@ -16,7 +16,7 @@
 
   /* English strings used only by script (the Hebrew ones live in AW_I18N_HE under the same keys). */
   var EN = {
-    copied: 'Copied', pause: 'Pause animation', play: 'Play animation',
+    copied: 'Copied',
     theme_system: 'Theme: match system. Change theme', theme_light: 'Theme: light. Change theme', theme_dark: 'Theme: dark. Change theme',
     doc_title: 'Academic Writer — cited academic articles with Claude'
   };
@@ -49,10 +49,9 @@
     });
     $$('.seg button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === lang)); });
     d.title = t('doc_title');
-    setThemeLabel(); labelPause();
+    setThemeLabel();
     if (persist) store.set('aw-lang', lang);
     if (flowApi) flowApi.restart();
-    if (howApi) howApi.update();
   }
   collect();
 
@@ -111,9 +110,28 @@
     rv.forEach(function (n) { rvIO.observe(n); });
   }
 
+  /* ---------- round 6: animations pause without a visible button ---------- */
+  /* Pauses while a mouse hovers or the keyboard focuses it; a click, tap, Space or Enter pins the pause (or resumes). onChange(paused) runs when the effective state flips. */
+  function pausable(el, area, onChange) {
+    var user = null, hover = false, focus = false, was = false;
+    function paused() { return user === 'paused' || (user === null && (hover || focus)); }
+    function sync() {
+      el.setAttribute('aria-pressed', String(user === 'paused'));
+      area.classList.toggle('is-held', paused());
+      var p = paused(); if (p !== was) { was = p; onChange(p); }
+    }
+    function toggle() { user = user === 'paused' ? 'playing' : 'paused'; sync(); }
+    area.addEventListener('pointerenter', function (e) { if (e.pointerType === 'mouse') { hover = true; sync(); } });
+    area.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') { hover = false; if (user === 'playing' && !focus) user = null; sync(); } });
+    el.addEventListener('focus', function () { var fv = false; try { fv = el.matches(':focus-visible'); } catch (x) { fv = true; } focus = fv; sync(); });
+    el.addEventListener('blur', function () { focus = false; if (user === 'playing' && !hover) user = null; sync(); });
+    area.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('a, button, input, select')) return; toggle(); });
+    el.addEventListener('keydown', function (e) { if (e.target === el && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); toggle(); } });
+  }
+
   /* ---------- hero flow visualization: a real /write run, almost no text ---------- */
   var flowApi = safe(function () {
-    var host = $('#flowviz'), stage = $('#flow-stage'), btn = $('#flow-pause'); if (!host || !stage) return null;
+    var host = $('#flowviz'), stage = $('#flow-stage'); if (!host || !stage) return null;
     var LOOP = 18, ICON = {
       you: '<circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-4.2 3-6.2 7-6.2s7 2 7 6.2"/>',
       sources: '<path d="M4 5h4v15H4zM9.5 5h4v15h-4z"/><path d="m15 7 3.7-.9 3 12.8-3.7.9z"/>',
@@ -174,7 +192,7 @@
       h += '<g class="pk__fn" transform="translate(' + (rtl ? -23 : 23) + ',-16)"><circle r="8"/><path class="pk__v" d="m-3.5 0 2.5 2.5 4.5-5"/><path class="pk__x" d="m-3-3 6 6m0-6-6 6"/></g></g></g></g>';
       h += '<g id="fl-bb"><g transform="scale(' + s + ')"><path class="bb__shape" d="M-17-20h34a6 6 0 0 1 6 6v10a6 6 0 0 1-6 6h-14l-8 7v-7h-12a6 6 0 0 1-6-6v-10a6 6 0 0 1 6-6z" transform="translate(0,2)"/><circle class="bb__dot" cx="-8" cy="-9" r="2"/><circle class="bb__dot" cx="0" cy="-9" r="2"/><circle class="bb__dot" cx="8" cy="-9" r="2"/></g></g>';
       h += '<circle class="vd" id="fl-vd" r="' + (4 * G.k) + '" cx="' + vx + '" cy="' + G.yr + '"/></g>';
-      stage.innerHTML = '<svg viewBox="0 0 ' + G.W + ' ' + G.H + '" style="--fs:' + G.fs + 'px" preserveAspectRatio="xMidYMid meet" focusable="false">' + h + '</svg>';
+      stage.innerHTML = '<svg viewBox="0 0 ' + G.W + ' ' + G.H + '" style="--fs:' + G.fs + 'px" preserveAspectRatio="xMidYMid meet" focusable="false" aria-hidden="true">' + h + '</svg>';
       var svg = stage.firstChild; mainEl = $('.fl-base', svg); retEl = $('.fl-ret', svg);
       els = { svg: svg, tm: $('#fl-tm', svg), tr: $('#fl-tr', svg), pk: $('#fl-pk', svg), card: $('#fl-card', svg), l2: $('#fl-l2', svg), bb: $('#fl-bb', svg), vd: $('#fl-vd', svg), voice: $('.fl-voice', svg), fx: $$('.fx', svg), nodes: {}, vx: vx, vy: vyEnd };
       $$('.fn', svg).forEach(function (n) { els.nodes[n.getAttribute('data-n')] = n; });
@@ -266,10 +284,7 @@
     function go() { if (reduceMQ.matches || paused || !visible || raf) return; last = performance.now(); raf = requestAnimationFrame(tick); }
     function stop() { if (raf) cancelAnimationFrame(raf); raf = 0; }
     function refresh() { build(); if (reduceMQ.matches) render(0, true); else { render(T); go(); } }
-    if (btn) btn.addEventListener('click', function () {
-      paused = !paused; btn.setAttribute('aria-pressed', String(paused)); labelPause();
-      if (paused) stop(); else go();
-    });
+    pausable(stage, $('.flow', host) || host, function (p) { paused = p; if (p) stop(); else go(); });
     if ('IntersectionObserver' in window) new IntersectionObserver(function (es) { visible = es[0].isIntersecting; if (visible) go(); else stop(); }, { threshold: 0.15 }).observe(host);
     else { visible = true; }
     reduceMQ.addEventListener && reduceMQ.addEventListener('change', function () { stop(); refresh(); });
@@ -277,7 +292,6 @@
     refresh();
     return { restart: refresh };
   });
-  function labelPause() { var b = $('#flow-pause'); if (!b) return; $('.pause__t', b).textContent = t(b.getAttribute('aria-pressed') === 'true' ? 'play' : 'pause'); }
 
 
   /* ---------- film fallback ---------- */
@@ -293,7 +307,7 @@
   /* ---------- how it works: an animated agent graph in a dark Cowork window (about 15 s, then loops) ---------- */
   var howApi = safe(function () {
     var sec = $('#hw'); if (!sec) return null;
-    var playB = $('#hw-play', sec), phBtns = $$('.hw__phase', sec), PH = [0, 3, 11, 15], END = 15, LOOP = 17;
+    var win = $('.hw__win', sec), phBtns = $$('.hw__phase', sec), PH = [0, 3, 11, 15], END = 15, LOOP = 17;
     var T = 0, running = true, inView = !('IntersectionObserver' in window), raf = 0, last = 0;
     var states = [], counts = [], fills = [], kfs = [];
     function num(s) { return parseFloat(s); }
@@ -331,11 +345,6 @@
         b.classList.toggle('is-done', now >= PH[i + 1]);
       });
     }
-    function labelPlay() {
-      if (!playB) return;
-      var paused = !running; playB.setAttribute('aria-pressed', String(paused));
-      $('.hw__playt', playB).textContent = t(paused ? 'play' : 'pause');
-    }
     function active() { return running && inView && !d.hidden && !reduceMQ.matches; }
     function frame(ts) {
       raf = 0; if (!active()) return;
@@ -350,19 +359,19 @@
       go();
     }
     sec.classList.add('is-live');
-    if (playB) playB.addEventListener('click', function () { running = !running; labelPlay(); go(); });
+    pausable(win, win, function (p) { running = !p; go(); });
     phBtns.forEach(function (b, i) { b.addEventListener('click', function () { if (reduceMQ.matches) return; T = PH[i] + 0.05; render(T); go(); }); });
     if ('IntersectionObserver' in window) {
       new IntersectionObserver(function (es) {
         var e = es[es.length - 1];
         inView = e.isIntersecting && (e.intersectionRatio >= 0.5 || e.intersectionRect.height >= window.innerHeight * 0.5);
         go();
-      }, { threshold: [0, 0.25, 0.5, 0.75, 1] }).observe($('.hw__win', sec));
+      }, { threshold: [0, 0.25, 0.5, 0.75, 1] }).observe(win);
     }
     d.addEventListener('visibilitychange', go);
     reduceMQ.addEventListener && reduceMQ.addEventListener('change', setStatic);
-    render(0); labelPlay(); setStatic();
-    return { update: labelPlay };
+    render(0); setStatic();
+    return {};
   });
 
   /* ---------- top bar over the hero: transparent on the dark hero, solid after ---------- */
@@ -374,9 +383,26 @@
   });
 
   /* ---------- init ---------- */
-  if (lang === 'he') applyLang('he', false); else { setThemeLabel(); labelPause(); d.title = t('doc_title'); }
-  if (howApi) howApi.update();
+  if (lang === 'he') applyLang('he', false); else { setThemeLabel(); d.title = t('doc_title'); }
   if (flowApi) flowApi.restart();
+})();
+
+/* round 6 (why): phone comparison table, one expandable row at a time */
+(function () {
+  var tbl = document.querySelector('[data-cmpm]');
+  if (!tbl) return;
+  var btns = Array.prototype.slice.call(tbl.querySelectorAll('.cmpm__b'));
+  btns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var open = b.getAttribute('aria-expanded') !== 'true';
+      btns.forEach(function (o) {
+        var on = o === b && open;
+        o.setAttribute('aria-expanded', on ? 'true' : 'false');
+        var d = document.getElementById(o.getAttribute('aria-controls'));
+        if (d) d.classList.toggle('is-open', on);
+      });
+    });
+  });
 })();
 
 /* round 4: FAQ is an exclusive accordion; name="faq" does it natively, this covers browsers without it */

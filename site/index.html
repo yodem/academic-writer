@@ -39,7 +39,7 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preload" as="image" href="assets/img/hero-desk-lg.webp" imagesrcset="assets/img/hero-desk-800.webp 800w, assets/img/hero-desk-lg.webp 1376w" imagesizes="(min-width: 900px) 62vw, 100vw" fetchpriority="high">
+<link rel="preload" as="image" href="assets/img/hero-desk-lg.webp" imagesrcset="assets/img/hero-desk-800.webp 800w, assets/img/hero-desk-lg.webp 1376w" imagesizes="(min-width: 900px) 62vw, 260px" fetchpriority="high">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Hebrew:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Spectral:ital,wght@0,400;0,500;0,600;1,400&display=swap">
 <link rel="stylesheet" href="assets/css/site.css">
 </head>
@@ -78,7 +78,7 @@
 <!-- HERO -->
 <section class="hero band" id="top" aria-labelledby="hero-h">
   <figure class="hero__plate" aria-hidden="true">
-    <img src="assets/img/hero-desk-lg.webp" srcset="assets/img/hero-desk-800.webp 800w, assets/img/hero-desk-lg.webp 1376w" sizes="(min-width: 900px) 78vw, 100vw" width="1376" height="768" alt="" fetchpriority="high" decoding="async">
+    <img src="assets/img/hero-desk-lg.webp" srcset="assets/img/hero-desk-800.webp 800w, assets/img/hero-desk-lg.webp 1376w" sizes="(min-width: 900px) 78vw, 260px" width="1376" height="768" alt="" fetchpriority="high" decoding="async">
   </figure>
   <div class="wrap hero__grid">
     <div class="hero__text">
@@ -95,9 +95,9 @@
       </ul>
     </div>
         <div class="hero__viz" id="flowviz">
-      <div class="flow" id="flow">
+      <div class="flow" id="flowviz-flow">
         <span class="flow__tag" data-i18n="r2b_illus">Illustrative</span>
-        <div class="flow__stage" id="flow-stage" aria-hidden="true"></div>
+        <div class="flow__stage" id="flow-stage" tabindex="0" role="button" aria-pressed="false" data-i18n-attr="aria-label:m6h_anim" aria-label="Animation — click or press Space to pause"></div>
         <ol class="flow__sr">
           <li data-i18n="r3d_you">You</li>
           <li data-i18n="r3d_sources">Sources</li>
@@ -110,13 +110,6 @@
           <li data-i18n="r3d_voice">Voice</li>
           <li data-i18n="r3d_invoice">in your voice</li>
         </ol>
-        <div class="flow__ctl">
-          <button type="button" class="pause" id="flow-pause" aria-pressed="false">
-            <svg class="i-pause" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-            <svg class="i-play" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5Z"/></svg>
-            <span class="pause__t" data-i18n="pause">Pause animation</span>
-          </button>
-        </div>
       </div>
     </div>
   </div>
@@ -128,7 +121,7 @@
 <section class="sec why" id="why" aria-labelledby="why-h">
   <div class="wrap why__grid">
     <figure class="plate why__fig rv">
-      <div class="plate__mat"><img src="assets/img/people-desperate-lg.webp" srcset="assets/img/people-desperate-800.webp 800w, assets/img/people-desperate-lg.webp 1200w" sizes="(min-width: 900px) 360px, 88vw" width="1200" height="896" loading="lazy" decoding="async" alt="An engraving of a frazzled researcher clutching his hair at a laptop between towers of books." data-i18n-attr="alt:r4f_alt_desperate"></div>
+      <div class="plate__mat"><img src="assets/img/people-desperate-lg.webp" srcset="assets/img/people-desperate-800.webp 800w, assets/img/people-desperate-lg.webp 1200w" sizes="(min-width: 900px) 360px, min(88vw, 260px)" width="1200" height="896" loading="lazy" decoding="async" alt="An engraving of a frazzled researcher clutching his hair at a laptop between towers of books." data-i18n-attr="alt:r4f_alt_desperate"></div>
       <p class="why__q" data-i18n="r4f_why_q">Tired of checking every citation yourself?</p>
     </figure>
     <div class="why__main">
@@ -142,6 +135,21 @@
           <tr><th scope="row" data-i18n="r4f_row_get">What you get</th><td><div class="cmp__c"><span class="cmp__who" data-i18n="r4f_who_bot">A chatbot</span><span class="g g--part" aria-hidden="true">~</span><span class="cmp__t" data-i18n="r4f_g1">A wall of chat text</span></div></td><td><div class="cmp__c"><span class="cmp__who" data-i18n="r4f_who_nlm">NotebookLM</span><span class="g g--part" aria-hidden="true">~</span><span class="cmp__t" data-i18n="r4f_g2">Notes and summaries</span></div></td><td class="is-aw"><div class="cmp__c"><span class="cmp__who" data-i18n="r4f_who_aw">Academic Writer</span><span class="g g--yes" aria-hidden="true">✓</span><span class="cmp__t" data-i18n="r4f_g3">Word article, footnotes, revise loop</span></div></td></tr>
           <tr><th scope="row" data-i18n="r4f_row_more">Beyond the draft</th><td><div class="cmp__c"><span class="cmp__who" data-i18n="r4f_who_bot">A chatbot</span><span class="g g--none" aria-hidden="true">–</span><span class="cmp__t" data-i18n="r4f_m1">Nothing more</span></div></td><td><div class="cmp__c"><span class="cmp__who" data-i18n="r4f_who_nlm">NotebookLM</span><span class="g g--part" aria-hidden="true">~</span><span class="cmp__t" data-i18n="r4f_m2">Study notes</span></div></td><td class="is-aw"><div class="cmp__c"><span class="cmp__who" data-i18n="r4f_who_aw">Academic Writer</span><span class="g g--yes" aria-hidden="true">✓</span><span class="cmp__t" data-i18n="r4f_m3">Courses, OCR, proofread, review</span></div></td></tr>
           </tbody>
+      </table>
+      <table class="cmpm rv" data-cmpm>
+        <thead><tr><th scope="col"><span class="sr-only" data-i18n="r4f_row_h">What you compare</span></th><th scope="col" data-i18n="m6w_bot">Chatbot</th><th scope="col" data-i18n="m6w_nlm">NotebookLM</th><th scope="col" class="is-aw" data-i18n="m6w_aw">AW</th></tr></thead>
+        <tbody>
+          <tr class="cmpm__r"><th scope="row"><button type="button" class="cmpm__b" aria-expanded="false" aria-controls="cmpm-cite"><span data-i18n="r4f_row_cite">Citations</span><svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th><td><span class="g g--no" aria-hidden="true">✗</span><span class="sr-only" data-i18n="m6w_no">No</span></td><td><span class="g g--part" aria-hidden="true">~</span><span class="sr-only" data-i18n="m6w_part">Partly</span></td><td class="is-aw"><span class="g g--yes" aria-hidden="true">✓</span><span class="sr-only" data-i18n="m6w_yes">Yes</span></td></tr>
+          <tr class="cmpm__d" id="cmpm-cite"><td colspan="4"><dl><div><dt data-i18n="r4f_who_bot">A chatbot</dt><dd data-i18n="r4f_c1">May invent authors and pages</dd></div><div><dt data-i18n="r4f_who_nlm">NotebookLM</dt><dd data-i18n="r4f_c2">Links answers to your passages</dd></div><div><dt data-i18n="r4f_who_aw">Academic Writer</dt><dd data-i18n="r4f_c3">Each footnote checked on its page</dd></div></dl></td></tr>
+          <tr class="cmpm__r"><th scope="row"><button type="button" class="cmpm__b" aria-expanded="false" aria-controls="cmpm-search"><span data-i18n="r4f_row_search">Search</span><svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th><td><span class="g g--no" aria-hidden="true">✗</span><span class="sr-only" data-i18n="m6w_no">No</span></td><td><span class="g g--part" aria-hidden="true">~</span><span class="sr-only" data-i18n="m6w_part">Partly</span></td><td class="is-aw"><span class="g g--yes" aria-hidden="true">✓</span><span class="sr-only" data-i18n="m6w_yes">Yes</span></td></tr>
+          <tr class="cmpm__d" id="cmpm-search"><td colspan="4"><dl><div><dt data-i18n="r4f_who_bot">A chatbot</dt><dd data-i18n="r4f_s1">Answers from memory, not your sources</dd></div><div><dt data-i18n="r4f_who_nlm">NotebookLM</dt><dd data-i18n="r4f_s2">Finds passages that sound similar</dd></div><div><dt data-i18n="r4f_who_aw">Academic Writer</dt><dd data-i18n="r4f_s3">Agents read pages, keep exact quotes</dd></div></dl></td></tr>
+          <tr class="cmpm__r"><th scope="row"><button type="button" class="cmpm__b" aria-expanded="false" aria-controls="cmpm-voice"><span data-i18n="r4f_row_voice">Your voice</span><svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th><td><span class="g g--no" aria-hidden="true">✗</span><span class="sr-only" data-i18n="m6w_no">No</span></td><td><span class="g g--no" aria-hidden="true">✗</span><span class="sr-only" data-i18n="m6w_no">No</span></td><td class="is-aw"><span class="g g--yes" aria-hidden="true">✓</span><span class="sr-only" data-i18n="m6w_yes">Yes</span></td></tr>
+          <tr class="cmpm__d" id="cmpm-voice"><td colspan="4"><dl><div><dt data-i18n="r4f_who_bot">A chatbot</dt><dd data-i18n="r4f_v1">One smooth style for everyone</dd></div><div><dt data-i18n="r4f_who_nlm">NotebookLM</dt><dd data-i18n="r4f_v2">Summarises; no voice to match</dd></div><div><dt data-i18n="r4f_who_aw">Academic Writer</dt><dd data-i18n="r4f_v3">Learned from your own articles</dd></div></dl></td></tr>
+          <tr class="cmpm__r"><th scope="row"><button type="button" class="cmpm__b" aria-expanded="false" aria-controls="cmpm-get"><span data-i18n="r4f_row_get">What you get</span><svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th><td><span class="g g--part" aria-hidden="true">~</span><span class="sr-only" data-i18n="m6w_part">Partly</span></td><td><span class="g g--part" aria-hidden="true">~</span><span class="sr-only" data-i18n="m6w_part">Partly</span></td><td class="is-aw"><span class="g g--yes" aria-hidden="true">✓</span><span class="sr-only" data-i18n="m6w_yes">Yes</span></td></tr>
+          <tr class="cmpm__d" id="cmpm-get"><td colspan="4"><dl><div><dt data-i18n="r4f_who_bot">A chatbot</dt><dd data-i18n="r4f_g1">A wall of chat text</dd></div><div><dt data-i18n="r4f_who_nlm">NotebookLM</dt><dd data-i18n="r4f_g2">Notes and summaries</dd></div><div><dt data-i18n="r4f_who_aw">Academic Writer</dt><dd data-i18n="r4f_g3">Word article, footnotes, revise loop</dd></div></dl></td></tr>
+          <tr class="cmpm__r"><th scope="row"><button type="button" class="cmpm__b" aria-expanded="false" aria-controls="cmpm-more"><span data-i18n="r4f_row_more">Beyond the draft</span><svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></th><td><span class="g g--none" aria-hidden="true">–</span><span class="sr-only" data-i18n="m6w_no">No</span></td><td><span class="g g--part" aria-hidden="true">~</span><span class="sr-only" data-i18n="m6w_part">Partly</span></td><td class="is-aw"><span class="g g--yes" aria-hidden="true">✓</span><span class="sr-only" data-i18n="m6w_yes">Yes</span></td></tr>
+          <tr class="cmpm__d" id="cmpm-more"><td colspan="4"><dl><div><dt data-i18n="r4f_who_bot">A chatbot</dt><dd data-i18n="r4f_m1">Nothing more</dd></div><div><dt data-i18n="r4f_who_nlm">NotebookLM</dt><dd data-i18n="r4f_m2">Study notes</dd></div><div><dt data-i18n="r4f_who_aw">Academic Writer</dt><dd data-i18n="r4f_m3">Courses, OCR, proofread, review</dd></div></dl></td></tr>
+        </tbody>
       </table>
       <p class="why__note rv" data-i18n="r4f_why_note">Also works with NotebookLM: notebooks, course notes, transcripts.</p>
     </div>
@@ -166,13 +174,13 @@
           <li data-i18n="r5_sr5">Run revise: your Word comments flow back to the writers and a new article-v2.docx is saved.</li>
         </ol>
       </div>
-      <div class="hw__win" aria-hidden="true">
-        <div class="hw__bar">
+      <div class="hw__win" tabindex="0" role="button" aria-pressed="false" data-i18n-attr="aria-label:m6h_anim" aria-label="Animation — click or press Space to pause">
+        <div class="hw__bar" aria-hidden="true">
           <span class="hw__dots"><i></i><i></i><i></i></span>
           <span class="hw__title" data-i18n="r5_title">Cowork</span>
           <span class="hw__tag" data-i18n="r5_tag">Illustrative</span>
         </div>
-        <div class="hw__body">
+        <div class="hw__body" aria-hidden="true">
           <nav class="hw__rail">
             <span class="is-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14v10H9l-4 4Z"/></svg></span>
             <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></span>
@@ -256,11 +264,6 @@
         </div>
       </div>
       <div class="hw__ctl">
-        <button type="button" class="hw__play" id="hw-play" aria-pressed="false">
-          <svg class="i-pause" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-          <svg class="i-play" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5Z"/></svg>
-          <span class="hw__playt">Pause animation</span>
-        </button>
         <ol class="hw__phases" data-i18n-attr="aria-label:r5_phases" aria-label="Phases">
           <li><button type="button" class="hw__phase" data-go="0"><span class="hw__pn">1</span><span data-i18n="r5_p1">Init</span><i></i></button></li>
           <li><button type="button" class="hw__phase" data-go="1"><span class="hw__pn">2</span><span data-i18n="r5_p2">Write</span><i></i></button></li>
@@ -357,7 +360,7 @@
     </div>
     <div class="revise__vis">
       <figure class="plate rv">
-        <div class="plate__mat"><img src="assets/img/people-revise-lg.webp" srcset="assets/img/people-revise-800.webp 800w, assets/img/people-revise-lg.webp 1200w" sizes="(min-width: 900px) 520px, 92vw" width="1200" height="896" loading="lazy" decoding="async" alt="An engraving of two researchers laughing over an annotated printed draft." data-i18n-attr="alt:r3c_alt_revise"></div>
+        <div class="plate__mat"><img src="assets/img/people-revise-lg.webp" srcset="assets/img/people-revise-800.webp 800w, assets/img/people-revise-lg.webp 1200w" sizes="(min-width: 900px) 520px, min(88vw, 260px)" width="1200" height="896" loading="lazy" decoding="async" alt="An engraving of two researchers laughing over an annotated printed draft." data-i18n-attr="alt:r3c_alt_revise"></div>
       </figure>
       <div class="vp rv" role="group" aria-labelledby="rv-t">
         <div class="vp__bar"><span class="vp__t" id="rv-t" data-i18n="r2a_rv_t">Review your comments</span><span class="tag" data-i18n="r2a_illus">Illustrative</span></div>
@@ -387,7 +390,7 @@
         <h2 id="crs-h" class="rv" data-i18n="r2a_crs_h">Your courses, kept in order.</h2>
         <p class="lede rv" data-i18n="r2a_crs_p">Set up a term once; turn lecture recordings into lesson notes.</p>
       </div>
-      <figure class="plate rv"><div class="plate__mat plate__mat--16x9"><img src="assets/img/people-students-lg.webp" srcset="assets/img/people-students-800.webp 800w, assets/img/people-students-lg.webp 1376w" sizes="(min-width: 900px) 560px, 92vw" width="1376" height="768" loading="lazy" decoding="async" alt="An engraving of a cheerful seminar: students with laptops, a lecturer and an audio recorder on the table." data-i18n-attr="alt:r3c_alt_students"></div></figure>
+      <figure class="plate rv"><div class="plate__mat plate__mat--16x9"><img src="assets/img/people-students-lg.webp" srcset="assets/img/people-students-800.webp 800w, assets/img/people-students-lg.webp 1376w" sizes="(min-width: 900px) 560px, min(88vw, 260px)" width="1376" height="768" loading="lazy" decoding="async" alt="An engraving of a cheerful seminar: students with laptops, a lecturer and an audio recorder on the table." data-i18n-attr="alt:r3c_alt_students"></div></figure>
     </div>
     <div class="cgrid">
       <article class="ccard rv">
@@ -413,12 +416,12 @@
         <ol class="csteps">
           <li data-i18n="r2a_l1">Give it a lecture recording.</li>
           <li data-i18n="r2a_l2">It matches it to your schedule; NotebookLM transcribes.</li>
-          <li data-i18n="r2a_l3">One Hebrew page lands in the course's Trove book.</li>
+          <li data-i18n="r2a_l3">One structured page lands in the course's Trove book.</li>
         </ol>
-        <div class="lpage lit" lang="he" dir="rtl">
-          <div class="lpage__t"># שיעור 4 · 3.11.2026 · שם הקורס</div>
+        <div class="lpage lit">
+          <div class="lpage__t" data-i18n="m6s_lp_t"># Lesson 4 · 3 Nov 2026 · Course name</div>
           <ul>
-            <li>תקציר</li><li>מהלך השיעור</li><li>טענות וטיעונים</li><li>עמדות ודוברים</li><li>שאלות ודיונים</li><li>מטלות, קריאה ומועדים</li><li>מושגים</li><li>לקריאה נוספת</li>
+            <li data-i18n="m6s_lp1">Summary</li><li data-i18n="m6s_lp2">Lesson flow</li><li data-i18n="m6s_lp3">Claims and arguments</li><li data-i18n="m6s_lp4">Positions and speakers</li><li data-i18n="m6s_lp5">Questions and discussion</li><li data-i18n="m6s_lp6">Assignments, readings and dates</li><li data-i18n="m6s_lp7">Concepts</li><li data-i18n="m6s_lp8">Further reading</li>
           </ul>
         </div>
         <ul class="trustl">
@@ -439,7 +442,7 @@
     </div>
     <figure class="film__fig rv">
       <div class="film__frame" id="film-frame">
-        <video id="film-video" controls playsinline preload="metadata" poster="assets/video/overview-poster.webp" width="1280" height="720">
+        <video id="film-video" controls playsinline preload="none" poster="assets/video/overview-poster.webp" width="1280" height="720">
           <source src="assets/video/overview.webm" type="video/webm">
           <source src="assets/video/overview.mp4" type="video/mp4">
         </video>
@@ -458,15 +461,15 @@
           <h3 data-i18n="lib_h">Your library, page by page</h3>
           <p data-i18n="lib_p">Articles and books keep their printed page numbers.</p>
         </div>
-        <figure class="plate"><div class="plate__mat"><img src="assets/img/people-library-lg.webp" srcset="assets/img/people-library-800.webp 800w, assets/img/people-library-lg.webp 1200w" sizes="(min-width: 900px) 340px, 88vw" width="1200" height="896" loading="lazy" decoding="async" alt="An engraving of a graduate student pulling a bookmarked book from a library shelf." data-i18n-attr="alt:r3c_alt_library"></div></figure>
+        <figure class="plate"><div class="plate__mat"><img src="assets/img/people-library-lg.webp" srcset="assets/img/people-library-800.webp 800w, assets/img/people-library-lg.webp 1200w" sizes="(min-width: 900px) 340px, min(88vw, 260px)" width="1200" height="896" loading="lazy" decoding="async" alt="An engraving of a graduate student pulling a bookmarked book from a library shelf." data-i18n-attr="alt:r3c_alt_library"></div></figure>
       </article>
       <article class="tile tile--he rv">
         <span class="tile__ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M9 6v2M6 12c1.5 3 4 4.5 6 5M12 12c-1 2.5-3.5 4.5-7 5.5M14 20l4-10 4 10M15.5 17h5"/></svg></span>
-        <h3 data-i18n="he_h">Hebrew, right-to-left</h3>
-        <p data-i18n="he_p">RTL layout and Hebrew footnotes, right in Word.</p>
-        <div class="sheet sheet--he" lang="he" dir="rtl">
-          <p class="sheet__p">הטענה המרכזית של המאמר היא שהפולמוס לא נסב על שאלת הסמכות בלבד, אלא על הגדרת הקהילה עצמה.<sup class="fn">1</sup></p>
-          <div class="sheet__foot"><sup class="fn">1</sup> גרשם שלום, <i>זרמים ראשיים במיסטיקה היהודית</i>, עמ' 244.</div>
+        <h3 data-i18n="he_h">Hebrew and English</h3>
+        <p data-i18n="he_p">Writes in either language: right-to-left layout and Hebrew footnotes, right in Word.</p>
+        <div class="sheet sheet--he">
+          <p class="sheet__p"><span data-i18n="m6s_sp">The article's central claim is that the controversy was not only about authority but about how the community defined itself.</span><sup class="fn">1</sup></p>
+          <div class="sheet__foot"><sup class="fn">1</sup> <span data-i18n-html="m6s_sf">Gershom Scholem, <i>Major Trends in Jewish Mysticism</i>, p. 244.</span></div>
         </div>
       </article>
       <article class="tile tile--s rv">
@@ -573,16 +576,23 @@
     <div class="final__main">
     <h2 id="final-h" class="final__h rv"><span data-i18n="fin_1">Your argument.</span> <span data-i18n="fin_2">Your sources.</span> <span data-i18n="fin_3">Your voice.</span></h2>
     <div class="final__cta rv">
-      <div class="cmd">
-        <pre dir="ltr" class="cmd__pre"><code>/plugin marketplace add yodem/academic-writer
-/plugin install academic-writer@yodem</code></pre>
-        <button type="button" class="copy" data-copy="/plugin marketplace add yodem/academic-writer&#10;/plugin install academic-writer@yodem"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span class="copy__t" data-i18n="copy">Copy</span></button>
+      <div class="final__two">
+        <div class="final__way">
+          <h3>Cowork</h3>
+          <p class="final__note" data-i18n="r2a_fin_note">In Cowork, add the plugin from Customize, then Plugins.</p>
+          <div class="cmd cmd--one"><pre dir="ltr" class="cmd__pre"><code>yodem/academic-writer</code></pre><button type="button" class="copy" data-copy="yodem/academic-writer"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span class="copy__t" data-i18n="copy">Copy</span></button></div>
+        </div>
+        <div class="final__way">
+          <h3>Claude Code</h3>
+          <p class="final__note" data-i18n="cc1">Paste these two lines:</p>
+          <div class="cmd"><pre dir="ltr" class="cmd__pre"><code>/plugin marketplace add yodem/academic-writer
+/plugin install academic-writer@yodem</code></pre><button type="button" class="copy" data-copy="/plugin marketplace add yodem/academic-writer&#10;/plugin install academic-writer@yodem"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span class="copy__t" data-i18n="copy">Copy</span></button></div>
+        </div>
       </div>
-      <p class="final__note"><span data-i18n="r2a_fin_note">In Cowork, add the plugin from Customize, then Plugins.</span> <a href="#install" data-i18n="r2a_fin_link">See the steps</a></p>
-      <p class="final__links"><a href="./guide/" data-i18n="fin_guide">Full guide</a><a href="https://github.com/yodem/academic-writer">GitHub</a><a href="https://github.com/yodem/academic-writer/issues" data-i18n="fin_issue">Report a problem</a></p>
+      <p class="final__links"><a href="#install" data-i18n="r2a_fin_link">See the steps</a><a href="./guide/" data-i18n="fin_guide">Full guide</a><a href="https://github.com/yodem/academic-writer">GitHub</a><a href="https://github.com/yodem/academic-writer/issues" data-i18n="fin_issue">Report a problem</a></p>
     </div>
     </div>
-    <figure class="plate final__plate rv"><div class="plate__mat plate__mat--16x9"><img src="assets/img/people-celebrate-lg.webp" srcset="assets/img/people-celebrate-800.webp 800w, assets/img/people-celebrate-lg.webp 1376w" sizes="(min-width: 900px) 520px, 92vw" width="1376" height="768" loading="lazy" decoding="async" alt="An engraving of a researcher holding up a journal issue while colleagues applaud." data-i18n-attr="alt:r3c_alt_celebrate"></div></figure>
+    <figure class="plate final__plate rv"><div class="plate__mat plate__mat--16x9"><img src="assets/img/people-celebrate-lg.webp" srcset="assets/img/people-celebrate-800.webp 800w, assets/img/people-celebrate-lg.webp 1376w" sizes="(min-width: 900px) 520px, min(88vw, 260px)" width="1376" height="768" loading="lazy" decoding="async" alt="An engraving of a researcher holding up a journal issue while colleagues applaud." data-i18n-attr="alt:r3c_alt_celebrate"></div></figure>
   </div>
 </section>
 </main>
