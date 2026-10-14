@@ -65,10 +65,10 @@ Present the brainstorm:
 
 ## Step 3: Gap Analysis
 
-If Candlekeep is enabled, scan the researcher's library:
+If Trove is enabled, scan the researcher's library:
 
 ```bash
-ck items list --json
+trove items list --json
 ```
 
 For each source, check its metadata against the topic:
@@ -90,7 +90,7 @@ Present the gap analysis:
 >
 > These gaps could be fertile ground for a research question."
 
-If CandleKeep is not enabled, ask the researcher which sources they know on the topic and do the gap analysis from their answer. Never invent sources.
+If Trove is not enabled, ask the researcher which sources they know on the topic and do the gap analysis from their answer. Never invent sources.
 
 ---
 

@@ -1,4 +1,4 @@
-# Integration Setup (Candlekeep, NotebookLM)
+# Integration Setup (Trove, NotebookLM)
 
 > Loaded on demand by `init` Phase 1. Each tool has detection command, configuration block, and registration steps.
 
@@ -8,7 +8,7 @@ Run ALL in parallel:
 
 ```python
 # PARALLEL — launch all at once
-Bash(command="command -v ck >/dev/null 2>&1 && echo 'DETECTED' || echo 'NOT_DETECTED'")
+Bash(command="command -v trove >/dev/null 2>&1 && echo 'DETECTED' || echo 'NOT_DETECTED'")
 Bash(command="command -v nlm >/dev/null 2>&1 && nlm login --check 2>/dev/null && echo 'DETECTED' || echo 'NOT_DETECTED'")
 ```
 
@@ -20,9 +20,9 @@ AskUserQuestion(questions=[{
   "header": "Integration setup",
   "options": [
     {
-      "label": "Candlekeep",
+      "label": "Trove",
       "description": "✓ Detected  (or ✗ Not found — I can install it after asking)",
-      "markdown": "```\nCandlekeep\n──────────\nType:    CLI (ck)\nWhat:    Cloud document library\nBest for: Storing and searching your source PDFs\nStatus:  ✓ Detected\n```"
+      "markdown": "```\nTrove\n─────\nType:    CLI (trove)\nWhat:    Cloud document library\nBest for: Storing and searching your source PDFs\nStatus:  ✓ Detected\n```"
     },
     {
       "label": "NotebookLM",

@@ -107,13 +107,13 @@ export function voiceSync(direction: 'push' | 'pull'): string {
     local['profile.json'] = readFileSync(join(dir, 'profile.json'), 'utf8');
     local['CHANGELOG.jsonl'] = readFileSync(join(dir, 'CHANGELOG.jsonl'), 'utf8');
     const localProfile = local['profile.json'] ? JSON.parse(local['profile.json']) as { voiceVersion?: string } : {};
-    const listingText = execFileSync('ck', ['items', 'list', '--json'], { encoding: 'utf8' });
+    const listingText = execFileSync('trove', ['items', 'list', '--json'], { encoding: 'utf8' });
     const listing = JSON.parse(listingText) as { items?: Array<{ id?: string; title?: string }> };
     const item = listing.items?.find(row => row.title === title && typeof row.id === 'string');
-    if (direction === 'pull' && !item?.id) throw new AwError('ERROR', 'voice.pull', 'no CandleKeep voice store found');
+    if (direction === 'pull' && !item?.id) throw new AwError('ERROR', 'voice.pull', 'no Trove voice store found');
     let remote: Record<string, string> | undefined;
     if (item?.id) {
-      const text = execFileSync('ck', ['items', 'get', item.id], { encoding: 'utf8' });
+      const text = execFileSync('trove', ['items', 'get', item.id], { encoding: 'utf8' });
       remote = JSON.parse(text) as Record<string, string>;
     }
     if (direction === 'pull') {
@@ -131,14 +131,14 @@ export function voiceSync(direction: 'push' | 'pull'): string {
     if (localProfile.voiceVersion && remoteProfile.voiceVersion && remoteProfile.voiceVersion > localProfile.voiceVersion && remote) {
       local['CHANGELOG.jsonl'] = [...new Set([...(remote['CHANGELOG.jsonl'] ?? '').split('\n'), ...(local['CHANGELOG.jsonl'] ?? '').split('\n')].filter(Boolean))].join('\n') + '\n';
     }
-    const file = join(dir, '.candlekeep-voice.md');
+    const file = join(dir, '.trove-voice.md');
     writeFileSync(file, body);
-    if (item?.id) execFileSync('ck', ['items', 'put', item.id, '-f', file], { encoding: 'utf8' });
-    else execFileSync('ck', ['items', 'import', file, '--title', title], { encoding: 'utf8' });
+    if (item?.id) execFileSync('trove', ['items', 'put', item.id, '-f', file], { encoding: 'utf8' });
+    else execFileSync('trove', ['items', 'import', file, '--title', title], { encoding: 'utf8' });
     return `voice push: synchronized ${title}`;
   } catch (error) {
     if (error instanceof AwError) throw error;
-    throw new AwError('ERROR', `voice.${direction}`, error instanceof Error ? error.message : 'CandleKeep sync failed');
+    throw new AwError('ERROR', `voice.${direction}`, error instanceof Error ? error.message : 'Trove sync failed');
   }
 }
 export function voiceProjectDir(): string { return projectDir(); }

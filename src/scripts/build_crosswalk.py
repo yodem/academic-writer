@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 build_crosswalk.py — Map every page of the *uploaded* combined book to its
-Trove (formerly CandleKeep) page number, per volume.
+Trove page number, per volume.
 
 Why this exists (the core gotcha):
 - Trove numbers pages sequentially from 1 (page 1 = your reading guide,
@@ -41,7 +41,7 @@ pages):
      number was skipped (see build_toc_enrich.py, which does this for you).
 
 Always verify 2-3 anchors (first chapter, a famous mid-book section, the index)
-against live content with `ck items read <id>:<ck>` before trusting the map.
+against live content with `trove items read <id>:<ck>` before trusting the map.
 """
 import argparse
 import json

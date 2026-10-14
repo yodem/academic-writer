@@ -1,6 +1,6 @@
 ---
 name: update-tools
-description: "Turn the optional integrations (CandleKeep source library, NotebookLM) on or off after setup and record the change in the profile. Use when the author wants to connect, disconnect or re-check CandleKeep or NotebookLM without redoing the full setup (/academic-writer:init)."
+description: "Turn the optional integrations (Trove source library, NotebookLM) on or off after setup and record the change in the profile. Use when the author wants to connect, disconnect or re-check Trove or NotebookLM without redoing the full setup (/academic-writer:init)."
 user-invocable: false
 allowed-tools: [Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.2.23"}
@@ -10,7 +10,7 @@ metadata: {author: "Yotam Fromm", version: "0.2.23"}
 
 Change which optional integrations are enabled, without re-running the full setup. In plain words for the author:
 
-- **CandleKeep** is the library where the author's sources are stored and read page by page; the citation checker relies on it.
+- **Trove** is the library where the author's sources are stored and read page by page; the citation checker relies on it.
 - **NotebookLM** is Google's notebook tool; the plugin uses it only for optional extras (background summaries, audio overviews, study guides), never as a citation source.
 
 Only mark a tool enabled after it is detected, because the other skills trust this setting and would otherwise fail midway.
@@ -32,9 +32,9 @@ Parse the current `tools` object from the profile. If the profile has no `tools`
 
 Run detection for every tool in the registry, regardless of current status:
 
-**1. Candlekeep** (`candlekeep`)
+**1. Trove** (`trove`; older profiles store it as `candlekeep`: read either, write `trove`)
 ```bash
-command -v ck >/dev/null 2>&1 && echo "DETECTED" || echo "NOT_DETECTED"
+command -v trove >/dev/null 2>&1 && echo "DETECTED" || echo "NOT_DETECTED"
 ```
 
 **2. NotebookLM** (`notebooklm`)
@@ -50,7 +50,7 @@ Show a table with current status and detection:
 >
 > | # | Tool | Currently | Detected | Setup |
 > |---|------|-----------|----------|-------|
-> | 1 | Candlekeep | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/romiluz13/candlekeep |
+> | 1 | Trove | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://heytrove.ai |
 > | 2 | NotebookLM | ✓ Enabled / ✗ Disabled | ✓ / ✗ | https://github.com/jacob-bd/notebooklm-mcp-cli |
 >
 > What would you like to change? You can:
@@ -67,7 +67,7 @@ For each tool the user wants to **enable**:
 
 For each tool the user wants to **disable**:
 1. Mark it as disabled immediately
-2. Warn if it affects existing sources: "Note: disabling Candlekeep won't delete your indexed sources, but new source management will need to be done manually."
+2. Warn if it affects existing sources: "Note: disabling Trove won't delete your indexed sources, but new source management will need to be done manually."
 
 ## Save Updated Profile
 
@@ -161,7 +161,7 @@ PYTHON
 Replace `TOOL_CONFIG` with the actual tools as a Python dict literal (Python spells booleans `True`/`False`; a JSON `true` would crash the script), e.g.:
 ```python
 {
-  "candlekeep": {"enabled": True, "version": "detected"},
+  "trove": {"enabled": True, "version": "detected"},
   "notebooklm": {"enabled": False, "version": None}
 }
 ```
@@ -173,4 +173,4 @@ Replace `TOOL_CONFIG` with the actual tools as a Python dict literal (Python spe
 > [list each tool with ✓/✗ status]
 >
 > These changes take effect immediately for `/academic-writer:write`.
-> If you enabled CandleKeep and haven't added sources yet, run `/academic-writer:init` to add them."
+> If you enabled Trove and haven't added sources yet, run `/academic-writer:init` to add them."

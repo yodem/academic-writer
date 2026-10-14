@@ -1,6 +1,6 @@
 ---
 name: ingest-book
-description: "Upload a whole academic book — a large or scanned PDF, a multi-volume set, or an EPUB — into the author's Trove (CandleKeep) library as one book with its printed page numbers preserved, a nested navigable table of contents where every entry jumps to its real page and carries a content hint, and a page-1 reading-and-citation guide. Use when the author says 'upload this book', 'ingest these volumes', 'combine these PDFs into one book', 'ingest this EPUB', or when the input is 100+ pages, over ~50MB, or a scanned PDF, and to repair an existing book whose sidebar is an unusable flat list of 'page N' entries. Do NOT use for a single article, paper or chapter — use /academic-writer:ingest."
+description: "Upload a whole academic book — a large or scanned PDF, a multi-volume set, or an EPUB — into the author's Trove library as one book with its printed page numbers preserved, a nested navigable table of contents where every entry jumps to its real page and carries a content hint, and a page-1 reading-and-citation guide. Use when the author says 'upload this book', 'ingest these volumes', 'combine these PDFs into one book', 'ingest this EPUB', or when the input is 100+ pages, over ~50MB, or a scanned PDF, and to repair an existing book whose sidebar is an unusable flat list of 'page N' entries. Do NOT use for a single article, paper or chapter — use /academic-writer:ingest."
 user-invocable: true
 allowed-tools: [Bash, Read, Write, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.1.0", summary: "Upload a whole book (multi-volume, scanned or EPUB) to the source library with a navigable hinted table of contents and a citation guide."}
@@ -8,19 +8,19 @@ metadata: {author: "Yotam Fromm", version: "0.1.0", summary: "Upload a whole boo
 
 # Ingest a whole book
 
-Turn a whole book — often a large, multi-volume, scanned PDF — into one Trove (formerly CandleKeep) book that reads page-by-page faithfully AND has a real navigable table of contents: a nested tree where every unit, section and subsection jumps to its actual page. This is the book-scale sibling of `/academic-writer:ingest` (single article or chapter); what makes book scale different is PDFs too big for the Read tool, scan watermarks and RTL bidi noise, several volumes to merge, and — the part everyone gets wrong — making the ToC actually navigate.
+Turn a whole book — often a large, multi-volume, scanned PDF — into one Trove book that reads page-by-page faithfully AND has a real navigable table of contents: a nested tree where every unit, section and subsection jumps to its actual page. This is the book-scale sibling of `/academic-writer:ingest` (single article or chapter); what makes book scale different is PDFs too big for the Read tool, scan watermarks and RTL bidi noise, several volumes to merge, and — the part everyone gets wrong — making the ToC actually navigate.
 
 Throughout: preserve the ORIGINAL printed page numbers (**cite the printed page, never the Trove page**), give every ToC entry a hint of up to 3 sentences, and make page 1 a "How to read and cite this book" guide.
 
 ## 0. Pre-flight
 
 1. Read `.academic-helper/profile.md`. If it does not exist, say nothing is set up yet and point at `/academic-writer:setup` or `/academic-writer:init`; stop.
-2. If the profile's Tools section has `"candlekeep": { "enabled": false }`, say the source library is disabled and it can be enabled with `/academic-writer:update-tools`; stop.
-3. Check the library CLI: run `ck items list --json` (some installations call the same CLI `trove`). If missing, point at `/academic-writer:health`; stop.
+2. If the profile's Tools section has `"trove": { "enabled": false }` (or the older `"candlekeep"` key), say the source library is disabled and it can be enabled with `/academic-writer:update-tools`; stop.
+3. Check the library CLI: run `trove items list --json` (some installations call the same CLI `trove`). If missing, point at `/academic-writer:health`; stop.
 
 ## Critical: the ToC is metadata, not page content
 
-Trove's sidebar/outline is built from **ToC metadata** you attach with `ck items enrich <id> --toc '[{"title","page","level"}]'`. It is NOT built from the markdown headings inside a page. A beautiful ToC written into page 1 as `##`/`###` headings makes every entry link back to page 1 — the single most common failure here. Read `references/toc-mechanism.md` before any ToC work, and before "fixing" a flat ToC.
+Trove's sidebar/outline is built from **ToC metadata** you attach with `trove items enrich <id> --toc '[{"title","page","level"}]'`. It is NOT built from the markdown headings inside a page. A beautiful ToC written into page 1 as `##`/`###` headings makes every entry link back to page 1 — the single most common failure here. Read `references/toc-mechanism.md` before any ToC work, and before "fixing" a flat ToC.
 
 ## Bundled scripts
 
@@ -62,13 +62,13 @@ Four phases; finish and sanity-check each before the next, so a failure is easy 
 ### Phase B — Combine & Upload
 
 3. **Combine volumes** into one file: reserve page 1 for the reading guide (fleshed out in Phase C), then for each volume a divider page followed by that volume's pages. Restart page numbering at 1 per volume — `build_crosswalk.py` detects volume boundaries from those resets.
-4. **Upload** with `ck items import` — it creates the book and uploads in chunks that cut only at `# ` boundaries (30 MB ceiling; `ck items create` has no `--file` flag, and whole-document `put --file` caps at 1 MB). Record the BOOK_ID it prints.
+4. **Upload** with `trove items import` — it creates the book and uploads in chunks that cut only at `# ` boundaries (30 MB ceiling; `trove items create` has no `--file` flag, and whole-document `put --file` caps at 1 MB). Record the BOOK_ID it prints.
    ```bash
-   ck items import /tmp/combined.md --title "<title>" --no-session
-   ck items enrich <BOOK_ID> --author "<authors>" --description "<one-line>" --no-session
+   trove items import /tmp/combined.md --title "<title>" --no-session
+   trove items enrich <BOOK_ID> --author "<authors>" --description "<one-line>" --no-session
    ```
 
-**Never delete or overwrite an existing book.** If the author wants to replace an earlier upload, ask for explicit confirmation, and delete the old book only after the new one passes the read-back below; before deleting, match the old item's id and title exactly against `ck items list --json`.
+**Never delete or overwrite an existing book.** If the author wants to replace an earlier upload, ask for explicit confirmation, and delete the old book only after the new one passes the read-back below; before deleting, match the old item's id and title exactly against `trove items list --json`.
 
 *Gate:* the reported page count matches what you predicted from the source structure. A mismatch means a stray `# ` split a page — find it before enriching, because every later ToC target is now off by one.
 
@@ -84,7 +84,7 @@ Four phases; finish and sanity-check each before the next, so a failure is easy 
    ```bash
    python "${CLAUDE_PLUGIN_ROOT}/scripts/build_crosswalk.py" /tmp/combined.md --page-label "עמוד מקורי" --out /tmp/crosswalk.json
    ```
-   Find each volume's **offset** (`stored = printed + offset`): take a ToC entry with a known printed page, read Trove pages (`ck items read <id>:<ck>`) until you find that content, and compute the difference. Verify 2–3 anchors per volume (first chapter, a famous mid-book section, the index). If anchors disagree by more than one page, do not guess — surface the conflicting anchors to the author and ask which printed page to trust. A confidently-wrong ToC is worse than none.
+   Find each volume's **offset** (`stored = printed + offset`): take a ToC entry with a known printed page, read Trove pages (`trove items read <id>:<ck>`) until you find that content, and compute the difference. Verify 2–3 anchors per volume (first chapter, a famous mid-book section, the index). If anchors disagree by more than one page, do not guess — surface the conflicting anchors to the author and ask which printed page to trust. A confidently-wrong ToC is worse than none.
 7. **Build and apply the navigable ToC.** Write a small config (schema and example in `build_toc_enrich.py`'s header) mapping each volume to its entries file, offset, divider Trove page, and title, then:
    ```bash
    python "${CLAUDE_PLUGIN_ROOT}/scripts/build_toc_enrich.py" \
@@ -92,17 +92,17 @@ Four phases; finish and sanity-check each before the next, so a failure is easy 
      --out /tmp/toc_enrich.json --apply <BOOK_ID>
    ```
    Levels: volume=1, unit=2, section=3, subsection=4, sub-subsection=5; appendices/glossary/index=3. Include the appendices, glossary and any combined index — readers specifically want those findable.
-8. **Flesh out page 1** as the "How to read and cite this book" guide, built from `${CLAUDE_PLUGIN_ROOT}/skills/ingest/references/reading-page-template.md` (English or Hebrew variant). It carries the full bibliographic record, how the printed page markers work and the rule **cite the printed page, never the Trove page**, the covered pages and gaps, and footnote templates in **three** citation styles: Chicago notes-bibliography (first note + short note), the Hebrew academic convention (שם המחבר, שם הספר, מקום תשנ״ה, עמ׳ N; short form for subsequent notes), and a third style chosen from the profile's `citationStyle` (MLA or APA) so the author's own style always appears. For a primary text it also carries the structural-locus form (chapter/premise/paragraph). Rewrite it in place with `ck items put <BOOK_ID>:1 --file /tmp/reading-guide.md --no-session`.
+8. **Flesh out page 1** as the "How to read and cite this book" guide, built from `${CLAUDE_PLUGIN_ROOT}/skills/ingest/references/reading-page-template.md` (English or Hebrew variant). It carries the full bibliographic record, how the printed page markers work and the rule **cite the printed page, never the Trove page**, the covered pages and gaps, and footnote templates in **three** citation styles: Chicago notes-bibliography (first note + short note), the Hebrew academic convention (שם המחבר, שם הספר, מקום תשנ״ה, עמ׳ N; short form for subsequent notes), and a third style chosen from the profile's `citationStyle` (MLA or APA) so the author's own style always appears. For a primary text it also carries the structural-locus form (chapter/premise/paragraph). Rewrite it in place with `trove items put <BOOK_ID>:1 --file /tmp/reading-guide.md --no-session`.
 
 ### Phase D — Read-back (mandatory)
 
 Never say "uploaded" without this. Run:
 
 ```bash
-ck items get <BOOK_ID> --no-session
-ck items toc <BOOK_ID> --no-session
-ck items read <BOOK_ID>:1 --no-session
-ck items read <BOOK_ID>:<anchor-ck> --no-session
+trove items get <BOOK_ID> --no-session
+trove items toc <BOOK_ID> --no-session
+trove items read <BOOK_ID>:1 --no-session
+trove items read <BOOK_ID>:<anchor-ck> --no-session
 ```
 
 and check all four:
@@ -119,7 +119,7 @@ Any failed check is a failed upload: report it plainly, fix and re-verify. Wrong
 - **ToC links land on the wrong pages** — the offset is wrong. Re-read a known printed page, recompute `offset = stored − printed`, rerun step 7. Re-enrich is non-destructive.
 - **Page count came back higher than expected** — a body line starting with `#` became a page break. Find it, escape it, re-import; do not enrich first.
 - **A volume's pages didn't map** — `build_crosswalk.py` detects volumes by the page-number reset to 1. If a volume doesn't restart numbering, give it a distinct `--page-label` and crosswalk it separately.
-- **`ck items enrich --toc` prints `✓ Enriched` then panics** — a CLI display bug truncating a non-ASCII description on a UTF-8 char boundary. The write already succeeded; ignore it and confirm with `ck items toc <id>`.
+- **`trove items enrich --toc` prints `✓ Enriched` then panics** — a CLI display bug truncating a non-ASCII description on a UTF-8 char boundary. The write already succeeded; ignore it and confirm with `trove items toc <id>`.
 - **`pdftoppm`/`pdftotext` unavailable** — install poppler with the user's permission (`/academic-writer:setup` asks before installing), or fall back to PyMuPDF (`fitz`).
 - **Coverage assertion fails while every structural check passes (EPUB)** — see `references/epub-sources.md`: the slicing model is wrong, not the sanitizing.
 
@@ -127,7 +127,7 @@ Any failed check is a failed upload: report it plainly, fix and re-verify. Wrong
 
 - **Faithful body text.** Reproduce page content as-is. The author holds a license to the original for personal study; summarizing or paraphrasing without being asked both corrupts the source and oversteps that license.
 - **Verify the crosswalk with anchors.** Interpolation plus a wrong offset silently points entries at the wrong pages — always check live content before done.
-- **Always pass `--no-session`** on every `ck` command.
+- **Always pass `--no-session`** on every `trove` command.
 - **Never delete or overwrite an existing book** without explicit user confirmation, and only after the new one reads back correctly.
 
 ## Boundary with /academic-writer:ingest

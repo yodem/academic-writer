@@ -51,7 +51,7 @@ No new Python, no new dependency, no `thresholds.json` change (mechanical proofr
 - `npm run build` → exit 0 (17 skills, 10 agents, 12 commands).
 - `python3 tests/test_plugin_structure.py` → 26 tests, all pass.
 
-## CandleKeep validation (2026-06-07)
+## Trove validation (2026-06-07)
 
 Reviewed the encoded conventions against the library's source-of-truth books: *The Writer's Guide: How to Write, Edit, and Proofread a Book* and *Hebrew Linguistic Reference*.
 
@@ -127,7 +127,7 @@ rejects (אמיתי, איתו/איתה/איתם, אזי, אידיאולוגיה,
 קורבנות, רדיקאלית, פרסונאלי), ~9 proper nouns (בובר, בודפסט, הרטמן, ליבוביץ, פינס, קאנט,
 בלייקווד) and 10 artifacts of stripped ׳/״ in abbreviations (הרמב, התנ, פרופ, סולוביצ). Precision
 ≈30%, which is acceptable because an LLM adjudicates each candidate — a false positive costs one
-line of prompt. The 2026-05-19 pg_hspell rejection (CandleKeep "Personal · Projects" p.26) does
+line of prompt. The 2026-05-19 pg_hspell rejection (Trove "Personal · Projects" p.26) does
 reproduce here after all, via ktiv male rather than Mishnaic orthography; a project-extensible
 allowlist at `src/skills/proofread/references/hspell-allowlist.txt` suppresses that class.
 

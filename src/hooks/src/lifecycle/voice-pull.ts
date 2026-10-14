@@ -1,5 +1,5 @@
 // src/hooks/src/lifecycle/voice-pull.ts
-// Pulls AUTHOR_VOICE.md from CandleKeep before write/edit skills run.
+// Pulls AUTHOR_VOICE.md from Trove before write/edit skills run.
 // Profile-scoped: silently skips in projects without `.academic-helper/profile.md`.
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";

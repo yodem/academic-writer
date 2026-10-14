@@ -45,7 +45,7 @@ the short guided check, `init` (full or `--quick`) builds the deeper profile and
 | 2. Profile | Field, language, citation style, author_key | Core profile | Runs |
 | 3.5. Gemini Onboarding | Optionally enable Gemini as prose writer | `gemini` config | Runs |
 | 3. Style Analysis | Read past articles, build fingerprint | `styleFingerprint` + `articleStructure` | Narrative-only, no computation (skipped in --quick mode: computational chain + voice fingerprint chain) |
-| 4. Sources | Index Candlekeep library | `sources` array | Skipped entirely in --quick mode |
+| 4. Sources | Index Trove library | `sources` array | Skipped entirely in --quick mode |
 
 ---
 
@@ -150,10 +150,10 @@ AskUserQuestion(questions=[{
 }])
 ```
 
-Only on "Install", run the matching command: CandleKeep on macOS with Homebrew,
+Only on "Install", run the matching command: Trove on macOS or Linux,
 
 ```bash
-brew tap CandleKeepAgents/candlekeep && brew install candlekeep-cli
+curl -fsSL https://heytrove.ai/install.sh | sh
 ```
 
 or NotebookLM when `npm` is available,
@@ -162,8 +162,8 @@ or NotebookLM when `npm` is available,
 npm install -g notebooklm-mcp-cli
 ```
 
-On other systems, or when Homebrew/npm is missing, give the researcher the numbered steps from
-`dependencies.md` instead. Then ask them to sign in themselves by typing `! ck auth login` or
+On Windows, or when npm is missing, give the researcher the numbered steps from
+`dependencies.md` instead. Then ask them to sign in themselves by typing `! trove login` or
 `! nlm login` (it opens their browser), re-run detection, and report the result plainly. A tool
 that could not be installed is saved as disabled.
 
@@ -198,7 +198,7 @@ print(slug)
 ```
 
 Confirm the derived slug with the user before saving — this key is stable across projects and used
-to key cross-project CandleKeep voice-profile lookups (see `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh`), so it
+to key cross-project Trove voice-profile lookups (see `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh`), so it
 should not change casually later:
 
 ```python
@@ -346,7 +346,7 @@ computational extraction and Stage 1 voice fingerprint chain below are skipped i
 
 Ask (via AskUserQuestion) whether the researcher has added papers to `past-articles/` yet. If yes,
 run the style analysis: **Step 1** computational extraction (`extract-style-metrics.py`, with an
-optional Hebrew contrastive baseline from CandleKeep), **Step 2** mechanical text extraction from
+optional Hebrew contrastive baseline from Trove), **Step 2** mechanical text extraction from
 each PDF/DOCX for the qualitative pass, **Step 3** qualitative analysis across the dimensions the
 script can't compute, then confirm the combined fingerprint with the researcher before saving. If
 they skip, the profile saves without a style fingerprint. Full question text, extraction commands,
@@ -381,22 +381,22 @@ wording: `references/gemini-onboarding.md`, which uses
 
 **(skipped entirely in --quick mode — `sources` is saved as `[]`)**
 
-**If Candlekeep is enabled:**
+**If Trove is enabled:**
 
 ```python
 AskUserQuestion(questions=[{
-  "question": "Let's index your research library. Have you added sources to Candlekeep yet?",
+  "question": "Let's index your research library. Have you added sources to Trove yet?",
   "header": "Research sources",
   "options": [
     {
       "label": "Yes, index my sources now",
-      "description": "I'll enrich and index everything in your Candlekeep library.",
+      "description": "I'll enrich and index everything in your Trove library.",
       "markdown": "```\nSource Indexing\n───────────────\n→ Lists items in your library\n   (scoped to the active shelf,\n    if you have set one)\n→ Saves minimal metadata to profile\n   (id, title, type only)\n```"
     },
     {
       "label": "Skip — I'll add sources later",
       "description": "Run /academic-writer:init again (choose Update → Sources) after adding items.",
-      "markdown": "```\nSkip Sources\n────────────\n⚠ Articles won't have source metadata yet\n→ Add sources with: ck items add file.pdf\n→ Then re-run this step\n```"
+      "markdown": "```\nSkip Sources\n────────────\n⚠ Articles won't have source metadata yet\n→ Add sources with: trove items add file.pdf\n→ Then re-run this step\n```"
     }
   ],
   "multiSelect": false
@@ -406,18 +406,17 @@ AskUserQuestion(questions=[{
 If **"Yes"**: list the items, scoped to the active shelf when one is set:
 
 ```bash
-# `ck shelf use` records the active shelf in ./.candlekeep/active-shelf.
-SHELF="$(tr -d '[:space:]' < ./.candlekeep/active-shelf 2>/dev/null || true)"
-if [ -n "$SHELF" ]; then
-  ck items list --shelf "$SHELF" --json || ck items list --json
-else
-  ck items list --json
-fi
+# `trove shelf current` names this project's active shelf (set with `trove shelf use`) or says there is none.
+# Scope the listing to it so a Jewish Studies write run doesn't present the
+# researcher's entire library (engineering books included) as source options.
+trove shelf current
+trove items list --shelf "<the shelf named above>" --json   # when a shelf is active
+trove items list --json                                       # when none is
 ```
 
-Do **not** run `ck items enrich` over the library. It is a manual metadata *setter*
+Do **not** run `trove items enrich` over the library. It is a manual metadata *setter*
 (`--title`, `--author`, `--toc`, ...), not an auto-extractor: a bare
-`ck items enrich <ID>` exits with "At least one of --title, --author, --description,
+`trove items enrich <ID>` exits with "At least one of --title, --author, --description,
 --toc, --add-prompt, or --sample-question is required", and running it across every
 item would overwrite metadata the researcher curated by hand.
 
@@ -425,12 +424,12 @@ If an item is missing a title or author, tell the researcher which items are thi
 offer to set the fields explicitly, one item at a time:
 
 ```bash
-ck items enrich ITEM_ID --title "..." --author "..."
+trove items enrich ITEM_ID --title "..." --author "..."
 ```
 
 Build the sources array from the listing (id + title + type only — never raw JSON).
 
-**If Candlekeep is NOT enabled**: set sources to `[]`.
+**If Trove is NOT enabled**: set sources to `[]`.
 
 ---
 
@@ -468,7 +467,7 @@ AskUserQuestion(questions=[{
     {
       "label": "I'm done for now",
       "description": "Profile saved. Run /academic-writer:write anytime to start writing.",
-      "markdown": "```\nProfile saved to:\n  .academic-helper/profile.md\n\nKey commands:\n  /academic-writer:write         ← write an article\n  /academic-writer:health       ← check everything\n  /academic-writer:intro        ← open the guide\n  "add CandleKeep" ← just ask to change integrations\n```"
+      "markdown": "```\nProfile saved to:\n  .academic-helper/profile.md\n\nKey commands:\n  /academic-writer:write         ← write an article\n  /academic-writer:health       ← check everything\n  /academic-writer:intro        ← open the guide\n  "add Trove" ← just ask to change integrations\n```"
     }
   ],
   "multiSelect": false

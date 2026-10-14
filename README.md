@@ -2,7 +2,7 @@
 
 Academic Writer is a plugin (an add-on) for Claude Code that helps humanities researchers write scholarly articles in Hebrew or English. You talk with Claude in plain language. The plugin takes you from a rough topic to a footnoted Word file: it reads the sources you choose, helps you settle a thesis and an outline, drafts in your own style, checks every citation against your sources, and then folds your Word comments back into the text.
 
-A fuller, step-by-step version of this page ships with the plugin as an offline guide. After installing, type `/academic-writer:intro` to open it in your browser (it works offline).
+A fuller, step-by-step version of this page is the **[Academic Writer guide](https://yodem.github.io/academic-writer/)**, which you can read online with no install. It also ships with the plugin as an offline guide: after installing, type `/academic-writer:intro` to open it in your browser.
 
 ---
 
@@ -18,7 +18,7 @@ Also useful:
 
 - **Python 3**, a free program the plugin uses to read PDFs and build Word files. Macs and most Linux computers already have it. Setup checks for it and asks before installing the small add-ons it needs.
 - **5 to 10 of your published articles** (PDF or Word), so the plugin can learn how you write.
-- **Your source texts** as PDFs or Word files. The optional CandleKeep library (an online bookshelf for your sources) lets the plugin search and quote them page by page.
+- **Your source texts** as PDFs or Word files. The optional [Trove](https://heytrove.ai) library (an online bookshelf for your sources; [install Trove](https://heytrove.ai/install), [docs](https://docs.heytrove.ai/)) lets the plugin search and quote them page by page.
 
 ---
 
@@ -106,7 +106,7 @@ A few more things the plugin can do have no command of their own. Ask for them i
 - **Learn from new papers or your corrections**: "I added new papers to past-articles, update my voice."
 - **Follow-on materials**: "Make a conference talk outline (or a journal abstract, or a chapter proposal) from this article."
 - **Change your field of study**: "Change my field in my profile to ..."
-- **Connect or disconnect CandleKeep or NotebookLM**: "Turn on CandleKeep in my profile."
+- **Connect or disconnect Trove or NotebookLM**: "Turn on Trove in my profile."
 
 ---
 
@@ -131,7 +131,7 @@ Either way, the key is picked up only when a **new** Claude Code session starts.
 
 - **Anthropic (Claude).** Your conversation with Claude, and the text Claude reads to help you (your drafts, the source passages it checks), go to Anthropic, as with any use of Claude Code.
 - **Google (Gemini).** With a Gemini key, the text being drafted, edited, proofread or summarised, the source passages it relies on, and any scanned pages you ask it to read are sent to Google. On Google's free tier, Google may use what you send to improve its products. Check Google's current terms, and consider a paid key for unpublished work you consider sensitive.
-- **CandleKeep (optional).** Only the sources you choose to upload are stored there. If you use CandleKeep, your voice profile is also synced there so it follows you between computers.
+- **Trove (optional).** Only the sources you choose to upload are stored there. If you use Trove, your voice profile is also synced there so it follows you between computers.
 - **Jev (advanced, off by default).** Only if you enter the optional `jev_api_key` setting, the question and context at a few decision points are also sent to the Jev service. In this version its answers are only logged and never change your results. Most users should leave it empty.
 - **Your keys.** Saved through the plugin settings, the key is kept in your keychain. The plugin never prints it or writes it into your research folder.
 

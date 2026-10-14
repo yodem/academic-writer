@@ -124,7 +124,7 @@ on in a project that has this file, so it must exist before the restart in Step 
 Run all detection lines from `references/dependencies.md` and the package check from
 `references/python-deps.md` in one parallel batch (they change nothing). Then show a short table
 built from the results — the tool, what it is for in one phrase, and ✓ found / ✗ missing /
-optional — for: Python 3, the Python packages, hspell (Hebrew writers only), CandleKeep,
+optional — for: Python 3, the Python packages, hspell (Hebrew writers only), Trove,
 NotebookLM, and the Gemini key (✓ when `GOOGLE_API_KEY` is set; never print its value).
 
 > "Here's what I'll go through. Anything already ✓ we skip. For each missing piece I'll tell you
@@ -170,11 +170,11 @@ python3 -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema
 Re-run the package check. On failure, read `references/troubleshooting.md § pip install failures`
 and explain the fix before offering a retry (any retry with a different command is asked again).
 
-### 4c. Homebrew (macOS, only if hspell or CandleKeep is wanted)
+### 4c. Homebrew (macOS, only if hspell or Trove is wanted)
 
 Homebrew needs the Mac password, so the researcher installs it: give the numbered steps from
 `references/dependencies.md § Homebrew`. Offer this only when the researcher wants hspell or
-CandleKeep and `BREW_MISSING`.
+Trove and `BREW_MISSING`.
 
 ### 4d. hspell — Hebrew spelling checker (Hebrew writers only)
 
@@ -201,14 +201,14 @@ Only on "Install":
 brew install hspell
 ```
 
-### 4e. CandleKeep — your research library (optional)
+### 4e. Trove — your research library (optional)
 
 Skip if found. Explain it in one sentence (reference), then:
 
 ```python
 AskUserQuestion(questions=[{
-  "question": "CandleKeep is an online library for your source PDFs, so I can search and quote them with exact pages. Set it up?",
-  "header": "CandleKeep (optional)",
+  "question": "Trove is an online library for your source PDFs, so I can search and quote them with exact pages. Set it up?",
+  "header": "Trove (optional)",
   "options": [
     {"label": "Install", "description": "On a Mac I install it with Homebrew; you then sign in once in your browser."},
     {"label": "Skip", "description": "You can add it later by running setup again."}
@@ -217,14 +217,14 @@ AskUserQuestion(questions=[{
 }])
 ```
 
-Only on "Install", on macOS with Homebrew:
+Only on "Install", on macOS or Linux:
 
 ```bash
-brew tap CandleKeepAgents/candlekeep && brew install candlekeep-cli
+curl -fsSL https://heytrove.ai/install.sh | sh
 ```
 
-On Windows/Linux, point to the install page in the reference instead. Then ask the researcher to
-sign in themselves by typing `! ck auth login` (it opens their browser).
+On Windows, point to https://heytrove.ai/install instead. Then ask the researcher to
+sign in themselves by typing `! trove login` (it opens their browser).
 
 ### 4f. NotebookLM — source Q&A (optional)
 
@@ -362,7 +362,7 @@ every existing field. Show:
 > | Field / language / citation style | [values] |
 > | Python and its add-ons | ✓ Ready / ⚠ [what's missing and the one-line fix] |
 > | Hebrew spelling (hspell) | ✓ / skipped / not available on Windows / not needed |
-> | CandleKeep / NotebookLM | ✓ / skipped (optional) |
+> | Trove / NotebookLM | ✓ / skipped (optional) |
 > | Gemini | ✓ Key works / ⚠ [problem in plain words] / — Not set up yet (needed to write, proofread, read scans) |
 > | Sample paragraph | ✓ Looked good / noted: [feedback] |
 

@@ -48,7 +48,7 @@ Other hooks: `SubagentStart` → `subagent-start` (adds the citation-verificatio
 | 0 Preflight | `mkdir -p past-articles .academic-helper .academic-helper/logs`; copies `thresholds.json`. If a profile exists, offers "Check my Gemini key" (jump to 5f) or a full re-check. | folders |
 | 2 Basics | `fieldOfStudy`, `targetLanguage`, `citationStyle` (`inline-parenthetical` / `chicago` / `mla` / `apa`). **Saves the profile immediately**, because `session-env` exports the key only when the profile exists. | `.academic-helper/profile.md` |
 | 3 Detection | Runs the detection lines in `references/dependencies.md` and `references/python-deps.md` in parallel; shows a found / missing table. | none |
-| 4 Tools | For each missing item: one-sentence explanation, `AskUserQuestion`, install only on "Install", re-detect. `python3 -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema`; `brew install hspell` (Hebrew, macOS); `brew tap CandleKeepAgents/candlekeep && brew install candlekeep-cli`; `npm install -g notebooklm-mcp-cli`. Python and Homebrew get per-OS steps for the researcher; sign-ins (`! ck auth login`, `! nlm login`) are typed by the researcher. | none |
+| 4 Tools | For each missing item: one-sentence explanation, `AskUserQuestion`, install only on "Install", re-detect. `python3 -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema`; `brew install hspell` (Hebrew, macOS); `brew tap CandleKeepAgents/candlekeep && brew install candlekeep-cli`; `npm install -g notebooklm-mcp-cli`. Python and Homebrew get per-OS steps for the researcher; sign-ins (`! trove login`, `! nlm login`) are typed by the researcher. | none |
 | 5 Gemini | Explains the key and the data flow, asks. Storage: plugin settings (`/plugin` → Installed → academic-writer → Configure → `google_api_key`, OS keychain) or a shell/user environment variable. Then restart. 5f runs `aw models check` (no network) and a `curl` to the Gemini models list with the key in the `x-goog-api-key` header (never printed, no article text). | `## Gemini` block |
 | 6 Sample | 2 to 4 sentences written by Claude in the researcher's register. | none |
 | 7–8 | Summary table; offers `/academic-writer:intro`, `/academic-writer:write`, `/academic-writer:init`. | profile |
@@ -59,7 +59,7 @@ Reference files: `src/skills/setup/references/{dependencies,python-deps,gemini-k
 
 ## `/academic-writer:init` (`src/skills/init/SKILL.md`)
 
-`disable-model-invocation: true`. Phases: 0 Preflight (incl. the Python add-ons check) → 1 Integration detection (CandleKeep, NotebookLM) → 2 Profile (full name and `author_key`, field, language, citation style, abstract languages, writing style) → 3.5 Gemini onboarding (same reference as setup) → 3 Research sources (CandleKeep, shelf-scoped) → 4 Save profile.
+`disable-model-invocation: true`. Phases: 0 Preflight (incl. the Python add-ons check) → 1 Integration detection (Trove, NotebookLM) → 2 Profile (full name and `author_key`, field, language, citation style, abstract languages, writing style) → 3.5 Gemini onboarding (same reference as setup) → 3 Research sources (Trove, shelf-scoped) → 4 Save profile.
 
 - Style analysis: `extract-style-metrics.py` for computed metrics, then a qualitative pass; the researcher confirms the fingerprint before it is saved (`references/style-analysis.md`).
 - Voice: reuses `${CLAUDE_PLUGIN_DATA}/voice/` when its `author_key` matches; otherwise runs `/academic-writer:voice`.
@@ -79,7 +79,7 @@ Voice load      voice-sync.sh pull "${CLAUDE_PLUGIN_DATA}" "$PWD"
 Profile         cat .academic-helper/profile.md   (missing → ask for /academic-writer:init)
 Guard           articles/<slug>.md exists → hand off to /academic-writer:edit
 Steps 1–2       subject, language, length, optional user draft; source selection
-                (ck items list, shelf-scoped); optional NotebookLM background (never cited)
+                (trove items list, shelf-scoped); optional NotebookLM background (never cited)
 W0 Intent       thesis in the author's words → .academic-helper/author-intent.json
 W1 Evidence     aw evidence build → .academic-helper/evidence.json
                 (only passages whose quotes match the source verbatim)
@@ -113,7 +113,7 @@ The auditor is the only mandatory hard gate and always runs. Jev decision points
 | `.academic-helper/author-intent.json`, `evidence.json`, `outline.json`, `drafts/` | write W0–W3 |
 | `.academic-helper/runs/<id>/usage.jsonl` | every `aw` model call (`aw ledger show <run>` summarizes) |
 | `.academic-helper/runs/<id>/article.json` and the `.docx` | write W6 |
-| `${CLAUDE_PLUGIN_DATA}/voice/` | voice / init; shared by all projects, synced to CandleKeep |
+| `${CLAUDE_PLUGIN_DATA}/voice/` | voice / init; shared by all projects, synced to Trove |
 
 ---
 
@@ -128,6 +128,6 @@ The auditor is the only mandatory hard gate and always runs. Jev decision points
 | `aw draft` exit 2 | A unit failed a code gate | Redraft that unit with a feedback file (counts as a rewrite cycle) |
 | Paragraph tagged `[NEEDS REVIEW]` | Still failed the audit after `rewriteCycles.max` attempts | Check it by hand; named in the W6 report |
 | Missing Python package | Add-ons not installed | `/academic-writer:setup`, or the pip line above |
-| CandleKeep not signed in | CLI installed, no login | `! ck auth login` |
+| Trove not signed in | CLI installed, no login | `! trove login` |
 
 `/academic-writer:health` checks the profile, key, tools and sources and prints a fix line for each.

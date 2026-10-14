@@ -5,7 +5,7 @@
 # full pytest suite against the bumped tree before it tags and publishes. A local
 # hook is bypassable with --no-verify and is not installed on a fresh clone, so it
 # can never be the thing standing between a drift and a release. The plugin's own
-# CandleKeep audit recorded a prior 804-line suite that rotted exactly that way.
+# Trove audit recorded a prior 804-line suite that rotted exactly that way.
 #
 # Enable with:  npm run hooks:install     (sets core.hooksPath to .githooks)
 set -euo pipefail

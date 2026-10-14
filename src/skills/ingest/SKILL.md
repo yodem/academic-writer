@@ -1,6 +1,6 @@
 ---
 name: ingest
-description: "Upload a single academic article or book chapter into the author's Trove (CandleKeep) library with its printed page numbers preserved, a hinted table of contents, and a page-1 reading-and-citation guide, so research and writing can cite it by the printed page. Use when the author says 'upload this article', 'ingest this paper or chapter', shares a source that is not yet in Trove, or hands you a file with printed page markers or footnotes. Do NOT use for a whole book, a multi-volume set, an EPUB, a 100+ page PDF, or repairing a flat table of contents — use /academic-writer:ingest-book."
+description: "Upload a single academic article or book chapter into the author's Trove library with its printed page numbers preserved, a hinted table of contents, and a page-1 reading-and-citation guide, so research and writing can cite it by the printed page. Use when the author says 'upload this article', 'ingest this paper or chapter', shares a source that is not yet in Trove, or hands you a file with printed page markers or footnotes. Do NOT use for a whole book, a multi-volume set, an EPUB, a 100+ page PDF, or repairing a flat table of contents — use /academic-writer:ingest-book."
 user-invocable: true
 allowed-tools: [Bash, Read, Write, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.1.0", summary: "Upload one article or chapter to the source library with printed page numbers, hinted contents and a citation guide."}
@@ -13,8 +13,8 @@ Academic articles and chapters have their own printed page numbers (e.g. 409–4
 ## 1. Pre-flight
 
 1. Read `.academic-helper/profile.md`. If it does not exist, say nothing is set up yet and point at `/academic-writer:setup` or `/academic-writer:init`; stop.
-2. If the profile's Tools section has `"candlekeep": { "enabled": false }`, say the source library is disabled and it can be enabled with `/academic-writer:update-tools`; stop.
-3. Check the library CLI: run `ck items list --json` (some installations call the same CLI `trove`). If the command is missing, say the library tool is not installed and point at `/academic-writer:health`; stop.
+2. If the profile's Tools section has `"trove": { "enabled": false }` (or the older `"candlekeep"` key), say the source library is disabled and it can be enabled with `/academic-writer:update-tools`; stop.
+3. Check the library CLI: run `trove items list --json` (some installations call the same CLI `trove`). If the command is missing, say the library tool is not installed and point at `/academic-writer:health`; stop.
 
 ## 2. Get the text
 
@@ -66,22 +66,22 @@ One `# ` header per Trove page.
 ## 5. Upload
 
 ```bash
-ck items import /tmp/article-ingest.md --title "<title>" --no-session
-ck items enrich <BOOK_ID> --author "<author>" --description "<one-sentence description>" --no-session
+trove items import /tmp/article-ingest.md --title "<title>" --no-session
+trove items enrich <BOOK_ID> --author "<author>" --description "<one-sentence description>" --no-session
 ```
 
-Use `ck items import` (it uploads in chunks and handles real documents); `ck items create` has no `--file` flag and whole-document `put --file` caps at 1 MB. Record the `BOOK_ID` it prints. If the upload fails, keep the assembled file and give the author its path.
+Use `trove items import` (it uploads in chunks and handles real documents); `trove items create` has no `--file` flag and whole-document `put --file` caps at 1 MB. Record the `BOOK_ID` it prints. If the upload fails, keep the assembled file and give the author its path.
 
-**Never delete or overwrite an existing book.** If the author wants to replace an earlier upload, ask for explicit confirmation, and delete the old book only after the new one passes the read-back below; before deleting, match the old item's id and title exactly against `ck items list --json`.
+**Never delete or overwrite an existing book.** If the author wants to replace an earlier upload, ask for explicit confirmation, and delete the old book only after the new one passes the read-back below; before deleting, match the old item's id and title exactly against `trove items list --json`.
 
 ## 6. Read-back (mandatory)
 
 Never say "uploaded" without this. Run:
 
 ```bash
-ck items get <BOOK_ID> --no-session
-ck items toc <BOOK_ID> --no-session
-ck items read <BOOK_ID>:2 --no-session
+trove items get <BOOK_ID> --no-session
+trove items toc <BOOK_ID> --no-session
+trove items read <BOOK_ID>:2 --no-session
 ```
 
 and check all four:

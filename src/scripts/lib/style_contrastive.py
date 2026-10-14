@@ -5,7 +5,7 @@
 Academic Writer — Contrastive Baseline Comparison
 
 Compares a researcher's computed computationalMetrics against the shared
-Hebrew academic-writing baseline (CandleKeep book "Hebrew Linguistic
+Hebrew academic-writing baseline (Trove book "Hebrew Linguistic
 Reference", cached to markdown by the init skill). Per src/skills/init/SKILL.md,
 the baseline is a JSON code block embedded in the cached markdown's
 "08-style-fingerprint-baseline" chapter — there is no separate baseline JSON

@@ -15,9 +15,9 @@ in front (for example `! nlm login`): Claude Code runs it and shows the result.
 |---|---|---|---|
 | Python 3 | Reading Word/PDF files, building the final `.docx`, proofreading checks | Yes | The researcher (steps below) |
 | Python packages (`python-docx`, `lxml`, `pdfplumber`, `pymupdf`, `jsonschema`) | Same as above — these are add-ons Python uses to open Word and PDF files | Yes | Claude, after asking |
-| Homebrew (macOS only) | A free installer for Mac tools; needed only to install hspell or CandleKeep | Only if you want those | The researcher (steps below) |
+| Homebrew (macOS only) | A free installer for Mac tools; needed only to install hspell or Trove | Only if you want those | The researcher (steps below) |
 | hspell | A Hebrew spelling checker used by `/academic-writer:proofread` | Optional, Hebrew only | Claude on macOS/Linux, after asking |
-| CandleKeep (`ck`) | Your online research library — lets the plugin search and quote your sources | Optional | Claude on macOS (via Homebrew), after asking |
+| Trove (`trove`) | Your online research library — lets the plugin search and quote your sources | Optional | Claude on macOS (via Homebrew), after asking |
 | NotebookLM (`nlm`) | Google's source Q&A tool | Optional | Claude, after asking; the researcher signs in |
 | Gemini API key | Lets the plugin use Google's Gemini model for drafting and proofreading | Optional but recommended | The researcher (see `gemini-key.md`) |
 
@@ -28,7 +28,7 @@ uname -s 2>/dev/null || echo "Windows"
 command -v python3 >/dev/null 2>&1 && python3 --version || echo "PYTHON_MISSING"
 command -v brew >/dev/null 2>&1 && echo "BREW_OK" || echo "BREW_MISSING"
 command -v hspell >/dev/null 2>&1 && echo "HSPELL_OK" || echo "HSPELL_MISSING"
-command -v ck >/dev/null 2>&1 && echo "CK_OK" || echo "CK_MISSING"
+command -v trove >/dev/null 2>&1 && echo "TROVE_OK" || echo "TROVE_MISSING"
 command -v nlm >/dev/null 2>&1 && echo "NLM_OK" || echo "NLM_MISSING"
 command -v npm >/dev/null 2>&1 && echo "NPM_OK" || echo "NPM_MISSING"
 ```
@@ -65,7 +65,7 @@ takes about five minutes." Then give the steps for their system:
 
 ## Homebrew (macOS only) — the researcher installs it
 
-Only needed if they want hspell or CandleKeep and `BREW_MISSING`. Say: "Homebrew is a free,
+Only needed if they want hspell or Trove and `BREW_MISSING`. Say: "Homebrew is a free,
 widely used installer for Mac tools. Installing it needs your Mac password, so you have to do this
 part yourself."
 
@@ -90,17 +90,17 @@ that are easy to miss by eye. Without it, proofreading still works, just with on
 
 Confirm afterwards with `command -v hspell`.
 
-## CandleKeep (`ck`) — Claude installs it after asking
+## Trove (`trove`) — Claude installs it after asking
 
-One sentence: "CandleKeep is an online library for your source PDFs; with it I can search your
+One sentence: "Trove is an online library for your source PDFs; with it I can search your
 sources and quote them with exact page numbers."
 
-- **macOS with Homebrew**: after a yes, Claude runs
-  `brew tap CandleKeepAgents/candlekeep && brew install candlekeep-cli`.
-- **Windows / Linux**: point the researcher to the install instructions on the CandleKeep project
-  page (github.com/CandleKeepAgents) and re-check with `command -v ck` when they say it's done.
+- **macOS / Linux**: after a yes, Claude runs
+  `curl -fsSL https://heytrove.ai/install.sh | sh`.
+- **Windows**: point the researcher to the install page (https://heytrove.ai/install) and re-check
+  with `command -v trove` when they say it's done.
 
-Then the researcher signs in themselves (it opens a browser): `! ck auth login`.
+Then the researcher signs in themselves (it opens a browser): `! trove login`.
 
 ## NotebookLM (`nlm`) — Claude installs it after asking
 
