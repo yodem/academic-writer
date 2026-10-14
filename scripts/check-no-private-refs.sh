@@ -22,7 +22,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
 
 SHIPPED_RE='^(src/|plugins/|manifests/|features\.json)'
-PUBLISHED_RE='^(docs/|tests/|scripts/|\.github/|CLAUDE\.md|README\.md|CHANGELOG\.md)'
+PUBLISHED_RE='^(docs/|site/|video/|tests/|scripts/|\.github/|CLAUDE\.md|README\.md|CHANGELOG\.md)'
 
 # Applied to BOTH tiers. Field separator is '::' — never '|', which is also the
 # regex alternation operator (an earlier version of this script silently ran only

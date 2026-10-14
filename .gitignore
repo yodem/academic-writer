@@ -33,6 +33,10 @@ logs/
 !plugins/academic-writer/guide/
 !plugins/academic-writer/guide/**
 
+# The product site (GitHub Pages) is shipped too
+!site/
+!site/**
+
 # .claude - ignore runtime/session state; commit hooks, skills, and config
 .claude/.comm-style-counter
 .claude/.satisfaction-counter
