@@ -18,7 +18,7 @@
   var EN = {
     copied: 'Copied', pause: 'Pause animation', play: 'Play animation',
     theme_system: 'Theme: match system. Change theme', theme_light: 'Theme: light. Change theme', theme_dark: 'Theme: dark. Change theme',
-    step: 'Step', doc_title: 'Academic Writer — cited academic articles with Claude'
+    doc_title: 'Academic Writer — cited academic articles with Claude'
   };
   var lang = root.lang === 'he' ? 'he' : 'en';
   function t(key) { return (lang === 'he' && HE[key]) || EN[key] || (function () { var n = d.querySelector('[data-i18n="' + key + '"]'); return n && n.__en; })() || key; }
@@ -49,10 +49,10 @@
     });
     $$('.seg button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === lang)); });
     d.title = t('doc_title');
-    setThemeLabel(); labelRail(); labelPause();
+    setThemeLabel(); labelPause();
     if (persist) store.set('aw-lang', lang);
     if (flowApi) flowApi.restart();
-    if (storyApi) storyApi.update();
+    if (howApi) howApi.update();
   }
   collect();
 
@@ -290,128 +290,78 @@
 
   /* ---------- gate diagram: reveal observer handles .in ---------- */
 
-  /* ---------- how it works: a scroll-locked stepper ---------- */
-  var storyApi = safe(function () {
-    var sec = $('#how'), grid = $('#story'); if (!sec || !grid) return null;
-    var body = $('.stage__body', grid), stage = $('#stage');
-    var steps = $$('.step', grid), scenes = steps.map(function (s) { return $('.scene', s); });
-    var titles = $$('.stage__frame .frame__title', stage), count = $('[data-count]', grid);
-    var dots = $$('.rail li', grid), links = $$('.rail a', grid), prevB = $('[data-prev]', grid), nextB = $('[data-next]', grid), skipA = $('[data-skip]', grid);
-    var bar = $('#bar');
-    var START = [0.45, 0.35, 0.3, 0.35, 0.55, 0.2, 0.35], N = 7, DUR = 1400, COOL = 700;
-    var pinned = false, cur = -1, locked = false, armed = true, lockY = 0, cool = 0, acc = 0, lastWheel = 0, tw = 0, dir = 1, lastY = window.pageYOffset, ty0 = null, tdone = false;
-    function barH() { return bar ? bar.offsetHeight : 56; }
-    function ease(u) { return 1 - Math.pow(1 - u, 4); }
-
-    function show(i, animate) {
-      if (i === cur) return;
-      cur = i; if (tw) { cancelAnimationFrame(tw); tw = 0; }
-      stage.setAttribute('data-scene', String(i + 1)); if (count) count.textContent = String(i + 1);
-      scenes.forEach(function (s, k) { s.classList.toggle('is-on', k === i); s.style.setProperty('--p', '1'); });
-      steps.forEach(function (s, k) { s.classList.toggle('is-on', k === i); if (k === i) s.removeAttribute('aria-hidden'); else s.setAttribute('aria-hidden', 'true'); });
-      titles.forEach(function (n, k) { n.classList.toggle('is-on', k === i); });
-      dots.forEach(function (li, k) { li.classList.toggle('is-on', k === i); li.classList.toggle('is-done', k < i); });
-      links.forEach(function (a, k) { if (k === i) a.setAttribute('aria-current', 'step'); else a.removeAttribute('aria-current'); });
-      if (prevB) prevB.setAttribute('aria-disabled', String(i === 0));
-      if (animate) {
-        var sc = scenes[i], t0 = performance.now(); sc.style.setProperty('--p', String(START[i]));
-        var f = function (now) { var u = Math.min(1, (now - t0) / DUR); sc.style.setProperty('--p', (START[i] + (1 - START[i]) * ease(u)).toFixed(4)); tw = u < 1 ? requestAnimationFrame(f) : 0; };
-        tw = requestAnimationFrame(f);
-      }
-    }
-    function enable() {
-      if (pinned) return; pinned = true;
-      scenes.forEach(function (s) { body.appendChild(s); });
-      sec.classList.add('is-pinned'); cur = -1; show(0, false); check();
-    }
-    function disable() {
-      if (!pinned) return; release(); pinned = false;
-      if (tw) { cancelAnimationFrame(tw); tw = 0; }
-      scenes.forEach(function (s, i) { $('.frame__body', steps[i]).appendChild(s); s.classList.remove('is-on'); s.style.removeProperty('--p'); });
-      sec.classList.remove('is-pinned'); cur = -1;
-      steps.forEach(function (s) { s.classList.remove('is-on'); s.removeAttribute('aria-hidden'); });
-    }
-    function sync() { if (reduceMQ.matches || window.innerHeight < 520) disable(); else enable(); }
-
-    function release() { locked = false; armed = false; acc = 0; ty0 = null; sec.classList.remove('is-locked'); }
-    function engage(i) {
-      var now = performance.now();
-      lockY = Math.round(sec.getBoundingClientRect().top + window.pageYOffset - barH());
-      locked = true; acc = 0; cool = now + COOL; ty0 = null; sec.classList.add('is-locked');
-      cur = -1; show(i, i === 0);
-      window.scrollTo({ top: lockY, behavior: 'instant' }); lastY = lockY;
-    }
-    function check() {
-      if (!pinned || locked) return;
-      var r = sec.getBoundingClientRect().top - barH(), H = sec.offsetHeight;
-      if (!armed) { if (r > 260 || r < -(H + 100)) armed = true; return; }
-      if (dir >= 0 && r <= 120 && r > -H * 0.4) engage(0);
-      else if (dir < 0 && r >= -120 && r < 120 && r < 1) engage(N - 1);
-    }
-    function step(d) {
-      var ni = cur + d;
-      if (ni < 0 || ni >= N) return false;
-      show(ni, d > 0); return true;
-    }
-    function onScroll() {
-      var y = window.pageYOffset; if (y !== lastY) dir = y > lastY ? 1 : -1; lastY = y;
-      if (!pinned) return;
-      if (locked) { if (Math.abs(y - lockY) > 1) { window.scrollTo({ top: lockY, behavior: 'instant' }); lastY = lockY; } return; }
-      check();
-    }
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', function () { sync(); if (locked) lockY = Math.round(sec.getBoundingClientRect().top + window.pageYOffset - barH()); }, { passive: true });
-
-    d.addEventListener('wheel', function (e) {
-      if (!locked || e.ctrlKey) return;
-      var dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * window.innerHeight : e.deltaY, now = performance.now();
-      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-      if (now < cool) { e.preventDefault(); return; }
-      if (now - lastWheel > 250) acc = 0; lastWheel = now;
-      acc += dy;
-      if (Math.abs(acc) < 40) { e.preventDefault(); return; }
-      var dd = acc > 0 ? 1 : -1; acc = 0;
-      if (cur + dd < 0 || cur + dd >= N) { release(); return; } /* not prevented: this same gesture scrolls the page */
-      e.preventDefault(); step(dd); cool = now + COOL;
-    }, { passive: false });
-    d.addEventListener('touchstart', function (e) { if (locked && e.touches.length === 1) { ty0 = e.touches[0].clientY; tdone = false; } }, { passive: true });
-    d.addEventListener('touchmove', function (e) {
-      if (!locked || ty0 === null) return;
-      var dy = ty0 - e.touches[0].clientY;
-      if (tdone || Math.abs(dy) < 40) { if (e.cancelable) e.preventDefault(); return; }
-      var dd = dy > 0 ? 1 : -1;
-      if (cur + dd < 0 || cur + dd >= N) { release(); return; }
-      if (e.cancelable) e.preventDefault(); step(dd); tdone = true;
-    }, { passive: false });
-    d.addEventListener('touchend', function () { ty0 = null; }, { passive: true });
-    d.addEventListener('keydown', function (e) {
-      if (!locked || e.altKey || e.ctrlKey || e.metaKey) return;
-      var k = e.key;
-      if (k === 'Escape') { release(); return; }
-      var dd = (k === 'ArrowDown' || k === 'PageDown' || k === ' ' || k === 'Spacebar') ? 1 : (k === 'ArrowUp' || k === 'PageUp') ? -1 : 0;
-      if (!dd) return;
-      if ((k === ' ' || k === 'Spacebar') && e.target && e.target.closest && e.target.closest('button,a,summary,input,textarea,select')) return;
-      if (e.target && e.target.closest && e.target.closest('input,textarea,select')) return;
-      if (cur + dd < 0 || cur + dd >= N) { release(); return; } /* the key then scrolls the page as usual */
-      e.preventDefault(); if (!e.repeat) step(dd);
+  /* ---------- how it works: an auto-playing Cowork-style window (about 15 s, then loops) ---------- */
+  var howApi = safe(function () {
+    var sec = $('#hw'); if (!sec) return null;
+    var playB = $('#hw-play', sec), phBtns = $$('.hw__phase', sec), PH = [0, 3, 10, 15], END = 15, LOOP = 17;
+    var T = 0, running = true, inView = !('IntersectionObserver' in window), raf = 0, last = 0;
+    var typed = [], states = [], counts = [], fills = [];
+    function num(s) { return parseFloat(s); }
+    $$('[data-type]', sec).forEach(function (el) {
+      var p = el.getAttribute('data-type').split(','), code = $('code', el);
+      typed.push({ el: el, code: code, full: code.textContent, a: num(p[0]), b: num(p[1]), n: -1, s: '' });
     });
-    d.addEventListener('focusin', function (e) { if (locked && !sec.contains(e.target)) release(); });
-    d.addEventListener('click', function (e) { var a = e.target.closest && e.target.closest('a[href^="#"]'); if (locked && a && !sec.contains(a)) release(); }, true);
-    window.addEventListener('hashchange', function () { if (locked) release(); });
-
-    links.forEach(function (a, i) { a.addEventListener('click', function (e) { if (!pinned) return; e.preventDefault(); show(i, i > cur); }); });
-    if (prevB) prevB.addEventListener('click', function () { if (cur > 0) show(cur - 1, false); });
-    if (nextB) nextB.addEventListener('click', function () { if (cur < N - 1) show(cur + 1, true); else if (skipA) skipA.click(); });
-    if (skipA) skipA.addEventListener('click', function (e) {
-      if (!pinned) return;
-      e.preventDefault(); release();
-      var g2 = $('#gate'); if (g2) window.scrollTo({ top: g2.getBoundingClientRect().top + window.pageYOffset - barH(), behavior: reduceMQ.matches ? 'auto' : 'smooth' });
+    $$('[data-st],[data-ss]', sec).forEach(function (el) {
+      var raw = el.getAttribute('data-st') || el.getAttribute('data-ss');
+      var steps = raw.split(',').map(function (x) { var q = x.split(':'); return { t: num(q[0]), s: q[1] }; });
+      states.push({ el: el, steps: steps, cur: null });
     });
-    reduceMQ.addEventListener && reduceMQ.addEventListener('change', sync);
-    sync();
-    return { update: function () { if (pinned && cur >= 0) { var c = cur; cur = -1; show(c, false); } } };
+    $$('[data-count]', sec).forEach(function (el) { var p = el.getAttribute('data-count').split(','); counts.push({ el: el, a: num(p[0]), b: num(p[1]), max: num(p[2]), v: -1 }); });
+    $$('[data-fill]', sec).forEach(function (el) { var p = el.getAttribute('data-fill').split(','); fills.push({ el: el, a: num(p[0]), b: num(p[1]), v: -1 }); });
+    function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+    function render(now) {
+      typed.forEach(function (x) {
+        var n = Math.floor(x.full.length * clamp01((now - x.a) / (x.b - x.a)) + 0.0001);
+        if (n !== x.n) { x.n = n; x.code.textContent = x.full.slice(0, n); }
+        var s = now < x.a ? '' : now < x.b + 0.35 ? 'typing' : 'done';
+        if (s !== x.s) { x.s = s; if (s) x.el.setAttribute('data-state', s); else x.el.removeAttribute('data-state'); }
+      });
+      states.forEach(function (x) {
+        var s = '';
+        for (var i = 0; i < x.steps.length; i++) if (now >= x.steps[i].t) s = x.steps[i].s;
+        if (s !== x.cur) { x.cur = s; if (s) x.el.setAttribute('data-state', s); else x.el.removeAttribute('data-state'); }
+      });
+      counts.forEach(function (x) { var v = Math.round(x.max * clamp01((now - x.a) / (x.b - x.a))); if (v !== x.v) { x.v = v; x.el.textContent = v; } });
+      fills.forEach(function (x) { var v = Math.round(clamp01((now - x.a) / (x.b - x.a)) * 200) / 200; if (v !== x.v) { x.v = v; x.el.style.setProperty('--f', v); } });
+      phBtns.forEach(function (b, i) {
+        b.lastElementChild.style.setProperty('--f', clamp01((now - PH[i]) / (PH[i + 1] - PH[i])));
+        b.classList.toggle('is-on', now >= PH[i] && now < PH[i + 1]);
+        b.classList.toggle('is-done', now >= PH[i + 1]);
+      });
+    }
+    function labelPlay() {
+      if (!playB) return;
+      var paused = !running; playB.setAttribute('aria-pressed', String(paused));
+      $('.hw__playt', playB).textContent = t(paused ? 'play' : 'pause');
+    }
+    function active() { return running && inView && !d.hidden && !reduceMQ.matches; }
+    function frame(ts) {
+      raf = 0; if (!active()) return;
+      T += Math.min(0.1, (ts - last) / 1000); last = ts;
+      if (T >= LOOP) T = 0;
+      render(T); raf = requestAnimationFrame(frame);
+    }
+    function go() { sec.classList.toggle('is-paused', !running || !inView); if (active() && !raf) { last = performance.now(); raf = requestAnimationFrame(frame); } }
+    function setStatic() {
+      var st = reduceMQ.matches; sec.classList.toggle('is-static', st);
+      if (st) { T = END; render(END); } else if (T >= END) { T = 0; render(0); }
+      go();
+    }
+    sec.classList.add('is-live');
+    if (playB) playB.addEventListener('click', function () { running = !running; labelPlay(); go(); });
+    phBtns.forEach(function (b, i) { b.addEventListener('click', function () { if (reduceMQ.matches) return; T = PH[i]; render(T); go(); }); });
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(function (es) {
+        var e = es[es.length - 1];
+        inView = e.isIntersecting && (e.intersectionRatio >= 0.5 || e.intersectionRect.height >= window.innerHeight * 0.5);
+        go();
+      }, { threshold: [0, 0.25, 0.5, 0.75, 1] }).observe($('.hw__win', sec));
+    }
+    d.addEventListener('visibilitychange', go);
+    reduceMQ.addEventListener && reduceMQ.addEventListener('change', setStatic);
+    render(0); labelPlay(); setStatic();
+    return { update: labelPlay };
   });
-  function labelRail() { $$('.rail a').forEach(function (a, i) { a.setAttribute('aria-label', t('step') + ' ' + (i + 1)); }); }
 
   /* ---------- top bar over the hero: transparent on the dark hero, solid after ---------- */
   safe(function () {
@@ -422,7 +372,18 @@
   });
 
   /* ---------- init ---------- */
-  if (lang === 'he') applyLang('he', false); else { setThemeLabel(); labelRail(); labelPause(); d.title = t('doc_title'); }
-  if (storyApi) storyApi.update();
+  if (lang === 'he') applyLang('he', false); else { setThemeLabel(); labelPause(); d.title = t('doc_title'); }
+  if (howApi) howApi.update();
   if (flowApi) flowApi.restart();
+})();
+
+/* round 4: FAQ is an exclusive accordion; name="faq" does it natively, this covers browsers without it */
+(function () {
+  var all = document.querySelectorAll('.faq__list details');
+  Array.prototype.forEach.call(all, function (el) {
+    el.addEventListener('toggle', function () {
+      if (!el.open) return;
+      Array.prototype.forEach.call(all, function (o) { if (o !== el && o.open) o.open = false; });
+    });
+  });
 })();
