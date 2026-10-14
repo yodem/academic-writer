@@ -4,9 +4,14 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.16.1] — 2026-10-14
+
 ### Changed
 - **CandleKeep is now Trove** ([heytrove.ai](https://heytrove.ai)) everywhere the plugin talks to you, and every command it runs now uses the `trove` program instead of `ck`. New profiles store the setting as `tools.trove`; profiles that still say `candlekeep` keep working. The install steps use Trove's own installer, and the shelf listing asks `trove shelf current` instead of reading a file in your project.
 - The README links to the online guide (published with GitHub Pages) and to Trove.
+
+### Fixed
+- **Hebrew and other right-to-left headings and footnotes in the Word file** are now aligned to the right margin. Word was drawing them at the left edge because of an explicit "right" setting inside right-to-left paragraphs.
 
 ## [0.16.0] — 2026-10-06
 
