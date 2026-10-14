@@ -35,7 +35,6 @@
     else if ((navigator.language || '').toLowerCase().indexOf('he') === 0) lang = 'he';
   } catch (e) {}
   d.lang = lang; d.dir = lang === 'he' ? 'rtl' : 'ltr';
-  d.classList.add('js');
 })();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -166,7 +165,8 @@
     <p class="lede" data-i18n="how_sub">Scroll through one article being written. You decide at every step; the plugin does the reading, drafting and checking.</p>
   </div>
 
-  <div class="story__grid" id="story">
+  <div class="story__track" id="track">
+  <div class="story__pin" id="story">
     <nav class="rail" aria-label="Progress" data-i18n-attr="aria-label:rail_label">
       <div class="rail__in">
       <span class="rail__line" aria-hidden="true"><span class="rail__fill"></span></span>
@@ -390,6 +390,7 @@
         </div>
       </div>
     </div>
+  </div>
   </div>
 </section>
 

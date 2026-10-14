@@ -2,6 +2,8 @@
 (function () {
   'use strict';
   var d = document, root = d.documentElement;
+  root.classList.add('js'); /* only now: CSS that hides content keys off this, so a failed load never hides it */
+  function safe(fn) { try { return fn(); } catch (e) { if (window.console) console.warn('section failed', e); return null; } }
   var $ = function (s, c) { return (c || d).querySelector(s); };
   var $$ = function (s, c) { return Array.prototype.slice.call((c || d).querySelectorAll(s)); };
   var HE = window.AW_I18N_HE || {};
@@ -111,7 +113,7 @@
   }
 
   /* ---------- hero demo ---------- */
-  var demoApi = (function () {
+  var demoApi = safe(function () {
     var demo = $('#demo'); if (!demo) return null;
     var live = $('[data-demo-text]', demo), ghost = $('.demo__ghost [data-i18n]', demo), btn = $('#demo-pause');
     var gen = 0, timers = [], paused = false, visible = true;
@@ -140,7 +142,7 @@
     function stop() { clear(); gen++; }
     if (btn) btn.addEventListener('click', function () {
       paused = !paused; btn.setAttribute('aria-pressed', String(paused)); labelPause();
-      if (paused) stop(); else run();
+      if (paused) showFinal(); else run();
     });
     if ('IntersectionObserver' in window) new IntersectionObserver(function (es) {
       visible = es[0].isIntersecting;
@@ -148,7 +150,7 @@
     }, { threshold: 0.2 }).observe(demo);
     reduceMQ.addEventListener && reduceMQ.addEventListener('change', run);
     return { restart: function () { if (reduceMQ.matches || paused) showFinal(); else run(); } };
-  })();
+  });
   function labelPause() { var b = $('#demo-pause'); if (!b) return; $('.pause__t', b).textContent = t(b.getAttribute('aria-pressed') === 'true' ? 'play' : 'pause'); }
 
   /* ---------- film captions follow the language ---------- */
@@ -169,62 +171,59 @@
   /* ---------- gate diagram: reveal observer handles .in ---------- */
 
   /* ---------- scrollytelling ---------- */
-  var storyApi = (function () {
-    var sec = $('#how'), grid = $('#story'); if (!sec || !grid) return null;
-    var stageWrap = $('.stage-wrap', grid), stage = $('#stage'), body = $('.stage__body', grid), rail = $('.rail', grid);
+  var storyApi = safe(function () {
+    var sec = $('#how'), grid = $('#story'), track = $('#track'); if (!sec || !grid || !track) return null;
+    var body = $('.stage__body', grid), stage = $('#stage');
     var steps = $$('.step', grid), scenes = steps.map(function (s) { return $('.scene', s); });
     var titles = $$('.stage__frame .frame__title', stage), count = $('[data-count]', stage);
     var dots = $$('.rail li', grid), links = $$('.rail a', grid);
-    var bar = $('#bar'), mobileMQ = window.matchMedia('(max-width: 899px)');
+    var bar = $('#bar');
+    /* where each scene starts on its own 0..1 timeline, so it never looks empty at p=0 */
+    var START = [0.3, 0.2, 0.4, 0.3, 0.52, 0.3, 0.2], N = 7, HOLD = 0.85;
     var pinned = false, inView = false, ticking = false, cur = -1, lastP = -1, lastG = -1;
 
     function enable() {
       if (pinned) return; pinned = true;
       scenes.forEach(function (s) { body.appendChild(s); });
-      sec.classList.add('is-pinned'); cur = -1; update();
+      sec.classList.add('is-pinned'); cur = -1; lastP = -1; update();
     }
     function disable() {
       if (!pinned) return; pinned = false;
-      scenes.forEach(function (s, i) { $('.frame__body', steps[i]).appendChild(s); s.classList.remove('is-on'); });
+      scenes.forEach(function (s, i) { $('.frame__body', steps[i]).appendChild(s); s.classList.remove('is-on'); s.style.removeProperty('--p'); });
       sec.classList.remove('is-pinned');
-      stage.style.removeProperty('--p'); grid.style.removeProperty('--g');
-      steps.forEach(function (s) { s.classList.remove('is-on'); });
+      grid.style.removeProperty('--g');
+      steps.forEach(function (s) { s.classList.remove('is-on'); s.removeAttribute('aria-hidden'); });
     }
     function sync() { if (reduceMQ.matches) disable(); else enable(); }
 
-    function geometry() {
-      var vh = window.innerHeight, barH = bar ? bar.offsetHeight : 56, top = barH;
-      if (mobileMQ.matches) top = barH + stageWrap.offsetHeight + rail.offsetHeight;
-      var centers = steps.map(function (s) { var r = s.getBoundingClientRect(); return r.top + r.height / 2; });
-      return { focus: (top + vh) / 2, centers: centers };
+    function metrics() {
+      var barH = bar ? bar.offsetHeight : 56;
+      var top = track.getBoundingClientRect().top + window.pageYOffset - barH;
+      return { top: top, range: Math.max(1, track.offsetHeight - grid.offsetHeight) };
     }
-    function uOf(g) {
-      var c = g.centers, f = g.focus, n = c.length - 1;
-      if (f <= c[0]) return 0;
-      if (f >= c[n]) return n;
-      for (var i = 0; i < n; i++) if (f < c[i + 1]) return i + (f - c[i]) / (c[i + 1] - c[i]);
-      return n;
-    }
+    function peOf(i, p) { return p >= HOLD ? 1 : START[i] + (p / HOLD) * (1 - START[i]); }
     function update() {
       ticking = false;
       if (!pinned) return;
-      var g = geometry(), u = uOf(g), v = u + 0.5, idx = Math.min(6, Math.floor(v)), p;
-      if (idx === 0) p = (v - 0.5) / 0.5; else if (idx === 6) p = (v - 6) / 0.5; else p = v - idx;
-      p = Math.max(0, Math.min(1, p));
-      if (Math.abs(p - lastP) > 0.0004) { stage.style.setProperty('--p', p.toFixed(4)); lastP = p; }
-      var gg = u / 6; if (Math.abs(gg - lastG) > 0.001) { grid.style.setProperty('--g', gg.toFixed(4)); lastG = gg; }
+      var m = metrics(), t = Math.max(0, Math.min(1, (window.pageYOffset - m.top) / m.range));
+      var u = t * N, idx = Math.min(N - 1, Math.floor(u)), p = Math.max(0, Math.min(1, u - idx));
       if (idx !== cur) {
-        cur = idx; stage.setAttribute('data-scene', String(idx + 1)); if (count) count.textContent = String(idx + 1);
-        scenes.forEach(function (s, i) { s.classList.toggle('is-on', i === idx); });
-        steps.forEach(function (s, i) { s.classList.toggle('is-on', i === idx); });
+        cur = idx; lastP = -1; stage.setAttribute('data-scene', String(idx + 1)); if (count) count.textContent = String(idx + 1);
+        scenes.forEach(function (s, i) {
+          s.classList.toggle('is-on', i === idx);
+          if (i < idx) s.style.setProperty('--p', '1'); else if (i > idx) s.style.setProperty('--p', String(START[i]));
+        });
+        steps.forEach(function (s, i) { s.classList.toggle('is-on', i === idx); if (i === idx) s.removeAttribute('aria-hidden'); else s.setAttribute('aria-hidden', 'true'); });
         titles.forEach(function (n, i) { n.classList.toggle('is-on', i === idx); });
         dots.forEach(function (li, i) { li.classList.toggle('is-on', i === idx); li.classList.toggle('is-done', i < idx); });
         links.forEach(function (a, i) { if (i === idx) a.setAttribute('aria-current', 'step'); else a.removeAttribute('aria-current'); });
       }
+      if (Math.abs(p - lastP) > 0.0004) { scenes[idx].style.setProperty('--p', peOf(idx, p).toFixed(4)); lastP = p; }
+      if (Math.abs(t - lastG) > 0.001) { grid.style.setProperty('--g', t.toFixed(4)); lastG = t; }
     }
     function request() { if (!ticking && pinned && inView) { ticking = true; requestAnimationFrame(update); } }
     window.addEventListener('scroll', request, { passive: true });
-    window.addEventListener('resize', function () { request(); }, { passive: true });
+    window.addEventListener('resize', request, { passive: true });
     if ('IntersectionObserver' in window) new IntersectionObserver(function (es) { inView = es[0].isIntersecting; if (inView) request(); }, { rootMargin: '200px 0px' }).observe(sec);
     else inView = true;
 
@@ -232,14 +231,14 @@
       a.addEventListener('click', function (e) {
         if (!pinned) return;
         e.preventDefault();
-        var g = geometry(), c = g.centers, target = c[i] + (i < 6 ? 0.4 * (c[i + 1] - c[i]) : 0) - g.focus;
-        window.scrollBy({ top: target, behavior: reduceMQ.matches ? 'auto' : 'smooth' });
+        var m = metrics();
+        window.scrollTo({ top: m.top + m.range * (i + 0.3) / N, behavior: reduceMQ.matches ? 'auto' : 'smooth' });
       });
     });
     reduceMQ.addEventListener && reduceMQ.addEventListener('change', sync);
     sync();
     return { update: function () { lastP = -1; update(); } };
-  })();
+  });
   function labelRail() { $$('.rail a').forEach(function (a, i) { a.setAttribute('aria-label', t('step') + ' ' + (i + 1)); }); }
 
   /* ---------- init ---------- */

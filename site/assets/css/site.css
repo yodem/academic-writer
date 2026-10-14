@@ -262,7 +262,8 @@ h1 { font-size: clamp(2.5rem, 4.9vw, 4.4rem); line-height: 1.05; letter-spacing:
 .story { padding-bottom: 0; }
 .story__head { margin-bottom: 40px; }
 .story__head h2 { max-inline-size: 18ch; margin-bottom: 16px; }
-.story__grid { position: relative; --g: 0; }
+.story__track { position: relative; }
+.story__pin { position: relative; --g: 0; }
 .rail, .stage-wrap { display: none; }
 .steps { list-style: none; margin: 0 auto; padding: 0 var(--gutter); max-width: 860px; display: grid; gap: 72px; padding-bottom: 96px; }
 .step__card { max-inline-size: 60ch; margin-bottom: 20px; position: relative; }
@@ -283,15 +284,18 @@ h1 { font-size: clamp(2.5rem, 4.9vw, 4.4rem); line-height: 1.05; letter-spacing:
 .stage__body .scene { opacity: 0; transform: translateY(12px); pointer-events: none; visibility: hidden; transition: opacity 0.25s var(--ease), transform 0.25s var(--ease), visibility 0s 0.25s; }
 .stage__body .scene.is-on { opacity: 1; transform: none; visibility: visible; transition: opacity 0.25s var(--ease), transform 0.25s var(--ease), visibility 0s; }
 
-/* pinned mode (JS adds .is-pinned on the section) */
+/* pinned mode (JS adds .is-pinned on the section): one sticky screen, nothing else scrolls */
+.is-pinned.story { padding-bottom: 32px; }
+.is-pinned .story__track { height: calc(7 * 95svh); }
+.is-pinned .story__pin { position: sticky; top: var(--bar); height: calc(100svh - var(--bar)); background: var(--paper); overflow: hidden; }
 .is-pinned .step__frame { display: none; }
 .is-pinned .stage-wrap, .is-pinned .rail { display: block; }
-.is-pinned .steps { gap: 0; padding-bottom: 0; max-width: none; padding-inline: 0; }
-.is-pinned .step { display: flex; align-items: center; min-height: calc(100svh - var(--bar)); }
-.is-pinned .step__card { margin: 0; padding-inline-start: 22px; border-inline-start: 2px solid var(--rule); opacity: 0.38; transform: translateX(0); transition: opacity 0.22s var(--ease), border-color 0.22s var(--ease); }
-.is-pinned .step.is-on .step__card { opacity: 1; border-inline-start-color: var(--indigo); }
-.is-pinned .step__n { font-size: 1.8rem; }
-.is-pinned .step__card h3 { font-size: 1.5rem; }
+.is-pinned .steps { display: grid; gap: 0; padding: 0; max-width: none; min-width: 0; }
+.is-pinned .step { grid-area: 1 / 1; display: flex; align-items: flex-start; min-width: 0; opacity: 0; transform: translateY(12px); visibility: hidden; transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s 0.15s; }
+.is-pinned .step.is-on { opacity: 1; transform: none; visibility: visible; transition: opacity 0.24s var(--ease), transform 0.24s var(--ease), visibility 0s; }
+.is-pinned .step__card { margin: 0; padding-inline-start: 22px; border-inline-start: 2px solid var(--indigo); }
+.is-pinned .step__n { font-size: 2.6rem; }
+.is-pinned .step__card h3 { font-size: 1.6rem; }
 .rail__line { position: absolute; background: var(--rule); }
 .rail__fill { position: absolute; inset: 0; background: var(--indigo); transform-origin: top; transform: scaleY(var(--g)); }
 .rail__in { position: relative; }
@@ -301,35 +305,33 @@ h1 { font-size: clamp(2.5rem, 4.9vw, 4.4rem); line-height: 1.05; letter-spacing:
 .rail li.is-on a { background: var(--indigo); border-color: var(--indigo); color: var(--on-indigo); }
 
 @media (min-width: 900px) {
-  .is-pinned .story__grid { display: grid; grid-template-columns: 56px minmax(0, 0.82fr) minmax(0, 1.3fr); column-gap: 28px; max-width: var(--wrap); margin-inline: auto; padding-inline: var(--gutter); }
+  .is-pinned .story__pin { display: grid; grid-template-columns: 44px minmax(0, 0.8fr) minmax(0, 1.35fr); column-gap: 40px; align-items: center; max-width: var(--wrap); margin-inline: auto; padding-inline: var(--gutter); }
   .is-pinned .rail { grid-column: 1; grid-row: 1; }
   .is-pinned .steps { grid-column: 2; grid-row: 1; }
-  .is-pinned .stage-wrap { grid-column: 3; grid-row: 1; }
-  .is-pinned .stage { position: sticky; top: var(--bar); height: calc(100svh - var(--bar)); display: flex; align-items: center; padding-block: 28px; }
-  .is-pinned .stage__frame { width: 100%; height: min(100%, 700px); }
-  .is-pinned .rail__in { position: sticky; top: calc(var(--bar) + (100svh - var(--bar) - 366px) / 2); height: 366px; width: 30px; margin-inline: auto; }
+  .is-pinned .stage-wrap { grid-column: 3; grid-row: 1; height: 100%; }
+  .is-pinned .stage { height: 100%; display: flex; align-items: center; padding-block: 24px; }
+  .is-pinned .stage__frame { width: 100%; height: min(100%, 640px); }
+  .is-pinned .rail__in { height: 366px; width: 30px; margin-inline: auto; }
   .is-pinned .rail ol { flex-direction: column; justify-content: space-between; height: 100%; }
   .is-pinned .rail__line { inset-block: 15px; inset-inline-start: 50%; width: 1px; }
-  .rail__fill { transform: scaleY(var(--g)); transform-origin: top; }
 }
 @media (max-width: 899px) {
-  .is-pinned .story__grid { display: flex; flex-direction: column; }
-  .is-pinned .stage-wrap { order: -2; position: sticky; top: var(--bar); z-index: 5; height: 50svh; padding: 8px var(--gutter) 6px; background: var(--paper); }
+  .is-pinned .story__pin { display: grid; grid-template-rows: 52% 36px minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); }
+  .is-pinned .stage-wrap { grid-row: 1; height: 100%; padding: 8px var(--gutter) 6px; min-height: 0; }
   .is-pinned .stage { height: 100%; }
   .is-pinned .stage__frame { height: 100%; }
-  .is-pinned .rail { order: -1; position: sticky; top: calc(var(--bar) + 50svh); z-index: 5; height: 36px; background: var(--paper); border-bottom: 1px solid var(--rule); }
+  .is-pinned .rail { grid-row: 2; height: 36px; border-bottom: 1px solid var(--rule); }
   .is-pinned .rail__in { height: 100%; display: flex; align-items: center; justify-content: center; }
   .is-pinned .rail ol { width: min(100% - 32px, 360px); justify-content: space-between; }
   .is-pinned .rail__line { inset-block-start: 50%; inset-inline: calc(50% - min(50% - 16px, 180px) + 15px) calc(50% - min(50% - 16px, 180px) + 15px); height: 1px; width: auto; }
   .is-pinned .rail__fill { transform: scaleX(var(--g)); transform-origin: left; }
   :root[dir="rtl"] .is-pinned .rail__fill { transform-origin: right; }
   .rail a { width: 24px; height: 24px; font-size: 0.7rem; }
-  .is-pinned .step { min-height: 62svh; padding-inline: var(--gutter); }
-  .is-pinned .steps { padding-bottom: 28svh; }
+  .is-pinned .steps { grid-row: 3; padding-inline: var(--gutter); }
   .is-pinned .step__card { padding-inline-start: 16px; }
-  .is-pinned .step__card h3 { font-size: 1.3rem; }
-  .is-pinned .step__card p { font-size: 0.97rem; }
-  .is-pinned .step__n { font-size: 1.4rem; margin-bottom: 4px; }
+  .is-pinned .step__card h3 { font-size: 1.25rem; margin-bottom: 6px; }
+  .is-pinned .step__card p { font-size: 0.93rem; line-height: 1.5; }
+  .is-pinned .step__n { font-size: 1.3rem; margin-bottom: 2px; }
   .is-pinned .stage__frame .frame__bar { height: 32px; }
 }
 
