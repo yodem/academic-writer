@@ -66,7 +66,7 @@ export function ckMetadata(text: string): { title?: string; author?: string } {
   return { title, author };
 }
 
-// The ck table of contents names the book reliably on the line before `ID: <id>`; the bold-line
+// The trove table of contents names the book reliably on the line before `ID: <id>`; the bold-line
 // heuristic misreads books whose first bold line is a list number (Sefer Yetzirah: "1.").
 export function titleFromToc(toc: string): string | undefined {
   const lines = toc.split('\n').map((l) => l.replace(/^=+|=+$/gu, '').trim()).filter((l) => l && !/^=+$/u.test(l));
