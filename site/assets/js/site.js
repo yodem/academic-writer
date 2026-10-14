@@ -50,7 +50,7 @@
     $$('.seg button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === lang)); });
     d.title = t('doc_title');
     var sheet = $('#demo-sheet'); if (sheet) { sheet.lang = lang; sheet.dir = lang === 'he' ? 'rtl' : 'ltr'; }
-    setThemeLabel(); labelRail(); labelPause(); syncTracks();
+    setThemeLabel(); labelRail(); labelPause();
     if (persist) store.set('aw-lang', lang);
     if (demoApi) demoApi.restart();
     if (storyApi) storyApi.update();
@@ -114,30 +114,21 @@
 
   /* ---------- hero demo ---------- */
   var demoApi = safe(function () {
-    var demo = $('#demo'); if (!demo) return null;
-    var live = $('[data-demo-text]', demo), ghost = $('.demo__ghost [data-i18n]', demo), btn = $('#demo-pause');
+    var demo = $('#demo'), btn = $('#demo-pause'); if (!demo) return null;
     var gen = 0, timers = [], paused = false, visible = true;
+    var BEATS = [0, 2700, 5400, 7900], LOOP_END = 10600; /* idea, plan, draft, Word; the last beat holds ~2.7s */
     function clear() { timers.forEach(clearTimeout); timers = []; }
     function at(ms, fn, my) { timers.push(setTimeout(function () { if (my === gen) fn(); }, ms)); }
-    function showFinal() { clear(); gen++; live.textContent = ghost.textContent; demo.setAttribute('data-step', '3'); demo.classList.remove('is-reset'); }
+    function showFinal() { clear(); gen++; demo.classList.remove('is-reset'); demo.setAttribute('data-step', '3'); }
     function run() {
       clear(); var my = ++gen;
       if (reduceMQ.matches) { showFinal(); return; }
       if (paused || !visible) return;
-      var text = ghost.textContent, i = 0;
-      demo.classList.remove('is-reset'); demo.setAttribute('data-step', '0'); live.textContent = '';
-      (function type() {
-        if (my !== gen) return;
-        i += 2; live.textContent = text.slice(0, i);
-        if (i < text.length) timers.push(setTimeout(type, 34));
-        else {
-          at(250, function () { demo.setAttribute('data-step', '1'); }, my);
-          at(1000, function () { demo.setAttribute('data-step', '2'); }, my);
-          at(1800, function () { demo.setAttribute('data-step', '3'); }, my);
-          at(5300, function () { demo.classList.add('is-reset'); }, my);
-          at(5600, run, my);
-        }
-      })();
+      demo.classList.remove('is-reset'); demo.setAttribute('data-step', '0');
+      [1, 2, 3].forEach(function (n) { at(BEATS[n], function () { demo.setAttribute('data-step', String(n)); }, my); });
+      at(LOOP_END, function () { demo.classList.add('is-reset'); }, my);
+      at(LOOP_END + 450, function () { demo.setAttribute('data-step', '0'); }, my);
+      at(LOOP_END + 500, run, my);
     }
     function stop() { clear(); gen++; }
     if (btn) btn.addEventListener('click', function () {
@@ -153,12 +144,6 @@
   });
   function labelPause() { var b = $('#demo-pause'); if (!b) return; $('.pause__t', b).textContent = t(b.getAttribute('aria-pressed') === 'true' ? 'play' : 'pause'); }
 
-  /* ---------- film captions follow the language ---------- */
-  function syncTracks() {
-    var v = $('#film-video'); if (!v || !v.textTracks) return;
-    for (var i = 0; i < v.textTracks.length; i++) v.textTracks[i].mode = v.textTracks[i].language === lang ? 'showing' : 'disabled';
-  }
-  (function () { var v = $('#film-video'); if (v) v.addEventListener('loadedmetadata', syncTracks); })();
 
   /* ---------- film fallback ---------- */
   (function () {
@@ -175,11 +160,11 @@
     var sec = $('#how'), grid = $('#story'), track = $('#track'); if (!sec || !grid || !track) return null;
     var body = $('.stage__body', grid), stage = $('#stage');
     var steps = $$('.step', grid), scenes = steps.map(function (s) { return $('.scene', s); });
-    var titles = $$('.stage__frame .frame__title', stage), count = $('[data-count]', stage);
+    var titles = $$('.stage__frame .frame__title', stage), count = $('[data-count]', grid);
     var dots = $$('.rail li', grid), links = $$('.rail a', grid);
     var bar = $('#bar');
     /* where each scene starts on its own 0..1 timeline, so it never looks empty at p=0 */
-    var START = [0.3, 0.2, 0.4, 0.3, 0.52, 0.3, 0.2], N = 7, HOLD = 0.85;
+    var START = [0.45, 0.35, 0.3, 0.35, 0.55, 0.2, 0.35], N = 7, HOLD = 0.85;
     var pinned = false, inView = false, ticking = false, cur = -1, lastP = -1, lastG = -1;
 
     function enable() {
@@ -243,7 +228,6 @@
 
   /* ---------- init ---------- */
   if (lang === 'he') applyLang('he', false); else { setThemeLabel(); labelRail(); labelPause(); d.title = t('doc_title'); var sh = $('#demo-sheet'); if (sh) { sh.lang = 'en'; sh.dir = 'ltr'; } }
-  syncTracks();
   if (storyApi) storyApi.update();
   if (demoApi) demoApi.restart();
 })();

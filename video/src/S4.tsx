@@ -1,7 +1,6 @@
 import React from 'react';
-import {useCurrentFrame} from 'remotion';
 import {Frame, Chip} from './Frame';
-import {C, p, rise, sans, spectral, shadow} from './theme';
+import {C, p, rise, useScaled, sans, spectral, shadow} from './theme';
 
 const Y = [0, 205, 410];
 const P1 = 'The sources agree that the dispute first surfaces in correspondence, not in print.';
@@ -11,7 +10,7 @@ const P3 = 'Later readers recast the procedural quarrel as a matter of doctrine.
 const FN = ['Monograph, p. 41', 'Archive letters, p. 91', 'Journal article, p. 88'];
 
 export const S4: React.FC<{dur: number}> = ({dur}) => {
-  const f = useCurrentFrame();
+  const f = useScaled(224, dur, 0.7);
   const swap = p(f, 120, 24);
   const bad = f >= 85 && f < 130;
   const para = (y: number, i: number, start: number, body: React.ReactNode) => (
@@ -28,7 +27,7 @@ export const S4: React.FC<{dur: number}> = ({dur}) => {
   );
   const ok = (start: number) => <Chip kind="ok" style={{opacity: p(f, start, 12), transform: `translateX(${(1 - p(f, start, 12)) * -8}px)`}}>verified</Chip>;
   return (
-    <Frame n={4} dur={dur} headline="It drafts in your voice, and checks every footnote against the page.">
+    <Frame n={4} dur={dur} headline="It drafts in your voice, and a separate auditor checks every footnote against the page.">
       {/* page */}
       <div style={{position: 'absolute', left: 0, top: 0, width: 1170, height: 660, background: C.paper2, border: `1px solid ${C.rule}`, borderRadius: 8, boxShadow: shadow}}>
         <div style={{position: 'absolute', left: 56, top: 40, width: 1050, height: 600}}>

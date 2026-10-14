@@ -1,7 +1,6 @@
 import React from 'react';
-import {useCurrentFrame} from 'remotion';
 import {Frame} from './Frame';
-import {C, p, rise, mono, sans, spectral, shadow} from './theme';
+import {C, p, rise, useScaled, mono, sans, spectral, shadow} from './theme';
 
 const X = [0, 620, 1240];
 const W = 460;
@@ -20,7 +19,7 @@ const Line: React.FC<{x1: number; y1: number; x2: number; y2: number; prog: numb
 };
 
 export const S3: React.FC<{dur: number}> = ({dur}) => {
-  const f = useCurrentFrame();
+  const f = useScaled(156, dur, 0.7);
   const col = (c: number, i: number, text: string, kind: 'a' | 'q' | 'p', start: number) => (
     <div key={`${c}${i}`} style={{position: 'absolute', left: X[c], top: Y[i], width: W, height: H, boxSizing: 'border-box', padding: '20px 24px', borderRadius: 8, background: kind === 'p' ? C.indigoSoft : C.paper2, border: `1px solid ${kind === 'p' ? C.indigo : C.rule}`, boxShadow: kind === 'p' ? 'none' : shadow,
       display: 'flex', alignItems: 'center', fontFamily: kind === 'p' ? mono : spectral, fontSize: kind === 'p' ? 30 : 33, lineHeight: 1.25, fontStyle: kind === 'q' ? 'italic' : 'normal', color: kind === 'p' ? C.indigo : C.ink, fontWeight: kind === 'p' ? 500 : 400, ...rise(f, start + i * 8, 18)}}>

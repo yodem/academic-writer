@@ -1,4 +1,4 @@
-import {Easing, interpolate} from 'remotion';
+import {Easing, interpolate, useCurrentFrame} from 'remotion';
 import {loadFont as loadSpectral} from '@remotion/google-fonts/Spectral';
 import {loadFont as loadSans} from '@remotion/google-fonts/IBMPlexSans';
 import {loadFont as loadMono} from '@remotion/google-fonts/IBMPlexMono';
@@ -38,3 +38,13 @@ export const rise = (frame: number, start: number, dur = 18, travel = 14): React
 };
 
 export const shadow = '0 1px 2px oklch(0.24 0.05 268 / 0.05), 0 12px 32px oklch(0.24 0.05 268 / 0.07)';
+
+/** Frames of stillness kept at the end of every scene (0.6s) before the cut. */
+export const HOLD = 18;
+
+/** Scene-local time, stretched/compressed so all motion (authored to end at `motionEnd`) finishes HOLD frames before `dur`. */
+export const useScaled = (motionEnd: number, dur: number, minK = 0.7, maxK = 1.1) => {
+  const frame = useCurrentFrame();
+  const k = Math.min(maxK, Math.max(minK, motionEnd / (dur - HOLD)));
+  return frame * k;
+};

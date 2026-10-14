@@ -1,7 +1,6 @@
 import React from 'react';
-import {useCurrentFrame} from 'remotion';
 import {Frame} from './Frame';
-import {C, p, rise, mono, sans, spectral, shadow} from './theme';
+import {C, p, rise, useScaled, mono, sans, spectral, shadow} from './theme';
 
 const COMMENTS: {y: number; text: string; at: number}[] = [
   {y: 50, text: 'Tighten this sentence.', at: 30},
@@ -10,7 +9,7 @@ const COMMENTS: {y: number; text: string; at: number}[] = [
 ];
 
 export const S5: React.FC<{dur: number}> = ({dur}) => {
-  const f = useCurrentFrame();
+  const f = useScaled(146, dur, 0.7);
   const done = p(f, 128, 16);
   return (
     <Frame n={5} dur={dur} headline="You get a Word file. Comment on it like any draft; it folds your comments back in.">

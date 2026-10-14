@@ -6,17 +6,19 @@ import {S3} from './S3';
 import {S4} from './S4';
 import {S5} from './S5';
 import {S6} from './S6';
+import {S7} from './S7';
 
 const FPS = 30;
-export const SCENES: {from: number; dur: number; C: React.FC<{dur: number}>}[] = [
-  {from: 0, dur: 5, C: S1},
-  {from: 5, dur: 6, C: S2},
-  {from: 11, dur: 7, C: S3},
-  {from: 18, dur: 9, C: S4},
-  {from: 27, dur: 7, C: S5},
-  {from: 34, dur: 6, C: S6},
-].map((s) => ({...s, from: s.from * FPS, dur: s.dur * FPS}));
-export const TOTAL = 40 * FPS;
+// Scene lengths in frames: narration clip + ~0.8s of air (see audio/ build notes). Narration starts 3 frames into each scene.
+const DURS = [216, 222, 234, 231, 255, 275, 222];
+const COMPS: React.FC<{dur: number}>[] = [S1, S2, S3, S4, S5, S6, S7];
+export const SCENES = DURS.map((dur, i) => ({
+  from: DURS.slice(0, i).reduce((a, b) => a + b, 0),
+  dur,
+  C: COMPS[i],
+}));
+export const TOTAL = DURS.reduce((a, b) => a + b, 0);
+void FPS;
 
 export const Overview: React.FC = () => (
   <AbsoluteFill style={{background: 'oklch(0.978 0.004 250)'}}>

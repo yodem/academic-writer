@@ -1,10 +1,10 @@
 import React from 'react';
 import {AbsoluteFill, Img, staticFile, useCurrentFrame, interpolate} from 'remotion';
-import {C, p, rise, spectral, sans} from './theme';
+import {C, p, rise, ease, HOLD, spectral, sans} from './theme';
 
 export const S1: React.FC<{dur: number}> = ({dur}) => {
   const f = useCurrentFrame();
-  const scale = interpolate(f, [0, dur], [1.0, 1.04]);
+  const scale = interpolate(f, [0, dur - HOLD], [1.0, 1.04], {easing: ease, extrapolateRight: 'clamp'});
   const opacity = interpolate(f, [0, 10, dur - 8, dur], [0, 1, 1, 0], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
   return (
     <AbsoluteFill style={{background: C.paper, opacity}}>
