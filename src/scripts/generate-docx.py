@@ -257,7 +257,10 @@ def add_para(
 
     # Create paragraph
     para = doc.add_paragraph()
-    para.alignment = align
+    # In a <w:bidi/> paragraph Word renders jc="right" at the LEFT margin, so RTL
+    # "right" alignment (headings, subtitles) is expressed as no jc: the bidi
+    # default (start) is the right margin.
+    para.alignment = None if (is_rtl and align == WD_ALIGN_PARAGRAPH.RIGHT) else align
     para.paragraph_format.space_before = Pt(space_before)
     para.paragraph_format.space_after = Pt(space_after)
     para.paragraph_format.line_spacing = line_spacing

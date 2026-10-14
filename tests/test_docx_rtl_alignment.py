@@ -57,8 +57,11 @@ class RtlAlignmentTests(unittest.TestCase):
 
         for ppr in (heading_ppr, footnote_ppr):
             tags = [child.tag.rsplit("}", 1)[-1] for child in ppr]
-            self.assertLess(tags.index("bidi"), tags.index("jc"))
-            self.assertEqual(ppr.find("w:jc", namespaces=NS).get("{%s}val" % W_NS), "right")
+            # RTL headings/footnotes carry <w:bidi/> and NO w:jc: Word renders
+            # jc="right" in a bidi paragraph at the LEFT margin, while the bidi
+            # default (start) is the right margin.
+            self.assertIn("bidi", tags)
+            self.assertIsNone(ppr.find("w:jc", namespaces=NS))
 
     def test_footnote_style_keeps_bidi_before_spacing_and_alignment(self):
         with zipfile.ZipFile(os.path.join(SCRIPTS_DIR, "lib", "footnote_template.docx")) as zf:
@@ -67,7 +70,7 @@ class RtlAlignmentTests(unittest.TestCase):
         ppr = styles.xpath(".//w:style[@w:styleId='FootnoteText']/w:pPr", namespaces=NS)[0]
         tags = [child.tag.rsplit("}", 1)[-1] for child in ppr]
         self.assertLess(tags.index("bidi"), tags.index("spacing"))
-        self.assertLess(tags.index("spacing"), tags.index("jc"))
+        self.assertNotIn("jc", tags)  # bidi default aligns right; jc=right would render left
 
 
 if __name__ == "__main__":
