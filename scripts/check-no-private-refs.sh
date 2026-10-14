@@ -11,7 +11,7 @@
 #
 # Two tiers, deliberately. SHIPPED files (src/, plugins/, manifests/) are what a user
 # installs and are held to the strict list. PUBLISHED docs (docs/, tests/, scripts/,
-# .github/, root md) are held to the identity list only — CandleKeep item ids are a
+# .github/, root md) are held to the identity list only — Trove item ids are a
 # pre-existing provenance convention in this repo's own docs/reviews and
 # docs/superpowers plans, and stripping them would rewrite the maintainer's prior
 # documentation choices rather than fix a leak. Ids are therefore NOT denied here;
@@ -43,7 +43,7 @@ IDENTITY_DENY=(
 
 # Applied to SHIPPED files only — stricter, because these are installed by users.
 SHIPPED_ONLY_DENY=(
-  '\bcm[a-z0-9]{22,}\b::CandleKeep item id in a shipped file (cite the title, not the id)'
+  '\bcm[a-z0-9]{22,}\b::Trove item id in a shipped file (cite the title, not the id)'
   '[Mm]ikdashim::name of an unrelated private project in a shipped file (describe the failure, not the project)'
 )
 

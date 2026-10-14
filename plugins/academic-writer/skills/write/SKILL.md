@@ -48,7 +48,7 @@ AskUserQuestion(questions=[{
 
 ### Voice profile load (first step of every run)
 
-1. Only if the profile has CandleKeep enabled (`candlekeep.enabled: true`): run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh pull "${CLAUDE_PLUGIN_DATA}" "$PWD"` to fetch the latest voice store from CandleKeep. Check its exit code and show its output: a non-zero exit is a real failure, so say so plainly before continuing with the local copy. Without CandleKeep, skip this step; the local store is the only copy.
+1. Only if the profile has Trove enabled (`tools.trove.enabled: true`, or `tools.candlekeep.enabled` in older profiles): run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh pull "${CLAUDE_PLUGIN_DATA}" "$PWD"` to fetch the latest voice store from Trove. Check its exit code and show its output: a non-zero exit is a real failure, so say so plainly before continuing with the local copy. Without Trove, skip this step; the local store is the only copy.
 2. `aw draft` and `aw synthesize` load the voice bundle (chosen exemplars, rewrite pairs, writing rules, style words) from the store themselves — you do not paste voice text into a prompt.
 3. The drafting prompt (`aw draft`'s `write-draft.md`) is written to weight `## Academic-specific`
    rules higher when they conflict with `## Core voice` rules; everything else applies as written.
@@ -88,8 +88,8 @@ The full `styleFingerprint` object lives in `profile.md`, which `aw draft` and `
 
 Read the `tools` object from the profile. Throughout this workflow, **only use tools that are enabled**:
 
-- **Candlekeep** (`tools.candlekeep.enabled`) — If disabled, skip `ck` commands. Source listing/selection steps should use any available sources from the profile's `sources` array instead.
-- **NotebookLM** (`tools.notebooklm.enabled`) — If disabled, skip notebook queries and AI summaries. NotebookLM is supplementary — it never replaces CandleKeep and the verified evidence file for citations.
+- **Trove** (`tools.trove.enabled`; older profiles: `tools.candlekeep.enabled`) — If disabled, skip `trove` commands. Source listing/selection steps should use any available sources from the profile's `sources` array instead.
+- **NotebookLM** (`tools.notebooklm.enabled`) — If disabled, skip notebook queries and AI summaries. NotebookLM is supplementary — it never replaces Trove and the verified evidence file for citations.
 
 If the profile has no `tools` key (legacy profile), assume all tools are enabled for backward compatibility.
 
@@ -163,29 +163,26 @@ Store the draft text as `userDraftText` regardless of which option is chosen. If
 ### Step 2: Source Selection
 
 
-**If Candlekeep is enabled**, list the available sources — scoped to the active shelf when one is set:
+**If Trove is enabled**, list the available sources — scoped to the active shelf when one is set:
 
 ```bash
-# `ck shelf use` records the active shelf in ./.candlekeep/active-shelf.
+# `trove shelf current` names this project's active shelf (set with `trove shelf use`) or says there is none.
 # Scope the listing to it so a Jewish Studies write run doesn't present the
 # researcher's entire library (engineering books included) as source options.
-SHELF="$(tr -d '[:space:]' < ./.candlekeep/active-shelf 2>/dev/null || true)"
-if [ -n "$SHELF" ]; then
-  ck items list --shelf "$SHELF" --json || ck items list --json
-else
-  ck items list --json
-fi
+trove shelf current
+trove items list --shelf "<the shelf named above>" --json   # when a shelf is active
+trove items list --json                                       # when none is
 ```
 
-Do **not** run `ck items enrich` here. It is a manual metadata *setter* (`--title`,
-`--author`, `--toc`, ...), not an auto-extractor: a bare `ck items enrich <ID>` exits
+Do **not** run `trove items enrich` here. It is a manual metadata *setter* (`--title`,
+`--author`, `--toc`, ...), not an auto-extractor: a bare `trove items enrich <ID>` exits
 with "At least one of --title, --author, --description, --toc, --add-prompt, or
 --sample-question is required". Enrichment is the researcher's curation step, and
 running it across the whole library would overwrite it.
 
-**If Candlekeep is NOT enabled**, use the `sources` array from the profile (indexed during init) to present available sources. If the sources array is empty, ask the researcher to describe their sources manually.
+**If Trove is NOT enabled**, use the `sources` array from the profile (indexed during init) to present available sources. If the sources array is empty, ask the researcher to describe their sources manually.
 
-If a source the author wants to use is **not yet in Trove** (CandleKeep), stop and point them at the ingest skills instead of working from an unindexed file: a single article or chapter → `/academic-writer:ingest`, a whole book (multi-volume, scanned, EPUB, 100+ pages) → `/academic-writer:ingest-book`. They upload it with its printed page numbers preserved so citations can name the printed page.
+If a source the author wants to use is **not yet in Trove** (Trove), stop and point them at the ingest skills instead of working from an unindexed file: a single article or chapter → `/academic-writer:ingest`, a whole book (multi-volume, scanned, EPUB, 100+ pages) → `/academic-writer:ingest-book`. They upload it with its printed page numbers preserved so citations can name the printed page.
 
 Present them clearly and ask:
 > "Which of these sources should I focus on? You can name them by number, by title, or say 'all'."

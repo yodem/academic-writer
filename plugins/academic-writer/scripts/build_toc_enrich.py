@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-build_toc_enrich.py — Assemble the navigable Trove (formerly CandleKeep) ToC
+build_toc_enrich.py — Assemble the navigable Trove ToC
 and (optionally) apply it.
 
 THE CENTRAL LESSON of this skill: Trove's sidebar/outline is driven by ToC
-METADATA, set with `ck items enrich <id> --toc '[{"title","page","level"}]'`.
+METADATA, set with `trove items enrich <id> --toc '[{"title","page","level"}]'`.
 It is NOT built from markdown headings inside a page. If you cram the whole
 table of contents into page 1 as ## / ### headings, every entry just links
 back to page 1 — useless. The fix is this metadata, where each entry carries
@@ -34,16 +34,16 @@ Inputs (via --config CONFIG.json):
   }
   --crosswalk crosswalk.json   (output of build_crosswalk.py)
   --out toc_enrich.json
-  --apply BOOK_ID              (optional: runs `ck items enrich --toc`)
+  --apply BOOK_ID              (optional: runs `trove items enrich --toc`)
 
 Type -> level:
   volume=1, unit=2, section=3, subsection=4, subsubsection=5,
   appendix/frontmatter/endmatter=3.
 
-Known harmless CLI quirk: with non-ASCII descriptions, `ck items enrich --toc`
+Known harmless CLI quirk: with non-ASCII descriptions, `trove items enrich --toc`
 prints "✓ Enriched" and THEN panics on a char-boundary while truncating the
 description for display. The ToC is already written; ignore the panic and
-verify with `ck items toc <id>`.
+verify with `trove items toc <id>`.
 """
 import argparse
 import json
@@ -168,7 +168,7 @@ def main(argv=None) -> int:
     if args.apply:
         print(f'Applying to {args.apply} ...')
         r = subprocess.run(
-            ['ck', 'items', 'enrich', args.apply, '--toc',
+            ['trove', 'items', 'enrich', args.apply, '--toc',
              Path(args.out).read_text(encoding='utf-8'), '--no-session'],
             capture_output=True, text=True)
         # The CLI prints ✓ then may panic on a Hebrew description-truncation bug.
@@ -177,7 +177,7 @@ def main(argv=None) -> int:
         else:
             print('stdout:', r.stdout[-500:])
             print('stderr:', r.stderr[-500:])
-        print('Verify with:  ck items toc', args.apply, '--no-session')
+        print('Verify with:  trove items toc', args.apply, '--no-session')
     return 0
 
 

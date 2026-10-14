@@ -13,7 +13,7 @@ Why this exists:
   and, for RTL languages, invisible Unicode bidi control characters. Both must
   be removed or they pollute every page and break agentic search.
 
-Each `# ` H1 becomes one Trove (formerly CandleKeep) page, so the page label +
+Each `# ` H1 becomes one Trove page, so the page label +
 number you choose here is what the crosswalk and ToC builders key off later.
 
 Usage:

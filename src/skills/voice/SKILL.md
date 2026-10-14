@@ -1,6 +1,6 @@
 ---
 name: voice
-description: "Build or update the author's voice profile: import older voice files, choose exemplar paragraphs from past papers, derive writing rules and sync them to CandleKeep. Use when the author sets up their voice for the first time, /write reports the voice profile is missing, or the author wants drafts to sound more like them. Not for routine learning from new papers (the learn step handles that)."
+description: "Build or update the author's voice profile: import older voice files, choose exemplar paragraphs from past papers, derive writing rules and sync them to Trove. Use when the author sets up their voice for the first time, /write reports the voice profile is missing, or the author wants drafts to sound more like them. Not for routine learning from new papers (the learn step handles that)."
 user-invocable: true
 disable-model-invocation: true
 allowed-tools: [Bash, Read, Write, AskUserQuestion]
@@ -25,11 +25,11 @@ Run `aw --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" voice exemplars 
 
 Run `aw --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" voice moves --run-id "voice-moves"`. This makes one Gemini call and writes `rules.md`, a short list of the author's characteristic writing moves. Go through the rules with the author and adjust any they do not recognise. The maximum number of lines is set in `thresholds.json > voice.bundle.maxRuleLines`.
 
-## Sync (only with CandleKeep)
+## Sync (only with Trove)
 
-Skip this section unless the profile has CandleKeep enabled (`candlekeep.enabled: true`); without it, the store in the plugin data folder is the only copy, and uninstalling the plugin without `--keep-data` deletes it — say so once.
+Skip this section unless the profile has Trove enabled (`tools.trove.enabled: true`, or `tools.candlekeep.enabled` in older profiles); without it, the store in the plugin data folder is the only copy, and uninstalling the plugin without `--keep-data` deletes it — say so once.
 
-Run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh push "${CLAUDE_PLUGIN_DATA}" "$PWD"` to save local changes to CandleKeep. Run `voice-sync.sh pull "${CLAUDE_PLUGIN_DATA}" "$PWD"` only when the author explicitly asks for a pull, because a pull replaces local changes. The wrapper runs `aw --data-dir … --project-dir … voice push` / `voice pull` with both required paths.
+Run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh push "${CLAUDE_PLUGIN_DATA}" "$PWD"` to save local changes to Trove. Run `voice-sync.sh pull "${CLAUDE_PLUGIN_DATA}" "$PWD"` only when the author explicitly asks for a pull, because a pull replaces local changes. The wrapper runs `aw --data-dir … --project-dir … voice push` / `voice pull` with both required paths.
 
 - Resolve conflicts by comparing `voiceVersion`, and keep both change histories by merging `CHANGELOG.jsonl`.
 - Report sync errors as errors.

@@ -43,12 +43,12 @@ narrative under `## Style Fingerprint` in Phase 4 as free text instead of the fu
 **Step 1: Computational extraction** — Run the metrics extraction script to get hard numbers.
 
 **Optional, best-effort, Hebrew only:** if `targetLanguage` is Hebrew, first try to fetch the
-**shared Hebrew baseline** from CandleKeep for a contrastive score (item titled *Hebrew Linguistic
+**shared Hebrew baseline** from Trove for a contrastive score (item titled *Hebrew Linguistic
 Reference*, mirrored on GitHub at
 [yodem/hebrew-linguistics-data](https://github.com/yodem/hebrew-linguistics-data); the same item is
 read by the `hebrew-book-producer` plugin so both share one source of truth). **Skip this whole
-step if `targetLanguage` is not Hebrew, OR if `tools.candlekeep.enabled` is false, OR if no
-CandleKeep CLI/tool is present** — the baseline is a nice-to-have contrastive signal, not a
+step if `targetLanguage` is not Hebrew, OR if `tools.trove.enabled` (or the older `tools.candlekeep.enabled`) is false, OR if no
+Trove CLI/tool is present** — the baseline is a nice-to-have contrastive signal, not a
 requirement, and the extractor runs fine without it (see below). Look it up by exact title rather
 than a hardcoded id — ids can drift if the item is ever recreated, and there is no fallback id to
 fall back to:
@@ -56,19 +56,19 @@ fall back to:
 ```bash
 mkdir -p .ctx
 BASELINE_TITLE="Hebrew Linguistic Reference"
-BASELINE_ID=$(ck items list --json 2>/dev/null | jq -r --arg t "$BASELINE_TITLE" '[.[] | select(.title == $t)] | if length == 1 then .[0].id elif length > 1 then (sort_by(.id) | .[0].id) else empty end')
+BASELINE_ID=$(trove items list --json 2>/dev/null | jq -r --arg t "$BASELINE_TITLE" '[.[] | select(.title == $t)] | if length == 1 then .[0].id elif length > 1 then (sort_by(.id) | .[0].id) else empty end')
 if [ -n "$BASELINE_ID" ]; then
-  ck items get "$BASELINE_ID" > .ctx/hebrew-linguistic-reference.md
+  trove items get "$BASELINE_ID" > .ctx/hebrew-linguistic-reference.md
 else
-  echo "Could not find CandleKeep item titled '$BASELINE_TITLE' by exact title match — continuing without a contrastive baseline (non-fatal)."
-  echo "If you want contrastive scoring, search CandleKeep manually (ck items list --json | jq) and rename the item to match exactly, or re-run init after adding it."
+  echo "Could not find Trove item titled '$BASELINE_TITLE' by exact title match — continuing without a contrastive baseline (non-fatal)."
+  echo "If you want contrastive scoring, search Trove manually (trove items list --json | jq) and rename the item to match exactly, or re-run init after adding it."
 fi
 ```
 
 Then run the extractor. Pass `--baseline`/`--contrastive` only when the baseline file above was
 successfully fetched — the extractor degrades gracefully and simply omits the contrastive section
 when no baseline is present, so this is safe to skip entirely for non-Hebrew articles or when
-CandleKeep isn't configured:
+Trove isn't configured:
 
 ```bash
 if [ -f .ctx/hebrew-linguistic-reference.md ]; then

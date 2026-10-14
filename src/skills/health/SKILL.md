@@ -1,6 +1,6 @@
 ---
 name: health
-description: "Check that Academic Writer is ready to use — your profile, the tools it needs (Python and its add-ons, Hebrew spelling, CandleKeep, NotebookLM), the Gemini key and past articles — with a plain-language fix for anything missing. Use when something stops working, after install or an update, or before a long writing session."
+description: "Check that Academic Writer is ready to use — your profile, the tools it needs (Python and its add-ons, Hebrew spelling, Trove, NotebookLM), the Gemini key and past articles — with a plain-language fix for anything missing. Use when something stops working, after install or an update, or before a long writing session."
 user-invocable: true
 allowed-tools: [Bash, Read]
 metadata: {author: "Yotam Fromm", version: "0.3.0"}
@@ -87,17 +87,17 @@ from `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/gemini-key.md § Checking th
 | live check not `HTTP 200` | ✗ Gemini key | the matching line from the table in `gemini-key.md` |
 | `AW_FAILED` | ✗ Plugin command | "The plugin's own command didn't start. Update or reinstall the plugin (see version check above)." |
 
-## 4. Candlekeep
+## 4. Trove
 
-**Skip if `tools.candlekeep.enabled` is false.** Report as "Disabled (enable with `/academic-writer:update-tools`)".
+**Skip if `tools.trove.enabled` (or the older `tools.candlekeep.enabled`) is false.** Report as "Disabled (enable with `/academic-writer:update-tools`)".
 
 ```bash
-command -v ck >/dev/null 2>&1 && echo "CLI: INSTALLED" || echo "CLI: NOT_FOUND"
+command -v trove >/dev/null 2>&1 && echo "CLI: INSTALLED" || echo "CLI: NOT_FOUND"
 ```
 
 If installed:
 ```bash
-ck items list 2>&1 | head -20
+trove items list 2>&1 | head -20
 ```
 
 Report:
@@ -105,9 +105,9 @@ Report:
 - Can connect? ✓/✗
 - Number of items in library
 - If error: show the error message, then one plain fix line (for example: "Not signed in — type
-  `! ck auth login`, which opens your browser.")
+  `! trove login`, which opens your browser.")
 
-**If CLI not installed**: "CandleKeep isn't installed. Run `/academic-writer:setup` — it can
+**If CLI not installed**: "Trove isn't installed. Run `/academic-writer:setup` — it can
 install it after asking."
 
 ---
@@ -168,7 +168,7 @@ Show a clean summary table:
 > | Python + add-ons | ✓ Ready / ✗ [what's missing] | Python [version] |
 > | Hebrew spelling | ✓ / ⚠ Missing / — Not needed | |
 > | Gemini key | ✓ Works / ✗ [problem] / — Not set up (needed to write, proofread, read scans) | |
-> | Candlekeep | ✓ Connected / ✗ Error / — Disabled | [N] items |
+> | Trove | ✓ Connected / ✗ Error / — Disabled | [N] items |
 > | NotebookLM | ✓ Connected / ✗ Not found / — Disabled | [N] notebooks |
 > | Plugin agents | ✓ Both present / ✗ Missing [list] | 2/2 |
 >

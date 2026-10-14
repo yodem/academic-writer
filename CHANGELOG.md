@@ -4,6 +4,10 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+### Changed
+- **CandleKeep is now Trove** ([heytrove.ai](https://heytrove.ai)) everywhere the plugin talks to you, and every command it runs now uses the `trove` program instead of `ck`. New profiles store the setting as `tools.trove`; profiles that still say `candlekeep` keep working. The install steps use Trove's own installer, and the shelf listing asks `trove shelf current` instead of reading a file in your project.
+- The README links to the online guide (published with GitHub Pages) and to Trove.
+
 ## [0.16.0] — 2026-10-06
 
 ### Added

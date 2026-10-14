@@ -80,7 +80,7 @@ def test_ingest_skill_contracts():
     assert "/academic-writer:ingest-book" in text
     # profile scoping
     assert "profile.md" in text
-    assert "candlekeep" in text
+    assert "trove" in text
 
 
 def test_ingest_book_skill_contracts():

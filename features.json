@@ -30,7 +30,7 @@
         },
         {
           "id": "integration-detect",
-          "name": "Auto-detect Candlekeep/NotebookLM/Gemini",
+          "name": "Auto-detect Trove/NotebookLM/Gemini",
           "status": "ok"
         },
         {
@@ -41,13 +41,13 @@
         },
         {
           "id": "hebrew-baseline-fetch",
-          "name": "Fetch Hebrew linguistic baseline from CandleKeep",
+          "name": "Fetch Hebrew linguistic baseline from Trove",
           "status": "ok",
-          "issue": "Now looked up by exact title (\"Hebrew Linguistic Reference\") via `ck items list --json | jq`, with a loud warning + manual-search instruction if the lookup fails or is ambiguous, and the old hardcoded id kept only as a documented, never-silent last-resort fallback"
+          "issue": "Now looked up by exact title (\"Hebrew Linguistic Reference\") via `trove items list --json | jq`, with a loud warning + manual-search instruction if the lookup fails or is ambiguous, and the old hardcoded id kept only as a documented, never-silent last-resort fallback"
         },
         {
           "id": "source-indexing",
-          "name": "Index + enrich Candlekeep library",
+          "name": "Index + enrich Trove library",
           "status": "ok"
         }
       ]
@@ -86,7 +86,7 @@
           "status": "ok"
         },
         {
-          "id": "candlekeep-sync",
+          "id": "trove-sync",
           "name": "voice-sync.sh pull/push (last-write-wins, CHANGELOG.jsonl merge)",
           "status": "ok"
         },
@@ -138,7 +138,7 @@
     },
     {
       "id": "ingest",
-      "name": "Source ingestion into Trove (CandleKeep)",
+      "name": "Source ingestion into Trove",
       "sources": [
         "src/skills/ingest/SKILL.md",
         "src/skills/ingest/references/reading-page-template.md",

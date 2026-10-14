@@ -18,7 +18,7 @@ Run `aw evidence build` and summarise the verified passages it returns. Do not a
 1. Read `.academic-helper/profile.md` and, if it exists, `.academic-helper/author-intent.json`.
 2. If there is no intent file and no question, ask the author what they want to find out.
 3. When needed, write `.academic-helper/author-intent.json` with the thesis (in the author's words) and any passages the author says must be used.
-4. Take the indexed CandleKeep source ids from the project profile. For a Sefaria text, pass its reference with `--sefaria`. If a source the author wants is not yet in Trove (CandleKeep), point them at the ingest skills before continuing: a single article or chapter → `/academic-writer:ingest`, a whole book (multi-volume, scanned, EPUB, 100+ pages) → `/academic-writer:ingest-book`; they upload it with its printed page numbers preserved.
+4. Take the indexed Trove source ids from the project profile. For a Sefaria text, pass its reference with `--sefaria`. If a source the author wants is not yet in Trove, point them at the ingest skills before continuing: a single article or chapter → `/academic-writer:ingest`, a whole book (multi-volume, scanned, EPUB, 100+ pages) → `/academic-writer:ingest-book`; they upload it with its printed page numbers preserved.
 
 ## 2. Extract evidence
 

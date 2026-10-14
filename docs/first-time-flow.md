@@ -33,7 +33,7 @@ Quit Claude Code and open it again **inside your research folder**. The plugin k
 A short conversation, one question at a time.
 
 1. **Your field, article language and citation style.** Styles offered: Inline Parenthetical (common for Hebrew), Chicago / Turabian, MLA and APA. Setup saves a starter profile to `.academic-helper/profile.md` right away.
-2. **A check of the tools the plugin needs.** You see a table of what is found and what is missing: Python 3, its add-ons, the Hebrew spelling checker hspell (Hebrew writers only), and the optional CandleKeep and NotebookLM. For each missing piece, setup says what it is for and **asks before installing it**. Python itself and Homebrew you install yourself; setup gives numbered steps for your system. Skipping something never blocks setup.
+2. **A check of the tools the plugin needs.** You see a table of what is found and what is missing: Python 3, its add-ons, the Hebrew spelling checker hspell (Hebrew writers only), and the optional Trove and NotebookLM. For each missing piece, setup says what it is for and **asks before installing it**. Python itself and Homebrew you install yourself; setup gives numbered steps for your system. Skipping something never blocks setup.
 3. **Gemini.** Setup explains what Gemini is, that your article text is sent to Google when it is on, and why the key must not be pasted into the chat. If you say yes, it walks you through getting a free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) and storing it, either in the plugin settings (`/plugin` → **Installed** → **academic-writer** → **Configure** → **google_api_key**, kept in your keychain) or as an environment variable.
 4. **Restart.** Quit Claude Code, open it again in the same folder, run `/academic-writer:setup` again and choose **Check my Gemini key**. Setup tests the key without sending any article text.
 5. **A sample paragraph**, so you can see the tone, and a summary table of what is ready.
@@ -49,7 +49,7 @@ Put your published papers into the `past-articles` folder that setup created, th
 - It asks your full name (used as the key for your voice profile), confirms field, language and citation style, and which languages you want abstracts in.
 - It reads your papers and builds a **style fingerprint**: sentence length and structure, vocabulary and register, how you build paragraphs, your tone and stance, preferred transitions, citation density, and how you open and close. **You review it and correct anything** before it is saved.
 - It sets up your **voice profile** (a set of 12 to 20 paragraphs from your papers that you pick as examples of your writing), or reuses the one you already have. The voice profile is shared by all your projects.
-- If you use CandleKeep, it helps you add and list your sources.
+- If you use Trove, it helps you add and list your sources.
 
 `/academic-writer:init --quick` does a faster version: no computed style analysis, no voice setup, no sources.
 
@@ -94,7 +94,7 @@ Before your first article, `/academic-writer:write` checks that your voice profi
 | `/academic-writer:health` | Check that everything still works, with a fix for anything missing. |
 | `/academic-writer:help` | The short command list. |
 
-To change your field or turn CandleKeep or NotebookLM on or off, ask in plain words ("change my field to ...", "turn on CandleKeep"); Claude updates the profile.
+To change your field or turn Trove or NotebookLM on or off, ask in plain words ("change my field to ...", "turn on Trove"); Claude updates the profile.
 
 ---
 

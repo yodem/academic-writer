@@ -57,7 +57,7 @@ function cachedText(id: string): string | undefined {
   const path = join(root, entry, 'text.md');
   return existsSync(path) ? readFileSync(path, 'utf8') : undefined;
 }
-// `ck items get/read` output opens with the book title as a bold line and an Author section.
+// `trove items get/read` output opens with the book title as a bold line and an Author section.
 export function ckMetadata(text: string): { title?: string; author?: string } {
   const head = text.slice(0, 4000);
   const title = head.match(/\*\*([^*\n]{2,200})\*\*/u)?.[1]?.trim();
@@ -75,11 +75,11 @@ export function titleFromToc(toc: string): string | undefined {
   return candidate?.replace(/^=+\s*|\s*=+$/gu, '').trim() || undefined;
 }
 async function ckTitle(id: string): Promise<string | undefined> {
-  try { const { stdout } = await execFileAsync('ck', ['items', 'toc', id], { maxBuffer: 8 * 1024 * 1024 }); return titleFromToc(stdout); } catch { return undefined; }
+  try { const { stdout } = await execFileAsync('trove', ['items', 'toc', id], { maxBuffer: 8 * 1024 * 1024 }); return titleFromToc(stdout); } catch { return undefined; }
 }
 
 async function fetchCk(id: string): Promise<string> {
-  const { stdout } = await execFileAsync('ck', ['items', 'read', `${id}:all`], { maxBuffer: 64 * 1024 * 1024 });
+  const { stdout } = await execFileAsync('trove', ['items', 'read', `${id}:all`], { maxBuffer: 64 * 1024 * 1024 });
   return stdout;
 }
 async function extract(sourceId: string, text: string, intent: string, runId: string, isCore = false): Promise<ExtractResult> {
@@ -106,7 +106,7 @@ export async function buildEvidence(options: BuildOptions): Promise<BuildResult>
   projectDir();
   const intent = options.intent ? readFileSync(options.intent, 'utf8') : '';
   // The author's intent decides the core text and primary sources (live rehearsal 2026-09-23: every
-  // CandleKeep source defaulted to secondary / not-core, and titles were raw ids).
+  // Trove source defaulted to secondary / not-core, and titles were raw ids).
   const intentJson = (() => { try { return JSON.parse(intent) as { coreTextSourceId?: string; primarySources?: string[] }; } catch { return {}; } })();
   const intentCore = intentJson.coreTextSourceId ?? '';
   const primaryIds = new Set(intentJson.primarySources ?? []);
