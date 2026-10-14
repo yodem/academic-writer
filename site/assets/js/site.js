@@ -290,17 +290,13 @@
 
   /* ---------- gate diagram: reveal observer handles .in ---------- */
 
-  /* ---------- how it works: an auto-playing Cowork-style window (about 15 s, then loops) ---------- */
+  /* ---------- how it works: an animated agent graph in a dark Cowork window (about 15 s, then loops) ---------- */
   var howApi = safe(function () {
     var sec = $('#hw'); if (!sec) return null;
-    var playB = $('#hw-play', sec), phBtns = $$('.hw__phase', sec), PH = [0, 3, 10, 15], END = 15, LOOP = 17;
+    var playB = $('#hw-play', sec), phBtns = $$('.hw__phase', sec), PH = [0, 3, 11, 15], END = 15, LOOP = 17;
     var T = 0, running = true, inView = !('IntersectionObserver' in window), raf = 0, last = 0;
-    var typed = [], states = [], counts = [], fills = [];
+    var states = [], counts = [], fills = [], kfs = [];
     function num(s) { return parseFloat(s); }
-    $$('[data-type]', sec).forEach(function (el) {
-      var p = el.getAttribute('data-type').split(','), code = $('code', el);
-      typed.push({ el: el, code: code, full: code.textContent, a: num(p[0]), b: num(p[1]), n: -1, s: '' });
-    });
     $$('[data-st],[data-ss]', sec).forEach(function (el) {
       var raw = el.getAttribute('data-st') || el.getAttribute('data-ss');
       var steps = raw.split(',').map(function (x) { var q = x.split(':'); return { t: num(q[0]), s: q[1] }; });
@@ -308,14 +304,19 @@
     });
     $$('[data-count]', sec).forEach(function (el) { var p = el.getAttribute('data-count').split(','); counts.push({ el: el, a: num(p[0]), b: num(p[1]), max: num(p[2]), v: -1 }); });
     $$('[data-fill]', sec).forEach(function (el) { var p = el.getAttribute('data-fill').split(','); fills.push({ el: el, a: num(p[0]), b: num(p[1]), v: -1 }); });
+    $$('[data-kf]', sec).forEach(function (el) {
+      var pts = el.getAttribute('data-kf').split(',').map(function (x) { var q = x.split(':'); return { t: num(q[0]), v: num(q[1]) }; });
+      kfs.push({ el: el, pts: pts, v: -1 });
+    });
     function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+    function kfAt(pts, now) {
+      if (now <= pts[0].t) return pts[0].v;
+      for (var i = 1; i < pts.length; i++) {
+        if (now <= pts[i].t) { var a = pts[i - 1], b = pts[i]; return a.v + (b.v - a.v) * clamp01((now - a.t) / (b.t - a.t)); }
+      }
+      return pts[pts.length - 1].v;
+    }
     function render(now) {
-      typed.forEach(function (x) {
-        var n = Math.floor(x.full.length * clamp01((now - x.a) / (x.b - x.a)) + 0.0001);
-        if (n !== x.n) { x.n = n; x.code.textContent = x.full.slice(0, n); }
-        var s = now < x.a ? '' : now < x.b + 0.35 ? 'typing' : 'done';
-        if (s !== x.s) { x.s = s; if (s) x.el.setAttribute('data-state', s); else x.el.removeAttribute('data-state'); }
-      });
       states.forEach(function (x) {
         var s = '';
         for (var i = 0; i < x.steps.length; i++) if (now >= x.steps[i].t) s = x.steps[i].s;
@@ -323,6 +324,7 @@
       });
       counts.forEach(function (x) { var v = Math.round(x.max * clamp01((now - x.a) / (x.b - x.a))); if (v !== x.v) { x.v = v; x.el.textContent = v; } });
       fills.forEach(function (x) { var v = Math.round(clamp01((now - x.a) / (x.b - x.a)) * 200) / 200; if (v !== x.v) { x.v = v; x.el.style.setProperty('--f', v); } });
+      kfs.forEach(function (x) { var v = Math.round(kfAt(x.pts, now) * 200) / 200; if (v !== x.v) { x.v = v; x.el.style.setProperty('--f', v); } });
       phBtns.forEach(function (b, i) {
         b.lastElementChild.style.setProperty('--f', clamp01((now - PH[i]) / (PH[i + 1] - PH[i])));
         b.classList.toggle('is-on', now >= PH[i] && now < PH[i + 1]);
@@ -349,7 +351,7 @@
     }
     sec.classList.add('is-live');
     if (playB) playB.addEventListener('click', function () { running = !running; labelPlay(); go(); });
-    phBtns.forEach(function (b, i) { b.addEventListener('click', function () { if (reduceMQ.matches) return; T = PH[i]; render(T); go(); }); });
+    phBtns.forEach(function (b, i) { b.addEventListener('click', function () { if (reduceMQ.matches) return; T = PH[i] + 0.05; render(T); go(); }); });
     if ('IntersectionObserver' in window) {
       new IntersectionObserver(function (es) {
         var e = es[es.length - 1];

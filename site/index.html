@@ -85,7 +85,7 @@
       <h1 id="hero-h" data-i18n="hero_h">From a rough idea to a footnoted article you can defend.</h1>
       <p class="lede" data-i18n="r3c_hero_sub">A plugin for Cowork and Claude Code that takes Humanities researchers from a rough idea to a cited Word article, in Hebrew or English.</p>
       <div class="hero__btns">
-        <a class="btn btn--primary" href="#install"><span data-i18n="r2a_hero_cw">Install in Cowork (recommended)</span><span class="arr arr--down" aria-hidden="true">↓</span></a>
+        <a class="btn btn--primary" href="#install"><span data-i18n="r2a_hero_cw">Install</span><span class="arr arr--down" aria-hidden="true">↓</span></a>
         <a class="btn btn--ghost" href="#how"><span data-i18n="hero_see">See how it works</span><span class="arr arr--down" aria-hidden="true">↓</span></a>
       </div>
       <ul class="marks">
@@ -123,23 +123,6 @@
 </section>
 
 <!-- FILM -->
-<section class="sec film band" id="film" aria-labelledby="film-h">
-  <div class="wrap">
-    <div class="film__text">
-      <h2 id="film-h" class="rv" data-i18n="film_h">The whole thing in one minute</h2>
-      <p class="lede film__lede rv" data-i18n="r2a_film_p">A narrated overview with music: from the first idea to the Word file.</p>
-    </div>
-    <figure class="film__fig rv">
-      <div class="film__frame" id="film-frame">
-        <video id="film-video" controls playsinline preload="metadata" poster="assets/video/overview-poster.webp" width="1280" height="720">
-          <source src="assets/video/overview.webm" type="video/webm">
-          <source src="assets/video/overview.mp4" type="video/mp4">
-        </video>
-        <img class="film__poster" src="assets/video/overview-poster.webp" alt="" width="1280" height="720" loading="lazy" decoding="async">
-      </div>
-    </figure>
-  </div>
-</section>
 
 <!-- WHY -->
 <section class="sec why" id="why" aria-labelledby="why-h">
@@ -165,7 +148,7 @@
   </div>
 </section>
 
-<!-- HOW: an auto-playing Cowork-style window (illustrative, about 15 seconds, loops) -->
+<!-- HOW: an animated agent graph in a dark Cowork window (illustrative, about 15 seconds, loops) -->
 <section class="sec how" id="how" aria-labelledby="how-h">
   <div class="wrap">
     <header class="how__head">
@@ -173,51 +156,102 @@
       <p class="lede" data-i18n="how_sub">The whole flow in fifteen seconds: set up, write with agents, revise.</p>
     </header>
     <div class="hw" id="hw">
-      <p class="hw__sr" data-i18n="r4e_sr">An illustrated screen recording: you run init once, then write, where separate agents gather evidence, propose a thesis, draft the outline, write the sections and audit every citation in parallel, then revise folds your Word comments into a new draft.</p>
+      <div class="hw__sr">
+        <p data-i18n="r5_sr">An illustrated animation of the flow, in order:</p>
+        <ol>
+          <li data-i18n="r5_sr1">Run init once: your profile, voice, Trove, NotebookLM and Gemini are checked and ready.</li>
+          <li data-i18n="r5_sr2">Run write: separate agents start in parallel. Evidence gathers verified quotes, Thesis offers three options, Architect plans five sections.</li>
+          <li data-i18n="r5_sr3">Five writers draft the sections in your voice, and five auditors check every citation. A rejected citation goes back to its writer.</li>
+          <li data-i18n="r5_sr4">Everything converges into article.docx, with footnotes, ready for Word.</li>
+          <li data-i18n="r5_sr5">Run revise: your Word comments flow back to the writers and a new article-v2.docx is saved.</li>
+        </ol>
+      </div>
       <div class="hw__win" aria-hidden="true">
         <div class="hw__bar">
           <span class="hw__dots"><i></i><i></i><i></i></span>
-          <span class="hw__title" data-i18n="r4e_title">Cowork</span>
-          <span class="hw__tag" data-i18n="r4e_tag">Illustrative</span>
+          <span class="hw__title" data-i18n="r5_title">Cowork</span>
+          <span class="hw__tag" data-i18n="r5_tag">Illustrative</span>
         </div>
         <div class="hw__body">
-          <aside class="hw__side">
-            <ul>
-              <li class="is-on"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14v10H9l-4 4Z"/></svg><span data-i18n="r4e_nav_cowork">Cowork</span></li>
-              <li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span data-i18n="r4e_nav_custom">Customize</span></li>
-            </ul>
-            <div class="hw__folder"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg><span><small data-i18n="r4e_folder">Connected folder</small><b data-i18n="r4e_folder_name">Polemic article</b></span></div>
-          </aside>
-          <div class="hw__chat">
-            <div class="hw__cmd" data-type="0.2,1.3"><span class="hw__pr" aria-hidden="true">&gt;</span><code dir="ltr">/academic-writer:init</code><span class="hw__caret"></span></div>
-            <div class="hw__chips">
-              <span class="hw__chip" data-st="1.4:ok" data-i18n="r4e_c1">Profile</span>
-              <span class="hw__chip" data-st="1.7:ok" data-i18n="r4e_c2">Voice learned</span>
-              <span class="hw__chip" data-st="2.0:ok">Trove</span>
-              <span class="hw__chip" data-st="2.3:ok">NotebookLM</span>
-              <span class="hw__chip" data-st="2.6:ok">Gemini</span>
+          <nav class="hw__rail">
+            <span class="is-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14v10H9l-4 4Z"/></svg></span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></span>
+          </nav>
+          <div class="hw__graph" data-st="0:out,0.4:in,16.3:out" data-fill="3.2,10.6">
+            <svg class="hw__svg" viewBox="0 0 190 100" preserveAspectRatio="none" fill="none" stroke-linecap="round">
+              <defs><marker id="hw-ah" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="3.2" markerHeight="3.2" orient="auto"><path d="M1 1.5 8.5 5 1 8.5Z" fill="context-stroke" stroke="none"/></marker></defs>
+              <g class="hw__g hw__g--ib">
+                <path class="hw__ln" pathLength="1" d="M53 45.2 C63 45.2 62 10 72.2 10" data-fill="0.7,1.4"/>
+                <path class="hw__ln" pathLength="1" d="M53 45.2 C63 45.2 62 27.6 72.2 27.6" data-fill="1.05,1.75"/>
+                <path class="hw__ln" pathLength="1" d="M53 45.2 C63 45.2 62 45.2 72.2 45.2" data-fill="1.4,2.1"/>
+                <path class="hw__ln" pathLength="1" d="M53 45.2 C63 45.2 62 62.8 72.2 62.8" data-fill="1.75,2.45"/>
+                <path class="hw__ln" pathLength="1" d="M53 45.2 C63 45.2 62 80.4 72.2 80.4" data-fill="2.1,2.8"/>
+              </g>
+              <g class="hw__g hw__g--out" data-st="3.0:on">
+                <path class="hw__ln" pathLength="1" d="M53 45.2 C63 45.2 62 10 72.2 10" data-fill="3.3,4.1"/>
+                <path class="hw__ln" pathLength="1" d="M53 45.2 C63 45.2 62 27.6 72.2 27.6" data-fill="3.4,4.2"/>
+                <path class="hw__ln" pathLength="1" d="M53 45.2 C63 45.2 62 45.2 72.2 45.2" data-fill="3.5,4.3"/>
+                <path class="hw__ln" pathLength="1" d="M53 45.2 C63 45.2 62 62.8 72.2 62.8" data-fill="3.6,4.4"/>
+                <path class="hw__ln" pathLength="1" d="M53 45.2 C63 45.2 62 80.4 72.2 80.4" data-fill="3.7,4.5"/>
+              </g>
+              <g class="hw__g hw__g--in">
+                <path class="hw__ln" pathLength="1" d="M125.4 10 C137 10 136 45.2 147.2 45.2" data-fill="9.9,10.6"/>
+                <path class="hw__ln" pathLength="1" d="M125.4 27.6 C137 27.6 136 45.2 147.2 45.2" data-fill="9.95,10.65"/>
+                <path class="hw__ln" pathLength="1" d="M125.4 45.2 C137 45.2 136 45.2 147.2 45.2" data-fill="10.0,10.7"/>
+                <path class="hw__ln" pathLength="1" d="M125.4 62.8 C137 62.8 136 45.2 147.2 45.2" data-fill="10.05,10.75"/>
+                <path class="hw__ln" pathLength="1" d="M125.4 80.4 C137 80.4 136 45.2 147.2 45.2" data-fill="10.1,10.8"/>
+              </g>
+              <path class="hw__ln hw__loop" pathLength="1" d="M126.2 79 C141 81 141 64.5 127.6 62.7" marker-end="url(#hw-ah)" data-fill="8.8,9.5"/>
+              <path class="hw__ln hw__rev" pathLength="1" d="M166 70 C166 99 64 101 64 78 S66 62.8 71.4 62.8" marker-end="url(#hw-ah)" data-fill="12.4,13.8"/>
+            </svg>
+
+            <div class="hw__n hw__cmd" data-st="0.15:on">
+              <code class="hw__pre" dir="ltr">/academic-writer:</code>
+              <span class="hw__verbs" dir="ltr">
+                <b class="hw__v" data-st="0.3:on,3.05:off">init</b>
+                <b class="hw__v" data-st="3.05:on,11:off">write</b>
+                <b class="hw__v" data-st="11:on">revise</b>
+              </span>
+              <span class="hw__ready" data-st="3.0:on"><span data-i18n="r5_ready">Ready</span></span>
             </div>
-            <div class="hw__cmd" data-type="3.2,4.3"><span class="hw__pr" aria-hidden="true">&gt;</span><code dir="ltr">/academic-writer:write</code><span class="hw__caret"></span></div>
-            <p class="hw__note" data-st="4.5:ok" data-i18n="r4e_agents">Starting five agents in parallel</p>
-            <div class="hw__file" data-st="9.6:ok"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7Z"/><path d="M14 3v5h5"/></svg><span><b dir="ltr">article.docx</b><small data-i18n="r4e_ready">Draft ready, with footnotes</small></span></div>
-            <div class="hw__cmd" data-type="10.2,11.2"><span class="hw__pr" aria-hidden="true">&gt;</span><code dir="ltr">/academic-writer:revise</code><span class="hw__caret"></span></div>
-            <p class="hw__note" data-st="11.6:ok" data-i18n="r4e_rc">3 comments, 2 groups</p>
-            <div class="hw__chips">
-              <span class="hw__chip" data-st="12.4:ok"><span data-i18n="r4e_g1">Group 1</span></span>
-              <span class="hw__chip" data-st="13.2:ok"><span data-i18n="r4e_g2">Group 2</span></span>
+
+            <div class="hw__badges">
+              <div class="hw__n hw__b" style="--r:0" data-st="0.7:on,1.1:ok,3.0:off"><i class="hw__bc"></i><span data-i18n="r5_b1">Profile</span></div>
+              <div class="hw__n hw__b" style="--r:1" data-st="1.05:on,1.45:ok,3.0:off"><i class="hw__bc"></i><span data-i18n="r5_b2">Voice</span></div>
+              <div class="hw__n hw__b" style="--r:2" data-st="1.4:on,1.8:ok,3.0:off"><i class="hw__bc"></i><span>Trove</span></div>
+              <div class="hw__n hw__b" style="--r:3" data-st="1.75:on,2.15:ok,3.0:off"><i class="hw__bc"></i><span>NotebookLM</span></div>
+              <div class="hw__n hw__b" style="--r:4" data-st="2.1:on,2.5:ok,3.0:off"><i class="hw__bc"></i><span>Gemini</span></div>
             </div>
-            <div class="hw__file hw__file--new" data-st="13.9:ok"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7Z"/><path d="M14 3v5h5"/></svg><span><b dir="ltr">article-v2.docx</b><small data-i18n="r4e_saved">New draft saved</small></span></div>
-          </div>
-          <div class="hw__prog">
-            <h3 class="hw__ph" data-i18n="r4e_prog">Progress</h3>
-            <ul class="hw__rows">
-              <li class="hw__row" data-st="4.7:run,7.8:ok"><span class="hw__ic"></span><span class="hw__rt"><b data-i18n="r4e_ev">Evidence</b><span class="hw__sub" data-i18n="r4e_ev_sub">Reading 4 sources</span><span class="hw__sub hw__sub--n"><b data-count="4.8,7.6,112">0</b> <span data-i18n="r4e_pages">pages</span> · <b data-count="5.2,7.7,23">0</b> <span data-i18n="r4e_quotes">quotes verified</span></span></span></li>
-              <li class="hw__row" data-st="5.0:run,6.8:ok"><span class="hw__ic"></span><span class="hw__rt"><b data-i18n="r4e_th">Thesis</b><span class="hw__sub" data-i18n="r4e_th_sub">3 options, you pick one</span><span class="hw__opts"><i data-ss="6.1:pick">1</i><i data-ss="6.1:pick">2</i><i data-ss="6.1:pick">3</i></span></span></li>
-              <li class="hw__row" data-st="5.3:run,7.2:ok"><span class="hw__ic"></span><span class="hw__rt"><b data-i18n="r4e_arch">Architect</b><span class="hw__sub" data-i18n="r4e_arch_sub">Outline, 5 sections approved</span><span class="hw__opts hw__opts--dots"><i data-ss="6.2:ok"></i><i data-ss="6.4:ok"></i><i data-ss="6.6:ok"></i><i data-ss="6.8:ok"></i><i data-ss="7.0:ok"></i></span></span></li>
-              <li class="hw__row" data-st="5.6:run,7.8:ok"><span class="hw__ic"></span><span class="hw__rt"><b data-i18n="r4e_wr">Writers</b><span class="hw__sub" data-i18n="r4e_wr_sub">5 sections, in your voice</span><span class="hw__bars"><i data-fill="5.8,7.2"></i><i data-fill="5.9,7.6"></i><i data-fill="6.0,6.9"></i><i data-fill="6.1,7.7"></i><i data-fill="6.2,7.3"></i></span></span></li>
-              <li class="hw__row" data-st="7.9:run,8.5:redo,9.5:ok"><span class="hw__ic"></span><span class="hw__rt"><b data-i18n="r4e_au">Auditors</b><span class="hw__sub hw__sub--a" data-i18n="r4e_au_sub">5 in parallel, one per section</span><span class="hw__sub hw__sub--b" data-i18n="r4e_au_redo">1 citation rejected, redrafting</span><span class="hw__opts hw__opts--dots"><i data-ss="8.0:run,8.8:ok"></i><i data-ss="8.1:run,8.9:ok"></i><i data-ss="8.2:run,8.5:bad,9.2:run,9.5:ok"></i><i data-ss="8.3:run,9.0:ok"></i><i data-ss="8.4:run,9.1:ok"></i></span></span></li>
-              <li class="hw__row" data-st="11.6:run,13.5:ok"><span class="hw__ic"></span><span class="hw__rt"><b data-i18n="r4e_rv">Revise</b><span class="hw__sub" data-i18n="r4e_rv_sub">Your Word comments, 2 groups</span></span></li>
-            </ul>
+
+            <div class="hw__n hw__a" style="--r:0" data-st="3.8:run,7.7:ok">
+              <div class="hw__ah"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5Z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3"/></svg><b data-i18n="r5_ev">Evidence</b><i class="hw__ck">&#10003;</i></div>
+              <div class="hw__av"><span class="hw__cnt"><b data-count="4.1,7.5,23">0</b> <span data-i18n="r5_quotes">quotes</span></span></div>
+            </div>
+            <div class="hw__n hw__a" style="--r:1" data-st="3.95:run,7.1:ok">
+              <div class="hw__ah"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z"/></svg><b data-i18n="r5_th">Thesis</b><i class="hw__ck">&#10003;</i></div>
+              <div class="hw__av hw__t3"><i data-ss="6.0:dim">1</i><i data-ss="6.0:pick">2</i><i data-ss="6.0:dim">3</i></div>
+            </div>
+            <div class="hw__n hw__a" style="--r:2" data-st="4.1:run,7.6:ok">
+              <div class="hw__ah"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h4"/></svg><b data-i18n="r5_arch">Architect</b><i class="hw__ck">&#10003;</i></div>
+              <div class="hw__av hw__v5 hw__dd"><i data-ss="5.4:ok"></i><i data-ss="5.9:ok"></i><i data-ss="6.4:ok"></i><i data-ss="6.9:ok"></i><i data-ss="7.4:ok"></i></div>
+            </div>
+            <div class="hw__n hw__a" style="--r:3" data-st="4.25:run,10.2:ok,12.8:run,13.7:ok">
+              <div class="hw__ah"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19Z"/><path d="M14.5 6.5l3 3"/></svg><b data-i18n="r5_wr">Writers</b><i class="hw__ck">&#10003;</i></div>
+              <div class="hw__av hw__v5 hw__bars"><i data-kf="4.8:0,7.0:1"></i><i data-kf="4.9:0,7.7:1"></i><i data-kf="5.0:0,6.6:1,8.7:1,9.0:0.1,10.0:1" data-ss="8.9:redo,10.0:"></i><i data-kf="5.1:0,8.1:1"></i><i data-kf="5.2:0,7.3:1"></i></div>
+            </div>
+            <div class="hw__n hw__a" style="--r:4" data-st="7.7:run,10.3:ok">
+              <div class="hw__ah"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7.5 3v5.5c0 4.5-3 8-7.5 9.5-4.5-1.5-7.5-5-7.5-9.5V6Z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg><b data-i18n="r5_au">Auditors</b><i class="hw__ck">&#10003;</i></div>
+              <div class="hw__av hw__v5 hw__dots5"><b data-ss="7.9:run,8.4:ok"></b><b data-ss="8.05:run,8.6:ok"></b><b data-ss="8.2:run,8.8:bad,10.1:ok"></b><b data-ss="8.35:run,9.0:ok"></b><b data-ss="8.5:run,9.2:ok"></b></div>
+            </div>
+
+            <div class="hw__n hw__doc" data-st="3.2:ghost,10.3:run,11.4:ok,13.9:v2">
+              <div class="hw__page"><i></i><i></i><i></i><i></i><i class="hw__fn"></i><i class="hw__fn s"></i></div>
+              <div class="hw__dn" dir="ltr"><span class="hw__d1">article.docx</span><span class="hw__d2">article-v2.docx</span></div>
+              <i class="hw__ck">&#10003;</i>
+              <span class="hw__bub hw__bub1" data-st="11.7:on"><i></i><i></i></span>
+              <span class="hw__bub hw__bub2" data-st="12.1:on"><i></i><i></i></span>
+            </div>
+            <div class="hw__n hw__rvp" data-st="12.4:on,14.2:ok"><span aria-hidden="true">&#8634;</span> <span data-i18n="r5_revise">Revise</span></div>
           </div>
         </div>
       </div>
@@ -227,10 +261,10 @@
           <svg class="i-play" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5Z"/></svg>
           <span class="hw__playt">Pause animation</span>
         </button>
-        <ol class="hw__phases" data-i18n-attr="aria-label:r4e_phases" aria-label="Phases">
-          <li><button type="button" class="hw__phase" data-go="0"><span class="hw__pn">1</span><span data-i18n="r4e_p1">Init</span><i></i></button></li>
-          <li><button type="button" class="hw__phase" data-go="1"><span class="hw__pn">2</span><span data-i18n="r4e_p2">Write</span><i></i></button></li>
-          <li><button type="button" class="hw__phase" data-go="2"><span class="hw__pn">3</span><span data-i18n="r4e_p3">Revise</span><i></i></button></li>
+        <ol class="hw__phases" data-i18n-attr="aria-label:r5_phases" aria-label="Phases">
+          <li><button type="button" class="hw__phase" data-go="0"><span class="hw__pn">1</span><span data-i18n="r5_p1">Init</span><i></i></button></li>
+          <li><button type="button" class="hw__phase" data-go="1"><span class="hw__pn">2</span><span data-i18n="r5_p2">Write</span><i></i></button></li>
+          <li><button type="button" class="hw__phase" data-go="2"><span class="hw__pn">3</span><span data-i18n="r5_p3">Revise</span><i></i></button></li>
         </ol>
       </div>
     </div>
@@ -420,6 +454,23 @@
 </section>
 
 <!-- ALSO IN THE BOX -->
+<section class="sec film band" id="film" aria-labelledby="film-h">
+  <div class="wrap">
+    <div class="film__text">
+      <h2 id="film-h" class="rv" data-i18n="film_h">The whole thing in one minute</h2>
+      <p class="lede film__lede rv" data-i18n="r2a_film_p">A narrated overview with music: from the first idea to the Word file.</p>
+    </div>
+    <figure class="film__fig rv">
+      <div class="film__frame" id="film-frame">
+        <video id="film-video" controls playsinline preload="metadata" poster="assets/video/overview-poster.webp" width="1280" height="720">
+          <source src="assets/video/overview.webm" type="video/webm">
+          <source src="assets/video/overview.mp4" type="video/mp4">
+        </video>
+        <img class="film__poster" src="assets/video/overview-poster.webp" alt="" width="1280" height="720" loading="lazy" decoding="async">
+      </div>
+    </figure>
+  </div>
+</section>
 <section class="sec features" id="features" aria-labelledby="feat-h">
   <div class="wrap">
     <h2 id="feat-h" class="rv" data-i18n="feat_h">What you get</h2>
@@ -478,7 +529,7 @@
     <div class="inst__lab rv"><span class="istep__n" aria-hidden="true">1</span><h3 data-i18n="i1_h">Install</h3></div>
     <div class="inst2">
       <article class="icard icard--main rv">
-        <div class="icard__top"><h3>Cowork</h3><span class="badge" data-i18n="r2a_rec">Recommended</span></div>
+        <div class="icard__top"><h3>Cowork</h3></div>
         <p class="icard__p" data-i18n="r2a_cw_p">In the Claude desktop app for Mac or Windows. No terminal needed.</p>
         <ol class="csteps csteps--big">
           <li data-i18n-html="r2a_cw1">Open the Claude desktop app and choose <b>Cowork</b>.</li>
