@@ -1,7 +1,7 @@
 {
   "name": "academic-writer",
-  "version": "0.16.0",
-  "description": "AI-first academic writing assistant for Humanities researchers \u2014 Claude Code plugin",
+  "version": "0.16.1",
+  "description": "AI-first academic writing assistant for Humanities researchers — Claude Code plugin",
   "type": "module",
   "scripts": {
     "build": "bash scripts/build-plugins.sh",
