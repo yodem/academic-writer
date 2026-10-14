@@ -62,6 +62,8 @@ This table is generated from the plugin itself, so it is always complete.
 | `/academic-writer:voice` | Build or update the author's voice profile: import older voice files, choose exemplar paragraphs from past papers, derive writing rules and sync them to Trove. |
 | `/academic-writer:health` | Check that Academic Writer is ready to use — your profile, the tools it needs (Python and its add-ons, Hebrew spelling, Trove, NotebookLM), the Gemini key and past articles — with a plain-language fix for anything missing. |
 | `/academic-writer:help` | A short list of every command and the three steps to get started. |
+| `/academic-writer:courses` | Use when setting up an academic term from a schedule, validating course resources, syncing your LMS (Moodle) materials, or running the daily course scan. |
+| `/academic-writer:lesson-notes` | Use when processing a course recording into a structured Hebrew lesson note, or when resuming queued NotebookLM lesson transcripts with --pending. |
 <!-- help:commands:end -->
 
 ## The usual cycle
