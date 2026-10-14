@@ -1,14 +1,15 @@
-name: Guide preview (GitHub Pages)
+name: Product site (GitHub Pages)
 
-# Publishes the bundled user guide (src/guide/index.html, the page /academic-writer:intro
-# opens offline) as a web preview. One source: the same file ships in the plugin and here,
-# so the preview can never drift from the guide. Needs Settings > Pages > Source:
-# "GitHub Actions" (one-time).
+# Publishes the product site (site/) as the project's one GitHub Pages site, with the bundled
+# offline guide (src/guide/index.html, the page /academic-writer:intro opens) copied to /guide/.
+# The guide is copied, never forked, so the online and offline guides cannot drift.
+# Needs Settings > Pages > Source: "GitHub Actions" (one-time).
 
 on:
   push:
     branches: [main]
     paths:
+      - 'site/**'
       - 'src/guide/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
@@ -34,10 +35,17 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload guide
+      - name: Assemble site
+        run: |
+          mkdir -p _site/guide
+          cp -R site/. _site/
+          cp -R src/guide/. _site/guide/
+          touch _site/.nojekyll
+
+      - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: src/guide
+          path: _site
 
       - name: Deploy
         id: deployment
