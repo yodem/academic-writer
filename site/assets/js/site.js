@@ -49,10 +49,9 @@
     });
     $$('.seg button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === lang)); });
     d.title = t('doc_title');
-    var sheet = $('#demo-sheet'); if (sheet) { sheet.lang = lang; sheet.dir = lang === 'he' ? 'rtl' : 'ltr'; }
     setThemeLabel(); labelRail(); labelPause();
     if (persist) store.set('aw-lang', lang);
-    if (demoApi) demoApi.restart();
+    if (flowApi) flowApi.restart();
     if (storyApi) storyApi.update();
   }
   collect();
@@ -112,37 +111,173 @@
     rv.forEach(function (n) { rvIO.observe(n); });
   }
 
-  /* ---------- hero demo ---------- */
-  var demoApi = safe(function () {
-    var demo = $('#demo'), btn = $('#demo-pause'); if (!demo) return null;
-    var gen = 0, timers = [], paused = false, visible = true;
-    var BEATS = [0, 2700, 5400, 7900], LOOP_END = 10600; /* idea, plan, draft, Word; the last beat holds ~2.7s */
-    function clear() { timers.forEach(clearTimeout); timers = []; }
-    function at(ms, fn, my) { timers.push(setTimeout(function () { if (my === gen) fn(); }, ms)); }
-    function showFinal() { clear(); gen++; demo.classList.remove('is-reset'); demo.setAttribute('data-step', '3'); }
-    function run() {
-      clear(); var my = ++gen;
-      if (reduceMQ.matches) { showFinal(); return; }
-      if (paused || !visible) return;
-      demo.classList.remove('is-reset'); demo.setAttribute('data-step', '0');
-      [1, 2, 3].forEach(function (n) { at(BEATS[n], function () { demo.setAttribute('data-step', String(n)); }, my); });
-      at(LOOP_END, function () { demo.classList.add('is-reset'); }, my);
-      at(LOOP_END + 450, function () { demo.setAttribute('data-step', '0'); }, my);
-      at(LOOP_END + 500, run, my);
+  /* ---------- hero flow visualization: a real /write run, almost no text ---------- */
+  var flowApi = safe(function () {
+    var host = $('#flowviz'), stage = $('#flow-stage'), btn = $('#flow-pause'); if (!host || !stage) return null;
+    var LOOP = 18, ICON = {
+      you: '<circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-4.2 3-6.2 7-6.2s7 2 7 6.2"/>',
+      sources: '<path d="M4 5h4v15H4zM9.5 5h4v15h-4z"/><path d="m15 7 3.7-.9 3 12.8-3.7.9z"/>',
+      evidence: '<rect x="3" y="4" width="9" height="7" rx="1.5"/><rect x="12" y="13" width="9" height="7" rx="1.5"/><path d="M7.5 11v3h4.5M16.5 13V8h-4.5"/>',
+      outline: '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.6" cy="6" r="1"/><circle cx="4.6" cy="12" r="1"/><circle cx="4.6" cy="18" r="1"/>',
+      draft: '<path d="m4 20 1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19z"/><path d="m14 7 3 3"/>',
+      auditor: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+      word: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
+      revise: '<path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4.5h4.5"/>',
+      voice: '<path d="M4 12v0M8 8v8M12 5v14M16 9v6M20 11v2"/>'
+    };
+    var ORDER = ['you', 'sources', 'evidence', 'outline', 'draft', 'auditor', 'word', 'revise'];
+    var LEGS = [[0.3, 1.1, 'you', 'sources'], [1.3, 2.1, 'sources', 'evidence'], [2.3, 3.1, 'evidence', 'outline'], [3.3, 4.9, 'outline', 'draft'], [5.6, 6.5, 'draft', 'auditor'],
+      [7.7, 8.6, 'auditor', 'draft'], [9.3, 10.2, 'draft', 'auditor'], [11.4, 12.3, 'auditor', 'word'], [13.1, 13.7, 'word', 'revise']];
+    var ARRIVE = { you: 0.3, sources: 1.1, evidence: 2.1, outline: 3.1, draft: 4.9, auditor: 6.5, word: 12.3, revise: 13.7, voice: 15.3 };
+    var g, D, mainEl, retEl, els = {}, T = 0, last = 0, raf = 0, paused = false, visible = false, mql = window.matchMedia('(max-width: 899px)');
+    var NS = 'http://www.w3.org/2000/svg', cache = {};
+    function ease(u) { u = Math.max(0, Math.min(1, u)); return 1 - Math.pow(1 - u, 4); }
+    function clamp(v) { return Math.max(0, Math.min(1, v)); }
+    function labels() { return $$('.flow__sr li', host).map(function (li) { return li.textContent; }); }
+
+    function layout(mobile) {
+      return mobile
+        ? { W: 360, H: 352, xs: [48, 136, 224, 312], y1: 52, y2: 172, yc: 112, yr: 318, r: 25, fs: 12, vx: 180, vy: 248, vr: 17, lab: 15, k: 0.8 }
+        : { W: 600, H: 470, xs: [70, 215, 360, 505], y1: 90, y2: 250, yc: 170, yr: 430, r: 32, fs: 14, vx: 287, vy: 358, vr: 22, lab: 20, k: 1 };
     }
-    function stop() { clear(); gen++; }
+    function build() {
+      var rtl = root.dir === 'rtl', G = g = layout(mql.matches), L = labels();
+      function X(x) { return rtl ? G.W - x : x; }
+      var xs = G.xs, step = xs[1] - xs[0], w = xs[3] - xs[0], a = G.yc - G.y1, b = G.y2 - G.yc, A = G.yr - G.y2;
+      var off = G.r + 14, ex = xs[3] + off, leftX = xs[0] - G.r - 16, B = ex - leftX;
+      D = { you: 0, sources: step, evidence: 2 * step, outline: w, draft: 2 * (ex - xs[0]) + a + b };
+      D.auditor = D.draft + step; D.word = D.draft + 2 * step; D.revise = D.draft + 3 * step;
+      var mainD = 'M' + X(xs[0]) + ' ' + G.y1 + 'H' + X(ex) + 'V' + G.yc + 'H' + X(xs[0]) + 'V' + G.y2 + 'H' + X(xs[3]);
+      var retD = 'M' + X(xs[3]) + ' ' + G.y2 + 'H' + X(ex) + 'V' + G.yr + 'H' + X(leftX) + 'V' + G.y2 + 'H' + X(xs[0] - G.r);
+      g.R = off + 2 * A + B + (xs[0] - G.r - leftX); g.Vd = off + A + (ex - G.vx);
+      var pos = { you: [xs[0], G.y1], sources: [xs[1], G.y1], evidence: [xs[2], G.y1], outline: [xs[3], G.y1], draft: [xs[0], G.y2], auditor: [xs[1], G.y2], word: [xs[2], G.y2], revise: [xs[3], G.y2], voice: [G.vx, G.vy] };
+      var kk = G.r / 22, h = '';
+      function node(name, i, rr, extra) {
+        var c = pos[name], k = rr / 22, icon = '<g class="fn__i" transform="translate(' + (-12 * k) + ',' + (-12 * k) + ') scale(' + k + ')">' + ICON[name] + '</g>';
+        var lab = '<text class="fn__t" y="' + (rr + G.lab - (name === 'voice' ? 4 : 0)) + '">' + L[i] + '</text>';
+        return '<g class="fn' + (name === 'voice' ? ' fn--voice' : '') + '" data-n="' + name + '" transform="translate(' + X(c[0]) + ',' + c[1] + ')"><circle class="fn__c" r="' + rr + '"/><circle class="fn__hl" r="' + (rr + 4) + '"/>' + (extra || '') + icon + lab + (name === 'draft' ? '<text class="fn__s" y="' + (rr + G.lab * 2 - 3) + '">' + L[9] + '</text>' : '') + '</g>';
+      }
+      var ring = '<circle class="fn__bad" r="' + (G.r + 4) + '"/><circle class="fn__ok" r="' + (G.r + 4) + '"/>';
+      var bx = G.r * 0.74, badge = '<g transform="translate(' + (rtl ? -bx : bx) + ',' + (-bx) + ')"><g class="fn__b0"><circle r="9"/><path d="m-4 0 3 3 5-6"/></g><g class="fn__b1"><circle r="9"/><path d="m-3.5-3.5 7 7m0-7-7 7"/></g></g>';
+      var vx = X(G.vx), vyEnd = G.vy + G.vr;
+      var cardY = -(G.r + 22 * G.k), s = G.k;
+      h += '<defs><radialGradient id="flhalo"><stop offset="0" stop-color="oklch(0.9 0.08 270)" stop-opacity="0.55"/><stop offset="1" stop-color="oklch(0.9 0.08 270)" stop-opacity="0"/></radialGradient></defs>';
+      h += '<path class="fl-base" d="' + mainD + '"/><path class="fl-base fl-ret" d="' + retD + '"/>';
+      var vTarget = [X(xs[0] + 20 * G.k + 0), G.y2 + 20 * G.k];
+      h += '<path class="fl-voice" d="M' + (rtl ? vx + G.vr : vx - G.vr) + ' ' + (G.vy - 6) + 'L' + vTarget[0] + ' ' + vTarget[1] + '"/>';
+      h += '<g class="fx"><path class="fl-trail" id="fl-tm" d="' + mainD + '"/><path class="fl-trail" id="fl-tr" d="' + retD + '"/></g>';
+      ORDER.forEach(function (n, i) { h += node(n, i, G.r, n === 'auditor' ? ring + badge : ''); });
+      h += node('voice', 8, G.vr);
+      h += '<g class="fx">';
+      h += '<g class="pk" id="fl-pk"><circle class="pk__halo" r="' + (18 * G.k) + '" fill="url(#flhalo)"/><circle class="pk__dot" r="' + (5 * G.k) + '"/>';
+      h += '<g id="fl-card"><line class="pk__stem" x1="0" y1="0" x2="0" y2="' + (cardY + 16 * s) + '"/><g transform="translate(0,' + cardY + ') scale(' + s + ')"><rect class="pk__paper" x="-23" y="-16" width="46" height="32" rx="4"/><rect class="pk__ln" x="-16" y="-8" width="32" height="3" rx="1.5"/><rect class="pk__ln" id="fl-l2" x="-16" y="-1" width="26" height="3" rx="1.5"/><rect class="pk__ln" x="-16" y="6" width="20" height="3" rx="1.5"/>';
+      h += '<g class="pk__fn" transform="translate(' + (rtl ? -23 : 23) + ',-16)"><circle r="8"/><path class="pk__v" d="m-3.5 0 2.5 2.5 4.5-5"/><path class="pk__x" d="m-3-3 6 6m0-6-6 6"/></g></g></g></g>';
+      h += '<g id="fl-bb"><g transform="scale(' + s + ')"><path class="bb__shape" d="M-17-20h34a6 6 0 0 1 6 6v10a6 6 0 0 1-6 6h-14l-8 7v-7h-12a6 6 0 0 1-6-6v-10a6 6 0 0 1 6-6z" transform="translate(0,2)"/><circle class="bb__dot" cx="-8" cy="-9" r="2"/><circle class="bb__dot" cx="0" cy="-9" r="2"/><circle class="bb__dot" cx="8" cy="-9" r="2"/></g></g>';
+      h += '<circle class="vd" id="fl-vd" r="' + (4 * G.k) + '" cx="' + vx + '" cy="' + G.yr + '"/></g>';
+      stage.innerHTML = '<svg viewBox="0 0 ' + G.W + ' ' + G.H + '" style="--fs:' + G.fs + 'px" preserveAspectRatio="xMidYMid meet" focusable="false">' + h + '</svg>';
+      var svg = stage.firstChild; mainEl = $('.fl-base', svg); retEl = $('.fl-ret', svg);
+      els = { svg: svg, tm: $('#fl-tm', svg), tr: $('#fl-tr', svg), pk: $('#fl-pk', svg), card: $('#fl-card', svg), l2: $('#fl-l2', svg), bb: $('#fl-bb', svg), vd: $('#fl-vd', svg), voice: $('.fl-voice', svg), fx: $$('.fx', svg), nodes: {}, vx: vx, vy: vyEnd };
+      $$('.fn', svg).forEach(function (n) { els.nodes[n.getAttribute('data-n')] = n; });
+      els.mainLen = mainEl.getTotalLength(); els.retLen = retEl.getTotalLength();
+      cache = {};
+    }
+
+    function dist(t) {
+      var d = D.you;
+      for (var i = 0; i < LEGS.length; i++) {
+        var l = LEGS[i], f = D[l[2]], to = D[l[3]];
+        if (t >= l[1]) d = to; else if (t >= l[0]) { d = f + (to - f) * ease((t - l[0]) / (l[1] - l[0])); break; } else break;
+      }
+      return d;
+    }
+    function maxDist(t) {
+      var m = 0;
+      for (var i = 0; i < LEGS.length; i++) {
+        var l = LEGS[i]; if (t < l[0]) break;
+        var f = D[l[2]], to = D[l[3]]; m = Math.max(m, f, t >= l[1] ? to : f + (to - f) * ease((t - l[0]) / (l[1] - l[0])));
+      }
+      return m;
+    }
+    function retDist(t) {
+      if (t < 13.7) return 0;
+      if (t < 15.0) return g.Vd * ease((t - 13.7) / 1.3);
+      if (t < 15.7) return g.Vd;
+      return g.Vd + (g.R - g.Vd) * ease((t - 15.7) / 1.3);
+    }
+    function setCls(n, c) { if (cache[n.getAttribute('data-n') || n.id] !== c) { cache[n.getAttribute('data-n') || n.id] = c; n.setAttribute('class', c); } }
+    function render(t, still) {
+      var G = g, fade = still ? 1 : t < 0.3 ? t / 0.3 : t > 17.3 ? clamp(1 - (t - 17.3) / 0.5) : 1;
+      var d = dist(t), mp, onMain = t < 13.1 || still;
+      if (still) { t = 12.8; d = D.word; }
+      var bad = t >= 6.9 && t < 9.0, ok = t >= 10.6, cardK = still ? 1 : clamp((t - 4.9) / 0.5);
+      els.fx.forEach(function (f) { f.style.opacity = String(fade); });
+      /* trails */
+      var m = still ? D.word : maxDist(t), bm = t >= 13.1 ? Math.max(m, D.word + (D.revise - D.word) * ease((t - 13.1) / 0.6)) : m;
+      els.tm.style.strokeDasharray = (still ? D.word : bm) + ' 99999'; els.tr.style.strokeDasharray = (still ? 0 : retDist(t)) + ' 99999';
+      /* packet */
+      var pt = mainEl.getPointAtLength(Math.min(d, els.mainLen)), dotOn = still ? 0 : (t < 13.1 ? 1 : 0);
+      els.pk.setAttribute('transform', 'translate(' + pt.x.toFixed(1) + ',' + pt.y.toFixed(1) + ')');
+      var parked = t >= 13.1 || still;
+      els.pk.querySelector('.pk__dot').style.opacity = String(dotOn);
+      els.pk.querySelector('.pk__halo').style.opacity = String(dotOn);
+      var cardOn = cardK > 0 && t < 17.4;
+      els.card.style.opacity = String(cardOn ? cardK : 0);
+      els.card.style.transform = 'scale(' + (0.7 + 0.3 * cardK) + ')'; els.card.style.transformBox = 'fill-box'; els.card.style.transformOrigin = '50% 100%';
+      if (parked) { var wp = mainEl.getPointAtLength(D.word); els.pk.setAttribute('transform', 'translate(' + wp.x.toFixed(1) + ',' + wp.y.toFixed(1) + ')'); }
+      var rw = t >= 8.6 && t < 9.3; els.l2.style.opacity = rw ? String(0.35 + 0.35 * Math.sin((t - 8.6) * 12)) : '1';
+      var pkc = 'pk' + (bad ? ' pk--bad' : ok ? ' pk--ok' : ''); if (cache.pk !== pkc) { cache.pk = pkc; els.pk.setAttribute('class', pkc); }
+      /* comment bubble, then the dot into the voice store */
+      var bOn = still ? 0 : (t >= 12.6 && t < 17.2), bp;
+      if (bOn) {
+        var bs = ease((t - 12.6) / 0.3);
+        if (t < 13.1) bp = mainEl.getPointAtLength(D.word);
+        else if (t < 13.7) bp = mainEl.getPointAtLength(D.word + (D.revise - D.word) * ease((t - 13.1) / 0.6));
+        else bp = retEl.getPointAtLength(Math.min(retDist(t), els.retLen));
+        var o = t < 13.1 ? 1 : t < 13.7 ? 1 - ease((t - 13.1) / 0.6) : 0, dir = root.dir === 'rtl' ? -1 : 1;
+        els.bb.setAttribute('transform', 'translate(' + (bp.x + dir * (G.r + 12) * o).toFixed(1) + ',' + (bp.y - G.r * 0.7 * o).toFixed(1) + ') scale(' + (t < 13.1 ? bs : 1) + ')');
+        els.bb.style.opacity = String(t > 16.7 ? clamp(1 - (t - 16.7) / 0.5) : 1);
+      } else els.bb.style.opacity = '0';
+      var vdu = clamp((t - 15.0) / 0.7);
+      els.vd.style.opacity = (!still && t >= 15.0 && t < 16.4) ? '1' : '0';
+      els.vd.setAttribute('cy', (G.yr + (els.vy - G.yr) * ease(vdu)).toFixed(1));
+      /* nodes */
+      var cur = {}, k;
+      if (!still) {
+        if (t >= 0.3 && t < 1.6) cur.you = 1;
+        LEGS.forEach(function (l, i) { var nx = LEGS[i + 1], end = nx ? nx[0] + 0.5 : 14.6; if (t >= l[1] && t < end) cur[l[3]] = 1; });
+        if (t >= 15.0 && t < 16.4) cur.voice = 1;
+        if (t >= 17.0 && t < 17.6) cur.draft = 1;
+      }
+      Object.keys(els.nodes).forEach(function (n) {
+        var c = 'fn' + (n === 'voice' ? ' fn--voice' : '');
+        if (still || t >= ARRIVE[n]) c += ' is-done'; if (cur[n] && !still) c += ' is-cur';
+        if (n === 'auditor') { if (bad && !still) c += ' is-bad'; else if (ok || still) c += ' is-ok'; }
+        setCls(els.nodes[n], c);
+      });
+      var vl = still || t >= 15.3 ? 'fl-voice is-lit' : 'fl-voice'; if (cache.vl !== vl) { cache.vl = vl; els.voice.setAttribute('class', vl); }
+    }
+
+    function tick(ts) {
+      raf = 0;
+      var dt = Math.min(0.1, (ts - last) / 1000); last = ts;
+      T = (T + dt) % LOOP; render(T);
+      if (visible && !paused) raf = requestAnimationFrame(tick);
+    }
+    function go() { if (reduceMQ.matches || paused || !visible || raf) return; last = performance.now(); raf = requestAnimationFrame(tick); }
+    function stop() { if (raf) cancelAnimationFrame(raf); raf = 0; }
+    function refresh() { build(); if (reduceMQ.matches) render(0, true); else { render(T); go(); } }
     if (btn) btn.addEventListener('click', function () {
       paused = !paused; btn.setAttribute('aria-pressed', String(paused)); labelPause();
-      if (paused) showFinal(); else run();
+      if (paused) stop(); else go();
     });
-    if ('IntersectionObserver' in window) new IntersectionObserver(function (es) {
-      visible = es[0].isIntersecting;
-      if (!visible) stop(); else if (!paused) run();
-    }, { threshold: 0.2 }).observe(demo);
-    reduceMQ.addEventListener && reduceMQ.addEventListener('change', run);
-    return { restart: function () { if (reduceMQ.matches || paused) showFinal(); else run(); } };
+    if ('IntersectionObserver' in window) new IntersectionObserver(function (es) { visible = es[0].isIntersecting; if (visible) go(); else stop(); }, { threshold: 0.15 }).observe(host);
+    else { visible = true; }
+    reduceMQ.addEventListener && reduceMQ.addEventListener('change', function () { stop(); refresh(); });
+    mql.addEventListener && mql.addEventListener('change', refresh);
+    refresh();
+    return { restart: refresh };
   });
-  function labelPause() { var b = $('#demo-pause'); if (!b) return; $('.pause__t', b).textContent = t(b.getAttribute('aria-pressed') === 'true' ? 'play' : 'pause'); }
+  function labelPause() { var b = $('#flow-pause'); if (!b) return; $('.pause__t', b).textContent = t(b.getAttribute('aria-pressed') === 'true' ? 'play' : 'pause'); }
 
 
   /* ---------- film fallback ---------- */
@@ -155,79 +290,139 @@
 
   /* ---------- gate diagram: reveal observer handles .in ---------- */
 
-  /* ---------- scrollytelling ---------- */
+  /* ---------- how it works: a scroll-locked stepper ---------- */
   var storyApi = safe(function () {
-    var sec = $('#how'), grid = $('#story'), track = $('#track'); if (!sec || !grid || !track) return null;
+    var sec = $('#how'), grid = $('#story'); if (!sec || !grid) return null;
     var body = $('.stage__body', grid), stage = $('#stage');
     var steps = $$('.step', grid), scenes = steps.map(function (s) { return $('.scene', s); });
     var titles = $$('.stage__frame .frame__title', stage), count = $('[data-count]', grid);
-    var dots = $$('.rail li', grid), links = $$('.rail a', grid);
+    var dots = $$('.rail li', grid), links = $$('.rail a', grid), prevB = $('[data-prev]', grid), nextB = $('[data-next]', grid), skipA = $('[data-skip]', grid);
     var bar = $('#bar');
-    /* where each scene starts on its own 0..1 timeline, so it never looks empty at p=0 */
-    var START = [0.45, 0.35, 0.3, 0.35, 0.55, 0.2, 0.35], N = 7, HOLD = 0.85;
-    var pinned = false, inView = false, ticking = false, cur = -1, lastP = -1, lastG = -1;
+    var START = [0.45, 0.35, 0.3, 0.35, 0.55, 0.2, 0.35], N = 7, DUR = 1400, COOL = 700;
+    var pinned = false, cur = -1, locked = false, armed = true, lockY = 0, cool = 0, acc = 0, lastWheel = 0, tw = 0, dir = 1, lastY = window.pageYOffset, ty0 = null, tdone = false;
+    function barH() { return bar ? bar.offsetHeight : 56; }
+    function ease(u) { return 1 - Math.pow(1 - u, 4); }
 
+    function show(i, animate) {
+      if (i === cur) return;
+      cur = i; if (tw) { cancelAnimationFrame(tw); tw = 0; }
+      stage.setAttribute('data-scene', String(i + 1)); if (count) count.textContent = String(i + 1);
+      scenes.forEach(function (s, k) { s.classList.toggle('is-on', k === i); s.style.setProperty('--p', '1'); });
+      steps.forEach(function (s, k) { s.classList.toggle('is-on', k === i); if (k === i) s.removeAttribute('aria-hidden'); else s.setAttribute('aria-hidden', 'true'); });
+      titles.forEach(function (n, k) { n.classList.toggle('is-on', k === i); });
+      dots.forEach(function (li, k) { li.classList.toggle('is-on', k === i); li.classList.toggle('is-done', k < i); });
+      links.forEach(function (a, k) { if (k === i) a.setAttribute('aria-current', 'step'); else a.removeAttribute('aria-current'); });
+      if (prevB) prevB.setAttribute('aria-disabled', String(i === 0));
+      if (animate) {
+        var sc = scenes[i], t0 = performance.now(); sc.style.setProperty('--p', String(START[i]));
+        var f = function (now) { var u = Math.min(1, (now - t0) / DUR); sc.style.setProperty('--p', (START[i] + (1 - START[i]) * ease(u)).toFixed(4)); tw = u < 1 ? requestAnimationFrame(f) : 0; };
+        tw = requestAnimationFrame(f);
+      }
+    }
     function enable() {
       if (pinned) return; pinned = true;
       scenes.forEach(function (s) { body.appendChild(s); });
-      sec.classList.add('is-pinned'); cur = -1; lastP = -1; update();
+      sec.classList.add('is-pinned'); cur = -1; show(0, false); check();
     }
     function disable() {
-      if (!pinned) return; pinned = false;
+      if (!pinned) return; release(); pinned = false;
+      if (tw) { cancelAnimationFrame(tw); tw = 0; }
       scenes.forEach(function (s, i) { $('.frame__body', steps[i]).appendChild(s); s.classList.remove('is-on'); s.style.removeProperty('--p'); });
-      sec.classList.remove('is-pinned');
-      grid.style.removeProperty('--g');
+      sec.classList.remove('is-pinned'); cur = -1;
       steps.forEach(function (s) { s.classList.remove('is-on'); s.removeAttribute('aria-hidden'); });
     }
-    function sync() { if (reduceMQ.matches) disable(); else enable(); }
+    function sync() { if (reduceMQ.matches || window.innerHeight < 520) disable(); else enable(); }
 
-    function metrics() {
-      var barH = bar ? bar.offsetHeight : 56;
-      var top = track.getBoundingClientRect().top + window.pageYOffset - barH;
-      return { top: top, range: Math.max(1, track.offsetHeight - grid.offsetHeight) };
+    function release() { locked = false; armed = false; acc = 0; ty0 = null; sec.classList.remove('is-locked'); }
+    function engage(i) {
+      var now = performance.now();
+      lockY = Math.round(sec.getBoundingClientRect().top + window.pageYOffset - barH());
+      locked = true; acc = 0; cool = now + COOL; ty0 = null; sec.classList.add('is-locked');
+      cur = -1; show(i, i === 0);
+      window.scrollTo({ top: lockY, behavior: 'instant' }); lastY = lockY;
     }
-    function peOf(i, p) { return p >= HOLD ? 1 : START[i] + (p / HOLD) * (1 - START[i]); }
-    function update() {
-      ticking = false;
+    function check() {
+      if (!pinned || locked) return;
+      var r = sec.getBoundingClientRect().top - barH(), H = sec.offsetHeight;
+      if (!armed) { if (r > 260 || r < -(H + 100)) armed = true; return; }
+      if (dir >= 0 && r <= 120 && r > -H * 0.4) engage(0);
+      else if (dir < 0 && r >= -120 && r < 120 && r < 1) engage(N - 1);
+    }
+    function step(d) {
+      var ni = cur + d;
+      if (ni < 0 || ni >= N) return false;
+      show(ni, d > 0); return true;
+    }
+    function onScroll() {
+      var y = window.pageYOffset; if (y !== lastY) dir = y > lastY ? 1 : -1; lastY = y;
       if (!pinned) return;
-      var m = metrics(), t = Math.max(0, Math.min(1, (window.pageYOffset - m.top) / m.range));
-      var u = t * N, idx = Math.min(N - 1, Math.floor(u)), p = Math.max(0, Math.min(1, u - idx));
-      if (idx !== cur) {
-        cur = idx; lastP = -1; stage.setAttribute('data-scene', String(idx + 1)); if (count) count.textContent = String(idx + 1);
-        scenes.forEach(function (s, i) {
-          s.classList.toggle('is-on', i === idx);
-          if (i < idx) s.style.setProperty('--p', '1'); else if (i > idx) s.style.setProperty('--p', String(START[i]));
-        });
-        steps.forEach(function (s, i) { s.classList.toggle('is-on', i === idx); if (i === idx) s.removeAttribute('aria-hidden'); else s.setAttribute('aria-hidden', 'true'); });
-        titles.forEach(function (n, i) { n.classList.toggle('is-on', i === idx); });
-        dots.forEach(function (li, i) { li.classList.toggle('is-on', i === idx); li.classList.toggle('is-done', i < idx); });
-        links.forEach(function (a, i) { if (i === idx) a.setAttribute('aria-current', 'step'); else a.removeAttribute('aria-current'); });
-      }
-      if (Math.abs(p - lastP) > 0.0004) { scenes[idx].style.setProperty('--p', peOf(idx, p).toFixed(4)); lastP = p; }
-      if (Math.abs(t - lastG) > 0.001) { grid.style.setProperty('--g', t.toFixed(4)); lastG = t; }
+      if (locked) { if (Math.abs(y - lockY) > 1) { window.scrollTo({ top: lockY, behavior: 'instant' }); lastY = lockY; } return; }
+      check();
     }
-    function request() { if (!ticking && pinned && inView) { ticking = true; requestAnimationFrame(update); } }
-    window.addEventListener('scroll', request, { passive: true });
-    window.addEventListener('resize', request, { passive: true });
-    if ('IntersectionObserver' in window) new IntersectionObserver(function (es) { inView = es[0].isIntersecting; if (inView) request(); }, { rootMargin: '200px 0px' }).observe(sec);
-    else inView = true;
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', function () { sync(); if (locked) lockY = Math.round(sec.getBoundingClientRect().top + window.pageYOffset - barH()); }, { passive: true });
 
-    links.forEach(function (a, i) {
-      a.addEventListener('click', function (e) {
-        if (!pinned) return;
-        e.preventDefault();
-        var m = metrics();
-        window.scrollTo({ top: m.top + m.range * (i + 0.3) / N, behavior: reduceMQ.matches ? 'auto' : 'smooth' });
-      });
+    d.addEventListener('wheel', function (e) {
+      if (!locked || e.ctrlKey) return;
+      var dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * window.innerHeight : e.deltaY, now = performance.now();
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      if (now < cool) { e.preventDefault(); return; }
+      if (now - lastWheel > 250) acc = 0; lastWheel = now;
+      acc += dy;
+      if (Math.abs(acc) < 40) { e.preventDefault(); return; }
+      var dd = acc > 0 ? 1 : -1; acc = 0;
+      if (cur + dd < 0 || cur + dd >= N) { release(); return; } /* not prevented: this same gesture scrolls the page */
+      e.preventDefault(); step(dd); cool = now + COOL;
+    }, { passive: false });
+    d.addEventListener('touchstart', function (e) { if (locked && e.touches.length === 1) { ty0 = e.touches[0].clientY; tdone = false; } }, { passive: true });
+    d.addEventListener('touchmove', function (e) {
+      if (!locked || ty0 === null) return;
+      var dy = ty0 - e.touches[0].clientY;
+      if (tdone || Math.abs(dy) < 40) { if (e.cancelable) e.preventDefault(); return; }
+      var dd = dy > 0 ? 1 : -1;
+      if (cur + dd < 0 || cur + dd >= N) { release(); return; }
+      if (e.cancelable) e.preventDefault(); step(dd); tdone = true;
+    }, { passive: false });
+    d.addEventListener('touchend', function () { ty0 = null; }, { passive: true });
+    d.addEventListener('keydown', function (e) {
+      if (!locked || e.altKey || e.ctrlKey || e.metaKey) return;
+      var k = e.key;
+      if (k === 'Escape') { release(); return; }
+      var dd = (k === 'ArrowDown' || k === 'PageDown' || k === ' ' || k === 'Spacebar') ? 1 : (k === 'ArrowUp' || k === 'PageUp') ? -1 : 0;
+      if (!dd) return;
+      if ((k === ' ' || k === 'Spacebar') && e.target && e.target.closest && e.target.closest('button,a,summary,input,textarea,select')) return;
+      if (e.target && e.target.closest && e.target.closest('input,textarea,select')) return;
+      if (cur + dd < 0 || cur + dd >= N) { release(); return; } /* the key then scrolls the page as usual */
+      e.preventDefault(); if (!e.repeat) step(dd);
+    });
+    d.addEventListener('focusin', function (e) { if (locked && !sec.contains(e.target)) release(); });
+    d.addEventListener('click', function (e) { var a = e.target.closest && e.target.closest('a[href^="#"]'); if (locked && a && !sec.contains(a)) release(); }, true);
+    window.addEventListener('hashchange', function () { if (locked) release(); });
+
+    links.forEach(function (a, i) { a.addEventListener('click', function (e) { if (!pinned) return; e.preventDefault(); show(i, i > cur); }); });
+    if (prevB) prevB.addEventListener('click', function () { if (cur > 0) show(cur - 1, false); });
+    if (nextB) nextB.addEventListener('click', function () { if (cur < N - 1) show(cur + 1, true); else if (skipA) skipA.click(); });
+    if (skipA) skipA.addEventListener('click', function (e) {
+      if (!pinned) return;
+      e.preventDefault(); release();
+      var g2 = $('#gate'); if (g2) window.scrollTo({ top: g2.getBoundingClientRect().top + window.pageYOffset - barH(), behavior: reduceMQ.matches ? 'auto' : 'smooth' });
     });
     reduceMQ.addEventListener && reduceMQ.addEventListener('change', sync);
     sync();
-    return { update: function () { lastP = -1; update(); } };
+    return { update: function () { if (pinned && cur >= 0) { var c = cur; cur = -1; show(c, false); } } };
   });
   function labelRail() { $$('.rail a').forEach(function (a, i) { a.setAttribute('aria-label', t('step') + ' ' + (i + 1)); }); }
 
+  /* ---------- top bar over the hero: transparent on the dark hero, solid after ---------- */
+  safe(function () {
+    var hero = $('#top'), bar = $('#bar'); if (!hero || !bar || !('IntersectionObserver' in window)) return;
+    var h = bar.offsetHeight || 56;
+    new IntersectionObserver(function (es) { root.classList.toggle('over-hero', es[0].isIntersecting); },
+      { rootMargin: '-' + h + 'px 0px 0px 0px', threshold: 0 }).observe(hero);
+  });
+
   /* ---------- init ---------- */
-  if (lang === 'he') applyLang('he', false); else { setThemeLabel(); labelRail(); labelPause(); d.title = t('doc_title'); var sh = $('#demo-sheet'); if (sh) { sh.lang = 'en'; sh.dir = 'ltr'; } }
+  if (lang === 'he') applyLang('he', false); else { setThemeLabel(); labelRail(); labelPause(); d.title = t('doc_title'); }
   if (storyApi) storyApi.update();
-  if (demoApi) demoApi.restart();
+  if (flowApi) flowApi.restart();
 })();

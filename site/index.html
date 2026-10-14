@@ -76,22 +76,17 @@
 <main id="main">
 
 <!-- HERO -->
-<section class="hero sec" id="top" aria-labelledby="hero-h">
+<section class="hero band" id="top" aria-labelledby="hero-h">
   <figure class="hero__plate" aria-hidden="true">
-    <img src="assets/img/hero-desk-lg.webp" srcset="assets/img/hero-desk-800.webp 800w, assets/img/hero-desk-lg.webp 1376w" sizes="(min-width: 900px) 62vw, 100vw" width="1376" height="768" alt="" fetchpriority="high" decoding="async">
+    <img src="assets/img/hero-desk-lg.webp" srcset="assets/img/hero-desk-800.webp 800w, assets/img/hero-desk-lg.webp 1376w" sizes="(min-width: 900px) 78vw, 100vw" width="1376" height="768" alt="" fetchpriority="high" decoding="async">
   </figure>
   <div class="wrap hero__grid">
     <div class="hero__text">
       <h1 id="hero-h" data-i18n="hero_h">From a rough idea to a footnoted article you can defend.</h1>
-      <p class="lede" data-i18n="hero_sub">Academic Writer is a plugin for Cowork and Claude Code that helps Humanities researchers write cited articles, in Hebrew or English. You get a Word file back, and you comment on it like any draft.</p>
-      <div class="cta">
-        <div class="cmd" data-copy-group>
-          <pre dir="ltr" class="cmd__pre"><code>/plugin marketplace add yodem/academic-writer
-/plugin install academic-writer@yodem</code></pre>
-          <button type="button" class="copy" data-copy="/plugin marketplace add yodem/academic-writer&#10;/plugin install academic-writer@yodem"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span class="copy__t" data-i18n="copy">Copy</span></button>
-        </div>
-        <p class="cta__note" data-i18n="hero_note">These two lines are for Claude Code; restart it afterwards. In Cowork you install the plugin with a few clicks instead.</p>
-        <p class="cta__more"><a class="link-arrow" href="#install"><span data-i18n="r2a_hero_cw">Install in Cowork (recommended)</span> <span class="arr arr--down" aria-hidden="true">↓</span></a> &nbsp;&nbsp; <a class="link-arrow" href="#how"><span data-i18n="hero_see">See how it works</span> <span class="arr arr--down" aria-hidden="true">↓</span></a></p>
+      <p class="lede" data-i18n="r3c_hero_sub">A plugin for Cowork and Claude Code that takes Humanities researchers from a rough idea to a cited Word article, in Hebrew or English.</p>
+      <div class="hero__btns">
+        <a class="btn btn--primary" href="#install"><span data-i18n="r2a_hero_cw">Install in Cowork (recommended)</span><span class="arr arr--down" aria-hidden="true">↓</span></a>
+        <a class="btn btn--ghost" href="#how"><span data-i18n="hero_see">See how it works</span><span class="arr arr--down" aria-hidden="true">↓</span></a>
       </div>
       <ul class="marks">
         <li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-4.6-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.4-7 10-7 10Z"/></svg><span data-i18n="mark_free">Free &amp; open source (MIT)</span></li>
@@ -99,43 +94,24 @@
         <li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span data-i18n="mark_cite">Every citation checked against your sources</span></li>
       </ul>
     </div>
-
-    <div class="hero__demo">
-      <div class="demo" id="demo" data-step="3" aria-labelledby="demo-cap">
-        <div class="sheet dpage" id="demo-sheet" lang="en" dir="ltr">
-          <div class="dbar" aria-hidden="true"><i></i><i></i><i></i><span data-i18n="demo_file">article.docx</span></div>
-          <span class="dtag" data-i18n="demo_tag">Sample</span>
-          <div class="dstack" aria-hidden="true">
-            <div class="dl dl--idea"><p class="idea" data-i18n="demo_idea">something about the quarrel over who could speak for the community…</p></div>
-            <div class="dl dl--plan">
-              <span class="dlab" data-i18n="demo_thesis_l">Thesis</span>
-              <p class="thesis" data-i18n="demo_thesis">The quarrel was never only about authority, but about how the community defines itself.</p>
-              <ol class="oline">
-                <li><b>1</b><span data-i18n="demo_o1">The dispute and its sources</span></li>
-                <li class="is-pick"><b>2</b><span data-i18n="demo_o2">Authority and the community</span></li>
-                <li><b>3</b><span data-i18n="demo_o3">Objections and replies</span></li>
-              </ol>
-            </div>
-            <div class="dl dl--doc">
-              <div class="dhead"><span class="dsec" data-i18n="demo_sec">2 · Authority and the community</span><h4 class="dtitle" data-i18n="demo_title">Authority and community</h4></div>
-              <p class="dp"><span data-i18n="demo_text">The central claim of this article is that the controversy was never only about authority, but about how the community defines itself.</span><sup class="fn">1</sup></p>
-              <div class="dswap">
-                <span class="dchip"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span data-i18n-html="demo_stamp"><b>Scholem, <i>Major Trends</i>, p. 244</b> · quote matched</span></span>
-                <span class="dlines"><i></i><i></i><i class="s"></i></span>
-              </div>
-              <div class="dfoot" data-i18n-html="demo_fnline"><sup class="fn">1</sup> Scholem, <i>Major Trends in Jewish Mysticism</i>, p. 244.</div>
-            </div>
-          </div>
-        </div>
-        <ol class="dsteps" aria-hidden="true">
-          <li><i></i><span data-i18n="demo_s1">Idea</span></li>
-          <li><i></i><span data-i18n="demo_s2">Plan</span></li>
-          <li><i></i><span data-i18n="demo_s3">Draft</span></li>
-          <li><i></i><span data-i18n="demo_s4">Word</span></li>
+        <div class="hero__viz" id="flowviz">
+      <div class="flow" id="flow">
+        <span class="flow__tag" data-i18n="r2b_illus">Illustrative</span>
+        <div class="flow__stage" id="flow-stage" aria-hidden="true"></div>
+        <ol class="flow__sr">
+          <li data-i18n="r3d_you">You</li>
+          <li data-i18n="r3d_sources">Sources</li>
+          <li data-i18n="r3d_evidence">Evidence</li>
+          <li data-i18n="r3d_outline">Outline</li>
+          <li data-i18n="r3d_draft">Draft</li>
+          <li data-i18n="r3d_auditor">Auditor</li>
+          <li data-i18n="r3d_word">Word</li>
+          <li data-i18n="r3d_revise">Revise</li>
+          <li data-i18n="r3d_voice">Voice</li>
+          <li data-i18n="r3d_invoice">in your voice</li>
         </ol>
-        <div class="demo__meta">
-          <span class="demo__cap" id="demo-cap" data-i18n="demo_cap">Sample: a rough idea becomes a footnoted article.</span>
-          <button type="button" class="pause" id="demo-pause" aria-pressed="false">
+        <div class="flow__ctl">
+          <button type="button" class="pause" id="flow-pause" aria-pressed="false">
             <svg class="i-pause" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
             <svg class="i-play" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5Z"/></svg>
             <span class="pause__t" data-i18n="pause">Pause animation</span>
@@ -150,8 +126,9 @@
 <section class="sec why" id="why" aria-labelledby="why-h">
   <div class="wrap">
     <h2 id="why-h" class="rv" data-i18n="why_h">Why not just ask a chatbot?</h2>
-    <div class="why__cols">
-      <div class="why__col why__col--no rv">
+    <div class="versus rv">
+      <div class="versus__side versus__side--no">
+        <span class="versus__g" aria-hidden="true"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span>
         <h3 data-i18n="why_no_h">What a chatbot does</h3>
         <ul>
           <li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span data-i18n="why_no_1">Invents plausible citations: real-sounding authors, page numbers nobody can find.</span></li>
@@ -159,16 +136,18 @@
           <li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span data-i18n="why_no_3">Hands you a wall of text, with nothing you can comment on or trace.</span></li>
         </ul>
       </div>
-      <div class="why__col why__col--yes rv">
+      <div class="versus__vs" aria-hidden="true" data-i18n="r3c_vs">vs</div>
+      <div class="versus__side versus__side--yes">
+        <span class="versus__g" aria-hidden="true"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>
         <h3 data-i18n="why_yes_h">What Academic Writer does</h3>
         <ul>
           <li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span data-i18n="why_yes_1">Checks every footnote against a page in the sources you chose.</span></li>
           <li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span data-i18n="why_yes_2">Writes in your voice, learned from your own past articles.</span></li>
           <li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span data-i18n="why_yes_3">Hands you a Word file that you edit like any draft.</span></li>
         </ul>
+        <figure class="plate versus__img"><div class="plate__mat plate__mat--16x9"><img src="assets/img/people-desk-lg.webp" srcset="assets/img/people-desk-800.webp 800w, assets/img/people-desk-lg.webp 1200w" sizes="(min-width: 900px) 440px, 88vw" width="1200" height="896" loading="lazy" decoding="async" alt="An engraving of a researcher at her desk, smiling, holding her finished printed article." data-i18n-attr="alt:r3c_alt_desk"></div></figure>
       </div>
     </div>
-    <p class="honest rv" data-i18n="why_honest">The honest trade-off: drafting is slower than a chatbot, because the auditor blocks any claim it cannot match to a page. And it is not a ghostwriter. The thesis, the sources and the outline are yours.</p>
   </div>
 </section>
 
@@ -179,24 +158,17 @@
     <header class="story__bar">
       <h2 id="how-h" data-i18n="how_h">How it works</h2>
       <span class="story__sub" data-i18n="how_sub">From first idea to a Word file, in seven scenes</span>
-      <span class="story__count"><span data-i18n="r2b_scene">Scene</span> <b data-count>1</b> <span data-i18n="r2b_of7">of 7</span></span>
+      <span class="story__count" aria-live="polite"><b data-count>1</b> / 7</span>
+      <a class="story__skip" href="#gate" data-skip data-i18n="r3d_skip">Skip</a>
     </header>
     <div class="story__main">
-    <nav class="rail" aria-label="Progress" data-i18n-attr="aria-label:rail_label">
-      <div class="rail__in">
-      <span class="rail__line" aria-hidden="true"><span class="rail__fill"></span></span>
-      <ol>
-        <li><a href="#step-1" data-i="0"><span>1</span></a></li><li><a href="#step-2" data-i="1"><span>2</span></a></li><li><a href="#step-3" data-i="2"><span>3</span></a></li><li><a href="#step-4" data-i="3"><span>4</span></a></li><li><a href="#step-5" data-i="4"><span>5</span></a></li><li><a href="#step-6" data-i="5"><span>6</span></a></li><li><a href="#step-7" data-i="6"><span>7</span></a></li>
-      </ol>
-      </div>
-    </nav>
 
     <ol class="steps">
       <li class="step" id="step-1">
         <div class="step__card">
           <span class="step__n" aria-hidden="true">1</span>
           <h3 data-i18n="s1_h">Start in Cowork</h3>
-          <p data-i18n-html="s1_p">Open Cowork, connect your article folder and type <code dir="ltr">/academic-writer:write</code>. Claude asks what you want to write about and in which language. A rough answer is fine.</p>
+          <p data-i18n-html="r3d_s1">Type <code dir="ltr">/academic-writer:write</code> and say, roughly, what you want to write about.</p>
         </div>
         <div class="frame step__frame">
           <div class="frame__bar"><i></i><i></i><i></i><span class="frame__title" data-i18n="t1">Cowork</span><span class="frame__count" data-i18n="r2b_illus">Illustrative</span></div>
@@ -223,7 +195,7 @@
         <div class="step__card">
           <span class="step__n" aria-hidden="true">2</span>
           <h3 data-i18n="s2_h">Choose your sources</h3>
-          <p data-i18n-html="s2_p">You pick the books and articles the article will rest on. Every footnote will later be checked against this list.</p>
+          <p data-i18n-html="r3d_s2">You choose the sources, and every footnote is checked against this list.</p>
         </div>
         <div class="frame step__frame">
           <div class="frame__bar"><i></i><i></i><i></i><span class="frame__title" data-i18n="t2">Your sources</span><span class="frame__count" data-i18n="r2b_illus">Illustrative</span></div>
@@ -245,7 +217,7 @@
         <div class="step__card">
           <span class="step__n" aria-hidden="true">3</span>
           <h3 data-i18n="s3_h">Deep reading</h3>
-          <p data-i18n-html="s3_p">It reads your sources and maps the evidence: arguments, quotations and page numbers. It also shows you where the evidence has gaps.</p>
+          <p data-i18n-html="r3d_s3">It maps arguments, quotations and page numbers, and shows you the gaps.</p>
         </div>
         <div class="frame step__frame">
           <div class="frame__bar"><i></i><i></i><i></i><span class="frame__title" data-i18n="t3">Evidence map</span><span class="frame__count" data-i18n="r2b_illus">Illustrative</span></div>
@@ -273,7 +245,7 @@
         <div class="step__card">
           <span class="step__n" aria-hidden="true">4</span>
           <h3 data-i18n="s4_h">Your thesis</h3>
-          <p data-i18n-html="s4_p">From the evidence you get two or three thesis options. Pick one, adjust it, or write your own.</p>
+          <p data-i18n-html="r3d_s4">You get two or three thesis options: pick one, adjust it, or write your own.</p>
         </div>
         <div class="frame step__frame">
           <div class="frame__bar"><i></i><i></i><i></i><span class="frame__title" data-i18n="t4">Thesis</span><span class="frame__count" data-i18n="r2b_illus">Illustrative</span></div>
@@ -296,7 +268,7 @@
         <div class="step__card">
           <span class="step__n" aria-hidden="true">5</span>
           <h3 data-i18n="s5_h">Outline, then your approval</h3>
-          <p data-i18n-html="s5_p">You shape the outline together. Nothing is written until you say it is ready.</p>
+          <p data-i18n-html="r3d_s5">You shape the outline, and nothing is written until you approve it.</p>
         </div>
         <div class="frame step__frame">
           <div class="frame__bar"><i></i><i></i><i></i><span class="frame__title" data-i18n="t5">Outline</span><span class="frame__count" data-i18n="r2b_illus">Illustrative</span></div>
@@ -321,7 +293,7 @@
         <div class="step__card">
           <span class="step__n" aria-hidden="true">6</span>
           <h3 data-i18n="s6_h">Drafting, and the citation check</h3>
-          <p data-i18n-html="s6_p">Paragraph by paragraph, in your style. A separate checker, the auditor, compares every footnote with the page. A paragraph it cannot confirm is rejected and rewritten.</p>
+          <p data-i18n-html="r3d_s6">The auditor compares each footnote with the page and sends any failure back for a rewrite.</p>
         </div>
         <div class="frame step__frame">
           <div class="frame__bar"><i></i><i></i><i></i><span class="frame__title" data-i18n="t6">Draft and audit</span><span class="frame__count" data-i18n="r2b_illus">Illustrative</span></div>
@@ -351,7 +323,7 @@
         <div class="step__card">
           <span class="step__n" aria-hidden="true">7</span>
           <h3 data-i18n="s7_h">Word in, Word out</h3>
-          <p data-i18n-html="s7_p">You get a .docx with real footnotes and a bibliography. Comment on it in Word; <code dir="ltr">/academic-writer:revise</code> groups your comments, asks you to confirm each group and saves a new file.</p>
+          <p data-i18n-html="r3d_s7">You get a Word file, comment on it, and <code dir="ltr">/academic-writer:revise</code> folds your changes in once you confirm them.</p>
         </div>
         <div class="frame step__frame">
           <div class="frame__bar"><i></i><i></i><i></i><span class="frame__title" data-i18n="t7">Word and revise</span><span class="frame__count" data-i18n="r2b_illus">Illustrative</span></div>
@@ -396,6 +368,15 @@
       </div>
     </div>
     </div>
+    <footer class="story__foot">
+      <button type="button" class="stepbtn" data-prev data-i18n-attr="aria-label:r3d_prev" aria-label="Previous scene"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 6-6 6 6"/></svg></button>
+      <nav class="rail" aria-label="Progress" data-i18n-attr="aria-label:rail_label">
+        <ol>
+          <li><a href="#step-1" data-i="0"><span>1</span></a></li><li><a href="#step-2" data-i="1"><span>2</span></a></li><li><a href="#step-3" data-i="2"><span>3</span></a></li><li><a href="#step-4" data-i="3"><span>4</span></a></li><li><a href="#step-5" data-i="4"><span>5</span></a></li><li><a href="#step-6" data-i="5"><span>6</span></a></li><li><a href="#step-7" data-i="6"><span>7</span></a></li>
+        </ol>
+      </nav>
+      <button type="button" class="stepbtn" data-next data-i18n-attr="aria-label:r3d_next" aria-label="Next scene"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 10 6 6 6-6"/></svg></button>
+    </footer>
   </div>
   </div>
 </section>
@@ -440,7 +421,7 @@
         <p class="trust rv"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span data-i18n="r2a_voice_trust">Nothing goes into your voice profile without your OK.</span></p>
       </div>
       <figure class="plate rv">
-        <div class="plate__mat"><img src="assets/img/voice-lg.webp" srcset="assets/img/voice-800.webp 800w, assets/img/voice-lg.webp 1200w" sizes="(min-width: 900px) 520px, 92vw" width="1200" height="896" loading="lazy" decoding="async" alt="An engraving of an open book: handwritten pages on the left, the same text typeset in columns on the right." data-i18n-attr="alt:voice_alt"></div>
+        <div class="plate__mat"><img src="assets/img/people-voice-lg.webp" srcset="assets/img/people-voice-800.webp 800w, assets/img/people-voice-lg.webp 1200w" sizes="(min-width: 900px) 520px, 92vw" width="1200" height="896" loading="lazy" decoding="async" alt="An engraving of a smiling older scholar writing by hand beside a stack of his earlier articles." data-i18n-attr="alt:r3c_alt_voice"></div>
       </figure>
     </div>
 
@@ -505,7 +486,7 @@
     </div>
     <div class="revise__vis">
       <figure class="plate rv">
-        <div class="plate__mat plate__mat--wide"><img src="assets/img/revise-lg.webp" srcset="assets/img/revise-800.webp 800w, assets/img/revise-lg.webp 1200w" sizes="(min-width: 900px) 520px, 92vw" width="1200" height="896" loading="lazy" decoding="async" alt="An engraving of an annotated page with marginal notes and a pen." data-i18n-attr="alt:rev_alt"></div>
+        <div class="plate__mat"><img src="assets/img/people-revise-lg.webp" srcset="assets/img/people-revise-800.webp 800w, assets/img/people-revise-lg.webp 1200w" sizes="(min-width: 900px) 520px, 92vw" width="1200" height="896" loading="lazy" decoding="async" alt="An engraving of two researchers laughing over an annotated printed draft." data-i18n-attr="alt:r3c_alt_revise"></div>
       </figure>
       <div class="vp rv" role="group" aria-labelledby="rv-t">
         <div class="vp__bar"><span class="vp__t" id="rv-t" data-i18n="r2a_rv_t">Review your comments</span><span class="tag" data-i18n="r2a_illus">Illustrative</span></div>
@@ -530,9 +511,12 @@
 <!-- COURSES AND LESSON NOTES -->
 <section class="sec courses" id="courses" aria-labelledby="crs-h">
   <div class="wrap">
-    <div class="sechead sechead--one">
-      <h2 id="crs-h" class="rv" data-i18n="r2a_crs_h">Your courses, kept in order.</h2>
-      <p class="lede rv" data-i18n="r2a_crs_p">For students and teaching researchers: set up a term once, and turn lecture recordings into structured lesson notes.</p>
+    <div class="sechead">
+      <div class="sechead__text">
+        <h2 id="crs-h" class="rv" data-i18n="r2a_crs_h">Your courses, kept in order.</h2>
+        <p class="lede rv" data-i18n="r2a_crs_p">For students and teaching researchers: set up a term once, and turn lecture recordings into structured lesson notes.</p>
+      </div>
+      <figure class="plate rv"><div class="plate__mat plate__mat--16x9"><img src="assets/img/people-students-lg.webp" srcset="assets/img/people-students-800.webp 800w, assets/img/people-students-lg.webp 1376w" sizes="(min-width: 900px) 560px, 92vw" width="1376" height="768" loading="lazy" decoding="async" alt="An engraving of a cheerful seminar: students with laptops, a lecturer and an audio recorder on the table." data-i18n-attr="alt:r3c_alt_students"></div></figure>
     </div>
     <div class="cgrid">
       <article class="ccard rv">
@@ -586,13 +570,18 @@
 <section class="sec features" id="features" aria-labelledby="feat-h">
   <div class="wrap">
     <h2 id="feat-h" class="rv" data-i18n="feat_h">What you get</h2>
-    <div class="also">
-      <article class="also__c rv">
-        <h3 data-i18n="lib_h">Your library, read page by page</h3>
-        <p data-i18n-html="lib_p">Upload an article (<code dir="ltr">/academic-writer:ingest</code>) or a whole book (<code dir="ltr">/academic-writer:ingest-book</code>) and keep its printed page numbers, so a footnote points to the page in your hand. Scanned pages and photos become text with <code dir="ltr">/academic-writer:ocr</code>.</p>
-        <p data-i18n-html="lib_p2"><code dir="ltr">/academic-writer:research</code> returns only passages whose quotations were verified word for word. The optional Trove library is an online bookshelf for your sources, searched page by page.</p>
+    <div class="bento">
+      <article class="tile tile--lib rv">
+        <div class="tile__text">
+          <span class="tile__ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5v-15ZM20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5v-15Z"/></svg></span>
+          <h3 data-i18n="lib_h">Your library, read page by page</h3>
+          <p data-i18n-html="lib_p">Upload an article (<code dir="ltr">/academic-writer:ingest</code>) or a whole book (<code dir="ltr">/academic-writer:ingest-book</code>) and keep its printed page numbers, so a footnote points to the page in your hand. Scanned pages and photos become text with <code dir="ltr">/academic-writer:ocr</code>.</p>
+          <p data-i18n-html="lib_p2"><code dir="ltr">/academic-writer:research</code> returns only passages whose quotations were verified word for word. The optional Trove library is an online bookshelf for your sources, searched page by page.</p>
+        </div>
+        <figure class="plate"><div class="plate__mat"><img src="assets/img/people-library-lg.webp" srcset="assets/img/people-library-800.webp 800w, assets/img/people-library-lg.webp 1200w" sizes="(min-width: 900px) 340px, 88vw" width="1200" height="896" loading="lazy" decoding="async" alt="An engraving of a graduate student pulling a bookmarked book from a library shelf." data-i18n-attr="alt:r3c_alt_library"></div></figure>
       </article>
-      <article class="also__c rv">
+      <article class="tile tile--he rv">
+        <span class="tile__ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M9 6v2M6 12c1.5 3 4 4.5 6 5M12 12c-1 2.5-3.5 4.5-7 5.5M14 20l4-10 4 10M15.5 17h5"/></svg></span>
         <h3 data-i18n="he_h">Hebrew is not an afterthought</h3>
         <p data-i18n="he_p">Right-to-left layout and Hebrew footnotes come out right in the Word file. You choose the language at the start of every article, and the whole conversation follows.</p>
         <div class="sheet sheet--he" lang="he" dir="rtl">
@@ -600,7 +589,8 @@
           <div class="sheet__foot"><sup class="fn">1</sup> גרשם שלום, <i>זרמים ראשיים במיסטיקה היהודית</i>, עמ' 244.</div>
         </div>
       </article>
-      <article class="also__c rv">
+      <article class="tile tile--sub band rv">
+        <span class="tile__ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7V3Z"/><path d="M14 3v5h5M10 14l2 2 3.5-4"/></svg></span>
         <h3 data-i18n="sub_h">Before you submit</h3>
         <p><code dir="ltr">/academic-writer:proofread</code></p>
         <p data-i18n="sub_pr">A marked-up copy and a short report. It never touches your original.</p>
@@ -610,23 +600,23 @@
           <li data-i18n="six1">Structure</li><li data-i18n="six2">Argument logic</li><li data-i18n="six3">Citation completeness</li><li data-i18n="six4">Source coverage</li><li data-i18n="six5">Writing quality</li><li data-i18n="six6">Academic conventions</li>
         </ul>
       </article>
-    </div>
-    <div class="cmds rv">
-      <h3 data-i18n="cmds_h">The rest of the toolkit</h3>
-      <dl>
-        <div><dt><code dir="ltr">/academic-writer:edit</code></dt><dd data-i18n="cm_edit">Revise a drafted article</dd></div>
-        <div><dt><code dir="ltr">/academic-writer:edit-section</code></dt><dd data-i18n="cm_section">Revise one section only</dd></div>
-        <div><dt><code dir="ltr">/academic-writer:ideate</code></dt><dd data-i18n="cm_ideate">From a vague topic to a sharp question and a research brief</dd></div>
-        <div><dt><code dir="ltr">/academic-writer:health</code></dt><dd data-i18n="cm_health">A plain-language readiness check; the first step when anything breaks</dd></div>
-        <div><dt><code dir="ltr">/academic-writer:help</code></dt><dd data-i18n="cm_help">A short command list and first steps</dd></div>
-        <div><dt><code dir="ltr">/academic-writer:intro</code></dt><dd data-i18n="cm_intro">Opens the full guide</dd></div>
-      </dl>
+      <article class="tile tile--tools rv">
+        <h3 data-i18n="cmds_h">The rest of the toolkit</h3>
+        <div class="tools">
+          <div class="tool"><span class="tool__ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4"/></svg></span><code dir="ltr">/academic-writer:edit</code><p data-i18n="cm_edit">Revise a drafted article</p></div>
+          <div class="tool"><span class="tool__ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="9" width="16" height="6" rx="1.5"/><path d="M4 5h16M4 19h16"/></svg></span><code dir="ltr">/academic-writer:edit-section</code><p data-i18n="cm_section">Revise one section only</p></div>
+          <div class="tool"><span class="tool__ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z"/></svg></span><code dir="ltr">/academic-writer:ideate</code><p data-i18n="cm_ideate">From a vague topic to a sharp question and a research brief</p></div>
+          <div class="tool"><span class="tool__ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg></span><code dir="ltr">/academic-writer:health</code><p data-i18n="cm_health">A plain-language readiness check; the first step when anything breaks</p></div>
+          <div class="tool"><span class="tool__ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></span><code dir="ltr">/academic-writer:help</code><p data-i18n="cm_help">A short command list and first steps</p></div>
+          <div class="tool"><span class="tool__ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M10 9l5 2.5-5 2.5V9ZM8 21h8"/></svg></span><code dir="ltr">/academic-writer:intro</code><p data-i18n="cm_intro">Opens the full guide</p></div>
+        </div>
+      </article>
     </div>
   </div>
 </section>
 
 <!-- FILM -->
-<section class="sec film" id="film" aria-labelledby="film-h">
+<section class="sec film band" id="film" aria-labelledby="film-h">
   <div class="wrap">
     <div class="film__text">
       <h2 id="film-h" class="rv" data-i18n="film_h">The whole thing in one minute</h2>
@@ -744,7 +734,7 @@
           <div><dt data-i18n="pv4k">Your computer</dt><dd data-i18n="pv4">Keys live in the operating system's keychain and are never printed or written into the project.</dd></div>
         </dl>
       </div>
-      <div class="rv">
+      <div class="rv priv__files band">
         <h3 data-i18n="priv_where">Where your files live</h3>
         <p data-i18n="pw_p">The plugin writes only inside your research folder and its own data folder.</p>
         <ul class="files">
@@ -781,8 +771,9 @@
 </section>
 
 <!-- FINAL CTA -->
-<section class="sec final" id="start" aria-labelledby="final-h">
-  <div class="wrap">
+<section class="sec final band" id="start" aria-labelledby="final-h">
+  <div class="wrap final__grid">
+    <div class="final__main">
     <h2 id="final-h" class="final__h rv"><span data-i18n="fin_1">Your argument.</span> <span data-i18n="fin_2">Your sources.</span> <span data-i18n="fin_3">Your voice.</span></h2>
     <div class="final__cta rv">
       <div class="cmd">
@@ -793,6 +784,8 @@
       <p class="final__note"><span data-i18n="r2a_fin_note">In Cowork, add the plugin from Customize, then Plugins.</span> <a href="#install" data-i18n="r2a_fin_link">See the steps</a></p>
       <p class="final__links"><a href="./guide/" data-i18n="fin_guide">Full guide</a><a href="https://github.com/yodem/academic-writer">GitHub</a><a href="https://github.com/yodem/academic-writer/issues" data-i18n="fin_issue">Report a problem</a></p>
     </div>
+    </div>
+    <figure class="plate final__plate rv"><div class="plate__mat plate__mat--16x9"><img src="assets/img/people-celebrate-lg.webp" srcset="assets/img/people-celebrate-800.webp 800w, assets/img/people-celebrate-lg.webp 1376w" sizes="(min-width: 900px) 520px, 92vw" width="1376" height="768" loading="lazy" decoding="async" alt="An engraving of a researcher holding up a journal issue while colleagues applaud." data-i18n-attr="alt:r3c_alt_celebrate"></div></figure>
   </div>
 </section>
 </main>

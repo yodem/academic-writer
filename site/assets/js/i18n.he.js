@@ -1,5 +1,26 @@
 /* Hebrew strings for the Academic Writer site. Keys match data-i18n / data-i18n-html / data-i18n-attr in index.html. */
 window.AW_I18N_HE = {
+  /* round 3: motion */
+  r3d_you: "אתם",
+  r3d_sources: "מקורות",
+  r3d_evidence: "ראיות",
+  r3d_outline: "מתווה",
+  r3d_draft: "טיוטה",
+  r3d_auditor: "המבקר",
+  r3d_word: "Word",
+  r3d_revise: "תיקון",
+  r3d_voice: "קול",
+  r3d_invoice: "בקול שלכם",
+  r3d_skip: "דלג",
+  r3d_prev: "השלב הקודם",
+  r3d_next: "השלב הבא",
+  r3d_s1: 'הקלידו <code dir="ltr">/academic-writer:write</code> וספרו, בערך, על מה אתם רוצים לכתוב.',
+  r3d_s2: "אתם בוחרים את המקורות, וכל הערת שוליים נבדקת מול הרשימה הזו.",
+  r3d_s3: "הוא ממפה טיעונים, ציטוטים ומספרי עמודים, ומראה לכם איפה חסר.",
+  r3d_s4: "תקבלו שתיים או שלוש אפשרויות לתזה: בחרו אחת, שנו אותה או כתבו משלכם.",
+  r3d_s5: "אתם מעצבים את המתווה, ושום דבר לא נכתב עד שתאשרו אותו.",
+  r3d_s6: "המבקר משווה כל הערת שוליים לעמוד במקור, ומחזיר כל כשל לכתיבה מחדש.",
+  r3d_s7: 'תקבלו קובץ Word, תגיבו עליו, ו-<code dir="ltr">/academic-writer:revise</code> משלב את השינויים אחרי שתאשרו אותם.',
   /* round 2: motion */
   demo_tag: "דוגמה",
   demo_file: "article.docx",
@@ -419,5 +440,14 @@ window.AW_I18N_HE = {
   r2a_cw2: "בסרגל הצד השמאלי לוחצים על <b>Customize</b> ואז על <b>Plugins</b>.",
   r2a_cw3: "לוחצים על <b>Add marketplace</b> ומזינים:",
   r2a_cw4: "בוחרים את <b>academic-writer</b> ולוחצים על <b>Install</b>.",
-  r2a_cw_note: "אחר כך מריצים <code dir=\"ltr\">/academic-writer:health</code> כדי לבדוק את כלי העזר. Cowork עובד בתיקייה שמחברים אליו, ו־“Check for updates” מביא גרסאות חדשות."
+  r2a_cw_note: "אחר כך מריצים <code dir=\"ltr\">/academic-writer:health</code> כדי לבדוק את כלי העזר. Cowork עובד בתיקייה שמחברים אליו, ו־“Check for updates” מביא גרסאות חדשות.",
+  /* round 3: design */
+  r3c_hero_sub: "תוסף ל־Cowork ול־Claude Code שמוביל חוקרי מדעי הרוח מרעיון גולמי למאמר מצוטט בקובץ Word, בעברית או באנגלית.",
+  r3c_vs: "מול",
+  r3c_alt_desk: "תחריט של חוקרת ליד שולחן העבודה, מחייכת ומחזיקה את המאמר המוגמר בדפוס.",
+  r3c_alt_voice: "תחריט של חוקר ותיק ומחייך שכותב בכתב יד לצד ערימת מאמרים קודמים שלו.",
+  r3c_alt_revise: "תחריט של שתי חוקרות צוחקות מעל טיוטה מודפסת מלאה בהערות.",
+  r3c_alt_library: "תחריט של דוקטורנטית שמושכת מהמדף בספרייה ספר עם סימנייה.",
+  r3c_alt_students: "תחריט של סמינר עליז: סטודנטים עם מחשבים ניידים, מרצה ומקליט קול על השולחן.",
+  r3c_alt_celebrate: "תחריט של חוקרת שמרימה גיליון של כתב עת בעוד עמיתים מוחאים כפיים."
 };
