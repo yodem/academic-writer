@@ -22,6 +22,6 @@ def test_every_hook_command_resolves_its_script():
     with tempfile.TemporaryDirectory() as project:  # no .academic-helper: hooks must no-op
         env = {**os.environ, "CLAUDE_PLUGIN_ROOT": str(PLUGIN), "CLAUDE_PROJECT_DIR": project}
         for event, cmd in cmds:
-            cmd = cmd.replace("${user_config.google_api_key}", "").replace("${user_config.jev_api_key}", "")
+            cmd = cmd.replace("${user_config.google_api_key}", "").replace("${user_config.jev_api_key}", "").replace("${user_config.pageindex_command}", "")
             p = subprocess.run(["sh", "-c", cmd], input="{}", capture_output=True, text=True, env=env, cwd=project, timeout=30)
             assert "MODULE_NOT_FOUND" not in p.stderr and "Cannot find module" not in p.stderr, (event, cmd, p.stderr[-400:])

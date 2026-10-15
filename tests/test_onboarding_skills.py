@@ -6,6 +6,7 @@ code actually does (plugin setting kept in the OS keychain, bridged to GOOGLE_AP
 These checks are deterministic text rules over the SKILL.md sources.
 """
 
+import json
 import pathlib
 import re
 
@@ -149,3 +150,75 @@ def test_write_voice_gate_lets_a_first_time_author_through():
     assert "${CLAUDE_PLUGIN_DATA}/voice" in gate
     assert "VOICE_MISSING" in gate and "AskUserQuestion" in gate
     assert "Write without it" in gate and "voice migrate" in gate
+
+
+# --- Library route (Trove | PageIndex | both) and the PageIndex plugin setting -------------------
+
+REFERENCE = SKILLS / "init" / "references" / "integration-setup.md"
+ROUTE_LABELS = (
+    "Trove (your current library)",
+    "PageIndex (a library on your own server)",
+    "Both: one answers and the other is tested quietly in the background",
+)
+
+
+def test_library_route_questions_are_plain_and_complete():
+    ref = REFERENCE.read_text(encoding="utf-8")
+    section = ref.split("## Library route")[1]
+    assert "AskUserQuestion" in section
+    for label in ROUTE_LABELS:
+        assert label in section, label
+    assert "Trove (recommended)" in section  # with Both, Trove answers by default
+    assert "PAGEINDEX_NOT_CONFIGURED" in section and "pageindex_command" in section
+    assert ".academic-helper/library.json" in section
+    # no host, key or password is ever asked for in chat
+    assert "Never ask for a host" in section
+
+
+def test_init_and_update_tools_ask_the_library_route_question():
+    for skill in ("init", "update-tools"):
+        text = _text(skill)
+        assert "AskUserQuestion" in text and ".academic-helper/library.json" in text, skill
+        assert "PageIndex" in text and "references/integration-setup.md" in text, skill
+        assert "Never install anything for this step" in text, skill
+    # init keeps the question out of --quick mode (Phase 3 is skipped there)
+    assert "no `library.json` is written" in _text("init")
+    # update-tools never touches the profile for this step, and its description keeps its trigger phrase
+    text = _text("update-tools")
+    assert "does not touch `profile.md`" in text
+    assert re.search(r"\bUse when\b", text.split("---")[1])
+
+
+def test_library_route_examples_match_the_config_schema():
+    schema = json.loads((ROOT / "src" / "schemas" / "library-config.schema.json").read_text(encoding="utf-8"))
+    props = schema["properties"]
+    ref = REFERENCE.read_text(encoding="utf-8").split("### Write")[1]
+    blocks = re.findall(r"```json\n(.*?)\n```", ref, re.S)
+    assert len(blocks) == 3
+    for block in blocks:
+        data = json.loads(block)
+        assert set(data) <= set(props) and data["route"] in props["route"]["enum"], block
+        if "primary" in data:
+            assert data["primary"] in props["primary"]["enum"], block
+
+
+def test_pageindex_setting_is_non_sensitive_and_bridged_without_a_host():
+    manifest = json.loads((ROOT / "manifests" / "academic-writer.json").read_text(encoding="utf-8"))
+    option = manifest["userConfig"]["pageindex_command"]
+    assert option["sensitive"] is False and option["required"] is False and option["type"] == "string"
+    assert "pilib" in option["description"] and "/path/to/" in option["description"]
+    assert "://" not in option["description"] and "@" not in option["description"]  # no URL, no user@host
+    hooks = (ROOT / "src" / "hooks" / "hooks.json").read_text(encoding="utf-8")
+    assert "USER_CONFIG_PAGEINDEX_COMMAND='${user_config.pageindex_command}'" in hooks
+    env_hook = (ROOT / "src" / "hooks" / "src" / "lifecycle" / "session-env.ts").read_text(encoding="utf-8")
+    assert "AW_PAGEINDEX_COMMAND" in env_hook and "USER_CONFIG_PAGEINDEX_COMMAND" in env_hook
+
+
+def test_setup_points_to_the_pageindex_setting_and_troubleshooting_covers_it():
+    setup = _text("setup")
+    assert "pageindex_command" in setup and "Never ask for a host" in setup
+    assert not INSTALL_RE.search(setup.split("### 4g.")[1].split("## Step 5")[0])  # nothing to install
+    trouble = (SKILLS / "setup" / "references" / "troubleshooting.md").read_text(encoding="utf-8")
+    for heading in ("PageIndex not reachable", "Wrong book list", "Shadow errors in the report"):
+        assert f"**{heading}**" in trouble, heading
+    assert "aw\" library status --check" in trouble

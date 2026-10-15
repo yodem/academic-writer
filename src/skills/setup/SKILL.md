@@ -250,6 +250,16 @@ npm install -g notebooklm-mcp-cli
 
 Then ask the researcher to type `! nlm login` to sign in (it opens their browser).
 
+### 4g. PageIndex library (optional, only if the researcher has one)
+
+PageIndex is a second library that the researcher hosts themselves, so there is nothing to install
+and no question to ask here. Add one plain line to the summary: "If you keep a PageIndex library on
+your own server and want to read books from it, open `/plugin`, choose academic-writer, then
+Configure, and fill in `pageindex_command` (for example `pilib`). It is optional, and
+`/academic-writer:update-tools` lets you pick it for an article afterwards." Never ask for a host,
+address or password in chat. If something goes wrong later, see "PageIndex" in
+`references/troubleshooting.md`.
+
 ---
 
 ## Step 5 — Gemini
@@ -363,6 +373,7 @@ every existing field. Show:
 > | Python and its add-ons | ✓ Ready / ⚠ [what's missing and the one-line fix] |
 > | Hebrew spelling (hspell) | ✓ / skipped / not available on Windows / not needed |
 > | Trove / NotebookLM | ✓ / skipped (optional) |
+> | PageIndex library | Optional: set `pageindex_command` in `/plugin` → Configure if you have one |
 > | Gemini | ✓ Key works / ⚠ [problem in plain words] / — Not set up yet (needed to write, proofread, read scans) |
 > | Sample paragraph | ✓ Looked good / noted: [feedback] |
 

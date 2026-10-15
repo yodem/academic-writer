@@ -23,6 +23,36 @@ with `aw ledger show <run>` (use the run ID shown by the command that failed).
 - **CAP_REACHED (exit 4)**: inspect `aw ledger show <run>` to see the calls and budget state. Start
   a new run only after addressing the budget or input size that exhausted the cap.
 
+## PageIndex library (optional second library)
+
+These apply only to projects whose `.academic-helper/library.json` has `"route": "pageindex"` or
+`"route": "both"`. With `"route": "trove"`, or no `library.json`, none of this is used. The setting
+`pageindex_command` (`/plugin` → Installed → academic-writer → Configure) reaches the session as
+`AW_PAGEINDEX_COMMAND`; the start-up hook exports it only in a project that has
+`.academic-helper/profile.md`, and only a new session picks up a changed value.
+
+- **PageIndex not reachable**: run `"${CLAUDE_PLUGIN_ROOT}/bin/aw" library status --check` in the
+  project. If the `pageindex` entry under `check` shows `"ok": false`, its `error` says why. Check, in this order: the setting
+  `pageindex_command` is filled in (no quotation marks) or `pilib` works in your terminal; the
+  computer or server that hosts the library is on and you can reach it; then start a new Claude
+  Code session. `AW_PAGEINDEX_COMMAND`, when set, wins over the command in `library.json`. If you
+  cannot fix it now, run `/academic-writer:update-tools` and choose Trove, or write
+  `{ "route": "trove" }` in `.academic-helper/library.json`; your articles read from Trove as before.
+- **Wrong book list**: with PageIndex answering, the list shows the PageIndex library's books,
+  narrowed to the shelf file named by `pageindex.shelf` in `library.json` when there is one
+  (a bare list of book ids, or `{"books": [...]}`; a missing or unreadable shelf file means no
+  narrowing). A book from Trove appears under its Trove id only when the shelf file's `map` links
+  it to the PageIndex book. Add or fix the entry, or check the active shelf in Trove
+  (`trove shelf current`) when Trove answers. An error "cannot tell how PageIndex pages map to
+  Trove pages" means the `map` entry needs `"pages": "identity"` or a page map; the message names
+  the book.
+- **Shadow errors in the report**: with `"route": "both"`, the library that does not answer is
+  tried quietly on the same request. Errors from that quiet lookup are recorded in
+  `.academic-helper/retrieval.jsonl` and summarised by `aw library report`. They never change or
+  delay your answers; they mean the second library did not respond or returned something the
+  plugin could not read. Fix it as in "PageIndex not reachable", or stop the quiet test with
+  `"shadow": { "enabled": false }` in `library.json` (or choose a single library).
+
 ## pip install failures
 
 - **`No module named pip`**: Python was installed without its package installer. On macOS and
