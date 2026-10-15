@@ -6,6 +6,7 @@ code actually does (plugin setting kept in the OS keychain, bridged to GOOGLE_AP
 These checks are deterministic text rules over the SKILL.md sources.
 """
 
+import json
 import pathlib
 import re
 
@@ -149,3 +150,120 @@ def test_write_voice_gate_lets_a_first_time_author_through():
     assert "${CLAUDE_PLUGIN_DATA}/voice" in gate
     assert "VOICE_MISSING" in gate and "AskUserQuestion" in gate
     assert "Write without it" in gate and "voice migrate" in gate
+
+
+# --- Library route (Trove | PageIndex | both) and the PageIndex plugin setting -------------------
+
+REFERENCE = SKILLS / "init" / "references" / "integration-setup.md"
+ROUTE_LABELS = (
+    "Trove (your current library)",
+    "PageIndex (a library on your own server)",
+    "Both: one answers and the other is tested quietly in the background",
+)
+
+
+def test_library_route_questions_are_plain_and_complete():
+    ref = REFERENCE.read_text(encoding="utf-8")
+    section = ref.split("## Library route")[1]
+    assert "AskUserQuestion" in section
+    for label in ROUTE_LABELS:
+        assert label in section, label
+    assert "Trove (recommended)" in section  # with Both, Trove answers by default
+    assert "PAGEINDEX_NOT_CONFIGURED" in section and "pageindex_command" in section
+    assert ".academic-helper/library.json" in section
+    # no host, key or password is ever asked for in chat
+    assert "Never ask for a host" in section
+
+
+def test_init_and_update_tools_ask_the_library_route_question():
+    for skill in ("init", "update-tools"):
+        text = _text(skill)
+        assert "AskUserQuestion" in text and ".academic-helper/library.json" in text, skill
+        assert "PageIndex" in text and "references/integration-setup.md" in text, skill
+        assert "Never install anything for this step" in text, skill
+    # init keeps the question out of --quick mode (Phase 3 is skipped there)
+    assert "no `library.json` is written" in _text("init")
+    # update-tools never touches the profile for this step, and its description keeps its trigger phrase
+    text = _text("update-tools")
+    assert "does not touch `profile.md`" in text
+    assert re.search(r"\bUse when\b", text.split("---")[1])
+
+
+def test_library_route_examples_match_the_config_schema():
+    schema = json.loads((ROOT / "src" / "schemas" / "library-config.schema.json").read_text(encoding="utf-8"))
+    props = schema["properties"]
+    ref = REFERENCE.read_text(encoding="utf-8").split("### Write")[1]
+    blocks = re.findall(r"```json\n(.*?)\n```", ref, re.S)
+    assert len(blocks) == 3
+    for block in blocks:
+        data = json.loads(block)
+        assert set(data) <= set(props) and data["route"] in props["route"]["enum"], block
+        if "primary" in data:
+            assert data["primary"] in props["primary"]["enum"], block
+
+
+def test_pageindex_setting_is_non_sensitive_and_bridged_without_a_host():
+    manifest = json.loads((ROOT / "manifests" / "academic-writer.json").read_text(encoding="utf-8"))
+    option = manifest["userConfig"]["pageindex_command"]
+    assert option["sensitive"] is False and option["required"] is False and option["type"] == "string"
+    assert "pilib" in option["description"] and "/path/to/" in option["description"]
+    assert "://" not in option["description"] and "@" not in option["description"]  # no URL, no user@host
+    hooks = (ROOT / "src" / "hooks" / "hooks.json").read_text(encoding="utf-8")
+    assert "pageindex_command" not in hooks  # never interpolated into the shell-form command
+    env_hook = (ROOT / "src" / "hooks" / "src" / "lifecycle" / "session-env.ts").read_text(encoding="utf-8")
+    assert "AW_PAGEINDEX_COMMAND" in env_hook and "CLAUDE_PLUGIN_OPTION_PAGEINDEX_COMMAND" in env_hook
+
+
+def test_setup_points_to_the_pageindex_setting_and_troubleshooting_covers_it():
+    setup = _text("setup")
+    assert "pageindex_command" in setup and "Never ask for a host" in setup
+    assert not INSTALL_RE.search(setup.split("### 4g.")[1].split("## Step 5")[0])  # nothing to install
+    trouble = (SKILLS / "setup" / "references" / "troubleshooting.md").read_text(encoding="utf-8")
+    for heading in ("PageIndex not reachable", "Wrong book list", "Shadow errors in the report"):
+        assert f"**{heading}**" in trouble, heading
+    assert "aw\" library status --check" in trouble
+
+
+def test_library_route_detection_honours_an_existing_library_json_and_never_overwrites_it():
+    section = REFERENCE.read_text(encoding="utf-8").split("## Library route")[1]
+    detect = section.split("### Detect")[1].split("### Ask")[0]
+    # same resolution order as loadLibraryConfig: env, then library.json pageindex.command, then pilib
+    assert "AW_PAGEINDEX_COMMAND" in detect and ".academic-helper/library.json" in detect
+    assert "'pageindex'" in detect and "'command'" in detect and "'pilib'" in detect
+    assert detect.index("env_cmd or file_cmd or 'pilib'") > 0
+    assert "CURRENT_ROUTE" in detect
+    ask = section.split("### Ask")[1].split("### Write")[0]
+    assert "never overwritten without asking" in ask
+    assert "(current)" in ask and "write nothing" in ask
+    # a PageIndex route that cannot be reached still offers the way out: switch to Trove, keep is the default
+    unreachable = ask.split("includes PageIndex but detection says it is not configured")[1].split("**PageIndex not configured**")[0]
+    assert "AskUserQuestion" in unreachable and "Switch this article to Trove" in unreachable
+    assert '"label": "Keep it as it is"' in unreachable and '"label": "Switch to Trove"' in unreachable
+    assert unreachable.index('"Keep it as it is"') < unreachable.index('"Switch to Trove"')  # keep listed first
+    assert '"Keep it as it is" is the default' in unreachable and "unless the researcher explicitly picks" in unreachable
+    assert "do not change the file" not in ask
+    trouble = (SKILLS / "setup" / "references" / "troubleshooting.md").read_text(encoding="utf-8")
+    assert "Switch to Trove" in trouble and "Keep it as it is" in trouble
+    assert "Keep it as it is" in _text("update-tools") and "switch this" in _text("update-tools")
+    assert "only when there is no `library.json` yet" in ask
+
+
+def test_detection_snippet_runs_and_follows_the_config_precedence(tmp_path):
+    import subprocess
+    section = REFERENCE.read_text(encoding="utf-8").split("## Library route")[1]
+    code = re.search(r"python3 - <<'PY'\n(.*?)\nPY", section, re.S).group(1)
+
+    def detect(cfg, env):
+        proj = tmp_path / str(abs(hash((json.dumps(cfg), json.dumps(env)))))
+        (proj / ".academic-helper").mkdir(parents=True)
+        if cfg is not None:
+            (proj / ".academic-helper" / "library.json").write_text(json.dumps(cfg))
+        base = {"PATH": "/usr/bin:/bin"}
+        out = subprocess.run(["python3", "-c", code], cwd=proj, env={**base, **env}, capture_output=True, text=True, check=True)
+        return out.stdout.splitlines()
+
+    assert detect(None, {}) == ["PAGEINDEX_NOT_CONFIGURED", "CURRENT_ROUTE=none CURRENT_PRIMARY=trove"]
+    assert detect({"route": "both", "primary": "pageindex", "pageindex": {"command": "/path/to/wrapper"}}, {}) == [
+        "PAGEINDEX_CONFIGURED", "CURRENT_ROUTE=both CURRENT_PRIMARY=pageindex"]
+    assert detect(None, {"AW_PAGEINDEX_COMMAND": "pilib"})[0] == "PAGEINDEX_CONFIGURED"
+    assert detect({"route": "trove"}, {})[0] == "PAGEINDEX_NOT_CONFIGURED"
