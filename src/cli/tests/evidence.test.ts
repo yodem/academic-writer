@@ -4,6 +4,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildEvidence, __stubs } from '../src/evidence.ts';
+import { Library } from '../src/library/adapter.ts';
 import { setPathArguments } from '../src/paths.ts';
 
 test('non-verbatim quotes are dropped; cache hit skips refetch', async () => {
@@ -94,7 +95,7 @@ const FAKE_TROVE = `
 const fs = require('node:fs');
 const args = process.argv.slice(2);
 if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, 'trove ' + args.join(' ') + '\\n');
-if (args[0] === 'items' && args[1] === 'read') process.stdout.write('**Trove Book**\\n\\n── Page 1 ──\\nהנבואה היא שפע מאת האל.\\n');
+if (args[0] === 'items' && args[1] === 'read') setTimeout(() => process.stdout.write('**Trove Book**\\n\\n── Page 1 ──\\nהנבואה היא שפע מאת האל.\\n'), Number(process.env.FAKE_SLOW_READ_MS || 0));
 else if (args[0] === 'items' && args[1] === 'toc') console.log('==========\\nTrove Title\\nID: ' + args[2] + ' | 1 pages\\n==========');
 else { console.error('unexpected: ' + args.join(' ')); process.exit(2); }
 `;
@@ -209,4 +210,24 @@ test('route=both: Trove answers as before and the quiet PageIndex lookup is a sh
   assert.equal(failing.text, healthy.text);
   assert.ok(healthy.types.includes('lookup') && healthy.types.includes('shadow'), healthy.types.join(','));
   assert.ok(failing.types.includes('shadow'), 'the failed shadow is recorded, not raised');
+});
+
+test('a whole-book read may take longer than a page lookup: readAll timeout vs lookup timeout', async () => {
+  const b = bench(undefined, { FAKE_SLOW_READ_MS: '1200' });
+  try {
+    const library = new Library(b.project, process.env, { shadow: 'off', timeoutMs: 400, readAllTimeoutMs: 6000 });
+    const whole = await library.read({ source: 'T-slow', all: true, op: 'get' });
+    assert.match(whole.raw ?? '', /Trove Book/u); // slower than the lookup timeout, inside the whole-book one
+    await assert.rejects(library.read({ source: 'T-slow', pages: '1' }), /did not answer within 400 ms/u); // a page range keeps the lookup timeout
+  } finally { b.restore(); }
+});
+
+test('evidence build reads a slow whole book (AW_LIBRARY_TIMEOUT_MS bounds lookups, the read-all seam bounds the book)', async () => {
+  const b = bench(undefined, { FAKE_SLOW_READ_MS: '1200', AW_LIBRARY_TIMEOUT_MS: '400', AW_LIBRARY_READALL_TIMEOUT_MS: '6000' });
+  __stubs(noPassages);
+  try {
+    const result = await buildEvidence({ sources: ['T-slow-evidence'], runId: 'r' });
+    assert.equal(result.sources[0]?.title, 'Trove Title');
+    assert.deepEqual(loggedCalls(b), ['trove items read T-slow-evidence:all', 'trove items toc T-slow-evidence']);
+  } finally { __stubs({}); b.restore(); }
 });

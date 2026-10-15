@@ -24,7 +24,7 @@ export type ReadRequest = {
   claim?: string;
 };
 /** Options of a Library. `shadow` defaults to off here; the aw library command turns it on (detached). */
-export type LibraryOptions = { shadow?: ShadowMode; timeoutMs?: number; /** The commands of this Library stop together (the shadow worker's scope). */ scope?: CommandScope };
+export type LibraryOptions = { shadow?: ShadowMode; timeoutMs?: number; /** Timeout of a whole-book read; default thresholds.json library.timeoutMs.readAll. */ readAllTimeoutMs?: number; /** The commands of this Library stop together (the shadow worker's scope). */ scope?: CommandScope };
 type Ids = { run?: string; claim?: string };
 export type ReadOutput = {
   lookup_id: string;
@@ -65,14 +65,17 @@ export class Library implements ShadowRunner {
     this.shadowMode = options.shadow ?? 'off';
     this.scope = options.scope;
     const timeoutMs = options.timeoutMs ?? this.override ?? limits.timeoutMs.primary;
-    this.trove = this.makeTrove(timeoutMs);
-    this.pageindex = this.makePageIndex(timeoutMs);
+    // A whole-book read has its own, longer timeout; a caller that fixed the timeout (the shadow worker) keeps it for everything.
+    const readAllEnv = Number(env.AW_LIBRARY_READALL_TIMEOUT_MS);
+    const readAllMs = options.readAllTimeoutMs ?? (Number.isFinite(readAllEnv) && readAllEnv > 0 ? readAllEnv : undefined) ?? options.timeoutMs ?? this.override ?? limits.timeoutMs.readAll;
+    this.trove = this.makeTrove(timeoutMs, readAllMs);
+    this.pageindex = this.makePageIndex(timeoutMs, readAllMs);
   }
 
   /** AW_LIBRARY_TIMEOUT_MS replaces every timeout (test and troubleshooting seam; the defaults live in thresholds.json). */
   private readonly override: number | undefined;
-  private makeTrove(timeoutMs: number): TroveBackend { return new TroveBackend({ command: this.config.troveCommand, env: this.env, timeoutMs, cwd: this.project, scope: this.scope }); }
-  private makePageIndex(timeoutMs: number): PageIndexBackend { return new PageIndexBackend({ command: this.config.pageindexCommand, env: this.env, timeoutMs, cwd: this.project, scope: this.scope }); }
+  private makeTrove(timeoutMs: number, readAllTimeoutMs?: number): TroveBackend { return new TroveBackend({ command: this.config.troveCommand, env: this.env, timeoutMs, readAllTimeoutMs, cwd: this.project, scope: this.scope }); }
+  private makePageIndex(timeoutMs: number, readAllTimeoutMs?: number): PageIndexBackend { return new PageIndexBackend({ command: this.config.pageindexCommand, env: this.env, timeoutMs, readAllTimeoutMs, cwd: this.project, scope: this.scope }); }
 
   private get shelf(): Shelf {
     this.shelfCache ??= loadShelf(this.config.shelfPath);

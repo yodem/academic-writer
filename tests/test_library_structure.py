@@ -79,8 +79,9 @@ class TestLibraryThresholds(unittest.TestCase):
         for key in ("maxBufferBytes", "maxRequestPages"):
             self.assertIsInstance(block[key], int)
             self.assertGreater(block[key], 0)
-        for key in ("primary", "check"):
+        for key in ("primary", "readAll", "check"):
             self.assertGreater(block["timeoutMs"][key], 0)
+        self.assertGreater(block["timeoutMs"]["readAll"], block["timeoutMs"]["primary"])
         for key in ("readChunkPages", "chunkConcurrency", "metaScanMax", "metaScanConcurrency"):
             self.assertGreater(block["pageindex"][key], 0)
 
