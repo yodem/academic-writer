@@ -30,6 +30,9 @@ DIGEST_FILES = ("chores.md", "chores.json")
 _TOKEN_RE = re.compile(r"((?:wstoken|token|key|sesskey)=)[^&\s]+", re.I)
 
 
+GENERAL = "general"  # pseudo-course for system chores (open Chrome, ToC audit failed)
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
 
@@ -69,8 +72,8 @@ def add_chore(registry: courses.Registry, *, course: str, kind: str, ref: str, t
         raise ValueError(f"unknown chore kind {kind!r}; expected one of {', '.join(KINDS)}")
     if not course or not ref:
         raise ValueError("a chore needs a course and a ref")
-    if course not in registry.courses:
-        raise ValueError(f"unknown course {course!r}")
+    if course != GENERAL and course not in registry.courses:
+        raise ValueError(f"unknown course {course!r} (use {GENERAL!r} for a chore not tied to a course)")
     values = {"title": title, "text": text, "core_texts": list(core_texts or []), "time_left_text": time_left_text,
               "due_text": due_text, "due_at": due_at}
     handle = _lock(registry)

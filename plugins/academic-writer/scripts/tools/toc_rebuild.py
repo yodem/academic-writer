@@ -115,9 +115,23 @@ def classify(heading: str) -> str:
     return "other"
 
 
-def build_plan(page_count: int, existing: list[dict], get_page, hints: dict | None = None) -> dict:
-    """Return {toc, needs_hint, counts}. get_page(n) -> markdown text."""
+def _norm(s: str) -> str:
+    return re.sub(r"\s+", " ", s or "").strip().casefold()
+
+
+def build_plan(page_count: int, existing: list[dict], get_page, hints: dict | None = None,
+               sources: list[dict] | None = None, overrides: dict | None = None) -> dict:
+    """Return {toc, needs_hint, counts}. get_page(n) -> markdown text.
+
+    sources: registry sources as {"title", "page"} (page set when the source's pages are in
+    this book, None when it lives in its own book and this book holds a pointer page).
+    A registered source is a level-2 entry under the readings index, titled with the source
+    title, which is what courses.py check-source verifies. overrides: {page: {title?, level?}}.
+    """
     hints = {int(k): str(v).strip() for k, v in (hints or {}).items()}
+    overrides = {int(k): v for k, v in (overrides or {}).items()}
+    local_src = {int(x["page"]): x["title"] for x in (sources or []) if x.get("page")}
+    pointer_src = {_norm(x["title"]): x["title"] for x in (sources or []) if not x.get("page")}
     by_page: dict[int, list[dict]] = {}
     for e in existing:
         p = e.get("page")
@@ -134,6 +148,12 @@ def build_plan(page_count: int, existing: list[dict], get_page, hints: dict | No
         if ex and len(by_page[p]) > 1:
             counts["merged"] += 1
         title = (ex or {}).get("title") or heading or f"Page {p}"
+        ov = overrides.get(p, {})
+        if ov.get("title"):
+            title = ov["title"]
+        src_title = local_src.get(p) or pointer_src.get(_norm(heading)) or pointer_src.get(_norm(title))
+        if src_title:
+            kind, title = "source", src_title
         if p in hints and hints[p]:
             hint, src = hints[p], "supplied"
         elif ex and ex["hint"]:
@@ -147,7 +167,7 @@ def build_plan(page_count: int, existing: list[dict], get_page, hints: dict | No
             default = 1
         elif kind == "lesson":
             default = 2
-        elif kind == "guide":
+        elif kind in ("guide", "source"):
             default = 2
         elif state == "readings":
             default = 3
@@ -156,12 +176,18 @@ def build_plan(page_count: int, existing: list[dict], get_page, hints: dict | No
         else:
             default = prev_level or 1
         level = ex["level"] if ex else default
+        if kind == "source":
+            level = 2
+        elif state == "readings" and level == 1 and kind == "other":
+            level = default  # a reading's section page never sits at the top level
+        if ov.get("level"):
+            level = int(ov["level"])
         level = max(1, min(level, prev_level + 1))
         if p == 1 or kind in ("changelog",):
             state = None
         elif kind in ("lessons_index", "lesson"):
             state = "lessons"
-        elif kind in ("readings_index", "guide"):
+        elif kind in ("readings_index", "guide", "source"):
             state = "readings"
         if hint:
             counts[src] += 1
@@ -242,7 +268,13 @@ def process_course(c: dict, work: Path, hints: dict, apply: bool, out=print) -> 
         return 1
     existing, n, _ = fetch_toc(bid)
     version = book_version(bid)
-    plan = build_plan(n, existing, lambda p: trove_get_page(bid, p), course_hints(hints, slug))
+    sources = [{"title": x.get("title", ""),
+                "page": (x.get("trove") or {}).get("page") if str((x.get("trove") or {}).get("book_id")) == str(bid) else None}
+               for x in c.get("sources", []) if x.get("title") and x.get("kind") != "media"]
+    ov_file = work / "overrides.json"
+    overrides = json.loads(ov_file.read_text(encoding="utf-8")).get(slug, {}) if ov_file.exists() else {}
+    plan = build_plan(n, existing, lambda p: trove_get_page(bid, p), course_hints(hints, slug),
+                      sources=sources, overrides=overrides)
     work.mkdir(parents=True, exist_ok=True)
     (work / f"{slug}.plan.json").write_text(json.dumps(
         {"slug": slug, "book_id": bid, "version": version, "page_count": n,

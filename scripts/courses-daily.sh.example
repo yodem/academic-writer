@@ -45,21 +45,8 @@ step() {
   return $rc
 }
 
-first_slug() {
-  "$PY" - "$REPO/src/scripts/courses" "$TERM_DIR" <<'PYEOF' 2>/dev/null
-import sys
-from pathlib import Path
-sys.path.insert(0, sys.argv[1])
-import courses
-print(next(iter(courses.Registry(Path(sys.argv[2])).courses)))
-PYEOF
-}
-
 add_manual_chore() {  # <ref> <title> <text>
-  local slug
-  slug=$(first_slug)
-  [ -n "$slug" ] || slug=general
-  "$PY" "$COURSES" chores add --course "$slug" --kind manual --ref "$1" --title "$2" --text "$3"
+  "$PY" "$COURSES" chores add --course general --kind manual --ref "$1" --title "$2" --text "$3"
 }
 
 run_job() {

@@ -99,3 +99,9 @@ def test_cli_digest_with_registry_flag(tmp_path, capsys):
     assert chores.load(reg)[0]["core_texts"] == ["a", "b"]
     assert courses.main(["chores", "done", chore_id, "--registry", str(reg.directory)]) == 0
     assert chores.load(reg)[0]["status"] == "done"
+
+
+def test_general_pseudo_course_accepted(tmp_path):
+    reg = make_registry(tmp_path)
+    chore = chores.add_chore(reg, course="general", kind="manual", ref="chrome", title="Open Chrome")
+    assert chore["course"] == "general"
