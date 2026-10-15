@@ -13,7 +13,7 @@ import { Library } from '../src/library/adapter.ts';
 import { runLibraryCli } from '../src/library/cli.ts';
 import { checkSchema, type JsonSchema } from '../src/library/jsonschema.ts';
 import { appendRow, clipError, readRows, spoolDir, writeSpool, type LookupRow, type RetrievalRow, type ShadowRow, type VerdictRow } from '../src/library/ledger.ts';
-import { acquireSlot } from '../src/library/shadow.ts';
+import { acquireSlot, claimSlot, releaseSlot, workerEntry } from '../src/library/shadow.ts';
 import { settlePending, recordVerdict, computeSupports } from '../src/library/verdict.ts';
 import { buildReport } from '../src/library/report.ts';
 import { setPathArguments } from '../src/paths.ts';
@@ -313,7 +313,7 @@ test('the shadow is skipped, with a reason, when it should not run', async () =>
     assert.equal(ofType(await rowsOf(tooMany), 'shadow').length, 0);
     // Detached mode with every slot taken: busy, and nothing is spawned.
     mkdirSync(join(busy.project, '.academic-helper', 'retrieval', 'active'), { recursive: true });
-    for (let index = 0; index < limits.shadow.maxConcurrent; index += 1) writeFileSync(join(busy.project, '.academic-helper', 'retrieval', 'active', `slot-${index}.lock`), JSON.stringify({ pid: process.pid, ts: new Date().toISOString() }));
+    for (let index = 0; index < limits.shadow.maxConcurrent; index += 1) writeFileSync(join(busy.project, '.academic-helper', 'retrieval', 'active', `slot-${index}.lock`), JSON.stringify({ pid: process.pid, nonce: `abcdef0123456789${index}`, ts: new Date().toISOString() }));
     const result = await new Library(busy.project, busy.env, { shadow: 'detached' }).read({ source: 'T-A', pages: '1' });
     assert.equal(result.shadow_status, 'skipped:busy');
     assert.equal((ofType(await rowsOf(busy), 'lookup')[0] as LookupRow).shadow_status, 'skipped:busy');
@@ -596,14 +596,14 @@ test('H2: a slot held by a dead process is taken over, a live one is not', async
     const old = new Date(Date.now() - limits.shadow.reapGraceMs * 5);
     for (let slot = 0; slot < limits.shadow.maxConcurrent; slot += 1) {
       const file = join(active, `slot-${slot}.lock`);
-      writeFileSync(file, JSON.stringify({ pid: slot === 0 ? process.pid : 2 ** 22 + 7, ts: old.toISOString() }));
+      writeFileSync(file, JSON.stringify({ pid: slot === 0 ? process.pid : 2 ** 22 + 7, nonce: `abcdef0123456789${slot}`, ts: old.toISOString() }));
       utimesSync(file, old, old);
     }
     const first = await acquireSlot(fx.project);
     assert.ok(first !== null, 'a dead holder frees its slot');
-    assert.notEqual(first, 0, 'the slot held by this live process stays taken');
+    assert.notEqual(first.slot, 0, 'the slot held by this live process stays taken');
     const second = await acquireSlot(fx.project);
-    assert.ok(second !== null && second !== first);
+    assert.ok(second !== null && second.slot !== first.slot);
     assert.equal(await acquireSlot(fx.project), null, 'all three slots are taken now');
   } finally { fx.cleanup(); }
 });
@@ -796,4 +796,105 @@ test('appends from many writers at once keep every line whole', async () => {
     assert.equal(lines.length, 300 + 1 + 6);
     for (const line of lines) assert.deepEqual(checkSchema(retrievalSchema as JsonSchema, JSON.parse(line)), []);
   } finally { fx.cleanup(); }
+});
+
+// ================================================================ second review rework
+
+const SLOT_DIR = (fx: Fixture): string => join(fx.project, '.academic-helper', 'retrieval', 'active');
+
+test('H2: a slot belongs to its token; a late claim or release by an old owner cannot touch the new owner', async () => {
+  const fx = fixture({ route: 'both' });
+  try {
+    const a = await acquireSlot(fx.project);
+    assert.ok(a !== null);
+    const file = join(SLOT_DIR(fx), `slot-${a.slot}.lock`);
+    assert.equal((JSON.parse(readFileSync(file, 'utf8')) as { nonce: string }).nonce, a.nonce, 'the token is written at the exclusive create');
+    // A's slot is taken away (reaped) and B gets the same slot number.
+    rmSync(file);
+    const b = await acquireSlot(fx.project);
+    assert.ok(b !== null);
+    assert.equal(b.slot, a.slot);
+    assert.notEqual(b.nonce, a.nonce);
+    await claimSlot(fx.project, a, 12345);
+    const held = JSON.parse(readFileSync(file, 'utf8')) as { pid: number; nonce: string };
+    assert.deepEqual([held.nonce, held.pid === 12345], [b.nonce, false], 'a late claim by the old owner changes nothing');
+    await releaseSlot(fx.project, a);
+    assert.ok(existsSync(file), 'a late release by the old owner frees nothing');
+    await claimSlot(fx.project, b, 4242);
+    assert.equal((JSON.parse(readFileSync(file, 'utf8')) as { pid: number }).pid, 4242, 'the owner can claim');
+    await releaseSlot(fx.project, b);
+    assert.ok(!existsSync(file), 'and release');
+  } finally { fx.cleanup(); }
+});
+
+test('H5: concurrent verdicts for one citation get distinct, increasing sequence numbers (in process)', async () => {
+  const fx = fixture({ route: 'both' });
+  try {
+    const results = await Promise.all(Array.from({ length: 20 }, (_, index) => recordVerdict(fx.project, { lookup: 'lk_race', verdict: index % 2 === 0 ? 'PASS' : 'FAIL', correctedPage: null, quote: '', paragraph: 'P1', run: null }, 0)));
+    const seqs = results.map((result) => result.row.seq).sort((a, b) => a - b);
+    assert.deepEqual(seqs, Array.from({ length: 20 }, (_, index) => index + 1));
+    const rows = ofType(await rowsOf(fx), 'verdict');
+    assert.deepEqual(rows.map((row) => row.seq).sort((a, b) => a - b), seqs);
+    assert.ok(!existsSync(join(fx.project, '.academic-helper', 'retrieval', 'verdict.lock')), 'the lock is released');
+  } finally { fx.cleanup(); }
+});
+
+test('H5: parallel aw library verdict processes for one citation get distinct seqs, and the report follows the highest', async () => {
+  const { aw } = await sharedBundle();
+  const fx = fixture({ route: 'both' });
+  try {
+    const lookup: LookupRow = {
+      row_type: 'lookup', schema: 1, ts: new Date().toISOString(), lookup_id: 'lk_procs', run_id: null, claim_id: null, op: 'read', source_id: 'T-A', mode: 'both', route_primary: 'trove',
+      book_by_route: { trove: 'T-A', pageindex: null }, request: { printed: null, trove_pages: '2' },
+      primary: { route: 'trove', ok: true, route_pages: '2', latency_ms: 5, bytes: 10, chars: 10, text_sha: '0123456789abcdef', error: null, error_code: null }, shadow_status: 'none',
+    };
+    await appendRow(fx.project, lookup);
+    const runs = await Promise.all(Array.from({ length: 8 }, (_, index) => runAw(aw, fx, 'verdict', '--lookup', 'lk_procs', '--verdict', index % 2 === 0 ? 'PASS' : 'FAIL', '--paragraph', 'P1')));
+    assert.ok(runs.every((run) => run.code === 0));
+    const rows = ofType(await rowsOf(fx), 'verdict');
+    assert.deepEqual(rows.map((row) => row.seq).sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8]);
+    const newest = rows.reduce((top, row) => (row.seq > top.seq ? row : top));
+    const report = buildReport([lookup, ...[...rows].reverse()], 0);
+    assert.deepEqual([report.routes.trove.auditor.verdicts, report.routes.trove.auditor.pass], [1, newest.verdict === 'PASS' ? 1 : 0]);
+  } finally { fx.cleanup(); }
+});
+
+test('M6: quoted assignments, whole Authorization values and cookie and key headers are redacted', () => {
+  const samples: Array<[string, RegExp]> = [
+    ["config {'password': 'hunter2'} rejected", /hunter2/],
+    ['body {"api_key": "abc def ghi 123"}', /abc def|ghi 123/],
+    ["TROVE_TOKEN='tok with spaces 99' failed", /tok with spaces|spaces 99/],
+    ['SECRET="quoted secret value" and more', /quoted secret value/],
+    ['Authorization: Basic YTpi', /YTpi/],
+    ['Authorization: Digest username="alice", realm="r", response="deadbeef00"', /alice|deadbeef00/],
+    ['authorization = token ghs_opaque_value_here', /ghs_opaque|opaque_value/],
+    ['Proxy-Authorization: Negotiate YIIabc123', /YIIabc123/],
+    ['x-api-key: kjh234sdf', /kjh234sdf/],
+    ['X-Auth-Token: 0aa11bb22', /0aa11bb22/],
+    ['Cookie: sid=abc123; theme=dark; csrf=zzz999', /abc123|zzz999|theme=dark/],
+    ['Set-Cookie: session=s3cr3tvalue; Path=/; HttpOnly', /s3cr3tvalue/],
+  ];
+  for (const [text, secret] of samples) {
+    const clean = clipError(text);
+    assert.doesNotMatch(clean, secret, `${text} -> ${clean}`);
+    assert.match(clean, /redacted/u, text);
+  }
+  // Line structure is what bounds a header value, so a multi line stderr keeps its other lines.
+  const multi = clipError('trove: denied\nAuthorization: Basic YTpi\nretry later');
+  assert.match(multi, /denied/);
+  assert.match(multi, /retry later/);
+  assert.doesNotMatch(multi, /YTpi/);
+});
+
+test('seam: AW_LIBRARY_WORKER_ENTRY is honoured only under the test runner', () => {
+  const saved = process.env.NODE_TEST_CONTEXT;
+  try {
+    process.env.NODE_TEST_CONTEXT = 'child-v8';
+    assert.equal(workerEntry({ AW_LIBRARY_WORKER_ENTRY: '/path/to/test-aw' }, '/real/bin/aw'), '/path/to/test-aw');
+    assert.equal(workerEntry({}, '/real/bin/aw'), '/real/bin/aw');
+    delete process.env.NODE_TEST_CONTEXT;
+    assert.equal(workerEntry({ AW_LIBRARY_WORKER_ENTRY: '/path/to/test-aw' }, '/real/bin/aw'), '/real/bin/aw', 'in production the override is ignored');
+    assert.equal(workerEntry({ AW_LIBRARY_WORKER_ENTRY: '/path/to/test-aw', NODE_TEST_CONTEXT: 'child-v8' }, '/real/bin/aw'), '/real/bin/aw', 'a value in the passed env does not count as the test runner');
+    assert.equal(workerEntry({}, undefined), undefined);
+  } finally { if (saved === undefined) delete process.env.NODE_TEST_CONTEXT; else process.env.NODE_TEST_CONTEXT = saved; }
 });

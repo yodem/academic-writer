@@ -214,7 +214,7 @@ class TestRetrievalThresholds(unittest.TestCase):
             self.assertGreater(block["shadow"][key], 0)
         self.assertGreater(block["spool"]["maxBytes"], 0)
         self.assertGreater(block["spool"]["ttlHours"], 0)
-        for key in ("maxRowBytes", "maxErrorChars", "maxAgreePages"):
+        for key in ("maxRowBytes", "maxErrorChars", "maxAgreePages", "lockWaitMs", "lockStaleMs", "lockPollMs"):
             self.assertGreater(block["ledger"][key], 0)
         for value in (block["agree"]["jaccardMin"], block["supports"]["tokenCoverageMin"]):
             self.assertTrue(0 < value <= 1)
@@ -244,6 +244,11 @@ class TestShadowModules(unittest.TestCase):
         for name in ("verdict.ts", "textmatch.ts", "shadow.ts"):
             source = open(os.path.join(LIBRARY_DIR, name), encoding="utf-8").read()
             self.assertNotRegex(source, r"openrouter|@google/genai|anthropic|gemini", name)
+
+    def test_worker_entry_override_is_test_only(self):
+        source = open(os.path.join(LIBRARY_DIR, "shadow.ts"), encoding="utf-8").read()
+        self.assertIn("NODE_TEST_CONTEXT", source)
+        self.assertEqual(source.count("AW_LIBRARY_WORKER_ENTRY"), 2)  # the comment and the one read in workerEntry
 
     def test_ledger_never_creates_the_project_folder(self):
         source = open(os.path.join(LIBRARY_DIR, "ledger.ts"), encoding="utf-8").read()

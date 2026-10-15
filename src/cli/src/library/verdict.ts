@@ -1,6 +1,6 @@
 import thresholds from '../../../thresholds.json' with { type: 'json' };
 import {
-  appendRow, containedDir, hasProjectFolder, listSpool, nowIso, readSpool, readSpoolJson, removeSpool, rowsForLookup, spoolDir, spoolFile, sweepSpool, textSha, writeSpool,
+  appendRow, containedDir, hasProjectFolder, listSpool, nowIso, readSpool, readSpoolJson, removeSpool, rowsForLookup, spoolDir, spoolFile, sweepSpool, textSha, withLedgerLock, writeSpool,
   type AppendResult, type LookupRow, type ShadowRow, type SupportsReason, type VerdictRow,
 } from './ledger.ts';
 import { coverage, tokens } from './textmatch.ts';
@@ -107,18 +107,22 @@ function verdictRow(input: VerdictInput, seq: number, result: Supports, lookup: 
 export async function recordVerdict(project: string, input: VerdictInput, waitMs: number = limits.timeoutMs.verdictSettle): Promise<VerdictResult> {
   await sweepSpool(project);
   const lookup = (await rowsForLookup(project, input.lookup)).find((row): row is LookupRow => row.row_type === 'lookup');
-  const earlier = await earlierVerdicts(project, input.lookup, input.paragraph);
-  const seq = earlier.reduce((top, row) => Math.max(top, row.seq), 0) + 1;
-  // Any verdict still waiting for its shadow is older than this one now.
-  await removeSpool(project, pendingFile(project, input.lookup, input.paragraph));
   const result = await computeSupports(project, input.lookup, input.quote, waitMs, input.page);
-  const row = verdictRow(input, seq, result, lookup, false);
-  const append = await appendRow(project, row);
-  if (append.ok && result.reason === 'shadow_pending') {
-    const pending: PendingVerdict = { ...input, seq };
-    await writeSpool(project, pendingFile(project, input.lookup, input.paragraph), pending);
-  }
-  return { row, append };
+  // Reading the highest sequence number and appending the next one is a single step under the ledger lock,
+  // so two verdicts for the same citation can never get the same number.
+  return withLedgerLock(project, async () => {
+    const earlier = await earlierVerdicts(project, input.lookup, input.paragraph);
+    const seq = earlier.reduce((top, row) => Math.max(top, row.seq), 0) + 1;
+    // Any verdict still waiting for its shadow is older than this one now.
+    await removeSpool(project, pendingFile(project, input.lookup, input.paragraph));
+    const row = verdictRow(input, seq, result, lookup, false);
+    const append = await appendRow(project, row);
+    if (append.ok && result.reason === 'shadow_pending') {
+      const pending: PendingVerdict = { ...input, seq };
+      await writeSpool(project, pendingFile(project, input.lookup, input.paragraph), pending);
+    }
+    return { row, append };
+  });
 }
 
 /**
@@ -137,12 +141,17 @@ export async function settlePending(project: string): Promise<{ settled: number;
       input = (await readSpoolJson(project, file)) as PendingVerdict;
     } catch { await removeSpool(project, file); continue; }
     if (!Number.isInteger(input.seq) || typeof input.lookup !== 'string') { await removeSpool(project, file); continue; }
-    const earlier = await earlierVerdicts(project, input.lookup, input.paragraph ?? null);
-    if (earlier.some((row) => row.seq > input.seq)) { await removeSpool(project, file); continue; }
     const result = await computeSupports(project, input.lookup, input.quote, 0, input.page);
     if (result.reason === 'shadow_pending') { waiting += 1; continue; }
     const lookup = (await rowsForLookup(project, input.lookup)).find((row): row is LookupRow => row.row_type === 'lookup');
-    if ((await appendRow(project, verdictRow({ ...input, paragraph: input.paragraph ?? null }, input.seq, result, lookup, true))).ok) { settled += 1; await removeSpool(project, file); }
+    // Check for a newer verdict and append under the same lock that numbers new verdicts.
+    const outcome = await withLedgerLock(project, async (): Promise<'stale' | 'settled' | 'failed'> => {
+      const earlier = await earlierVerdicts(project, input.lookup, input.paragraph ?? null);
+      if (earlier.some((row) => row.seq > input.seq)) return 'stale';
+      return (await appendRow(project, verdictRow({ ...input, paragraph: input.paragraph ?? null }, input.seq, result, lookup, true))).ok ? 'settled' : 'failed';
+    });
+    if (outcome === 'settled') settled += 1;
+    if (outcome !== 'failed') await removeSpool(project, file);
   }
   return { settled, waiting };
 }

@@ -186,7 +186,7 @@ export class Library implements ShadowRunner {
     if (!this.config.shadowEnabled || this.shadowMode === 'off') return noShadow('disabled');
     if (!limits.shadow.ops.includes(op)) return noShadow('skipped:op');
     if (Array.isArray(pages) && pages.length > limits.shadow.readAllMaxPages) return noShadow('skipped:too_many_pages');
-    const spec: Omit<ShadowSpec, 'slot'> = { v: 1, lookup_id: lookupId, run_id: ids.run ?? null, claim_id: ids.claim ?? null, op, route: secondary, project: this.project, source, pages };
+    const spec: Omit<ShadowSpec, 'slot' | 'slot_nonce'> = { v: 1, lookup_id: lookupId, run_id: ids.run ?? null, claim_id: ids.claim ?? null, op, route: secondary, project: this.project, source, pages };
     return startShadow(spec, this.shadowMode, this.env, this);
   }
 

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, readFile, readdir, realpath, rename, rm, stat } from 'node:fs/promises';
 import { basename, dirname, join, sep } from 'node:path';
@@ -100,7 +100,8 @@ export function textSha(text: string): string { return createHash('sha256').upda
 
 /** One line, no newlines, credentials hidden, short enough for a ledger row. */
 export function clipError(message: string): string {
-  return redact(message.replace(/\s+/gu, ' ').trim()).slice(0, limits.ledger.maxErrorChars);
+  // Redact first, on the raw text: line breaks are what end a header value.
+  return redact(message).replace(/\s+/gu, ' ').trim().slice(0, limits.ledger.maxErrorChars);
 }
 
 export function ledgerPath(project: string): string { return join(project, RETRIEVAL_FILE); }
@@ -129,8 +130,67 @@ export async function containedDir(project: string, segments: string[], create =
   } catch { return null; }
 }
 
+// Known limit (accepted): a folder swapped for a symlink between the realpath check and the write below is
+// not caught; only the final component is opened without following links. The plugin's threat model is one
+// researcher on a local machine who owns the project folder (CLAUDE.md), so the static symlink cases are
+// refused and this race is documented rather than closed with descriptor-relative paths.
 /** Whether `project` is an article project (has a real `.academic-helper/` inside it); the ledger never makes that folder. */
 export async function hasProjectFolder(project: string): Promise<boolean> { return (await containedDir(project, [])) !== null; }
+
+// ---------------------------------------------------------------- a short lock for read-then-append steps
+
+type LockToken = { pid: number; nonce: string; ts: string };
+
+function pidAlive(pid: number): boolean {
+  try { process.kill(pid, 0); return true; } catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM'; }
+}
+
+async function readLock(file: string): Promise<LockToken | null> {
+  try {
+    const parsed = JSON.parse(await readFile(file, 'utf8')) as Partial<LockToken>;
+    return typeof parsed.pid === 'number' && typeof parsed.nonce === 'string' ? { pid: parsed.pid, nonce: parsed.nonce, ts: String(parsed.ts ?? '') } : null;
+  } catch { return null; }
+}
+
+/**
+ * Run `work` while holding the ledger's short lock (`retrieval/verdict.lock`, made with an exclusive create
+ * that writes the holder's pid and a random nonce). It makes "read the highest sequence number, then append"
+ * one step even with several `aw` processes at once. A lock whose holder is dead, or that has been held for
+ * ledger.lockStaleMs, is taken over after re-reading its nonce; release only removes a lock that still holds
+ * the caller's nonce. Waiting is bounded by ledger.lockWaitMs; after that `work` runs unlocked, because a
+ * ledger row is never worth failing the auditor for.
+ */
+export async function withLedgerLock<T>(project: string, work: () => Promise<T>): Promise<T> {
+  const dir = await containedDir(project, ['retrieval'], true);
+  if (!dir) return work();
+  const file = join(dir, 'verdict.lock');
+  const nonce = randomBytes(12).toString('hex');
+  const deadline = Date.now() + limits.ledger.lockWaitMs;
+  let held = false;
+  while (!held && Date.now() < deadline) {
+    try {
+      const handle = await open(file, 'wx', 0o644);
+      try { await handle.writeFile(JSON.stringify({ pid: process.pid, nonce, ts: nowIso() } satisfies LockToken), 'utf8'); } finally { await handle.close(); }
+      held = true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') break;
+      try {
+        const age = Date.now() - (await stat(file)).mtimeMs;
+        const judged = await readLock(file);
+        if (age > limits.ledger.lockStaleMs || (judged !== null && !pidAlive(judged.pid))) {
+          // Re-read before unlinking: if the lock changed hands meanwhile, it is not ours to remove.
+          const current = await readLock(file);
+          if (judged === null ? current === null : current?.nonce === judged.nonce) await rm(file, { force: true });
+          continue;
+        }
+      } catch { continue; }
+      await new Promise<void>((resolveWait) => { setTimeout(resolveWait, limits.ledger.lockPollMs); });
+    }
+  }
+  try { return await work(); } finally {
+    if (held && (await readLock(file))?.nonce === nonce) await rm(file, { force: true });
+  }
+}
 
 export type AppendResult = { ok: true } | { ok: false; reason: string };
 

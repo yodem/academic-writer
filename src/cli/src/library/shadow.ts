@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { mkdir, open, readFile, realpath, rm, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { z } from 'zod';
@@ -39,6 +40,8 @@ export const shadowSpecSchema = z.object({
   pages: z.union([z.literal('all'), z.array(z.number().int().min(1)), z.null()]),
   /** The worker slot this lookup holds (released when the worker ends), or null for none. */
   slot: z.number().int().min(0).nullable(),
+  /** The token of that slot: only its holder may claim or release it. */
+  slot_nonce: z.string().regex(/^[0-9a-f]{16,64}$/u).nullable().optional(),
 }).strict();
 export type ShadowSpec = z.infer<typeof shadowSpecSchema>;
 
@@ -80,25 +83,38 @@ function sleep(ms: number): Promise<void> { return new Promise((resolveSleep) =>
 
 /**
  * A fixed set of slot files, `slot-0.lock` .. `slot-<max-1>.lock`, each made with an exclusive create
- * (O_EXCL), so two lookups can never hold the same slot and the limit holds under any concurrency. A slot
- * records its holder's pid; one whose holder is gone (or that nobody released for shadow.lockStaleMs) is
- * reaped, and reaping is serialised by a `.reap` folder so two reapers never fight over a slot.
+ * (O_EXCL) that writes the holder's token: its pid, a random nonce and the time. The limit holds because
+ * two lookups can never create the same file. Ownership is by token: claim and release act only on a slot
+ * that still holds the caller's nonce, so a late parent or worker can never free or overwrite a slot that
+ * has since passed to someone else. A slot is reaped only when its recorded pid is dead (or nobody released
+ * it for shadow.lockStaleMs), the token is re-read right before unlinking, and reaping is serialised by a
+ * `.reap` folder.
  */
+export type Slot = { slot: number; nonce: string };
+type SlotToken = { pid: number; nonce: string; ts: string };
+
 const slotFile = (dir: string, slot: number): string => join(dir, `slot-${slot}.lock`);
 
 function pidAlive(pid: number): boolean {
   try { process.kill(pid, 0); return true; } catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM'; }
 }
 
-async function slotIsStale(file: string, now: number): Promise<boolean> {
+async function readToken(file: string): Promise<SlotToken | null> {
+  try {
+    const parsed: unknown = JSON.parse(await readFile(file, 'utf8'));
+    const record = typeof parsed === 'object' && parsed !== null ? parsed as Partial<SlotToken> : {};
+    return typeof record.pid === 'number' && typeof record.nonce === 'string' ? { pid: record.pid, nonce: record.nonce, ts: String(record.ts ?? '') } : null;
+  } catch { return null; }
+}
+
+async function slotIsStale(file: string, now: number): Promise<SlotToken | 'unreadable' | null> {
   try {
     const age = now - (await stat(file)).mtimeMs;
-    if (age > limits.shadow.lockStaleMs) return true;
-    if (age < limits.shadow.reapGraceMs) return false;
-    const parsed: unknown = JSON.parse(await readFile(file, 'utf8'));
-    const pid = typeof parsed === 'object' && parsed !== null ? (parsed as { pid?: unknown }).pid : undefined;
-    return typeof pid === 'number' && Number.isInteger(pid) && !pidAlive(pid);
-  } catch { return false; }
+    const token = await readToken(file);
+    if (age > limits.shadow.lockStaleMs) return token ?? 'unreadable';
+    if (age < limits.shadow.reapGraceMs || !token) return null;
+    return pidAlive(token.pid) ? null : token;
+  } catch { return null; }
 }
 
 async function reapSlots(dir: string): Promise<void> {
@@ -114,44 +130,68 @@ async function reapSlots(dir: string): Promise<void> {
     const now = Date.now();
     for (let slot = 0; slot < limits.shadow.maxConcurrent; slot += 1) {
       const file = slotFile(dir, slot);
-      if (await slotIsStale(file, now)) await rm(file, { force: true });
+      const judged = await slotIsStale(file, now);
+      if (judged === null) continue;
+      // Re-read the token just before unlinking: if the slot changed hands since, leave it alone.
+      const current = await readToken(file);
+      if (judged === 'unreadable' ? current === null : current?.nonce === judged.nonce) await rm(file, { force: true });
     }
   } finally { await rm(guard, { recursive: true, force: true }); }
 }
 
 /** Take a free worker slot, or null when all of shadow.maxConcurrent are held (or the project folder is not usable). */
-export async function acquireSlot(project: string): Promise<number | null> {
+export async function acquireSlot(project: string): Promise<Slot | null> {
   try {
     const dir = await containedDir(project, ['retrieval', 'active'], true);
     if (!dir) return null;
     await reapSlots(dir);
+    const nonce = randomBytes(12).toString('hex');
     for (let slot = 0; slot < limits.shadow.maxConcurrent; slot += 1) {
       try {
         const handle = await open(slotFile(dir, slot), 'wx', 0o644);
-        try { await handle.writeFile(JSON.stringify({ pid: process.pid, ts: nowIso() }), 'utf8'); } finally { await handle.close(); }
-        return slot;
+        try { await handle.writeFile(JSON.stringify({ pid: process.pid, nonce, ts: nowIso() } satisfies SlotToken), 'utf8'); } finally { await handle.close(); }
+        return { slot, nonce };
       } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') return null; }
     }
     return null;
   } catch { return null; }
 }
 
-/** Record the worker's own pid in its slot, so the slot is freed if the worker dies. A slot already released is left alone. */
-async function claimSlot(project: string, slot: number, pid: number): Promise<void> {
+/** Record the worker's own pid in a slot this caller holds, so the slot is freed if the worker dies. Does nothing if the slot is not (or no longer) ours. */
+export async function claimSlot(project: string, held: Slot, pid: number): Promise<void> {
   try {
     const dir = await containedDir(project, ['retrieval', 'active']);
     if (!dir) return;
-    const handle = await open(slotFile(dir, slot), 'r+');
-    try { await handle.truncate(0); await handle.writeFile(JSON.stringify({ pid, ts: nowIso() }), 'utf8'); } finally { await handle.close(); }
+    const file = slotFile(dir, held.slot);
+    const handle = await open(file, 'r+');
+    try {
+      const current = await readToken(file);
+      if (current?.nonce !== held.nonce) return;
+      await handle.truncate(0);
+      await handle.writeFile(JSON.stringify({ pid, nonce: held.nonce, ts: nowIso() } satisfies SlotToken), 'utf8');
+    } finally { await handle.close(); }
   } catch { /* released already, or no slot */ }
 }
 
-export async function releaseSlot(project: string, slot: number | null): Promise<void> {
-  if (slot === null) return;
+/** Free a slot, but only if it still holds this caller's token. */
+export async function releaseSlot(project: string, held: Slot | null): Promise<void> {
+  if (held === null) return;
   try {
     const dir = await containedDir(project, ['retrieval', 'active']);
-    if (dir) await rm(slotFile(dir, slot), { force: true });
+    if (!dir) return;
+    const file = slotFile(dir, held.slot);
+    if ((await readToken(file))?.nonce === held.nonce) await rm(file, { force: true });
   } catch { /* nothing to release */ }
+}
+
+/**
+ * The program a detached worker runs: the aw that is running now. AW_LIBRARY_WORKER_ENTRY can name another
+ * one, but only inside the test runner (node --test sets NODE_TEST_CONTEXT in the real process environment);
+ * anywhere else the setting is ignored, so a stray environment value can never change what gets spawned.
+ */
+export function workerEntry(env: NodeJS.ProcessEnv, argvEntry: string | undefined): string | undefined {
+  const override = env.AW_LIBRARY_WORKER_ENTRY?.trim();
+  return override && process.env.NODE_TEST_CONTEXT !== undefined ? override : argvEntry;
 }
 
 // ---------------------------------------------------------------- starting a shadow (foreground)
@@ -160,14 +200,14 @@ export async function releaseSlot(project: string, slot: number | null): Promise
  * Start the shadow for one lookup and return at once. Never throws and never waits for the worker: the cost
  * to the caller is one small file write and one spawn. `status` goes into the lookup row.
  */
-export async function startShadow(spec: Omit<ShadowSpec, 'slot'>, mode: ShadowMode, env: NodeJS.ProcessEnv, runner: ShadowRunner): Promise<ShadowHandle> {
+export async function startShadow(spec: Omit<ShadowSpec, 'slot' | 'slot_nonce'>, mode: ShadowMode, env: NodeJS.ProcessEnv, runner: ShadowRunner): Promise<ShadowHandle> {
   if (mode === 'off') return idle('disabled');
-  let slot: number | null = null;
+  let slot: Slot | null = null;
   let specPath: string | null = null;
   try {
     if (!(await hasProjectFolder(spec.project))) return idle('skipped:no_project_dir');
     if (mode === 'inline') return { status: 'pending', settle: () => runShadowWorker({ ...spec, slot: null }, runner, workerSettings(env)) };
-    const entry = env.AW_LIBRARY_WORKER_ENTRY?.trim() || (process.argv[1] ? resolve(process.argv[1]) : undefined);
+    const entry = workerEntry(env, process.argv[1] ? resolve(process.argv[1]) : undefined);
     if (!entry) return idle('skipped:spawn_failed');
     slot = await acquireSlot(spec.project);
     if (slot === null) return idle('skipped:busy');
@@ -175,7 +215,7 @@ export async function startShadow(spec: Omit<ShadowSpec, 'slot'>, mode: ShadowMo
     if (!dir) throw new Error('no retrieval folder');
     specPath = join(dir, `spec-${spec.lookup_id}.json`);
     const handle = await open(specPath, 'wx', 0o644);
-    try { await handle.writeFile(JSON.stringify({ ...spec, slot }), 'utf8'); } finally { await handle.close(); }
+    try { await handle.writeFile(JSON.stringify({ ...spec, slot: slot.slot, slot_nonce: slot.nonce }), 'utf8'); } finally { await handle.close(); }
     const child = spawn(process.execPath, [entry, 'library', '_shadow', specPath], { detached: true, stdio: 'ignore', windowsHide: true, env, cwd: spec.project });
     child.on('error', () => undefined);
     child.unref();
@@ -293,7 +333,7 @@ export async function runShadowWorker(spec: ShadowSpec, runner: ShadowRunner, se
   } finally {
     clearTimeout(timer);
     scope.abort();
-    await releaseSlot(spec.project, spec.slot);
+    await releaseSlot(spec.project, spec.slot === null || !spec.slot_nonce ? null : { slot: spec.slot, nonce: spec.slot_nonce });
     await removeSpool(spec.project, spoolFile(spec.project, spec.lookup_id, 'primary'));
   }
 }
