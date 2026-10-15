@@ -49,20 +49,29 @@ export function pagesSupport(quote: string, pages: Array<{ page: number; text: s
  * auditor's quote that appears, word by word, on one shadow page (or a page and the next). Null (not false)
  * when there is nothing to test: no quote, no shadow text, or the shadow is still running.
  */
-export async function computeSupports(project: string, lookupId: string, quote: string, waitMs: number, page?: number | null): Promise<Supports> {
+export async function computeSupports(project: string, lookupId: string, quote: string, waitMs: number, page?: number | null, probe?: { afterFirstSpoolRead?: () => Promise<void> }): Promise<Supports> {
   if (tokens(quote).length < limits.supports.minQuoteTokens) return { supports: null, reason: 'no_quote' };
   const rows = await rowsForLookup(project, lookupId);
   const lookup = rows.find((row): row is LookupRow => row.row_type === 'lookup');
   if (!lookup || lookup.shadow_status !== 'pending') return { supports: null, reason: 'shadow_missing' };
   const deadline = Date.now() + waitMs;
+  const judge = (spool: { too_large?: boolean; pages: Array<{ page: number; text: string }> }): Supports => {
+    if (spool.too_large || spool.pages.length === 0) return { supports: null, reason: 'shadow_missing' };
+    return pagesSupport(quote, spool.pages, page) ? { supports: true, reason: 'covered' } : { supports: false, reason: 'not_covered' };
+  };
+  const spoolPath = spoolFile(project, lookupId, 'shadow');
+  let first = true;
   for (;;) {
-    const spool = await readSpool(project, spoolFile(project, lookupId, 'shadow'));
-    if (spool) {
-      if (spool.too_large || spool.pages.length === 0) return { supports: null, reason: 'shadow_missing' };
-      return pagesSupport(quote, spool.pages, page) ? { supports: true, reason: 'covered' } : { supports: false, reason: 'not_covered' };
-    }
+    const spool = await readSpool(project, spoolPath);
+    if (first) { first = false; await probe?.afterFirstSpoolRead?.(); }
+    if (spool) return judge(spool);
     const shadow = (await rowsForLookup(project, lookupId)).find((row): row is ShadowRow => row.row_type === 'shadow');
-    if (shadow) return { supports: null, reason: 'shadow_missing' };
+    if (shadow) {
+      // The worker writes its spool before its row, so a row seen now may have been published after the spool
+      // read above: look at the spool again before deciding. Only a shadow that failed, or left no text, is missing.
+      const again = await readSpool(project, spoolPath);
+      return again ? judge(again) : { supports: null, reason: 'shadow_missing' };
+    }
     if (Date.now() >= deadline) return { supports: null, reason: 'shadow_pending' };
     await sleep(limits.shadow.pollMs);
   }

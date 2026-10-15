@@ -998,3 +998,37 @@ test('M6: quoted secrets containing escaped quotes are redacted whole', () => {
   }
   assert.match(clipError('{"password": "x\\"y-Z9", "other": 1}'), /other/);
 });
+
+// ================================================================ fourth review (medium findings)
+
+test('verdict: a shadow that publishes between the spool read and the ledger read is not recorded as missing', async () => {
+  const fx = fixture({ route: 'both' });
+  try {
+    await appendRow(fx.project, lookupFor('lk_interleave', 'pending'));
+    mkdirSync(spoolDir(fx.project), { recursive: true });
+    // Injected order: the first spool read finds nothing; then the worker publishes its spool and its row; then the ledger is read.
+    const publish = async (): Promise<void> => {
+      writeFileSync(join(spoolDir(fx.project), 'lk_interleave.shadow.json'), JSON.stringify({ lookup_id: 'lk_interleave', route: 'pageindex', ok: true, pages: [{ page: 2, text: WORDS }] }));
+      const shadow: ShadowRow = {
+        row_type: 'shadow', schema: 1, ts: new Date().toISOString(), lookup_id: 'lk_interleave', run_id: 'R1', route: 'pageindex', ok: true, book: 'lib-a', route_pages: '2', latency_ms: 5,
+        bytes: 10, chars: 10, text_sha: '0123456789abcdef', error: null, error_code: null, timed_out: false, agree: null,
+      };
+      await appendRow(fx.project, shadow);
+    };
+    const result = await computeSupports(fx.project, 'lk_interleave', WORDS, 0, undefined, { afterFirstSpoolRead: publish });
+    assert.deepEqual(result, { supports: true, reason: 'covered' });
+  } finally { fx.cleanup(); }
+});
+
+test('verdict: a shadow row whose spool never appears (it failed) is still shadow_missing', async () => {
+  const fx = fixture({ route: 'both' });
+  try {
+    await appendRow(fx.project, lookupFor('lk_failed', 'pending'));
+    const failed: ShadowRow = {
+      row_type: 'shadow', schema: 1, ts: new Date().toISOString(), lookup_id: 'lk_failed', run_id: 'R1', route: 'pageindex', ok: false, book: null, route_pages: null, latency_ms: 5,
+      bytes: 0, chars: 0, text_sha: null, error: 'boom', error_code: 'exit', timed_out: false, agree: null,
+    };
+    await appendRow(fx.project, failed);
+    assert.deepEqual(await computeSupports(fx.project, 'lk_failed', WORDS, 0), { supports: null, reason: 'shadow_missing' });
+  } finally { fx.cleanup(); }
+});

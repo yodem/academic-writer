@@ -45,7 +45,10 @@ export type Report = {
   agreement: { lookups_compared: number; pages_compared: number; pages_agreed: number; rate: Rate };
   auditor: {
     verdicts: number;
+    /** Distinct page reads that have at least one auditor verdict. */
+    lookups_with_verdict: number;
     read_lookups: number;
+    /** lookups_with_verdict over read_lookups, never above 100%. */
     verdict_coverage: Rate;
     /** For each auditor verdict, did the shadow's page text also support the claim. */
     shadow_supports_by_verdict: { PASS: Confusion; FAIL: Confusion };
@@ -141,6 +144,7 @@ export function buildReport(rows: RetrievalRow[], invalid: number, run: string |
     else bucket.unknown += 1;
   }
   const readLookups = lookups.filter((row) => row.op === 'read' || row.op === 'get');
+  const withVerdict = new Set([...verdicts.values()].map((row) => row.lookup_id).filter((id) => readLookups.some((lookup) => lookup.lookup_id === id))).size;
   const modes: Record<string, number> = {};
   for (const row of lookups) { const key = row.mode === 'both' ? `both, ${row.route_primary} answers` : row.mode; modes[key] = (modes[key] ?? 0) + 1; }
   const skipped: Record<string, number> = {};
@@ -152,7 +156,7 @@ export function buildReport(rows: RetrievalRow[], invalid: number, run: string |
     modes,
     routes,
     agreement: { lookups_compared: totals.lookups, pages_compared: totals.pages, pages_agreed: totals.agreed, rate: rate(totals.agreed, totals.pages) },
-    auditor: { verdicts: verdicts.size, read_lookups: readLookups.length, verdict_coverage: rate(verdicts.size, readLookups.length), shadow_supports_by_verdict: confusion },
+    auditor: { verdicts: verdicts.size, lookups_with_verdict: withVerdict, read_lookups: readLookups.length, verdict_coverage: rate(withVerdict, readLookups.length), shadow_supports_by_verdict: confusion },
     data_quality: {
       shadow_pending_verdicts: settled.filter((row) => row.shadow_supports_reason === 'shadow_pending').length,
       shadow_missing_verdicts: settled.filter((row) => row.shadow_supports_reason === 'shadow_missing').length,
@@ -196,7 +200,7 @@ export function formatReport(report: Report): string {
   }
   lines.push('', `Page agreement overall: ${report.agreement.pages_agreed} of ${report.agreement.pages_compared} pages (${pct(report.agreement.rate)}) over ${report.agreement.lookups_compared} lookups`);
   const confusion = report.auditor.shadow_supports_by_verdict;
-  lines.push(`Auditor verdicts recorded: ${report.auditor.verdicts} for ${report.auditor.read_lookups} page reads (${pct(report.auditor.verdict_coverage)})`);
+  lines.push(`Lookups with an auditor verdict: ${report.auditor.lookups_with_verdict} of ${report.auditor.read_lookups} page reads (${pct(report.auditor.verdict_coverage)}); ${report.auditor.verdicts} verdicts in all`);
   lines.push(`  Passed: the other library supports ${confusion.PASS.supports}, does not ${confusion.PASS.not_supports}, unknown ${confusion.PASS.unknown}`);
   lines.push(`  Failed: the other library supports ${confusion.FAIL.supports}, does not ${confusion.FAIL.not_supports}, unknown ${confusion.FAIL.unknown}`);
   const quality = report.data_quality;

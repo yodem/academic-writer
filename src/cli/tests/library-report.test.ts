@@ -110,7 +110,7 @@ test('report: auditor pass rate and shadow support by route; the last verdict ro
   const pageindex = report.routes.pageindex.auditor;
   assert.deepEqual([pageindex.verdicts, pageindex.pass_rate, pageindex.shadow_supports_rate], [1, 1, 1]);
   assert.deepEqual(report.auditor.shadow_supports_by_verdict, { PASS: { supports: 2, not_supports: 1, unknown: 1 }, FAIL: { supports: 0, not_supports: 1, unknown: 1 } });
-  assert.deepEqual([report.auditor.verdicts, report.auditor.read_lookups, report.auditor.verdict_coverage], [6, 7, 0.857]);
+  assert.deepEqual([report.auditor.verdicts, report.auditor.lookups_with_verdict, report.auditor.read_lookups, report.auditor.verdict_coverage], [6, 5, 7, 0.714]);
   assert.deepEqual([report.data_quality.shadow_pending_verdicts, report.data_quality.shadow_missing_verdicts, report.data_quality.no_quote_verdicts], [0, 1, 1]);
 });
 
@@ -125,6 +125,19 @@ test('report: the verdict with the highest ordering key stands, wherever it sits
   const report = buildReport(rows, 0);
   assert.deepEqual([report.routes.trove.auditor.verdicts, report.routes.trove.auditor.pass, report.routes.trove.auditor.fail], [2, 1, 1]);
   assert.equal(report.data_quality.shadow_pending_verdicts, 0, 'the settled row replaces the pending one at the same key');
+});
+
+test('report: coverage counts lookups with a verdict, so several verdicts on one lookup never pass 100%', () => {
+  const rows: RetrievalRow[] = [
+    lookup('C1'),
+    verdict('C1', 'P1', 'PASS', true, 'covered'),
+    verdict('C1', 'P2', 'FAIL', null, 'no_quote'),
+    verdict('C1', 'P3', 'PASS', null, 'shadow_missing'),
+  ];
+  const report = buildReport(rows, 0);
+  assert.deepEqual([report.auditor.verdicts, report.auditor.lookups_with_verdict, report.auditor.read_lookups, report.auditor.verdict_coverage], [3, 1, 1, 1]);
+  assert.match(formatReport(report), /Lookups with an auditor verdict: 1 of 1 page reads \(100%\)/);
+  assert.ok(buildReport([...rows, lookup('C2')], 0).auditor.verdict_coverage === 0.5);
 });
 
 test('report: a run filter keeps that run only, and skipped shadows are counted by reason', () => {
