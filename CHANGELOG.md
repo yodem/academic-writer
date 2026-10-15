@@ -4,6 +4,13 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Choose where an article project reads its books from.** Setup and `/academic-writer:update-tools` now ask whether to use Trove (the default and the previous behaviour), a PageIndex library you run yourself, or both, where one answers and the other is tested quietly in the background without ever changing, slowing or failing your result. The choice is saved per project in `.academic-helper/library.json`; a project without it behaves exactly as before. PageIndex stays optional: you supply the command through the new `pageindex_command` plugin setting, and nothing private ships in the plugin.
+- **A local log of every library lookup and every citation check**, in `.academic-helper/retrieval.jsonl` (figures and short messages, never uploaded), and **`aw library report`**, which compares the libraries on your real articles: agreement on page text, speed, failures and timeouts, the citation checker's pass rate, and whether the second library's page also supported each claim. See [docs/library-routes.md](docs/library-routes.md).
+
+### Changed
+- The citation check, the evidence build and the source listing in write, ideate, research and health now go through one `aw library` command instead of calling Trove directly.
+
 ## [0.16.1] — 2026-10-14
 
 ### Changed

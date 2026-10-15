@@ -65,11 +65,13 @@ Present the brainstorm:
 
 ## Step 3: Gap Analysis
 
-If Trove is enabled, scan the researcher's library:
+If the library is enabled (`"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$PWD" library status` shows `"enabled": true`), scan the researcher's library:
 
 ```bash
-trove items list --json
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$PWD" library list
 ```
+
+The JSON lists `items` with each source's `id`, `title`, `author` and `pageCount`.
 
 For each source, check its metadata against the topic:
 - What has been written about this topic in the researcher's sources?
@@ -90,7 +92,7 @@ Present the gap analysis:
 >
 > These gaps could be fertile ground for a research question."
 
-If Trove is not enabled, ask the researcher which sources they know on the topic and do the gap analysis from their answer. Never invent sources.
+If the library is not enabled, ask the researcher which sources they know on the topic and do the gap analysis from their answer. Never invent sources.
 
 ---
 

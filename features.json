@@ -594,6 +594,50 @@
           "status": "ok"
         }
       ]
+    },
+    {
+      "id": "library-routes",
+      "name": "Library routes and retrieval ledger (Trove, PageIndex or both)",
+      "sources": [
+        "src/cli/src/library/",
+        "src/schemas/library-config.schema.json",
+        "src/schemas/retrieval-row.schema.json",
+        "src/agents/auditor.md",
+        "src/cli/src/evidence.ts",
+        "src/skills/init/references/integration-setup.md",
+        "src/skills/update-tools/SKILL.md",
+        "docs/library-routes.md",
+        "tests/test_library_e2e.py"
+      ],
+      "status": "ok",
+      "subfeatures": [
+        {
+          "id": "route-choice",
+          "name": "Per-project route (trove | pageindex | both, with a choice of which answers) asked in init and update-tools, stored in .academic-helper/library.json; no file means Trove only, as before",
+          "status": "ok"
+        },
+        {
+          "id": "library-adapter",
+          "name": "aw library status|list|toc|read|get: one adapter over Trove and an optional PageIndex command (pageindex_command plugin setting), Trove page numbers as the canonical page space with printed-page mapping through sources.json pageMap",
+          "status": "ok"
+        },
+        {
+          "id": "quiet-shadow",
+          "name": "With route=both the other library runs as a detached background lookup that never changes, delays or fails the answering result (tested with a failing and a hanging fake pilib)",
+          "status": "ok"
+        },
+        {
+          "id": "retrieval-ledger",
+          "name": "Schema-validated .academic-helper/retrieval.jsonl: lookup, shadow and verdict rows (PASS/FAIL, corrected page, shadow-supports computed in code, no model call)",
+          "status": "ok"
+        },
+        {
+          "id": "library-report",
+          "name": "aw library report: page agreement, latency, failures and timeouts, auditor pass rate and second-library support by route",
+          "status": "ok",
+          "issue": "The page-agreement (0.6) and quote-support (0.8) cut-offs in thresholds.json are uncalibrated on real Hebrew pairs. Accepted risks, written up in docs/library-routes.md: the shadow worker cap is soft, and a directory swapped for a symlink between the ledger's containment check and its write is not caught."
+        }
+      ]
     }
   ]
 }
