@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "library-config.schema.json",
+  "title": "Academic Writer library route (.academic-helper/library.json)",
+  "description": "Which library answers book lookups for one article project. A missing file means Trove only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["route"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "route": {
+      "description": "trove, pageindex, or both (one answers, the other is timed quietly on the same request).",
+      "enum": ["trove", "pageindex", "both"]
+    },
+    "primary": {
+      "description": "Which library answers when route is both. Defaults to trove. With a single route it must match that route.",
+      "enum": ["trove", "pageindex"]
+    },
+    "pageindex": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "description": "How to run the PageIndex library command, as one string or a list of words (no shell). The AW_PAGEINDEX_COMMAND setting wins over this; the default is pilib.",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+          ]
+        },
+        "shelf": {
+          "description": "Path to the shelf file (books this article may use, plus an optional map from Trove ids to PageIndex books). Relative paths start at the project folder.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "shadow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "description": "Turn the quiet second lookup off without changing the route. Default true when route is both.", "type": "boolean" }
+      }
+    }
+  }
+}
