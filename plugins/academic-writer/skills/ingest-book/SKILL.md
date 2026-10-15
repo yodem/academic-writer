@@ -20,7 +20,7 @@ Throughout: preserve the ORIGINAL printed page numbers (**cite the printed page,
 
 ## Critical: the ToC is metadata, not page content
 
-ToC rule: one entry per page, "Title - hint", nested, in page order. Every page of the book is the start page of its own `Title - hint` entry, nested by level (for a reading that sits in a course book: source level 2, its sections level 3), in page order. After applying the ToC to a course's book, audit it from the plugin repository checkout (repo-local tools, not shipped in the installed plugin): `python3 tools/toc_audit.py --course <slug>`.
+ToC rule: one entry per page, "Title - hint", nested in tree order (siblings by page; lesson pages under תמלולי שיעורים). Every page of the book is the start page of its own `Title - hint` entry, nested by level (for a reading that sits in a course book: source level 2, its sections level 3), in page order. After applying the ToC to a course's book, audit it from the plugin repository checkout (repo-local tools, not shipped in the installed plugin): `python3 tools/toc_audit.py --course <slug>`.
 
 Trove's sidebar/outline is built from **ToC metadata** you attach with `ck items enrich <id> --toc '[{"title","page","level"}]'`. It is NOT built from the markdown headings inside a page. A beautiful ToC written into page 1 as `##`/`###` headings makes every entry link back to page 1 — the single most common failure here. Read `references/toc-mechanism.md` before any ToC work, and before "fixing" a flat ToC.
 

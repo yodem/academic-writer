@@ -53,7 +53,7 @@ For scanned readings, OCR with Claude vision first: render with `pdftoppm -r 150
 
 ## Table of contents rule
 
-ToC rule: one entry per page, "Title - hint", nested, in page order.
+ToC rule: one entry per page, "Title - hint", nested in tree order (siblings by page; lesson pages under תמלולי שיעורים).
 
 - Every page of a course book has its own ToC entry titled `Title - hint` (a non-empty content hint after ` - `).
 - Nesting: the course page is level 1; `תמלולי שיעורים` is level 1 with each lesson at level 2; `חומרי קריאה` is level 1, each source level 2, its sections level 3.

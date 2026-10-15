@@ -13,7 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-TOC_RULE = 'ToC rule: one entry per page, "Title - hint", nested, in page order.'
+TOC_RULE = 'ToC rule: one entry per page, "Title - hint", nested in tree order (siblings by page; lesson pages under תמלולי שיעורים).'
 LESSON_RULE = (
     "Lesson recordings: the 'תמלולי שיעורים' entry page explains the course; "
     "each lesson page ('שיעור NN · <date>') sits under it in the sidebar "

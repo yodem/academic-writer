@@ -77,7 +77,7 @@ Drop greetings, small talk, audio/Zoom trouble, jokes, banter, unsupported perso
 
 ## Append and rebuild the ToC
 
-ToC rule: one entry per page, "Title - hint", nested, in page order.
+ToC rule: one entry per page, "Title - hint", nested in tree order (siblings by page; lesson pages under תמלולי שיעורים).
 
 
 Key every step on the book's current structure (`trove items toc <book_id> --json --no-session`), never on whether this is the first lesson.
