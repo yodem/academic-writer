@@ -268,5 +268,20 @@
     "openerWords": 3,
     "repeatedOpenerMin": 3,
     "_comment": "aw synthesize: a paragraph opener (first openerWords words) used at least repeatedOpenerMin times across the article is passed to the synthesizer as a required variation (live rehearsal 2026-09-23: 7 units opened with the same phrase, 0 edits proposed)."
+  },
+  "library": {
+    "timeoutMs": {
+      "primary": 60000,
+      "check": 15000
+    },
+    "maxBufferBytes": 67108864,
+    "maxRequestPages": 5000,
+    "pageindex": {
+      "readChunkPages": 10,
+      "chunkConcurrency": 4,
+      "metaScanMax": 60,
+      "metaScanConcurrency": 4
+    },
+    "_comment": "aw library: one adapter in front of the Trove and PageIndex routes. timeoutMs.primary bounds each call to the answering route and timeoutMs.check each call of status --check. maxBufferBytes caps one command's output (a whole book). maxRequestPages caps one requested page list. pageindex.readChunkPages is pilib's per-call read cap, used only when pilib has no read --json; chunkConcurrency runs those chunks in parallel; metaScanMax is the most shelf books looked up one by one to find a Trove id (more than that needs an explicit shelf map)."
   }
 }
