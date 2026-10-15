@@ -8,6 +8,11 @@ import { LibraryError, errorMessage } from './types.ts';
 const BOOLEAN_FLAGS = new Set(['--json', '--check', '--text', '--all', '--settle']);
 const VALUE_FLAGS = new Set(['--source', '--pages', '--printed', '--page', '--run', '--claim', '--lookup', '--verdict', '--corrected-page', '--support-quote', '--paragraph']);
 
+// Ids that an agent writes into a shell command line. Anything else is refused before it is used (a defence in depth:
+// the agent single-quotes them too), so an id can never carry a command.
+const ID_FLAGS = new Set(['--source', '--lookup', '--paragraph', '--run', '--claim']);
+const PLAIN_ID = /^[A-Za-z0-9_.#:-]+$/u;
+
 type Parsed = { positional: string[]; flags: Map<string, string | true> };
 
 function parse(argv: string[]): Parsed {
@@ -19,6 +24,7 @@ function parse(argv: string[]): Parsed {
     else if (VALUE_FLAGS.has(arg)) {
       const value = argv[index + 1];
       if (value === undefined) throw new LibraryError('usage', `ERROR library: ${arg} needs a value`);
+      if (ID_FLAGS.has(arg) && !PLAIN_ID.test(value)) throw new LibraryError('usage', `ERROR library: ${arg} must be a plain id (letters, digits and . _ # : - only)`);
       flags.set(arg, value);
       index += 1;
     } else if (arg.startsWith('--')) throw new LibraryError('usage', `ERROR library: unknown option ${arg}`);

@@ -113,7 +113,7 @@ class TestAuditorRecordsVerdicts(unittest.TestCase):
         self.assertIn("library status", self.text)
 
     def test_auditor_calls_verdict_after_each_citation(self):
-        self.assertRegex(self.text, r"library verdict --lookup \"LOOKUP_ID\" --verdict (PASS|FAIL)")
+        self.assertRegex(self.text, r"library verdict --lookup 'LOOKUP_ID' --verdict (PASS|FAIL)")
         for flag in ("--support-quote", "--page", "--corrected-page", "--paragraph", "--run"):
             self.assertIn(flag, self.text)
         self.assertIn("lookup_id", self.text)
@@ -133,9 +133,24 @@ class TestAuditorRecordsVerdicts(unittest.TestCase):
         self.assertNotRegex(verdict_bullets[0], r"\brun (it|that|the)\b")
 
     def test_supporting_quote_cannot_run_as_a_command(self):
-        # The quote comes from untrusted source text: it goes through a quoted heredoc, never into the command line.
-        self.assertIn("<<'AW_QUOTE'", self.text)
+        # The quote comes from untrusted source text: one line, through a quoted heredoc with a per-call delimiter.
+        self.assertIn("<<'AW_QUOTE_END_LOOKUP_ID'", self.text)
+        self.assertEqual(len(re.findall(r"^AW_QUOTE_END_LOOKUP_ID$", self.text, re.M)), 1)
+        self.assertNotRegex(self.text, r"AW_QUOTE(?!_END_)", "no fixed delimiter a page could contain")
         self.assertIn('--support-quote "$QUOTE"', self.text)
+        lowered = self.text.lower()
+        self.assertIn("one line", lowered)
+        self.assertIn("replace every newline", lowered)
+        self.assertIn("`lookup_id` of this read", lowered)  # the delimiter is built from the lookup id, which page text cannot know
+
+    def test_ids_in_commands_are_single_quoted(self):
+        commands = [line for line in code_lines(self.text) if "library read" in line or "library verdict" in line]
+        self.assertGreaterEqual(len(commands), 2)
+        for line in commands:
+            for placeholder in ("SOURCE_ID", "PARAGRAPH_ID", "RUN_ID", "LOOKUP_ID"):
+                if placeholder in line:
+                    self.assertIn(f"'{placeholder}'", line, line)
+                    self.assertNotIn(f'"{placeholder}"', line, line)
 
     def test_untrusted_text_rule_and_unconfirmed_page_rule_survive(self):
         self.assertIn("<source_text>", self.text)

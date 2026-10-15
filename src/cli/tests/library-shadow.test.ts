@@ -991,8 +991,8 @@ test('the retry hint is single-quoted: evaluated by sh it reproduces the exact a
   try {
     mkdirSync(join(fx.project, '.academic-helper', 'retrieval.jsonl'));
     const evil = `a $(touch ${lab}/pwned1) \`touch ${lab}/pwned2\` it's "double" $HOME \\ end\nsecond line; touch ${lab}/pwned3 #`;
-    const paragraph = `P'1 $(touch ${lab}/pwned4)`;
-    const run = await cli(fx, 'verdict', '--lookup', 'lk_$(touch x)', '--verdict', 'PASS', '--page', '7', '--support-quote', evil, '--paragraph', paragraph, '--run', "run'1");
+    const paragraph = 'unit-1_p_2';
+    const run = await cli(fx, 'verdict', '--lookup', 'lk_abc123', '--verdict', 'PASS', '--page', '7', '--support-quote', evil, '--paragraph', paragraph, '--run', 'write-art-20261015-1200');
     assert.equal(run.code, 0);
     const start = run.err.indexOf('run:\n  ');
     assert.ok(start >= 0, run.err);
@@ -1006,9 +1006,28 @@ test('the retry hint is single-quoted: evaluated by sh it reproduces the exact a
     mkdirSync(work);
     const result = spawnSync('sh', ['-c', hint], { cwd: work, env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ''}` }, encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(JSON.parse(result.stdout), ['library', 'verdict', '--lookup', 'lk_$(touch x)', '--verdict', 'PASS', '--page', '7', '--support-quote', evil, '--paragraph', paragraph, '--run', "run'1"]);
+    assert.deepEqual(JSON.parse(result.stdout), ['library', 'verdict', '--lookup', 'lk_abc123', '--verdict', 'PASS', '--page', '7', '--support-quote', evil, '--paragraph', paragraph, '--run', 'write-art-20261015-1200']);
     assert.deepEqual(readdirSync(lab).sort(), ['bin', 'work'], 'nothing in the quote ran');
     assert.deepEqual(readdirSync(work), []);
+  } finally { rmSync(lab, { recursive: true, force: true }); fx.cleanup(); }
+});
+
+test('ids that reach a shell are plain: read, toc and verdict reject $(...) and backticks with a usage error', async () => {
+  const fx = fixture({ route: 'trove' });
+  const lab = mkdtempSync(join(tmpdir(), 'aw-ids-'));
+  try {
+    const bad = [`x$(touch ${lab}/p1)`, `x\`touch ${lab}/p2\``, 'a b', 'a;b', "a'b", 'a"b', 'a\nb', ''];
+    for (const value of bad) {
+      for (const argv of [['read', '--source', value, '--pages', '1'], ['read', '--source', 'T-A', '--pages', '1', '--run', value], ['read', '--source', 'T-A', '--pages', '1', '--claim', value],
+        ['toc', '--source', value], ['verdict', '--lookup', value, '--verdict', 'PASS'], ['verdict', '--lookup', 'lk_a', '--verdict', 'PASS', '--paragraph', value], ['verdict', '--lookup', 'lk_a', '--verdict', 'PASS', '--run', value]]) {
+        const result = await cli(fx, ...argv);
+        assert.equal(result.code, 2, `${argv.join(' ')} -> ${result.err}`);
+        assert.match(result.err, /plain id|letters, digits/u);
+      }
+    }
+    assert.deepEqual(readdirSync(lab), [], 'nothing ran');
+    const ok = await cli(fx, 'read', '--source', 'T-A#frag:1.a-b_c', '--pages', '1', '--run', 'write-art_2026.10-15', '--claim', 'unit-1_p_2');
+    assert.notEqual(ok.code, 2, ok.err); // a plain id is accepted (whether Trove knows it is another matter)
   } finally { rmSync(lab, { recursive: true, force: true }); fx.cleanup(); }
 });
 
