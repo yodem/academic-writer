@@ -97,13 +97,14 @@ else:
     sys.exit(2)
 '''
 
-SHADOW_TIMEOUT_MS = 6000  # the quiet second lookup is given up on after this; large so no assertion races it
+SHADOW_TIMEOUT_MS = 6000  # how long the quiet second lookup may run before it is given up on (tests that never wait for it)
 
 
 class Project:
     """A temp research project plus the fake commands, and the way to run the built aw against it."""
 
-    def __init__(self, root: pathlib.Path, pilib_mode: str = "ok", library: dict | None = None, with_shelf: bool = True):
+    def __init__(self, root: pathlib.Path, pilib_mode: str = "ok", library: dict | None = None, with_shelf: bool = True,
+                 shadow_timeout_ms: int = SHADOW_TIMEOUT_MS):
         self.root = root
         self.project = root / "project"
         self.data = root / "data"
@@ -128,7 +129,7 @@ class Project:
             **{k: v for k, v in os.environ.items() if not k.startswith("AW_")},
             "AW_TROVE_COMMAND": str(self.trove),
             "AW_PAGEINDEX_COMMAND": str(self.pilib),
-            "AW_LIBRARY_SHADOW_TIMEOUT_MS": str(SHADOW_TIMEOUT_MS),
+            "AW_LIBRARY_SHADOW_TIMEOUT_MS": str(shadow_timeout_ms),
             "FAKE_LOG": str(self.log),
         }
 
@@ -397,9 +398,13 @@ def test_failing_shadow_leaves_primary_output_identical_and_report_shows_the_err
     p.wait_for("no leftover processes", lambda: not p.leftovers(), timeout=10)
 
 
-def test_hanging_shadow_never_delays_the_primary_and_the_report_shows_a_timeout(make_project):
+def test_hanging_shadow_never_delays_the_primary_and_a_killed_shadow_is_recorded(make_project):
+    """Timeout behaviour itself (the worker giving up and killing its command at the limit) is covered by the
+    unit tests in src/cli/tests/library-shadow.test.ts (H1). Here the limit is set far above any scheduling delay
+    so nothing in this test races it, and the TEST ends the hang by killing the blocked fake pilib."""
     baseline = _baseline_read(make_project)
-    p = make_project(pilib_mode="hang", library={"route": "both", "pageindex": {"shelf": "shelf.json"}})
+    p = make_project(pilib_mode="hang", shadow_timeout_ms=120_000,
+                     library={"route": "both", "pageindex": {"shelf": "shelf.json"}})
 
     # The primary command runs to completion (aw_json asserts exit 0 and parses its output) with the right answer.
     read = p.aw_json("library", "read", "--source", "T-A", "--pages", "2-4", "--run", "hang-run")
@@ -411,19 +416,22 @@ def test_hanging_shadow_never_delays_the_primary_and_the_report_shows_a_timeout(
     p.wait_for("the fake pilib to start", p.started_pid)
     pilib_pid = p.started_pid()
     assert pilib_pid is not None and alive(pilib_pid), "the hanging pilib must still be blocked after the primary returned"
+    assert p.shadow_row(read["lookup_id"]) is None, "a blocked shadow has recorded nothing yet"
 
-    # Later, the shadow gives up on its own time limit: a ledger row, not a failure of the lookup.
-    shadow = p.wait_for("the timed-out shadow row", lambda: p.shadow_row(read["lookup_id"]), timeout=60)
-    assert shadow["ok"] is False and shadow["timed_out"] is True
+    # End the hang from the test: the quiet lookup then fails, and the ledger says so without touching the primary.
+    group = os.getpgid(pilib_pid)
+    os.killpg(group, signal.SIGKILL) if group != os.getpgrp() else os.kill(pilib_pid, signal.SIGKILL)
+    shadow = p.wait_for("the failed shadow row", lambda: p.shadow_row(read["lookup_id"]), timeout=60)
+    assert shadow["ok"] is False and shadow["timed_out"] is False and shadow["error"]
     assert_rows_valid(p)
 
     report = p.aw_json("library", "report", "--json")
     assert report["routes"]["trove"]["errors"] == 0
-    assert report["routes"]["pageindex"]["shadow_timeouts"] == 1
-    assert "1 timed out" in p.aw("library", "report").stdout
-    # The timed-out worker took its blocked pilib down with it.
-    p.wait_for("the blocked pilib to be stopped", lambda: not alive(pilib_pid), timeout=30)
-    p.wait_for("no leftover processes", lambda: not p.leftovers(), timeout=30)
+    assert report["routes"]["pageindex"]["shadow_errors"] == 1
+    assert report["routes"]["pageindex"]["shadow_timeouts"] == 0
+    assert "1 failed, 0 timed out" in p.aw("library", "report").stdout
+    p.wait_for("the killed pilib to be gone", lambda: not alive(pilib_pid), timeout=30)
+    assert p.kill_leftovers() == []
 
 
 # ---------------------------------------------------------------------------------------------------------
