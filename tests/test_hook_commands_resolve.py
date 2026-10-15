@@ -4,7 +4,7 @@ Regression (2026-09-23): quoting "${CLAUDE_PLUGIN_ROOT}/hooks/bin/run-hook.mjs l
 shell word made node look for a file named "run-hook.mjs lifecycle/x"; every hook died with
 MODULE_NOT_FOUND and no structural test noticed.
 """
-import json, os, pathlib, subprocess, tempfile
+import json, os, pathlib, shutil, subprocess, tempfile
 ROOT = pathlib.Path(__file__).parent.parent
 PLUGIN = ROOT / "plugins/academic-writer"
 
@@ -27,22 +27,47 @@ def test_every_hook_command_resolves_its_script():
             assert "MODULE_NOT_FOUND" not in p.stderr and "Cannot find module" not in p.stderr, (event, cmd, p.stderr[-400:])
 
 
+SRC_HOOKS = ROOT / "src/hooks"
+
+
 def _session_env_command():
-    return next(c for e, c in _commands() if e == "SessionStart" and "lifecycle/session-env" in c)
+    hooks = json.loads((SRC_HOOKS / "hooks.json").read_text())["hooks"]
+    return next(
+        h["command"] for g in hooks["SessionStart"] for h in g["hooks"] if "lifecycle/session-env" in h.get("command", "")
+    )
+
+
+def _build_plugin_root(tmp):
+    """A throwaway plugin root with the CURRENT src/hooks bundle (never touches plugins/)."""
+    esbuild = SRC_HOOKS / "node_modules/.bin/esbuild"
+    if not esbuild.exists():
+        esbuild = ROOT / "node_modules/.bin/esbuild"
+    assert esbuild.exists(), "esbuild not installed: run npm ci in src/hooks"
+    root = pathlib.Path(tmp) / "plugin"
+    (root / "hooks/dist").mkdir(parents=True)
+    shutil.copytree(SRC_HOOKS / "bin", root / "hooks/bin")
+    subprocess.run(
+        [str(esbuild), "src/entries/lifecycle.ts", "--bundle", "--format=esm", "--platform=node", "--target=node20",
+         f"--outfile={root / 'hooks/dist/lifecycle.mjs'}", "--log-level=error"],
+        cwd=SRC_HOOKS, check=True, timeout=60,
+    )
+    return root
 
 
 def _run_session_env(value, extra_env=None):
-    """Run the real SessionStart session-env command as a shell would, then source the env file it wrote."""
+    """Run the real SessionStart session-env command from src/hooks/hooks.json as a shell would, then source the env file it wrote."""
     cmd = _session_env_command()
     # Claude Code substitutes the two key placeholders itself; leave them empty here.
     cmd = cmd.replace("${user_config.google_api_key}", "").replace("${user_config.jev_api_key}", "")
-    with tempfile.TemporaryDirectory() as project:
-        (pathlib.Path(project) / ".academic-helper").mkdir()
-        (pathlib.Path(project) / ".academic-helper/profile.md").write_text("profile")
-        env_file = pathlib.Path(project) / "claude.env"
+    with tempfile.TemporaryDirectory() as tmp:
+        plugin_root = _build_plugin_root(tmp)
+        project = pathlib.Path(tmp) / "project"
+        (project / ".academic-helper").mkdir(parents=True)
+        (project / ".academic-helper/profile.md").write_text("profile")
+        env_file = pathlib.Path(tmp) / "claude.env"
         env_file.write_text("")
         env = {k: v for k, v in os.environ.items() if "PAGEINDEX" not in k}
-        env.update({"CLAUDE_PLUGIN_ROOT": str(PLUGIN), "CLAUDE_PROJECT_DIR": project, "CLAUDE_ENV_FILE": str(env_file)})
+        env.update({"CLAUDE_PLUGIN_ROOT": str(plugin_root), "CLAUDE_PROJECT_DIR": str(project), "CLAUDE_ENV_FILE": str(env_file)})
         env.update(extra_env if extra_env is not None else {"CLAUDE_PLUGIN_OPTION_PAGEINDEX_COMMAND": value})
         p = subprocess.run(["sh", "-c", cmd], input="{}", capture_output=True, text=True, env=env, cwd=project, timeout=30)
         assert p.returncode == 0, p.stderr[-400:]
