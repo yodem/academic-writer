@@ -78,7 +78,8 @@ Offer this after the tool changes, or on its own when the author asks to switch 
 otherwise explain in one sentence how to set it up and keep Trove. Read the current
 `.academic-helper/library.json` first and show the current choice. Questions, detection and file format:
 `${CLAUDE_PLUGIN_ROOT}/skills/init/references/integration-setup.md` (section "Library route").
-Never install anything for this step. This step does not touch `profile.md`.
+When the current route includes PageIndex but it cannot be reached, ask whether to switch this
+article to Trove ("Keep it as it is" is the default and changes nothing). Never install anything for this step. This step does not touch `profile.md`.
 
 ## Save Updated Profile
 

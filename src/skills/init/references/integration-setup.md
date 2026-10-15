@@ -69,7 +69,21 @@ PY
 
 ### Ask
 
-**An existing `library.json` is never overwritten without asking.** When `CURRENT_ROUTE` is not `none`, tell the researcher the current choice in plain words and ask whether to change it; the current choice comes first in the options and its description starts with "(current)". Write only after they pick a different route. If they keep it, write nothing. If the current route includes PageIndex but detection says it is not configured, do not ask and do not change the file: say PageIndex is not reachable right now and point to the "PageIndex" entries in `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/troubleshooting.md`.
+**An existing `library.json` is never overwritten without asking.** When `CURRENT_ROUTE` is not `none`, tell the researcher the current choice in plain words and ask whether to change it; the current choice comes first in the options and its description starts with "(current)". Write only after they pick a different route. If they keep it, write nothing. If the current route includes PageIndex but detection says it is not configured, say in plain words that PageIndex is not reachable right now and ask:
+
+```python
+AskUserQuestion(questions=[{
+  "question": "Your article is set to read from PageIndex, but I can't reach it right now. Switch this article to Trove for now?",
+  "header": "Library",
+  "options": [
+    {"label": "Keep it as it is", "description": "(current) Nothing changes. See the PageIndex entries in the troubleshooting list to get it working again."},
+    {"label": "Switch to Trove", "description": "Your books are read from Trove, as before. You can pick PageIndex again later."}
+  ],
+  "multiSelect": false
+}])
+```
+
+"Keep it as it is" is the default: leave the file unchanged unless the researcher explicitly picks "Switch to Trove" (then write `{ "route": "trove" }`, keeping the other keys). Either way, point to the "PageIndex" entries in `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/troubleshooting.md`.
 
 **PageIndex not configured** (and no existing route to keep): do not offer it. Say, in one sentence: "Your books will be read from Trove; if you keep a PageIndex library on your own server you can add it later in `/plugin` → academic-writer → Configure (the `pageindex_command` setting), then run `/academic-writer:update-tools`." Use route `trove`, and write it only when there is no `library.json` yet.
 

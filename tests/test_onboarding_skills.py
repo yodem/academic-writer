@@ -235,7 +235,16 @@ def test_library_route_detection_honours_an_existing_library_json_and_never_over
     ask = section.split("### Ask")[1].split("### Write")[0]
     assert "never overwritten without asking" in ask
     assert "(current)" in ask and "write nothing" in ask
-    assert "do not ask and do not change the file" in ask  # route includes PageIndex but it is unreachable
+    # a PageIndex route that cannot be reached still offers the way out: switch to Trove, keep is the default
+    unreachable = ask.split("includes PageIndex but detection says it is not configured")[1].split("**PageIndex not configured**")[0]
+    assert "AskUserQuestion" in unreachable and "Switch this article to Trove" in unreachable
+    assert '"label": "Keep it as it is"' in unreachable and '"label": "Switch to Trove"' in unreachable
+    assert unreachable.index('"Keep it as it is"') < unreachable.index('"Switch to Trove"')  # keep listed first
+    assert '"Keep it as it is" is the default' in unreachable and "unless the researcher explicitly picks" in unreachable
+    assert "do not change the file" not in ask
+    trouble = (SKILLS / "setup" / "references" / "troubleshooting.md").read_text(encoding="utf-8")
+    assert "Switch to Trove" in trouble and "Keep it as it is" in trouble
+    assert "Keep it as it is" in _text("update-tools") and "switch this" in _text("update-tools")
     assert "only when there is no `library.json` yet" in ask
 
 

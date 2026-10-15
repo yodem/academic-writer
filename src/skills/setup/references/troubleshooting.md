@@ -36,7 +36,7 @@ These apply only to projects whose `.academic-helper/library.json` has `"route":
   `pageindex_command` is filled in (no quotation marks) or `pilib` works in your terminal; the
   computer or server that hosts the library is on and you can reach it; then start a new Claude
   Code session. `AW_PAGEINDEX_COMMAND`, when set, wins over the command in `library.json`. If you
-  cannot fix it now, run `/academic-writer:update-tools` and choose Trove, or write
+  cannot fix it now, run `/academic-writer:update-tools`, which asks whether to switch this article to Trove (answer "Switch to Trove"; "Keep it as it is" changes nothing), or write
   `{ "route": "trove" }` in `.academic-helper/library.json`; your articles read from Trove as before.
 - **Wrong book list**: with PageIndex answering, the list shows the PageIndex library's books,
   narrowed to the shelf file named by `pageindex.shelf` in `library.json` when there is one
