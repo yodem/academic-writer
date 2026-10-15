@@ -115,3 +115,17 @@ def test_apply_refuses_version_change_and_applies_when_ok():
     assert code == 1 and not calls
     code, msg = tr.apply_plan("b", toc, 1, 5, 1, run=run, version_fn=lambda b: 5)
     assert code == 0 and calls and "enrich" in calls[0][0]
+
+
+def test_registered_sources_nest_under_readings():
+    pages = {1: "# Course · X\n\n> Load this page when: o.\n", 2: "# חומרי קריאה\n\n> Load this page when: s.\n",
+             3: "# Syllabus · details\n\n> Load this page when: d.\n", 4: "# Syllabus · grades\n\n> Load this page when: g.\n",
+             5: "# Baumgarten notes\n\n> Load this page when: b.\n"}
+    existing = [{"title": f"E{p} - h", "page": p, "level": 1} for p in range(1, 6)]
+    plan = tr.build_plan(5, existing, lambda p: pages[p], sources=[
+        {"title": "Syllabus", "page": 3}, {"title": "Baumgarten - Poetry", "page": None}],
+        overrides={5: {"title": "Baumgarten - Poetry"}})
+    toc = plan["toc"]
+    assert [e["level"] for e in toc] == [1, 1, 2, 3, 2]
+    assert toc[2]["title"].startswith("Syllabus - ") and toc[4]["title"].startswith("Baumgarten - Poetry - ")
+    assert audit_toc(toc, 5)["ok"]
