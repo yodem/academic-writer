@@ -1,0 +1,149 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "retrieval-row.schema.json",
+  "title": "Academic Writer retrieval ledger row (.academic-helper/retrieval.jsonl)",
+  "description": "One line per event: a lookup (the answering route), a shadow (the quiet second route, joined on lookup_id) or a verdict (the auditor's call on one citation). Metadata only: ids, pages, sizes, hashes. No source text.",
+  "oneOf": [
+    { "$ref": "#/definitions/lookup" },
+    { "$ref": "#/definitions/shadow" },
+    { "$ref": "#/definitions/verdict" }
+  ],
+  "definitions": {
+    "route": { "enum": ["trove", "pageindex"] },
+    "mode": { "enum": ["trove", "pageindex", "both"] },
+    "ts": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T" },
+    "id": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "nullableId": { "type": ["string", "null"], "maxLength": 200 },
+    "pages": { "type": ["string", "null"], "maxLength": 400 },
+    "count": { "type": "integer", "minimum": 0 },
+    "sha": { "type": ["string", "null"], "pattern": "^[0-9a-f]{16}$" },
+    "error": { "type": ["string", "null"], "maxLength": 400 },
+    "routeCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route", "ok", "route_pages", "latency_ms", "bytes", "chars", "text_sha", "error", "error_code"],
+      "properties": {
+        "route": { "$ref": "#/definitions/route" },
+        "ok": { "type": "boolean" },
+        "route_pages": { "$ref": "#/definitions/pages" },
+        "latency_ms": { "$ref": "#/definitions/count" },
+        "bytes": { "$ref": "#/definitions/count" },
+        "chars": { "$ref": "#/definitions/count" },
+        "text_sha": { "$ref": "#/definitions/sha" },
+        "error": { "$ref": "#/definitions/error" },
+        "error_code": { "type": ["string", "null"], "maxLength": 40 }
+      }
+    },
+    "agreement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rate", "compared", "agreed", "pages"],
+      "properties": {
+        "rate": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "compared": { "$ref": "#/definitions/count" },
+        "agreed": { "$ref": "#/definitions/count" },
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["page", "jaccard", "agree"],
+            "properties": {
+              "page": { "type": "integer", "minimum": 1 },
+              "jaccard": { "type": "number", "minimum": 0, "maximum": 1 },
+              "agree": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "lookup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["row_type", "schema", "ts", "lookup_id", "run_id", "claim_id", "op", "source_id", "mode", "route_primary", "book_by_route", "request", "primary", "shadow_status"],
+      "properties": {
+        "row_type": { "const": "lookup" },
+        "schema": { "const": 1 },
+        "ts": { "$ref": "#/definitions/ts" },
+        "lookup_id": { "$ref": "#/definitions/id" },
+        "run_id": { "$ref": "#/definitions/nullableId" },
+        "claim_id": { "$ref": "#/definitions/nullableId" },
+        "op": { "enum": ["list", "toc", "read", "get"] },
+        "source_id": { "$ref": "#/definitions/nullableId" },
+        "mode": { "$ref": "#/definitions/mode" },
+        "route_primary": { "$ref": "#/definitions/route" },
+        "book_by_route": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["trove", "pageindex"],
+          "properties": {
+            "trove": { "$ref": "#/definitions/nullableId" },
+            "pageindex": { "$ref": "#/definitions/nullableId" }
+          }
+        },
+        "request": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["printed", "trove_pages"],
+          "properties": {
+            "printed": { "$ref": "#/definitions/pages" },
+            "trove_pages": { "$ref": "#/definitions/pages" }
+          }
+        },
+        "primary": { "$ref": "#/definitions/routeCall" },
+        "shadow_status": {
+          "description": "none (single route), disabled (both, shadow off), pending (shadow started), skipped:<why>.",
+          "type": "string",
+          "pattern": "^(none|disabled|pending|skipped:[a-z_]+)$"
+        }
+      }
+    },
+    "shadow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["row_type", "schema", "ts", "lookup_id", "run_id", "route", "ok", "book", "route_pages", "latency_ms", "bytes", "chars", "text_sha", "error", "error_code", "timed_out", "agree"],
+      "properties": {
+        "row_type": { "const": "shadow" },
+        "schema": { "const": 1 },
+        "ts": { "$ref": "#/definitions/ts" },
+        "lookup_id": { "$ref": "#/definitions/id" },
+        "run_id": { "$ref": "#/definitions/nullableId" },
+        "route": { "$ref": "#/definitions/route" },
+        "ok": { "type": "boolean" },
+        "book": { "$ref": "#/definitions/nullableId" },
+        "route_pages": { "$ref": "#/definitions/pages" },
+        "latency_ms": { "$ref": "#/definitions/count" },
+        "bytes": { "$ref": "#/definitions/count" },
+        "chars": { "$ref": "#/definitions/count" },
+        "text_sha": { "$ref": "#/definitions/sha" },
+        "error": { "$ref": "#/definitions/error" },
+        "error_code": { "type": ["string", "null"], "maxLength": 40 },
+        "timed_out": { "type": "boolean" },
+        "agree": {
+          "description": "Page by page word overlap with the answering route's text (read lookups only; null when it could not be compared).",
+          "oneOf": [{ "type": "null" }, { "$ref": "#/definitions/agreement" }]
+        }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["row_type", "schema", "ts", "lookup_id", "run_id", "paragraph_id", "verdict", "corrected_page", "shadow_supports", "shadow_supports_reason", "primary_route", "mode"],
+      "properties": {
+        "row_type": { "const": "verdict" },
+        "schema": { "const": 1 },
+        "ts": { "$ref": "#/definitions/ts" },
+        "lookup_id": { "$ref": "#/definitions/id" },
+        "run_id": { "$ref": "#/definitions/nullableId" },
+        "paragraph_id": { "$ref": "#/definitions/nullableId" },
+        "verdict": { "enum": ["PASS", "FAIL"] },
+        "corrected_page": { "type": ["integer", "null"], "minimum": 1 },
+        "shadow_supports": { "type": ["boolean", "null"] },
+        "shadow_supports_reason": { "enum": ["covered", "not_covered", "no_quote", "shadow_missing", "shadow_pending"] },
+        "primary_route": { "oneOf": [{ "type": "null" }, { "$ref": "#/definitions/route" }] },
+        "mode": { "oneOf": [{ "type": "null" }, { "$ref": "#/definitions/mode" }] },
+        "settled": { "type": "boolean" }
+      }
+    }
+  }
+}

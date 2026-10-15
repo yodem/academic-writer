@@ -1,9 +1,18 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { LibraryError } from './types.ts';
 
 export type RunOptions = { timeoutMs: number; maxBuffer: number; env?: NodeJS.ProcessEnv; cwd?: string };
 
 const STDERR_KEEP = 8192;
+
+// Commands still running, so a worker that gives up at its deadline can stop them instead of orphaning them.
+const live = new Set<ChildProcess>();
+export function killLiveCommands(): void {
+  for (const child of live) {
+    try { if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, 'SIGKILL'); else child.kill('SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch { /* already gone */ } }
+  }
+  live.clear();
+}
 
 /**
  * Run `command` (a word list, never a shell string) with `args` and return its stdout.
@@ -21,12 +30,14 @@ export function runCommand(command: string[], args: string[], options: RunOption
     let stderr = '';
     const posix = process.platform !== 'win32';
     const child = spawn(file, [...prefix, ...args], { stdio: ['ignore', 'pipe', 'pipe'], env: options.env, cwd: options.cwd, detached: posix, windowsHide: true });
+    live.add(child);
     const killTree = (): void => {
       try { if (posix && child.pid) process.kill(-child.pid, 'SIGKILL'); else child.kill('SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch { /* already gone */ } }
     };
     const finish = (fn: () => void): void => {
       if (settled) return;
       settled = true;
+      live.delete(child);
       clearTimeout(timer);
       fn();
     };
