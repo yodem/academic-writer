@@ -53,7 +53,9 @@ export type RouteResult = {
 export interface ShadowRunner { runShadow(spec: ShadowSpec): Promise<RouteResult> }
 
 export type ShadowHandle = { status: string; settle: () => Promise<void> };
-const idle = (status: string): ShadowHandle => ({ status, settle: async () => undefined });
+/** A shadow that did not start (or is not wanted); `status` says why. */
+export const noShadow = (status: string): ShadowHandle => ({ status, settle: async () => undefined });
+const idle = noShadow;
 
 /** killLive: the worker owns its whole process, so at the deadline it may stop every command still running. */
 export type WorkerSettings = { timeoutMs: number; primaryWaitMs: number; killLive: boolean };
@@ -105,14 +107,14 @@ export async function startShadow(spec: ShadowSpec, mode: ShadowMode, env: NodeJ
     if (!(await hasProjectFolder(spec.project))) return idle('skipped:no_project_dir');
     if (mode === 'inline') return { status: 'pending', settle: () => runShadowWorker(spec, runner, workerSettings(env)) };
     if (await liveWorkers(spec.project) >= limits.shadow.maxConcurrent) return idle('skipped:busy');
-    const entry = process.argv[1];
+    const entry = process.argv[1] ? resolve(process.argv[1]) : undefined;
     if (!entry) return idle('skipped:spawn_failed');
     const specPath = join(retrievalDir(spec.project), `spec-${spec.lookup_id}.json`);
     try {
       await mkdir(activeDir(spec.project), { recursive: true });
       await writeFile(specPath, JSON.stringify(spec), 'utf8');
       await writeFile(lockFile(spec.project, spec.lookup_id), '', 'utf8');
-      const child = spawn(process.execPath, [entry, 'library', '_shadow', specPath], { detached: true, stdio: 'ignore', windowsHide: true, env });
+      const child = spawn(process.execPath, [entry, 'library', '_shadow', specPath], { detached: true, stdio: 'ignore', windowsHide: true, env, cwd: spec.project });
       child.on('error', () => undefined);
       child.unref();
     } catch (error) {
