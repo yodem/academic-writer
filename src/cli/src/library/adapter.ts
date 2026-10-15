@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import thresholds from '../../../thresholds.json' with { type: 'json' };
 import { PageIndexBackend, TroveBackend } from './backends.ts';
 import { loadLibraryConfig, profileTroveEnabled, type LibraryConfig } from './config.ts';
-import { formatPageRanges, parsePageSpec, printedToTrove, relabelPages, routeToTrovePage, troveToRoutePages, type RoutePages } from './pages.ts';
+import { formatPageRanges, parsePageSpec, printedToTrove, relabelPages, routeToTrovePage, splitComplete, troveToRoutePages, type RoutePages } from './pages.ts';
 import { findSource, loadShelf, stripFragment, type Shelf } from './registry.ts';
 import { LibraryError, errorMessage, type BookInfo, type LibraryBackend, type RouteName, type TocEntry } from './types.ts';
 
@@ -49,8 +49,8 @@ export class Library {
 
   /** AW_LIBRARY_TIMEOUT_MS replaces every timeout (test and troubleshooting seam; the defaults live in thresholds.json). */
   private readonly override: number | undefined;
-  private makeTrove(timeoutMs: number): TroveBackend { return new TroveBackend({ command: this.config.troveCommand, env: this.env, timeoutMs }); }
-  private makePageIndex(timeoutMs: number): PageIndexBackend { return new PageIndexBackend({ command: this.config.pageindexCommand, env: this.env, timeoutMs }); }
+  private makeTrove(timeoutMs: number): TroveBackend { return new TroveBackend({ command: this.config.troveCommand, env: this.env, timeoutMs, cwd: this.project }); }
+  private makePageIndex(timeoutMs: number): PageIndexBackend { return new PageIndexBackend({ command: this.config.pageindexCommand, env: this.env, timeoutMs, cwd: this.project }); }
 
   private get shelf(): Shelf {
     this.shelfCache ??= loadShelf(this.config.shelfPath);
@@ -162,11 +162,17 @@ export class Library {
     }
     const backend = this.backend(route);
     const raw = routeWanted === 'all' || routeWanted.length > 0 ? await backend.read(book, routeWanted) : { pages: [] };
-    const canonical = relabelPages(raw.pages, routePages);
+    const split = splitComplete(relabelPages(raw.pages, routePages), routePages);
+    const canonical = split.complete;
     if (!wantedAll) {
       const have = new Set(canonical.map((page) => page.page));
       missing = [...new Set([...missing, ...(wanted as number[]).filter((page) => !have.has(page))])].sort((a, b) => a - b);
       if (canonical.length === 0) throw new LibraryError('page_missing', `ERROR library read: ${route} has none of the requested pages of ${source} (missing ${missing.join(',')})`);
+    }
+    // A whole-book read has no requested list: every canonical page the book's pagemap has must be whole.
+    if (wantedAll && routePages.kind === 'pagemap') {
+      const have = new Set(canonical.map((page) => page.page));
+      missing = [...new Set(routePages.pdfToTrove)].filter((page) => !have.has(page)).sort((a, b) => a - b);
     }
     const title = raw.title ?? await backend.title(book);
     const chars = canonical.reduce((sum, page) => sum + page.text.length, 0);

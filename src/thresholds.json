@@ -276,12 +276,13 @@
     },
     "maxBufferBytes": 67108864,
     "maxRequestPages": 5000,
+    "maxPageNumber": 100000,
     "pageindex": {
       "readChunkPages": 10,
       "chunkConcurrency": 4,
       "metaScanMax": 60,
       "metaScanConcurrency": 4
     },
-    "_comment": "aw library: one adapter in front of the Trove and PageIndex routes. timeoutMs.primary bounds each call to the answering route and timeoutMs.check each call of status --check. maxBufferBytes caps one command's output (a whole book). maxRequestPages caps one requested page list. pageindex.readChunkPages is pilib's per-call read cap, used only when pilib has no read --json; chunkConcurrency runs those chunks in parallel; metaScanMax is the most shelf books looked up one by one to find a Trove id (more than that needs an explicit shelf map)."
+    "_comment": "aw library: one adapter in front of the Trove and PageIndex routes. timeoutMs.primary bounds each call to the answering route and timeoutMs.check each call of status --check. maxBufferBytes caps one command's output (a whole book). maxRequestPages caps one requested page list. maxPageNumber is the highest page number a request may name. pageindex.readChunkPages is pilib's per-call read cap, used only when pilib has no read --json; chunkConcurrency runs those chunks in parallel; metaScanMax is the most shelf books looked up one by one to find a Trove id (more than that needs an explicit shelf map)."
   }
 }
