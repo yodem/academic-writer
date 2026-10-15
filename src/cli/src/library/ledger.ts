@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, readFile, readdir, realpath, rename, rm, stat } from 'node:fs/promises';
 import { basename, dirname, join, sep } from 'node:path';
@@ -6,7 +6,7 @@ import retrievalSchema from '../../../schemas/retrieval-row.schema.json' with { 
 import thresholds from '../../../thresholds.json' with { type: 'json' };
 import { checkSchema, type JsonSchema } from './jsonschema.ts';
 import { redact } from './redact.ts';
-import { LibraryError, type RouteMode, type RouteName } from './types.ts';
+import type { RouteMode, RouteName } from './types.ts';
 
 const limits = thresholds.library;
 
@@ -80,8 +80,10 @@ export type VerdictRow = {
   lookup_id: string;
   run_id: string | null;
   paragraph_id: string | null;
-  /** 1, 2, ... per (lookup, citation): the newest verdict is the highest number, whatever the order of the lines. */
-  seq: number;
+  /** When `aw library verdict` was invoked (epoch nanoseconds, as a string). With `pid` and `nonce` it orders the verdicts of one citation. */
+  verdict_at: string;
+  pid: number;
+  nonce: string;
   verdict: 'PASS' | 'FAIL';
   corrected_page: number | null;
   shadow_supports: boolean | null;
@@ -92,6 +94,20 @@ export type VerdictRow = {
 };
 
 export type RetrievalRow = LookupRow | ShadowRow | VerdictRow;
+
+/**
+ * Order two verdicts of one citation: by the time `aw library verdict` was invoked, then pid, then nonce.
+ * The ledger needs no lock for this: each row carries its own key, so rows may be appended in any order
+ * (several processes, a late settle) and the newest verdict is still the one with the highest key.
+ * Positive when `a` is newer than `b`.
+ */
+export function compareVerdictKeys(a: Pick<VerdictRow, 'verdict_at' | 'pid' | 'nonce'>, b: Pick<VerdictRow, 'verdict_at' | 'pid' | 'nonce'>): number {
+  const left = BigInt(a.verdict_at);
+  const right = BigInt(b.verdict_at);
+  if (left !== right) return left > right ? 1 : -1;
+  if (a.pid !== b.pid) return a.pid > b.pid ? 1 : -1;
+  return a.nonce === b.nonce ? 0 : (a.nonce > b.nonce ? 1 : -1);
+}
 
 export function nowIso(): string { return new Date().toISOString(); }
 
@@ -136,67 +152,6 @@ export async function containedDir(project: string, segments: string[], create =
 // refused and this race is documented rather than closed with descriptor-relative paths.
 /** Whether `project` is an article project (has a real `.academic-helper/` inside it); the ledger never makes that folder. */
 export async function hasProjectFolder(project: string): Promise<boolean> { return (await containedDir(project, [])) !== null; }
-
-// ---------------------------------------------------------------- a short lock for read-then-append steps
-
-type LockToken = { pid: number; nonce: string; ts: string };
-
-function pidAlive(pid: number): boolean {
-  try { process.kill(pid, 0); return true; } catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM'; }
-}
-
-async function readLock(file: string): Promise<LockToken | null> {
-  try {
-    const parsed = JSON.parse(await readFile(file, 'utf8')) as Partial<LockToken>;
-    return typeof parsed.pid === 'number' && typeof parsed.nonce === 'string' ? { pid: parsed.pid, nonce: parsed.nonce, ts: String(parsed.ts ?? '') } : null;
-  } catch { return null; }
-}
-
-/**
- * Run `work` while holding the ledger's short lock (`retrieval/verdict.lock`, made with an exclusive create
- * that writes the holder's pid and a random nonce). It makes "read the highest sequence number, then append"
- * one step even with several `aw` processes at once. The work NEVER runs without the lock: if the lock cannot
- * be taken within ledger.lockWaitMs (AW_LIBRARY_LOCK_WAIT_MS overrides it for tests and troubleshooting) this
- * throws a `lock` error and nothing has been done. A lock is taken over only when its recorded holder pid is
- * dead (the nonce is re-read before unlinking); a live holder is waited for however old the lock is, and age
- * only matters for a lock file that never got a readable token, which has no holder to ask. Release removes
- * the lock only if it still holds the caller's nonce.
- */
-export async function withLedgerLock<T>(project: string, work: () => Promise<T>, waitMs?: number): Promise<T> {
-  const dir = await containedDir(project, ['retrieval'], true);
-  if (!dir) return work(); // no usable project folder: there is no ledger to protect
-  const file = join(dir, 'verdict.lock');
-  const nonce = randomBytes(12).toString('hex');
-  const fromEnv = Number(process.env.AW_LIBRARY_LOCK_WAIT_MS);
-  const wait = waitMs ?? (Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : limits.ledger.lockWaitMs);
-  const deadline = Date.now() + wait;
-  let held = false;
-  while (!held) {
-    try {
-      const handle = await open(file, 'wx', 0o644);
-      try { await handle.writeFile(JSON.stringify({ pid: process.pid, nonce, ts: nowIso() } satisfies LockToken), 'utf8'); } finally { await handle.close(); }
-      held = true;
-      break;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw new LibraryError('lock', `ERROR library: the ledger lock could not be taken (${error instanceof Error ? error.message : String(error)})`);
-    }
-    try {
-      const judged = await readLock(file);
-      const unreadableTooLong = judged === null && Date.now() - (await stat(file)).mtimeMs > limits.ledger.lockStaleMs;
-      if ((judged !== null && !pidAlive(judged.pid)) || unreadableTooLong) {
-        // Re-read before unlinking: if the lock changed hands meanwhile, it is not ours to remove.
-        const current = await readLock(file);
-        if (judged === null ? current === null : current?.nonce === judged.nonce) await rm(file, { force: true });
-        continue;
-      }
-    } catch { continue; }
-    if (Date.now() >= deadline) throw new LibraryError('lock', 'ERROR library: the ledger is busy (another aw command holds its lock); nothing was recorded');
-    await new Promise<void>((resolveWait) => { setTimeout(resolveWait, limits.ledger.lockPollMs); });
-  }
-  try { return await work(); } finally {
-    if ((await readLock(file))?.nonce === nonce) await rm(file, { force: true });
-  }
-}
 
 export type AppendResult = { ok: true } | { ok: false; reason: string };
 

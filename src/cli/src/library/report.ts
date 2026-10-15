@@ -1,5 +1,5 @@
 import thresholds from '../../../thresholds.json' with { type: 'json' };
-import { readRows, type LookupRow, type RetrievalRow, type ShadowRow, type VerdictRow } from './ledger.ts';
+import { compareVerdictKeys, readRows, type LookupRow, type RetrievalRow, type ShadowRow, type VerdictRow } from './ledger.ts';
 import type { RouteName } from './types.ts';
 
 const limits = thresholds.library;
@@ -78,18 +78,19 @@ export function buildReport(rows: RetrievalRow[], invalid: number, run: string |
   let lookups = rows.filter((row): row is LookupRow => row.row_type === 'lookup');
   if (run !== null) lookups = lookups.filter((row) => row.run_id === run);
   const ids = new Set(lookups.map((row) => row.lookup_id));
-  // One shadow row per lookup; a verdict is the row with the highest sequence number for each (lookup, citation).
+  // One shadow row per lookup; a verdict is the row with the highest ordering key for each (lookup, citation).
   const shadows = new Map<string, ShadowRow>();
   const verdicts = new Map<string, VerdictRow>();
   for (const row of rows) {
     if (!ids.has(row.lookup_id)) continue;
     if (row.row_type === 'shadow') shadows.set(row.lookup_id, row);
     else if (row.row_type === 'verdict') {
-      // The newest verdict for a citation is the one with the highest sequence number, never the one written last;
-      // at equal numbers a settled row replaces the pending row it settles.
+      // The newest verdict for a citation is the one with the highest ordering key (when it was invoked, pid, nonce),
+      // never the one written last; at an equal key a settled row replaces the pending row it settles.
       const key = `${row.lookup_id}\u0000${row.paragraph_id ?? ''}`;
       const held = verdicts.get(key);
-      if (!held || row.seq > held.seq || (row.seq === held.seq && (row.settled === true || held.settled !== true))) verdicts.set(key, row);
+      const order = held ? compareVerdictKeys(row, held) : 1;
+      if (!held || order > 0 || (order === 0 && (row.settled === true || held.settled !== true))) verdicts.set(key, row);
     }
   }
   const routes = {} as Record<RouteName, RouteStats>;

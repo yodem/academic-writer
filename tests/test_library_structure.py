@@ -127,7 +127,7 @@ SHADOW = {
     "agree": {"rate": 1.0, "compared": 1, "agreed": 1, "pages": [{"page": 4, "jaccard": 0.9, "agree": True}]},
 }
 VERDICT = {
-    "row_type": "verdict", "schema": 1, "seq": 1, "ts": TS, "lookup_id": "lk_1", "run_id": None, "paragraph_id": "P1",
+    "row_type": "verdict", "schema": 1, "verdict_at": "1760526000000000001", "pid": 4242, "nonce": "0123456789abcdef", "ts": TS, "lookup_id": "lk_1", "run_id": None, "paragraph_id": "P1",
     "verdict": "PASS", "corrected_page": None, "shadow_supports": True, "shadow_supports_reason": "covered",
     "primary_route": "trove", "mode": "both",
 }
@@ -192,8 +192,11 @@ class TestRetrievalRowSchema(unittest.TestCase):
             {**VERDICT, "shadow_supports_reason": "maybe"},
             {**VERDICT, "corrected_page": 0},
             {**VERDICT, "schema": 2},
-            {**VERDICT, "seq": 0},
-            {k: v for k, v in VERDICT.items() if k != "seq"},
+            {**VERDICT, "verdict_at": "soon"},
+            {**VERDICT, "pid": 0},
+            {**VERDICT, "nonce": "x"},
+            {k: v for k, v in VERDICT.items() if k != "verdict_at"},
+            {**VERDICT, "seq": 1},
         ):
             self.assertTrue(list(check.iter_errors(row)), row)
 
@@ -214,7 +217,7 @@ class TestRetrievalThresholds(unittest.TestCase):
             self.assertGreater(block["shadow"][key], 0)
         self.assertGreater(block["spool"]["maxBytes"], 0)
         self.assertGreater(block["spool"]["ttlHours"], 0)
-        for key in ("maxRowBytes", "maxErrorChars", "maxAgreePages", "lockWaitMs", "lockStaleMs", "lockPollMs"):
+        for key in ("maxRowBytes", "maxErrorChars", "maxAgreePages"):
             self.assertGreater(block["ledger"][key], 0)
         for value in (block["agree"]["jaccardMin"], block["supports"]["tokenCoverageMin"]):
             self.assertTrue(0 < value <= 1)
@@ -249,6 +252,12 @@ class TestShadowModules(unittest.TestCase):
         source = open(os.path.join(LIBRARY_DIR, "shadow.ts"), encoding="utf-8").read()
         self.assertIn("NODE_TEST_CONTEXT", source)
         self.assertEqual(source.count("AW_LIBRARY_WORKER_ENTRY"), 2)  # the comment and the one read in workerEntry
+
+    def test_the_ledger_has_no_lock_and_no_counter(self):
+        for name in ("ledger.ts", "verdict.ts", "report.ts", "cli.ts"):
+            source = open(os.path.join(LIBRARY_DIR, name), encoding="utf-8").read()
+            self.assertNotRegex(source, r"withLedgerLock|verdict\.lock|\bseq\b", name)
+        self.assertIn("compareVerdictKeys", open(os.path.join(LIBRARY_DIR, "report.ts"), encoding="utf-8").read())
 
     def test_ledger_never_creates_the_project_folder(self):
         source = open(os.path.join(LIBRARY_DIR, "ledger.ts"), encoding="utf-8").read()

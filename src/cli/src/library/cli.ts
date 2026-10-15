@@ -34,7 +34,6 @@ function exitCodeFor(error: unknown): number {
   if (!(error instanceof LibraryError)) return 4;
   if (error.code === 'usage') return 2;
   if (error.code === 'config') return 3;
-  if (error.code === 'lock') return 5;
   return 4;
 }
 
@@ -71,26 +70,18 @@ export async function runLibraryCli(argv: string[], io: LibraryIo = processIo): 
       if (cited !== undefined && !/^[1-9]\d{0,5}$/u.test(cited)) throw new LibraryError('usage', 'ERROR library verdict: --page must be a page number');
       const quote = flagText(flags, '--support-quote') ?? '';
       const paragraph = flagText(flags, '--paragraph') ?? null;
-      let recorded: Awaited<ReturnType<typeof recordVerdict>>;
-      try {
-        recorded = await recordVerdict(projectDirOr(), {
-          lookup, verdict: word, correctedPage: corrected === undefined ? null : Number(corrected),
-          quote, paragraph, run: flagText(flags, '--run') ?? null,
-          page: cited === undefined ? null : Number(cited),
-        });
-      } catch (error) {
-        if (error instanceof LibraryError && error.code === 'lock') {
-          // Nothing was recorded; say exactly how to try again (the auditor retries, the verdict is not dropped).
-          const retry = ['aw library verdict', `--lookup ${JSON.stringify(lookup)}`, `--verdict ${word}`,
-            ...(corrected === undefined ? [] : [`--corrected-page ${corrected}`]), ...(cited === undefined ? [] : [`--page ${cited}`]),
-            `--support-quote ${JSON.stringify(quote)}`, ...(paragraph === null ? [] : [`--paragraph ${JSON.stringify(paragraph)}`])].join(' ');
-          throw new LibraryError('lock', `${error.message}\nRetry with: ${retry}`);
-        }
-        throw error;
+      const { row, append } = await recordVerdict(projectDirOr(), {
+        lookup, verdict: word, correctedPage: corrected === undefined ? null : Number(corrected),
+        quote, paragraph, run: flagText(flags, '--run') ?? null,
+        page: cited === undefined ? null : Number(cited),
+      });
+      // A ledger problem never changes the auditor's verdict: say so on stderr, with the command to try again, and still exit 0.
+      if (!append.ok) {
+        const retry = ['aw library verdict', `--lookup ${JSON.stringify(lookup)}`, `--verdict ${word}`,
+          ...(corrected === undefined ? [] : [`--corrected-page ${corrected}`]), ...(cited === undefined ? [] : [`--page ${cited}`]),
+          `--support-quote ${JSON.stringify(quote)}`, ...(paragraph === null ? [] : [`--paragraph ${JSON.stringify(paragraph)}`])].join(' ');
+        io.err(`NOTE library verdict: not recorded in the ledger (${append.reason}). To record it, run: ${retry}\n`);
       }
-      const { row, append } = recorded;
-      // A ledger problem never changes the auditor's verdict: say so on stderr and still exit 0.
-      if (!append.ok) io.err(`NOTE library verdict: not recorded in the ledger (${append.reason})\n`);
       print({ ok: append.ok, lookup_id: row.lookup_id, verdict: row.verdict, shadow_supports: row.shadow_supports, shadow_supports_reason: row.shadow_supports_reason });
       return 0;
     }

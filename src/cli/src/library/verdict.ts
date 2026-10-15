@@ -1,10 +1,10 @@
 import thresholds from '../../../thresholds.json' with { type: 'json' };
 import {
-  appendRow, containedDir, hasProjectFolder, listSpool, nowIso, readSpool, readSpoolJson, removeSpool, rowsForLookup, spoolDir, spoolFile, sweepSpool, textSha, withLedgerLock, writeSpool,
+  appendRow, compareVerdictKeys, containedDir, hasProjectFolder, listSpool, nowIso, readSpool, readSpoolJson, removeSpool, rowsForLookup, spoolDir, spoolFile, sweepSpool, textSha, writeSpool,
   type AppendResult, type LookupRow, type ShadowRow, type SupportsReason, type VerdictRow,
 } from './ledger.ts';
 import { coverage, tokens } from './textmatch.ts';
-import { LibraryError } from './types.ts';
+import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 
 const limits = thresholds.library;
@@ -68,10 +68,20 @@ export async function computeSupports(project: string, lookupId: string, quote: 
   }
 }
 
-const pendingName = (lookupId: string, paragraph: string | null): string => `pending-${lookupId}-${textSha(paragraph ?? '').slice(0, 8)}.json`;
-const pendingFile = (project: string, lookupId: string, paragraph: string | null): string => join(spoolDir(project), pendingName(lookupId, paragraph));
+/** Epoch nanoseconds: the wall clock at start-up plus the monotonic clock since, so two calls in one process never go backwards. */
+const WALL_AT_START = BigInt(Date.now()) * 1_000_000n;
+const MONO_AT_START = process.hrtime.bigint();
+function nowNs(): string { return String(WALL_AT_START + (process.hrtime.bigint() - MONO_AT_START)); }
 
-type PendingVerdict = VerdictInput & { seq: number };
+/** Who and when: the ordering key of one verdict. It is fixed when `aw library verdict` is invoked and never changes, even when the verdict settles later. */
+type VerdictKey = { verdict_at: string; pid: number; nonce: string };
+function newKey(): VerdictKey { return { verdict_at: nowNs(), pid: process.pid, nonce: randomBytes(8).toString('hex') }; }
+
+// One pending file per verdict (named by its nonce), so a newer and an older pending verdict for the same citation never overwrite each other.
+const pendingName = (lookupId: string, paragraph: string | null, nonce: string): string => `pending-${lookupId}-${textSha(paragraph ?? '').slice(0, 8)}-${nonce}.json`;
+const pendingFile = (project: string, lookupId: string, paragraph: string | null, nonce: string): string => join(spoolDir(project), pendingName(lookupId, paragraph, nonce));
+
+type PendingVerdict = VerdictInput & VerdictKey;
 
 export type VerdictResult = { row: VerdictRow; append: AppendResult };
 
@@ -80,11 +90,11 @@ async function earlierVerdicts(project: string, lookup: string, paragraph: strin
   return (await rowsForLookup(project, lookup)).filter((row): row is VerdictRow => row.row_type === 'verdict' && row.paragraph_id === paragraph);
 }
 
-function verdictRow(input: VerdictInput, seq: number, result: Supports, lookup: LookupRow | undefined, settled: boolean): VerdictRow {
+function verdictRow(input: VerdictInput, key: VerdictKey, result: Supports, lookup: LookupRow | undefined, settled: boolean): VerdictRow {
   return {
     row_type: 'verdict',
     schema: 1,
-    seq,
+    ...key,
     ts: nowIso(),
     lookup_id: input.lookup,
     run_id: input.run ?? lookup?.run_id ?? null,
@@ -100,36 +110,31 @@ function verdictRow(input: VerdictInput, seq: number, result: Supports, lookup: 
 }
 
 /**
- * `aw library verdict`: record the auditor's call on one citation next to the lookup it was made from. Each
- * verdict for the same citation gets the next sequence number, and the report always follows the highest
- * number, so a later verdict is never replaced by an earlier one that settles late. The row is best effort:
- * a ledger problem is reported to the caller but never changes the verdict itself.
+ * `aw library verdict`: record the auditor's call on one citation next to the lookup it was made from. The
+ * ledger needs no lock: each verdict row carries its own ordering key (when this command was invoked, pid,
+ * a random nonce) and is appended as one write, so rows from several processes can land in any order and the
+ * newest verdict is still the one with the highest key. The row is best effort: a ledger problem is reported
+ * to the caller but never changes the verdict itself.
  */
-export async function recordVerdict(project: string, input: VerdictInput, waitMs: number = limits.timeoutMs.verdictSettle, lockWaitMs?: number): Promise<VerdictResult> {
+export async function recordVerdict(project: string, input: VerdictInput, waitMs: number = limits.timeoutMs.verdictSettle): Promise<VerdictResult> {
+  const key = newKey();
   await sweepSpool(project);
   const lookup = (await rowsForLookup(project, input.lookup)).find((row): row is LookupRow => row.row_type === 'lookup');
   const result = await computeSupports(project, input.lookup, input.quote, waitMs, input.page);
-  // Reading the highest sequence number and appending the next one is a single step under the ledger lock,
-  // so two verdicts for the same citation can never get the same number.
-  return withLedgerLock(project, async () => {
-    const earlier = await earlierVerdicts(project, input.lookup, input.paragraph);
-    const seq = earlier.reduce((top, row) => Math.max(top, row.seq), 0) + 1;
-    // Any verdict still waiting for its shadow is older than this one now.
-    await removeSpool(project, pendingFile(project, input.lookup, input.paragraph));
-    const row = verdictRow(input, seq, result, lookup, false);
-    const append = await appendRow(project, row);
-    if (append.ok && result.reason === 'shadow_pending') {
-      const pending: PendingVerdict = { ...input, seq };
-      await writeSpool(project, pendingFile(project, input.lookup, input.paragraph), pending);
-    }
-    return { row, append };
-  }, lockWaitMs);
+  const row = verdictRow(input, key, result, lookup, false);
+  const append = await appendRow(project, row);
+  if (append.ok && result.reason === 'shadow_pending') {
+    const pending: PendingVerdict = { ...input, ...key };
+    await writeSpool(project, pendingFile(project, input.lookup, input.paragraph, key.nonce), pending);
+  }
+  return { row, append };
 }
 
 /**
  * Settle verdicts that were recorded while their shadow was still running: when the shadow's text (or its
- * failure) is there now, append the verdict again with the answer, under the same sequence number. A pending
- * verdict that a newer one has replaced is dropped, never written.
+ * failure) is there now, append the verdict again with the answer, under the SAME ordering key it was first
+ * recorded with, so a late settle can never outrank a verdict invoked after it. A pending verdict that a newer
+ * one has replaced is dropped without writing.
  */
 export async function settlePending(project: string): Promise<{ settled: number; waiting: number }> {
   let settled = 0;
@@ -138,28 +143,16 @@ export async function settlePending(project: string): Promise<{ settled: number;
   const files = await listSpool(project, (name) => name.startsWith('pending-') && name.endsWith('.json'));
   for (const file of files) {
     let input: PendingVerdict;
-    try {
-      input = (await readSpoolJson(project, file)) as PendingVerdict;
-    } catch { await removeSpool(project, file); continue; }
-    if (!Number.isInteger(input.seq) || typeof input.lookup !== 'string') { await removeSpool(project, file); continue; }
+    try { input = (await readSpoolJson(project, file)) as PendingVerdict; } catch { await removeSpool(project, file); continue; }
+    if (typeof input.lookup !== 'string' || typeof input.verdict_at !== 'string' || typeof input.nonce !== 'string' || !Number.isInteger(input.pid)) { await removeSpool(project, file); continue; }
+    const paragraph = input.paragraph ?? null;
+    const earlier = await earlierVerdicts(project, input.lookup, paragraph);
+    if (earlier.some((row) => compareVerdictKeys(row, input) > 0)) { await removeSpool(project, file); continue; }
     const result = await computeSupports(project, input.lookup, input.quote, 0, input.page);
     if (result.reason === 'shadow_pending') { waiting += 1; continue; }
     const lookup = (await rowsForLookup(project, input.lookup)).find((row): row is LookupRow => row.row_type === 'lookup');
-    // Check for a newer verdict and append under the same lock that numbers new verdicts.
-    let outcome: 'stale' | 'settled' | 'failed';
-    try {
-      outcome = await withLedgerLock(project, async (): Promise<'stale' | 'settled' | 'failed'> => {
-      const earlier = await earlierVerdicts(project, input.lookup, input.paragraph ?? null);
-      if (earlier.some((row) => row.seq > input.seq)) return 'stale';
-      return (await appendRow(project, verdictRow({ ...input, paragraph: input.paragraph ?? null }, input.seq, result, lookup, true))).ok ? 'settled' : 'failed';
-      });
-    } catch (error) {
-      // A busy ledger leaves the pending verdict where it is, to be settled by a later run.
-      if (error instanceof LibraryError && error.code === 'lock') { waiting += 1; continue; }
-      throw error;
-    }
-    if (outcome === 'settled') settled += 1;
-    if (outcome !== 'failed') await removeSpool(project, file);
+    const key: VerdictKey = { verdict_at: input.verdict_at, pid: input.pid, nonce: input.nonce };
+    if ((await appendRow(project, verdictRow({ ...input, paragraph }, key, result, lookup, true))).ok) { settled += 1; await removeSpool(project, file); }
   }
   return { settled, waiting };
 }

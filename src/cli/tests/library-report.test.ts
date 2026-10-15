@@ -35,9 +35,9 @@ function shadow(id: string, over: { route?: RouteName; ok?: boolean; latency?: n
   };
 }
 
-function verdict(id: string, paragraph: string, word: 'PASS' | 'FAIL', supports: boolean | null, reason: SupportsReason, over: { corrected?: number; route?: RouteName; settled?: boolean; seq?: number } = {}): VerdictRow {
+function verdict(id: string, paragraph: string, word: 'PASS' | 'FAIL', supports: boolean | null, reason: SupportsReason, over: { corrected?: number; route?: RouteName; settled?: boolean; at?: number } = {}): VerdictRow {
   return {
-    row_type: 'verdict', schema: 1, seq: over.seq ?? 1, ts: TS, lookup_id: id, run_id: 'R1', paragraph_id: paragraph, verdict: word, corrected_page: over.corrected ?? null, shadow_supports: supports, shadow_supports_reason: reason,
+    row_type: 'verdict', schema: 1, verdict_at: String(1760526000000000000n + BigInt(over.at ?? 1)), pid: 4242, nonce: '0123456789abcdef', ts: TS, lookup_id: id, run_id: 'R1', paragraph_id: paragraph, verdict: word, corrected_page: over.corrected ?? null, shadow_supports: supports, shadow_supports_reason: reason,
     primary_route: over.route ?? 'trove', mode: 'both', ...(over.settled ? { settled: true } : {}),
   };
 }
@@ -114,17 +114,17 @@ test('report: auditor pass rate and shadow support by route; the last verdict ro
   assert.deepEqual([report.data_quality.shadow_pending_verdicts, report.data_quality.shadow_missing_verdicts, report.data_quality.no_quote_verdicts], [0, 1, 1]);
 });
 
-test('report: the verdict with the highest sequence number stands, wherever it sits in the file', () => {
+test('report: the verdict with the highest ordering key stands, wherever it sits in the file', () => {
   const rows: RetrievalRow[] = [
     lookup('S1'),
-    verdict('S1', 'P1', 'FAIL', null, 'no_quote', { seq: 2 }),
-    verdict('S1', 'P1', 'PASS', true, 'covered', { seq: 1, settled: true }),
-    verdict('S1', 'P2', 'PASS', null, 'shadow_pending', { seq: 1 }),
-    verdict('S1', 'P2', 'PASS', true, 'covered', { seq: 1, settled: true }),
+    verdict('S1', 'P1', 'FAIL', null, 'no_quote', { at: 2 }),
+    verdict('S1', 'P1', 'PASS', true, 'covered', { at: 1, settled: true }),
+    verdict('S1', 'P2', 'PASS', null, 'shadow_pending', { at: 1 }),
+    verdict('S1', 'P2', 'PASS', true, 'covered', { at: 1, settled: true }),
   ];
   const report = buildReport(rows, 0);
   assert.deepEqual([report.routes.trove.auditor.verdicts, report.routes.trove.auditor.pass, report.routes.trove.auditor.fail], [2, 1, 1]);
-  assert.equal(report.data_quality.shadow_pending_verdicts, 0, 'the settled row replaces the pending one at the same number');
+  assert.equal(report.data_quality.shadow_pending_verdicts, 0, 'the settled row replaces the pending one at the same key');
 });
 
 test('report: a run filter keeps that run only, and skipped shadows are counted by reason', () => {

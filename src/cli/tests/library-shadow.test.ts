@@ -12,12 +12,11 @@ import thresholds from '../../thresholds.json' with { type: 'json' };
 import { Library } from '../src/library/adapter.ts';
 import { runLibraryCli } from '../src/library/cli.ts';
 import { checkSchema, type JsonSchema } from '../src/library/jsonschema.ts';
-import { appendRow, clipError, readRows, withLedgerLock, spoolDir, writeSpool, type LookupRow, type RetrievalRow, type ShadowRow, type VerdictRow } from '../src/library/ledger.ts';
+import { appendRow, clipError, compareVerdictKeys, readRows, spoolDir, writeSpool, type LookupRow, type RetrievalRow, type ShadowRow, type VerdictRow } from '../src/library/ledger.ts';
 import { acquireSlot, claimSlot, releaseSlot, workerEntry } from '../src/library/shadow.ts';
 import { settlePending, recordVerdict, computeSupports } from '../src/library/verdict.ts';
 import { buildReport } from '../src/library/report.ts';
 import { setPathArguments } from '../src/paths.ts';
-import { LibraryError } from '../src/library/types.ts';
 import { coverage, jaccard, normalizeText } from '../src/library/textmatch.ts';
 
 const limits = thresholds.library;
@@ -77,7 +76,7 @@ function writeFake(dir: string, name: string, body: string): string {
   return file;
 }
 
-const FAKE_KEYS = ['AW_LIBRARY_LOCK_WAIT_MS', 'FAKE_TROVE_FAIL_MSG', 'FAKE_TROVE_HANG_SHELF', 'AW_LIBRARY_WORKER_ENTRY', 'FAKE_TROVE_FAIL', 'FAKE_TROVE_HANG', 'FAKE_PILIB_FAIL', 'FAKE_PILIB_HANG', 'FAKE_PI_TEXT', 'AW_LIBRARY_SHADOW', 'AW_LIBRARY_SHADOW_TIMEOUT_MS', 'AW_LIBRARY_TIMEOUT_MS'];
+const FAKE_KEYS = ['FAKE_TROVE_FAIL_MSG', 'FAKE_TROVE_HANG_SHELF', 'AW_LIBRARY_WORKER_ENTRY', 'FAKE_TROVE_FAIL', 'FAKE_TROVE_HANG', 'FAKE_PILIB_FAIL', 'FAKE_PILIB_HANG', 'FAKE_PI_TEXT', 'AW_LIBRARY_SHADOW', 'AW_LIBRARY_SHADOW_TIMEOUT_MS', 'AW_LIBRARY_TIMEOUT_MS'];
 
 function fixture(config?: unknown, extra: Record<string, string> = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'aw-shadow-'));
@@ -129,7 +128,7 @@ test('the schema accepts well formed rows of each type and refuses the rest', ()
     book_by_route: { trove: 'T-A', pageindex: null }, request: { printed: '3', trove_pages: '4' },
     primary: { route: 'trove', ok: true, route_pages: '4', latency_ms: 12, bytes: 40, chars: 40, text_sha: '0123456789abcdef', error: null, error_code: null }, shadow_status: 'pending',
   };
-  const verdict: VerdictRow = { row_type: 'verdict', schema: 1, seq: 1, ts: lookup.ts, lookup_id: 'lk_1', run_id: null, paragraph_id: 'P1', verdict: 'PASS', corrected_page: null, shadow_supports: null, shadow_supports_reason: 'no_quote', primary_route: 'trove', mode: 'both' };
+  const verdict: VerdictRow = { row_type: 'verdict', schema: 1, verdict_at: '1760526000000000001', pid: 4242, nonce: '0123456789abcdef', ts: lookup.ts, lookup_id: 'lk_1', run_id: null, paragraph_id: 'P1', verdict: 'PASS', corrected_page: null, shadow_supports: null, shadow_supports_reason: 'no_quote', primary_route: 'trove', mode: 'both' };
   assert.deepEqual(checkSchema(retrievalSchema as JsonSchema, lookup), []);
   assert.deepEqual(checkSchema(retrievalSchema as JsonSchema, verdict), []);
   const broken: unknown[] = [
@@ -138,7 +137,9 @@ test('the schema accepts well formed rows of each type and refuses the rest', ()
     { ...lookup, shadow_status: 'skipped:Bad Reason' },
     { ...lookup, primary: { ...lookup.primary, latency_ms: -1 } },
     { ...verdict, verdict: 'PARTIAL' },
-    { ...verdict, seq: 0 },
+    { ...verdict, verdict_at: 'soon' },
+    { ...verdict, pid: 0 },
+    { ...verdict, nonce: 'x' },
     { ...verdict, shadow_supports_reason: 'maybe' },
     { ...verdict, corrected_page: 0 },
     { row_type: 'other' },
@@ -156,7 +157,7 @@ test('appendRow checks the schema and never makes the project folder', async () 
     assert.equal((await appendRow(fx.project, bad)).ok, false);
     const noFolder = join(fx.root, 'elsewhere');
     mkdirSync(noFolder);
-    const row: VerdictRow = { row_type: 'verdict', schema: 1, seq: 1, ts: new Date().toISOString(), lookup_id: 'lk_x', run_id: null, paragraph_id: null, verdict: 'FAIL', corrected_page: 9, shadow_supports: false, shadow_supports_reason: 'not_covered', primary_route: null, mode: null };
+    const row: VerdictRow = { row_type: 'verdict', schema: 1, verdict_at: '1760526000000000001', pid: 4242, nonce: '0123456789abcdef', ts: new Date().toISOString(), lookup_id: 'lk_x', run_id: null, paragraph_id: null, verdict: 'FAIL', corrected_page: 9, shadow_supports: false, shadow_supports_reason: 'not_covered', primary_route: null, mode: null };
     assert.equal((await appendRow(noFolder, row)).ok, false);
     assert.equal(existsSync(join(noFolder, '.academic-helper')), false);
     assert.equal((await appendRow(fx.project, row)).ok, true);
@@ -646,7 +647,7 @@ test('H3: aw library _shadow never deletes a file it was merely pointed at', asy
 
 // HIGH 4: containment after resolving symlinks
 test('H4: the ledger and the spool never follow a symlink out of the project', async () => {
-  const row: VerdictRow = { row_type: 'verdict', schema: 1, seq: 1, ts: new Date().toISOString(), lookup_id: 'lk_x', run_id: null, paragraph_id: null, verdict: 'PASS', corrected_page: null, shadow_supports: null, shadow_supports_reason: 'no_quote', primary_route: null, mode: null };
+  const row: VerdictRow = { row_type: 'verdict', schema: 1, verdict_at: '1760526000000000001', pid: 4242, nonce: '0123456789abcdef', ts: new Date().toISOString(), lookup_id: 'lk_x', run_id: null, paragraph_id: null, verdict: 'PASS', corrected_page: null, shadow_supports: null, shadow_supports_reason: 'no_quote', primary_route: null, mode: null };
   const linkedFolder = fixture();
   const linkedFile = fixture();
   const linkedSpool = fixture();
@@ -683,7 +684,7 @@ test('H4: the ledger and the spool never follow a symlink out of the project', a
   } finally { linkedFolder.cleanup(); linkedFile.cleanup(); linkedSpool.cleanup(); }
 });
 
-// HIGH 5: verdicts are versioned per citation
+// HIGH 5: verdicts are ordered per citation by when `aw library verdict` was invoked
 test('H5: a newer verdict is never replaced by settling an older pending one', async () => {
   const fx = fixture({ route: 'both' });
   try {
@@ -697,7 +698,7 @@ test('H5: a newer verdict is never replaced by settling an older pending one', a
     assert.equal(first.row.shadow_supports_reason, 'shadow_pending');
     const second = await recordVerdict(fx.project, { lookup: 'lk_seq', verdict: 'FAIL', correctedPage: 4, quote: '', paragraph: 'P1', run: null }, 0);
     assert.equal(second.row.verdict, 'FAIL');
-    assert.ok(second.row.seq > first.row.seq, 'later verdicts get a higher sequence number');
+    assert.ok(compareVerdictKeys(second.row, first.row) > 0, 'a later invocation has the higher ordering key');
     mkdirSync(spoolDir(fx.project), { recursive: true });
     writeFileSync(join(spoolDir(fx.project), 'lk_seq.shadow.json'), JSON.stringify({ lookup_id: 'lk_seq', route: 'pageindex', ok: true, pages: [{ page: 2, text: WORDS }] }));
     await settlePending(fx.project);
@@ -708,7 +709,7 @@ test('H5: a newer verdict is never replaced by settling an older pending one', a
     // A pending verdict that nothing replaced still settles, and settles once.
     const lone = await recordVerdict(fx.project, { lookup: 'lk_seq', verdict: 'PASS', correctedPage: null, quote: WORDS, paragraph: 'P9', run: null }, 0);
     assert.equal(lone.row.shadow_supports_reason, 'covered', 'the spool is there now');
-    // Even with rows in the ledger in the "wrong" order, the highest seq wins.
+    // Even with rows in the ledger in the "wrong" order, the highest ordering key wins.
     const swapped = [...(await readRows(fx.project)).rows].reverse();
     assert.deepEqual([buildReport(swapped, 0).routes.trove.auditor.pass, buildReport(swapped, 0).routes.trove.auditor.fail], [1, 1]);
   } finally { fx.cleanup(); }
@@ -779,7 +780,7 @@ test('appends from many writers at once keep every line whole', async () => {
   const fx = fixture({ route: 'both' });
   try {
     const rows = Array.from({ length: 300 }, (_, index): VerdictRow => ({
-      row_type: 'verdict', schema: 1, seq: index + 1, ts: new Date().toISOString(), lookup_id: `lk_${index}`, run_id: 'x'.repeat(150), paragraph_id: 'p'.repeat(150), verdict: 'PASS',
+      row_type: 'verdict', schema: 1, verdict_at: String(1760526000000000000n + BigInt(index)), pid: 4242, nonce: '0123456789abcdef', ts: new Date().toISOString(), lookup_id: `lk_${index}`, run_id: 'x'.repeat(150), paragraph_id: 'p'.repeat(150), verdict: 'PASS',
       corrected_page: null, shadow_supports: null, shadow_supports_reason: 'no_quote', primary_route: 'trove', mode: 'both',
     }));
     const results = await Promise.all(rows.map((row) => appendRow(fx.project, row)));
@@ -828,33 +829,38 @@ test('H2: a slot belongs to its token; a late claim or release by an old owner c
   } finally { fx.cleanup(); }
 });
 
-test('H5: concurrent verdicts for one citation get distinct, increasing sequence numbers (in process)', async () => {
+test('H5: concurrent verdicts for one citation all land, and the report picks the highest ordering key (in process)', async () => {
   const fx = fixture({ route: 'both' });
   try {
+    const lookup = lookupFor('lk_race');
+    await appendRow(fx.project, lookup);
     const results = await Promise.all(Array.from({ length: 20 }, (_, index) => recordVerdict(fx.project, { lookup: 'lk_race', verdict: index % 2 === 0 ? 'PASS' : 'FAIL', correctedPage: null, quote: '', paragraph: 'P1', run: null }, 0)));
-    const seqs = results.map((result) => result.row.seq).sort((a, b) => a - b);
-    assert.deepEqual(seqs, Array.from({ length: 20 }, (_, index) => index + 1));
+    assert.ok(results.every((result) => result.append.ok));
     const rows = ofType(await rowsOf(fx), 'verdict');
-    assert.deepEqual(rows.map((row) => row.seq).sort((a, b) => a - b), seqs);
-    assert.ok(!existsSync(join(fx.project, '.academic-helper', 'retrieval', 'verdict.lock')), 'the lock is released');
+    assert.equal(rows.length, 20, 'every row is present and parses');
+    assert.equal(new Set(rows.map((row) => `${row.verdict_at}/${row.pid}/${row.nonce}`)).size, 20, 'every row has its own ordering key');
+    const newest = rows.reduce((top, row) => (compareVerdictKeys(row, top) > 0 ? row : top));
+    for (const order of [rows, [...rows].reverse()]) {
+      const report = buildReport([lookup, ...order], 0);
+      assert.deepEqual([report.routes.trove.auditor.verdicts, report.routes.trove.auditor.pass], [1, newest.verdict === 'PASS' ? 1 : 0], 'the same answer whatever the order of the lines');
+    }
+    assert.ok(!existsSync(join(fx.project, '.academic-helper', 'retrieval', 'verdict.lock')), 'there is no lock');
   } finally { fx.cleanup(); }
 });
 
-test('H5: parallel aw library verdict processes for one citation get distinct seqs, and the report follows the highest', async () => {
+test('H5: parallel aw library verdict processes for one citation all land, and the report picks the highest ordering key', async () => {
   const { aw } = await sharedBundle();
   const fx = fixture({ route: 'both' });
   try {
-    const lookup: LookupRow = {
-      row_type: 'lookup', schema: 1, ts: new Date().toISOString(), lookup_id: 'lk_procs', run_id: null, claim_id: null, op: 'read', source_id: 'T-A', mode: 'both', route_primary: 'trove',
-      book_by_route: { trove: 'T-A', pageindex: null }, request: { printed: null, trove_pages: '2' },
-      primary: { route: 'trove', ok: true, route_pages: '2', latency_ms: 5, bytes: 10, chars: 10, text_sha: '0123456789abcdef', error: null, error_code: null }, shadow_status: 'none',
-    };
+    const lookup = lookupFor('lk_procs');
     await appendRow(fx.project, lookup);
     const runs = await Promise.all(Array.from({ length: 8 }, (_, index) => runAw(aw, fx, 'verdict', '--lookup', 'lk_procs', '--verdict', index % 2 === 0 ? 'PASS' : 'FAIL', '--paragraph', 'P1')));
     assert.ok(runs.every((run) => run.code === 0));
+    assert.equal(rawLedger(fx).length, 9);
     const rows = ofType(await rowsOf(fx), 'verdict');
-    assert.deepEqual(rows.map((row) => row.seq).sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8]);
-    const newest = rows.reduce((top, row) => (row.seq > top.seq ? row : top));
+    assert.equal(rows.length, 8);
+    assert.equal(new Set(rows.map((row) => `${row.verdict_at}/${row.pid}/${row.nonce}`)).size, 8);
+    const newest = rows.reduce((top, row) => (compareVerdictKeys(row, top) > 0 ? row : top));
     const report = buildReport([lookup, ...[...rows].reverse()], 0);
     assert.deepEqual([report.routes.trove.auditor.verdicts, report.routes.trove.auditor.pass], [1, newest.verdict === 'PASS' ? 1 : 0]);
   } finally { fx.cleanup(); }
@@ -900,73 +906,82 @@ test('seam: AW_LIBRARY_WORKER_ENTRY is honoured only under the test runner', () 
   } finally { if (saved === undefined) delete process.env.NODE_TEST_CONTEXT; else process.env.NODE_TEST_CONTEXT = saved; }
 });
 
-// ================================================================ third review rework
+// ================================================================ final design: no ledger lock
 
-function lockPath(fx: Fixture): string { return join(fx.project, '.academic-helper', 'retrieval', 'verdict.lock'); }
-function holdLock(fx: Fixture, pid: number, ageMs: number): void {
-  mkdirSync(join(fx.project, '.academic-helper', 'retrieval'), { recursive: true });
-  writeFileSync(lockPath(fx), JSON.stringify({ pid, nonce: 'abcdef0123456789abcd', ts: new Date(Date.now() - ageMs).toISOString() }));
-  const when = new Date(Date.now() - ageMs);
-  utimesSync(lockPath(fx), when, when);
+function lookupFor(id: string, shadowStatus = 'none'): LookupRow {
+  return {
+    row_type: 'lookup', schema: 1, ts: new Date().toISOString(), lookup_id: id, run_id: 'R1', claim_id: 'P1', op: 'read', source_id: 'T-A', mode: 'both', route_primary: 'trove',
+    book_by_route: { trove: 'T-A', pageindex: null }, request: { printed: null, trove_pages: '2' },
+    primary: { route: 'trove', ok: true, route_pages: '2', latency_ms: 5, bytes: 10, chars: 10, text_sha: '0123456789abcdef', error: null, error_code: null }, shadow_status: shadowStatus,
+  };
 }
-const VERDICT_ARGS = { verdict: 'PASS' as const, correctedPage: null, quote: '', paragraph: 'P1', run: null };
 
-test('H5: the ledger lock is never skipped: a live holder is waited for, even past the stale age, and the wait ends in an error', async () => {
+test('H5: a stale PASS settled after a newer FAIL never outranks it, and keeps its own time', async () => {
   const fx = fixture({ route: 'both' });
   try {
-    holdLock(fx, process.pid, limits.ledger.lockStaleMs * 3);
-    let ran = false;
-    await assert.rejects(withLedgerLock(fx.project, async () => { ran = true; }, 300), (error: unknown) => error instanceof LibraryError && error.code === 'lock');
-    assert.equal(ran, false, 'the work never runs unlocked');
-    assert.ok(existsSync(lockPath(fx)), 'a live holder keeps its lock');
-    await assert.rejects(recordVerdict(fx.project, { lookup: 'lk_busy', ...VERDICT_ARGS }, 0, 300), (error: unknown) => error instanceof LibraryError && error.code === 'lock');
-    assert.equal(ofType(await rowsOf(fx), 'verdict').length, 0, 'nothing was appended');
-  } finally { fx.cleanup(); }
-});
-
-test('H5: a lock whose holder is dead is taken over', async () => {
-  const fx = fixture({ route: 'both' });
-  try {
-    holdLock(fx, 2 ** 22 + 7, 10);
-    const result = await recordVerdict(fx.project, { lookup: 'lk_dead', ...VERDICT_ARGS }, 0, 2000);
-    assert.equal(result.row.seq, 1);
-    assert.ok(!existsSync(lockPath(fx)), 'and released afterwards');
-  } finally { fx.cleanup(); }
-});
-
-test('H5: aw library verdict with a busy ledger exits non-zero, records nothing and prints the command to retry', async () => {
-  const fx = fixture({ route: 'both' }, { AW_LIBRARY_LOCK_WAIT_MS: '300' });
-  try {
-    holdLock(fx, process.pid, 50);
-    const run = await cli(fx, 'verdict', '--lookup', 'lk_retry', '--verdict', 'FAIL', '--corrected-page', '4', '--support-quote', 'some words from the page here', '--paragraph', 'P3');
-    assert.notEqual(run.code, 0);
-    assert.match(run.err, /ledger is busy/);
-    assert.match(run.err, /aw library verdict --lookup "lk_retry" --verdict FAIL --corrected-page 4 --support-quote "some words from the page here" --paragraph "P3"/);
-    assert.equal(ofType(await rowsOf(fx), 'verdict').length, 0);
-  } finally { fx.cleanup(); }
-});
-
-test('H5: settling does not write while the ledger is locked, keeps the pending verdict, and settles once it is free', async () => {
-  const fx = fixture({ route: 'both' });
-  const saved = process.env.AW_LIBRARY_LOCK_WAIT_MS;
-  try {
-    const lookup: LookupRow = {
-      row_type: 'lookup', schema: 1, ts: new Date().toISOString(), lookup_id: 'lk_set', run_id: 'R1', claim_id: 'P1', op: 'read', source_id: 'T-A', mode: 'both', route_primary: 'trove',
-      book_by_route: { trove: 'T-A', pageindex: null }, request: { printed: null, trove_pages: '2' },
-      primary: { route: 'trove', ok: true, route_pages: '2', latency_ms: 5, bytes: 10, chars: 10, text_sha: '0123456789abcdef', error: null, error_code: null }, shadow_status: 'pending',
-    };
-    await appendRow(fx.project, lookup);
-    const pending = await recordVerdict(fx.project, { lookup: 'lk_set', verdict: 'PASS', correctedPage: null, quote: WORDS, paragraph: 'P1', run: null }, 0);
-    assert.equal(pending.row.shadow_supports_reason, 'shadow_pending');
+    await appendRow(fx.project, lookupFor('lk_stale', 'pending'));
+    const pass = await recordVerdict(fx.project, { lookup: 'lk_stale', verdict: 'PASS', correctedPage: null, quote: WORDS, paragraph: 'P1', run: null }, 0);
+    assert.equal(pass.row.shadow_supports_reason, 'shadow_pending');
+    await sleep(5);
+    const fail = await recordVerdict(fx.project, { lookup: 'lk_stale', verdict: 'FAIL', correctedPage: 3, quote: '', paragraph: 'P1', run: null }, 0);
     mkdirSync(spoolDir(fx.project), { recursive: true });
-    writeFileSync(join(spoolDir(fx.project), 'lk_set.shadow.json'), JSON.stringify({ lookup_id: 'lk_set', route: 'pageindex', ok: true, pages: [{ page: 2, text: WORDS }] }));
-    process.env.AW_LIBRARY_LOCK_WAIT_MS = '300';
-    holdLock(fx, process.pid, 50);
-    assert.deepEqual(await settlePending(fx.project), { settled: 0, waiting: 1 });
-    assert.equal(ofType(await rowsOf(fx), 'verdict').length, 1, 'nothing was written under a busy lock');
-    rmSync(lockPath(fx));
+    writeFileSync(join(spoolDir(fx.project), 'lk_stale.shadow.json'), JSON.stringify({ lookup_id: 'lk_stale', route: 'pageindex', ok: true, pages: [{ page: 2, text: WORDS }] }));
+    await settlePending(fx.project);
+    const rows = ofType(await rowsOf(fx), 'verdict');
+    assert.ok(rows.every((row) => !(row.verdict === 'PASS' && row.settled)), 'a pending verdict that a newer one replaced is dropped, not settled');
+    // Even if the stale PASS had been settled (forced here), it keeps its original time, so it still loses.
+    const forced: VerdictRow = { ...pass.row, shadow_supports: true, shadow_supports_reason: 'covered', settled: true };
+    await appendRow(fx.project, forced);
+    assert.equal(forced.verdict_at, pass.row.verdict_at);
+    assert.ok(compareVerdictKeys(fail.row, forced) > 0);
+    const { rows: all } = await readRows(fx.project);
+    for (const order of [all, [...all].reverse()]) {
+      const report = buildReport(order, 0);
+      assert.deepEqual([report.routes.trove.auditor.pass, report.routes.trove.auditor.fail], [0, 1], 'the report shows FAIL');
+    }
+  } finally { fx.cleanup(); }
+});
+
+test('H5: a pending verdict that nothing replaced settles under its original time, once', async () => {
+  const fx = fixture({ route: 'both' });
+  try {
+    await appendRow(fx.project, lookupFor('lk_lone', 'pending'));
+    const pending = await recordVerdict(fx.project, { lookup: 'lk_lone', verdict: 'PASS', correctedPage: null, quote: WORDS, paragraph: 'P1', run: null }, 0);
+    mkdirSync(spoolDir(fx.project), { recursive: true });
+    writeFileSync(join(spoolDir(fx.project), 'lk_lone.shadow.json'), JSON.stringify({ lookup_id: 'lk_lone', route: 'pageindex', ok: true, pages: [{ page: 2, text: WORDS }] }));
     assert.deepEqual(await settlePending(fx.project), { settled: 1, waiting: 0 });
-  } finally { if (saved === undefined) delete process.env.AW_LIBRARY_LOCK_WAIT_MS; else process.env.AW_LIBRARY_LOCK_WAIT_MS = saved; fx.cleanup(); }
+    assert.deepEqual(await settlePending(fx.project), { settled: 0, waiting: 0 });
+    const rows = ofType(await rowsOf(fx), 'verdict');
+    assert.equal(rows.length, 2);
+    const settled = rows.find((row) => row.settled) as VerdictRow;
+    assert.deepEqual([settled.verdict_at, settled.pid, settled.nonce, settled.shadow_supports], [pending.row.verdict_at, pending.row.pid, pending.row.nonce, true]);
+    const report = buildReport([lookupFor('lk_lone', 'pending'), ...rows], 0);
+    assert.deepEqual([report.routes.trove.auditor.verdicts, report.data_quality.shadow_pending_verdicts, report.routes.trove.auditor.shadow_supports], [1, 0, 1]);
+  } finally { fx.cleanup(); }
+});
+
+test('H5: a regular file where the old lock folder was does not matter', async () => {
+  const fx = fixture({ route: 'both' });
+  try {
+    writeFileSync(join(fx.project, '.academic-helper', 'retrieval'), 'not a folder');
+    const result = await recordVerdict(fx.project, { lookup: 'lk_file', verdict: 'PASS', correctedPage: null, quote: '', paragraph: 'P1', run: null }, 0);
+    assert.equal(result.append.ok, true);
+    assert.equal(ofType(await rowsOf(fx), 'verdict').length, 1);
+  } finally { fx.cleanup(); }
+});
+
+test('H5: when the ledger write itself fails, aw library verdict says so and prints the command to retry', async () => {
+  const fx = fixture({ route: 'both' });
+  try {
+    writeFileSync(join(fx.project, '.academic-helper', 'retrieval.jsonl'), '');
+    rmSync(join(fx.project, '.academic-helper', 'retrieval.jsonl'));
+    mkdirSync(join(fx.project, '.academic-helper', 'retrieval.jsonl'));
+    const run = await cli(fx, 'verdict', '--lookup', 'lk_retry', '--verdict', 'FAIL', '--corrected-page', '4', '--support-quote', 'some words from the page here', '--paragraph', 'P3');
+    assert.equal(run.code, 0, 'a ledger problem never changes the auditor\'s verdict');
+    assert.match(run.err, /not recorded/);
+    assert.match(run.err, /aw library verdict --lookup "lk_retry" --verdict FAIL --corrected-page 4 --support-quote "some words from the page here" --paragraph "P3"/);
+    assert.equal((JSON.parse(run.out) as { ok: boolean }).ok, false);
+  } finally { fx.cleanup(); }
 });
 
 test('M6: quoted secrets containing escaped quotes are redacted whole', () => {

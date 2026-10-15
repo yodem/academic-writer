@@ -20,7 +20,7 @@ export interface LibraryBackend {
   title(book: string): Promise<string | undefined>;
 }
 
-export type LibraryErrorCode = 'usage' | 'config' | 'spawn' | 'timeout' | 'exit' | 'too_large' | 'parse' | 'page_map' | 'page_missing' | 'lock';
+export type LibraryErrorCode = 'usage' | 'config' | 'spawn' | 'timeout' | 'exit' | 'too_large' | 'parse' | 'page_map' | 'page_missing';
 
 export class LibraryError extends Error {
   readonly code: LibraryErrorCode;
