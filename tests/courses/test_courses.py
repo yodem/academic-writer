@@ -194,3 +194,74 @@ def test_import_docx_semester_subcolumns_and_yearly_span(tmp_path):
 def test_help_runs():
     result = subprocess.run([sys.executable, str(Path(__file__).parents[2] / "src/scripts/courses/courses.py"), "--help"], capture_output=True, text=True)
     assert result.returncode == 0
+
+
+def test_registry_skips_json_without_slug(tmp_path):
+    registry = make_registry(tmp_path)
+    (registry.directory / "links.json").write_text(json.dumps({"sample": {"name": "x", "lemida_url": "u"}}), encoding="utf-8")
+    (registry.directory / "chores.json").write_text("[]", encoding="utf-8")
+    loaded = courses.Registry(registry.directory)
+    assert list(loaded.courses) == ["sample"]
+
+
+def test_lemida_blocked_detects_captcha_html():
+    assert courses.lemida_blocked([{"slug": "kane", "error": "Moodle request failed: Expecting value: line 1 column 1 (char 0)"}])
+    assert courses.lemida_blocked(["Radware Bot Manager Captcha"])
+    assert not courses.lemida_blocked([{"slug": "kane", "error": "Moodle error invalidtoken: bad"}])
+
+
+def test_daily_blocked_still_scans_voice_memos(tmp_path, monkeypatch, capsys):
+    import lemida
+    registry = make_registry(tmp_path)
+    memos = tmp_path / "memos"
+    memos.mkdir()
+    (memos / "20261012 120422.m4a").write_bytes(b"memo")
+    term = json.loads((registry.directory / "term.json").read_text())
+    term["voice_memos_dir"] = str(memos)
+    (registry.directory / "term.json").write_text(json.dumps(term))
+    course = registry.courses["sample"]
+    course["lemida_course_id"] = 1
+    (registry.directory / "sample.json").write_text(json.dumps(course))
+    scanned = []
+    monkeypatch.setattr(courses, "map_recording", lambda reg, when: scanned.append(when) or (None, "no slot"))
+
+    def blocked(*a, **k):
+        raise ValueError("Expecting value: line 1 column 1 (char 0)")  # what json.loads says on the captcha HTML
+
+    monkeypatch.setattr(lemida, "lemida_sync", blocked)
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(registry.directory.parent))
+    code = courses.main(["--term", registry.directory.name, "daily"])
+    out = capsys.readouterr().out
+    assert code == 5 and "lemida: blocked, use chrome watcher" in out
+    assert len(scanned) == 1
+
+
+def test_watch_diff_advances_only_with_apply_and_ok(tmp_path, monkeypatch, capsys):
+    import watch_diff as wd
+    registry = make_registry(tmp_path)
+    calls = {}
+
+    def fake_diff(pages, seen, *, legacy_seen=None, sources=None):
+        calls["args"] = (pages, seen, legacy_seen, sources)
+        return wd.Diff(new_modules=[{"cmid": "22"}])
+
+    def fake_advance(seen, diff, ok_ids):
+        calls["ok"] = ok_ids
+        return {"modules": {i: {} for i in ok_ids}, "discussions": {}, "assigns": {}, "sections": {}}
+
+    monkeypatch.setattr(wd, "diff_course", fake_diff)
+    monkeypatch.setattr(wd, "advance", fake_advance)
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(registry.directory.parent))
+    pages = tmp_path / "pages.json"
+    pages.write_text("[]")
+    base = ["--term", registry.directory.name]
+    saved = lambda: json.loads((registry.directory / "sample.json").read_text())  # noqa: E731
+
+    assert courses.main(base + ["watch-diff", "sample", "--pages", str(pages)]) == 0
+    assert json.loads(capsys.readouterr().out)["new_modules"] == [{"cmid": "22"}]
+    assert "watch_seen" not in saved() and calls["args"][2] == {}
+    assert courses.main(base + ["watch-diff", "sample", "--pages", str(pages), "--apply"]) == 2
+    assert "watch_seen" not in saved()
+    assert courses.main(base + ["watch-diff", "sample", "--pages", str(pages), "--apply", "--ok", "22"]) == 0
+    assert saved()["watch_seen"]["modules"] == {"22": {}} and calls["ok"] == {"22"}
+    assert courses.main(base + ["watch-diff", "ghost", "--pages", str(pages)]) == 2
