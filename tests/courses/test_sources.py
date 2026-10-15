@@ -24,7 +24,7 @@ def make_registry(tmp_path, term=None, **overrides):
     term_json.update(term or {})
     (directory / "term.json").write_text(json.dumps(term_json), encoding="utf-8")
     course = {"slug": "sample", "name": "Sample Course", "lecturer": "Dr X", "slots": [], "notebook_id": "nb-1",
-              "manuscript_id": "ms-1", "book_id": "book-1", "drive_folder_id": "folder-1", "lessons": []}
+              "book_id": "book-1", "drive_folder_id": "folder-1", "lessons": []}
     course.update(overrides)
     (directory / "sample.json").write_text(json.dumps(course), encoding="utf-8")
     return courses.Registry(directory)
@@ -94,7 +94,7 @@ def test_add_source_argv_job_and_record(tmp_path):
     assert record["status"] == "queued" and record["added_at"]
     job = json.loads((registry.directory / "queue/sources" / f"sample-{sha[:8]}.json").read_text())
     assert job == {"slug": "sample", "sha8": sha[:8], "title": "Reading One", "file": str(snap.resolve()), "pages": 7,
-                   "kind": "pdf", "book_id": "book-1", "manuscript_id": "ms-1", "course_name": "Sample Course"}
+                   "kind": "pdf", "book_id": "book-1", "course_name": "Sample Course"}
 
 
 def test_same_name_different_bytes_make_two_snapshots_and_jobs(tmp_path):

@@ -19,7 +19,7 @@ def make_registry(tmp_path, **course_overrides):
     course = {
         "slug": "sample", "name": "Sample Course", "lecturer": "Dr Example",
         "slots": [{"day": "Mon", "start": "12:00", "end": "14:00", "semester": "A"}],
-        "notebook_id": "notebook-1", "manuscript_id": "manuscript-1", "book_id": "book-1",
+        "notebook_id": "notebook-1", "book_id": "book-1",
         "lessons": [],
     }
     course.update(course_overrides)
@@ -63,7 +63,7 @@ def test_ingest_uploads_transcript_metadata_and_digest_job(tmp_path):
     assert meta["weekday"] == "Mon"
     assert json.loads((registry.directory / "queue/sample-2026-10-12-0000.json").read_text()) == {
         "slug": "sample", "date": "2026-10-12", "lesson_key": "2026-10-12-0000", "transcript_path": str(lesson_dir / "transcript.txt"),
-        "meta_path": str(lesson_dir / "meta.json"), "manuscript_id": "manuscript-1",
+        "meta_path": str(lesson_dir / "meta.json"),
         "book_id": "book-1", "course_name": "Sample Course", "lecturer": "Dr Example",
     }
     updated = json.loads((registry.directory / "sample.json").read_text())

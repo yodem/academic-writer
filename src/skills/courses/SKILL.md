@@ -8,7 +8,7 @@ metadata: {author: "Academic Writer", version: "0.1.0"}
 
 # Academic Writer — Courses
 
-Set up and maintain one Drive folder, NotebookLM notebook, and Trove manuscript for each course. Course identities, external resource IDs, naming templates, LMS settings, and local paths belong in the user's private registry, never in this plugin.
+Set up and maintain one Drive folder, NotebookLM notebook, and Trove book for each course (a plain book, not a manuscript; its layout and ToC rules are in `references/course-book.md`). Course identities, external resource IDs, naming templates, LMS settings, and local paths belong in the user's private registry, never in this plugin.
 
 ## Registry and configuration
 
@@ -19,14 +19,14 @@ Document and preserve these `term.json` fields:
 - `term`: display name or academic-term key.
 - `timezone`: IANA time zone used to interpret recording and slot times.
 - `semesters`: A/B objects with inclusive `start` and `end` dates; yearly slots are active in either configured semester.
-- `naming`: `drive`, `notebook`, and `manuscript` templates. Template context includes course fields and `term`.
+- `naming`: `drive`, `notebook`, and `book` templates (a legacy `manuscript` template is used for the book title when `book` is absent). Template context includes course fields and `term`.
 - `drive_subject_folders`: subject-folder labels mapped to Drive folder IDs; `drive_remote` is the rclone remote name.
 - `lemida`: `base_url`, optional `keychain_service` (default `academic-writer-lemida`) and `keychain_account`; the token remains in the OS keychain.
 - `voice_memos_dir`: local recording directory; `local_root`: local LMS download root.
 - `notebook_source_limit`: maximum sources to allow before stopping (default 45).
 - `state.last_voice_memo_scan`: last completed scan boundary, stored as an ISO timestamp.
 
-Each course JSON has `slug`, `code`, `name`, `lecturer`, `slots` (`day`, `start`, `end`, `semester`), `drive_subject_folder`, `drive_folder_id`, `notebook_id`, `manuscript_id`, `book_id`, `lemida_course_id`, `lemida_seen`, and `lessons`. `manuscript_id` identifies the Trove manuscript; `book_id` identifies the manuscript's Trove book/item. Lesson records include date, audio SHA-256, NotebookLM source ID, Trove page, and status. Keep unknown schedule details marked for review; do not infer a course, time, or ID.
+Each course JSON has `slug`, `code`, `name`, `lecturer`, `slots` (`day`, `start`, `end`, `semester`), `drive_subject_folder`, `drive_folder_id`, `notebook_id`, `book_id`, `lemida_course_id`, `lemida_seen`, and `lessons`. `book_id` identifies the course's Trove book; course books have no manuscript, so they never appear in other sessions' manuscript lists. Lesson records include date, audio SHA-256, NotebookLM source ID, Trove page, and status. Keep unknown schedule details marked for review; do not infer a course, time, or ID.
 
 ## Set up a term from a schedule
 
@@ -36,18 +36,18 @@ Each course JSON has `slug`, `code`, `name`, `lecturer`, `slots` (`day`, `start`
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" import-docx "/path/to/schedule.docx" --dry-run
    ```
 
-2. Present a table with course name, code, lecturer, day, hours, semester, proposed Drive subject folder, notebook title, and manuscript title. Identify tentative/admin entries and unresolved slots. Ask the user to confirm the courses and subject-folder choices before creating anything.
-3. After confirmation, create the registry directory and `term.json`, then one JSON per confirmed course. Naming defaults: Drive folder and NotebookLM notebook use the course name exactly; manuscript uses the configured template (for example `Personal · <term> · <course name>`). Do not put real IDs in skill text or examples.
-4. For each missing resource, create a Drive folder named exactly as the course under its configured subject folder using the Drive connector's `create_file` with folder MIME type; create a notebook with `nlm notebook create "<course name>" --json`; check `trove auth whoami --no-session` for the plan/quota, then create a Trove manuscript with `trove ms create "<manuscript title>" --instructions "<configured LMS course ID, Drive URL, and reading-extraction rules>" --json --no-session`. Ask before renaming or replacing any existing resource. Record returned IDs immediately in the course JSON.
+2. Present a table with course name, code, lecturer, day, hours, semester, proposed Drive subject folder, notebook title, and book title. Identify tentative/admin entries and unresolved slots. Ask the user to confirm the courses and subject-folder choices before creating anything.
+3. After confirmation, create the registry directory and `term.json`, then one JSON per confirmed course. Naming defaults: Drive folder and NotebookLM notebook use the course name exactly; the book uses the configured template (for example `Personal · <term> · <course name>`). Do not put real IDs in skill text or examples.
+4. For each missing resource, create a Drive folder named exactly as the course under its configured subject folder using the Drive connector's `create_file` with folder MIME type; create a notebook with `nlm notebook create "<course name>" --json`; check `trove auth whoami --no-session` for the plan/quota, then create the course book as `references/course-book.md` describes (`trove items create`, never `trove ms create`). Ask before renaming or replacing any existing resource. Record returned IDs immediately in the course JSON.
 5. Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" validate`. Resolve each mismatch by renaming the external resource after asking; never make a wrong resource appear valid by changing the registry's expected name. Repeat until exit 0.
 
 ## Validate existing resources
 
-Run `courses.py validate` (add `--json` when machine-readable output is useful). It checks each configured Drive folder, NotebookLM notebook, and Trove manuscript by ID and expected name. Report all mismatches. Do not silently repair or delete resources.
+Run `courses.py validate` (add `--json` when machine-readable output is useful). It checks each configured Drive folder, NotebookLM notebook, and Trove book by ID and expected name. `tools/book_audit.py` checks that page 1 of each book carries the Drive, NotebookLM and Lemida ids. Report all mismatches. Do not silently repair or delete resources.
 
 ## LMS and readings
 
-Use `courses.py lemida-sync --dry-run` to preview API changes when a Lemida token is available in the OS keychain; otherwise use the user's browser session to inspect their LMS (Moodle). Download PDFs and DOCX files; list Zoom, forum, and videostream entries by name. Never bulk-download LTI/Perusall readings: capture pages on demand about a week before the lesson. Keep copyrighted readings only in the user's own Drive and Trove, in the relevant course's manuscript.
+Use `courses.py lemida-sync --dry-run` to preview API changes when a Lemida token is available in the OS keychain; otherwise use the user's browser session to inspect their LMS (Moodle). Download PDFs and DOCX files; list Zoom, forum, and videostream entries by name. Never bulk-download LTI/Perusall readings: capture pages on demand about a week before the lesson. Keep copyrighted readings only in the user's own Drive and Trove, in the relevant course's book.
 
 For scanned readings, OCR with Claude vision first: render with `pdftoppm -r 150`, then inspect the PNG pages. Escalate to Gemini's best OCR (the bundled `/academic-writer:ocr`) when Claude flags pages as unreadable or low-confidence, or the text is degraded, and record which engine produced the text in the job. For Google Docs, export native DOCX and convert with `pandoc`. When extracting Hebrew from two-column pages, join columns right to left and preserve reading order. Flag unclear text instead of silently reconstructing it.
 

@@ -19,7 +19,7 @@ def make_registry(tmp_path):
     }), encoding="utf-8")
     (d / "sample.json").write_text(json.dumps({
         "slug": "sample", "name": "Course  Name", "drive_subject": "Philosophy",
-        "drive_folder_id": "drive-1", "notebook_id": "note-1", "manuscript_id": "book-1",
+        "drive_folder_id": "drive-1", "notebook_id": "note-1", "book_id": "book-1",
     }), encoding="utf-8")
     return courses.Registry(d)
 
@@ -88,6 +88,7 @@ def test_validate_rclone_uses_subject_folder_id(tmp_path):
         return subprocess.CompletedProcess(command, 0, json.dumps(output), "")
 
     courses.validate_registry(registry, runner)
+    assert ["trove", "items", "list", "--json", "--no-session"] in commands  # books, not manuscripts
     rclone = next(command for command in commands if command[0] == "rclone")
     assert rclone[rclone.index("--drive-root-folder-id") + 1] == "subject-1"
 

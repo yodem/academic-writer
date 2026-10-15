@@ -407,7 +407,7 @@ def ingest_recording(
     meta.update({"weekday": weekday, "transcript_words": len(transcript.split()), "transcript_source": "file" if transcript_file else "notebooklm", "created_at": datetime.now(ZoneInfo(timezone_name)).isoformat(), "status": "queued"})
     _atomic_json(meta_path, meta)
     queue_path = registry.directory / "queue" / f"{slug}-{lesson_key}.json"
-    _atomic_json(queue_path, {"slug": slug, "date": day, "lesson_key": lesson_key, "transcript_path": str(transcript_path), "meta_path": str(meta_path), "manuscript_id": course.get("manuscript_id"), "book_id": course.get("book_id"), "course_name": course.get("name"), "lecturer": course.get("lecturer")})
+    _atomic_json(queue_path, {"slug": slug, "date": day, "lesson_key": lesson_key, "transcript_path": str(transcript_path), "meta_path": str(meta_path), "book_id": course.get("book_id"), "course_name": course.get("name"), "lecturer": course.get("lecturer")})
     with _locked_course(registry.directory, slug) as locked:
         stored_course = locked.payload
         for entry in stored_course.get("lessons", []):
@@ -435,11 +435,11 @@ def validate_registry(registry: Registry, runner: Callable[..., Any] = subproces
     except Exception as exc:
         return [f"NotebookLM lookup failed: {exc}"]
     try:
-        manuscripts = _as_list(_json_from_command(["trove", "ms", "list", "--json", "--no-session"], runner), "manuscripts", "items")
+        books = _as_list(_json_from_command(["trove", "items", "list", "--json", "--no-session"], runner), "items", "books")
     except Exception as exc:
         return [f"Trove lookup failed: {exc}"]
     notebook_by_id = {str(x.get("id")): x for x in notebooks}
-    manuscript_by_id = {str(x.get("id")): x for x in manuscripts}
+    book_by_id = {str(x.get("id")): x for x in books}
 
     drive_cache: dict[str, list[dict[str, Any]] | Exception] = {}
     remote = registry.term.get("drive_remote", "gdrive")
@@ -450,12 +450,14 @@ def validate_registry(registry: Registry, runner: Callable[..., Any] = subproces
         try:
             expected = {
                 key: naming.get(key, "{name}").format_map(context)
-                for key in ("drive", "notebook", "manuscript")
+                for key in ("drive", "notebook")
             }
+            # course books keep the title the manuscript template gave them; a `book` template wins when set
+            expected["book"] = naming.get("book", naming.get("manuscript", "{name}")).format_map(context)
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             problems.append(f"{slug}: naming template error: {exc}")
             continue
-        for key in ("drive_folder_id", "notebook_id", "manuscript_id"):
+        for key in ("drive_folder_id", "notebook_id", "book_id"):
             if not course.get(key):
                 problems.append(f"{slug}: missing {key}")
         notebook_id = course.get("notebook_id")
@@ -465,13 +467,13 @@ def validate_registry(registry: Registry, runner: Callable[..., Any] = subproces
                 problems.append(f"{slug}: NotebookLM notebook {notebook_id} not found")
             elif normalise_name(str(obj.get("title", ""))) != normalise_name(expected["notebook"]):
                 problems.append(f"{slug}: NotebookLM name mismatch (expected {expected['notebook']!r}, got {obj.get('title')!r})")
-        manuscript_id = course.get("manuscript_id")
-        if manuscript_id:
-            obj = manuscript_by_id.get(str(manuscript_id))
+        book_id = course.get("book_id")
+        if book_id:
+            obj = book_by_id.get(str(book_id))
             if obj is None:
-                problems.append(f"{slug}: Trove manuscript {manuscript_id} not found")
-            elif normalise_name(str(obj.get("title", ""))) != normalise_name(expected["manuscript"]):
-                problems.append(f"{slug}: Trove name mismatch (expected {expected['manuscript']!r}, got {obj.get('title')!r})")
+                problems.append(f"{slug}: Trove book {book_id} not found")
+            elif normalise_name(str(obj.get("title", ""))) != normalise_name(expected["book"]):
+                problems.append(f"{slug}: Trove name mismatch (expected {expected['book']!r}, got {obj.get('title')!r})")
         drive_id = course.get("drive_folder_id")
         if drive_id:
             label = course.get("drive_subject_folder") or course.get("drive_subject")
@@ -847,7 +849,7 @@ def _add_source_locked(registry: Registry, file: Path, course_slug: str, *, titl
     _atomic_json(job_path, {
         "slug": course_slug, "sha8": sha8, "title": title, "file": str(file.resolve()),
         "pages": _pdf_pages(file, runner), "kind": _source_kind(file),
-        "book_id": course.get("book_id"), "manuscript_id": course.get("manuscript_id"), "course_name": course.get("name"),
+        "book_id": course.get("book_id"), "course_name": course.get("name"),
     })
     entry = _update_source(registry, course_slug, sha, status="queued")
     return {"status": "added", "slug": course_slug, "sha8": sha8, "title": title, "notebook_source_id": entry.get("notebook_source_id"), "queue_path": str(job_path), "file": str(file.resolve())}
