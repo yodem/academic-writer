@@ -1,5 +1,5 @@
 // Academic Writer Hooks - lifecycle bundle
-// Generated: 2026-10-15T19:32:41.193Z
+// Generated: 2026-10-15T19:36:03.024Z
 
 import{existsSync as I,readFileSync as U}from"node:fs";import{join as w}from"node:path";var p={continue:!0,suppressOutput:!0};function M(t){if(!Array.isArray(t)||t.length===0)return"";let n=t.slice(0,3).map(e=>{if(typeof e=="string")return e;try{return JSON.stringify(e)}catch{return String(e)}}),r=t.length>n.length?` (+${t.length-n.length} more)`:"";return`
     violations: ${n.join("; ")}${r}`}function O(t){try{let n=t.project_dir??process.env.CLAUDE_PROJECT_DIR??".";if(!I(w(n,".academic-helper","profile.md"))||t.stop_hook_active===!0)return p;let r=w(n,".academic-helper","session-state.json");if(!I(r))return p;let e;try{let i=U(r,"utf-8"),m=JSON.parse(i);if(typeof m!="object"||m===null)return p;e=m}catch{return p}let s=e.run;if(typeof s!="object"||s===null||s.completed===!0)return p;let c=s.requiredGates;if(!Array.isArray(c)||c.length===0)return p;let o=c.filter(i=>typeof i=="string");if(o.length===0)return p;let a=typeof e.gates=="object"&&e.gates!==null?e.gates:{},u=[];for(let i of o){let m=a[i];if(typeof m!="object"||m===null){u.push(`  - "${i}": MISSING \u2014 gate.py was never run for this gate.`);continue}let l=m;if(l.status!=="pass"){let h=typeof l.status=="string"?l.status:"unknown",G=typeof l.detail=="string"&&l.detail?`
