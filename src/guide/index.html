@@ -166,7 +166,7 @@ footer { margin-top: 48px; color: var(--muted); font-size: .9rem; border-top: 1p
 <p>Helpful, but optional:</p>
 <ul>
   <li><strong>5 to 10 of your published articles</strong> (PDF or Word), so the plugin can learn your writing style.</li>
-  <li><strong>Your source texts</strong> as PDFs or Word files. The optional CandleKeep library (an online bookshelf for your sources) lets the plugin search them page by page.</li>
+  <li><strong>Your source texts</strong> as PDFs or Word files. The optional Trove library (an online bookshelf for your sources) lets the plugin search them page by page.</li>
   <li><strong>Python 3</strong>, a free program that reads and writes Word and PDF files. Macs and most Linux computers already have it. Setup checks, and asks before installing the small helper packages it needs.</li>
 </ul>
 </section>
@@ -257,8 +257,8 @@ claude plugin install academic-writer@yodem</code></pre></div>
 <tr><td><code>/academic-writer:ocr</code></td><td>Turn a scanned PDF or photographed page (or a folder of them) into plain text with the bundled Gemini reading tool; pages that already contain text are extracted directly.</td></tr>
 <tr><td><code>/academic-writer:ingest</code></td><td>Upload one article or chapter to the source library with printed page numbers, hinted contents and a citation guide.</td></tr>
 <tr><td><code>/academic-writer:ingest-book</code></td><td>Upload a whole book (multi-volume, scanned or EPUB) to the source library with a navigable hinted table of contents and a citation guide.</td></tr>
-<tr><td><code>/academic-writer:voice</code></td><td>Build or update the author&#x27;s voice profile: import older voice files, choose exemplar paragraphs from past papers, derive writing rules and sync them to CandleKeep.</td></tr>
-<tr><td><code>/academic-writer:health</code></td><td>Check that Academic Writer is ready to use — your profile, the tools it needs (Python and its add-ons, Hebrew spelling, CandleKeep, NotebookLM), the Gemini key and past articles — with a plain-language fix for anything missing.</td></tr>
+<tr><td><code>/academic-writer:voice</code></td><td>Build or update the author&#x27;s voice profile: import older voice files, choose exemplar paragraphs from past papers, derive writing rules and sync them to Trove.</td></tr>
+<tr><td><code>/academic-writer:health</code></td><td>Check that Academic Writer is ready to use — your profile, the tools it needs (Python and its add-ons, Hebrew spelling, Trove, NotebookLM), the Gemini key and past articles — with a plain-language fix for anything missing.</td></tr>
 <tr><td><code>/academic-writer:help</code></td><td>A short list of every command and the three steps to get started.</td></tr>
 <tr><td><code>/academic-writer:courses</code></td><td>Use when setting up an academic term from a schedule, validating course resources, syncing your LMS (Moodle) materials, or running the daily course scan.</td></tr>
 <tr><td><code>/academic-writer:lesson-notes</code></td><td>Use when processing a course recording into a structured Hebrew lesson note, or when resuming queued NotebookLM lesson transcripts with --pending.</td></tr>
@@ -295,7 +295,7 @@ claude plugin install academic-writer@yodem</code></pre></div>
 <ul>
   <li><strong>Anthropic (Claude).</strong> Your conversation with Claude, and the text Claude reads to help you (your drafts, the passages of sources it checks), are sent to Anthropic, as with any use of Claude Code.</li>
   <li><strong>Google (Gemini).</strong> If you set up a Gemini key, the paragraphs being drafted, edited, proofread or summarised, the source passages they rely on, and any scanned pages you ask it to read are sent to Google's Gemini service. On Google's free tier, Google may use what you send to improve its products; check Google's current terms, and consider a paid key for unpublished work you consider sensitive.</li>
-  <li><strong>CandleKeep (optional).</strong> Only the sources you choose to upload to your CandleKeep library are stored there.</li>
+  <li><strong>Trove (optional).</strong> Only the sources you choose to upload to your Trove library are stored there.</li>
   <li><strong>Your keys.</strong> When you save your Gemini key through the plugin's settings, Claude Code stores it in your computer's secure keychain (or a protected credentials file), never in a plain text file in your project. The plugin never prints it or writes it into your research folder.</li>
   <li><strong>Nothing else.</strong> The plugin writes only inside your research folder and its own data folder. It does not send your files anywhere else.</li>
 </ul>
