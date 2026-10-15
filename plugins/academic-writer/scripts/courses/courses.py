@@ -1045,6 +1045,19 @@ def lemida_blocked(errors: list[Any]) -> bool:
     return any(_BLOCKED_RE.search(json.dumps(e, ensure_ascii=False) if not isinstance(e, str) else e) for e in errors)
 
 
+def watch_baseline(registry: Registry, slug: str, pages: list[dict[str, Any]]) -> dict[str, Any]:
+    """Replace the course's watch_seen with everything on `pages` marked seen (clears a `suspect` course)."""
+    import watch_diff as wd
+    if slug not in registry.courses:
+        raise ValueError(f"unknown course {slug!r}")
+    seen = wd.baseline(pages)
+    with _locked_course(registry.directory, slug) as locked:
+        locked.payload["watch_seen"] = seen
+        _atomic_json(locked.path, locked.payload)
+        registry.courses[slug] = locked.payload
+    return seen
+
+
 def watch_diff(registry: Registry, slug: str, pages: list[dict[str, Any]], *, apply: bool = False,
                ok_ids: list[str] | None = None) -> tuple[dict[str, Any], list[str]]:
     """Diff Chrome-extracted pages against the course's `watch_seen` (+ legacy `lemida_seen`, sources).
@@ -1132,6 +1145,7 @@ def main(argv: list[str] | None = None) -> int:
     wdiff = sub.add_parser("watch-diff", help="diff Chrome-extracted Lemida pages against the course's watch state")
     wdiff.add_argument("slug")
     wdiff.add_argument("--pages", type=Path, required=True, help="JSON file: a list of page objects")
+    wdiff.add_argument("--baseline", action="store_true", help="mark everything on --pages as seen (clears a suspect course)")
     wdiff.add_argument("--apply", action="store_true", help="advance the seen state (needs --ok)")
     wdiff.add_argument("--ok", nargs="*", default=None, help="ids (cmid / discussion / section) handled successfully")
     chores_p = sub.add_parser("chores", help="things Yotam must do by hand (chores.json and its digest)")
@@ -1175,6 +1189,11 @@ def main(argv: list[str] | None = None) -> int:
             pages = json.loads(args.pages.read_text(encoding="utf-8"))
             if not isinstance(pages, list):
                 raise ValueError("--pages must hold a JSON list of pages")
+            if args.baseline:
+                seen = watch_baseline(registry, args.slug, pages)
+                print(json.dumps({"baseline": True, "modules": len(seen["modules"]), "discussions": len(seen["discussions"]),
+                                  "assigns": len(seen["assigns"]), "sections": len(seen["sections"])}))
+                return 0
             diff, advanced = watch_diff(registry, args.slug, pages, apply=args.apply, ok_ids=args.ok)
             print(json.dumps(diff, ensure_ascii=False, indent=2))
             if args.apply:

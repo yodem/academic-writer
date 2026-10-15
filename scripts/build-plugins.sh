@@ -120,6 +120,15 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
     cp -R "$SRC_DIR/scripts" "$PLUGIN_DIR/"
   fi
 
+  # Ship the course audit tools so the plugin can run them (toc_audit, toc_rebuild, ms_audit).
+  if [[ -d "$PROJECT_ROOT/tools" ]]; then
+    mkdir -p "$PLUGIN_DIR/scripts/tools"
+    for tool in toc_audit.py toc_rebuild.py ms_audit.py; do
+      [[ -f "$PROJECT_ROOT/tools/$tool" ]] && cp "$PROJECT_ROOT/tools/$tool" "$PLUGIN_DIR/scripts/tools/"
+    done
+    : > "$PLUGIN_DIR/scripts/tools/__init__.py"
+  fi
+
   # Copy workflow scripts (Workflow-tool scriptPath targets)
   if [[ -d "$SRC_DIR/workflows" ]]; then
     cp -R "$SRC_DIR/workflows" "$PLUGIN_DIR/"

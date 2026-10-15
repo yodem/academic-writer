@@ -1,0 +1,148 @@
+#!/bin/bash
+# Nightly BIU course job. Versioned, reviewed copy of ~/.academic-writer/bin/courses-daily.sh
+# (launchd: com.yotam.academic-courses-daily). The live script is replaced by hand, not by this repo.
+#
+# Steps, each logged to $TERM_DIR/logs/daily-<date>.log; one failing step never stops the rest:
+#   a. courses.py daily            Voice Memos (exit 5 = Lemida REST blocked by the captcha: expected, not a failure)
+#   b. Chrome check                no "Google Chrome" process -> a manual chore, step c skipped
+#   c. claude -p --chrome          /academic-writer:courses watch-lemida --all   (COURSES_ONLY="cohen kane" restricts)
+#   d. queued lesson jobs          /academic-writer:lesson-notes --pending
+#   e. tools/toc_audit.py --all    failure -> a manual chore (the job is not failed by it)
+#   f. courses.py chores digest
+#   g. courses-sync-nanoclaw.sh    failure is logged, not fatal
+# Exit status is nonzero only when a step failed.
+# COURSES_DRY=1 prints each planned command to stdout instead of running it (no log file).
+export PATH="${PATH:+$PATH:}$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+REPO="${ACADEMIC_WRITER_REPO:-$HOME/dev/academic-writer}"
+COURSES="$REPO/src/scripts/courses/courses.py"
+TERM_DIR="${COURSES_TERM_DIR:-$HOME/.academic-writer/courses/תשפ״ז}"
+SYNC="$HOME/.academic-writer/bin/courses-sync-nanoclaw.sh"
+PY=/usr/bin/python3
+DAY=$(date +%Y-%m-%d)
+DRY="${COURSES_DRY:-}"
+FAILED=0
+
+WATCH_TOOLS="mcp__claude-in-chrome__*,Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(trove items:*),Bash(trove ms show:*),Bash(nlm source:*),Bash(nlm notebook:*),Bash(rclone:*),Bash(pdftoppm:*),Bash(pdftotext:*),Bash(pandoc:*),Bash(ls:*),Bash(mkdir:*),Bash(mv:*),Bash(cp:*),Bash(open:*),Bash(screencapture:*),Bash(date:*)"
+LESSON_TOOLS="Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(trove items:*),Bash(trove ms show:*),Bash(trove auth whoami:*),Bash(mkdir:*),Bash(mv:*),Bash(ls:*),Bash(cat:*),Bash(date:*)"
+
+stamp() { date '+%Y-%m-%dT%H:%M:%S%z'; }
+
+# plan "<description>" -> in dry mode prints it; returns 0 when the caller should skip running
+dry_plan() {
+  [ -n "$DRY" ] || return 1
+  echo "PLAN: $*"
+  return 0
+}
+
+# step <name> <command...>: run, log the exit code, count a failure. Never aborts the job.
+step() {
+  local name="$1"; shift
+  echo "-- $name $(stamp)"
+  "$@"
+  local rc=$?
+  echo "-- $name exit=$rc"
+  return $rc
+}
+
+first_slug() {
+  "$PY" - "$REPO/src/scripts/courses" "$TERM_DIR" <<'PYEOF' 2>/dev/null
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import courses
+print(next(iter(courses.Registry(Path(sys.argv[2])).courses)))
+PYEOF
+}
+
+add_manual_chore() {  # <ref> <title> <text>
+  local slug
+  slug=$(first_slug)
+  [ -n "$slug" ] || slug=general
+  "$PY" "$COURSES" chores add --course "$slug" --kind manual --ref "$1" --title "$2" --text "$3"
+}
+
+run_job() {
+  echo "== courses daily $(stamp)"
+
+  # a. Voice Memos (+ REST sync; exit 5 = blocked by the captcha, expected)
+  if ! dry_plan "$PY $COURSES daily"; then
+    step daily "$PY" "$COURSES" daily
+    rc=$?
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 5 ]; then FAILED=1; fi
+  fi
+
+  # b/c. Lemida scan through Claude in Chrome
+  if pgrep -x "Google Chrome" >/dev/null 2>&1; then
+    PROMPT="/academic-writer:courses watch-lemida --all"
+    [ -n "${COURSES_ONLY:-}" ] && PROMPT="$PROMPT $COURSES_ONLY"
+    if ! dry_plan "printf '%s' '$PROMPT' | claude -p --chrome --model sonnet --plugin-dir $REPO/plugins/academic-writer --allowedTools \"$WATCH_TOOLS\""; then
+      echo "-- watch-lemida $(stamp)"
+      printf '%s' "$PROMPT" | claude -p --chrome --model sonnet \
+        --plugin-dir "$REPO/plugins/academic-writer" --allowedTools "$WATCH_TOOLS"
+      rc=$?
+      echo "-- watch-lemida exit=$rc"
+      [ "$rc" -ne 0 ] && FAILED=1
+    fi
+  else
+    if ! dry_plan "$PY $COURSES chores add --kind manual \"Open Chrome logged in to Lemida so tonight's scan can run\""; then
+      echo "Chrome is not running: watch-lemida skipped"
+      step chrome-chore add_manual_chore "open-chrome-$DAY" "Open Chrome logged in to Lemida so tonight's scan can run" \
+        "Chrome was not running at the nightly job on $DAY, so the Lemida scan was skipped." || FAILED=1
+    fi
+  fi
+
+  # d. queued lesson jobs
+  shopt -s nullglob
+  JOBS=("$TERM_DIR"/queue/*.json)
+  shopt -u nullglob
+  if [ ${#JOBS[@]} -eq 0 ]; then
+    echo "no queued lessons"
+  else
+    echo "queued lessons: ${#JOBS[@]}"
+    if ! dry_plan "printf '%s' '/academic-writer:lesson-notes --pending' | claude -p --model sonnet --plugin-dir $REPO/plugins/academic-writer --allowedTools \"$LESSON_TOOLS\""; then
+      printf '%s' "/academic-writer:lesson-notes --pending" | claude -p --model sonnet \
+        --plugin-dir "$REPO/plugins/academic-writer" --allowedTools "$LESSON_TOOLS"
+      rc=$?
+      echo "-- lesson-notes exit=$rc $(stamp)"
+      [ "$rc" -ne 0 ] && FAILED=1
+    fi
+  fi
+
+  # e. Trove ToC audit: a failure becomes a chore, it does not fail the job
+  if ! dry_plan "$PY $REPO/tools/toc_audit.py --all"; then
+    AUDIT=$("$PY" "$REPO/tools/toc_audit.py" --all --json 2>&1)
+    rc=$?
+    echo "-- toc-audit exit=$rc"
+    if [ "$rc" -ne 0 ]; then
+      echo "$AUDIT" | head -40
+      BOOKS=$(printf '%s' "$AUDIT" | "$PY" -c 'import json,sys
+try:
+    d=json.load(sys.stdin); print(", ".join(b["label"] for b in d["books"] if not b.get("ok")))
+except Exception:
+    print("see the daily log")' 2>/dev/null)
+      add_manual_chore "toc-audit-$DAY" "ToC audit failed: ${BOOKS:-see the daily log}" \
+        "tools/toc_audit.py --all failed on $DAY. Run it to see the missing, duplicate or unhinted entries." \
+        || echo "could not record the ToC chore"
+    fi
+  fi
+
+  # f. chores digest
+  if ! dry_plan "$PY $COURSES chores digest"; then
+    step digest "$PY" "$COURSES" chores digest || FAILED=1
+  fi
+
+  # g. sync to NanoClaw (logged, not fatal)
+  if ! dry_plan "$SYNC"; then
+    step nanoclaw-sync "$SYNC" || echo "nanoclaw sync failed (not fatal)"
+  fi
+  echo "== done $(stamp) failed=$FAILED"
+}
+
+if [ -n "$DRY" ]; then
+  run_job
+else
+  mkdir -p "$TERM_DIR/logs"
+  run_job >> "$TERM_DIR/logs/daily-$DAY.log" 2>&1
+fi
+exit "$FAILED"

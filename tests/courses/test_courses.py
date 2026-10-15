@@ -265,3 +265,23 @@ def test_watch_diff_advances_only_with_apply_and_ok(tmp_path, monkeypatch, capsy
     assert courses.main(base + ["watch-diff", "sample", "--pages", str(pages), "--apply", "--ok", "22"]) == 0
     assert saved()["watch_seen"]["modules"] == {"22": {}} and calls["ok"] == {"22"}
     assert courses.main(base + ["watch-diff", "ghost", "--pages", str(pages)]) == 2
+
+
+def test_watch_diff_baseline_marks_everything_seen(tmp_path, monkeypatch, capsys):
+    registry = make_registry(tmp_path)
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(registry.directory.parent))
+    mods = [{"cmid": "11", "name": "f", "type": "file", "url": "u", "completion": "", "link": None}]
+    page = {"kind": "course", "url": "u", "course_id": 1, "fetched_at": "2026-10-14T22:30:00+03:00",
+            "sections": [{"id": "s1", "name": "unit", "modules": mods}], "declared_module_count": 1}
+    pages = tmp_path / "pages.json"
+    pages.write_text(json.dumps([page]))
+    base = ["--term", registry.directory.name]
+    assert courses.main(base + ["watch-diff", "sample", "--baseline", "--pages", str(pages)]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["baseline"] is True and out["modules"] == 1
+    saved = json.loads((registry.directory / "sample.json").read_text())
+    assert "11" in saved["watch_seen"]["modules"]
+    assert courses.main(base + ["watch-diff", "sample", "--pages", str(pages)]) == 0
+    diff = json.loads(capsys.readouterr().out)
+    assert diff["suspect"] is False and diff["new_modules"] == []
+    assert courses.main(base + ["watch-diff", "ghost", "--baseline", "--pages", str(pages)]) == 2
