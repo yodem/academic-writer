@@ -162,6 +162,37 @@ class TestAuditorRecordsVerdicts(unittest.TestCase):
         self.assertIn("`runId`", self.text)
 
 
+class TestAuditorChecksIdsBeforeBuildingCommands(unittest.TestCase):
+    HOSTILE = ["x'; printf INJECTED >&2; #", "a;b", "a$(touch /tmp/aw-pwned)b", "a`id`b", "has space", 'a"b', "a\nb", ""]
+
+    def setUp(self):
+        self.text = read("src/agents/auditor.md")
+        code = re.search(r"export const PLAIN_ID = /(.+?)/u;", read("src/cli/src/library/backends.ts"))
+        self.assertIsNotNone(code)
+        self.code_pattern = code.group(1)
+
+    def test_the_documented_check_is_the_cli_pattern_written_literally(self):
+        self.assertIn(self.code_pattern, self.text)
+        self.assertIn("invalid source id", self.text)
+        lowered = self.text.lower()
+        self.assertIn("before you build any command", lowered)
+        self.assertIn("do not run a command with it", lowered)
+
+    def test_a_template_filled_with_a_hostile_id_is_refused_by_the_documented_check(self):
+        documented = re.compile(self.code_pattern)
+        templates = [line for line in code_lines(self.text) if "library read" in line or "library verdict" in line]
+        self.assertGreaterEqual(len(templates), 2)
+        for line in templates:
+            for placeholder in ("SOURCE_ID", "PARAGRAPH_ID", "RUN_ID", "LOOKUP_ID"):
+                if f"'{placeholder}'" not in line:
+                    continue
+                for hostile in self.HOSTILE:
+                    rendered = line.replace(f"'{placeholder}'", f"'{hostile}'")
+                    self.assertNotRegex(hostile, documented, rendered)  # the check refuses it, so this command is never run
+                for good in ("T-A#frag:1.a_b", "lk_abc123", "unit-1_p_2", "write-art-20261015-1430"):
+                    self.assertRegex(good, documented)
+
+
 class TestRunIdReachesTheAuditor(unittest.TestCase):
     def test_write_edit_and_edit_section_pass_run_id(self):
         for rel in ("src/skills/write/SKILL.md", "src/skills/edit/SKILL.md", "src/skills/edit-section/SKILL.md"):
@@ -172,8 +203,8 @@ class TestRunIdIsAPlainId(unittest.TestCase):
     """The library refuses ids that are not plain, so the run id a skill documents must pass the same pattern."""
 
     def pattern(self):
-        text = read("src/cli/src/library/cli.ts")
-        match = re.search(r"const PLAIN_ID = /(.+?)/u;", text)
+        text = read("src/cli/src/library/backends.ts")
+        match = re.search(r"export const PLAIN_ID = /(.+?)/u;", text)
         self.assertIsNotNone(match)
         return re.compile(match.group(1))
 

@@ -69,6 +69,8 @@ For each paragraph, list every **factual claim** (not the author's own analysis)
 
 Its JSON has `"enabled"`. If `enabled` is `false`, skip Check A. If the command itself fails, fall back to `tools.trove.enabled` in the prompt (older profiles: `tools.candlekeep.enabled`): when that is false, skip Check A. The route behind the library (Trove, PageIndex or both) is the plugin's business, not yours: never call `trove` or `pilib` directly and never probe them with `which` or `--help`.
 
+**Check every id before you build any command.** The ids you put into commands (`SOURCE_ID`, `PARAGRAPH_ID`, `RUN_ID`, `LOOKUP_ID`) must match `^[A-Za-z0-9_.#:-]+$`: only letters, digits and `. _ # : -`. If one does not match (a quote, a space, `;`, `$`, a backtick, a newline or anything else), do not run a command with it, not even inside quotes. Treat that citation as unverifiable ("invalid source id"): FAIL the paragraph and say in the feedback that its source id is not valid and the researcher should fix the source list. Never try to clean or shorten the id yourself.
+
 Otherwise confirm that the page is real and says what is claimed. Read the cited pages with the library, once per cited page range (reuse the result across paragraphs):
 
 ```bash

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import thresholds from '../../../thresholds.json' with { type: 'json' };
-import { PageIndexBackend, TroveBackend } from './backends.ts';
+import { PageIndexBackend, TroveBackend, isPlainId } from './backends.ts';
 import type { CommandScope } from './exec.ts';
 import { loadLibraryConfig, profileTroveEnabled, type LibraryConfig } from './config.ts';
 import { appendRow, clipError, nowIso, spoolFile, spoolValue, textSha, writeSpool, type LookupOp, type LookupRow } from './ledger.ts';
@@ -131,7 +131,14 @@ export class Library implements ShadowRunner {
     return found;
   }
 
-  private async listVia(route: RouteName): Promise<BookInfo[]> {
+  /** The route's books with plain ids only: an id that is not plain could carry a command into a shell, so it is dropped (and counted). */
+  private async listVia(route: RouteName): Promise<{ items: BookInfo[]; skipped: number }> {
+    const all = await this.listRaw(route);
+    const items = all.filter((book) => isPlainId(book.id));
+    return { items, skipped: all.length - items.length };
+  }
+
+  private async listRaw(route: RouteName): Promise<BookInfo[]> {
     const books = await this.backend(route).list();
     if (route === 'trove') return books;
     const shelf = this.shelf;
@@ -245,7 +252,7 @@ export class Library implements ShadowRunner {
   }
 
   private async shadowCall(spec: ShadowSpec): Promise<RouteResult> {
-    if (spec.op === 'list') return summarizeText(null, JSON.stringify(await this.listVia(spec.route)));
+    if (spec.op === 'list') return summarizeText(null, JSON.stringify((await this.listVia(spec.route)).items));
     if (spec.op === 'toc') {
       const result = await this.tocVia(spec.route, spec.source ?? '');
       return summarizeText(result.book, JSON.stringify(result.toc));
@@ -281,10 +288,10 @@ export class Library implements ShadowRunner {
   }
 
   /** The answering route's books, as canonical ids (PageIndex books that map to a Trove id show that id). */
-  async list(ids: Ids = {}): Promise<{ route: RouteName; mode: LibraryConfig['route']; items: BookInfo[] }> {
+  async list(ids: Ids = {}): Promise<{ route: RouteName; mode: LibraryConfig['route']; items: BookInfo[]; skipped_invalid_ids: number }> {
     return this.tracked('list', null, ids, async (route) => {
-      const items = await this.listVia(route);
-      return { value: { route, mode: this.config.route, items }, book: null, text: JSON.stringify(items) };
+      const { items, skipped } = await this.listVia(route);
+      return { value: { route, mode: this.config.route, items, skipped_invalid_ids: skipped }, book: null, text: JSON.stringify(items) };
     });
   }
 

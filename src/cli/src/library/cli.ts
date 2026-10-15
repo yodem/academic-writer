@@ -1,4 +1,5 @@
 import { Library } from './adapter.ts';
+import { PLAIN_ID } from './backends.ts';
 import { formatReport, reportFor } from './report.ts';
 import { loadSpec, runShadowWorker, shadowModeFrom, workerSettings } from './shadow.ts';
 import { recordVerdict, settlePending } from './verdict.ts';
@@ -11,7 +12,6 @@ const VALUE_FLAGS = new Set(['--source', '--pages', '--printed', '--page', '--ru
 // Ids that an agent writes into a shell command line. Anything else is refused before it is used (a defence in depth:
 // the agent single-quotes them too), so an id can never carry a command.
 const ID_FLAGS = new Set(['--source', '--lookup', '--paragraph', '--run', '--claim']);
-const PLAIN_ID = /^[A-Za-z0-9_.#:-]+$/u;
 
 type Parsed = { positional: string[]; flags: Map<string, string | true> };
 
@@ -114,7 +114,9 @@ export async function runLibraryCli(argv: string[], io: LibraryIo = processIo): 
     if (subcommand === 'status') {
       print(await library.status(flags.has('--check')));
     } else if (subcommand === 'list') {
-      print(await library.list({ run: flagText(flags, '--run'), claim: flagText(flags, '--claim') }));
+      const listed = await library.list({ run: flagText(flags, '--run'), claim: flagText(flags, '--claim') });
+      if (listed.skipped_invalid_ids > 0) io.err(`NOTE library list: ${listed.skipped_invalid_ids} entries skipped: their ids are not plain (letters, digits and . _ # : - only), so they cannot be used as sources\n`);
+      print(listed);
     } else if (subcommand === 'toc') {
       print(await library.toc(requireSource(), { run: flagText(flags, '--run'), claim: flagText(flags, '--claim') }));
     } else if (subcommand === 'read' || subcommand === 'get') {

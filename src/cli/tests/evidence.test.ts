@@ -97,6 +97,8 @@ const fs = require('node:fs');
 const args = process.argv.slice(2);
 if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, 'trove ' + args.join(' ') + '\\n');
 if (args[0] === 'items' && args[1] === 'read') setTimeout(() => process.stdout.write('**Trove Book**\\n\\n── Page 1 ──\\nהנבואה היא שפע מאת האל.\\n'), Number(process.env.FAKE_SLOW_READ_MS || 0));
+else if (args[0] === 'shelf') console.log('No active shelf');
+else if (args[0] === 'items' && args[1] === 'list') console.log(JSON.stringify({ items: JSON.parse(process.env.FAKE_LIST_JSON || '[]') }));
 else if (args[0] === 'items' && args[1] === 'toc') console.log('==========\\nTrove Title\\nID: ' + args[2] + ' | 1 pages\\n==========');
 else { console.error('unexpected: ' + args.join(' ')); process.exit(2); }
 `;
@@ -106,7 +108,7 @@ const args = process.argv.slice(2);
 if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, 'pilib ' + args.join(' ') + '\\n');
 if (process.env.FAKE_PILIB_FAIL) { console.error('pilib: boom'); process.exit(1); }
 const [cmd, book, spec] = args;
-if (cmd === 'catalog') console.log(JSON.stringify({ 'lib-1': { title: 'PageIndex Title', author: 'Au', n_pages: 2, toc_source: 'x', top: [] } }));
+if (cmd === 'catalog') console.log(JSON.stringify({ 'lib-1': { title: 'PageIndex Title', author: 'Au', n_pages: 2, toc_source: 'x', top: [] }, ...JSON.parse(process.env.FAKE_PI_EXTRA || '{}') }));
 else if (cmd === 'meta') console.log(JSON.stringify({ book_id: book, title: 'PageIndex Title', n_pages: 2, origin: {}, trove_id: process.env.FAKE_PI_TROVE_ID || 'T-1', pagemap: null }));
 else if (cmd === 'read') console.log(JSON.stringify({ book_id: book, pages: [{ page: 1, content: 'פרק ראשון של המקור.' }, { page: 2, content: 'פרק שני של המקור.' }] }));
 else { console.error('unexpected: ' + args.join(' ')); process.exit(2); }
@@ -248,4 +250,41 @@ test('evidence lookups and their shadow carry the run id, so aw library report -
     assert.ok(report.rows.lookup >= 1, out);
     assert.ok(report.rows.shadow >= 1, out);
   } finally { __stubs({}); b.restore(); }
+});
+
+// ---------------------------------------------------------------- ids that reach a shell are validated where they enter
+
+const HOSTILE_IDS = ["x'; printf INJECTED >&2; #", 'a;b', 'a$(touch /tmp/aw-pwned)b', 'a`id`b', 'has space'];
+
+test('aw library list drops entries whose id is not plain (Trove and PageIndex) and says so', async () => {
+  const items = [{ id: 'good-1', title: 'Good', author: 'A', pageCount: 3 }, ...HOSTILE_IDS.map((id) => ({ id, title: 'Bad', author: 'B', pageCount: 1 }))];
+  for (const route of ['trove', 'pageindex']) {
+    const extra = Object.fromEntries(HOSTILE_IDS.map((id) => [id, { title: 'Bad', author: 'B', n_pages: 1, toc_source: 'x', top: [] }]));
+    const b = bench({ route }, { FAKE_LIST_JSON: JSON.stringify(items), FAKE_PI_EXTRA: JSON.stringify(extra) });
+    try {
+      const library = new Library(b.project, process.env, { shadow: 'off' });
+      const listed = await library.list();
+      const ids = listed.items.map((item) => item.id);
+      assert.ok(ids.length >= 1 && ids.every((id) => /^[A-Za-z0-9_.#:-]+$/u.test(id)), `${route}: ${ids.join(' | ')}`);
+      assert.equal(listed.skipped_invalid_ids, HOSTILE_IDS.length, route);
+      let out = '';
+      let err = '';
+      setPathArguments(['--data-dir', join(b.root, 'd'), '--project-dir', b.project]);
+      assert.equal(await runLibraryCli(['list'], { out: (t) => { out += t; }, err: (t) => { err += t; } }), 0);
+      assert.ok(!out.includes('INJECTED') && !out.includes('$('), `${route}: hostile id reached the output`);
+      assert.match(err, /skipped/u);
+    } finally { b.restore(); }
+  }
+});
+
+test('evidence build refuses a source id that is not plain, before any command runs and before evidence.json', async () => {
+  for (const id of HOSTILE_IDS) {
+    const b = bench();
+    __stubs(noPassages);
+    try {
+      await assert.rejects(buildEvidence({ sources: ['good-ok', id], runId: 'r' }), /not a plain id/u);
+      assert.deepEqual(loggedCalls(b), [], 'no command ran');
+      assert.equal(existsSync(join(b.project, '.academic-helper', 'evidence.json')), false);
+    } finally { __stubs({}); b.restore(); }
+  }
 });

@@ -9,6 +9,7 @@ import thresholds from '../../thresholds.json' with { type: 'json' };
 import { fetchSefaria } from './sefaria.ts';
 import { Library } from './library/adapter.ts';
 import { shadowModeFrom } from './library/shadow.ts';
+import { isPlainId } from './library/backends.ts';
 import type { RouteName } from './library/types.ts';
 import { decide } from './decide.ts';
 import evidenceSchema from '../../schemas/evidence.schema.json' with { type: 'json' };
@@ -110,6 +111,10 @@ function event(runId: string, record: Passage, reason: string): void {
 export async function buildEvidence(options: BuildOptions): Promise<BuildResult> {
   dataDir();
   projectDir();
+  // A source id ends up in command lines the auditor and the library run: refuse anything but a plain id before any command runs.
+  for (const id of options.sources) {
+    if (!isPlainId(id)) throw new Error(`ERROR evidence.build: source id ${JSON.stringify(id)} is not a plain id (letters, digits and . _ # : - only); remove it from the source list`);
+  }
   const intent = options.intent ? readFileSync(options.intent, 'utf8') : '';
   // The author's intent decides the core text and primary sources (live rehearsal 2026-09-23: every
   // Trove source defaulted to secondary / not-core, and titles were raw ids).

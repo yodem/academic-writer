@@ -6,6 +6,13 @@ import { LibraryError, type BookInfo, type LibraryBackend, type PageText, type R
 export type BackendOptions = { command: string[]; env?: NodeJS.ProcessEnv; timeoutMs: number; /** Timeout of a whole-book read (`all`); defaults to timeoutMs. */ readAllTimeoutMs?: number; /** The project folder: the child runs there, not in the caller's directory. */ cwd?: string; /** Commands of one lookup that must stop together (the shadow worker). */ scope?: CommandScope };
 const limits = thresholds.library;
 
+/**
+ * The ids an agent may write into a shell command line (source, lookup, paragraph, run, claim). Ids are checked here, where
+ * they enter the system (library listings, evidence building) and again by `aw library` when they come back as arguments.
+ */
+export const PLAIN_ID = /^[A-Za-z0-9_.#:-]+$/u;
+export function isPlainId(id: string): boolean { return PLAIN_ID.test(id); }
+
 function parseJson(text: string, what: string): unknown {
   try { return JSON.parse(text); } catch { throw new LibraryError('parse', `ERROR library: ${what} did not return JSON`); }
 }
