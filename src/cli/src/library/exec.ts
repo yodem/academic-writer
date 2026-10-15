@@ -1,9 +1,30 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { LibraryError } from './types.ts';
 
-export type RunOptions = { timeoutMs: number; maxBuffer: number; env?: NodeJS.ProcessEnv; cwd?: string };
+export type RunOptions = { timeoutMs: number; maxBuffer: number; env?: NodeJS.ProcessEnv; cwd?: string; scope?: CommandScope };
 
 const STDERR_KEEP = 8192;
+
+/**
+ * A group of commands that live and die together: the shadow worker runs everything for one lookup in one
+ * scope. Aborting it kills the commands still running AND makes every later command refuse to start, so a
+ * lookup that timed out cannot go on to launch the next step (a caller that swallows one failure and tries
+ * another command gets nothing). A command that times out inside a scope aborts the whole scope.
+ */
+export class CommandScope {
+  private stopped = false;
+  private readonly children = new Set<ChildProcess>();
+  get aborted(): boolean { return this.stopped; }
+  add(child: ChildProcess): void { this.children.add(child); }
+  remove(child: ChildProcess): void { this.children.delete(child); }
+  abort(): void {
+    this.stopped = true;
+    for (const child of this.children) {
+      try { if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, 'SIGKILL'); else child.kill('SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch { /* already gone */ } }
+    }
+    this.children.clear();
+  }
+}
 
 /**
  * Run `command` (a word list, never a shell string) with `args` and return its stdout.
@@ -14,6 +35,7 @@ export function runCommand(command: string[], args: string[], options: RunOption
   const [file, ...prefix] = command;
   if (!file) return Promise.reject(new LibraryError('config', 'ERROR library: empty command'));
   const label = file.split('/').pop() ?? file;
+  if (options.scope?.aborted) return Promise.reject(new LibraryError('timeout', `ERROR library: ${label} not started: this lookup was stopped`));
   return new Promise<string>((resolve, reject) => {
     let settled = false;
     const chunks: Buffer[] = [];
@@ -21,18 +43,21 @@ export function runCommand(command: string[], args: string[], options: RunOption
     let stderr = '';
     const posix = process.platform !== 'win32';
     const child = spawn(file, [...prefix, ...args], { stdio: ['ignore', 'pipe', 'pipe'], env: options.env, cwd: options.cwd, detached: posix, windowsHide: true });
+    options.scope?.add(child);
     const killTree = (): void => {
       try { if (posix && child.pid) process.kill(-child.pid, 'SIGKILL'); else child.kill('SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch { /* already gone */ } }
     };
     const finish = (fn: () => void): void => {
       if (settled) return;
       settled = true;
+      options.scope?.remove(child);
       clearTimeout(timer);
       fn();
     };
     const timer = setTimeout(() => {
       finish(() => {
         killTree();
+        options.scope?.abort();
         child.stdout?.destroy();
         child.stderr?.destroy();
         reject(new LibraryError('timeout', `ERROR library: ${label} did not answer within ${options.timeoutMs} ms`));
