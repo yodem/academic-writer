@@ -4,6 +4,15 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-10-15
+
+### Added
+- **Nightly Lemida watcher (Chrome)** in `/academic-writer:courses`, with the full procedure in `skills/courses/references/lemida-watch.md`. Moodle's REST API is blocked by a captcha, so the watch drives your signed-in Chrome: it walks every section of each course, continues from the last section with content, always reads the announcements forum, downloads files from their `pluginfile.php` links, handles Zoom recordings (download, else transcript reduced to the lecturer's main ideas with meaningful asides kept), Perusall items (OCR of the pdf twin, else a `perusall-capture` chore), assignments (time left, task, core texts; `assignment` and `kotar-source` chores) and forums you must post in (`forum-post` chore). Seen state advances only after routing succeeded (`courses.py watch-diff --apply --ok`).
+- **Table of contents rule** in `courses`, `lesson-notes` and `ingest-book`: every page has its own `Title - hint` entry, nested (course, lessons, readings with sections) and in page order, with `tools/toc_rebuild.py` and `tools/toc_audit.py` named as the repo-local check.
+
+### Changed
+- **Course OCR: Claude vision first, Gemini on escalation.** Scanned course readings are read with Claude vision (`pdftoppm -r 150`); pages Claude flags unreadable or low-confidence, or degraded text, go to the bundled `/academic-writer:ocr`, and the engine used is recorded. This replaces the old "never Gemini" rule.
+
 ## [0.16.1] — 2026-10-14
 
 ### Changed

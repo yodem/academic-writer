@@ -10,6 +10,8 @@ metadata: {author: "Yotam Fromm", version: "0.1.0"}
 
 OCR (optical character recognition) reads the text out of a scanned or photographed page. Transcribe a PDF, an image, or a folder of them with `aw ocr`. OCR copies the source text exactly: it never corrects, modernises or paraphrases it, because the text may later be quoted as evidence.
 
+For course readings this is the escalation engine, not the first try: read the pages with Claude vision first (`pdftoppm -r 150`), and use `aw ocr` when Claude flags pages as unreadable or low-confidence or the text is degraded. Record which engine produced the text.
+
 1. If the author gave no path, ask for the file or folder.
 2. Choose the language: `he`, `en` or `mixed`. Take it from `.academic-helper/profile.md`, or ask when the source language is unclear.
 3. Write the output under a project folder named `ocr-output/`, and run:
