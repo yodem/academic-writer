@@ -58,9 +58,14 @@ And for each citation the checker looked at:
 
 - passed or failed, the corrected page when it found one, and whether the second library's page also supported the claim.
 
-The ledger holds figures and short messages, not your text. For the comparison, the plugin briefly keeps a copy of the second library's pages in `.academic-helper/retrieval/`. Those copies are deleted after about three days.
+The ledger file holds figures and short messages, not your text. The plugin does, however, keep temporary working copies in the folder `.academic-helper/retrieval/` so it can compare the two libraries:
 
-**Nothing leaves your computer because of the ledger.** It is not uploaded or shared, and the plugin has no step that sends it anywhere. (A PageIndex command you set up yourself may contact your own server to fetch pages; that is part of your setup, not of the ledger.) Deleting `retrieval.jsonl` and the `retrieval/` folder is always safe; the report simply starts again from zero.
+- a copy of the pages each library returned (the answering one and the quiet one), and
+- while a citation check is still waiting for the quiet lookup to finish, a small file holding the supporting quote the citation checker gave. It is removed once that check is settled.
+
+These temporary files are not cleaned on a timer. Files older than about three days are removed only when the library is used again (the next background lookup or citation check). A project you stop using keeps its copies until you delete the `retrieval/` folder yourself.
+
+**Nothing leaves your computer because of the ledger or these copies.** They are not uploaded or shared, and the plugin has no step that sends them anywhere. Page requests that go through a PageIndex route are different: they go wherever your PageIndex command points (for example your own server). That is part of your setup, not of the ledger. Deleting `retrieval.jsonl` and the `retrieval/` folder is always safe; the report simply starts again from zero.
 
 ---
 

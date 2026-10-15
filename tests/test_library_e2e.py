@@ -75,7 +75,10 @@ if MODE == "fail":
     sys.stderr.write("pilib: the index is unavailable\\n")
     sys.exit(1)
 if MODE == "hang":
-    time.sleep(600)
+    # Handshake: say we started, then become a process that blocks and never finishes on its own. exec keeps the
+    # pid, so killing the pid (or its group) stops the block; the tag in argv lets the test find it by name.
+    open("{state}/pilib.started", "w").write(str(os.getpid()))
+    os.execv(sys.executable, [sys.executable, "-c", "import time; time.sleep(600)", "{tag}"])
 text = lambda n: "{page}".format(n=n)
 if a[0] == "catalog":
     print(json.dumps({{"lib-a": {{"title": "Library A", "author": "Au", "n_pages": 5, "toc_source": "x", "top": []}}}}))
@@ -94,7 +97,7 @@ else:
     sys.exit(2)
 '''
 
-SHADOW_TIMEOUT_MS = 3000  # how long the quiet second lookup may run before it is given up on (the hanging case)
+SHADOW_TIMEOUT_MS = 6000  # the quiet second lookup is given up on after this; large so no assertion races it
 
 
 class Project:
@@ -120,7 +123,7 @@ class Project:
         if with_shelf:
             (self.project / "shelf.json").write_text(json.dumps({"map": {"T-A": {"book": "lib-a", "pages": "identity"}}}), encoding="utf-8")
         self.trove = self._write(bin_dir / "trove", TROVE_FAKE.format(python=sys.executable, page=PAGE))
-        self.pilib = self._write(bin_dir / "pilib", PILIB_FAKE.format(python=sys.executable, mode=pilib_mode, page=PAGE))
+        self.pilib = self._write(bin_dir / "pilib", PILIB_FAKE.format(python=sys.executable, mode=pilib_mode, page=PAGE, state=root, tag=root))
         self.env = {
             **{k: v for k, v in os.environ.items() if not k.startswith("AW_")},
             "AW_TROVE_COMMAND": str(self.trove),
@@ -169,21 +172,55 @@ class Project:
         return next((r for r in self.rows() if r["row_type"] == "shadow" and r["lookup_id"] == lookup_id), None)
 
     def leftovers(self) -> list[tuple[int, str]]:
-        """Processes still running that belong to this project (shadow workers, fake commands)."""
-        out = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True).stdout
+        """Processes still running that belong to this project: every one has the project's unique temp folder in
+        its command line (the detached shadow worker's spec path, the fake commands' script path, the tag the
+        hanging fake carries after it execs). A ps that fails or does not even list this test is an error, never "clean"."""
+        out = subprocess.run(["ps", "-axww", "-o", "pid=,command="], capture_output=True, text=True)
+        if out.returncode != 0 or not re.search(rf"^\s*{os.getpid()}\s", out.stdout, flags=re.M):
+            raise RuntimeError(f"ps could not list processes (exit {out.returncode}): {out.stderr[-200:]}")
         mine = []
-        for line in out.splitlines():
+        for line in out.stdout.splitlines():
             pid_text, _, command = line.strip().partition(" ")
-            if str(self.root) in command and int(pid_text) != os.getpid():
+            if pid_text.isdigit() and str(self.root) in command and int(pid_text) != os.getpid():
                 mine.append((int(pid_text), command.strip()))
         return mine
 
-    def kill_leftovers(self) -> None:
-        for pid, _ in self.leftovers():
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+    def kill_leftovers(self, deadline_s: float = 20.0) -> list[tuple[int, str]]:
+        """Kill tagged processes (and their process groups), then look again, until two scans in a row find none
+        or the deadline passes. A worker that starts a child after one scan is caught by the next scan. Returns what remains."""
+        deadline = time.monotonic() + deadline_s
+        clean_scans = 0
+        while True:
+            found = self.leftovers()
+            if not found:
+                clean_scans += 1
+                if clean_scans >= 2:
+                    return []
+            else:
+                clean_scans = 0
+                for pid, _ in found:
+                    try:
+                        group = os.getpgid(pid)
+                        if group != os.getpgrp():
+                            os.killpg(group, signal.SIGKILL)
+                        os.kill(pid, signal.SIGKILL)
+                    except (ProcessLookupError, PermissionError):
+                        pass
+            if time.monotonic() > deadline:
+                return self.leftovers()
+            time.sleep(0.1)
+
+    def started_pid(self) -> int | None:
+        marker = self.root / "pilib.started"
+        return int(marker.read_text()) if marker.exists() and marker.read_text().strip() else None
+
+
+def alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
 
 
 @pytest.fixture(autouse=True)
@@ -205,11 +242,9 @@ def make_project(tmp_path):
         return project
 
     yield make
-    # The detached shadow workers and any hanging fake command must not outlive the test.
-    for project in made:
-        project.kill_leftovers()
-    for project in made:
-        assert project.leftovers() == [], project.leftovers()
+    # The detached shadow workers and any hanging fake command must not outlive the test, whatever happened in it.
+    remaining = {project.root.name: project.kill_leftovers() for project in made}
+    assert all(not left for left in remaining.values()), remaining
 
 
 def assert_rows_valid(project: Project) -> None:
@@ -366,17 +401,19 @@ def test_hanging_shadow_never_delays_the_primary_and_the_report_shows_a_timeout(
     baseline = _baseline_read(make_project)
     p = make_project(pilib_mode="hang", library={"route": "both", "pageindex": {"shelf": "shelf.json"}})
 
-    started = time.monotonic()
+    # The primary command runs to completion (aw_json asserts exit 0 and parses its output) with the right answer.
     read = p.aw_json("library", "read", "--source", "T-A", "--pages", "2-4", "--run", "hang-run")
-    elapsed = time.monotonic() - started
     assert stable(read) == baseline
-    # aw answered long before the shadow's own time limit: it never waits for the second lookup.
-    assert elapsed < SHADOW_TIMEOUT_MS / 1000, elapsed
     assert read["shadow_status"] == "pending"
-    assert p.shadow_row(read["lookup_id"]) is None, "the hanging shadow cannot have finished yet"
 
-    # Giving up on the shadow is a ledger row, not a failure of the lookup.
-    shadow = p.wait_for("the timed-out shadow row", lambda: p.shadow_row(read["lookup_id"]), timeout=30)
+    # Handshake, no clock: the fake pilib records that it started and then blocks for good. Whenever it started,
+    # aw had already exited, so the answer never waited for it; and it is still blocked now.
+    p.wait_for("the fake pilib to start", p.started_pid)
+    pilib_pid = p.started_pid()
+    assert pilib_pid is not None and alive(pilib_pid), "the hanging pilib must still be blocked after the primary returned"
+
+    # Later, the shadow gives up on its own time limit: a ledger row, not a failure of the lookup.
+    shadow = p.wait_for("the timed-out shadow row", lambda: p.shadow_row(read["lookup_id"]), timeout=60)
     assert shadow["ok"] is False and shadow["timed_out"] is True
     assert_rows_valid(p)
 
@@ -384,8 +421,9 @@ def test_hanging_shadow_never_delays_the_primary_and_the_report_shows_a_timeout(
     assert report["routes"]["trove"]["errors"] == 0
     assert report["routes"]["pageindex"]["shadow_timeouts"] == 1
     assert "1 timed out" in p.aw("library", "report").stdout
-    # The timed-out worker took its hanging pilib down with it.
-    p.wait_for("the hanging pilib to be stopped", lambda: not p.leftovers(), timeout=15)
+    # The timed-out worker took its blocked pilib down with it.
+    p.wait_for("the blocked pilib to be stopped", lambda: not alive(pilib_pid), timeout=30)
+    p.wait_for("no leftover processes", lambda: not p.leftovers(), timeout=30)
 
 
 # ---------------------------------------------------------------------------------------------------------
