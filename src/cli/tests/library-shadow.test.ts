@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -979,9 +979,37 @@ test('H5: when the ledger write itself fails, aw library verdict says so and pri
     const run = await cli(fx, 'verdict', '--lookup', 'lk_retry', '--verdict', 'FAIL', '--corrected-page', '4', '--support-quote', 'some words from the page here', '--paragraph', 'P3');
     assert.equal(run.code, 0, 'a ledger problem never changes the auditor\'s verdict');
     assert.match(run.err, /not recorded/);
-    assert.match(run.err, /aw library verdict --lookup "lk_retry" --verdict FAIL --corrected-page 4 --support-quote "some words from the page here" --paragraph "P3"/);
+    assert.match(run.err, /aw library verdict --lookup 'lk_retry' --verdict 'FAIL' --corrected-page '4' --support-quote 'some words from the page here' --paragraph 'P3'/);
+    assert.match(run.err, /hint for a person/);
     assert.equal((JSON.parse(run.out) as { ok: boolean }).ok, false);
   } finally { fx.cleanup(); }
+});
+
+test('the retry hint is single-quoted: evaluated by sh it reproduces the exact arguments and runs nothing from the quote', async () => {
+  const fx = fixture({ route: 'both' });
+  const lab = mkdtempSync(join(tmpdir(), 'aw-hint-'));
+  try {
+    mkdirSync(join(fx.project, '.academic-helper', 'retrieval.jsonl'));
+    const evil = `a $(touch ${lab}/pwned1) \`touch ${lab}/pwned2\` it's "double" $HOME \\ end\nsecond line; touch ${lab}/pwned3 #`;
+    const paragraph = `P'1 $(touch ${lab}/pwned4)`;
+    const run = await cli(fx, 'verdict', '--lookup', 'lk_$(touch x)', '--verdict', 'PASS', '--page', '7', '--support-quote', evil, '--paragraph', paragraph, '--run', "run'1");
+    assert.equal(run.code, 0);
+    const start = run.err.indexOf('run:\n  ');
+    assert.ok(start >= 0, run.err);
+    const hint = run.err.slice(start + 'run:\n  '.length).replace(/\n$/u, '');
+    const bin = join(lab, 'bin');
+    mkdirSync(bin);
+    const fake = join(bin, 'aw');
+    writeFileSync(fake, `#!${process.execPath}\nprocess.stdout.write(JSON.stringify(process.argv.slice(2)));\n`, 'utf8');
+    chmodSync(fake, 0o755);
+    const work = join(lab, 'work');
+    mkdirSync(work);
+    const result = spawnSync('sh', ['-c', hint], { cwd: work, env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ''}` }, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), ['library', 'verdict', '--lookup', 'lk_$(touch x)', '--verdict', 'PASS', '--page', '7', '--support-quote', evil, '--paragraph', paragraph, '--run', "run'1"]);
+    assert.deepEqual(readdirSync(lab).sort(), ['bin', 'work'], 'nothing in the quote ran');
+    assert.deepEqual(readdirSync(work), []);
+  } finally { rmSync(lab, { recursive: true, force: true }); fx.cleanup(); }
 });
 
 test('M6: quoted secrets containing escaped quotes are redacted whole', () => {

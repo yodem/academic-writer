@@ -75,8 +75,8 @@ export { titleFromToc } from './library/backends.ts';
 
 // A whole-book read through the library adapter (Trove or PageIndex, whichever answers this project). Trove's
 // own output is returned untouched; a route that has no Trove-format text gets page banners and a title line.
-async function fetchViaLibrary(library: Library, id: string): Promise<string> {
-  const output = await library.read({ source: id, all: true, op: 'get' });
+async function fetchViaLibrary(library: Library, id: string, runId: string): Promise<string> {
+  const output = await library.read({ source: id, all: true, op: 'get', run: runId });
   if (output.raw !== undefined) return output.raw;
   const body = output.pages.map((page) => `── Page ${page.trove_page} ──\n${page.text}`).join('\n\n');
   return output.title ? `**${output.title}**\n\n${body}` : body;
@@ -123,7 +123,7 @@ export async function buildEvidence(options: BuildOptions): Promise<BuildResult>
     ...options.sources.map(async (id) => {
       const key = cacheKeyFor(route, id);
       const cached = sourceCache.get(key) ?? cachedText(key);
-      const text = cached ?? await (stubState.value?.fetchCk ? stubState.value.fetchCk(id, route) : fetchViaLibrary(library, id));
+      const text = cached ?? await (stubState.value?.fetchCk ? stubState.value.fetchCk(id, route) : fetchViaLibrary(library, id, options.runId));
       sourceCache.set(key, text);
       cachePath(key, text);
       const meta = ckMetadata(text);

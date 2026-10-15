@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildEvidence, __stubs } from '../src/evidence.ts';
 import { Library } from '../src/library/adapter.ts';
+import { runLibraryCli } from '../src/library/cli.ts';
 import { setPathArguments } from '../src/paths.ts';
 
 test('non-verbatim quotes are dropped; cache hit skips refetch', async () => {
@@ -229,5 +230,22 @@ test('evidence build reads a slow whole book (AW_LIBRARY_TIMEOUT_MS bounds looku
     const result = await buildEvidence({ sources: ['T-slow-evidence'], runId: 'r' });
     assert.equal(result.sources[0]?.title, 'Trove Title');
     assert.deepEqual(loggedCalls(b), ['trove items read T-slow-evidence:all', 'trove items toc T-slow-evidence']);
+  } finally { __stubs({}); b.restore(); }
+});
+
+test('evidence lookups and their shadow carry the run id, so aw library report --run includes them', async () => {
+  const b = bench({ route: 'both' }, { FAKE_PI_TROVE_ID: 'T-run' });
+  __stubs(noPassages);
+  try {
+    await buildEvidence({ sources: ['T-run'], runId: 'run-evidence-1' });
+    const rows = readFileSync(join(b.project, '.academic-helper', 'retrieval.jsonl'), 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line) as { row_type: string; run_id: string | null });
+    assert.ok(rows.some((r) => r.row_type === 'lookup'));
+    for (const row of rows) assert.equal(row.run_id, 'run-evidence-1', `${row.row_type} row has the run id`);
+    let out = '';
+    const code = await runLibraryCli(['report', '--run', 'run-evidence-1', '--json'], { out: (t) => { out += t; }, err: () => undefined });
+    assert.equal(code, 0);
+    const report = JSON.parse(out) as { rows: { lookup: number; shadow: number } };
+    assert.ok(report.rows.lookup >= 1, out);
+    assert.ok(report.rows.shadow >= 1, out);
   } finally { __stubs({}); b.restore(); }
 });

@@ -37,6 +37,9 @@ function exitCodeFor(error: unknown): number {
   return 4;
 }
 
+/** POSIX single quotes: nothing inside is expanded by a shell; an embedded ' is written as '\\''. */
+export function shellQuote(value: string): string { return `'${value.replace(/'/gu, `'\\''`)}'`; }
+
 function flagText(flags: Map<string, string | true>, name: string): string | undefined {
   const value = flags.get(name);
   return typeof value === 'string' ? value : undefined;
@@ -77,10 +80,14 @@ export async function runLibraryCli(argv: string[], io: LibraryIo = processIo): 
       });
       // A ledger problem never changes the auditor's verdict: say so on stderr, with the command to try again, and still exit 0.
       if (!append.ok) {
-        const retry = ['aw library verdict', `--lookup ${JSON.stringify(lookup)}`, `--verdict ${word}`,
-          ...(corrected === undefined ? [] : [`--corrected-page ${corrected}`]), ...(cited === undefined ? [] : [`--page ${cited}`]),
-          `--support-quote ${JSON.stringify(quote)}`, ...(paragraph === null ? [] : [`--paragraph ${JSON.stringify(paragraph)}`])].join(' ');
-        io.err(`NOTE library verdict: not recorded in the ledger (${append.reason}). To record it, run: ${retry}\n`);
+        // For a person to read and run, never for a program to execute: every argument is single-quoted (a ' becomes '\''),
+        // so the quote text (which comes from untrusted page text) cannot expand or run anything in a shell.
+        const args: Array<[string, string]> = [['--lookup', lookup], ['--verdict', word],
+          ...(corrected === undefined ? [] : [['--corrected-page', corrected] as [string, string]]), ...(cited === undefined ? [] : [['--page', cited] as [string, string]]),
+          ['--support-quote', quote], ...(paragraph === null ? [] : [['--paragraph', paragraph] as [string, string]]),
+          ...(flagText(flags, '--run') === undefined ? [] : [['--run', flagText(flags, '--run') as string] as [string, string]])];
+        const retry = `aw library verdict ${args.map(([name, value]) => `${name} ${shellQuote(value)}`).join(' ')}`;
+        io.err(`NOTE library verdict: not recorded in the ledger (${append.reason}). This is a hint for a person, not for a program: to record it, run:\n  ${retry}\n`);
       }
       print({ ok: append.ok, lookup_id: row.lookup_id, verdict: row.verdict, shadow_supports: row.shadow_supports, shadow_supports_reason: row.shadow_supports_reason });
       return 0;
