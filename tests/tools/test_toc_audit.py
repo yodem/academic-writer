@@ -34,6 +34,14 @@ def test_no_hint():
         assert len(r["no_hint"]) == 1 and not r["ok"], bad
 
 
+def test_course_name_with_hyphen_is_not_a_hint():
+    name = "חוויה והתנסות - שאלת אחדות התודעה"
+    assert ta.audit_toc([e(f"Course · {name}", 1)], 1)["ok"]  # without the name it looks hinted
+    r = ta.audit_toc([e(f"Course · {name}", 1)], 1, course_name=name)
+    assert len(r["no_hint"]) == 1 and not r["ok"]
+    assert ta.audit_toc([e(f"Course · {name} - סקירת הקורס", 1)], 1, course_name=name)["ok"]
+
+
 def test_out_of_order():
     r = ta.audit_toc([e("A - a", 1), e("C - c", 3), e("B - b", 2)], 3)
     assert r["out_of_order"] == [{"index": 2, "prev_page": 3, "page": 2}] and not r["ok"]
