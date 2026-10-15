@@ -3,7 +3,7 @@ import { runCommand } from './exec.ts';
 import { formatPageRanges, parseBanners } from './pages.ts';
 import { LibraryError, type BookInfo, type LibraryBackend, type PageText, type RawRead, type TocEntry, type TocResult } from './types.ts';
 
-export type BackendOptions = { command: string[]; env?: NodeJS.ProcessEnv; timeoutMs: number };
+export type BackendOptions = { command: string[]; env?: NodeJS.ProcessEnv; timeoutMs: number; /** The project folder: the child runs there, not in the caller's directory. */ cwd?: string };
 const limits = thresholds.library;
 
 function parseJson(text: string, what: string): unknown {
@@ -30,7 +30,7 @@ export class TroveBackend implements LibraryBackend {
   constructor(private readonly options: BackendOptions) {}
 
   private run(args: string[]): Promise<string> {
-    return runCommand(this.options.command, args, { timeoutMs: this.options.timeoutMs, maxBuffer: limits.maxBufferBytes, env: this.options.env });
+    return runCommand(this.options.command, args, { timeoutMs: this.options.timeoutMs, maxBuffer: limits.maxBufferBytes, env: this.options.env, cwd: this.options.cwd });
   }
 
   /** The active shelf of this project, so a listing is not the whole library. Best effort: no shelf means none. */
@@ -89,7 +89,7 @@ export class PageIndexBackend implements LibraryBackend {
   constructor(private readonly options: BackendOptions) {}
 
   private run(args: string[]): Promise<string> {
-    return runCommand(this.options.command, args, { timeoutMs: this.options.timeoutMs, maxBuffer: limits.maxBufferBytes, env: this.options.env });
+    return runCommand(this.options.command, args, { timeoutMs: this.options.timeoutMs, maxBuffer: limits.maxBufferBytes, env: this.options.env, cwd: this.options.cwd });
   }
 
   async catalog(): Promise<Map<string, PilibCatalogEntry>> {
