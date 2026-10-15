@@ -61,9 +61,19 @@ def audit_toc(toc: list[dict], page_count: int) -> dict:
     duplicate = sorted(p for p, n in counts.items() if n > 1)
     no_hint = [{"index": i, "page": e.get("page"), "title": e.get("title", "")}
                for i, e in enumerate(toc) if not has_hint(e.get("title", ""))]
-    out_of_order = [{"index": i, "prev_page": toc[i - 1]["page"], "page": e["page"]}
-                    for i, e in enumerate(toc)
-                    if i and e["page"] < toc[i - 1]["page"]]
+    # Tree order: siblings ascend by page and a child starts after its parent, so a
+    # lesson page appended at the end of the book may still nest under its index.
+    out_of_order = []
+    last_at: dict[int, int] = {}  # level -> page of the latest entry at that level
+    for i, e in enumerate(toc):
+        lvl, page = e.get("level", 1), e["page"]
+        parent = last_at.get(lvl - 1, 0) if lvl > 1 else 0
+        sibling = last_at.get(lvl, 0)
+        if page <= parent or page <= sibling:
+            out_of_order.append({"index": i, "prev_page": max(parent, sibling), "page": page})
+        last_at[lvl] = page
+        for deeper in [k for k in last_at if k > lvl]:
+            del last_at[deeper]
     level_gap = []
     prev = 0
     for i, e in enumerate(toc):

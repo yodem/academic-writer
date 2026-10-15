@@ -77,3 +77,15 @@ def test_all_uses_fetch(tmp_path, monkeypatch):
     assert ta.main(["--all"]) == 0
     monkeypatch.setattr(ta, "fetch_toc", lambda b: (GOOD, 6, b))
     assert ta.main(["--all"]) == 1
+
+
+def test_tree_order_allows_lesson_appended_at_end():
+    toc = [{"title": "C - h", "page": 1, "level": 1}, {"title": "L - h", "page": 2, "level": 1},
+           {"title": "Lesson - h", "page": 4, "level": 2}, {"title": "R - h", "page": 3, "level": 1}]
+    assert ta.audit_toc(toc, 4)["ok"]
+
+
+def test_tree_order_rejects_sibling_going_back():
+    toc = [{"title": "C - h", "page": 1, "level": 1}, {"title": "R - h", "page": 3, "level": 1},
+           {"title": "X - h", "page": 2, "level": 1}]
+    assert ta.audit_toc(toc, 3)["out_of_order"]

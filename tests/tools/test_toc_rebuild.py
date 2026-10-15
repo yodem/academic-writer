@@ -53,9 +53,10 @@ PAGES = {
 def test_levels_and_order():
     plan = tr.build_plan(7, [], lambda p: PAGES[p])
     toc = plan["toc"]
-    assert [e["page"] for e in toc] == list(range(1, 8))
-    assert [e["level"] for e in toc] == [1, 1, 1, 1, 2, 3, 2]
-    assert toc[2]["title"].startswith("Course · Changelog - ")
+    # Tree order: the lesson page (7, appended last) nests under the lessons index (2).
+    assert [e["page"] for e in toc] == [1, 2, 7, 3, 4, 5, 6]
+    assert [e["level"] for e in toc] == [1, 1, 2, 1, 1, 2, 3]
+    assert toc[3]["title"].startswith("Course · Changelog - ")
     assert audit_toc(toc, 7)["ok"]
     assert plan["counts"]["derived"] == 7
 
@@ -64,7 +65,7 @@ def test_reuse_existing_hint_title_and_level():
     existing = [{"title": "My Title - kept hint", "page": 6, "level": 4},
                 {"title": "x - y", "page": 5, "level": 2}]
     plan = tr.build_plan(7, existing, lambda p: PAGES[p])
-    e6 = plan["toc"][5]
+    e6 = next(e for e in plan["toc"] if e["page"] == 6)
     assert e6["title"] == "My Title - kept hint" and e6["level"] == 3  # clamped to prev+1
     assert plan["counts"]["reused"] == 2 and plan["counts"]["derived"] == 5
 

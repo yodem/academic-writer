@@ -165,13 +165,31 @@ def build_plan(page_count: int, existing: list[dict], get_page, hints: dict | No
             state = "readings"
         if hint:
             counts[src] += 1
-            toc.append({"title": f"{title} - {hint}", "page": p, "level": level})
+            toc.append({"title": f"{title} - {hint}", "page": p, "level": level, "kind": kind})
         else:
             counts["needs_hint"] += 1
-            toc.append({"title": title, "page": p, "level": level})
+            toc.append({"title": title, "page": p, "level": level, "kind": kind})
             needs.append({"page": p, "title": title, "first_800_chars": text[:800]})
         prev_level = level
-    return {"toc": toc, "needs_hint": needs, "counts": counts}
+    return {"toc": tree_order(toc), "needs_hint": needs, "counts": counts}
+
+
+def tree_order(toc: list[dict]) -> list[dict]:
+    """Group lesson pages under the lessons index wherever they sit in the book.
+
+    lesson-notes appends lesson pages at the end, so strict page order would nest
+    them under the last section. Every other entry keeps page order.
+    """
+    lessons = [e for e in toc if e.get("kind") == "lesson"]
+    has_index = any(e.get("kind") == "lessons_index" for e in toc)
+    out = []
+    for e in toc:
+        if has_index and e.get("kind") == "lesson":
+            continue
+        out.append(e)
+        if e.get("kind") == "lessons_index":
+            out.extend({**l, "level": e["level"] + 1} for l in lessons)
+    return [{k: v for k, v in e.items() if k != "kind"} for e in out]
 
 
 def trove_get_page(book_id: str, page: int) -> str:
