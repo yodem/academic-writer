@@ -58,7 +58,7 @@ def test_chrome_missing_adds_manual_chore_and_skips_watch(tmp_path):
 
 def test_courses_only_is_appended_to_the_prompt(tmp_path):
     _, plans = run_dry(tmp_path, True, {"COURSES_ONLY": "cohen kane"})
-    assert "watch-lemida --all cohen kane'" in next(p for p in plans if "claude -p --chrome" in p)
+    assert "watch-lemida cohen kane'" in next(p for p in plans if "claude -p --chrome" in p)
 
 
 @pytest.mark.parametrize("chrome", [True, False])

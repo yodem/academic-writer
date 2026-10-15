@@ -61,8 +61,7 @@ run_job() {
 
   # b/c. Lemida scan through Claude in Chrome
   if pgrep -x "Google Chrome" >/dev/null 2>&1; then
-    PROMPT="/academic-writer:courses watch-lemida --all"
-    [ -n "${COURSES_ONLY:-}" ] && PROMPT="$PROMPT $COURSES_ONLY"
+    PROMPT="/academic-writer:courses watch-lemida ${COURSES_ONLY:---all}"
     if ! dry_plan "printf '%s' '$PROMPT' | claude -p --chrome --model sonnet --plugin-dir $REPO/plugins/academic-writer --allowedTools \"$WATCH_TOOLS\""; then
       echo "-- watch-lemida $(stamp)"
       printf '%s' "$PROMPT" | claude -p --chrome --model sonnet \
