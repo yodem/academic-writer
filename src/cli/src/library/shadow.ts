@@ -1,11 +1,11 @@
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
-import { join, resolve, sep } from 'node:path';
+import { mkdir, open, readFile, realpath, rm, stat } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { z } from 'zod';
 import thresholds from '../../../thresholds.json' with { type: 'json' };
-import { killLiveCommands } from './exec.ts';
+import { CommandScope } from './exec.ts';
 import {
-  appendRow, clipError, hasProjectFolder, nowIso, readSpool, retrievalDir, RETRIEVAL_DIR, spoolFile, spoolValue, sweepSpool, writeSpool,
+  appendRow, clipError, containedDir, hasProjectFolder, nowIso, readSpool, removeSpool, spoolFile, spoolValue, sweepSpool, writeSpool,
   type Agreement, type ShadowRow, type SpooledPages,
 } from './ledger.ts';
 import { jaccard } from './textmatch.ts';
@@ -29,7 +29,7 @@ export function shadowModeFrom(env: NodeJS.ProcessEnv, fallback: ShadowMode = 'd
 
 export const shadowSpecSchema = z.object({
   v: z.literal(1),
-  lookup_id: z.string().min(1).max(80),
+  lookup_id: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/u),
   run_id: z.string().nullable(),
   claim_id: z.string().nullable(),
   op: z.enum(['list', 'toc', 'read']),
@@ -37,6 +37,8 @@ export const shadowSpecSchema = z.object({
   project: z.string().min(1),
   source: z.string().nullable(),
   pages: z.union([z.literal('all'), z.array(z.number().int().min(1)), z.null()]),
+  /** The worker slot this lookup holds (released when the worker ends), or null for none. */
+  slot: z.number().int().min(0).nullable(),
 }).strict();
 export type ShadowSpec = z.infer<typeof shadowSpecSchema>;
 
@@ -50,26 +52,25 @@ export type RouteResult = {
   pages?: Array<{ page: number; text: string }>;
 };
 
-export interface ShadowRunner { runShadow(spec: ShadowSpec): Promise<RouteResult> }
+/** Runs the shadow's request; every command it starts belongs to `scope`, so the worker can stop them all. */
+export interface ShadowRunner { runShadow(spec: ShadowSpec, scope?: CommandScope): Promise<RouteResult> }
 
 export type ShadowHandle = { status: string; settle: () => Promise<void> };
 /** A shadow that did not start (or is not wanted); `status` says why. */
 export const noShadow = (status: string): ShadowHandle => ({ status, settle: async () => undefined });
 const idle = noShadow;
 
-/** killLive: the worker owns its whole process, so at the deadline it may stop every command still running. */
-export type WorkerSettings = { timeoutMs: number; primaryWaitMs: number; killLive: boolean };
+export type WorkerSettings = { timeoutMs: number; primaryWaitMs: number };
 
 function positive(value: string | undefined): number | undefined {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : undefined;
 }
 
-export function workerSettings(env: NodeJS.ProcessEnv, killLive = false): WorkerSettings {
+export function workerSettings(env: NodeJS.ProcessEnv): WorkerSettings {
   return {
     timeoutMs: positive(env.AW_LIBRARY_SHADOW_TIMEOUT_MS) ?? limits.timeoutMs.shadow,
     primaryWaitMs: positive(env.AW_LIBRARY_TIMEOUT_MS) ?? limits.timeoutMs.primary,
-    killLive,
   };
 }
 
@@ -77,22 +78,80 @@ function sleep(ms: number): Promise<void> { return new Promise((resolveSleep) =>
 
 // ---------------------------------------------------------------- slots (how many workers may run at once)
 
-const activeDir = (project: string): string => join(retrievalDir(project), 'active');
-const lockFile = (project: string, lookupId: string): string => join(activeDir(project), `${lookupId}.lock`);
+/**
+ * A fixed set of slot files, `slot-0.lock` .. `slot-<max-1>.lock`, each made with an exclusive create
+ * (O_EXCL), so two lookups can never hold the same slot and the limit holds under any concurrency. A slot
+ * records its holder's pid; one whose holder is gone (or that nobody released for shadow.lockStaleMs) is
+ * reaped, and reaping is serialised by a `.reap` folder so two reapers never fight over a slot.
+ */
+const slotFile = (dir: string, slot: number): string => join(dir, `slot-${slot}.lock`);
 
-/** Workers that have started and not reported back; a slot nobody released for shadow.lockStaleMs is dropped. */
-async function liveWorkers(project: string, now: number = Date.now()): Promise<number> {
-  let count = 0;
+function pidAlive(pid: number): boolean {
+  try { process.kill(pid, 0); return true; } catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM'; }
+}
+
+async function slotIsStale(file: string, now: number): Promise<boolean> {
   try {
-    for (const name of await readdir(activeDir(project))) {
-      const file = join(activeDir(project), name);
-      try {
-        if (now - (await stat(file)).mtimeMs > limits.shadow.lockStaleMs) await rm(file, { force: true });
-        else count += 1;
-      } catch { /* released meanwhile */ }
+    const age = now - (await stat(file)).mtimeMs;
+    if (age > limits.shadow.lockStaleMs) return true;
+    if (age < limits.shadow.reapGraceMs) return false;
+    const parsed: unknown = JSON.parse(await readFile(file, 'utf8'));
+    const pid = typeof parsed === 'object' && parsed !== null ? (parsed as { pid?: unknown }).pid : undefined;
+    return typeof pid === 'number' && Number.isInteger(pid) && !pidAlive(pid);
+  } catch { return false; }
+}
+
+async function reapSlots(dir: string): Promise<void> {
+  const guard = join(dir, '.reap');
+  try {
+    await mkdir(guard);
+  } catch {
+    // Someone else is reaping; a reaper that died leaves the guard behind, so an old guard is cleared.
+    try { if (Date.now() - (await stat(guard)).mtimeMs > limits.shadow.reapGraceMs * 5) await rm(guard, { recursive: true, force: true }); } catch { /* gone */ }
+    return;
+  }
+  try {
+    const now = Date.now();
+    for (let slot = 0; slot < limits.shadow.maxConcurrent; slot += 1) {
+      const file = slotFile(dir, slot);
+      if (await slotIsStale(file, now)) await rm(file, { force: true });
     }
-  } catch { /* no slots folder yet */ }
-  return count;
+  } finally { await rm(guard, { recursive: true, force: true }); }
+}
+
+/** Take a free worker slot, or null when all of shadow.maxConcurrent are held (or the project folder is not usable). */
+export async function acquireSlot(project: string): Promise<number | null> {
+  try {
+    const dir = await containedDir(project, ['retrieval', 'active'], true);
+    if (!dir) return null;
+    await reapSlots(dir);
+    for (let slot = 0; slot < limits.shadow.maxConcurrent; slot += 1) {
+      try {
+        const handle = await open(slotFile(dir, slot), 'wx', 0o644);
+        try { await handle.writeFile(JSON.stringify({ pid: process.pid, ts: nowIso() }), 'utf8'); } finally { await handle.close(); }
+        return slot;
+      } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') return null; }
+    }
+    return null;
+  } catch { return null; }
+}
+
+/** Record the worker's own pid in its slot, so the slot is freed if the worker dies. A slot already released is left alone. */
+async function claimSlot(project: string, slot: number, pid: number): Promise<void> {
+  try {
+    const dir = await containedDir(project, ['retrieval', 'active']);
+    if (!dir) return;
+    const handle = await open(slotFile(dir, slot), 'r+');
+    try { await handle.truncate(0); await handle.writeFile(JSON.stringify({ pid, ts: nowIso() }), 'utf8'); } finally { await handle.close(); }
+  } catch { /* released already, or no slot */ }
+}
+
+export async function releaseSlot(project: string, slot: number | null): Promise<void> {
+  if (slot === null) return;
+  try {
+    const dir = await containedDir(project, ['retrieval', 'active']);
+    if (dir) await rm(slotFile(dir, slot), { force: true });
+  } catch { /* nothing to release */ }
 }
 
 // ---------------------------------------------------------------- starting a shadow (foreground)
@@ -101,45 +160,52 @@ async function liveWorkers(project: string, now: number = Date.now()): Promise<n
  * Start the shadow for one lookup and return at once. Never throws and never waits for the worker: the cost
  * to the caller is one small file write and one spawn. `status` goes into the lookup row.
  */
-export async function startShadow(spec: ShadowSpec, mode: ShadowMode, env: NodeJS.ProcessEnv, runner: ShadowRunner): Promise<ShadowHandle> {
+export async function startShadow(spec: Omit<ShadowSpec, 'slot'>, mode: ShadowMode, env: NodeJS.ProcessEnv, runner: ShadowRunner): Promise<ShadowHandle> {
   if (mode === 'off') return idle('disabled');
+  let slot: number | null = null;
+  let specPath: string | null = null;
   try {
     if (!(await hasProjectFolder(spec.project))) return idle('skipped:no_project_dir');
-    if (mode === 'inline') return { status: 'pending', settle: () => runShadowWorker(spec, runner, workerSettings(env)) };
-    if (await liveWorkers(spec.project) >= limits.shadow.maxConcurrent) return idle('skipped:busy');
-    const entry = process.argv[1] ? resolve(process.argv[1]) : undefined;
+    if (mode === 'inline') return { status: 'pending', settle: () => runShadowWorker({ ...spec, slot: null }, runner, workerSettings(env)) };
+    const entry = env.AW_LIBRARY_WORKER_ENTRY?.trim() || (process.argv[1] ? resolve(process.argv[1]) : undefined);
     if (!entry) return idle('skipped:spawn_failed');
-    const specPath = join(retrievalDir(spec.project), `spec-${spec.lookup_id}.json`);
-    try {
-      await mkdir(activeDir(spec.project), { recursive: true });
-      await writeFile(specPath, JSON.stringify(spec), 'utf8');
-      await writeFile(lockFile(spec.project, spec.lookup_id), '', 'utf8');
-      const child = spawn(process.execPath, [entry, 'library', '_shadow', specPath], { detached: true, stdio: 'ignore', windowsHide: true, env, cwd: spec.project });
-      child.on('error', () => undefined);
-      child.unref();
-    } catch (error) {
-      await rm(specPath, { force: true });
-      await rm(lockFile(spec.project, spec.lookup_id), { force: true });
-      throw error;
-    }
+    slot = await acquireSlot(spec.project);
+    if (slot === null) return idle('skipped:busy');
+    const dir = await containedDir(spec.project, ['retrieval'], true);
+    if (!dir) throw new Error('no retrieval folder');
+    specPath = join(dir, `spec-${spec.lookup_id}.json`);
+    const handle = await open(specPath, 'wx', 0o644);
+    try { await handle.writeFile(JSON.stringify({ ...spec, slot }), 'utf8'); } finally { await handle.close(); }
+    const child = spawn(process.execPath, [entry, 'library', '_shadow', specPath], { detached: true, stdio: 'ignore', windowsHide: true, env, cwd: spec.project });
+    child.on('error', () => undefined);
+    child.unref();
+    if (child.pid) await claimSlot(spec.project, slot, child.pid);
     return idle('pending');
   } catch {
+    if (specPath) await rm(specPath, { force: true });
+    await releaseSlot(spec.project, slot);
     return idle('skipped:spawn_failed');
   }
 }
 
 // ---------------------------------------------------------------- the worker (background)
 
-/** Read a worker spec file and delete it. The file must sit in the project's own retrieval folder. */
+/**
+ * Read and validate a worker spec file. The file is deleted only when it is a well formed spec that sits
+ * in its own project's retrieval folder under its own name (`spec-<lookup_id>.json`); anything else is
+ * left exactly as found, so `_shadow <path>` can never remove a file it was merely pointed at.
+ */
 export async function loadSpec(path: string): Promise<ShadowSpec | null> {
   try {
     const parsed = shadowSpecSchema.safeParse(JSON.parse(await readFile(path, 'utf8')));
     if (!parsed.success) return null;
-    const inside = resolve(path).startsWith(`${resolve(parsed.data.project, RETRIEVAL_DIR)}${sep}`);
-    return inside ? parsed.data : null;
-  } catch { return null; } finally {
-    await rm(path, { force: true });
-  }
+    const dir = await containedDir(parsed.data.project, ['retrieval']);
+    if (!dir) return null;
+    const expected = join(dir, `spec-${parsed.data.lookup_id}.json`);
+    if ((await realpath(path)) !== expected) return null;
+    await rm(expected, { force: true });
+    return parsed.data;
+  } catch { return null; }
 }
 
 const round3 = (value: number): number => Math.round(value * 1000) / 1000;
@@ -160,7 +226,7 @@ export function compareRoutes(primary: SpooledPages, shadowPages: Array<{ page: 
 async function waitForPrimary(spec: ShadowSpec, started: number, settings: WorkerSettings): Promise<SpooledPages | null> {
   const file = spoolFile(spec.project, spec.lookup_id, 'primary');
   for (;;) {
-    const found = await readSpool(file);
+    const found = await readSpool(spec.project, file);
     if (found) return found;
     if (Date.now() - started >= settings.primaryWaitMs) return null;
     await sleep(limits.shadow.pollMs);
@@ -174,23 +240,26 @@ async function waitForPrimary(spec: ShadowSpec, started: number, settings: Worke
  */
 export async function runShadowWorker(spec: ShadowSpec, runner: ShadowRunner, settings: WorkerSettings): Promise<void> {
   const started = Date.now();
+  const scope = new CommandScope();
   let result: RouteResult | null = null;
   let failure: unknown = null;
   let timedOut = false;
   let timer: NodeJS.Timeout | undefined;
   try {
     await sweepSpool(spec.project);
-    const call = runner.runShadow(spec);
+    const call = runner.runShadow(spec, scope);
     call.catch(() => undefined);
     const deadline = new Promise<'timeout'>((resolveDeadline) => { timer = setTimeout(() => { resolveDeadline('timeout'); }, settings.timeoutMs); });
     try {
       const outcome = await Promise.race([call, deadline]);
-      if (outcome === 'timeout') { timedOut = true; if (settings.killLive) killLiveCommands(); } else result = outcome;
+      if (outcome === 'timeout') timedOut = true; else result = outcome;
     } catch (error) {
       failure = error;
       timedOut = error instanceof LibraryError && error.code === 'timeout';
     }
     clearTimeout(timer);
+    // Once the lookup has timed out, nothing it started may go on: running commands are killed and no new one can begin.
+    if (timedOut || scope.aborted) { timedOut = true; scope.abort(); result = null; }
     const latency = Date.now() - started;
     let agree: Agreement | null = null;
     if (spec.op === 'read' && result?.pages) {
@@ -213,7 +282,7 @@ export async function runShadowWorker(spec: ShadowSpec, runner: ShadowRunner, se
       bytes: result?.bytes ?? 0,
       chars: result?.chars ?? 0,
       text_sha: result?.text_sha ?? null,
-      error: result ? null : clipError(timedOut && !failure ? `${spec.route} did not answer within ${settings.timeoutMs} ms` : (failure instanceof Error ? failure.message : String(failure ?? 'no answer'))),
+      error: result ? null : clipError(timedOut ? `${spec.route} did not answer within ${settings.timeoutMs} ms` : (failure instanceof Error ? failure.message : String(failure ?? 'no answer'))),
       error_code: result ? null : (timedOut ? 'timeout' : code),
       timed_out: timedOut,
       agree,
@@ -223,7 +292,8 @@ export async function runShadowWorker(spec: ShadowSpec, runner: ShadowRunner, se
     // The shadow can never fail the caller, and has nobody to tell: its row is simply missing.
   } finally {
     clearTimeout(timer);
-    await rm(lockFile(spec.project, spec.lookup_id), { force: true });
-    await rm(spoolFile(spec.project, spec.lookup_id, 'primary'), { force: true });
+    scope.abort();
+    await releaseSlot(spec.project, spec.slot);
+    await removeSpool(spec.project, spoolFile(spec.project, spec.lookup_id, 'primary'));
   }
 }

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,8 +12,10 @@ import thresholds from '../../thresholds.json' with { type: 'json' };
 import { Library } from '../src/library/adapter.ts';
 import { runLibraryCli } from '../src/library/cli.ts';
 import { checkSchema, type JsonSchema } from '../src/library/jsonschema.ts';
-import { appendRow, readRows, spoolDir, type LookupRow, type RetrievalRow, type ShadowRow, type VerdictRow } from '../src/library/ledger.ts';
+import { appendRow, clipError, readRows, spoolDir, writeSpool, type LookupRow, type RetrievalRow, type ShadowRow, type VerdictRow } from '../src/library/ledger.ts';
+import { acquireSlot } from '../src/library/shadow.ts';
 import { settlePending, recordVerdict, computeSupports } from '../src/library/verdict.ts';
+import { buildReport } from '../src/library/report.ts';
 import { setPathArguments } from '../src/paths.ts';
 import { coverage, jaccard, normalizeText } from '../src/library/textmatch.ts';
 
@@ -26,8 +28,8 @@ const TROVE_FAKE = `
 const fs = require('node:fs');
 const args = process.argv.slice(2);
 if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, 'trove ' + args.join(' ') + '\\n');
-if (process.env.FAKE_TROVE_FAIL) { console.error('trove: boom'); process.exit(1); }
-if (process.env.FAKE_TROVE_HANG) setTimeout(() => {}, 60000);
+if (process.env.FAKE_TROVE_FAIL) { console.error(process.env.FAKE_TROVE_FAIL_MSG || 'trove: boom'); process.exit(1); }
+if (process.env.FAKE_TROVE_HANG || (process.env.FAKE_TROVE_HANG_SHELF && args[0] === 'shelf')) setTimeout(() => {}, 60000);
 else {
   const PAGES = 5;
   ${SHARED_TEXT}
@@ -74,7 +76,7 @@ function writeFake(dir: string, name: string, body: string): string {
   return file;
 }
 
-const FAKE_KEYS = ['FAKE_TROVE_FAIL', 'FAKE_TROVE_HANG', 'FAKE_PILIB_FAIL', 'FAKE_PILIB_HANG', 'FAKE_PI_TEXT', 'AW_LIBRARY_SHADOW', 'AW_LIBRARY_SHADOW_TIMEOUT_MS', 'AW_LIBRARY_TIMEOUT_MS'];
+const FAKE_KEYS = ['FAKE_TROVE_FAIL_MSG', 'FAKE_TROVE_HANG_SHELF', 'AW_LIBRARY_WORKER_ENTRY', 'FAKE_TROVE_FAIL', 'FAKE_TROVE_HANG', 'FAKE_PILIB_FAIL', 'FAKE_PILIB_HANG', 'FAKE_PI_TEXT', 'AW_LIBRARY_SHADOW', 'AW_LIBRARY_SHADOW_TIMEOUT_MS', 'AW_LIBRARY_TIMEOUT_MS'];
 
 function fixture(config?: unknown, extra: Record<string, string> = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'aw-shadow-'));
@@ -126,7 +128,7 @@ test('the schema accepts well formed rows of each type and refuses the rest', ()
     book_by_route: { trove: 'T-A', pageindex: null }, request: { printed: '3', trove_pages: '4' },
     primary: { route: 'trove', ok: true, route_pages: '4', latency_ms: 12, bytes: 40, chars: 40, text_sha: '0123456789abcdef', error: null, error_code: null }, shadow_status: 'pending',
   };
-  const verdict: VerdictRow = { row_type: 'verdict', schema: 1, ts: lookup.ts, lookup_id: 'lk_1', run_id: null, paragraph_id: 'P1', verdict: 'PASS', corrected_page: null, shadow_supports: null, shadow_supports_reason: 'no_quote', primary_route: 'trove', mode: 'both' };
+  const verdict: VerdictRow = { row_type: 'verdict', schema: 1, seq: 1, ts: lookup.ts, lookup_id: 'lk_1', run_id: null, paragraph_id: 'P1', verdict: 'PASS', corrected_page: null, shadow_supports: null, shadow_supports_reason: 'no_quote', primary_route: 'trove', mode: 'both' };
   assert.deepEqual(checkSchema(retrievalSchema as JsonSchema, lookup), []);
   assert.deepEqual(checkSchema(retrievalSchema as JsonSchema, verdict), []);
   const broken: unknown[] = [
@@ -135,6 +137,7 @@ test('the schema accepts well formed rows of each type and refuses the rest', ()
     { ...lookup, shadow_status: 'skipped:Bad Reason' },
     { ...lookup, primary: { ...lookup.primary, latency_ms: -1 } },
     { ...verdict, verdict: 'PARTIAL' },
+    { ...verdict, seq: 0 },
     { ...verdict, shadow_supports_reason: 'maybe' },
     { ...verdict, corrected_page: 0 },
     { row_type: 'other' },
@@ -152,7 +155,7 @@ test('appendRow checks the schema and never makes the project folder', async () 
     assert.equal((await appendRow(fx.project, bad)).ok, false);
     const noFolder = join(fx.root, 'elsewhere');
     mkdirSync(noFolder);
-    const row: VerdictRow = { row_type: 'verdict', schema: 1, ts: new Date().toISOString(), lookup_id: 'lk_x', run_id: null, paragraph_id: null, verdict: 'FAIL', corrected_page: 9, shadow_supports: false, shadow_supports_reason: 'not_covered', primary_route: null, mode: null };
+    const row: VerdictRow = { row_type: 'verdict', schema: 1, seq: 1, ts: new Date().toISOString(), lookup_id: 'lk_x', run_id: null, paragraph_id: null, verdict: 'FAIL', corrected_page: 9, shadow_supports: false, shadow_supports_reason: 'not_covered', primary_route: null, mode: null };
     assert.equal((await appendRow(noFolder, row)).ok, false);
     assert.equal(existsSync(join(noFolder, '.academic-helper')), false);
     assert.equal((await appendRow(fx.project, row)).ok, true);
@@ -310,7 +313,7 @@ test('the shadow is skipped, with a reason, when it should not run', async () =>
     assert.equal(ofType(await rowsOf(tooMany), 'shadow').length, 0);
     // Detached mode with every slot taken: busy, and nothing is spawned.
     mkdirSync(join(busy.project, '.academic-helper', 'retrieval', 'active'), { recursive: true });
-    for (let index = 0; index < limits.shadow.maxConcurrent; index += 1) writeFileSync(join(busy.project, '.academic-helper', 'retrieval', 'active', `lk_busy${index}.lock`), '');
+    for (let index = 0; index < limits.shadow.maxConcurrent; index += 1) writeFileSync(join(busy.project, '.academic-helper', 'retrieval', 'active', `slot-${index}.lock`), JSON.stringify({ pid: process.pid, ts: new Date().toISOString() }));
     const result = await new Library(busy.project, busy.env, { shadow: 'detached' }).read({ source: 'T-A', pages: '1' });
     assert.equal(result.shadow_status, 'skipped:busy');
     assert.equal((ofType(await rowsOf(busy), 'lookup')[0] as LookupRow).shadow_status, 'skipped:busy');
@@ -535,4 +538,262 @@ test('detached shadow: a primary that fails exits 4 as before, and the worker re
     fx.cleanup();
     rmSync(scratch, { recursive: true, force: true });
   }
+});
+
+// ================================================================ review rework (T2 review findings)
+
+let sharedAw: Promise<{ aw: string; dir: string }> | undefined;
+/** One bundled `aw` for the tests that need a real worker process. */
+function sharedBundle(): Promise<{ aw: string; dir: string }> {
+  sharedAw ??= (async () => { const dir = mkdtempSync(join(tmpdir(), 'aw-bundle-')); return { aw: await buildAw(dir), dir }; })();
+  return sharedAw;
+}
+test.after(async () => { if (sharedAw) rmSync((await sharedAw).dir, { recursive: true, force: true }); });
+
+function lineCount(fx: Fixture): number { return rawLedger(fx).length; }
+
+// HIGH 1: a timed-out shadow stops all further work
+test('H1: a timed-out shadow spawns no further command and writes nothing after its timeout row', async () => {
+  const fx = fixture({ route: 'both', primary: 'pageindex' }, { FAKE_TROVE_HANG_SHELF: '1', AW_LIBRARY_SHADOW_TIMEOUT_MS: '500' });
+  try {
+    await new Library(fx.project, fx.env, { shadow: 'inline' }).list();
+    const rows = await rowsOf(fx);
+    const shadow = ofType(rows, 'shadow')[0] as ShadowRow;
+    assert.deepEqual([shadow.ok, shadow.timed_out, shadow.error_code], [false, true, 'timeout']);
+    const before = lineCount(fx);
+    const calls = readFileSync(fx.log, 'utf8').split('\n').filter(Boolean).length;
+    await sleep(1500);
+    const log = readFileSync(fx.log, 'utf8');
+    assert.ok(!log.includes('items list'), `a command was started after the timeout:\n${log}`);
+    assert.equal(log.split('\n').filter(Boolean).length, calls);
+    assert.equal(lineCount(fx), before, 'nothing is written after the timeout row');
+    assert.equal(ofType(await rowsOf(fx), 'shadow').length, 1);
+  } finally { fx.cleanup(); }
+});
+
+// HIGH 2: atomic worker slots
+test('H2: parallel lookups never start more workers than shadow.maxConcurrent', async () => {
+  const { aw } = await sharedBundle();
+  const fx = fixture({ route: 'both' }, { FAKE_PILIB_HANG: '1', AW_LIBRARY_SHADOW_TIMEOUT_MS: '2500', AW_LIBRARY_WORKER_ENTRY: aw });
+  try {
+    const library = new Library(fx.project, fx.env, { shadow: 'detached' });
+    const results = await Promise.all(Array.from({ length: 8 }, () => library.read({ source: 'T-A', pages: '2' })));
+    const started = results.filter((result) => result.shadow_status === 'pending').length;
+    assert.ok(started <= limits.shadow.maxConcurrent, `${started} workers started, the limit is ${limits.shadow.maxConcurrent}`);
+    assert.ok(started >= 1);
+    assert.equal(results.filter((result) => result.shadow_status === 'skipped:busy').length, 8 - started);
+    const active = join(fx.project, '.academic-helper', 'retrieval', 'active');
+    await until('the worker slots to be released', async () => (!existsSync(active) || readdirSync(active).length === 0 ? true : undefined), 20000);
+    assert.equal(ofType(await rowsOf(fx), 'shadow').length, started);
+  } finally { await sleep(300); fx.cleanup(); }
+});
+
+test('H2: a slot held by a dead process is taken over, a live one is not', async () => {
+  const fx = fixture({ route: 'both' }, { AW_LIBRARY_SHADOW: 'detached' });
+  try {
+    const active = join(fx.project, '.academic-helper', 'retrieval', 'active');
+    mkdirSync(active, { recursive: true });
+    const old = new Date(Date.now() - limits.shadow.reapGraceMs * 5);
+    for (let slot = 0; slot < limits.shadow.maxConcurrent; slot += 1) {
+      const file = join(active, `slot-${slot}.lock`);
+      writeFileSync(file, JSON.stringify({ pid: slot === 0 ? process.pid : 2 ** 22 + 7, ts: old.toISOString() }));
+      utimesSync(file, old, old);
+    }
+    const first = await acquireSlot(fx.project);
+    assert.ok(first !== null, 'a dead holder frees its slot');
+    assert.notEqual(first, 0, 'the slot held by this live process stays taken');
+    const second = await acquireSlot(fx.project);
+    assert.ok(second !== null && second !== first);
+    assert.equal(await acquireSlot(fx.project), null, 'all three slots are taken now');
+  } finally { fx.cleanup(); }
+});
+
+// HIGH 3: _shadow only deletes spec files it validated in its own folder
+test('H3: aw library _shadow never deletes a file it was merely pointed at', async () => {
+  const fx = fixture({ route: 'both' });
+  try {
+    const victim = join(fx.root, 'victim.json');
+    writeFileSync(victim, '{"keep":true}');
+    assert.equal((await cli(fx, '_shadow', victim)).code, 0);
+    assert.ok(existsSync(victim), 'an unrelated file survives');
+    const notJson = join(fx.root, 'notes.txt');
+    writeFileSync(notJson, 'hello');
+    await cli(fx, '_shadow', notJson);
+    assert.ok(existsSync(notJson));
+    // A well formed spec that sits outside the project's retrieval folder is refused and kept.
+    const spec = { v: 1, lookup_id: 'lk_outside', run_id: null, claim_id: null, op: 'list', route: 'pageindex', project: fx.project, source: null, pages: null, slot: null };
+    const outside = join(fx.root, 'spec-lk_outside.json');
+    writeFileSync(outside, JSON.stringify(spec));
+    await cli(fx, '_shadow', outside);
+    assert.ok(existsSync(outside));
+    assert.equal(ofType(await rowsOf(fx), 'shadow').length, 0, 'and no lookup was made for it');
+    // The same spec inside the retrieval folder, under its own name, is run and removed.
+    const dir = join(fx.project, '.academic-helper', 'retrieval');
+    mkdirSync(dir, { recursive: true });
+    const inside = join(dir, 'spec-lk_outside.json');
+    writeFileSync(inside, JSON.stringify(spec));
+    await cli(fx, '_shadow', inside);
+    assert.ok(!existsSync(inside));
+    assert.equal(ofType(await rowsOf(fx), 'shadow').length, 1);
+    // A valid spec in that folder under a name that is not its own is kept.
+    const odd = join(dir, 'other.json');
+    writeFileSync(odd, JSON.stringify(spec));
+    await cli(fx, '_shadow', odd);
+    assert.ok(existsSync(odd));
+  } finally { fx.cleanup(); }
+});
+
+// HIGH 4: containment after resolving symlinks
+test('H4: the ledger and the spool never follow a symlink out of the project', async () => {
+  const row: VerdictRow = { row_type: 'verdict', schema: 1, seq: 1, ts: new Date().toISOString(), lookup_id: 'lk_x', run_id: null, paragraph_id: null, verdict: 'PASS', corrected_page: null, shadow_supports: null, shadow_supports_reason: 'no_quote', primary_route: null, mode: null };
+  const linkedFolder = fixture();
+  const linkedFile = fixture();
+  const linkedSpool = fixture();
+  try {
+    // .academic-helper is a symlink to a folder outside the project.
+    const elsewhere = join(linkedFolder.root, 'elsewhere');
+    mkdirSync(elsewhere);
+    rmSync(join(linkedFolder.project, '.academic-helper'), { recursive: true });
+    symlinkSync(elsewhere, join(linkedFolder.project, '.academic-helper'));
+    assert.equal((await appendRow(linkedFolder.project, row)).ok, false);
+    assert.deepEqual(readdirSync(elsewhere), [], 'nothing written outside');
+    assert.equal(await writeSpool(linkedFolder.project, join(spoolDir(linkedFolder.project), 'x.json'), { a: 1 }), false);
+    assert.deepEqual(readdirSync(elsewhere), []);
+    // retrieval.jsonl is a symlink to a file outside the project.
+    const target = join(linkedFile.root, 'target.txt');
+    writeFileSync(target, 'precious\n');
+    symlinkSync(target, join(linkedFile.project, '.academic-helper', 'retrieval.jsonl'));
+    assert.equal((await appendRow(linkedFile.project, row)).ok, false);
+    assert.equal(readFileSync(target, 'utf8'), 'precious\n');
+    // The spool folder is a symlink to a folder outside the project.
+    const outsideSpool = join(linkedSpool.root, 'outside-spool');
+    mkdirSync(outsideSpool);
+    mkdirSync(join(linkedSpool.project, '.academic-helper', 'retrieval'), { recursive: true });
+    symlinkSync(outsideSpool, join(linkedSpool.project, '.academic-helper', 'retrieval', 'spool'));
+    assert.equal(await writeSpool(linkedSpool.project, join(spoolDir(linkedSpool.project), 'x.json'), { a: 1 }), false);
+    assert.deepEqual(readdirSync(outsideSpool), []);
+    // A project that is itself reached through a symlink still works.
+    const real = fixture();
+    const alias = join(real.root, 'alias');
+    symlinkSync(real.project, alias);
+    assert.equal((await appendRow(alias, row)).ok, true);
+    assert.equal(rawLedger(real).length, 1);
+    real.cleanup();
+  } finally { linkedFolder.cleanup(); linkedFile.cleanup(); linkedSpool.cleanup(); }
+});
+
+// HIGH 5: verdicts are versioned per citation
+test('H5: a newer verdict is never replaced by settling an older pending one', async () => {
+  const fx = fixture({ route: 'both' });
+  try {
+    const lookup: LookupRow = {
+      row_type: 'lookup', schema: 1, ts: new Date().toISOString(), lookup_id: 'lk_seq', run_id: 'R1', claim_id: 'P1', op: 'read', source_id: 'T-A', mode: 'both', route_primary: 'trove',
+      book_by_route: { trove: 'T-A', pageindex: null }, request: { printed: null, trove_pages: '2' },
+      primary: { route: 'trove', ok: true, route_pages: '2', latency_ms: 5, bytes: 10, chars: 10, text_sha: '0123456789abcdef', error: null, error_code: null }, shadow_status: 'pending',
+    };
+    await appendRow(fx.project, lookup);
+    const first = await recordVerdict(fx.project, { lookup: 'lk_seq', verdict: 'PASS', correctedPage: null, quote: WORDS, paragraph: 'P1', run: null }, 0);
+    assert.equal(first.row.shadow_supports_reason, 'shadow_pending');
+    const second = await recordVerdict(fx.project, { lookup: 'lk_seq', verdict: 'FAIL', correctedPage: 4, quote: '', paragraph: 'P1', run: null }, 0);
+    assert.equal(second.row.verdict, 'FAIL');
+    assert.ok(second.row.seq > first.row.seq, 'later verdicts get a higher sequence number');
+    mkdirSync(spoolDir(fx.project), { recursive: true });
+    writeFileSync(join(spoolDir(fx.project), 'lk_seq.shadow.json'), JSON.stringify({ lookup_id: 'lk_seq', route: 'pageindex', ok: true, pages: [{ page: 2, text: WORDS }] }));
+    await settlePending(fx.project);
+    const { rows } = await readRows(fx.project);
+    const report = buildReport(rows, 0);
+    assert.deepEqual([report.routes.trove.auditor.pass, report.routes.trove.auditor.fail], [0, 1], 'the newest verdict (FAIL) stands');
+    assert.equal(ofType(rows, 'verdict').filter((row) => row.verdict === 'PASS' && row.settled).length, 0, 'the stale PASS is not settled');
+    // A pending verdict that nothing replaced still settles, and settles once.
+    const lone = await recordVerdict(fx.project, { lookup: 'lk_seq', verdict: 'PASS', correctedPage: null, quote: WORDS, paragraph: 'P9', run: null }, 0);
+    assert.equal(lone.row.shadow_supports_reason, 'covered', 'the spool is there now');
+    // Even with rows in the ledger in the "wrong" order, the highest seq wins.
+    const swapped = [...(await readRows(fx.project)).rows].reverse();
+    assert.deepEqual([buildReport(swapped, 0).routes.trove.auditor.pass, buildReport(swapped, 0).routes.trove.auditor.fail], [1, 1]);
+  } finally { fx.cleanup(); }
+});
+
+// MEDIUM 6: redaction
+test('M6: secrets in backend messages are redacted before they reach the ledger', async () => {
+  const samples: Array<[string, RegExp]> = [
+    ['Authorization: Bearer abcDEF123456.tokenvalue-xyz', /abcDEF123456/],
+    ['request to https://user:hunter2pass@example.org/path failed', /hunter2pass/],
+    ['TROVE_API_KEY=sk-live-1234567890abcdef rejected', /1234567890abcdef/],
+    ['export GOOGLE_API_KEY="AIzaSyA-abcdefghijklmnopqrstuvwxyz012345"', /AIzaSyA-abcdefghijklmnopqrstuvwxyz012345/],
+    ['run with --token abcd1234efgh5678 and --api-key=zzyyxx998877', /abcd1234efgh5678|zzyyxx998877/],
+    ['password: correct-horse-battery', /correct-horse/],
+    ['bad key 0123456789abcdef0123456789abcdef01234567', /0123456789abcdef0123456789abcdef01234567/],
+    ['jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r', /eyJhbGciOiJIUzI1NiJ9/],
+    ['aws AKIAIOSFODNN7EXAMPLE and ghp_abcdefghijklmnopqrstuvwxyz0123456789', /AKIAIOSFODNN7EXAMPLE|ghp_abcdefghij/],
+    ['blob c2VjcmV0LXZhbHVlLXRoYXQtaXMtbG9uZy1lbm91Z2gtdG8tbG9vay1saWtlLWEta2V5Cg==', /c2VjcmV0LXZhbHVl/],
+  ];
+  for (const [text, secret] of samples) {
+    const clean = clipError(text);
+    assert.doesNotMatch(clean, secret, `${text} -> ${clean}`);
+    assert.match(clean, /redacted/u);
+  }
+  assert.equal(clipError('trove: items read failed on page 12 of /path/to/book'), 'trove: items read failed on page 12 of /path/to/book', 'ordinary messages are untouched');
+  assert.ok(clipError(`x ${'word '.repeat(200)}`).length <= limits.ledger.maxErrorChars);
+  // End to end: a failing backend that echoes a credential.
+  const fx = fixture({ route: 'both' }, { FAKE_TROVE_FAIL: '1', FAKE_TROVE_FAIL_MSG: 'denied: Authorization: Bearer SECRETSECRET123456 for TROVE_TOKEN=tok_abcdef123456' });
+  try {
+    await assert.rejects(new Library(fx.project, fx.env, { shadow: 'inline' }).read({ source: 'T-A', pages: '2' }));
+    const text = rawLedger(fx).join('\n');
+    assert.doesNotMatch(text, /SECRETSECRET123456|tok_abcdef123456/);
+    assert.match(text, /denied/);
+  } finally { fx.cleanup(); }
+});
+
+// MEDIUM 7: support is judged page by page
+test('M7: quote words scattered over unrelated pages do not count as support', async () => {
+  const fx = fixture({ route: 'both' });
+  try {
+    const lookup: LookupRow = {
+      row_type: 'lookup', schema: 1, ts: new Date().toISOString(), lookup_id: 'lk_pages', run_id: null, claim_id: null, op: 'read', source_id: 'T-A', mode: 'both', route_primary: 'trove',
+      book_by_route: { trove: 'T-A', pageindex: null }, request: { printed: null, trove_pages: '2-6' },
+      primary: { route: 'trove', ok: true, route_pages: '2-6', latency_ms: 5, bytes: 10, chars: 10, text_sha: '0123456789abcdef', error: null, error_code: null }, shadow_status: 'pending',
+    };
+    await appendRow(fx.project, lookup);
+    mkdirSync(spoolDir(fx.project), { recursive: true });
+    const pages = [
+      { page: 2, text: 'alpha beta gamma delta epsilon' },
+      { page: 3, text: 'zeta eta theta iota kappa' },
+      { page: 5, text: 'lambda mu nu xi omicron' },
+      { page: 6, text: 'pi rho sigma tau upsilon' },
+    ];
+    writeFileSync(join(spoolDir(fx.project), 'lk_pages.shadow.json'), JSON.stringify({ lookup_id: 'lk_pages', route: 'pageindex', ok: true, pages }));
+    const supports = async (quote: string, page?: number): Promise<boolean | null> => (await computeSupports(fx.project, 'lk_pages', quote, 0, page)).supports;
+    assert.equal(await supports('alpha beta gamma delta'), true, 'one page covers it');
+    assert.equal(await supports('alpha beta lambda mu'), false, 'pages 2 and 5 are not neighbours');
+    assert.equal(await supports('zeta eta lambda mu'), false, 'pages 3 and 5 are not neighbours either');
+    assert.equal(await supports('delta epsilon zeta eta'), true, 'a page and its immediate spill-over');
+    assert.equal(await supports('delta epsilon pi rho'), false);
+    assert.equal(await supports('alpha beta gamma delta', 2), true, 'a cited page is checked on its own');
+    assert.equal(await supports('alpha beta gamma delta', 5), false, 'and not on the others');
+  } finally { fx.cleanup(); }
+});
+
+// Concurrent appends
+test('appends from many writers at once keep every line whole', async () => {
+  const fx = fixture({ route: 'both' });
+  try {
+    const rows = Array.from({ length: 300 }, (_, index): VerdictRow => ({
+      row_type: 'verdict', schema: 1, seq: index + 1, ts: new Date().toISOString(), lookup_id: `lk_${index}`, run_id: 'x'.repeat(150), paragraph_id: 'p'.repeat(150), verdict: 'PASS',
+      corrected_page: null, shadow_supports: null, shadow_supports_reason: 'no_quote', primary_route: 'trove', mode: 'both',
+    }));
+    const results = await Promise.all(rows.map((row) => appendRow(fx.project, row)));
+    assert.ok(results.every((result) => result.ok));
+    const { aw } = await sharedBundle();
+    const lookup: LookupRow = {
+      row_type: 'lookup', schema: 1, ts: new Date().toISOString(), lookup_id: 'lk_many', run_id: null, claim_id: null, op: 'read', source_id: 'T-A', mode: 'both', route_primary: 'trove',
+      book_by_route: { trove: null, pageindex: null }, request: { printed: null, trove_pages: '2' },
+      primary: { route: 'trove', ok: true, route_pages: '2', latency_ms: 5, bytes: 10, chars: 10, text_sha: '0123456789abcdef', error: null, error_code: null }, shadow_status: 'none',
+    };
+    await appendRow(fx.project, lookup);
+    const processes = await Promise.all(Array.from({ length: 6 }, (_, index) => runAw(aw, fx, 'verdict', '--lookup', 'lk_many', '--verdict', 'PASS', '--paragraph', `proc${index}`)));
+    assert.ok(processes.every((run) => run.code === 0));
+    const lines = rawLedger(fx);
+    assert.equal(lines.length, 300 + 1 + 6);
+    for (const line of lines) assert.deepEqual(checkSchema(retrievalSchema as JsonSchema, JSON.parse(line)), []);
+  } finally { fx.cleanup(); }
 });

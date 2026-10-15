@@ -127,7 +127,7 @@ SHADOW = {
     "agree": {"rate": 1.0, "compared": 1, "agreed": 1, "pages": [{"page": 4, "jaccard": 0.9, "agree": True}]},
 }
 VERDICT = {
-    "row_type": "verdict", "schema": 1, "ts": TS, "lookup_id": "lk_1", "run_id": None, "paragraph_id": "P1",
+    "row_type": "verdict", "schema": 1, "seq": 1, "ts": TS, "lookup_id": "lk_1", "run_id": None, "paragraph_id": "P1",
     "verdict": "PASS", "corrected_page": None, "shadow_supports": True, "shadow_supports_reason": "covered",
     "primary_route": "trove", "mode": "both",
 }
@@ -192,6 +192,8 @@ class TestRetrievalRowSchema(unittest.TestCase):
             {**VERDICT, "shadow_supports_reason": "maybe"},
             {**VERDICT, "corrected_page": 0},
             {**VERDICT, "schema": 2},
+            {**VERDICT, "seq": 0},
+            {k: v for k, v in VERDICT.items() if k != "seq"},
         ):
             self.assertTrue(list(check.iter_errors(row)), row)
 
@@ -208,7 +210,7 @@ class TestRetrievalThresholds(unittest.TestCase):
         for key in ("shadow", "verdictSettle"):
             self.assertGreater(block["timeoutMs"][key], 0)
         self.assertEqual(block["shadow"]["ops"], ["list", "toc", "read"])
-        for key in ("maxConcurrent", "readAllMaxPages", "lockStaleMs", "pollMs"):
+        for key in ("maxConcurrent", "readAllMaxPages", "lockStaleMs", "reapGraceMs", "pollMs"):
             self.assertGreater(block["shadow"][key], 0)
         self.assertGreater(block["spool"]["maxBytes"], 0)
         self.assertGreater(block["spool"]["ttlHours"], 0)

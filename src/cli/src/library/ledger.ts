@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
-import { appendFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { constants } from 'node:fs';
+import { lstat, mkdir, open, readFile, readdir, realpath, rename, rm, stat } from 'node:fs/promises';
+import { basename, dirname, join, sep } from 'node:path';
 import retrievalSchema from '../../../schemas/retrieval-row.schema.json' with { type: 'json' };
 import thresholds from '../../../thresholds.json' with { type: 'json' };
 import { checkSchema, type JsonSchema } from './jsonschema.ts';
+import { redact } from './redact.ts';
 import type { RouteMode, RouteName } from './types.ts';
 
 const limits = thresholds.library;
@@ -78,6 +80,8 @@ export type VerdictRow = {
   lookup_id: string;
   run_id: string | null;
   paragraph_id: string | null;
+  /** 1, 2, ... per (lookup, citation): the newest verdict is the highest number, whatever the order of the lines. */
+  seq: number;
   verdict: 'PASS' | 'FAIL';
   corrected_page: number | null;
   shadow_supports: boolean | null;
@@ -94,43 +98,88 @@ export function nowIso(): string { return new Date().toISOString(); }
 /** 16 hex characters of the SHA-256 of `text`: enough to tell two page texts apart, nothing to read back. */
 export function textSha(text: string): string { return createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 16); }
 
-/** One line, no newlines, short enough for a ledger row. */
+/** One line, no newlines, credentials hidden, short enough for a ledger row. */
 export function clipError(message: string): string {
-  return message.replace(/\s+/gu, ' ').trim().slice(0, limits.ledger.maxErrorChars);
+  return redact(message.replace(/\s+/gu, ' ').trim()).slice(0, limits.ledger.maxErrorChars);
 }
 
 export function ledgerPath(project: string): string { return join(project, RETRIEVAL_FILE); }
 export function retrievalDir(project: string): string { return join(project, RETRIEVAL_DIR); }
 export function spoolDir(project: string): string { return join(retrievalDir(project), 'spool'); }
 
-async function isDirectory(path: string): Promise<boolean> {
-  try { return (await stat(path)).isDirectory(); } catch { return false; }
+function inside(root: string, path: string): boolean { return path === root || path.startsWith(`${root}${sep}`); }
+
+/**
+ * A folder of this project that is really inside it: `.academic-helper` and then `segments`, each resolved
+ * through symlinks and required to stay under the project's real path. With `create`, missing segments are
+ * made (never `.academic-helper` itself). Null when anything is missing, is not a folder, or points outside.
+ */
+export async function containedDir(project: string, segments: string[], create = false): Promise<string | null> {
+  try {
+    const root = await realpath(project);
+    let current = await realpath(join(root, '.academic-helper'));
+    if (!inside(root, current) || !(await stat(current)).isDirectory()) return null;
+    for (const segment of segments) {
+      const next = join(current, segment);
+      if (create) await mkdir(next).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'EEXIST') throw error; });
+      current = await realpath(next);
+      if (!inside(root, current) || !(await stat(current)).isDirectory()) return null;
+    }
+    return current;
+  } catch { return null; }
 }
 
-/** Whether `project` is an article project (has `.academic-helper/`); the ledger never makes that folder. */
-export function hasProjectFolder(project: string): Promise<boolean> { return isDirectory(join(project, '.academic-helper')); }
+/** Whether `project` is an article project (has a real `.academic-helper/` inside it); the ledger never makes that folder. */
+export async function hasProjectFolder(project: string): Promise<boolean> { return (await containedDir(project, [])) !== null; }
 
 export type AppendResult = { ok: true } | { ok: false; reason: string };
 
-/** Check the row against the schema and append it as one line. Never throws; a refused row is reported, not fatal. */
+async function isSymlink(path: string): Promise<boolean> {
+  try { return (await lstat(path)).isSymbolicLink(); } catch { return false; }
+}
+
+/** The ledger file inside the project, or null when the project folder is missing, escapes the project, or the file is a symlink. */
+async function safeLedgerFile(project: string): Promise<string | null> {
+  const dir = await containedDir(project, []);
+  if (!dir) return null;
+  const file = join(dir, basename(RETRIEVAL_FILE));
+  return (await isSymlink(file)) ? null : file;
+}
+
+/**
+ * Check the row against the schema and append it as ONE write on an O_APPEND handle (so rows from the
+ * answering path and several workers never interleave). The file is opened without following symlinks.
+ * Never throws; a refused row is reported, not fatal.
+ */
 export async function appendRow(project: string, row: RetrievalRow): Promise<AppendResult> {
   try {
-    if (!(await hasProjectFolder(project))) return { ok: false, reason: 'no .academic-helper folder in this project' };
+    const file = await safeLedgerFile(project);
+    if (!file) return { ok: false, reason: 'no usable .academic-helper folder in this project' };
     const problems = checkSchema(retrievalSchema as JsonSchema, row);
     if (problems.length > 0) return { ok: false, reason: `row does not match the schema (${problems[0]})` };
-    const line = `${JSON.stringify(row)}\n`;
-    if (Buffer.byteLength(line, 'utf8') > limits.ledger.maxRowBytes) return { ok: false, reason: 'row is larger than the ledger allows' };
-    await appendFile(ledgerPath(project), line, 'utf8');
+    const line = Buffer.from(`${JSON.stringify(row)}\n`, 'utf8');
+    if (line.length > limits.ledger.maxRowBytes) return { ok: false, reason: 'row is larger than the ledger allows' };
+    const handle = await open(file, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | (constants.O_NOFOLLOW ?? 0), 0o644);
+    try {
+      const { bytesWritten } = await handle.write(line, 0, line.length);
+      if (bytesWritten !== line.length) return { ok: false, reason: 'the ledger write was cut short' };
+    } finally { await handle.close(); }
     return { ok: true };
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : String(error) };
   }
 }
 
+async function readLedgerText(project: string): Promise<string | null> {
+  const file = await safeLedgerFile(project);
+  if (!file) return null;
+  try { return await readFile(file, 'utf8'); } catch { return null; }
+}
+
 /** Every valid row in the ledger, in file order. Lines that are not valid rows are counted, not returned. */
 export async function readRows(project: string): Promise<{ rows: RetrievalRow[]; invalid: number }> {
-  let text: string;
-  try { text = await readFile(ledgerPath(project), 'utf8'); } catch { return { rows: [], invalid: 0 }; }
+  const text = await readLedgerText(project);
+  if (text === null) return { rows: [], invalid: 0 };
   const rows: RetrievalRow[] = [];
   let invalid = 0;
   for (const line of text.split('\n')) {
@@ -146,8 +195,8 @@ export async function readRows(project: string): Promise<{ rows: RetrievalRow[];
 
 /** The raw ledger lines that mention `lookupId`, parsed; a cheap way to look for one lookup's rows without validating the whole file. */
 export async function rowsForLookup(project: string, lookupId: string): Promise<RetrievalRow[]> {
-  let text: string;
-  try { text = await readFile(ledgerPath(project), 'utf8'); } catch { return []; }
+  const text = await readLedgerText(project);
+  if (text === null) return [];
   const found: RetrievalRow[] = [];
   for (const line of text.split('\n')) {
     if (!line.includes(lookupId)) continue;
@@ -163,26 +212,51 @@ export async function rowsForLookup(project: string, lookupId: string): Promise<
 
 export type SpooledPages = { lookup_id: string; route?: RouteName; ok?: boolean; too_large?: boolean; pages: Array<{ page: number; text: string }> };
 
+/** The nominal spool file of a lookup; reads and writes go through the contained spool folder, using only the file's name. */
 export function spoolFile(project: string, lookupId: string, kind: 'primary' | 'shadow'): string { return join(spoolDir(project), `${lookupId}.${kind}.json`); }
 
-/** Write a spool file whole (temp name, then rename), so a reader never sees half a file. Never throws. */
+/** Write a spool file whole (new temp name, then rename), inside the project's real spool folder. Never throws. */
 export async function writeSpool(project: string, file: string, value: unknown): Promise<boolean> {
   try {
-    if (!(await hasProjectFolder(project))) return false;
-    await mkdir(spoolDir(project), { recursive: true });
-    const temp = `${file}.${process.pid}.tmp`;
-    await writeFile(temp, JSON.stringify(value), 'utf8');
-    await rename(temp, file);
+    if (dirname(file) !== spoolDir(project)) return false;
+    const dir = await containedDir(project, ['retrieval', 'spool'], true);
+    if (!dir) return false;
+    const target = join(dir, basename(file));
+    const temp = `${target}.${process.pid}.${Date.now().toString(36)}.tmp`;
+    const handle = await open(temp, 'wx', 0o644);
+    try { await handle.writeFile(JSON.stringify(value), 'utf8'); } finally { await handle.close(); }
+    await rename(temp, target);
     return true;
   } catch { return false; }
 }
 
-export async function readSpool(file: string): Promise<SpooledPages | null> {
+/** A JSON file from the project's real spool folder (never through a symlink); throws when it is missing or not JSON. */
+export async function readSpoolJson(project: string, file: string): Promise<unknown> {
+  const dir = await containedDir(project, ['retrieval', 'spool']);
+  if (!dir) throw new Error('no spool folder');
+  const target = join(dir, basename(file));
+  if (await isSymlink(target)) throw new Error('spool file is a symlink');
+  return JSON.parse(await readFile(target, 'utf8'));
+}
+
+export async function readSpool(project: string, file: string): Promise<SpooledPages | null> {
   try {
-    const parsed: unknown = JSON.parse(await readFile(file, 'utf8'));
+    const parsed = await readSpoolJson(project, file);
     if (typeof parsed !== 'object' || parsed === null || !Array.isArray((parsed as SpooledPages).pages)) return null;
     return parsed as SpooledPages;
   } catch { return null; }
+}
+
+/** Files in the project's real spool folder whose names pass `keep`. */
+export async function listSpool(project: string, keep: (name: string) => boolean): Promise<string[]> {
+  const dir = await containedDir(project, ['retrieval', 'spool']);
+  if (!dir) return [];
+  try { return (await readdir(dir)).filter(keep).map((name) => join(spoolDir(project), name)); } catch { return []; }
+}
+
+export async function removeSpool(project: string, file: string): Promise<void> {
+  const dir = await containedDir(project, ['retrieval', 'spool']);
+  if (dir) await rm(join(dir, basename(file)), { force: true });
 }
 
 /** Page texts as a spool value, or the size marker when they would be larger than spool.maxBytes. */
@@ -195,11 +269,12 @@ export function spoolValue(lookupId: string, extra: { route?: RouteName; ok?: bo
 /** Delete spool files older than spool.ttlHours. Never throws. */
 export async function sweepSpool(project: string, now: number = Date.now()): Promise<void> {
   try {
-    const dir = spoolDir(project);
+    const dir = await containedDir(project, ['retrieval', 'spool']);
+    if (!dir) return;
     const cutoff = now - limits.spool.ttlHours * 3600 * 1000;
     for (const name of await readdir(dir)) {
       const file = join(dir, name);
-      try { if ((await stat(file)).mtimeMs < cutoff) await rm(file, { force: true }); } catch { /* gone already */ }
+      try { if ((await lstat(file)).mtimeMs < cutoff) await rm(file, { force: true }); } catch { /* gone already */ }
     }
   } catch { /* no spool folder yet */ }
 }

@@ -56,7 +56,7 @@ export async function runLibraryCli(argv: string[], io: LibraryIo = processIo): 
     if (subcommand === '_shadow') {
       // The detached worker: it has nobody to report to, so it always exits 0 and its result is a ledger row.
       const spec = positional[0] ? await loadSpec(positional[0]) : null;
-      if (spec) await runShadowWorker(spec, new Library(spec.project, process.env), workerSettings(process.env, true));
+      if (spec) await runShadowWorker(spec, new Library(spec.project, process.env), workerSettings(process.env));
       return 0;
     }
     if (subcommand === 'verdict') {
@@ -66,9 +66,12 @@ export async function runLibraryCli(argv: string[], io: LibraryIo = processIo): 
       if (word !== 'PASS' && word !== 'FAIL') throw new LibraryError('usage', 'ERROR library verdict: --verdict must be PASS or FAIL');
       const corrected = flagText(flags, '--corrected-page');
       if (corrected !== undefined && !/^[1-9]\d{0,5}$/u.test(corrected)) throw new LibraryError('usage', 'ERROR library verdict: --corrected-page must be a page number');
+      const cited = flagText(flags, '--page');
+      if (cited !== undefined && !/^[1-9]\d{0,5}$/u.test(cited)) throw new LibraryError('usage', 'ERROR library verdict: --page must be a page number');
       const { row, append } = await recordVerdict(projectDirOr(), {
         lookup, verdict: word, correctedPage: corrected === undefined ? null : Number(corrected),
         quote: flagText(flags, '--support-quote') ?? '', paragraph: flagText(flags, '--paragraph') ?? null, run: flagText(flags, '--run') ?? null,
+        page: flagText(flags, '--page') === undefined ? null : Number(flagText(flags, '--page')),
       });
       // A ledger problem never changes the auditor's verdict: say so on stderr and still exit 0.
       if (!append.ok) io.err(`NOTE library verdict: not recorded in the ledger (${append.reason})\n`);

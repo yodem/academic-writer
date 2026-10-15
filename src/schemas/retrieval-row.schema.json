@@ -128,10 +128,11 @@
     "verdict": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["row_type", "schema", "ts", "lookup_id", "run_id", "paragraph_id", "verdict", "corrected_page", "shadow_supports", "shadow_supports_reason", "primary_route", "mode"],
+      "required": ["row_type", "schema", "seq", "ts", "lookup_id", "run_id", "paragraph_id", "verdict", "corrected_page", "shadow_supports", "shadow_supports_reason", "primary_route", "mode"],
       "properties": {
         "row_type": { "const": "verdict" },
         "schema": { "const": 1 },
+        "seq": { "description": "1, 2, ... per (lookup_id, paragraph_id): the newest verdict has the highest number, whatever the order of the lines. A settled row repeats the number of the pending verdict it settles.", "type": "integer", "minimum": 1 },
         "ts": { "$ref": "#/definitions/ts" },
         "lookup_id": { "$ref": "#/definitions/id" },
         "run_id": { "$ref": "#/definitions/nullableId" },

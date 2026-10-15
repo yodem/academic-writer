@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import thresholds from '../../../thresholds.json' with { type: 'json' };
 import { PageIndexBackend, TroveBackend } from './backends.ts';
+import type { CommandScope } from './exec.ts';
 import { loadLibraryConfig, profileTroveEnabled, type LibraryConfig } from './config.ts';
 import { appendRow, clipError, nowIso, spoolFile, spoolValue, textSha, writeSpool, type LookupOp, type LookupRow } from './ledger.ts';
 import { noShadow, startShadow, workerSettings, type RouteResult, type ShadowHandle, type ShadowMode, type ShadowRunner, type ShadowSpec } from './shadow.ts';
@@ -23,7 +24,7 @@ export type ReadRequest = {
   claim?: string;
 };
 /** Options of a Library. `shadow` defaults to off here; the aw library command turns it on (detached). */
-export type LibraryOptions = { shadow?: ShadowMode; timeoutMs?: number };
+export type LibraryOptions = { shadow?: ShadowMode; timeoutMs?: number; /** The commands of this Library stop together (the shadow worker's scope). */ scope?: CommandScope };
 type Ids = { run?: string; claim?: string };
 export type ReadOutput = {
   lookup_id: string;
@@ -55,12 +56,14 @@ export class Library implements ShadowRunner {
   private readonly resolved = new Map<string, ResolvedBook>();
 
   private readonly shadowMode: ShadowMode;
+  private readonly scope: CommandScope | undefined;
 
   constructor(readonly project: string, private readonly env: NodeJS.ProcessEnv = process.env, options: LibraryOptions = {}) {
     this.config = loadLibraryConfig(project, env);
     const override = Number(env.AW_LIBRARY_TIMEOUT_MS);
     this.override = Number.isFinite(override) && override > 0 ? override : undefined;
     this.shadowMode = options.shadow ?? 'off';
+    this.scope = options.scope;
     const timeoutMs = options.timeoutMs ?? this.override ?? limits.timeoutMs.primary;
     this.trove = this.makeTrove(timeoutMs);
     this.pageindex = this.makePageIndex(timeoutMs);
@@ -68,8 +71,8 @@ export class Library implements ShadowRunner {
 
   /** AW_LIBRARY_TIMEOUT_MS replaces every timeout (test and troubleshooting seam; the defaults live in thresholds.json). */
   private readonly override: number | undefined;
-  private makeTrove(timeoutMs: number): TroveBackend { return new TroveBackend({ command: this.config.troveCommand, env: this.env, timeoutMs, cwd: this.project }); }
-  private makePageIndex(timeoutMs: number): PageIndexBackend { return new PageIndexBackend({ command: this.config.pageindexCommand, env: this.env, timeoutMs, cwd: this.project }); }
+  private makeTrove(timeoutMs: number): TroveBackend { return new TroveBackend({ command: this.config.troveCommand, env: this.env, timeoutMs, cwd: this.project, scope: this.scope }); }
+  private makePageIndex(timeoutMs: number): PageIndexBackend { return new PageIndexBackend({ command: this.config.pageindexCommand, env: this.env, timeoutMs, cwd: this.project, scope: this.scope }); }
 
   private get shelf(): Shelf {
     this.shelfCache ??= loadShelf(this.config.shelfPath);
@@ -183,7 +186,7 @@ export class Library implements ShadowRunner {
     if (!this.config.shadowEnabled || this.shadowMode === 'off') return noShadow('disabled');
     if (!limits.shadow.ops.includes(op)) return noShadow('skipped:op');
     if (Array.isArray(pages) && pages.length > limits.shadow.readAllMaxPages) return noShadow('skipped:too_many_pages');
-    const spec: ShadowSpec = { v: 1, lookup_id: lookupId, run_id: ids.run ?? null, claim_id: ids.claim ?? null, op, route: secondary, project: this.project, source, pages };
+    const spec: Omit<ShadowSpec, 'slot'> = { v: 1, lookup_id: lookupId, run_id: ids.run ?? null, claim_id: ids.claim ?? null, op, route: secondary, project: this.project, source, pages };
     return startShadow(spec, this.shadowMode, this.env, this);
   }
 
@@ -234,8 +237,8 @@ export class Library implements ShadowRunner {
   }
 
   /** The ShadowRunner side: the same request on the other route, under the shadow timeout instead of the primary one; the worker records the outcome. */
-  runShadow(spec: ShadowSpec): Promise<RouteResult> {
-    return new Library(this.project, this.env, { shadow: 'off', timeoutMs: workerSettings(this.env).timeoutMs }).shadowCall(spec);
+  runShadow(spec: ShadowSpec, scope?: CommandScope): Promise<RouteResult> {
+    return new Library(this.project, this.env, { shadow: 'off', timeoutMs: workerSettings(this.env).timeoutMs, scope }).shadowCall(spec);
   }
 
   private async shadowCall(spec: ShadowSpec): Promise<RouteResult> {
