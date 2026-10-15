@@ -32,6 +32,6 @@ Save the selected text and the instruction to temporary files inside the project
 ## 3. Check and apply
 
 1. Show the author what changed (a short before/after of each changed passage) before you replace anything in their article.
-2. If the edit touched a factual claim or a citation, send the whole edited unit to the `auditor` agent in one single batched call covering every paragraph. The auditor is the plugin's only hard gate for citations, so it must see edited facts before they are accepted.
+2. If the edit touched a factual claim or a citation, send the whole edited unit to the `auditor` agent in one single batched call covering every paragraph, with `runId: <run-id>` (the `--run` value used for `aw edit`) in the prompt. The auditor is the plugin's only hard gate for citations, so it must see edited facts before they are accepted.
 3. Commit the auditor's `taggedText` for PASS paragraphs only. Correct FAIL or PARTIAL paragraphs and audit them again before accepting them.
 4. Tell the author which passages changed and whether any paragraph still carries a `[NEEDS REVIEW: ...]` tag they should check by hand.

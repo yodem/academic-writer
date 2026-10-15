@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildEvidence, __stubs } from '../src/evidence.ts';
@@ -85,4 +85,128 @@ test('a rebuild keeps previously extracted passages that are still verbatim', as
     assert.ok(second.passages.some((p) => p.id === first.passages[0]!.id));
     assert.equal(second.passages.length, 2);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+// ---------------------------------------------------------------- library routes (phase 4)
+
+// Fake `trove` and `pilib` commands: tiny node scripts, so no real library is touched.
+const FAKE_TROVE = `
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, 'trove ' + args.join(' ') + '\\n');
+if (args[0] === 'items' && args[1] === 'read') process.stdout.write('**Trove Book**\\n\\n── Page 1 ──\\nהנבואה היא שפע מאת האל.\\n');
+else if (args[0] === 'items' && args[1] === 'toc') console.log('==========\\nTrove Title\\nID: ' + args[2] + ' | 1 pages\\n==========');
+else { console.error('unexpected: ' + args.join(' ')); process.exit(2); }
+`;
+const FAKE_PILIB = `
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, 'pilib ' + args.join(' ') + '\\n');
+if (process.env.FAKE_PILIB_FAIL) { console.error('pilib: boom'); process.exit(1); }
+const [cmd, book, spec] = args;
+if (cmd === 'catalog') console.log(JSON.stringify({ 'lib-1': { title: 'PageIndex Title', author: 'Au', n_pages: 2, toc_source: 'x', top: [] } }));
+else if (cmd === 'meta') console.log(JSON.stringify({ book_id: book, title: 'PageIndex Title', n_pages: 2, origin: {}, trove_id: process.env.FAKE_PI_TROVE_ID || 'T-1', pagemap: null }));
+else if (cmd === 'read') console.log(JSON.stringify({ book_id: book, pages: [{ page: 1, content: 'פרק ראשון של המקור.' }, { page: 2, content: 'פרק שני של המקור.' }] }));
+else { console.error('unexpected: ' + args.join(' ')); process.exit(2); }
+`;
+
+type Bench = { root: string; project: string; data: string; log: string; restore: () => void };
+
+function bench(config?: unknown, extraEnv: Record<string, string> = {}): Bench {
+  const root = mkdtempSync(join(tmpdir(), 'aw-evidence-lib-'));
+  const project = join(root, 'p');
+  const data = join(root, 'd');
+  const bin = join(root, 'bin');
+  mkdirSync(join(project, '.academic-helper'), { recursive: true });
+  mkdirSync(bin);
+  const write = (name: string, body: string): string => { const file = join(bin, name); writeFileSync(file, `#!${process.execPath}\n${body}`, 'utf8'); chmodSync(file, 0o755); return file; };
+  const log = join(root, 'calls.log');
+  const saved: Record<string, string | undefined> = {};
+  const set = (key: string, value: string | undefined): void => { saved[key] = process.env[key]; if (value === undefined) delete process.env[key]; else process.env[key] = value; };
+  set('AW_TROVE_COMMAND', write('trove', FAKE_TROVE));
+  set('AW_PAGEINDEX_COMMAND', write('pilib', FAKE_PILIB));
+  set('FAKE_LOG', log);
+  set('AW_LIBRARY_SHADOW', 'inline');
+  for (const [key, value] of Object.entries(extraEnv)) set(key, value);
+  if (config !== undefined) writeFileSync(join(project, '.academic-helper', 'library.json'), JSON.stringify(config), 'utf8');
+  setPathArguments(['--data-dir', data, '--project-dir', project]);
+  return { root, project, data, log, restore: () => { for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } rmSync(root, { recursive: true, force: true }); } };
+}
+const loggedCalls = (b: Bench): string[] => (existsSync(b.log) ? readFileSync(b.log, 'utf8').split('\n').filter(Boolean) : []);
+const noPassages = { extract: async () => ({ passages: [] }) };
+
+test('library.json absent: the old call pattern, cache name and output are unchanged (stubbed seam)', async () => {
+  const b = bench();
+  const seen: Array<[string, string]> = [];
+  __stubs({ fetchCk: async (id, route) => { seen.push([id, route]); return '**Stub Book**\n\nהנבואה היא שפע.'; }, ...noPassages });
+  try {
+    const result = await buildEvidence({ sources: ['S-1'], runId: 'r' });
+    assert.deepEqual(seen, [['S-1', 'trove']]);
+    assert.deepEqual(Object.keys(result.sources[0] ?? {}).sort(), ['author', 'id', 'isCoreText', 'role', 'title']);
+    const cached = readdirSync(join(b.data, 'sources'));
+    assert.equal(cached.length, 1);
+    assert.match(cached[0] ?? '', /^S-1@[0-9a-f]{64}$/u); // the plain id: caches written before routes still hit
+    assert.equal(existsSync(join(b.project, '.academic-helper', 'library.json')), false);
+    assert.equal(existsSync(join(b.project, '.academic-helper', 'retrieval.jsonl')), false); // the stub never reaches the library
+  } finally { __stubs({}); b.restore(); }
+});
+
+test('library.json absent: a real read is exactly `trove items read ID:all` then `trove items toc ID`', async () => {
+  const b = bench();
+  __stubs(noPassages);
+  try {
+    const result = await buildEvidence({ sources: ['T-1'], runId: 'r' });
+    assert.deepEqual(loggedCalls(b), ['trove items read T-1:all', 'trove items toc T-1']);
+    assert.equal(result.sources[0]?.title, 'Trove Title'); // from the toc line before ID:, as before
+    assert.equal(readFileSync(join(b.data, 'sources', readdirSync(join(b.data, 'sources'))[0] ?? '', 'text.md'), 'utf8'), '**Trove Book**\n\n── Page 1 ──\nהנבואה היא שפע מאת האל.\n'); // Trove's own text, untouched
+    const rows = readFileSync(join(b.project, '.academic-helper', 'retrieval.jsonl'), 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line) as { row_type: string; op: string; source_id: string });
+    assert.deepEqual(rows.map((r) => [r.row_type, r.op, r.source_id]), [['lookup', 'get', 'T-1']]);
+  } finally { __stubs({}); b.restore(); }
+});
+
+test('the source cache is keyed by route: a Trove text is never reused for PageIndex', async () => {
+  const b = bench({ route: 'pageindex' });
+  const seen: string[] = [];
+  __stubs({ fetchCk: async (id, route) => { seen.push(`${route}:${id}`); return `text from ${route}`; }, ...noPassages });
+  try {
+    // an entry the Trove route wrote earlier, under the plain id
+    mkdirSync(join(b.data, 'sources', 'T-1@abc'), { recursive: true });
+    writeFileSync(join(b.data, 'sources', 'T-1@abc', 'text.md'), 'older Trove text', 'utf8');
+    await buildEvidence({ sources: ['T-1'], runId: 'r' });
+    assert.deepEqual(seen, ['pageindex:T-1']);
+    assert.ok(readdirSync(join(b.data, 'sources')).some((name) => name.startsWith('pageindex~T-1@')));
+  } finally { __stubs({}); b.restore(); }
+});
+
+test('route=pageindex reads through pilib with page banners and the PageIndex title', async () => {
+  const b = bench({ route: 'pageindex' });
+  __stubs(noPassages);
+  try {
+    const result = await buildEvidence({ sources: ['lib-1'], runId: 'r' });
+    assert.equal(result.sources[0]?.title, 'PageIndex Title');
+    const text = readFileSync(join(b.data, 'sources', readdirSync(join(b.data, 'sources'))[0] ?? '', 'text.md'), 'utf8');
+    assert.match(text, /── Page 1 ──\nפרק ראשון של המקור\./u);
+    assert.match(text, /── Page 2 ──\nפרק שני/u);
+    assert.ok(!loggedCalls(b).some((line) => line.startsWith('trove ')), 'Trove is not asked on the PageIndex route');
+  } finally { __stubs({}); b.restore(); }
+});
+
+test('route=both: Trove answers as before and the quiet PageIndex lookup is a shadow row; a failing shadow changes nothing', async () => {
+  // Each run uses its own source id: the in-memory source cache outlives a test.
+  const stable = async (id: string, env: Record<string, string>): Promise<{ sources: unknown; text: string; types: string[] }> => {
+    const b = bench({ route: 'both' }, env);
+    __stubs(noPassages);
+    try {
+      const result = await buildEvidence({ sources: [id], runId: 'r' });
+      const text = readFileSync(join(b.data, 'sources', readdirSync(join(b.data, 'sources'))[0] ?? '', 'text.md'), 'utf8');
+      const rows = readFileSync(join(b.project, '.academic-helper', 'retrieval.jsonl'), 'utf8').split('\n').filter(Boolean).map((line) => (JSON.parse(line) as { row_type: string }).row_type);
+      return { sources: result.sources.map(({ id: _id, ...rest }) => rest), text, types: rows };
+    } finally { __stubs({}); b.restore(); }
+  };
+  const healthy = await stable('T-healthy', { FAKE_PI_TROVE_ID: 'T-healthy' });
+  const failing = await stable('T-failing', { FAKE_PI_TROVE_ID: 'T-failing', FAKE_PILIB_FAIL: '1' });
+  assert.deepEqual(failing.sources, healthy.sources);
+  assert.equal(failing.text, healthy.text);
+  assert.ok(healthy.types.includes('lookup') && healthy.types.includes('shadow'), healthy.types.join(','));
+  assert.ok(failing.types.includes('shadow'), 'the failed shadow is recorded, not raised');
 });
