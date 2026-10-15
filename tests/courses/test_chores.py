@@ -105,3 +105,36 @@ def test_general_pseudo_course_accepted(tmp_path):
     reg = make_registry(tmp_path)
     chore = chores.add_chore(reg, course="general", kind="manual", ref="chrome", title="Open Chrome")
     assert chore["course"] == "general"
+
+
+def test_canonical_ref_spellings():
+    assert {chores.canonical_ref(r) for r in ("3251589", "cm:3251589", " CMID-3251589 ",
+            "https://lemida.biu.ac.il/mod/url/view.php?id=3251589")} == {"3251589"}
+    for ref in ("login", "Lemida-Signin-2026-10-15", "sign in", "lemida_login"):
+        assert chores.canonical_ref(ref) == chores.SIGNIN_REF
+    assert chores.canonical_ref("toc-audit-2026-10-15") == "toc-audit-2026-10-15"
+
+
+def test_reworded_refs_do_not_duplicate(tmp_path):
+    reg = make_registry(tmp_path)
+    first = chores.add_chore(reg, course="kane", kind="perusall-capture", ref="cm:3251589", title="a")
+    chores.add_chore(reg, course="kane", kind="perusall-capture", ref="3251589", title="b")
+    assert len(chores.load(reg)) == 1 and chores.load(reg)[0]["id"] == first["id"]
+
+
+def test_signin_chores_collapse_to_one_general_chore(tmp_path):
+    reg = make_registry(tmp_path)
+    for course, ref in (("kane", "login"), ("cohen", "login"), ("kane", "lemida-signin-2026-10-15")):
+        chores.add_chore(reg, course=course, kind="manual", ref=ref, title="Sign in to Lemida in Chrome")
+    stored = chores.load(reg)
+    assert len(stored) == 1 and (stored[0]["course"], stored[0]["ref"]) == ("general", "lemida-signin")
+
+
+def test_legacy_stored_ref_matches_canonical(tmp_path):
+    reg = make_registry(tmp_path)
+    legacy = [{"id": "abc", "kind": "manual", "course": "kane", "ref": "cm:42", "title": "t", "text": "",
+               "core_texts": [], "time_left_text": "", "due_text": "", "due_at": None, "status": "open",
+               "created": "x", "updated": "x"}]
+    (reg.directory / "chores.json").write_text(json.dumps(legacy), encoding="utf-8")
+    assert chores.add_chore(reg, course="kane", kind="manual", ref="42", title="t")["id"] == "abc"
+    assert len(chores.load(reg)) == 1

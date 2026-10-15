@@ -31,6 +31,22 @@ _TOKEN_RE = re.compile(r"((?:wstoken|token|key|sesskey)=)[^&\s]+", re.I)
 
 
 GENERAL = "general"  # pseudo-course for system chores (open Chrome, ToC audit failed)
+SIGNIN_REF = "lemida-signin"  # the one "Chrome is signed out of Lemida" chore, whatever the watcher calls it
+_SIGNIN_RE = re.compile(r"^(?:lemida[-_ ]?)?(?:log[-_ ]?in|sign[-_ ]?in)(?:[-_ ]\d{4}-\d{2}-\d{2})?$")
+_CMID_RE = re.compile(r"^(?:cm|cmid)[:\-_ ]?(\d+)$")
+_URL_ID_RE = re.compile(r"^https?://\S*[?&]id=(\d+)")
+
+
+def canonical_ref(ref: str) -> str:
+    """One spelling per Lemida item, so a reworded re-scan updates the chore instead of duplicating it.
+
+    `cm:123`, `cmid-123` and a Moodle `...view.php?id=123` URL become `123`; any sign-in/login ref becomes
+    SIGNIN_REF. Other refs are trimmed and lowercased."""
+    ref = " ".join(ref.split()).lower()
+    if _SIGNIN_RE.match(ref):
+        return SIGNIN_REF
+    match = _CMID_RE.match(ref) or _URL_ID_RE.match(ref)
+    return match.group(1) if match else ref
 
 
 def _now() -> str:
@@ -65,13 +81,17 @@ def load(registry: courses.Registry) -> list[dict[str, Any]]:
 def add_chore(registry: courses.Registry, *, course: str, kind: str, ref: str, title: str = "", text: str = "",
               core_texts: list[str] | None = None, time_left_text: str = "", due_text: str = "",
               due_at: str | None = None) -> dict[str, Any]:
-    """Create a chore, or update the existing one with the same (course, kind, ref); never duplicates.
+    """Create a chore, or update the existing one with the same (course, kind, canonical ref); never duplicates.
 
-    An updated chore keeps its id, `created` and status (a done chore stays done)."""
+    An updated chore keeps its id, `created` and status (a done chore stays done). A sign-in chore is always
+    one `general` chore, whichever course the watcher was scanning."""
     if kind not in KINDS:
         raise ValueError(f"unknown chore kind {kind!r}; expected one of {', '.join(KINDS)}")
     if not course or not ref:
         raise ValueError("a chore needs a course and a ref")
+    ref = canonical_ref(ref)
+    if ref == SIGNIN_REF:
+        course = GENERAL
     if course != GENERAL and course not in registry.courses:
         raise ValueError(f"unknown course {course!r} (use {GENERAL!r} for a chore not tied to a course)")
     values = {"title": title, "text": text, "core_texts": list(core_texts or []), "time_left_text": time_left_text,
@@ -80,7 +100,7 @@ def add_chore(registry: courses.Registry, *, course: str, kind: str, ref: str, t
     try:
         chores = load(registry)
         for chore in chores:
-            if (chore["course"], chore["kind"], chore["ref"]) == (course, kind, ref):
+            if (chore["course"], chore["kind"], canonical_ref(chore["ref"])) == (course, kind, ref):
                 # a re-scan may know less than an earlier one: only non-empty values overwrite
                 changed = {k: v for k, v in values.items() if v not in ("", None, []) and chore.get(k) != v}
                 if changed:
