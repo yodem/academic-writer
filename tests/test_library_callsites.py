@@ -168,6 +168,33 @@ class TestRunIdReachesTheAuditor(unittest.TestCase):
             self.assertIn("runId", read(rel), f"{rel} must put runId in the auditor prompt")
 
 
+class TestRunIdIsAPlainId(unittest.TestCase):
+    """The library refuses ids that are not plain, so the run id a skill documents must pass the same pattern."""
+
+    def pattern(self):
+        text = read("src/cli/src/library/cli.ts")
+        match = re.search(r"const PLAIN_ID = /(.+?)/u;", text)
+        self.assertIsNotNone(match)
+        return re.compile(match.group(1))
+
+    def test_write_edit_and_edit_section_say_how_to_build_the_run_id(self):
+        for rel in ("src/skills/write/SKILL.md", "src/skills/edit/SKILL.md", "src/skills/edit-section/SKILL.md"):
+            text = read(rel)
+            self.assertIn("Latin letters, digits and hyphens", text, rel)
+            self.assertIn("transliterate", text, rel)
+            self.assertNotIn("<slug>", text, rel)
+
+    def test_documented_run_id_examples_match_the_cli_id_pattern(self):
+        plain = self.pattern()
+        seen = 0
+        for rel in ("src/skills/write/SKILL.md", "src/skills/edit/SKILL.md", "src/skills/edit-section/SKILL.md"):
+            for example in re.findall(r"e\.g\. `((?:write|edit)-[^`]+)`", read(rel)):
+                seen += 1
+                self.assertRegex(example, plain, f"{rel}: {example}")
+                self.assertRegex(example, r"^[A-Za-z0-9-]+$", f"{rel}: {example}")
+        self.assertEqual(seen, 3)
+
+
 class TestSkillsUseTheLibraryAndAbsoluteAwPath(unittest.TestCase):
     def test_source_listing_and_health_use_aw_library(self):
         self.assertIn("library list", read("src/skills/write/SKILL.md"))

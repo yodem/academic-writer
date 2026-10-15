@@ -118,7 +118,7 @@ If the file does not exist, proceed with Phase 1 normally.
 
 ## PHASE 1: CONVERSATIONAL (human-in-the-loop)
 
-Choose one run ID for this article, for example `write-<slug>-<YYYYMMDD-HHMM>`, and pass the same `--run` value to every `aw` command below. The run ID ties the cost ledger and the logs of one article together.
+Choose one run ID for this article, e.g. `write-ashkenazi-creation-20261015-1430` (a short English label, then the date and time). Use only Latin letters, digits and hyphens: transliterate a Hebrew title or use a short English label, because the library refuses any other character in an id. Pass the same `--run` value to every `aw` command below. The run ID ties the cost ledger and the logs of one article together.
 
 ### Step 1: Subject & Language
 

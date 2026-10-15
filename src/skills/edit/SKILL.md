@@ -25,6 +25,7 @@ Save the selected text and the instruction to temporary files inside the project
   --text-file <text-file> --instruction-file <instruction-file> --lang <he|en> --run <run-id> --out <output-file>
 ```
 
+- Choose one run ID for this edit, e.g. `edit-ashkenazi-creation-20261015-1430` (a short English label, then the date and time). Use only Latin letters, digits and hyphens: transliterate a Hebrew title or use a short English label, because the library refuses any other character in an id. Use the same `<run-id>` for the auditor.
 - For a one-line instruction you may pass `--instruction <text>` instead of `--instruction-file`.
 - Take the language from `.academic-helper/profile.md` (`targetLanguage`); ask the author if it is missing.
 - The command prints `{"revised_text":"..."}` and, with `--out`, writes the output file.

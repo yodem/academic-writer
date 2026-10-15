@@ -19,6 +19,7 @@ Revise one focused section. For changes across the whole article, hand off to `/
   --text-file <section-file> --instruction-file <instruction-file> --lang <he|en> --run <run-id> --out <output-file>
 ```
 
+- Choose one run ID for this edit, e.g. `edit-ashkenazi-creation-20261015-1430` (a short English label, then the date and time). Use only Latin letters, digits and hyphens: transliterate a Hebrew title or use a short English label, because the library refuses any other character in an id. Use the same `<run-id>` for the auditor.
 - For a short instruction you may use `--instruction <text>` instead.
 - Take `--lang` from `.academic-helper/profile.md`, or ask the author.
 
