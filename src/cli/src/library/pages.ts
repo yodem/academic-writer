@@ -16,6 +16,7 @@ export type SourcePageMap =
 export type RoutePages = { kind: 'identity' } | { kind: 'pagemap'; pdfToTrove: number[] };
 
 const maxRequestPages = thresholds.library.maxRequestPages;
+const maxPageNumber = thresholds.library.maxPageNumber;
 
 /** "7-9,12" -> [7,8,9,12] (sorted, unique); "all" -> 'all'. */
 export function parsePageSpec(spec: string): number[] | 'all' {
@@ -29,6 +30,7 @@ export function parsePageSpec(spec: string): number[] | 'all' {
     if (!match) throw new LibraryError('usage', `ERROR library: bad page list "${spec}" (use 7, 7-9, 7-9,12 or all)`);
     const low = Number(match[1]);
     const high = Number(match[2] ?? match[1]);
+    if (!Number.isSafeInteger(low) || !Number.isSafeInteger(high) || high > maxPageNumber) throw new LibraryError('usage', `ERROR library: page "${piece}" is out of range (pages are whole numbers from 1 to ${maxPageNumber})`);
     if (low < 1 || high < low) throw new LibraryError('usage', `ERROR library: bad page range "${piece}"`);
     if (out.size + (high - low + 1) > maxRequestPages) throw new LibraryError('usage', `ERROR library: more than ${maxRequestPages} pages requested; use all`);
     for (let page = low; page <= high; page += 1) out.add(page);
@@ -140,6 +142,22 @@ export function troveToRoutePages(trove: number[], routePages: RoutePages): { ro
 export function routeToTrovePage(page: number, routePages: RoutePages): number | null {
   if (routePages.kind === 'identity') return page;
   return routePages.pdfToTrove[page - 1] ?? null;
+}
+
+/**
+ * Split canonical pages into complete and incomplete. A canonical page built from several route pages is
+ * complete only when every route page that belongs to it came back; a partial page is never presented as whole.
+ */
+export function splitComplete(pages: CanonicalPage[], routePages: RoutePages): { complete: CanonicalPage[]; incomplete: number[] } {
+  if (routePages.kind === 'identity') return { complete: pages, incomplete: [] };
+  const expected = new Map<number, number>();
+  for (const trove of routePages.pdfToTrove) expected.set(trove, (expected.get(trove) ?? 0) + 1);
+  const complete: CanonicalPage[] = [];
+  const incomplete: number[] = [];
+  for (const page of pages) {
+    if (new Set(page.routePages).size >= (expected.get(page.page) ?? 0)) complete.push(page); else incomplete.push(page.page);
+  }
+  return { complete, incomplete };
 }
 
 /** Route pages -> canonical pages: many-to-one PDF pages are joined under their Trove page, sorted. */

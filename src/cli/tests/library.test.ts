@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import libraryConfigSchema from '../../schemas/library-config.schema.json' with { type: 'json' };
@@ -18,6 +18,7 @@ const TROVE_FAKE = `
 const fs = require('node:fs');
 const args = process.argv.slice(2);
 if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, 'trove ' + args.join(' ') + '\\n');
+if (process.env.FAKE_CWD_LOG) fs.appendFileSync(process.env.FAKE_CWD_LOG, process.cwd() + '\\n');
 if (process.env.FAKE_TROVE_FAIL) { console.error('trove: boom'); process.exit(1); }
 if (process.env.FAKE_TROVE_HANG) setTimeout(() => {}, 60000);
 else {
@@ -39,6 +40,7 @@ const PILIB_FAKE = `
 const fs = require('node:fs');
 const args = process.argv.slice(2);
 if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, 'pilib ' + args.join(' ') + '\\n');
+if (process.env.FAKE_CWD_LOG) fs.appendFileSync(process.env.FAKE_CWD_LOG, process.cwd() + '\\n');
 if (process.env.FAKE_PILIB_FAIL) { console.error('pilib: boom'); process.exit(1); }
 if (process.env.FAKE_PILIB_HANG) setTimeout(() => {}, 60000);
 else {
@@ -59,7 +61,8 @@ else {
   else if (cmd === 'read') {
     const json = args.includes('--json');
     if (json && process.env.FAKE_NO_JSON) { console.error('pilib: error: unrecognized arguments: --json'); process.exit(2); }
-    const pages = range(spec, books[book].n_pages);
+    const dropped = (process.env.FAKE_DROP || '').split(',').filter(Boolean).map(Number);
+    const pages = range(spec, books[book].n_pages).filter((n) => !dropped.includes(n));
     if (!json && pages.length > 10) { console.error('asked for ' + pages.length + ' pages; at most 10 per read'); process.exit(1); }
     if (json) console.log(JSON.stringify({ book_id: book, pages: pages.map((n) => ({ page: n, content: text(book, n) })) }));
     else pages.forEach((n) => { console.log('── Page ' + n + ' ──'); console.log(text(book, n)); });
@@ -84,7 +87,7 @@ function fixture(config?: unknown, extra: Record<string, string> = {}): Fixture 
   mkdirSync(bin);
   const log = join(root, 'calls.log');
   const env: NodeJS.ProcessEnv = { ...process.env, AW_TROVE_COMMAND: writeFake(bin, 'trove', TROVE_FAKE), AW_PAGEINDEX_COMMAND: writeFake(bin, 'pilib', PILIB_FAKE), FAKE_LOG: log, ...extra };
-  for (const key of ['FAKE_TROVE_FAIL', 'FAKE_TROVE_HANG', 'FAKE_PILIB_FAIL', 'FAKE_PILIB_HANG', 'FAKE_NO_JSON', 'FAKE_NO_META']) if (!(key in extra)) delete env[key];
+  for (const key of ['FAKE_TROVE_FAIL', 'FAKE_TROVE_HANG', 'FAKE_PILIB_FAIL', 'FAKE_PILIB_HANG', 'FAKE_NO_JSON', 'FAKE_NO_META', 'FAKE_DROP', 'FAKE_CWD_LOG']) if (!(key in extra)) delete env[key];
   if (config !== undefined) writeFileSync(join(project, '.academic-helper', 'library.json'), JSON.stringify(config), 'utf8');
   return { root, project, env, log, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
@@ -160,7 +163,7 @@ test('the JSON schema and the validator agree on the route words', () => {
 
 test('library thresholds are numbers', () => {
   const library = thresholds.library;
-  for (const value of [library.timeoutMs.primary, library.timeoutMs.check, library.maxBufferBytes, library.maxRequestPages, library.pageindex.readChunkPages, library.pageindex.chunkConcurrency, library.pageindex.metaScanMax, library.pageindex.metaScanConcurrency]) {
+  for (const value of [library.timeoutMs.primary, library.timeoutMs.check, library.maxBufferBytes, library.maxRequestPages, library.maxPageNumber, library.pageindex.readChunkPages, library.pageindex.chunkConcurrency, library.pageindex.metaScanMax, library.pageindex.metaScanConcurrency]) {
     assert.ok(Number.isInteger(value) && value > 0);
   }
 });
@@ -465,4 +468,78 @@ test('aw library with no library.json behaves as route trove', async () => {
     const list = JSON.parse((await cli(fx, 'list')).out) as { route: string; items: unknown[] };
     assert.deepEqual([list.route, list.items.length], ['trove', 1]);
   } finally { fx.cleanup(); }
+});
+
+// ---------------------------------------------------------------- review findings (T1-fix)
+
+test('page specs beyond the sane maximum are usage errors, never a hang', () => {
+  const max = thresholds.library.maxPageNumber;
+  const usage = (error: unknown): boolean => error instanceof LibraryError && error.code === 'usage';
+  for (const bad of ['9007199254740992', '9007199254740993-9007199254740995', `${max + 1}`, `${max}-${max + 1}`, '1,9007199254740992']) assert.throws(() => parsePageSpec(bad), usage, bad);
+  assert.deepEqual(parsePageSpec(`${max}`), [max]);
+});
+
+test('a configured shelf that is missing, unreadable or malformed is a config error, not an open catalog', async () => {
+  const cases: Array<[string, (project: string) => void]> = [
+    ['missing', () => undefined],
+    ['unreadable (a directory)', (project) => mkdirSync(join(project, 'shelf.json'))],
+    ['not JSON', (project) => writeFileSync(join(project, 'shelf.json'), '{nope')],
+    ['wrong shape', (project) => writeFileSync(join(project, 'shelf.json'), '{"shelf":["lib-a"]}')],
+    ['books not strings', (project) => writeFileSync(join(project, 'shelf.json'), '{"books":[1,2]}')],
+    ['a JSON scalar', (project) => writeFileSync(join(project, 'shelf.json'), '3')],
+  ];
+  for (const [label, prepare] of cases) {
+    const fx = fixture({ route: 'pageindex', pageindex: { shelf: 'shelf.json' } });
+    try {
+      prepare(fx.project);
+      await rejects(new Library(fx.project, fx.env).list(), 'config');
+      await rejects(new Library(fx.project, fx.env).read({ source: 'lib-a', pages: '1' }), 'config');
+      const out = await cli(fx, 'list');
+      assert.equal(out.code, 3, `${label}: ${out.err}`);
+      assert.match(out.err, /shelf/iu, label);
+      assert.equal(out.out, '', `${label}: nothing may be listed`);
+    } finally { fx.cleanup(); }
+  }
+  // Unconfigured stays "no restriction"; a shelf with only a map restricts to the mapped books.
+  const open = fixture({ route: 'pageindex' });
+  const mapOnly = fixture({ route: 'pageindex', pageindex: { shelf: 'shelf.json' } });
+  try {
+    assert.equal((await new Library(open.project, open.env).list()).items.length, 2);
+    writeFileSync(join(mapOnly.project, 'shelf.json'), JSON.stringify({ map: { 'T-A': { book: 'lib-a', pages: 'identity' } } }));
+    assert.deepEqual((await new Library(mapOnly.project, mapOnly.env).list()).items.map((item) => item.id), ['T-A']);
+  } finally { open.cleanup(); mapOnly.cleanup(); }
+});
+
+test('a Trove page spilling over several PDF pages is complete only when every PDF page came back', async () => {
+  const half = fixture({ route: 'pageindex' }, { FAKE_DROP: '2' });
+  const none = fixture({ route: 'pageindex' }, { FAKE_DROP: '1,2' });
+  const whole = fixture({ route: 'pageindex' }, { FAKE_DROP: '5' });
+  try {
+    // lib-b maps PDF pages 1..6 to Trove 1,1,2,3,3,3; PDF page 2 is missing, so Trove page 1 is incomplete.
+    const read = await new Library(half.project, half.env).read({ source: 'T-B', pages: '1-3' });
+    assert.deepEqual(read.pages.map((page) => page.trove_page), [2, 3]);
+    assert.deepEqual(read.missing_pages, [1]);
+    await rejects(new Library(half.project, half.env).read({ source: 'T-B', pages: '1' }), 'page_missing');
+    const gone = await new Library(none.project, none.env).read({ source: 'T-B', pages: '1-2' });
+    assert.deepEqual([gone.pages.map((page) => page.trove_page), gone.missing_pages], [[2], [1]]);
+    // Trove page 3 has PDF pages 4,5,6; with 5 missing it is incomplete too, and `all` says so.
+    const all = await new Library(whole.project, whole.env).read({ source: 'T-B', all: true });
+    assert.deepEqual([all.pages.map((page) => page.trove_page), all.missing_pages], [[1, 2], [3]]);
+  } finally { half.cleanup(); none.cleanup(); whole.cleanup(); }
+});
+
+test('the project dir is the working directory of the trove and pilib children', async () => {
+  const fx = fixture({ route: 'both' }, {});
+  const pageindex = fixture({ route: 'pageindex' }, {});
+  try {
+    for (const [target, route] of [[fx, 'trove'], [pageindex, 'pageindex']] as const) {
+      const cwdLog = join(target.root, 'cwd.log');
+      const env = { ...target.env, FAKE_CWD_LOG: cwdLog };
+      assert.notEqual(realpathSync(process.cwd()), realpathSync(target.project));
+      await new Library(target.project, env).read({ source: route === 'trove' ? 'T-A' : 'lib-a', pages: '1' });
+      const seen = readFileSync(cwdLog, 'utf8').split('\n').filter(Boolean);
+      assert.ok(seen.length > 0, route);
+      for (const dir of seen) assert.equal(realpathSync(dir), realpathSync(target.project), route);
+    }
+  } finally { fx.cleanup(); pageindex.cleanup(); }
 });
