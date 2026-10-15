@@ -1,4 +1,5 @@
 import { Library } from './adapter.ts';
+import { PLAIN_ID } from './backends.ts';
 import { formatReport, reportFor } from './report.ts';
 import { loadSpec, runShadowWorker, shadowModeFrom, workerSettings } from './shadow.ts';
 import { recordVerdict, settlePending } from './verdict.ts';
@@ -7,6 +8,10 @@ import { LibraryError, errorMessage } from './types.ts';
 
 const BOOLEAN_FLAGS = new Set(['--json', '--check', '--text', '--all', '--settle']);
 const VALUE_FLAGS = new Set(['--source', '--pages', '--printed', '--page', '--run', '--claim', '--lookup', '--verdict', '--corrected-page', '--support-quote', '--paragraph']);
+
+// Ids that an agent writes into a shell command line. Anything else is refused before it is used (a defence in depth:
+// the agent single-quotes them too), so an id can never carry a command.
+const ID_FLAGS = new Set(['--source', '--lookup', '--paragraph', '--run', '--claim']);
 
 type Parsed = { positional: string[]; flags: Map<string, string | true> };
 
@@ -19,6 +24,7 @@ function parse(argv: string[]): Parsed {
     else if (VALUE_FLAGS.has(arg)) {
       const value = argv[index + 1];
       if (value === undefined) throw new LibraryError('usage', `ERROR library: ${arg} needs a value`);
+      if (ID_FLAGS.has(arg) && !PLAIN_ID.test(value)) throw new LibraryError('usage', `ERROR library: ${arg} must be a plain id (letters, digits and . _ # : - only)`);
       flags.set(arg, value);
       index += 1;
     } else if (arg.startsWith('--')) throw new LibraryError('usage', `ERROR library: unknown option ${arg}`);
@@ -36,6 +42,9 @@ function exitCodeFor(error: unknown): number {
   if (error.code === 'config') return 3;
   return 4;
 }
+
+/** POSIX single quotes: nothing inside is expanded by a shell; an embedded ' is written as '\\''. */
+export function shellQuote(value: string): string { return `'${value.replace(/'/gu, `'\\''`)}'`; }
 
 function flagText(flags: Map<string, string | true>, name: string): string | undefined {
   const value = flags.get(name);
@@ -77,10 +86,14 @@ export async function runLibraryCli(argv: string[], io: LibraryIo = processIo): 
       });
       // A ledger problem never changes the auditor's verdict: say so on stderr, with the command to try again, and still exit 0.
       if (!append.ok) {
-        const retry = ['aw library verdict', `--lookup ${JSON.stringify(lookup)}`, `--verdict ${word}`,
-          ...(corrected === undefined ? [] : [`--corrected-page ${corrected}`]), ...(cited === undefined ? [] : [`--page ${cited}`]),
-          `--support-quote ${JSON.stringify(quote)}`, ...(paragraph === null ? [] : [`--paragraph ${JSON.stringify(paragraph)}`])].join(' ');
-        io.err(`NOTE library verdict: not recorded in the ledger (${append.reason}). To record it, run: ${retry}\n`);
+        // For a person to read and run, never for a program to execute: every argument is single-quoted (a ' becomes '\''),
+        // so the quote text (which comes from untrusted page text) cannot expand or run anything in a shell.
+        const args: Array<[string, string]> = [['--lookup', lookup], ['--verdict', word],
+          ...(corrected === undefined ? [] : [['--corrected-page', corrected] as [string, string]]), ...(cited === undefined ? [] : [['--page', cited] as [string, string]]),
+          ['--support-quote', quote], ...(paragraph === null ? [] : [['--paragraph', paragraph] as [string, string]]),
+          ...(flagText(flags, '--run') === undefined ? [] : [['--run', flagText(flags, '--run') as string] as [string, string]])];
+        const retry = `aw library verdict ${args.map(([name, value]) => `${name} ${shellQuote(value)}`).join(' ')}`;
+        io.err(`NOTE library verdict: not recorded in the ledger (${append.reason}). This is a hint for a person, not for a program: to record it, run:\n  ${retry}\n`);
       }
       print({ ok: append.ok, lookup_id: row.lookup_id, verdict: row.verdict, shadow_supports: row.shadow_supports, shadow_supports_reason: row.shadow_supports_reason });
       return 0;
@@ -101,7 +114,9 @@ export async function runLibraryCli(argv: string[], io: LibraryIo = processIo): 
     if (subcommand === 'status') {
       print(await library.status(flags.has('--check')));
     } else if (subcommand === 'list') {
-      print(await library.list({ run: flagText(flags, '--run'), claim: flagText(flags, '--claim') }));
+      const listed = await library.list({ run: flagText(flags, '--run'), claim: flagText(flags, '--claim') });
+      if (listed.skipped_invalid_ids > 0) io.err(`NOTE library list: ${listed.skipped_invalid_ids} entries skipped: their ids are not plain (letters, digits and . _ # : - only), so they cannot be used as sources\n`);
+      print(listed);
     } else if (subcommand === 'toc') {
       print(await library.toc(requireSource(), { run: flagText(flags, '--run'), claim: flagText(flags, '--claim') }));
     } else if (subcommand === 'read' || subcommand === 'get') {

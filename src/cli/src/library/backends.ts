@@ -3,8 +3,15 @@ import { runCommand, type CommandScope } from './exec.ts';
 import { formatPageRanges, parseBanners } from './pages.ts';
 import { LibraryError, type BookInfo, type LibraryBackend, type PageText, type RawRead, type TocEntry, type TocResult } from './types.ts';
 
-export type BackendOptions = { command: string[]; env?: NodeJS.ProcessEnv; timeoutMs: number; /** The project folder: the child runs there, not in the caller's directory. */ cwd?: string; /** Commands of one lookup that must stop together (the shadow worker). */ scope?: CommandScope };
+export type BackendOptions = { command: string[]; env?: NodeJS.ProcessEnv; timeoutMs: number; /** Timeout of a whole-book read (`all`); defaults to timeoutMs. */ readAllTimeoutMs?: number; /** The project folder: the child runs there, not in the caller's directory. */ cwd?: string; /** Commands of one lookup that must stop together (the shadow worker). */ scope?: CommandScope };
 const limits = thresholds.library;
+
+/**
+ * The ids an agent may write into a shell command line (source, lookup, paragraph, run, claim). Ids are checked here, where
+ * they enter the system (library listings, evidence building) and again by `aw library` when they come back as arguments.
+ */
+export const PLAIN_ID = /^[A-Za-z0-9_.#:-]+$/u;
+export function isPlainId(id: string): boolean { return PLAIN_ID.test(id); }
 
 function parseJson(text: string, what: string): unknown {
   try { return JSON.parse(text); } catch { throw new LibraryError('parse', `ERROR library: ${what} did not return JSON`); }
@@ -29,8 +36,8 @@ export class TroveBackend implements LibraryBackend {
   readonly route = 'trove' as const;
   constructor(private readonly options: BackendOptions) {}
 
-  private run(args: string[]): Promise<string> {
-    return runCommand(this.options.command, args, { timeoutMs: this.options.timeoutMs, maxBuffer: limits.maxBufferBytes, env: this.options.env, cwd: this.options.cwd, scope: this.options.scope });
+  private run(args: string[], timeoutMs: number = this.options.timeoutMs): Promise<string> {
+    return runCommand(this.options.command, args, { timeoutMs, maxBuffer: limits.maxBufferBytes, env: this.options.env, cwd: this.options.cwd, scope: this.options.scope });
   }
 
   /** The active shelf of this project, so a listing is not the whole library. Best effort: no shelf means none. */
@@ -71,7 +78,7 @@ export class TroveBackend implements LibraryBackend {
 
   async read(book: string, pages: number[] | 'all'): Promise<RawRead> {
     const args = pages === 'all' ? ['items', 'read', `${book}:all`] : ['items', 'read', book, '--pages', formatPageRanges(pages)];
-    const raw = await this.run(args);
+    const raw = await this.run(args, pages === 'all' ? this.options.readAllTimeoutMs ?? this.options.timeoutMs : this.options.timeoutMs);
     const parsed = parseBanners(raw);
     return { pages: parsed.pages, raw, title: parsed.header[0], pageCount: parsed.pageCount };
   }
@@ -88,8 +95,8 @@ export class PageIndexBackend implements LibraryBackend {
   private jsonRead: boolean | undefined;
   constructor(private readonly options: BackendOptions) {}
 
-  private run(args: string[]): Promise<string> {
-    return runCommand(this.options.command, args, { timeoutMs: this.options.timeoutMs, maxBuffer: limits.maxBufferBytes, env: this.options.env, cwd: this.options.cwd, scope: this.options.scope });
+  private run(args: string[], timeoutMs: number = this.options.timeoutMs): Promise<string> {
+    return runCommand(this.options.command, args, { timeoutMs, maxBuffer: limits.maxBufferBytes, env: this.options.env, cwd: this.options.cwd, scope: this.options.scope });
   }
 
   async catalog(): Promise<Map<string, PilibCatalogEntry>> {
@@ -147,7 +154,7 @@ export class PageIndexBackend implements LibraryBackend {
     if (this.jsonRead !== false) {
       try {
         const spec = pages === 'all' ? 'all' : formatPageRanges(pages);
-        const raw = asRecord(parseJson(await this.run(['read', book, spec, '--json']), 'pilib read'));
+        const raw = asRecord(parseJson(await this.run(['read', book, spec, '--json'], this.readTimeout(pages)), 'pilib read'));
         const list = Array.isArray(raw?.pages) ? raw.pages : undefined;
         if (!list) throw new LibraryError('parse', 'ERROR library: pilib read --json returned no pages');
         this.jsonRead = true;
@@ -166,6 +173,11 @@ export class PageIndexBackend implements LibraryBackend {
     return { pages: await this.readPlain(book, pages) };
   }
 
+  /** A whole-book read gets the longer timeout; page ranges keep the lookup timeout. */
+  private readTimeout(pages: number[] | 'all'): number {
+    return pages === 'all' ? this.options.readAllTimeoutMs ?? this.options.timeoutMs : this.options.timeoutMs;
+  }
+
   private async readPlain(book: string, pages: number[] | 'all'): Promise<PageText[]> {
     let wanted: number[];
     if (pages === 'all') {
@@ -182,7 +194,7 @@ export class PageIndexBackend implements LibraryBackend {
       while (next < chunks.length) {
         const mine = next;
         next += 1;
-        results[mine] = parseBanners(await this.run(['read', book, formatPageRanges(chunks[mine] as number[])])).pages;
+        results[mine] = parseBanners(await this.run(['read', book, formatPageRanges(chunks[mine] as number[])], this.readTimeout(pages))).pages;
       }
     };
     await Promise.all(Array.from({ length: Math.min(limits.pageindex.chunkConcurrency, chunks.length) }, worker));
