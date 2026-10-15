@@ -42,12 +42,16 @@ def load_registry(reg: Path | None = None) -> list[dict]:
     return out
 
 
-def has_hint(title: str) -> bool:
+def has_hint(title: str, course_name: str | None = None) -> bool:
+    """True when the title is "Title - hint". A course name that itself contains " - " is not a hint:
+    "Course · <name>" alone fails even though it splits on " - "."""
     head, sep, hint = str(title).partition(" - ")
+    if course_name and " ".join(str(title).removeprefix("Course · ").split()) == " ".join(course_name.split()):
+        return False
     return bool(sep) and bool(hint.strip()) and bool(head.strip())
 
 
-def audit_toc(toc: list[dict], page_count: int) -> dict:
+def audit_toc(toc: list[dict], page_count: int, course_name: str | None = None) -> dict:
     """Return {missing, duplicate, no_hint, out_of_order, level_gap, ok}.
 
     missing: pages with no entry starting there; duplicate: pages with >1 entry;
@@ -60,7 +64,7 @@ def audit_toc(toc: list[dict], page_count: int) -> dict:
     missing = [p for p in range(1, page_count + 1) if counts.get(p, 0) == 0]
     duplicate = sorted(p for p, n in counts.items() if n > 1)
     no_hint = [{"index": i, "page": e.get("page"), "title": e.get("title", "")}
-               for i, e in enumerate(toc) if not has_hint(e.get("title", ""))]
+               for i, e in enumerate(toc) if not has_hint(e.get("title", ""), course_name)]
     # Tree order: siblings ascend by page and a child starts after its parent, so a
     # lesson page appended at the end of the book may still nest under its index.
     out_of_order = []
@@ -108,8 +112,8 @@ def fetch_toc(book_id: str) -> tuple[list[dict], int, str]:
     return parse_toc_payload(json.loads(r.stdout), book_id)
 
 
-def audit_book(label: str, toc: list[dict], page_count: int, book_id: str = "") -> dict:
-    res = audit_toc(toc, page_count)
+def audit_book(label: str, toc: list[dict], page_count: int, book_id: str = "", course_name: str | None = None) -> dict:
+    res = audit_toc(toc, page_count, course_name)
     res.update(label=label, book_id=book_id, pages=page_count, entries=len(toc))
     return res
 
@@ -166,7 +170,7 @@ def run(args) -> tuple[list[dict], int]:
                 continue
             try:
                 toc, n, _ = fetch_toc(bid)
-                results.append(audit_book(c["slug"], toc, n, bid))
+                results.append(audit_book(c["slug"], toc, n, bid, c.get("name")))
             except Exception as exc:  # noqa: BLE001 - report per book, keep going
                 results.append({"label": c["slug"], "book_id": bid, "pages": 0, "entries": 0, "missing": [],
                                 "duplicate": [], "no_hint": [], "out_of_order": [], "level_gap": [],

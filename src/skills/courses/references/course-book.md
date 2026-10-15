@@ -26,6 +26,13 @@ One entry per page, written as `Title - hint`, nested in tree order: siblings in
 metadata (`trove items enrich <book_id> --toc ...`), not from headings in the pages. Rebuild it with
 `tools/toc_rebuild.py` after appending pages; `tools/toc_audit.py --all` must exit 0.
 
+**Replacing a page resets the whole ToC.** `trove items put <book_id>:<page>` makes Trove regenerate the book's
+ToC from the page headings: every hint and the nesting are lost, for all pages, not just the edited one. Before a
+`put`, keep the book's applied plan (`<registry>/toc-work/<slug>.plan.json`). After it, re-apply that plan when the
+page count is unchanged, otherwise run `toc_rebuild.py --course <slug> --hints <registry>/toc-work/hints.json --apply`,
+and confirm with `toc_audit.py --course <slug>`. A course title that contains " - " needs an en dash (" – ") in
+its ToC title and a real hint after it.
+
 ## Extraction
 
 PDFs are read with Claude vision first; pages Claude flags as unreadable or low-confidence go to the bundled Gemini
