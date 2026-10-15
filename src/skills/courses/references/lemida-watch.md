@@ -50,7 +50,12 @@ Every downloaded file goes through the source contract in `../SKILL.md` ("Course
 - **Assignments** (`mod/assign`). Extract an `assign` page: the `הזמן שנותר` text (`time_left_text`), the due date (`due_text`) and the task text. Identify the core texts (for example "pages 308-322 of Dan's chapter on Sefer ha-Qanah; the article A kabbalistic reading") and confirm each exists in the course's sources or in the section. If a core text points to Kotar, search Anna's Archive (the `annas-archive-ebooks` skill when installed); if it is not found, add a `kotar-source` chore. Always add an `assignment` chore: `courses.py chores add --course <slug> --kind assignment --ref <cmid> --title "<assignment>" --time-left-text "<...>" --due-text "<...>" --core-text "<text 1>" --core-text "<text 2>"`. A changed deadline or task (`changed_assigns`) updates the same chore (same course, kind and ref).
 - **Forums the user must post in** (a `mod/forum` that requires a submission). Add `courses.py chores add --course <slug> --kind forum-post --ref <cmid or discussion id> --title "<forum>" --text "<what to post, by when>"`. Do not post for the user.
 
-Refs: always pass the bare cmid as `--ref` (`courses.py` also folds `cm:<cmid>` and Moodle URLs into it). If Chrome lands on the guest or enrolment page, Lemida is signed out: add exactly `courses.py chores add --course general --kind manual --ref lemida-signin --title "Sign in to Lemida in Chrome"`, once per run, and stop the scan. Any other sign-in ref is folded into this one chore.
+Refs: always pass the bare cmid as `--ref` (`courses.py` also folds `cm:<cmid>` and Moodle URLs into it).
+
+- **Signed out** (the dashboard `lemida.biu.ac.il/my/`, or every course, redirects to login or guest access): add exactly `courses.py chores add --course general --kind manual --ref lemida-signin --title "Sign in to Lemida in Chrome"` and stop the scan. Any other sign-in ref is folded into this one chore.
+- **Not enrolled** (one course shows the enrolment page while other courses load): add `courses.py chores add --course <slug> --kind manual --ref lemida-no-access --title "Lemida: no access to <slug>"` and continue with the next course. A fresh registration can take a day or two to reach Lemida.
+
+Unattended runs (`claude -p`, the nightly job): nobody can answer, so never end with a question or hold a batch back for approval. Route every item you can, add a chore for each one you cannot, and apply seen state only for the items you routed or chored.
 
 ## Chrome downloads
 
