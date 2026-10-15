@@ -19,9 +19,10 @@ Revise one focused section. For changes across the whole article, hand off to `/
   --text-file <section-file> --instruction-file <instruction-file> --lang <he|en> --run <run-id> --out <output-file>
 ```
 
+- Choose one run ID for this edit, e.g. `edit-ashkenazi-creation-20261015-1430` (a short English label, then the date and time). Use only Latin letters, digits and hyphens: transliterate a Hebrew title or use a short English label, because the library refuses any other character in an id. Use the same `<run-id>` for the auditor.
 - For a short instruction you may use `--instruction <text>` instead.
 - Take `--lang` from `.academic-helper/profile.md`, or ask the author.
 
 4. Read the returned `revised_text` and the output file. Show the author the before/after before applying it.
-5. Keep the section's citations unless the author asked to change them. If a factual claim or citation changed, send every paragraph of the section to the `auditor` agent in one batched call: the auditor is the only gate that checks citations against the real sources.
+5. Keep the section's citations unless the author asked to change them. If a factual claim or citation changed, send every paragraph of the section to the `auditor` agent in one batched call, with `runId: <run-id>` (the `--run` value used for `aw edit`) in the prompt: the auditor is the only gate that checks citations against the real sources.
 6. Replace the accepted text only with PASS paragraphs and their `taggedText`. Correct and re-audit any FAIL or PARTIAL paragraph first.

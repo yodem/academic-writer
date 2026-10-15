@@ -88,7 +88,7 @@ The full `styleFingerprint` object lives in `profile.md`, which `aw draft` and `
 
 Read the `tools` object from the profile. Throughout this workflow, **only use tools that are enabled**:
 
-- **Trove** (`tools.trove.enabled`; older profiles: `tools.candlekeep.enabled`) — If disabled, skip `trove` commands. Source listing/selection steps should use any available sources from the profile's `sources` array instead.
+- **Library** (Trove, PageIndex or both, as the project's library route says; `tools.trove.enabled`, older profiles `tools.candlekeep.enabled`, switches the Trove route off) — Ask `"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$PWD" library status`: its JSON says whether the library is usable (`"enabled"`). If it is not, skip the library commands. Source listing/selection steps should use any available sources from the profile's `sources` array instead.
 - **NotebookLM** (`tools.notebooklm.enabled`) — If disabled, skip notebook queries and AI summaries. NotebookLM is supplementary — it never replaces Trove and the verified evidence file for citations.
 
 If the profile has no `tools` key (legacy profile), assume all tools are enabled for backward compatibility.
@@ -118,7 +118,7 @@ If the file does not exist, proceed with Phase 1 normally.
 
 ## PHASE 1: CONVERSATIONAL (human-in-the-loop)
 
-Choose one run ID for this article, for example `write-<slug>-<YYYYMMDD-HHMM>`, and pass the same `--run` value to every `aw` command below. The run ID ties the cost ledger and the logs of one article together.
+Choose one run ID for this article, e.g. `write-ashkenazi-creation-20261015-1430` (a short English label, then the date and time). Use only Latin letters, digits and hyphens: transliterate a Hebrew title or use a short English label, because the library refuses any other character in an id. Pass the same `--run` value to every `aw` command below. The run ID ties the cost ledger and the logs of one article together.
 
 ### Step 1: Subject & Language
 
@@ -163,16 +163,16 @@ Store the draft text as `userDraftText` regardless of which option is chosen. If
 ### Step 2: Source Selection
 
 
-**If Trove is enabled**, list the available sources — scoped to the active shelf when one is set:
+**If the library is enabled** (`library status` above), list the available sources:
 
 ```bash
-# `trove shelf current` names this project's active shelf (set with `trove shelf use`) or says there is none.
-# Scope the listing to it so a Jewish Studies write run doesn't present the
+# The library answers from the route this project chose (Trove, PageIndex or both) and keeps the
+# listing scoped to the project's active shelf, so a Jewish Studies write run doesn't present the
 # researcher's entire library (engineering books included) as source options.
-trove shelf current
-trove items list --shelf "<the shelf named above>" --json   # when a shelf is active
-trove items list --json                                       # when none is
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$PWD" library list
 ```
+
+The JSON has `items`: each source's `id`, `title`, `author` and `pageCount`. Use those `id` values as the source ids.
 
 Do **not** run `trove items enrich` here. It is a manual metadata *setter* (`--title`,
 `--author`, `--toc`, ...), not an auto-extractor: a bare `trove items enrich <ID>` exits
@@ -180,9 +180,9 @@ with "At least one of --title, --author, --description, --toc, --add-prompt, or
 --sample-question is required". Enrichment is the researcher's curation step, and
 running it across the whole library would overwrite it.
 
-**If Trove is NOT enabled**, use the `sources` array from the profile (indexed during init) to present available sources. If the sources array is empty, ask the researcher to describe their sources manually.
+**If the library is NOT enabled**, use the `sources` array from the profile (indexed during init) to present available sources. If the sources array is empty, ask the researcher to describe their sources manually.
 
-If a source the author wants to use is **not yet in Trove** (Trove), stop and point them at the ingest skills instead of working from an unindexed file: a single article or chapter → `/academic-writer:ingest`, a whole book (multi-volume, scanned, EPUB, 100+ pages) → `/academic-writer:ingest-book`. They upload it with its printed page numbers preserved so citations can name the printed page.
+If a source the author wants to use is **not yet in the library**, stop and point them at the ingest skills instead of working from an unindexed file (the ingest skills add to Trove; when the library route is PageIndex only, ask the researcher to add the book to their PageIndex library or to switch routes with `/academic-writer:update-tools`): a single article or chapter → `/academic-writer:ingest`, a whole book (multi-volume, scanned, EPUB, 100+ pages) → `/academic-writer:ingest-book`. They upload it with its printed page numbers preserved so citations can name the printed page.
 
 Present them clearly and ask:
 > "Which of these sources should I focus on? You can name them by number, by title, or say 'all'."
@@ -280,6 +280,8 @@ single response so every unit is audited in parallel.** Each call is a single ba
 every paragraph in that unit's `drafts/<unitId>.md` (the 847c831 shape: one auditor spawn per unit,
 not one per paragraph) — see `${CLAUDE_PLUGIN_ROOT}/agents/auditor.md` for the exact input/output
 contract, including the `taggedText` field the auditor returns for each passed paragraph.
+Put `runId: <run-id>` (the run ID chosen at the start of Phase 1, the same value passed to `--run`) in
+every auditor prompt, so the auditor's page reads and verdicts are recorded under this run.
 
 The auditor is the only mandatory hard gate, and it always runs — nothing in this pipeline
 substitutes for it or skips it. (`aw draft` may separately run the `write.audit_prescreen` and
@@ -301,8 +303,8 @@ For each unit's batch of `results`:
   --unit <unitId> --feedback-file <path-to-feedback.json>
 ```
 
-Re-audit only the redrafted unit (one more batched `auditor` call over just its paragraphs), and
-repeat. Track rewrite attempts **per unit**, reading the ceiling at runtime rather than inlining it:
+Re-audit only the redrafted unit (one more batched `auditor` call over just its paragraphs, with the
+same `runId`), and repeat. Track rewrite attempts **per unit**, reading the ceiling at runtime rather than inlining it:
 
 ```bash
 python3 -c "import json;print(json.load(open('${CLAUDE_PLUGIN_ROOT}/thresholds.json'))['rewriteCycles']['max'])"

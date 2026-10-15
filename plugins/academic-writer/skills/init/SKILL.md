@@ -30,7 +30,7 @@ Invoke as `/academic-writer:init --quick` for a fast onboarding path. Quick mode
   extraction, no Hebrew baseline fetch, no `extract-style-metrics.py`, and no Stage 1 voice
   fingerprint chain (voice store migration and author-picked exemplars). The researcher can still describe
   their style in free text if they wish, but nothing is computed.
-- **Skips entirely**: Phase 3 (Research Sources) — `sources` is saved as `[]`.
+- **Skips entirely**: Phase 3 (Research Sources) — `sources` is saved as `[]` and no `library.json` is written (Trove only).
 
 Everywhere below, a phase or step marked "(skipped in --quick mode)" does not run when `--quick` is
 passed; everything else runs identically. `setup` and `init` are both safe to re-run: `setup` is
@@ -45,7 +45,7 @@ the short guided check, `init` (full or `--quick`) builds the deeper profile and
 | 2. Profile | Field, language, citation style, author_key | Core profile | Runs |
 | 3.5. Gemini Onboarding | Optionally enable Gemini as prose writer | `gemini` config | Runs |
 | 3. Style Analysis | Read past articles, build fingerprint | `styleFingerprint` + `articleStructure` | Narrative-only, no computation (skipped in --quick mode: computational chain + voice fingerprint chain) |
-| 4. Sources | Index Trove library | `sources` array | Skipped entirely in --quick mode |
+| 4. Sources | Index Trove library; choose the library route | `sources` array, `library.json` | Skipped entirely in --quick mode |
 
 ---
 
@@ -430,6 +430,14 @@ trove items enrich ITEM_ID --title "..." --author "..."
 Build the sources array from the listing (id + title + type only — never raw JSON).
 
 **If Trove is NOT enabled**: set sources to `[]`.
+
+### Library route
+
+Then ask which library this article reads its books from, with `AskUserQuestion` in plain words
+(Trove, PageIndex or both; with both, which one answers), and save `.academic-helper/library.json`.
+Offer PageIndex only when a PageIndex command is configured, otherwise explain in one sentence how
+to set it up and use Trove. Questions, detection and file format: `references/integration-setup.md`
+(section "Library route"). Never install anything for this step.
 
 ---
 

@@ -110,6 +110,12 @@ A few more things the plugin can do have no command of their own. Ask for them i
 
 ---
 
+## Choosing a library (optional)
+
+Each article project can read its books from Trove (the default), from a PageIndex library you run yourself, or from both, where one answers and the other is tested quietly in the background. Every lookup and every citation check is logged on your computer in `.academic-helper/retrieval.jsonl`, and `aw library report` compares the libraries on your real articles. See [docs/library-routes.md](docs/library-routes.md).
+
+---
+
 ## Your Gemini key
 
 **What it is.** Gemini is Google's AI model. In this version, the plugin's own drafting tool (`aw`) sends every drafting, evidence-extraction (used by write and research), synthesis, editing, proofreading, OCR and voice-analysis step to Gemini, while Claude runs the conversation and checks every citation.
@@ -139,7 +145,7 @@ Either way, the key is picked up only when a **new** Claude Code session starts.
 
 | Where | What |
 |---|---|
-| `.academic-helper/` in your research folder | This project's working files: your profile (`profile.md`), the source list, the outline, drafts, verified evidence and a log of each run. |
+| `.academic-helper/` in your research folder | This project's working files: your profile (`profile.md`), the source list, the outline, drafts, verified evidence, a log of each run and a log of library lookups (`retrieval.jsonl`). |
 | `past-articles/`, `ocr-output/` and your `.docx` files, in your research folder | Your published articles, text from scanned pages, and the finished articles. |
 | The plugin's data folder, `~/.claude/plugins/data/` (the folder whose name starts with `academic-writer`) | Your voice data, shared by all your projects, and a small log of plugin mistakes you flagged during revise. |
 

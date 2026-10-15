@@ -21,6 +21,12 @@ for sub in "ledger show none" "voice bundle" "proofread --run smoke missing.md" 
   o="$("$AW" --data-dir "$T/data" --project-dir "$T/proj" $sub 2>&1)"
   [[ "$o" != *"Dynamic require"* && "$o" != *"at file://"* && "$o" != *"Cannot find module"* ]] && ok "aw $sub loads" || bad "aw $sub: ${o:0:200}"
 done
+# aw library: no library.json means Trove only; status makes no Trove call, and the report on an empty project reads no ledger.
+o="$("$AW" --data-dir "$T/data" --project-dir "$T/proj" library status 2>&1)"
+[[ "$o" == *'"route":"trove"'* && "$o" == *'"configured":false'* ]] && ok "aw library status (no library.json: Trove only)" || bad "aw library status: ${o:0:200}"
+o="$("$AW" --data-dir "$T/data" --project-dir "$T/proj" library report 2>&1)"
+[[ "$o" == *"Library report"* && "$o" == *"No lookups are recorded yet"* && "$o" != *"Dynamic require"* ]] && ok "aw library report on an empty project" || bad "aw library report: ${o:0:200}"
+[[ ! -e "$T/proj/.academic-helper/retrieval.jsonl" ]] && ok "an empty report writes no ledger" || bad "report created retrieval.jsonl"
 printf 'פסקה ראשונה.\n\nפסקה שנייה.\n' > "$T/a.md"
 python3 "$P/scripts/chunk-article.py" --input "$T/a.md" >/dev/null 2>"$T/e" && ok "built chunk-article.py finds config" || bad "chunk-article.py: $(tail -1 "$T/e")"
 python3 "$P/scripts/gate.py" --help >/dev/null 2>"$T/e" && ok "built gate.py imports" || bad "gate.py: $(tail -1 "$T/e")"
@@ -28,7 +34,7 @@ for s in must-catch.py apply-changes.py citation-guard.py; do
   [[ -f "$P/scripts/$s" ]] || continue
   python3 "$P/scripts/$s" --help >/dev/null 2>"$T/e" && ok "built $s imports" || bad "$s: $(tail -1 "$T/e")"
 done
-tests=(); for t in test_hook_commands_resolve.py test_aw_binary_runs.py; do [[ -f "$ROOT/tests/$t" ]] && tests+=("$ROOT/tests/$t"); done
+tests=(); for t in test_hook_commands_resolve.py test_aw_binary_runs.py test_library_e2e.py; do [[ -f "$ROOT/tests/$t" ]] && tests+=("$ROOT/tests/$t"); done
 python3 -m pytest -q "${tests[@]}" >"$T/e" 2>&1 && ok "hook commands + binary tests (${#tests[@]} files)" || bad "hook/binary tests: $(tail -1 "$T/e")"
 
 # aw docx makes no model calls, so run it for real: a 1-unit project in a path WITH A SPACE (a URL-encoded
