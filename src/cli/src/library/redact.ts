@@ -19,7 +19,7 @@ const RULES: Array<[RegExp, string]> = [
   // Authorization header values written without the header name
   [/\b(Bearer|Basic|Token)\s+[A-Za-z0-9._~+/=-]{6,}/giu, `$1 ${MARK}`],
   // NAME=value, NAME: value, "name": "value", 'name': 'value' (single or double quoted names and values)
-  [new RegExp(`(["']?)\\b([A-Za-z0-9_.-]*${NAME}[A-Za-z0-9_.-]*)\\b(["']?\\s*[=:]\\s*)("[^"]*"|'[^']*'|[^\\s,;}]+)`, 'giu'), `$1$2$3${MARK}`],
+  [new RegExp(`(["']?)\\b([A-Za-z0-9_.-]*${NAME}[A-Za-z0-9_.-]*)\\b(["']?\\s*[=:]\\s*)("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|[^\\s,;}]+)`, 'giu'), `$1$2$3${MARK}`],
   // command line flags that carry a secret: --api-key abc, --token=abc
   [new RegExp(`(--[a-z0-9-]*(?:key|token|secret|password|passwd)[a-z0-9-]*)(\\s+|=)(\\S+)`, 'giu'), `$1$2${MARK}`],
   // long strings that mix letters and digits: hex digests, base64 blobs, opaque ids

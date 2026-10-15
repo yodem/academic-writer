@@ -12,11 +12,12 @@ import thresholds from '../../thresholds.json' with { type: 'json' };
 import { Library } from '../src/library/adapter.ts';
 import { runLibraryCli } from '../src/library/cli.ts';
 import { checkSchema, type JsonSchema } from '../src/library/jsonschema.ts';
-import { appendRow, clipError, readRows, spoolDir, writeSpool, type LookupRow, type RetrievalRow, type ShadowRow, type VerdictRow } from '../src/library/ledger.ts';
+import { appendRow, clipError, readRows, withLedgerLock, spoolDir, writeSpool, type LookupRow, type RetrievalRow, type ShadowRow, type VerdictRow } from '../src/library/ledger.ts';
 import { acquireSlot, claimSlot, releaseSlot, workerEntry } from '../src/library/shadow.ts';
 import { settlePending, recordVerdict, computeSupports } from '../src/library/verdict.ts';
 import { buildReport } from '../src/library/report.ts';
 import { setPathArguments } from '../src/paths.ts';
+import { LibraryError } from '../src/library/types.ts';
 import { coverage, jaccard, normalizeText } from '../src/library/textmatch.ts';
 
 const limits = thresholds.library;
@@ -76,7 +77,7 @@ function writeFake(dir: string, name: string, body: string): string {
   return file;
 }
 
-const FAKE_KEYS = ['FAKE_TROVE_FAIL_MSG', 'FAKE_TROVE_HANG_SHELF', 'AW_LIBRARY_WORKER_ENTRY', 'FAKE_TROVE_FAIL', 'FAKE_TROVE_HANG', 'FAKE_PILIB_FAIL', 'FAKE_PILIB_HANG', 'FAKE_PI_TEXT', 'AW_LIBRARY_SHADOW', 'AW_LIBRARY_SHADOW_TIMEOUT_MS', 'AW_LIBRARY_TIMEOUT_MS'];
+const FAKE_KEYS = ['AW_LIBRARY_LOCK_WAIT_MS', 'FAKE_TROVE_FAIL_MSG', 'FAKE_TROVE_HANG_SHELF', 'AW_LIBRARY_WORKER_ENTRY', 'FAKE_TROVE_FAIL', 'FAKE_TROVE_HANG', 'FAKE_PILIB_FAIL', 'FAKE_PILIB_HANG', 'FAKE_PI_TEXT', 'AW_LIBRARY_SHADOW', 'AW_LIBRARY_SHADOW_TIMEOUT_MS', 'AW_LIBRARY_TIMEOUT_MS'];
 
 function fixture(config?: unknown, extra: Record<string, string> = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'aw-shadow-'));
@@ -897,4 +898,88 @@ test('seam: AW_LIBRARY_WORKER_ENTRY is honoured only under the test runner', () 
     assert.equal(workerEntry({ AW_LIBRARY_WORKER_ENTRY: '/path/to/test-aw', NODE_TEST_CONTEXT: 'child-v8' }, '/real/bin/aw'), '/real/bin/aw', 'a value in the passed env does not count as the test runner');
     assert.equal(workerEntry({}, undefined), undefined);
   } finally { if (saved === undefined) delete process.env.NODE_TEST_CONTEXT; else process.env.NODE_TEST_CONTEXT = saved; }
+});
+
+// ================================================================ third review rework
+
+function lockPath(fx: Fixture): string { return join(fx.project, '.academic-helper', 'retrieval', 'verdict.lock'); }
+function holdLock(fx: Fixture, pid: number, ageMs: number): void {
+  mkdirSync(join(fx.project, '.academic-helper', 'retrieval'), { recursive: true });
+  writeFileSync(lockPath(fx), JSON.stringify({ pid, nonce: 'abcdef0123456789abcd', ts: new Date(Date.now() - ageMs).toISOString() }));
+  const when = new Date(Date.now() - ageMs);
+  utimesSync(lockPath(fx), when, when);
+}
+const VERDICT_ARGS = { verdict: 'PASS' as const, correctedPage: null, quote: '', paragraph: 'P1', run: null };
+
+test('H5: the ledger lock is never skipped: a live holder is waited for, even past the stale age, and the wait ends in an error', async () => {
+  const fx = fixture({ route: 'both' });
+  try {
+    holdLock(fx, process.pid, limits.ledger.lockStaleMs * 3);
+    let ran = false;
+    await assert.rejects(withLedgerLock(fx.project, async () => { ran = true; }, 300), (error: unknown) => error instanceof LibraryError && error.code === 'lock');
+    assert.equal(ran, false, 'the work never runs unlocked');
+    assert.ok(existsSync(lockPath(fx)), 'a live holder keeps its lock');
+    await assert.rejects(recordVerdict(fx.project, { lookup: 'lk_busy', ...VERDICT_ARGS }, 0, 300), (error: unknown) => error instanceof LibraryError && error.code === 'lock');
+    assert.equal(ofType(await rowsOf(fx), 'verdict').length, 0, 'nothing was appended');
+  } finally { fx.cleanup(); }
+});
+
+test('H5: a lock whose holder is dead is taken over', async () => {
+  const fx = fixture({ route: 'both' });
+  try {
+    holdLock(fx, 2 ** 22 + 7, 10);
+    const result = await recordVerdict(fx.project, { lookup: 'lk_dead', ...VERDICT_ARGS }, 0, 2000);
+    assert.equal(result.row.seq, 1);
+    assert.ok(!existsSync(lockPath(fx)), 'and released afterwards');
+  } finally { fx.cleanup(); }
+});
+
+test('H5: aw library verdict with a busy ledger exits non-zero, records nothing and prints the command to retry', async () => {
+  const fx = fixture({ route: 'both' }, { AW_LIBRARY_LOCK_WAIT_MS: '300' });
+  try {
+    holdLock(fx, process.pid, 50);
+    const run = await cli(fx, 'verdict', '--lookup', 'lk_retry', '--verdict', 'FAIL', '--corrected-page', '4', '--support-quote', 'some words from the page here', '--paragraph', 'P3');
+    assert.notEqual(run.code, 0);
+    assert.match(run.err, /ledger is busy/);
+    assert.match(run.err, /aw library verdict --lookup "lk_retry" --verdict FAIL --corrected-page 4 --support-quote "some words from the page here" --paragraph "P3"/);
+    assert.equal(ofType(await rowsOf(fx), 'verdict').length, 0);
+  } finally { fx.cleanup(); }
+});
+
+test('H5: settling does not write while the ledger is locked, keeps the pending verdict, and settles once it is free', async () => {
+  const fx = fixture({ route: 'both' });
+  const saved = process.env.AW_LIBRARY_LOCK_WAIT_MS;
+  try {
+    const lookup: LookupRow = {
+      row_type: 'lookup', schema: 1, ts: new Date().toISOString(), lookup_id: 'lk_set', run_id: 'R1', claim_id: 'P1', op: 'read', source_id: 'T-A', mode: 'both', route_primary: 'trove',
+      book_by_route: { trove: 'T-A', pageindex: null }, request: { printed: null, trove_pages: '2' },
+      primary: { route: 'trove', ok: true, route_pages: '2', latency_ms: 5, bytes: 10, chars: 10, text_sha: '0123456789abcdef', error: null, error_code: null }, shadow_status: 'pending',
+    };
+    await appendRow(fx.project, lookup);
+    const pending = await recordVerdict(fx.project, { lookup: 'lk_set', verdict: 'PASS', correctedPage: null, quote: WORDS, paragraph: 'P1', run: null }, 0);
+    assert.equal(pending.row.shadow_supports_reason, 'shadow_pending');
+    mkdirSync(spoolDir(fx.project), { recursive: true });
+    writeFileSync(join(spoolDir(fx.project), 'lk_set.shadow.json'), JSON.stringify({ lookup_id: 'lk_set', route: 'pageindex', ok: true, pages: [{ page: 2, text: WORDS }] }));
+    process.env.AW_LIBRARY_LOCK_WAIT_MS = '300';
+    holdLock(fx, process.pid, 50);
+    assert.deepEqual(await settlePending(fx.project), { settled: 0, waiting: 1 });
+    assert.equal(ofType(await rowsOf(fx), 'verdict').length, 1, 'nothing was written under a busy lock');
+    rmSync(lockPath(fx));
+    assert.deepEqual(await settlePending(fx.project), { settled: 1, waiting: 0 });
+  } finally { if (saved === undefined) delete process.env.AW_LIBRARY_LOCK_WAIT_MS; else process.env.AW_LIBRARY_LOCK_WAIT_MS = saved; fx.cleanup(); }
+});
+
+test('M6: quoted secrets containing escaped quotes are redacted whole', () => {
+  const samples: Array<[string, RegExp]> = [
+    ['{"password": "ab\\"cd-SECRETTAIL"}', /SECRETTAIL|cd-/],
+    ["{'password': 'it\\'s-SECRETTWO'}", /SECRETTWO|s-SECRET/],
+    ['API_KEY="va\\"lue-ENDONE" next', /ENDONE|lue-/],
+    ["TOKEN='a\\'b-ENDTWO' next", /ENDTWO|b-END/],
+  ];
+  for (const [text, leak] of samples) {
+    const clean = clipError(text);
+    assert.doesNotMatch(clean, leak, `${text} -> ${clean}`);
+    assert.match(clean, /redacted/u);
+  }
+  assert.match(clipError('{"password": "x\\"y-Z9", "other": 1}'), /other/);
 });

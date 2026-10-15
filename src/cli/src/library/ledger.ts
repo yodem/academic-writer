@@ -6,7 +6,7 @@ import retrievalSchema from '../../../schemas/retrieval-row.schema.json' with { 
 import thresholds from '../../../thresholds.json' with { type: 'json' };
 import { checkSchema, type JsonSchema } from './jsonschema.ts';
 import { redact } from './redact.ts';
-import type { RouteMode, RouteName } from './types.ts';
+import { LibraryError, type RouteMode, type RouteName } from './types.ts';
 
 const limits = thresholds.library;
 
@@ -155,40 +155,46 @@ async function readLock(file: string): Promise<LockToken | null> {
 /**
  * Run `work` while holding the ledger's short lock (`retrieval/verdict.lock`, made with an exclusive create
  * that writes the holder's pid and a random nonce). It makes "read the highest sequence number, then append"
- * one step even with several `aw` processes at once. A lock whose holder is dead, or that has been held for
- * ledger.lockStaleMs, is taken over after re-reading its nonce; release only removes a lock that still holds
- * the caller's nonce. Waiting is bounded by ledger.lockWaitMs; after that `work` runs unlocked, because a
- * ledger row is never worth failing the auditor for.
+ * one step even with several `aw` processes at once. The work NEVER runs without the lock: if the lock cannot
+ * be taken within ledger.lockWaitMs (AW_LIBRARY_LOCK_WAIT_MS overrides it for tests and troubleshooting) this
+ * throws a `lock` error and nothing has been done. A lock is taken over only when its recorded holder pid is
+ * dead (the nonce is re-read before unlinking); a live holder is waited for however old the lock is, and age
+ * only matters for a lock file that never got a readable token, which has no holder to ask. Release removes
+ * the lock only if it still holds the caller's nonce.
  */
-export async function withLedgerLock<T>(project: string, work: () => Promise<T>): Promise<T> {
+export async function withLedgerLock<T>(project: string, work: () => Promise<T>, waitMs?: number): Promise<T> {
   const dir = await containedDir(project, ['retrieval'], true);
-  if (!dir) return work();
+  if (!dir) return work(); // no usable project folder: there is no ledger to protect
   const file = join(dir, 'verdict.lock');
   const nonce = randomBytes(12).toString('hex');
-  const deadline = Date.now() + limits.ledger.lockWaitMs;
+  const fromEnv = Number(process.env.AW_LIBRARY_LOCK_WAIT_MS);
+  const wait = waitMs ?? (Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : limits.ledger.lockWaitMs);
+  const deadline = Date.now() + wait;
   let held = false;
-  while (!held && Date.now() < deadline) {
+  while (!held) {
     try {
       const handle = await open(file, 'wx', 0o644);
       try { await handle.writeFile(JSON.stringify({ pid: process.pid, nonce, ts: nowIso() } satisfies LockToken), 'utf8'); } finally { await handle.close(); }
       held = true;
+      break;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') break;
-      try {
-        const age = Date.now() - (await stat(file)).mtimeMs;
-        const judged = await readLock(file);
-        if (age > limits.ledger.lockStaleMs || (judged !== null && !pidAlive(judged.pid))) {
-          // Re-read before unlinking: if the lock changed hands meanwhile, it is not ours to remove.
-          const current = await readLock(file);
-          if (judged === null ? current === null : current?.nonce === judged.nonce) await rm(file, { force: true });
-          continue;
-        }
-      } catch { continue; }
-      await new Promise<void>((resolveWait) => { setTimeout(resolveWait, limits.ledger.lockPollMs); });
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw new LibraryError('lock', `ERROR library: the ledger lock could not be taken (${error instanceof Error ? error.message : String(error)})`);
     }
+    try {
+      const judged = await readLock(file);
+      const unreadableTooLong = judged === null && Date.now() - (await stat(file)).mtimeMs > limits.ledger.lockStaleMs;
+      if ((judged !== null && !pidAlive(judged.pid)) || unreadableTooLong) {
+        // Re-read before unlinking: if the lock changed hands meanwhile, it is not ours to remove.
+        const current = await readLock(file);
+        if (judged === null ? current === null : current?.nonce === judged.nonce) await rm(file, { force: true });
+        continue;
+      }
+    } catch { continue; }
+    if (Date.now() >= deadline) throw new LibraryError('lock', 'ERROR library: the ledger is busy (another aw command holds its lock); nothing was recorded');
+    await new Promise<void>((resolveWait) => { setTimeout(resolveWait, limits.ledger.lockPollMs); });
   }
   try { return await work(); } finally {
-    if (held && (await readLock(file))?.nonce === nonce) await rm(file, { force: true });
+    if ((await readLock(file))?.nonce === nonce) await rm(file, { force: true });
   }
 }
 

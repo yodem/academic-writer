@@ -4,6 +4,7 @@ import {
   type AppendResult, type LookupRow, type ShadowRow, type SupportsReason, type VerdictRow,
 } from './ledger.ts';
 import { coverage, tokens } from './textmatch.ts';
+import { LibraryError } from './types.ts';
 import { join } from 'node:path';
 
 const limits = thresholds.library;
@@ -104,7 +105,7 @@ function verdictRow(input: VerdictInput, seq: number, result: Supports, lookup: 
  * number, so a later verdict is never replaced by an earlier one that settles late. The row is best effort:
  * a ledger problem is reported to the caller but never changes the verdict itself.
  */
-export async function recordVerdict(project: string, input: VerdictInput, waitMs: number = limits.timeoutMs.verdictSettle): Promise<VerdictResult> {
+export async function recordVerdict(project: string, input: VerdictInput, waitMs: number = limits.timeoutMs.verdictSettle, lockWaitMs?: number): Promise<VerdictResult> {
   await sweepSpool(project);
   const lookup = (await rowsForLookup(project, input.lookup)).find((row): row is LookupRow => row.row_type === 'lookup');
   const result = await computeSupports(project, input.lookup, input.quote, waitMs, input.page);
@@ -122,7 +123,7 @@ export async function recordVerdict(project: string, input: VerdictInput, waitMs
       await writeSpool(project, pendingFile(project, input.lookup, input.paragraph), pending);
     }
     return { row, append };
-  });
+  }, lockWaitMs);
 }
 
 /**
@@ -145,11 +146,18 @@ export async function settlePending(project: string): Promise<{ settled: number;
     if (result.reason === 'shadow_pending') { waiting += 1; continue; }
     const lookup = (await rowsForLookup(project, input.lookup)).find((row): row is LookupRow => row.row_type === 'lookup');
     // Check for a newer verdict and append under the same lock that numbers new verdicts.
-    const outcome = await withLedgerLock(project, async (): Promise<'stale' | 'settled' | 'failed'> => {
+    let outcome: 'stale' | 'settled' | 'failed';
+    try {
+      outcome = await withLedgerLock(project, async (): Promise<'stale' | 'settled' | 'failed'> => {
       const earlier = await earlierVerdicts(project, input.lookup, input.paragraph ?? null);
       if (earlier.some((row) => row.seq > input.seq)) return 'stale';
       return (await appendRow(project, verdictRow({ ...input, paragraph: input.paragraph ?? null }, input.seq, result, lookup, true))).ok ? 'settled' : 'failed';
-    });
+      });
+    } catch (error) {
+      // A busy ledger leaves the pending verdict where it is, to be settled by a later run.
+      if (error instanceof LibraryError && error.code === 'lock') { waiting += 1; continue; }
+      throw error;
+    }
     if (outcome === 'settled') settled += 1;
     if (outcome !== 'failed') await removeSpool(project, file);
   }

@@ -117,6 +117,10 @@ async function slotIsStale(file: string, now: number): Promise<SlotToken | 'unre
   } catch { return null; }
 }
 
+// Accepted limit: between re-reading a stale slot's token and unlinking it, a slot can change hands, so under
+// an unlucky interleaving one extra worker may run for a short while. maxConcurrent is a soft load cap for
+// best-effort background shadows; the worst case never touches the answering route's result or the
+// ledger's correctness.
 async function reapSlots(dir: string): Promise<void> {
   const guard = join(dir, '.reap');
   try {
