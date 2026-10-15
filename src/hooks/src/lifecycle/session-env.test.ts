@@ -59,7 +59,7 @@ test('an unprofiled project, an empty value and a literal placeholder never expo
   } finally { rmSync(root, { recursive: true, force: true }); rmSync(bare, { recursive: true, force: true }); }
 });
 
-test('an omitted PageIndex value is read from the hook command environment', () => {
+test('an omitted PageIndex value is read from CLAUDE_PLUGIN_OPTION_PAGEINDEX_COMMAND, then the older USER_CONFIG_ name', () => {
   const root = mkdtempSync(join(tmpdir(), 'aw-session-env-'));
   const before = process.env['USER_CONFIG_PAGEINDEX_COMMAND'];
   try {
@@ -72,6 +72,25 @@ test('an omitted PageIndex value is read from the hook command environment', () 
     assert.equal(readFileSync(envFile, 'utf8'), "export AW_PAGEINDEX_COMMAND='pilib'\n");
   } finally {
     if (before === undefined) delete process.env['USER_CONFIG_PAGEINDEX_COMMAND']; else process.env['USER_CONFIG_PAGEINDEX_COMMAND'] = before;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('CLAUDE_PLUGIN_OPTION_PAGEINDEX_COMMAND wins over the older USER_CONFIG_ name', () => {
+  const root = mkdtempSync(join(tmpdir(), 'aw-session-env-'));
+  const before = [process.env['CLAUDE_PLUGIN_OPTION_PAGEINDEX_COMMAND'], process.env['USER_CONFIG_PAGEINDEX_COMMAND']];
+  try {
+    mkdirSync(join(root, '.academic-helper'));
+    writeFileSync(join(root, '.academic-helper', 'profile.md'), 'profile');
+    const envFile = join(root, 'claude.env');
+    writeFileSync(envFile, '');
+    process.env['CLAUDE_PLUGIN_OPTION_PAGEINDEX_COMMAND'] = "/path/to/it's wrapper";
+    process.env['USER_CONFIG_PAGEINDEX_COMMAND'] = 'old';
+    sessionEnv(root, envFile, {});
+    assert.equal(readFileSync(envFile, 'utf8'), "export AW_PAGEINDEX_COMMAND='/path/to/it'\\''s wrapper'\n");
+  } finally {
+    const names = ['CLAUDE_PLUGIN_OPTION_PAGEINDEX_COMMAND', 'USER_CONFIG_PAGEINDEX_COMMAND'] as const;
+    names.forEach((name, i) => { const v = before[i]; if (v === undefined) delete process.env[name]; else process.env[name] = v; });
     rmSync(root, { recursive: true, force: true });
   }
 });

@@ -45,15 +45,33 @@ AskUserQuestion(questions=[{
 
 ### Detect (changes nothing, never prints the command itself)
 
+Read what the project already says and how the command resolves, the same order `aw library` uses
+(`AW_PAGEINDEX_COMMAND`, then `pageindex.command` in `.academic-helper/library.json`, then `pilib`):
+
 ```bash
-{ [ -n "${AW_PAGEINDEX_COMMAND:-}" ] || command -v pilib >/dev/null 2>&1; } && echo "PAGEINDEX_CONFIGURED" || echo "PAGEINDEX_NOT_CONFIGURED"
+python3 - <<'PY'
+import json, os, shlex, shutil
+try:
+    cfg = json.load(open('.academic-helper/library.json', encoding='utf-8'))
+except Exception:
+    cfg = {}
+env_cmd = os.environ.get('AW_PAGEINDEX_COMMAND', '').strip()
+file_cmd = (cfg.get('pageindex') or {}).get('command')
+cmd = env_cmd or file_cmd or 'pilib'
+words = cmd if isinstance(cmd, list) else shlex.split(cmd)
+found = bool(env_cmd or file_cmd or (words and shutil.which(words[0])))
+print('PAGEINDEX_CONFIGURED' if found else 'PAGEINDEX_NOT_CONFIGURED')
+print('CURRENT_ROUTE=' + str(cfg.get('route', 'none')) + ' CURRENT_PRIMARY=' + str(cfg.get('primary', 'trove')))
+PY
 ```
 
-`AW_PAGEINDEX_COMMAND` comes from the plugin setting `pageindex_command` (`/plugin` → Installed → academic-writer → Configure), exported at session start in projects that have `.academic-helper/profile.md`.
+`AW_PAGEINDEX_COMMAND` comes from the plugin setting `pageindex_command` (`/plugin` → Installed → academic-writer → Configure), exported at session start in projects that have `.academic-helper/profile.md`. A project that already names its own command in `library.json` counts as configured.
 
 ### Ask
 
-**PageIndex not configured**: do not offer it. Say, in one sentence: "Your books will be read from Trove; if you keep a PageIndex library on your own server you can add it later in `/plugin` → academic-writer → Configure (the `pageindex_command` setting), then run `/academic-writer:update-tools`." Use route `trove`.
+**An existing `library.json` is never overwritten without asking.** When `CURRENT_ROUTE` is not `none`, tell the researcher the current choice in plain words and ask whether to change it; the current choice comes first in the options and its description starts with "(current)". Write only after they pick a different route. If they keep it, write nothing. If the current route includes PageIndex but detection says it is not configured, do not ask and do not change the file: say PageIndex is not reachable right now and point to the "PageIndex" entries in `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/troubleshooting.md`.
+
+**PageIndex not configured** (and no existing route to keep): do not offer it. Say, in one sentence: "Your books will be read from Trove; if you keep a PageIndex library on your own server you can add it later in `/plugin` → academic-writer → Configure (the `pageindex_command` setting), then run `/academic-writer:update-tools`." Use route `trove`, and write it only when there is no `library.json` yet.
 
 **PageIndex configured**:
 

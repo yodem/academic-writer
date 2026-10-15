@@ -209,9 +209,9 @@ def test_pageindex_setting_is_non_sensitive_and_bridged_without_a_host():
     assert "pilib" in option["description"] and "/path/to/" in option["description"]
     assert "://" not in option["description"] and "@" not in option["description"]  # no URL, no user@host
     hooks = (ROOT / "src" / "hooks" / "hooks.json").read_text(encoding="utf-8")
-    assert "USER_CONFIG_PAGEINDEX_COMMAND='${user_config.pageindex_command}'" in hooks
+    assert "pageindex_command" not in hooks  # never interpolated into the shell-form command
     env_hook = (ROOT / "src" / "hooks" / "src" / "lifecycle" / "session-env.ts").read_text(encoding="utf-8")
-    assert "AW_PAGEINDEX_COMMAND" in env_hook and "USER_CONFIG_PAGEINDEX_COMMAND" in env_hook
+    assert "AW_PAGEINDEX_COMMAND" in env_hook and "CLAUDE_PLUGIN_OPTION_PAGEINDEX_COMMAND" in env_hook
 
 
 def test_setup_points_to_the_pageindex_setting_and_troubleshooting_covers_it():
@@ -222,3 +222,39 @@ def test_setup_points_to_the_pageindex_setting_and_troubleshooting_covers_it():
     for heading in ("PageIndex not reachable", "Wrong book list", "Shadow errors in the report"):
         assert f"**{heading}**" in trouble, heading
     assert "aw\" library status --check" in trouble
+
+
+def test_library_route_detection_honours_an_existing_library_json_and_never_overwrites_it():
+    section = REFERENCE.read_text(encoding="utf-8").split("## Library route")[1]
+    detect = section.split("### Detect")[1].split("### Ask")[0]
+    # same resolution order as loadLibraryConfig: env, then library.json pageindex.command, then pilib
+    assert "AW_PAGEINDEX_COMMAND" in detect and ".academic-helper/library.json" in detect
+    assert "'pageindex'" in detect and "'command'" in detect and "'pilib'" in detect
+    assert detect.index("env_cmd or file_cmd or 'pilib'") > 0
+    assert "CURRENT_ROUTE" in detect
+    ask = section.split("### Ask")[1].split("### Write")[0]
+    assert "never overwritten without asking" in ask
+    assert "(current)" in ask and "write nothing" in ask
+    assert "do not ask and do not change the file" in ask  # route includes PageIndex but it is unreachable
+    assert "only when there is no `library.json` yet" in ask
+
+
+def test_detection_snippet_runs_and_follows_the_config_precedence(tmp_path):
+    import subprocess
+    section = REFERENCE.read_text(encoding="utf-8").split("## Library route")[1]
+    code = re.search(r"python3 - <<'PY'\n(.*?)\nPY", section, re.S).group(1)
+
+    def detect(cfg, env):
+        proj = tmp_path / str(abs(hash((json.dumps(cfg), json.dumps(env)))))
+        (proj / ".academic-helper").mkdir(parents=True)
+        if cfg is not None:
+            (proj / ".academic-helper" / "library.json").write_text(json.dumps(cfg))
+        base = {"PATH": "/usr/bin:/bin"}
+        out = subprocess.run(["python3", "-c", code], cwd=proj, env={**base, **env}, capture_output=True, text=True, check=True)
+        return out.stdout.splitlines()
+
+    assert detect(None, {}) == ["PAGEINDEX_NOT_CONFIGURED", "CURRENT_ROUTE=none CURRENT_PRIMARY=trove"]
+    assert detect({"route": "both", "primary": "pageindex", "pageindex": {"command": "/path/to/wrapper"}}, {}) == [
+        "PAGEINDEX_CONFIGURED", "CURRENT_ROUTE=both CURRENT_PRIMARY=pageindex"]
+    assert detect(None, {"AW_PAGEINDEX_COMMAND": "pilib"})[0] == "PAGEINDEX_CONFIGURED"
+    assert detect({"route": "trove"}, {})[0] == "PAGEINDEX_NOT_CONFIGURED"
