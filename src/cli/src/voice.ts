@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { join, resolve, basename } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { dataDir as configuredDataDir, projectDir } from './paths.ts';
+import { allowedEnv } from './library/backends.ts';
 import { callGemini } from './gemini.ts';
 import { AwError, Budget } from './ledger.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
@@ -107,13 +108,13 @@ export function voiceSync(direction: 'push' | 'pull'): string {
     local['profile.json'] = readFileSync(join(dir, 'profile.json'), 'utf8');
     local['CHANGELOG.jsonl'] = readFileSync(join(dir, 'CHANGELOG.jsonl'), 'utf8');
     const localProfile = local['profile.json'] ? JSON.parse(local['profile.json']) as { voiceVersion?: string } : {};
-    const listingText = execFileSync('trove', ['items', 'list', '--json'], { encoding: 'utf8' });
+    const listingText = execFileSync('trove', ['items', 'list', '--json'], { encoding: 'utf8', env: allowedEnv(process.env, 'trove') });
     const listing = JSON.parse(listingText) as { items?: Array<{ id?: string; title?: string }> };
     const item = listing.items?.find(row => row.title === title && typeof row.id === 'string');
     if (direction === 'pull' && !item?.id) throw new AwError('ERROR', 'voice.pull', 'no Trove voice store found');
     let remote: Record<string, string> | undefined;
     if (item?.id) {
-      const text = execFileSync('trove', ['items', 'get', item.id], { encoding: 'utf8' });
+      const text = execFileSync('trove', ['items', 'get', item.id], { encoding: 'utf8', env: allowedEnv(process.env, 'trove') });
       remote = JSON.parse(text) as Record<string, string>;
     }
     if (direction === 'pull') {
@@ -133,8 +134,8 @@ export function voiceSync(direction: 'push' | 'pull'): string {
     }
     const file = join(dir, '.trove-voice.md');
     writeFileSync(file, body);
-    if (item?.id) execFileSync('trove', ['items', 'put', item.id, '-f', file], { encoding: 'utf8' });
-    else execFileSync('trove', ['items', 'import', file, '--title', title], { encoding: 'utf8' });
+    if (item?.id) execFileSync('trove', ['items', 'put', item.id, '-f', file], { encoding: 'utf8', env: allowedEnv(process.env, 'trove') });
+    else execFileSync('trove', ['items', 'import', file, '--title', title], { encoding: 'utf8', env: allowedEnv(process.env, 'trove') });
     return `voice push: synchronized ${title}`;
   } catch (error) {
     if (error instanceof AwError) throw error;

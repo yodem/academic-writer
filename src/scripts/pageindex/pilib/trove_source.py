@@ -13,21 +13,31 @@ import subprocess
 from .errors import IndexFailure, scrub
 
 # pilib holds a model key (for LiteLLM); the `trove` command it starts is another program and must not see it.
-_SECRET_NAME = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL)", re.IGNORECASE)
-_MODEL_PREFIX = ("GEMINI_", "GOOGLE_", "OPENAI_", "ANTHROPIC_", "OPENROUTER_")
+# An allow-list that matches `allowedEnv(env, 'trove')` in src/cli/src/library/backends.ts: keep the two in step.
+_BASE_NAMES = frozenset({
+    "PATH", "HOME", "USER", "LOGNAME", "LANG", "LANGUAGE", "TMPDIR", "TEMP", "TMP", "TERM", "SHELL", "TZ", "SSH_AUTH_SOCK",
+    "SYSTEMROOT", "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA",
+})
+_BASE_PREFIXES = ("LC_", "XDG_")
 _TROVE_OWN = ("TROVE_", "CANDLEKEEP_", "CK_")  # how Trove itself logs in
+_SECRET_NAME = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH)", re.IGNORECASE)
+_VALID_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+PASS_ENV = "AW_LIBRARY_PASS_ENV"  # names the researcher opts in, comma separated
 
 
 def trove_env(env=None) -> dict:
-    """The environment for a `trove` child: everything except model keys and other secrets (Trove's own variables stay)."""
+    """The environment for a `trove` child: an allow-list (base names, Trove's own variables, non-secret AW_*, names in AW_LIBRARY_PASS_ENV)."""
+    source = os.environ if env is None else env
+    listed = {n.strip() for n in source.get(PASS_ENV, "").split(",") if _VALID_NAME.match(n.strip())}
     out = {}
-    for name, value in (os.environ if env is None else env).items():
-        upper = name.upper()
-        if upper.startswith(_TROVE_OWN):
-            out[name] = value
-        elif upper.startswith(_MODEL_PREFIX) or _SECRET_NAME.search(name):
-            continue
-        else:
+    for name, value in source.items():
+        if (
+            name in _BASE_NAMES
+            or name.startswith(_BASE_PREFIXES)
+            or (name.startswith("AW_") and not _SECRET_NAME.search(name))
+            or name.startswith(_TROVE_OWN)
+            or name in listed
+        ):
             out[name] = value
     return out
 

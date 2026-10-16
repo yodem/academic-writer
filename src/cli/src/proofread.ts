@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, appendFileSync } fr
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
+import { allowedEnv } from './library/backends.ts';
 import { callGemini } from './gemini.ts';
 import { judge } from './judge.ts';
 import { decide } from './decide.ts';
@@ -41,7 +42,7 @@ export type ProofreadResult = { changes: Change[]; memo: string; proofed: string
 
 async function command(bin: string, args: string[], cwd?: string): Promise<string> {
   return await new Promise((resolvePromise, reject) => {
-    const child = spawn(bin, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(bin, args, { cwd, env: allowedEnv(process.env, 'script'), stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = ''; let stderr = '';
     child.stdout.setEncoding('utf8').on('data', (data: string) => { stdout += data; });
     child.stderr.setEncoding('utf8').on('data', (data: string) => { stderr += data; });
