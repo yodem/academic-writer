@@ -160,17 +160,21 @@ export function resolveNoteSource(project: string, source: NoteSource): Resolved
 /**
  * The sources a sentence's footnote keys stand for. A key is tried as a source id (or evidence passage id) first; a note
  * that is not one is matched by author and title against sources.json (see notes.ts). Notes that match nothing, or
- * several sources equally, are added to `unmatched` once each and contribute no source.
+ * several sources equally, or only in part, are added to `unmatched` once each and contribute no source.
  */
 export class KeyResolver {
   private readonly resolver: NoteResolver;
   private readonly cards: ReturnType<typeof loadSourceCards>;
   private readonly byKey = new Map<string, ResolvedKey[]>();
+  private readonly partialKeys = new Set<string>();
 
   constructor(private readonly project: string, private readonly registry: Registry, private readonly definitions: Map<string, string>, private readonly unit: string, private readonly unmatched: UnmatchedNote[] | undefined) {
     this.cards = loadSourceCards(project);
     this.resolver = new NoteResolver(this.cards);
   }
+
+  /** True when only some citations of the note matched a source: the note is unresolved, and a sentence carrying it is not used. */
+  isPartial(key: string): boolean { return this.partialKeys.has(key); }
 
   resolve(key: string): ResolvedKey[] {
     const cached = this.byKey.get(key);
@@ -182,6 +186,7 @@ export class KeyResolver {
       out = [byId];
     } else if (this.cards.length > 0) {
       const result = this.resolver.resolve(key, this.definitions.get(key) ?? '');
+      if (result.partial) this.partialKeys.add(key);
       out = result.sources.map((source) => resolveNoteSource(this.project, source));
       for (const item of result.unmatched) this.unmatched?.push({ unit: this.unit, note: key, text: item.text.slice(0, 200), reason: item.reason });
     }
