@@ -7,6 +7,8 @@
 #   bash scripts/smoke-built-plugin.sh --live   # + live proofread recall eval (needs GOOGLE_API_KEY; ~$0.01)
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; P="$ROOT/plugins/academic-writer"; AW="$P/bin/aw"
+# Importing the shipped Python must not write __pycache__ under plugins/ (outside the temp folder and its cleanup).
+export PYTHONDONTWRITEBYTECODE=1
 fail=0; ok(){ echo "ok   $1"; }; bad(){ echo "FAIL $1"; fail=1; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT; mkdir -p "$T/data" "$T/proj/.academic-helper"; echo "# profile" > "$T/proj/.academic-helper/profile.md"
 
