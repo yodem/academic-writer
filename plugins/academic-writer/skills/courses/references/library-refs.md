@@ -8,7 +8,7 @@ For the operator running the `courses` skill who needs to find the works a cours
 - `pandoc` on the PATH. `refs.py extract` shells out to it; `status`, `chores` and `index` do not need it.
 - The `trove` CLI, for book edits. Check `trove auth whoami --no-session` first.
 - A Chrome window signed in to the BIU library proxy, for the download steps only. Lookups need no login.
-- Book writes happen one at a time, after the owner confirms no other session is writing to that book.
+- The book lock (A0): one writer per Trove course book, held through writes, ToC repair and audit.
 
 Built versus planned, as of this runbook:
 
@@ -22,6 +22,18 @@ Built versus planned, as of this runbook:
 | Kotar image download by token | Recipe in A6, proven by hand; not scripted |
 
 ## Part A: references
+
+### A0. Book lock: one writer per course book
+
+Two sessions writing to one Trove book overwrite each other's pages and ToC. The courses lock script, `book-lock.sh` in the `bin/` folder of the user's academic-writer home (`~/.academic-writer/bin/book-lock.sh`), serialises them.
+
+```bash
+~/.academic-writer/bin/book-lock.sh acquire <slug> <session> "<what>"
+```
+
+- Acquire before the first write to a book. Exit 1 means another session holds it: do other work and come back.
+- Hold it through the page writes, the ToC repair and `toc_audit` (A9). Release it only when the ToC has no new failures against the before-snapshot.
+- A lock older than 3 hours goes to the user. Never break it yourself.
 
 ### A1. Find the cited works
 
@@ -103,7 +115,16 @@ From each hit it reads `delivery.availability` (`fulltext`, `available_in_librar
   | No services, but `available_in_library` | `print-only`, with `--call-number` from `delivery.holding` |
   | Anything else | Look further (A5, no-hit path) |
 
-- **No hit:** try a title fragment, then the publisher or journal site (JANES is open access), Google Scholar, and RAMBI. For a book chapter, Anna's Archive is the last resort. Never use Anna's Archive for a Kotar item. When nothing is found, record `not-found`.
+- **No hit:** try a title fragment, then the publisher or journal site (JANES is open access), Google Scholar, and RAMBI. For a book chapter, check Anna's Archive (A4a). When nothing is found, record `not-found`.
+
+### A4a. Step 0 before any OCR: Anna's Archive
+
+Before OCR-ing a scan, look for the same edition on Anna's Archive. Same edition means the publisher, the year and the printed pagination all match.
+
+- Use its text layer or EPUB text only if the printed page numbers can be kept exactly. Otherwise OCR (A7).
+- Record the result on the ref as `annas: found-used | found-wrong-edition | not-found | not-checked`.
+- Never use Anna's Archive for a Kotar item.
+- Status as of October 2026: the CLI's mirrors sit behind DDoS-Guard or rate limits, and the `.gl` mirror works only in a real browser.
 
 ### A5. Downloads (Chrome only)
 
@@ -127,7 +148,9 @@ Record each result with `refs.py --term <term> lookup <slug> --set <key> --statu
 
 ### A6. Kotar: fetch the cited pages
 
-Kotar items are read through the user's own BIU licence, for their own study. Fetch only the cited pages. Use this token route; add a chore only after two failures.
+Fetching Kotar pages is the job of the `kotar-fetch` skill (`/academic-writer:kotar-fetch`). A ref keeps status `kotar` until that skill reports. Add no Kotar chore unless it fails.
+
+Kotar items are read through the user's own BIU licence, for their own study, and only the cited pages are fetched. The route the skill relies on, for reference:
 
 1. Open the Kotar viewer for the book through the OpenAthens proxy host. Its book id comes from the URL; keep it out of shipped files.
 2. Kotar page indices are not printed page numbers. The print validator in the print dialog's iframe (`CheckPageStart(null, {Value})`) says which labels are valid. Map label to index once per book; the offset comes after the front matter. Never press "send" in Chrome's native print preview: it freezes the browser tool.
@@ -139,9 +162,14 @@ The browser tool may refuse output that contains query strings, so report counts
 
 ### A7. OCR and ingest
 
-- OCR: Claude vision first, after `pdftoppm -r 150`. Send pages Claude flags as unreadable to the bundled Gemini OCR (`/academic-writer:ocr`).
-- Never trust `pdftotext` on JSTOR Hebrew text layers: they come out reversed.
-- Ingest the file as a library source:
+- Step 0: check Anna's Archive first (A4a).
+- OCR of Hebrew: never plain `aw ocr` or Gemini alone; Gemini-only output invented or paraphrased Hebrew. The route is:
+  1. Tesseract per page (`tess_pages.py`).
+  2. Gemini character correction against the page image (`gemini_correct.py`), with a similarity gate of at least 0.8 between the Tesseract text and the corrected text.
+  3. Pages under the gate keep the Tesseract text and are flagged.
+- If a model returns empty or refuses on a page, stop for that item and report.
+- JSTOR Hebrew text layers are reversed: never use `pdftotext` on them.
+- Ingest of in-copyright library readings: the full text goes to Trove and NotebookLM with the printed page numbers exact, and the original PDF goes to the course Drive folder. Register it as a library source:
   ```bash
   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" add-source <file> --course <slug> --origin library --origin-ref <key>
   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" check-source <slug> --sha <sha8>
@@ -155,7 +183,7 @@ The browser tool may refuse output that contains query strings, so report counts
 
 | Ref status | Chore kind | What the chore asks for |
 |---|---|---|
-| `kotar` | `kotar-source` | Download the cited pages from Kotar |
+| `kotar` | `kotar-source` | Only when `/academic-writer:kotar-fetch` failed: download the cited pages from Kotar |
 | `print-only` | `manual` | Get the print copy from the library, with the call number |
 | `not-found` | `manual` | Find the work; the citation is in the text |
 
@@ -171,19 +199,21 @@ Each course book ends with a `מקורות נזכרים` section: an index page 
 
 #### Writing pages and the ToC
 
-`trove items append` and `trove items put` regenerate the book's ToC, which flattens any hand-built sidebar. So, for an ordinary book:
+`trove items append` and `trove items put` regenerate the book's ToC, which flattens any hand-built sidebar. Take the book lock (A0) first, then follow the case that fits the book.
 
-1. Extend the ToC plan (`toc-work/<slug>.plan.json`) and the hints file first.
-2. Write the pages: `trove items append <id>`, or `trove items put <id>:<page>` to replace one page.
-3. Re-apply the plan with `trove items enrich`, taking the version to start from via `trove items history --json`.
-4. Run `python3 tools/toc_audit.py --course <slug>` and wait for exit 0.
+**Books with assignment blocks.** These books have level-1 blocks ("מקורות ראשוניים", "מקורות משניים", "מטלות") built by `assignment_toc.py`, which lives in the course-book tools checkout, not in this plugin. Their blocks repeat start pages on purpose, so never re-apply `toc-work/<slug>.plan.json` and never run `toc_rebuild` on them. Repair per book:
 
-Books whose assignment blocks are built by `assignment_toc.py` follow different rules:
+1. Snapshot the ToC: `trove items toc <id> --json > <snapshot>`.
+2. Write the pages.
+3. `trove items enrich <id> --toc <snapshot plus the new entries>`.
+4. Run `assignment_toc.py` **without** `--base-toc`, and only if a task or spec changed. It reads the live ToC and strips only its own blocks.
+5. `python3 tools/toc_audit.py --course <slug> --keep-from <snapshot>`. It fails if a title in the snapshot is gone.
 
-- **Never re-apply `toc-work/<slug>.plan.json` over them.** Their level-1 blocks ("מקורות ראשוניים", "מקורות משניים") repeat start pages on purpose, so re-applying the plan breaks page order and removes the blocks. `assignment_toc.py` lives in the course-book tools checkout, not in this plugin.
-- Run `assignment_toc.py` **without** `--base-toc`: it reads the live ToC and strips only its own blocks. Skip it when no task or spec changed. Use `--base-toc` only right after a `trove items put`, which writes the snapshot it starts from.
+**Other books.** Write the pages, then `toc_rebuild` (dry run, then `--apply`), then `assignment_toc.py`, then `toc_audit`.
 
-`toc_audit.py` exempts entries under level-1 titles that start with "מקורות ראשוניים" or "מקורות משניים" from its duplicate and order checks. `מקורות נזכרים` is not exempt: it is an index page, and it must pass those checks.
+`--base-toc` is for the step right after a `trove items put`, which flattens the ToC; `put` writes the snapshot `assignment_toc.py` then starts from.
+
+`toc_audit.py` exempts entries under the level-1 titles "מקורות ראשוניים", "מקורות משניים" and "מטלות" from its duplicate and order checks. Pages under "מטלות" count as covered. `מקורות נזכרים` is not exempt: it is an index page, and it is fully checked.
 
 ## Part B: Chrome bookmark folders
 

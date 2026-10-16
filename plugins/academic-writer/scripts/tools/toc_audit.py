@@ -111,18 +111,20 @@ def source_parent_problems(toc: list[dict], sources: list) -> list[dict]:
     return out
 
 
-CROSS_REFERENCE_BLOCKS = ("מקורות ראשוניים", "מקורות משניים")
+CROSS_REFERENCE_BLOCKS = ("מקורות ראשוניים", "מקורות משניים", "מטלות")
+# Blocks whose entries are the only ones on their pages, so they do count toward missing.
+COVERING_BLOCKS = ("מטלות",)
 
 
-def _cross_reference_entries(toc: list[dict]) -> set[int]:
-    """Indices of a cross-reference block: a level-1 entry titled "מקורות ראשוניים"/"מקורות משניים" and every
+def _cross_reference_entries(toc: list[dict], prefixes: tuple = CROSS_REFERENCE_BLOCKS) -> set[int]:
+    """Indices of a cross-reference block: a level-1 entry titled "מקורות ראשוניים"/"מקורות משניים"/"מטלות" and every
     entry under it up to the next level-1 entry. assignment_toc.py builds these, and they repeat source start
-    pages on purpose, so duplicate and out_of_order skip them. They still need a hint and a level."""
+    pages on purpose (task entries under "מטלות" share a start page), so duplicate and out_of_order skip them. They still need a hint and a level."""
     out: set[int] = set()
     in_block = False
     for i, e in enumerate(toc):
         if e.get("level", 1) <= 1:
-            in_block = _label(e.get("title", "")).startswith(CROSS_REFERENCE_BLOCKS)
+            in_block = _label(e.get("title", "")).startswith(prefixes)
         if in_block:
             out.add(i)
     return out
@@ -138,14 +140,16 @@ def audit_toc(toc: list[dict], page_count: int, course_name: str | None = None, 
     no_hint: titles lacking " - hint"; out_of_order: (index, prev_page, page)
     where the page decreases; level_gap: (index, level) violating level rules.
     Cross-reference blocks (see _cross_reference_entries) are exempt from duplicate and out_of_order
-    and do not count toward missing.
+    and do not count toward missing, except COVERING_BLOCKS ("מטלות"), whose pages they alone cover.
     """
     exempt = _cross_reference_entries(toc)
+    covering = _cross_reference_entries(toc, COVERING_BLOCKS)
     counts: dict[int, int] = {}
     for i, e in enumerate(toc):
         if i not in exempt:
             counts[e.get("page")] = counts.get(e.get("page"), 0) + 1
-    missing = [p for p in range(1, page_count + 1) if counts.get(p, 0) == 0]
+    covered = set(counts) | {toc[i].get("page") for i in covering}
+    missing = [p for p in range(1, page_count + 1) if p not in covered]
     duplicate = sorted(p for p, n in counts.items() if n > 1)
     no_hint = [{"index": i, "page": e.get("page"), "title": e.get("title", "")}
                for i, e in enumerate(toc) if not has_hint(e.get("title", ""), course_name)]
