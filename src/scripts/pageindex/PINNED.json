@@ -1,0 +1,36 @@
+{
+ "_comment": "What the installer (aw library install) pins. A lock file is compiled per Python minor: the core lock was compiled on Python 3.9, the structure lock on Python 3.10. requirements_sha256 is the sha256 of the requirements file; a test keeps it in step.",
+ "schema": 1,
+ "pilib_version": "1.0.0",
+ "pageindex": {
+  "repo": "https://github.com/VectifyAI/PageIndex",
+  "commit": "af92d9658a6a9c0ae31171b43198db28951af2f4",
+  "tarball_url": "https://codeload.github.com/VectifyAI/PageIndex/tar.gz/af92d9658a6a9c0ae31171b43198db28951af2f4",
+  "tarball_sha256": "72e7d119a80867ddbd60894e225b14bf0c484cb50c1e05e812b061b7bbf6d672",
+  "license": "MIT",
+  "requires_python": ">=3.10"
+ },
+ "tiers": {
+  "core": {
+   "purpose": "index a book from its hinted table of contents (summaries through LiteLLM)",
+   "requirements": "requirements-core.txt",
+   "requirements_sha256": "6c78e155591e69222f5b3dc0f41b85a5cfd740ecebec9969999a2352f1912e1b",
+   "requires_python": ">=3.9",
+   "locked_with_python": "3.9",
+   "litellm": "1.83.9"
+  },
+  "structure": {
+   "purpose": "core plus PageIndex structure detection, for a book with no hinted table of contents",
+   "requirements": "requirements-structure.txt",
+   "requirements_sha256": "ce8ee382673b35ce89da064ce0d495f09f5aca61f37b595b4db405587334d16f",
+   "requires_python": ">=3.10",
+   "locked_with_python": "3.10",
+   "litellm": "1.105.1",
+   "includes_core": true,
+   "extra_unpinned": [
+    "weasyprint"
+   ],
+   "extra_note": "WeasyPrint (renders Trove text to a PDF for structure detection) is not in the lock; it also needs the pango system library."
+  }
+ }
+}

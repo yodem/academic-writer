@@ -1,0 +1,31 @@
+{
+ "items": [
+  {
+   "id": "flat-demo",
+   "title": "A Flat Book",
+   "author": "",
+   "toc": [
+    {
+     "title": "Page 1",
+     "page": 1,
+     "level": 1
+    },
+    {
+     "title": "Page 2",
+     "page": 2,
+     "level": 1
+    },
+    {
+     "title": "Page 3",
+     "page": 3,
+     "level": 1
+    },
+    {
+     "title": "Page 4",
+     "page": 4,
+     "level": 1
+    }
+   ]
+  }
+ ]
+}
