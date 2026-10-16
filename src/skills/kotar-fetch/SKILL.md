@@ -23,9 +23,9 @@ Kotar shows a book as page images, one per page token. A token can only be read 
 **Never open the viewer's print dialog or press its "שלח" button.** Chrome's native print preview freezes claude-in-chrome.
 
 1. Print the snippet: `python3 kf tokens-js <book_id> <start_idx> <end_idx>`. It fetches `PrintPages.aspx` with the tab's credentials in batches of at most 10 pages (Kotar's own print limit), reads every `<img src>` for `gPageToken=<uuid>`, and returns the uuids **with dashes replaced by spaces**. The browser tool blocks output that looks like URL query data, and a blob download is held by Chrome's "multiple downloads" prompt, so do not change that format.
-2. Run it with `javascript_tool` in the viewer tab. Save the returned text verbatim to `<out_dir>/tokens.txt`.
+2. Run it with `javascript_tool` in the viewer tab. Keep its leading `await`: without it the tool returns `{}` for the pending promise. Save the returned text verbatim to `<out_dir>/tokens.txt`.
 
-Indices are not printed page numbers. On a new book, first fetch a small probe batch (2–3 indices near the cited pages), look at the page image to read its printed number, and compute the offset: `python3 kf offset <index> <printed> --pages <A-B>` prints the offset and the index range for printed pages A–B. Plates are numbered in the sequence, so the offset holds across them.
+Indices are not printed page numbers. On a new book, first fetch a small probe batch (2–3 indices near the cited pages), look at the page image to read its printed number, and compute the offset: `python3 kf offset <index> <printed> --pages <A-B>` prints the offset and the index range for printed pages A–B. Plates can sit inside the sequence. Some books number them (Gilad's plates are pp. 322 and 324, so the offset holds); others, such as אנציקלופדיה מקראית, insert unnumbered plates (`לוח יח`) that shift every later index. When the range is more than a few pages, check every page's running header, not only the first and last, and fetch the extra indices that the plates cost. An encyclopedia page carries two numbered columns: map the cited columns to pages the same way.
 
 ## 3. Pages, check, merge
 

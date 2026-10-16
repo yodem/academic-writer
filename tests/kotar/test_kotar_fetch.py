@@ -35,6 +35,7 @@ def test_batches_cap_at_ten():
 def test_tokens_js_has_book_and_ranges_and_no_dashes_out():
     js = kf.tokens_js("95229718", 319, 336)
     assert "nBookID=95229718" in js and "[[319, 328], [329, 336]]" in js
+    assert js.startswith("await (async () => {")
     assert "replace(/-/g, ' ')" in js and "credentials: 'include'" in js
     with pytest.raises(ValueError):
         kf.tokens_js("1; alert(1)", 1, 2)

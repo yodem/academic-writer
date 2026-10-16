@@ -49,7 +49,8 @@ def tokens_js(book_id: str, start: int, end: int) -> str:
         raise ValueError(f"book id must be numeric, got {book_id!r}")
     ranges = json.dumps(batches(start, end))
     return (
-        "(async () => {\n"
+        # javascript_tool returns {} for a bare promise; top-level await resolves it.
+        "await (async () => {\n"
         f"  const ranges = {ranges};\n"
         "  const out = [];\n"
         "  for (const [s, e] of ranges) {\n"
