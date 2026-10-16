@@ -54,7 +54,12 @@ async function listTrove(indexer: Indexer, selector: BackfillSelector): Promise<
 
 /** The books a backfill would touch, with the outline Trove holds for each (read-only on Trove). */
 async function candidates(indexer: Indexer, request: BackfillRequest): Promise<{ list: Candidate[]; unreadable: Array<{ id: string; error: string }> }> {
-  const base = await listTrove(indexer, request.selector);
+  let base: Awaited<ReturnType<typeof listTrove>>;
+  try { base = await listTrove(indexer, request.selector); }
+  catch (error) {
+    // The backend's stderr can echo a credential: redact it here, before it can be printed.
+    throw new LibraryError(error instanceof LibraryError && error.code !== 'exit' ? error.code : 'exit', `ERROR library backfill: the list of books could not be read from Trove (${clipError(errorMessage(error).replace(/^ERROR library: /u, ''))}). Nothing was indexed.`);
+  }
   const trove = new TroveBackend({ command: indexer.config.troveCommand, env: childEnv(indexer.env, { kind: 'trove' }), timeoutMs: limits.timeoutMs.primary, cwd: indexer.project });
   const list: Candidate[] = [];
   const unreadable: Array<{ id: string; error: string }> = [];

@@ -21,6 +21,8 @@ import subprocess
 from collections import Counter
 from pathlib import Path
 
+from .trove_source import trove_env
+
 NIQQUD = re.compile("[֑-ׇ]")  # cantillation + points (U+0591-U+05C7)
 HEBREW = re.compile("[א-ת]")
 LATINISH = re.compile("[A-Za-zͰ-Ͽἀ-῿]")
@@ -38,7 +40,7 @@ p { margin: 0 0 0.55em; text-align: start; }
 
 
 def trove(*args: str) -> str:
-    out = subprocess.run(["trove", *args, "--no-session"], capture_output=True, text=True)
+    out = subprocess.run(["trove", *args, "--no-session"], capture_output=True, text=True, env=trove_env())
     if out.returncode != 0:
         raise SystemExit(f"trove {' '.join(args)} failed: {out.stderr.strip()[:400]}")
     return out.stdout

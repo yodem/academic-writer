@@ -15,6 +15,10 @@ log = os.environ.get("FAKE_TROVE_LOG")
 if log:
     with open(log, "a", encoding="utf-8") as f:
         f.write(json.dumps(args) + "\n")
+env_log = os.environ.get("FAKE_TROVE_ENV_LOG")
+if env_log:  # the names of the variables this child was started with (never the values)
+    with open(env_log, "a", encoding="utf-8") as f:
+        f.write(json.dumps(sorted(os.environ)) + "\n")
 root = os.environ["FAKE_TROVE_DIR"]
 if args[:2] not in (["items", "toc"], ["items", "read"]) or "--json" not in args or "--no-session" not in args:
     sys.stderr.write("fake trove: unsupported call " + " ".join(args) + "\n")

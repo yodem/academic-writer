@@ -318,14 +318,18 @@ export async function runInstall(options: InstallOptions): Promise<Record<string
   const warnings = [...chosen.notes];
   if (!chosen.exact) warnings.push(`The packages were locked with Python ${pinned.tiers[chosen.tier].locked_with_python}; this computer uses ${chosen.python.minorName}. The install checks that it works afterwards.`);
   // A private Python folder made earlier may be too old for this tier (a basic install under Python 3.9, then the full helper): it is rebuilt.
-  let rebuild: string | null = null;
-  if (existsSync(paths.python)) {
+  // The question is asked again once the lock is held: another installer may have made or changed the folder since this plan.
+  const venvVerdict = async (): Promise<string | null> => {
+    if (!existsSync(paths.python)) return null;
     const minimum = chosen.tier === 'structure' ? install.minPython : install.minPythonCore;
     const existing = await probePython(paths.python, childEnv(options.env));
-    if (!existing) rebuild = 'the existing private Python folder no longer starts';
-    else if (!atLeast(existing, minimum)) rebuild = `the existing private Python folder uses Python ${existing.version}, and this tier needs Python ${minimum} or newer`;
-  }
-  if (rebuild) warnings.push(`${rebuild[0]?.toUpperCase()}${rebuild.slice(1)}, so it will be removed and rebuilt with Python ${chosen.python.version}. The indexed books are kept.`);
+    if (!existing) return 'the existing private Python folder no longer starts';
+    if (!atLeast(existing, minimum)) return `the existing private Python folder uses Python ${existing.version}, and this tier needs Python ${minimum} or newer`;
+    return null;
+  };
+  let rebuild = await venvVerdict();
+  const rebuildWarning = (reason: string): string => `${reason[0]?.toUpperCase()}${reason.slice(1)}, so it will be removed and rebuilt with Python ${chosen.python.version}. The indexed books are kept.`;
+  if (rebuild) warnings.push(rebuildWarning(rebuild));
   const plan = {
     rebuild_venv: rebuild !== null, rebuild_reason: rebuild,
     tier: chosen.tier, requested_tier: chosen.requested, python: { path: chosen.python.path, version: chosen.python.version },
@@ -351,6 +355,9 @@ export async function runInstall(options: InstallOptions): Promise<Record<string
   try {
     const env = { ...childEnv(options.env, { kind: 'install' }), PIP_DISABLE_PIP_VERSION_CHECK: '1', PIP_NO_INPUT: '1', PYTHONNOUSERSITE: '1' };
     const command = installedCommand(home, options.pluginRoot);
+    const verdict = await venvVerdict();
+    if (verdict !== null && rebuild === null) warnings.push(rebuildWarning(verdict));
+    rebuild = verdict;
     const existing = readInstalled(home);
     if (!rebuild && existing && existing.tier === chosen.tier && matchesPinned(existing, pinned) && existsSync(paths.python)) {
       const health = await pilibHealth(command, env);
@@ -384,7 +391,7 @@ export async function runInstall(options: InstallOptions): Promise<Record<string
     // A degraded structure install keeps the structure lock's hash, so a later run sees it is not complete and tries again.
     if (degraded) record.requirements_sha256 = pinned.tiers.core.requirements_sha256;
     await writeAtomic(paths.installed, `${JSON.stringify(record, null, 2)}\n`);
-    return { ok: true, action: 'installed', ...plan, tier: record.tier, degraded, pilib_version: record.pilib_version, litellm: record.litellm ?? null, installed_at: record.installed_at, warnings };
+    return { ok: true, action: 'installed', ...plan, rebuild_venv: rebuild !== null, rebuild_reason: rebuild, tier: record.tier, degraded, pilib_version: record.pilib_version, litellm: record.litellm ?? null, installed_at: record.installed_at, warnings };
   } catch (error) {
     await abandon();
     throw error;

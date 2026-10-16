@@ -26,6 +26,10 @@ const VERSION = ${JSON.stringify(version)};
 const args = process.argv.slice(2);
 const log = (extra) => process.env.FAKE_LOG && fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify(Object.assign({ who: 'base-' + VERSION, args, google: process.env.GOOGLE_API_KEY ? 'set' : 'unset', gemini: process.env.GEMINI_API_KEY ? 'set' : 'unset' }, extra || {})) + '\\n');
 if (args[0] === '-c' && String(args[1]).includes('fcntl')) { // the install lock: delegate to a real Python
+  if (process.env.FAKE_PLANT_VENV && !fs.existsSync(path.join(process.env.FAKE_PLANT_VENV, 'bin', 'python'))) { // another installer finished just before this one got the lock
+    fs.mkdirSync(path.join(process.env.FAKE_PLANT_VENV, 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(process.env.FAKE_PLANT_VENV, 'bin', 'python'), fs.readFileSync(process.env.FAKE_VENV_SCRIPT, 'utf8').replace('__VERSION__', '3.9.23'), { mode: 0o755 });
+  }
   const child = require('node:child_process').spawn(process.env.FAKE_REAL_PYTHON, args, { stdio: 'inherit' });
   child.on('close', (code) => process.exit(code === null ? 1 : code));
 } else if (args[0] === '-c') { log(); console.log(VERSION); console.log(process.argv[1]); process.exit(0); }
@@ -93,7 +97,7 @@ function fixture(pythons: string[], extra: Record<string, string> = {}): Fixture
   const log = join(root, 'calls.log');
   const data = join(root, 'data');
   const env: NodeJS.ProcessEnv = { PATH: bin, HOME: root, FAKE_LOG: log, FAKE_VENV_SCRIPT: venvScript, GOOGLE_API_KEY: SECRET, GEMINI_API_KEY: SECRET, JEV_API_KEY: 'jev-secret-value', FAKE_REAL_PYTHON: REAL_PYTHON, ...extra };
-  env.AW_LIBRARY_PASS_ENV = ['FAKE_LOG', 'FAKE_VENV_SCRIPT', 'FAKE_REAL_PYTHON', 'FAKE_TIER', 'FAKE_PILIB_VERSION', 'FAKE_PIP_FAIL', 'FAKE_VENV_FAIL', 'FAKE_NO_HEALTH'].join(',');
+  env.AW_LIBRARY_PASS_ENV = ['FAKE_LOG', 'FAKE_VENV_SCRIPT', 'FAKE_REAL_PYTHON', 'FAKE_TIER', 'FAKE_PILIB_VERSION', 'FAKE_PIP_FAIL', 'FAKE_VENV_FAIL', 'FAKE_NO_HEALTH', 'FAKE_PLANT_VENV'].join(',');
   return {
     root, bin, pluginRoot, data, home: join(data, 'pageindex'), log, env,
     options: (more = {}) => ({ dryRun: false, yes: true, dataDir: data, pluginRoot, env, ...more }),
@@ -403,6 +407,22 @@ test('an existing private Python too old for the tier is rebuilt with a suitable
     // a venv that is already new enough is reused
     const reuse = await runInstall(fx.options({ tier: 'structure', dryRun: true, yes: false })) as Record<string, any>;
     assert.equal(reuse.rebuild_venv, false);
+  } finally { fx.cleanup(); }
+});
+
+test('the venv check is made again once the lock is held: a venv another installer made in between is judged too, not reused blindly', async () => {
+  const fx = fixture(['3.9.23', '3.12.1'], { FAKE_TIER: 'structure' });
+  try {
+    fx.env.FAKE_PLANT_VENV = installPaths(fx.home).venv;
+    // at planning time there is no venv, so the plan says nothing about a rebuild ...
+    const plan = await runInstall(fx.options({ tier: 'structure', dryRun: true, yes: false })) as Record<string, any>;
+    assert.equal(plan.rebuild_venv, false);
+    // ... but by the time this installer holds the lock, a Python 3.9 venv is there
+    const result = await runInstall(fx.options({ tier: 'structure' })) as Record<string, any>;
+    assert.deepEqual([result.action, result.tier, result.rebuild_venv], ['installed', 'structure', true]);
+    assert.match(result.rebuild_reason, /Python 3\.9\.23.*3\.10/);
+    assert.equal(readInstalled(fx.home)?.python, '3.12.1', 'the packages went into a venv made with the newer Python');
+    assert.ok(fx.calls().some((call) => call.who === 'base-3.12.1' && (call.args as string[])[1] === 'venv'));
   } finally { fx.cleanup(); }
 });
 

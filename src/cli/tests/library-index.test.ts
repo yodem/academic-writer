@@ -436,6 +436,22 @@ test('a backfill where books cannot be read from Trove fails: unreadable books c
   } finally { all.cleanup(); some.cleanup(); }
 });
 
+test('when Trove\'s book list itself cannot be read, backfill stops with a redacted message (--all and --shelf-current)', async () => {
+  const leak = 'trove: login failed. Authorization: Bearer abcdefghijklmnop token=SUPERSECRETVALUE123 AIzaSyFAKEKEYFORTESTS0123456789abcdef';
+  const fx = fixture('wrapper', { FAKE_TROVE_FAIL: '1', FAKE_TROVE_FAIL_MSG: leak });
+  try {
+    for (const selector of ['--all', '--shelf-current']) {
+      for (const extra of [[], ['--dry-run']]) {
+        const result = await cli(fx, 'backfill', selector, ...extra, '--run', 'bf-l');
+        assert.notEqual(result.code, 0, selector);
+        assert.match(result.err, /ERROR library backfill: .*list of books could not be read/s, result.err);
+        for (const text of [result.out, result.err]) assert.ok(!/abcdefghijklmnop|SUPERSECRETVALUE123|AIzaSy/.test(text), `a secret was printed: ${text}`);
+      }
+    }
+    assert.equal(pilibCalls(fx, 'index-trove').filter((line) => !line.cmd.includes('--help')).length, 0);
+  } finally { fx.cleanup(); }
+});
+
 test('backfill --limit and --skip-existing (same pages and outline length) decide what is indexed', async () => {
   const fx = fixture('wrapper', { FAKE_TROVE_BOOKS: 'T-A,T-B,T-C', FAKE_INDEXED: 'T-A', FAKE_META_TOC: '2' });
   try {
