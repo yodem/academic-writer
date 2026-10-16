@@ -34,12 +34,13 @@ def test_syntax():
 def test_chrome_running_plans_watch_in_order(tmp_path):
     out, plans = run_dry(tmp_path, True, queue=True)
     assert out.returncode == 0, out.stderr
-    keys = ["courses.py daily", "claude -p --chrome", "courses.py wispr-scan", "lesson-notes --pending", "toc_audit.py --all",
+    keys = ["courses.py daily", "claude -p --chrome", "courses.py wispr-scan", "refs.py --registry", "lesson-notes --pending", "toc_audit.py --all",
             "chores digest", "courses-sync-nanoclaw.sh"]
     idx = [next(i for i, p in enumerate(plans) if k in p) for k in keys]
     assert idx == sorted(idx) and len(plans) == len(keys)
     watch = plans[1]
     assert "courses.py wispr-scan" in plans[2]
+    assert plans[3].endswith("fetch-queue") and "refs.py --registry" in plans[3]
     assert "/academic-writer:courses watch-lemida --all'" in watch
     assert "--model sonnet" in watch and "--plugin-dir" in watch
     for tool in ("mcp__claude-in-chrome__*", "Bash(rclone:*)", "Bash(pdftoppm:*)", "Bash(screencapture:*)", "Bash(trove ms show:*)"):
@@ -69,7 +70,7 @@ def test_dry_run_writes_no_log(tmp_path, chrome):
     assert not list((tmp_path / "home").rglob("daily-*.log"))
 
 
-def run_live_with_failing_bookmarks(tmp_path):
+def run_live_with_failing_bookmarks(tmp_path, refs_exit=0):
     """Run the script for real (no COURSES_DRY) against a stub repo whose courses.py fails only `bookmarks`."""
     home = tmp_path / "home"
     term = home / ".academic-writer" / "courses" / "term"
@@ -78,6 +79,7 @@ def run_live_with_failing_bookmarks(tmp_path):
     courses = repo / "src" / "scripts" / "courses" / "courses.py"
     courses.parent.mkdir(parents=True)
     courses.write_text("import sys\nsys.exit(5 if 'bookmarks' in sys.argv else 0)\n")
+    (courses.parent / "refs.py").write_text(f"import sys\nsys.exit({refs_exit})\n")
     (repo / "tools").mkdir()
     (repo / "tools" / "toc_audit.py").write_text("import sys\nsys.exit(0)\n")
     sync = home / ".academic-writer" / "bin" / "courses-sync-nanoclaw.sh"
@@ -104,3 +106,11 @@ def test_bookmarks_step_is_never_run(tmp_path):
     assert "bookmarks" not in log
     assert "-- nanoclaw-sync exit=0" in log
     assert log.index("-- digest") < log.index("-- nanoclaw-sync")
+
+
+@pytest.mark.skipif(not Path("/usr/bin/python3").exists(), reason="script hardcodes /usr/bin/python3")
+def test_fetch_queue_failure_is_counted_but_later_steps_run(tmp_path):
+    out, log = run_live_with_failing_bookmarks(tmp_path, refs_exit=1)
+    assert out.returncode == 1
+    assert "-- fetch-queue exit=1" in log and "-- nanoclaw-sync exit=0" in log
+    assert log.index("-- wispr-scan exit") < log.index("-- fetch-queue") < log.index("-- digest")

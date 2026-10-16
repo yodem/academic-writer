@@ -10,6 +10,7 @@ Stdlib plus a pandoc subprocess only. The one network call is fetch_url; tests r
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import html
 import json
@@ -578,6 +579,88 @@ def fetch_ref(reg: Path, slug: str, key: str, *, task: str | None = None, dry_ru
     return {"key": key, "status": ref.get("status"), "annas": ref.get("annas"), "dry_run": dry_run, "log": log}
 
 
+# --- fetch queue (jobs written by the dashboard) --------------------------------------------------
+
+MAX_ATTEMPTS = 3
+
+
+def _job_error(result: dict[str, Any]) -> str | None:
+    """A ref counts as errored when the chain could not run (exception) or the Primo lookup itself failed."""
+    for entry in result.get("log", []):
+        if entry.get("step") == "lookup" and entry.get("outcome") == "error":
+            return f"lookup error: {entry.get('detail', '')}".strip()
+    return None
+
+
+def _ref_outcome(result: dict[str, Any]) -> str:
+    steps = [e for e in result.get("log", []) if e.get("step") not in ("annas",)]
+    return steps[-1]["outcome"] if steps else "none"
+
+
+def drain_fetch_queue(reg: Path, *, dry_run: bool = False, env: dict[str, str] | None = None,
+                      lookup: Callable[..., list[dict[str, Any]]] | None = None,
+                      annas: Callable[[str], list[dict[str, Any]]] | None = None) -> dict[str, Any]:
+    """Run `fetch_ref` for every ref of every job in queue/fetch/*.json, oldest first (file name = timestamp).
+
+    A finished job moves to queue/fetch/done/ with per-ref `results`. A job whose refs all errored stays with an
+    `attempts` counter and is retried next run; after MAX_ATTEMPTS it moves to done with status "failed".
+    Refs that already finished in an earlier attempt are not run again. A lock file keeps two drains apart."""
+    folder = reg / "queue" / "fetch"
+    report: dict[str, Any] = {"jobs": [], "dry_run": dry_run}
+    if not folder.is_dir():
+        return report
+    lock = (folder / ".drain.lock").open("a+")
+    fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+    try:
+        for path in sorted(folder.glob("*.json")):
+            try:
+                job = json.loads(path.read_text(encoding="utf-8"))
+            except ValueError:
+                report["jobs"].append({"job": path.name, "status": "unreadable"})
+                continue
+            if not isinstance(job, dict) or not job.get("course") or not isinstance(job.get("refs"), list):
+                report["jobs"].append({"job": path.name, "status": "invalid"})
+                continue
+            results: dict[str, Any] = dict(job.get("results") or {})
+            for key in job["refs"]:
+                key = str(key)
+                if results.get(key, {}).get("state") == "ok":
+                    continue
+                try:
+                    res = fetch_ref(reg, job["course"], key, task=job.get("task"), dry_run=dry_run, env=env, lookup=lookup, annas=annas)
+                except Exception as exc:  # unknown course/ref, bad refs file: record, never abort the queue
+                    results[key] = {"state": "error", "detail": str(exc)[:200]}
+                    continue
+                err = _job_error(res)
+                results[key] = ({"state": "error", "detail": err} if err else
+                                {"state": "ok", "outcome": _ref_outcome(res), "status": res.get("status"), "annas": res.get("annas")})
+            errored = [k for k, v in results.items() if v.get("state") == "error"]
+            all_errored = bool(job["refs"]) and len(errored) == len(job["refs"])
+            entry: dict[str, Any] = {"job": path.name, "course": job["course"], "results": results}
+            if all_errored:
+                attempts = int(job.get("attempts") or 0) + 1
+                entry["attempts"] = attempts
+                entry["status"] = "failed" if attempts >= MAX_ATTEMPTS else "retry"
+            else:
+                entry["status"] = "done"
+            report["jobs"].append(entry)
+            if dry_run:
+                continue
+            job.update({"results": results, "status": entry["status"], "processed_at": _stamp()})
+            if "attempts" in entry:
+                job["attempts"] = entry["attempts"]
+            if entry["status"] == "retry":
+                job["status"] = "pending"
+                save_json(path, job)
+            else:
+                save_json(folder / "done" / path.name, job)
+                path.unlink()
+    finally:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+        lock.close()
+    return report
+
+
 # --- index ----------------------------------------------------------------------------------------
 
 def render_index(slug: str, data: dict[str, Any]) -> str:
@@ -633,6 +716,10 @@ def build_parser() -> argparse.ArgumentParser:
     fe.add_argument("--hit", type=int, help="0-based Primo hit to take when several come back")
     fe.add_argument("--file", type=Path, help="a PDF already downloaded for this ref")
     fe.add_argument("--dry-run", action="store_true", help="run read-only steps, write nothing")
+
+    fq = sub.add_parser("fetch-queue", help="run the fetch chain for every job the dashboard queued (queue/fetch/*.json), oldest first")
+    fq.add_argument("--dry-run", action="store_true", help="run read-only steps, move nothing")
+    fq.add_argument("--json", action="store_true")
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))  # python -I leaves the script dir off sys.path
     import tasks as tasks_mod
@@ -709,6 +796,18 @@ def _dispatch(args: argparse.Namespace) -> int:
         print(json.dumps(fetch_ref(reg, args.course, args.ref, task=args.task, dry_run=args.dry_run, hit=args.hit, file=args.file),
                          ensure_ascii=False, indent=2))
         return 0
+
+    if args.command == "fetch-queue":
+        report = drain_fetch_queue(reg, dry_run=args.dry_run)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            for j in report["jobs"]:
+                print(f"{j['job']}\t{j.get('status')}\t{len(j.get('results', {}))} ref(s)")
+            if not report["jobs"]:
+                print("fetch queue empty")
+        failed = [j for j in report["jobs"] if j.get("status") in ("retry", "failed", "invalid", "unreadable")]
+        return 1 if failed else 0
 
     if args.command == "task":
         sys.path.insert(0, str(Path(__file__).resolve().parent))  # python -I leaves the script dir off sys.path

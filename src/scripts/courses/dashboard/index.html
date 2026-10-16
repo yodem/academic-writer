@@ -541,7 +541,7 @@ function glossText(t){
   if (t.status === 'submitted') return null;
   if (t.state === 'missing') return {red:true, text: t.missing_count === 1 ? 'חסר מקור אחד' : `חסרים ${t.missing_count} מקורות`};
   if (t.overdue) return {red:true, text:'מועד ההגשה עבר'};
-  if (t.state === 'waiting') return {text: t.items.some(i => i.queued) ? 'Claude יביא את מה שחסר בריצה הבאה' : 'מחכה לבדיקת הזיהוי האוטומטי של הטקסט'};
+  if (t.state === 'waiting') return {text: t.items.some(i => i.queued) ? 'Claude יביא את מה שחסר בריצה הלילית' : 'מחכה לבדיקת הזיהוי האוטומטי של הטקסט'};
   if (t.state === 'pending') return {text:'עוד לא כל המקורות אצלך'};
   return null;
 }
@@ -735,7 +735,7 @@ function wireDrag(v){
 
 /* ================= course ================= */
 function itemGloss(i){
-  if (i.queued) return `<span class="gloss">Claude יחפש את זה אצל אנה, בספריית בר־אילן ובכותר, בריצה הבאה.</span>`;
+  if (i.queued) return `<span class="gloss">Claude יחפש את זה אצל אנה, בספריית בר־אילן ובכותר, בריצה הלילית. מה שדורש הורדה בדפדפן יהפוך למשימה אצלך.</span>`;
   if (i.type === 'chore') return `<span class="gloss red">לא נמצא בחומרי הקורס</span>`;
   if (i.missing) return `<span class="gloss red">${i.status === 'not-found' ? 'לא נמצא בספרייה' : 'קיים רק בדפוס, בלי טקסט'}</span>`;
   if (i.ocr === 'blocked' || i.ocr === 'flagged') return `<span class="gloss"><span class="q" aria-label="לבדיקה">?</span>הזיהוי האוטומטי של הטקסט סומן לבדיקה: כדאי להשוות לסריקה לפני שמצטטים</span>`;
@@ -844,7 +844,7 @@ async function queueFetch(slug, boxes){
     await api('/api/fetch', {course:slug, refs, task: taskIds.length === 1 ? taskIds[0] : null});
     refs.forEach(k => SEL.delete(k));
     $('#toast').classList.remove('lifted');
-    toast(refs.length === 1 ? 'Claude יביא את המקור בריצה הבאה. הסימון כאן יתעדכן כשהוא יגיע.' : `Claude יביא את ${refs.length} המקורות בריצה הבאה. הסימון כאן יתעדכן כשהם יגיעו.`);
+    toast(refs.length === 1 ? 'Claude יביא את המקור בריצה הלילית. הסימון כאן יתעדכן כשהוא יגיע.' : `Claude יביא את ${refs.length} המקורות בריצה הלילית. הסימון כאן יתעדכן כשהם יגיעו.`);
     await load(true);
   } catch(e) { if (e.message !== 'forbidden') toast('הבקשה לא נשמרה: ' + esc(e.message)); }
 }
@@ -943,7 +943,7 @@ function commands(){
     const keys = [...new Set(miss.map(([i]) => i.key))];
     if (keys.length) out.push({label:`לבקש מ־Claude להביא ${keys.length === 1 ? 'את המקור החסר' : keys.length + ' מקורות חסרים'} ב${esc(c.name)}`, hint:'מקורות', run: async () => {
       const tids = [...new Set(miss.map(([, t]) => t).filter(Boolean))];
-      try { await api('/api/fetch', {course:c.slug, refs:keys, task: tids.length === 1 ? tids[0] : null}); toast(`Claude יביא ${keys.length === 1 ? 'את המקור' : 'את ' + keys.length + ' המקורות'} בריצה הבאה.`); await load(true); }
+      try { await api('/api/fetch', {course:c.slug, refs:keys, task: tids.length === 1 ? tids[0] : null}); toast(`Claude יביא ${keys.length === 1 ? 'את המקור' : 'את ' + keys.length + ' המקורות'} בריצה הלילית.`); await load(true); }
       catch(e) { if (e.message !== 'forbidden') toast('הבקשה לא נשמרה: ' + esc(e.message)); }
     }});
   });

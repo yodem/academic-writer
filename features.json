@@ -605,7 +605,7 @@
         "src/scripts/courses/tasks.py",
         "tests/courses/test_dashboard.py"
       ],
-      "status": "partial",
+      "status": "ok",
       "subfeatures": [
         {
           "id": "dashboard-state",
@@ -625,11 +625,11 @@
         {
           "id": "dashboard-fetch-queue",
           "name": "Fetch selected writes queue/fetch jobs for refs.py fetch",
-          "status": "partial",
-          "notes": "The page only queues jobs. They are run when Claude works through /academic-writer:courses (its skill says to drain queue/fetch); the nightly script does not run them yet, so a job can wait until the next Claude session."
+          "status": "ok",
+          "notes": "The page only queues jobs; the nightly script drains them with refs.py fetch-queue (retry up to 3 nights, then done/ with status failed). Downloads that need the browser become chores."
         }
       ],
-      "notes": "Parent is partial because of dashboard-fetch-queue (see its notes): nothing drains queue/fetch automatically yet."
+      "notes": "All dashboard features are ok; queue/fetch is drained nightly by refs.py fetch-queue."
     },
     {
       "id": "library-routes",
