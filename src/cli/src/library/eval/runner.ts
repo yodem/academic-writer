@@ -28,7 +28,10 @@ export type RunnerOptions = {
   progress: (line: string) => void;
 };
 
-export type RunSummary = { planned: number; done: number; skipped: number; failed: number; invalid: number; cost_usd: number };
+/** One claim whose runs were invalidated: how many runs, why in plain words, and the (clipped, wrapper-hidden) commands that broke the rule. No library is named. */
+export type InvalidClaim = { claim_id: string; runs: number; reason: string; commands: string[] };
+
+export type RunSummary = { planned: number; done: number; skipped: number; failed: number; invalid: number; cost_usd: number; invalid_runs: InvalidClaim[] };
 
 const MAX_ATTEMPTS = 2;
 
@@ -82,6 +85,11 @@ async function lookupErrors(errorLog: string): Promise<string[]> {
   return out.slice(0, 5);
 }
 
+/** The warning line for a count of invalid runs (null when there are none); the same wording in `run` and `status`. */
+export function invalidWarning(invalid: number, total: number): string | null {
+  return invalid === 0 ? null : `${invalid} of ${total} runs are INVALID: the agent ran a command outside its allowed list (a pipe, a redirect or another shell form), so those answers are thrown away and their claims are left out of the pairs`;
+}
+
 export function buildPrompt(plan: Plan, claim: Claim, wrapper: string): string {
   const shelf = plan.shelf.map((book) => `- ${book.id}: ${book.title}`).join('\n');
   return `You are a research assistant. A scholar's article makes the claim below, and you must find
@@ -93,9 +101,12 @@ ${shelf}
 Claim from the article:
 "${claim.text}"
 
-You may only use these shell commands:
-${wrapper} toc --source <book id>   # table of contents: section titles with page ranges and short hints
-${wrapper} read --source <book id> --pages <a>-<b> --text   # read pages a to b
+You may only use these two shell commands, in exactly these forms:
+${wrapper} toc --source <book id>
+${wrapper} read --source <book id> --pages <a>-<b> --text
+(toc prints the table of contents: section titles with page ranges and short hints; read prints pages a to b. A single page is --pages <a>, a short list is --pages <a>,<b>.)
+
+Run each command exactly as given, as one plain command, without pipes, redirects, \`;\`, \`&&\`, \`||\`, subshells, \`$(...)\` or backticks, and without head, grep, cut, sed or any other filter after it. A command with any of these is refused, and a refused command invalidates your whole answer: it is thrown away. You never need to filter: a read is already limited to the pages you ask for (at most ${evalLimits.maxPagesPerRead} pages per read), so read the output as it comes.
 
 Rules:
 - Start from the table of contents.
@@ -176,13 +187,46 @@ export function commandProblem(call: string, wrapper: string): string | null {
   return 'subcommand is not allowed';
 }
 
+/** Plain words for why commands were refused: from the first one that breaks the rule. */
+export function invalidReason(commands: string[], wrapper: string): string {
+  for (const call of commands) {
+    const problem = commandProblem(call, wrapper);
+    if (problem === null) continue;
+    if (problem === 'shell metacharacter') return 'a pipe, redirect or other shell character was used (commands must be run exactly as given)';
+    if (problem === 'not the library command') return 'a command that is not one of the two allowed library commands';
+    return `a command that is not allowed (${problem})`;
+  }
+  return 'a command outside the allowed list';
+}
+
+/** A stand-in path for the wrapper that stored commands show as `<wrapper>` (which is itself shell metacharacters), to re-check them. */
+const STORED_WRAPPER = '/awlib';
+
+/** One entry per claim with invalid runs, from the runs' recorded violations (route-blind: never says which library). */
+export function invalidClaims(runs: Array<Pick<Run, 'claim_id' | 'violations'>>): InvalidClaim[] {
+  const byClaim = new Map<string, { runs: number; commands: string[] }>();
+  for (const run of runs) {
+    if (run.violations.length === 0) continue;
+    const entry = byClaim.get(run.claim_id) ?? { runs: 0, commands: [] };
+    entry.runs += 1;
+    for (const command of run.violations) if (!entry.commands.includes(command)) entry.commands.push(command);
+    byClaim.set(run.claim_id, entry);
+  }
+  return [...byClaim.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([claim_id, entry]) => ({ claim_id, runs: entry.runs, reason: invalidReason(entry.commands.map((command) => command.replaceAll('<wrapper>', STORED_WRAPPER)), STORED_WRAPPER), commands: entry.commands.slice(0, 5) }));
+}
+
 /** The commands (clipped, wrapper path hidden) that break the allowed list. */
 export function commandViolations(calls: string[], wrapper: string): string[] {
   return calls.filter((call) => commandProblem(call, wrapper) !== null).map((call) => call.replaceAll(wrapper, '<wrapper>').slice(0, 120));
 }
 
-/** Characters and (when T2's estimate is present) tokens that this run's lookups returned, from the retrieval ledger. */
-export async function returnedFor(project: string, runId: string): Promise<{ chars: number | null; est: number | null }> {
+/**
+ * Characters and (when T2's estimate is present) tokens that ONE locate attempt's lookups returned, from the retrieval ledger:
+ * only lookup rows with this run id whose time falls inside the attempt's window. The run id is reused by a later generation
+ * (`run --reset`, a replaced plan, another model), so rows of an older generation are never counted.
+ */
+export async function returnedFor(project: string, runId: string, window: { fromMs: number; toMs: number }): Promise<{ chars: number | null; est: number | null }> {
   let text: string;
   try { text = await readFile(join(project, '.academic-helper', 'retrieval.jsonl'), 'utf8'); } catch { return { chars: null, est: null }; }
   let chars = 0;
@@ -192,8 +236,10 @@ export async function returnedFor(project: string, runId: string): Promise<{ cha
   for (const line of text.split('\n')) {
     if (!line.includes(runId)) continue;
     try {
-      const row = JSON.parse(line) as { row_type?: string; run_id?: string | null; primary?: { chars?: unknown; est_tokens?: unknown } };
+      const row = JSON.parse(line) as { row_type?: string; run_id?: string | null; ts?: unknown; primary?: { chars?: unknown; est_tokens?: unknown } };
       if (row.row_type !== 'lookup' || row.run_id !== runId) continue;
+      const at = typeof row.ts === 'string' ? Date.parse(row.ts) : Number.NaN;
+      if (!(at >= window.fromMs && at <= window.toMs)) continue;
       rows += 1;
       chars += typeof row.primary?.chars === 'number' ? row.primary.chars : 0;
       if (typeof row.primary?.est_tokens === 'number') { est += row.primary.est_tokens; withEstimate += 1; }
@@ -216,7 +262,7 @@ function codexArgs(model: string | null, cwd: string): string[] {
 function engineCommand(engine: Engine, env: NodeJS.ProcessEnv): string[] { return [(engine === 'claude' ? env.AW_EVAL_CLAUDE_COMMAND : env.AW_EVAL_CODEX_COMMAND)?.trim() || engine]; }
 
 /** Bump when the prompt or the allowed commands change: runs made with the old ones are not reused. */
-export const PROMPT_VERSION = 'locate-v2';
+export const PROMPT_VERSION = 'locate-v3';
 
 export function planSha(plan: Plan): string { return sha256(canonicalJson(plan)); }
 export function claimSha(claim: Claim): string { return sha256(claim.text.normalize('NFC')); }
@@ -258,6 +304,8 @@ async function locateOnce(options: RunnerOptions, claim: Claim, route: Route, gr
     const [file, ...prefix] = engineCommand(options.engine, options.env) as [string, ...string[]];
     let exit;
     let tracker: TreeTracker | undefined;
+    // This attempt's own window in the retrieval ledger (real clock: the rows are stamped by the library commands).
+    const fromMs = Date.now();
     const attempt: { tag: string; tracker?: TreeTracker } = { tag };
     group.attempts.add(attempt);
     try {
@@ -274,7 +322,7 @@ async function locateOnce(options: RunnerOptions, claim: Claim, route: Route, gr
     const parsed: Parsed = parseAgent(options.engine, exit.stdout);
     const answer = parseAnswer(parsed.text, evalLimits.maxAnswerPages);
     const budget = deriveBudget(parsed.calls, wrapper);
-    const returned = await returnedFor(options.project, runId);
+    const returned = await returnedFor(options.project, runId, { fromMs, toMs: Date.now() });
     const violations = commandViolations(parsed.calls, wrapper).slice(0, 5);
     let error: string | null = null;
     if (exit.spawnError === 'missing') error = `the ${options.engine} command was not found`;
@@ -304,6 +352,13 @@ async function locateOnce(options: RunnerOptions, claim: Claim, route: Route, gr
   }
 }
 
+/** Returned text over two attempts: an attempt with no rows adds nothing; one whose rows lack an estimate makes the estimate unknown. */
+function sumReturned(a: Pick<Run, 'returned_chars' | 'returned_est_tokens'>, b: Pick<Run, 'returned_chars' | 'returned_est_tokens'>): { chars: number | null; est: number | null } {
+  if (a.returned_chars === null && b.returned_chars === null) return { chars: null, est: null };
+  const missing = (x: Pick<Run, 'returned_chars' | 'returned_est_tokens'>): boolean => x.returned_chars !== null && x.returned_est_tokens === null;
+  return { chars: (a.returned_chars ?? 0) + (b.returned_chars ?? 0), est: missing(a) || missing(b) ? null : (a.returned_est_tokens ?? 0) + (b.returned_est_tokens ?? 0) };
+}
+
 /** One claim on one route: up to two attempts, and the totals of time, tokens and cost over both. */
 export async function locate(options: RunnerOptions, claim: Claim, route: Route, group: ChildGroup): Promise<Run> {
   let total: Run | null = null;
@@ -316,6 +371,9 @@ export async function locate(options: RunnerOptions, claim: Claim, route: Route,
     total = total === null ? { ...run, attempts: 1 } : {
       ...run, attempts: attempt, wall_ms: total.wall_ms + run.wall_ms, input_tokens: total.input_tokens + run.input_tokens, output_tokens: total.output_tokens + run.output_tokens,
       cost_usd: total.cost_usd === null && run.cost_usd === null ? null : (total.cost_usd ?? 0) + (run.cost_usd ?? 0),
+      // Each attempt measured its own window; the run's figure is the total over its attempts.
+      returned_chars: sumReturned(total, run).chars,
+      returned_est_tokens: sumReturned(total, run).est,
       agent_ms: total.agent_ms === null && run.agent_ms === null ? null : (total.agent_ms ?? 0) + (run.agent_ms ?? 0),
     };
     total.violations = violations;
@@ -342,18 +400,19 @@ export async function runAll(options: RunnerOptions): Promise<RunSummary> {
   const jobs: Array<{ claim: Claim; route: Route }> = [];
   let skipped = 0;
   let invalid = 0;
+  const invalidSeen: Array<Pick<Run, 'claim_id' | 'violations'>> = [];
   for (const claim of options.plan.claims) {
     for (const route of options.routes) {
       const existing = await readJson(runFile(options.paths, claim.id, route));
       // Reused only when it finished AND is bound to this very plan, claim text, route, engine, model and prompt.
       const current = existing !== null && validate('run', existing).length === 0 && (existing as Run).fingerprint === expectedFingerprint(options, claim, route);
       // A run that ran a forbidden command stays invalid: it is not tried again.
-      if (current && (existing as Run).violations.length > 0) invalid += 1;
+      if (current && (existing as Run).violations.length > 0) { invalid += 1; invalidSeen.push(existing as Run); }
       else if (current && (existing as Run).status === 'ok') skipped += 1;
       else jobs.push({ claim, route });
     }
   }
-  const summary: RunSummary = { planned: options.plan.claims.length * options.routes.length, done: 0, skipped, failed: 0, invalid, cost_usd: 0 };
+  const summary: RunSummary = { planned: options.plan.claims.length * options.routes.length, done: 0, skipped, failed: 0, invalid, cost_usd: 0, invalid_runs: [] };
   const group = new ChildGroup();
   const stop = (): void => group.killAll();
   let fatal: unknown = null;
@@ -379,7 +438,7 @@ export async function runAll(options: RunnerOptions): Promise<RunSummary> {
         const run = await locate(options, job.claim, job.route, group);
         await writeJson(runFile(options.paths, job.claim.id, job.route), run);
         summary.cost_usd += run.cost_usd ?? 0;
-        if (run.violations.length > 0) summary.invalid += 1;
+        if (run.violations.length > 0) { summary.invalid += 1; invalidSeen.push(run); }
         else if (run.status === 'ok') summary.done += 1;
         else summary.failed += 1;
         options.progress(`located ${summary.done + summary.failed + summary.invalid + skipped} of ${summary.planned}`);
@@ -398,5 +457,6 @@ export async function runAll(options: RunnerOptions): Promise<RunSummary> {
   if (interrupted) await new Promise<never>(() => undefined);
   if (fatal !== null) throw fatal;
   summary.cost_usd = Math.round(summary.cost_usd * 10000) / 10000;
+  summary.invalid_runs = invalidClaims(invalidSeen);
   return summary;
 }

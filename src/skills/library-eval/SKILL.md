@@ -33,7 +33,7 @@ The rule the whole skill serves: **the author never sees which library is A or B
   --article <draft-path-or-run-id> [--n <claims>] [--seed <text>] [--claims <your-claims.json>]
 ```
 
-It prints one JSON line: `eval_id` (use it in every later command), `claims`, `runs`, `estimated_usd` and `skipped` (claims left out, with reasons). Tell the author in plain words how many claims were picked and from how many sources, and what was skipped and why. `--n` sets how many claims; the code keeps it within its limit. A claim picked from the draft is a sentence with a footnote, joined to the source and printed page it cites.
+It prints one JSON line: `eval_id` (use it in every later command), `claims`, `runs`, `estimated_usd` and `skipped` (claims left out, with reasons). Tell the author in plain words how many claims were picked and from how many sources, and what was skipped and why. `--n` sets how many claims; the code keeps it within its limit. A claim picked from the draft is a sentence with a footnote, joined to the source and printed page it cites. A footnote may name its source by id or, as in a real article, by author and title ("Pedersén, South Palace Archives, 14.", "Ibid.", "שם"); the code matches it to `sources.json` and never guesses. When the output has `unmatched_notes`, tell the author how many footnotes could not be matched and why (the first few are printed, all are in `unmatched-notes.json` in the evaluation folder): usually a work that is not in `sources.json` yet, or two works by one author that the note does not tell apart.
 
 ## 3. Ask before anything is spent
 
@@ -46,7 +46,7 @@ Ask with `AskUserQuestion`. Say, from the plan output: how many helper runs (`ru
   --eval <eval_id> [--engine claude|codex] [--parallel <n>]
 ```
 
-This can take many minutes: run it in the background (the Bash tool's `run_in_background`) and check progress with `library eval status --eval <eval_id>` (it shows stage, runs finished and failed, and never names a library). Running it again continues where it stopped: finished runs are skipped. The output is `planned`, `done`, `skipped`, `failed`, `invalid` and `cost_usd`; report those only, in plain words. A few failed runs are normal; the same command retries them.
+This can take many minutes: run it in the background (the Bash tool's `run_in_background`) and check progress with `library eval status --eval <eval_id>` (it shows stage, runs finished and failed, and never names a library). Running it again continues where it stopped: finished runs are skipped. The output is `planned`, `done`, `skipped`, `failed`, `invalid` and `cost_usd`; report those only, in plain words. A few failed runs are normal; the same command retries them. **Invalid runs are different and come first in your report:** when `warning` or `invalid_runs` is present, an agent ran a command outside its two allowed ones (for example a pipe such as `| head`), so its answer was thrown away and its claim is left out of the pairs. Say how many runs and which claims, and why (`reason`), without naming a library. `library eval status` shows the same under `invalid`. Too many invalid runs leave too few pairs to judge; run again with `--reset` only if the author agrees (it costs again).
 
 ## 5. Build the pairs and the judging page
 

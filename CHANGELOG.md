@@ -25,6 +25,12 @@ All notable changes to the academic-writer plugin are documented here.
 - **Privacy wording corrected.** `docs/library-routes.md` said the library routes send nothing to Anthropic or Google, and the README did not mention indexing. That is true of the quiet background test (no model at all) but not of PageIndex indexing: choosing Gemini summaries sends the book's text to Google. The docs now say so, and also that a Claude or Codex locating run sends claims and page text to Anthropic or OpenAI.
 - **CI and the release workflow now run the `aw` tool's tests and type check** (`npm run test:cli`, `npm run typecheck:cli`) after installing its dependencies, before the Python test suite.
 
+### Fixed
+- **The session start hook works again on current Claude Code.** Claude Code 2.1.300 refuses to run a hook command that contains a `${user_config.*}` setting, so on that version the start-up step silently never ran: your Gemini key (and the optional Jev key and PageIndex command) were not passed to the session and the built-in PageIndex helper was not found. The hook now reads each plugin setting from the environment Claude Code gives it (`CLAUDE_PLUGIN_OPTION_*`, with the older `USER_CONFIG_*` names as a fallback), never prints a key, and always tells `aw library` where the built-in helper is once it is installed. Start a new Claude Code session after updating.
+- **Library comparison: locating helpers that piped the page text through `head` or `grep` no longer ruin runs unnoticed.** The prompt now says plainly that each command is run exactly as given (no pipes, redirects, `;`, `&&` or subshells), and `eval run` and `eval status` list the invalid runs, with the reason, first.
+- **Library comparison: footnotes that cite by author and title** ("Pedersén, South Palace Archives, 14.", "Ibid.", "שם") are matched to your sources (accents, capital letters and Hebrew vowel signs do not matter); notes that match no source, or two equally, are listed with the reason instead of being guessed.
+- The usage figures of a comparison run no longer add up lookups of an earlier run that had the same run id.
+
 ## [0.16.1] — 2026-10-14
 
 ### Changed

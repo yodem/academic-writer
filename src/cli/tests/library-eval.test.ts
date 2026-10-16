@@ -11,7 +11,7 @@ import { evalPaths, readJson, validate, writeJson } from '../src/library/eval/fi
 import { importJudgments, normalizeImport } from '../src/library/eval/judgments.ts';
 import { TEXT_UNAVAILABLE, buildPairs, routeLeak } from '../src/library/eval/pairs.ts';
 import { buildPlan } from '../src/library/eval/plan.ts';
-import { claimSha, fingerprintOf, planSha } from '../src/library/eval/runner.ts';
+import { PROMPT_VERSION, claimSha, fingerprintOf, planSha } from '../src/library/eval/runner.ts';
 import { mappingCommitment, seededRandom, shuffle, slotOrders } from '../src/library/eval/seal.ts';
 import { median, signTestP, wilson95 } from '../src/library/eval/stats.ts';
 import { unblind } from '../src/library/eval/unblind.ts';
@@ -209,8 +209,8 @@ async function scenario(pages: Array<Record<Route, number[] | null>>, over: { au
         answer: answer ? { book: 'T-A', pages: answer, reason: 'the trove tree node says so' } : null, tool_calls: [], n_reads: 1, n_toc: 1, pages_per_read: [2], over_budget: false, permission_denials: 0,
         wall_ms: route === 'trove' ? 4000 : 6000, agent_ms: 1000, turns: 3, input_tokens: route === 'trove' ? 1000 : 2000, output_tokens: 100, cost_usd: route === 'trove' ? 0.05 : 0.07,
         returned_chars: 500, returned_est_tokens: route === 'trove' ? 200 : 300, agent_version: '1.0.0', error: answer ? null : 'no answer',
-        plan_sha256: planSha(plan), claim_sha256: claimSha(claim), prompt_version: 'locate-v2', model_requested: 'm', violations: [], lookup_errors: [],
-        fingerprint: fingerprintOf({ plan_sha256: planSha(plan), claim_sha256: claimSha(claim), claim_id: claim.id, route, engine: 'claude', model_requested: 'm', prompt_version: 'locate-v2' }),
+        plan_sha256: planSha(plan), claim_sha256: claimSha(claim), prompt_version: PROMPT_VERSION, model_requested: 'm', violations: [], lookup_errors: [],
+        fingerprint: fingerprintOf({ plan_sha256: planSha(plan), claim_sha256: claimSha(claim), claim_id: claim.id, route, engine: 'claude', model_requested: 'm', prompt_version: PROMPT_VERSION }),
       };
       await writeJson(join(paths.runsDir, `${claim.id}-${route}.json`), run);
     }

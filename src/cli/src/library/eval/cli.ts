@@ -10,8 +10,9 @@ import { importJudgments } from './judgments.ts';
 import { evalLimits } from './limits.ts';
 import { buildPairs, routeLeak } from './pairs.ts';
 import { buildPlan } from './plan.ts';
+import type { UnmatchedNote } from './notes.ts';
 import { archiveGeneration } from './reset.ts';
-import { runAll } from './runner.ts';
+import { invalidClaims, invalidWarning, runAll } from './runner.ts';
 import { renderMarkdown, unblind } from './unblind.ts';
 import type { Engine, EvalIo, Pairs, Plan, Route, Run } from './types.ts';
 
@@ -112,15 +113,24 @@ export async function runEvalCli(argv: string[], io: EvalIo): Promise<number> {
       if (existsSync(paths.plan) && !flags.has('--force')) throw new LibraryError('usage', `ERROR library eval plan: ${evalId} already has a plan (--force replaces it)`);
       const routes = routesFrom(flags);
       const aw = makeAwRunner(project, awCommandFor(io, env), env);
+      const unmatched: UnmatchedNote[] = [];
       const plan = await buildPlan({
-        project, evalId, article: text(flags, '--article'), n: wholeNumber(flags, '--n', Math.min(12, evalLimits.maxClaims), evalLimits.maxClaims),
+        unmatched, project, evalId, article: text(flags, '--article'), n: wholeNumber(flags, '--n', Math.min(12, evalLimits.maxClaims), evalLimits.maxClaims),
         seed: text(flags, '--seed') ?? evalId, routes, claimsFile: text(flags, '--claims'), resolve: !flags.has('--no-resolve'), aw, now,
       });
-      if (plan.claims.length === 0) throw new LibraryError('usage', `ERROR library eval plan: no usable claims found (skipped: ${JSON.stringify(plan.skipped)}); check that the draft has footnotes and the sources answer on both libraries`);
+      if (plan.claims.length === 0) throw new LibraryError('usage', `ERROR library eval plan: no usable claims found (skipped: ${JSON.stringify(plan.skipped)}${unmatched.length > 0 ? `; ${unmatched.length} footnote${unmatched.length === 1 ? '' : 's'} matched no source, first: ${unmatched[0]?.reason}` : ''}); check that the draft has footnotes and the sources answer on both libraries`);
       // A replaced plan starts a new evaluation: runs of the old one are removed (they are also bound to the old plan by fingerprint).
       if (flags.has('--force')) await rm(paths.runsDir, { recursive: true, force: true });
       await writeJson(paths.plan, plan);
-      print({ eval_id: evalId, claims: plan.claims.length, runs: plan.estimate.runs, estimated_usd: plan.estimate.usd, skipped: plan.skipped, plan: paths.plan });
+      // Notes that matched no source are listed beside the plan (the plan schema is closed), never guessed.
+      const unmatchedFile = join(paths.root, 'unmatched-notes.json');
+      if (unmatched.length > 0) await writeJson(unmatchedFile, { eval_id: evalId, unmatched });
+      else await rm(unmatchedFile, { force: true });
+      print({
+        eval_id: evalId, claims: plan.claims.length, runs: plan.estimate.runs, estimated_usd: plan.estimate.usd, skipped: plan.skipped,
+        ...(unmatched.length > 0 ? { unmatched_notes: { count: unmatched.length, first: unmatched.slice(0, 5), file: unmatchedFile } } : {}),
+        plan: paths.plan,
+      });
       return 0;
     }
 
@@ -138,7 +148,12 @@ export async function runEvalCli(argv: string[], io: EvalIo): Promise<number> {
         runTimeoutMs: io.runTimeoutMs ?? (timeoutS ? wholeNumber(flags, '--timeout-s', 1, 7200) * 1000 : evalLimits.runTimeoutMs), now: io.now ?? ((): Date => new Date()),
         progress: (line) => io.err(`${line}\n`),
       });
-      print({ eval_id: evalId, ...summary, ...(archived ? { archived } : {}) });
+      const warning = invalidWarning(summary.invalid, summary.planned);
+      if (warning) {
+        io.err(`WARNING library eval run: ${warning}\n`);
+        for (const entry of summary.invalid_runs) io.err(`  claim ${entry.claim_id}: ${entry.reason}: ${entry.commands.join(' ; ')}\n`);
+      }
+      print({ eval_id: evalId, ...(warning ? { warning } : {}), ...summary, ...(archived ? { archived } : {}) });
       return 0;
     }
 
@@ -191,12 +206,18 @@ export async function runEvalCli(argv: string[], io: EvalIo): Promise<number> {
     const typed = plan as Plan;
     let finished = 0;
     let failed = 0;
+    const invalidRuns: Run[] = [];
     for (const claim of typed.claims) {
       for (const route of typed.routes) {
         const run = await readJson(runFile(paths, claim.id, route)) as Run | null;
-        if (run && validate('run', run).length === 0) { if (run.status === 'ok') finished += 1; else failed += 1; }
+        if (run && validate('run', run).length === 0) {
+          if (run.violations.length > 0) invalidRuns.push(run);
+          if (run.status === 'ok') finished += 1; else failed += 1;
+        }
       }
     }
+    const invalidClaimList = invalidClaims(invalidRuns);
+    const invalidNote = invalidWarning(invalidRuns.length, typed.claims.length * typed.routes.length);
     const pairs = await readJson(paths.pairs) as Pairs | null;
     const judgments = await readJson(paths.judgments) as { entries?: Array<{ pair_id: string }> } | null;
     const judgedIds = new Set((judgments?.entries ?? []).map((entry) => entry.pair_id));
@@ -204,7 +225,8 @@ export async function runEvalCli(argv: string[], io: EvalIo): Promise<number> {
     const unblinded = existsSync(paths.reportJson);
     const stage = unblinded ? 'unblinded' : judgments && judgedIds.size >= built && built > 0 ? 'judged' : pairs ? 'paired' : finished + failed >= typed.claims.length * typed.routes.length ? 'located' : 'planned';
     print({
-      eval_id: evalId, stage, claims: typed.claims.length,
+      eval_id: evalId, ...(invalidNote ? { warning: invalidNote } : {}), stage, claims: typed.claims.length,
+      invalid: { runs: invalidRuns.length, claims: invalidClaimList },
       runs: { expected: typed.claims.length * typed.routes.length, finished, failed },
       pairs: { built, identical: pairs?.pairs.filter((pair) => pair.auto_same).length ?? 0 },
       judged: { done: judgedIds.size, of: built }, unblinded,

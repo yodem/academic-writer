@@ -5,10 +5,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
-import { buildPrompt, commandProblem, commandViolations, deriveBudget, expectedFingerprint, returnedFor, runAll, runIdFor, wrapperScript, writeWrapper, type RunnerOptions } from '../src/library/eval/runner.ts';
+import { buildPrompt, commandProblem, invalidReason, commandViolations, deriveBudget, expectedFingerprint, returnedFor, runAll, runIdFor, wrapperScript, writeWrapper, type RunnerOptions } from '../src/library/eval/runner.ts';
 import { parseAnswer, parseClaude, parseCodex } from '../src/library/eval/agent.ts';
 import { evalPaths, readJson, validate, writeJson } from '../src/library/eval/files.ts';
 import { runEvalCli } from '../src/library/eval/cli.ts';
+import { evalLimits } from '../src/library/eval/limits.ts';
 import type { Claim, Engine, Mapping, Plan, Route, Run } from '../src/library/eval/types.ts';
 
 const NOW = new Date('2026-10-16T10:00:00.000Z');
@@ -99,6 +100,8 @@ function main() {
   const reads = mode === 'overbudget' ? 3 : 1;
   for (let i = 0; i < reads; i += 1) { const range = pages[0] + '-' + (pages[0] + (mode === 'overbudget' ? 6 : 1)); calls.push(wrapper + ' read --source ' + entry.book + ' --pages ' + range + ' --text'); run('read', '--source', entry.book, '--pages', range, '--text'); }
   if (mode === 'chain' || mode === 'fail_then_chain' || (mode === 'chain_once' && first)) calls.push(wrapper + ' toc --source ' + entry.book + ' ; cat /etc/hosts');
+  // 'pipe' trims every read like the live agents did; 'by_prompt' pipes only when the prompt does not forbid it (an agent that obeys what it is told).
+  if (mode === 'pipe' || (mode === 'by_prompt' && !/without pipes/.test(input))) calls.push(wrapper + ' read --source ' + entry.book + ' --pages 3-4 --text | head -20');
   const emit = (event) => console.log(JSON.stringify(event));
   emit({ type: 'system', subtype: 'init', model: 'claude-sonnet-5-5', claude_code_version: '9.9.9' });
   for (const command of calls) emit({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command } }] } });
@@ -124,6 +127,7 @@ process.stdin.on('end', () => {
   const emit = (event) => console.log(JSON.stringify(event));
   emit({ type: 'thread.started', thread_id: 't1' });
   emit({ type: 'item.completed', item: { id: 'i1', type: 'command_execution', command: "bash -lc '" + wrapper + " toc --source " + entry.book + "'", aggregated_output: '', exit_code: 0, status: 'completed' } });
+  if (process.env.FAKE_CODEX_MODE === 'pipe') emit({ type: 'item.completed', item: { id: 'i2', type: 'command_execution', command: "bash -lc '" + wrapper + " read --source " + entry.book + " --pages 3-4 --text | cut -c1-400'", aggregated_output: '', exit_code: 0, status: 'completed' } });
   if (process.env.FAKE_CODEX_MODE === 'offlist') emit({ type: 'item.completed', item: { id: 'i2', type: 'command_execution', command: 'cat /etc/hosts', aggregated_output: '', exit_code: 0, status: 'completed' } });
   emit({ type: 'item.completed', item: { id: 'i3', type: 'agent_message', text: '\`\`\`json\\n' + JSON.stringify({ book: entry.book, pages, reason: 'r' }) + '\\n\`\`\`' } });
   emit({ type: 'turn.completed', usage: { input_tokens: 700, cached_input_tokens: 100, output_tokens: 40 } });
@@ -629,14 +633,36 @@ test('a failing lookup is kept in the run record (redacted) while the agent only
   rmSync(w.dir, { recursive: true, force: true });
 });
 
-test('returnedFor: sums only this run id lookup rows and says null when the ledger has none', async () => {
+test('returnedFor: sums only this run id lookup rows inside the attempt window and says null when there are none', async () => {
   const w = world();
-  assert.deepEqual(await returnedFor(w.project, 'r1'), { chars: null, est: null });
-  const row = (run: string, chars: number, est?: number) => JSON.stringify({ row_type: 'lookup', run_id: run, primary: { chars, ...(est === undefined ? {} : { est_tokens: est }) } });
-  writeFileSync(join(w.project, '.academic-helper', 'retrieval.jsonl'), [row('r1', 10, 3), row('r1-extra', 99, 99), row('r1', 20, 5), 'torn {', JSON.stringify({ row_type: 'verdict', run_id: 'r1' })].join('\n'));
-  assert.deepEqual(await returnedFor(w.project, 'r1'), { chars: 30, est: 8 });
+  const window = { fromMs: Date.parse('2026-10-16T10:00:00Z'), toMs: Date.parse('2026-10-16T10:05:00Z') };
+  assert.deepEqual(await returnedFor(w.project, 'r1', window), { chars: null, est: null });
+  const row = (run: string, chars: number, est?: number, ts = '2026-10-16T10:01:00Z') => JSON.stringify({ row_type: 'lookup', run_id: run, ts, primary: { chars, ...(est === undefined ? {} : { est_tokens: est }) } });
+  writeFileSync(join(w.project, '.academic-helper', 'retrieval.jsonl'), [row('r1', 10, 3), row('r1-extra', 99, 99), row('r1', 20, 5), 'torn {', JSON.stringify({ row_type: 'verdict', run_id: 'r1', ts: '2026-10-16T10:01:00Z' })].join('\n'));
+  assert.deepEqual(await returnedFor(w.project, 'r1', window), { chars: 30, est: 8 });
   writeFileSync(join(w.project, '.academic-helper', 'retrieval.jsonl'), [row('r2', 10), row('r2', 20, 5)].join('\n'));
-  assert.deepEqual(await returnedFor(w.project, 'r2'), { chars: 30, est: null }, 'an estimate is only reported when every row has one');
+  assert.deepEqual(await returnedFor(w.project, 'r2', window), { chars: 30, est: null }, 'an estimate is only reported when every row has one');
+  // An older generation reused the run id: its rows (before the window) and rows with no usable time are not counted.
+  writeFileSync(join(w.project, '.academic-helper', 'retrieval.jsonl'), [row('r3', 100, 25, '2026-10-15T09:00:00Z'), row('r3', 40, 10), row('r3', 7, 2, 'not a time'), row('r3', 8, 2, '2026-10-16T11:00:00Z')].join('\n'));
+  assert.deepEqual(await returnedFor(w.project, 'r3', window), { chars: 40, est: 10 });
+  rmSync(w.dir, { recursive: true, force: true });
+});
+
+test('after run --reset the old generation\'s retrieval rows under the same run id are not counted', async () => {
+  const w = world();
+  const { plan, paths } = await planFor(w, 1);
+  const ledger = join(w.project, '.academic-helper', 'retrieval.jsonl');
+  const oldRow = (route: string) => JSON.stringify({ row_type: 'lookup', ts: '2026-10-15T08:00:00.000Z', run_id: `ev-run-${route}-c01`, claim_id: 'c01', primary: { chars: 1000000, est_tokens: 250000 } });
+  writeFileSync(ledger, ['trove', 'pageindex'].map(oldRow).join('\n') + '\n');
+  await runAll(options(w, plan, paths));
+  const run = await readJson(join(paths.runsDir, 'c01-trove.json')) as Run;
+  assert.ok((run.returned_chars ?? 0) > 0 && (run.returned_chars ?? 0) < 1000, `only this attempt's rows: ${run.returned_chars}`);
+  // The generation is replaced (reset) and run again: the first generation's own rows are old too.
+  const first = run.returned_chars;
+  const code = await runEvalCli(['run', '--eval', 'ev-run', '--reset'], { out: () => undefined, err: () => undefined, project: w.project, env: w.env, awCommand: w.awCommand, now: () => NOW });
+  assert.equal(code, 0);
+  const second = await readJson(join(paths.runsDir, 'c01-trove.json')) as Run;
+  assert.equal(second.returned_chars, first, 'same figure as one generation, not the sum of both');
   rmSync(w.dir, { recursive: true, force: true });
 });
 
@@ -705,5 +731,87 @@ test('a full round: plan, run, pairs, import, unblind through runEvalCli with fa
   assert.equal(final.json?.n_auto_same, 2);
   assert.equal(final.json?.enough_pairs, false);
   assert.equal((await call('status', '--eval', 'ev-full')).json?.stage, 'unblinded');
+  rmSync(w.dir, { recursive: true, force: true });
+});
+
+// ------------------------------------------------------------------ the locate prompt forbids pipes, and invalid runs are reported
+
+test('the locate prompt says plainly that every command is run exactly as given, shows the allowed forms, and names no library', async () => {
+  const w = world();
+  const { plan } = await planFor(w, 1);
+  const prompt = buildPrompt(plan, plan.claims[0] as Claim, '/tmp/x/awlib');
+  for (const needle of [/exactly as given/u, /without pipes/u, /redirects/u, /`;`/u, /`&&`/u, /subshells/u, /refused/u, /invalidate/u, /already (?:limited|capped)/u]) assert.match(prompt, needle);
+  assert.match(prompt, /\/tmp\/x\/awlib toc --source <book id>/u);
+  assert.match(prompt, /\/tmp\/x\/awlib read --source <book id> --pages <a>-<b> --text/u);
+  assert.match(prompt, new RegExp(`at most ${evalLimits.maxPagesPerRead} pages per read`, 'u'));
+  assert.ok(!/trove|page-?index/iu.test(prompt));
+  rmSync(w.dir, { recursive: true, force: true });
+});
+
+test('an agent that does what the prompt says gives valid runs; one that pipes the read output is invalid, with the reason and the command', async () => {
+  for (const engine of ['claude'] as const) {
+    const w = world();
+    const { plan, paths } = await planFor(w, 2);
+    w.env.FAKE_CLAUDE_MODE = 'by_prompt';
+    const obeying = await runAll(options(w, plan, paths, engine));
+    assert.deepEqual([obeying.done, obeying.invalid, obeying.failed, obeying.invalid_runs], [4, 0, 0, []], 'a prompt that forbids pipes is obeyed by the fake agent');
+    rmSync(paths.runsDir, { recursive: true, force: true });
+    w.env.FAKE_CLAUDE_MODE = 'pipe';
+    const piping = await runAll(options(w, plan, paths, engine));
+    assert.deepEqual([piping.done, piping.invalid], [0, 4]);
+    assert.deepEqual(piping.invalid_runs.map((entry) => [entry.claim_id, entry.runs]), [['c01', 2], ['c02', 2]]);
+    const first = piping.invalid_runs[0];
+    assert.match(String(first?.reason), /pipe|redirect|shell/u);
+    assert.ok(first?.commands.some((command) => command.includes('| head -20') && !command.includes('/awlib') && command.startsWith('<wrapper> read')));
+    assert.ok(!/trove|pageindex/iu.test(JSON.stringify(piping.invalid_runs)), 'the report names no library');
+    const run = await readJson(join(paths.runsDir, 'c01-trove.json')) as Run;
+    assert.equal(run.status, 'error');
+    // A rerun keeps them in the report (they are not tried again).
+    const again = await runAll(options(w, plan, paths, engine));
+    assert.deepEqual([again.invalid, again.invalid_runs.length], [4, 2]);
+    rmSync(w.dir, { recursive: true, force: true });
+  }
+});
+
+test('codex agents that pipe the read output are invalid too (same prompt, same guard)', async () => {
+  const w = world();
+  const { plan, paths } = await planFor(w, 1);
+  w.env.FAKE_CODEX_MODE = 'pipe';
+  const summary = await runAll(options(w, plan, paths, 'codex'));
+  assert.deepEqual([summary.done, summary.invalid, summary.invalid_runs.length], [0, 2, 1]);
+  assert.ok(summary.invalid_runs[0]?.commands.some((command) => command.includes('| cut -c1-400')));
+  rmSync(w.dir, { recursive: true, force: true });
+});
+
+test('invalidReason says in plain words why a command was refused', () => {
+  const w = '/x/awlib';
+  assert.match(invalidReason([`${w} read --source A --pages 1-2 --text | head -5`], w), /pipe|redirect/u);
+  assert.match(invalidReason(['cat /etc/hosts'], w), /not one of the two allowed/u);
+  assert.match(invalidReason([`${w} list`], w), /not allowed/u);
+});
+
+test('eval run and eval status put the invalid runs first, by claim, with the reason, and no library name', async () => {
+  const w = world();
+  mkdirSync(join(w.project, '.academic-helper'), { recursive: true });
+  const { plan, paths } = await planFor(w, 2);
+  w.env.FAKE_CLAUDE_MODE = 'pipe';
+  const out: string[] = [];
+  const err: string[] = [];
+  const io = { out: (t: string) => out.push(t), err: (t: string) => err.push(t), project: w.project, env: w.env, awCommand: w.awCommand, now: () => NOW };
+  assert.equal(await runEvalCli(['run', '--eval', 'ev-run'], io), 0, err.join(''));
+  const ran = JSON.parse(out.join('')) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  assert.equal(ran.invalid, 4);
+  assert.match(String(ran.warning), /4 of 4 runs are INVALID/u);
+  assert.deepEqual(ran.invalid_runs.map((entry: { claim_id: string }) => entry.claim_id), ['c01', 'c02']);
+  assert.match(err.join(''), /WARNING library eval run: 4 of 4 runs are INVALID/u);
+  assert.ok(!/trove|pageindex/iu.test(err.join('') + out.join('')), 'run output names no library');
+  out.length = 0;
+  assert.equal(await runEvalCli(['status', '--eval', 'ev-run'], io), 0);
+  const status = JSON.parse(out.join('')) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  assert.deepEqual([status.invalid.runs, status.invalid.claims.map((entry: { claim_id: string }) => entry.claim_id)], [4, ['c01', 'c02']]);
+  assert.match(String(status.warning), /4 of 4 runs are INVALID/u);
+  assert.ok(!/trove|pageindex/iu.test(out.join('')));
+  assert.equal(plan.claims.length, 2);
+  assert.ok(paths.root.length > 0);
   rmSync(w.dir, { recursive: true, force: true });
 });

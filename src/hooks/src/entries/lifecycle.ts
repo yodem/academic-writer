@@ -12,10 +12,7 @@ export const hooks: Record<string, (input: HookInput) => HookResult> = {
   'lifecycle/notify-stop': notifyStop,
   'lifecycle/session-dashboard': sessionDashboard,
   'lifecycle/session-env': (input) => {
-    sessionEnv(input.project_dir ?? process.env['CLAUDE_PROJECT_DIR'] ?? '.', process.env['CLAUDE_ENV_FILE'], {
-      googleApiKey: process.env['USER_CONFIG_GOOGLE_API_KEY'],
-      jevApiKey: process.env['USER_CONFIG_JEV_API_KEY'],
-    });
+    sessionEnv(input.project_dir ?? process.env['CLAUDE_PROJECT_DIR'] ?? '.', process.env['CLAUDE_ENV_FILE'], {});
     return { continue: true, suppressOutput: true };
   },
   'lifecycle/session-end-log': sessionEndLog,

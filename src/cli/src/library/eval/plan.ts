@@ -6,7 +6,8 @@ import { parsePageSpec } from '../pages.ts';
 import { stripFragment } from '../registry.ts';
 import { LibraryError } from '../types.ts';
 import type { AwRunner } from './aw.ts';
-import { draftFiles, loadRegistry, parseDraft, resolveKey, wordCount } from './claims.ts';
+import { KeyResolver, draftFiles, loadRegistry, parseDraft, wordCount } from './claims.ts';
+import type { UnmatchedNote } from './notes.ts';
 import { EVAL_ID } from './files.ts';
 import { evalLimits } from './limits.ts';
 import { seededRandom, shuffle } from './seal.ts';
@@ -26,6 +27,8 @@ export type PlanOptions = {
   resolve: boolean;
   aw: AwRunner;
   now: Date;
+  /** Receives the footnotes that matched no source (or several equally), with the reason: never guessed. */
+  unmatched?: UnmatchedNote[];
 };
 
 type Candidate = Omit<Claim, 'id' | 'auditor_verdict' | 'corrected_page'> & { order: number };
@@ -41,17 +44,18 @@ function articleFiles(project: string, article: string | undefined): { files: Ar
   throw new LibraryError('usage', `ERROR library eval plan: --article ${article} is neither a file or folder nor a run id`);
 }
 
-function candidatesFromDrafts(project: string, files: Array<{ file: string; unit: string }>, skips: SkipCounts): Candidate[] {
+function candidatesFromDrafts(project: string, files: Array<{ file: string; unit: string }>, skips: SkipCounts, unmatched?: UnmatchedNote[]): Candidate[] {
   const registry = loadRegistry(project);
   const out: Candidate[] = [];
   const seen = new Set<string>();
   let order = 0;
   for (const { file, unit } of files) {
     const draft = parseDraft(readFileSync(file, 'utf8'), unit);
+    const keysOf = new KeyResolver(project, registry, draft.definitions, unit, unmatched);
     for (const sentence of draft.sentences) {
       order += 1;
       if (wordCount(sentence.text) < evalLimits.minClaimWords) { skips.too_short += 1; continue; }
-      const keys = sentence.keys.map((key) => resolveKey(project, registry, key, draft.definitions)).filter((key) => key !== null);
+      const keys = sentence.keys.flatMap((key) => keysOf.resolve(key));
       if (keys.length === 0) { skips.no_source += 1; continue; }
       const sources = new Set(keys.map((key) => key.sourceId));
       if (sources.size > 1) { skips.multi_source += 1; continue; }
@@ -132,7 +136,7 @@ export async function buildPlan(options: PlanOptions): Promise<Plan> {
   const article = articleFiles(options.project, options.article);
   let candidates = options.claimsFile
     ? candidatesFromFile(options.project, options.claimsFile, skipped)
-    : candidatesFromDrafts(options.project, article.files, skipped);
+    : candidatesFromDrafts(options.project, article.files, skipped, options.unmatched);
   if (options.resolve) {
     const sets = await Promise.all(options.routes.map((route) => resolvableIds(options.aw, route, options.evalId)));
     const before = candidates.length;

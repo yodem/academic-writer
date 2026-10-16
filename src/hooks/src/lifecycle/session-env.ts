@@ -7,18 +7,26 @@ export type SessionEnvValues = { googleApiKey?: string; jevApiKey?: string; page
 // docs/refactor/runtime-facts.md); never export a placeholder as a key.
 function usable(v: string | undefined): v is string { return !!v && v.trim() !== '' && !v.includes('${user_config.'); }
 
+/**
+ * A plugin option as the hook process sees it. Claude Code hands every option to hooks as CLAUDE_PLUGIN_OPTION_<UPPER_KEY>; the
+ * hooks.json command must not interpolate ${user_config.*} (Claude Code 2.1.300 refuses a shell-form command that does). The
+ * USER_CONFIG_<UPPER_KEY> name is the older bridge and stays as a fallback. Example: pageindex_command arrives as
+ * CLAUDE_PLUGIN_OPTION_PAGEINDEX_COMMAND and leaves as AW_PAGEINDEX_COMMAND.
+ */
+export function pluginOption(key: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const upper = key.toUpperCase();
+  return [env[`CLAUDE_PLUGIN_OPTION_${upper}`], env[`USER_CONFIG_${upper}`]].find(usable);
+}
+
 export function sessionEnv(projectDir: string, envFile: string | undefined, values: SessionEnvValues): void {
   if (!existsSync(join(projectDir, '.academic-helper', 'profile.md')) || !envFile) return;
   const lines: string[] = [];
-  if (usable(values.googleApiKey)) lines.push(`export GOOGLE_API_KEY='${shellQuote(values.googleApiKey)}'`);
-  if (usable(values.jevApiKey)) lines.push(`export JEV_API_KEY='${shellQuote(values.jevApiKey)}'`);
-  // Not a secret: how to start the optional PageIndex library (read by `aw library`). Claude Code hands
-  // plugin options to hook processes as CLAUDE_PLUGIN_OPTION_<KEY>, so the value never passes through
-  // the shell-form hook command (a ${user_config.*} there would be re-parsed by the shell). The
-  // USER_CONFIG_ name is the older bridge and stays as a fallback.
-  const pageindex = 'pageindexCommand' in values
-    ? values.pageindexCommand
-    : [process.env['CLAUDE_PLUGIN_OPTION_PAGEINDEX_COMMAND'], process.env['USER_CONFIG_PAGEINDEX_COMMAND']].find(usable);
+  const googleApiKey = 'googleApiKey' in values ? values.googleApiKey : pluginOption('google_api_key');
+  const jevApiKey = 'jevApiKey' in values ? values.jevApiKey : pluginOption('jev_api_key');
+  if (usable(googleApiKey)) lines.push(`export GOOGLE_API_KEY='${shellQuote(googleApiKey)}'`);
+  if (usable(jevApiKey)) lines.push(`export JEV_API_KEY='${shellQuote(jevApiKey)}'`);
+  // Not a secret: how to start the optional PageIndex library (read by `aw library`).
+  const pageindex = 'pageindexCommand' in values ? values.pageindexCommand : pluginOption('pageindex_command');
   if (usable(pageindex)) lines.push(`export AW_PAGEINDEX_COMMAND='${shellQuote(pageindex.trim())}'`);
   // The built-in PageIndex helper (`aw library install`) lives in <plugin data>/pageindex. Not a secret: it tells `aw library` where to
   // look, because the Bash tool gets no CLAUDE_PLUGIN_DATA. Exported only once installed.json exists, so nothing changes for a researcher

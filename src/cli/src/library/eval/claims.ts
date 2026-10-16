@@ -4,6 +4,7 @@ import { PLAIN_ID } from '../backends.ts';
 import { printedToTrove } from '../pages.ts';
 import { findSource, stripFragment } from '../registry.ts';
 import { evalLimits } from './limits.ts';
+import { NoteResolver, loadSourceCards, type NoteSource, type UnmatchedNote } from './notes.ts';
 
 // ---------------------------------------------------------------- reading a draft
 
@@ -144,6 +145,49 @@ function fromLocator(locator: string): { trove: number[]; printed: number[] } {
   const original = /\borig\.?\s*(\d{1,6})/iu.exec(locator);
   if (trove) return { trove: [Number(trove[1])], printed: original ? [Number(original[1])] : [] };
   return { trove: [], printed: pagesNamedIn(locator) };
+}
+
+/** A source found from a note's author and title, with its cited printed pages worked out into Trove pages where the source has a page map. */
+export function resolveNoteSource(project: string, source: NoteSource): ResolvedKey {
+  let trove: number[] = [];
+  if (source.printed.length > 0) {
+    const map = findSource(project, source.sourceId)?.pageMap;
+    if (map) { try { trove = printedToTrove(source.printed, map, project); } catch { trove = []; } }
+  }
+  return { sourceId: source.sourceId, title: source.title, printed: source.printed, trove };
+}
+
+/**
+ * The sources a sentence's footnote keys stand for. A key is tried as a source id (or evidence passage id) first; a note
+ * that is not one is matched by author and title against sources.json (see notes.ts). Notes that match nothing, or
+ * several sources equally, are added to `unmatched` once each and contribute no source.
+ */
+export class KeyResolver {
+  private readonly resolver: NoteResolver;
+  private readonly cards: ReturnType<typeof loadSourceCards>;
+  private readonly byKey = new Map<string, ResolvedKey[]>();
+
+  constructor(private readonly project: string, private readonly registry: Registry, private readonly definitions: Map<string, string>, private readonly unit: string, private readonly unmatched: UnmatchedNote[] | undefined) {
+    this.cards = loadSourceCards(project);
+    this.resolver = new NoteResolver(this.cards);
+  }
+
+  resolve(key: string): ResolvedKey[] {
+    const cached = this.byKey.get(key);
+    if (cached) return cached;
+    const byId = resolveKey(this.project, this.registry, key, this.definitions);
+    let out: ResolvedKey[] = [];
+    if (byId) {
+      this.resolver.noteResolvedByKey(key, { sourceId: byId.sourceId, title: byId.title, printed: byId.printed });
+      out = [byId];
+    } else if (this.cards.length > 0) {
+      const result = this.resolver.resolve(key, this.definitions.get(key) ?? '');
+      out = result.sources.map((source) => resolveNoteSource(this.project, source));
+      for (const item of result.unmatched) this.unmatched?.push({ unit: this.unit, note: key, text: item.text.slice(0, 200), reason: item.reason });
+    }
+    this.byKey.set(key, out);
+    return out;
+  }
 }
 
 /** Which source a footnote key stands for, its title and the pages the citation names; null when it names none we know. */
