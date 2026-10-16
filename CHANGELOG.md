@@ -4,6 +4,9 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- **Course dashboard:** a task is identified by its course and id together, so two courses with the same spec task id (`s-t2`) no longer submit, undo or move each other's task; saved agenda moves are scoped by course. The page also refreshes on its own at local midnight, when a due time passes, when a task enters the 72-hour window and when the undo window closes, even if no registry file changed.
+
 ## [0.17.0] — 2026-10-16
 
 ### Added
