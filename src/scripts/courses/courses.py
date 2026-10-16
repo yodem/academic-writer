@@ -1194,7 +1194,11 @@ def main(argv: list[str] | None = None) -> int:
     bookmarks_p.add_argument("--all", action="store_true", help="every course in the registry")
     bookmarks_p.add_argument("--print-script", action="store_true", help="print the AppleScript and exit without touching Chrome")
     bookmarks_p.add_argument("--check", action="store_true", help="read-only: exit 1 when applying would change Chrome")
+    import dashboard
+    dashboard.add_parser(sub)
     args = parser.parse_args(argv)
+    if args.command == "dashboard":  # before the registry is read: a fresh install shows the empty state
+        return dashboard.run(args)
     try:
         if args.command == "import-docx":
             stubs = parse_docx(args.docx)
