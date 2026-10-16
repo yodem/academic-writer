@@ -22277,7 +22277,7 @@ var require_stream = __commonJS({
       };
       duplex._final = function(callback) {
         if (ws.readyState === ws.CONNECTING) {
-          ws.once("open", function open5() {
+          ws.once("open", function open4() {
             duplex._final(callback);
           });
           return;
@@ -22298,7 +22298,7 @@ var require_stream = __commonJS({
       };
       duplex._write = function(chunk, encoding, callback) {
         if (ws.readyState === ws.CONNECTING) {
-          ws.once("open", function open5() {
+          ws.once("open", function open4() {
             duplex._write(chunk, encoding, callback);
           });
           return;
@@ -41717,6 +41717,46 @@ var PLAIN_ID = /^[A-Za-z0-9_.#:-]+$/u;
 function isPlainId(id) {
   return PLAIN_ID.test(id);
 }
+var BASE_NAMES = /* @__PURE__ */ new Set([
+  "PATH",
+  "HOME",
+  "USER",
+  "LOGNAME",
+  "LANG",
+  "LANGUAGE",
+  "TMPDIR",
+  "TEMP",
+  "TMP",
+  "TERM",
+  "SHELL",
+  "TZ",
+  "SSH_AUTH_SOCK",
+  "SYSTEMROOT",
+  "SystemRoot",
+  "WINDIR",
+  "COMSPEC",
+  "PATHEXT",
+  "USERPROFILE",
+  "APPDATA",
+  "LOCALAPPDATA",
+  "PROGRAMDATA"
+]);
+var BASE_PREFIXES = ["LC_", "XDG_"];
+var TROVE_PREFIXES = ["TROVE_", "CANDLEKEEP_", "CK_"];
+var INSTALL_NAMES = /* @__PURE__ */ new Set(["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "no_proxy", "all_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"]);
+var SECRET_NAME = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH)/iu;
+var VALID_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/u;
+var PASS_ENV = "AW_LIBRARY_PASS_ENV";
+function allowedEnv(env, kind = "pageindex") {
+  const out = {};
+  const listed = new Set((env[PASS_ENV] ?? "").split(",").map((name) => name.trim()).filter((name) => VALID_NAME.test(name)));
+  for (const [name, value] of Object.entries(env)) {
+    if (value === void 0) continue;
+    const allowed = BASE_NAMES.has(name) || BASE_PREFIXES.some((prefix) => name.startsWith(prefix)) || name.startsWith("AW_") && !SECRET_NAME.test(name) || kind === "trove" && TROVE_PREFIXES.some((prefix) => name.startsWith(prefix)) || kind === "install" && (INSTALL_NAMES.has(name) || name.startsWith("PIP_")) || listed.has(name);
+    if (allowed) out[name] = value;
+  }
+  return out;
+}
 function parseJson(text4, what) {
   try {
     return JSON.parse(text4);
@@ -41906,7 +41946,7 @@ var PageIndexBackend = class {
 
 // src/library/config.ts
 import { existsSync as existsSync4, readFileSync as readFileSync5 } from "node:fs";
-import { basename as basename5, dirname as dirname2, isAbsolute as isAbsolute2, join as join7, resolve as resolve6 } from "node:path";
+import { basename as basename5, dirname as dirname3, isAbsolute as isAbsolute2, join as join7, resolve as resolve6 } from "node:path";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -45951,9 +45991,10 @@ var NEVER = INVALID;
 
 // src/library/install.ts
 import { createHash as createHash2 } from "node:crypto";
-import { existsSync as existsSync3, lstatSync, readFileSync as readFileSync4 } from "node:fs";
-import { mkdir, open as open2, readFile, rename, rm, writeFile as writeFile2 } from "node:fs/promises";
-import { basename as basename4, join as join6, resolve as resolve5 } from "node:path";
+import { spawn as spawn4 } from "node:child_process";
+import { existsSync as existsSync3, lstatSync, readFileSync as readFileSync4, realpathSync as realpathSync2 } from "node:fs";
+import { mkdir, readFile, rename, rm, writeFile as writeFile2 } from "node:fs/promises";
+import { basename as basename4, dirname as dirname2, join as join6, resolve as resolve5 } from "node:path";
 init_thresholds();
 
 // src/library/python-discovery.ts
@@ -46093,10 +46134,8 @@ function matchesPinned(installed, pinned) {
   const tier = pinned.tiers[installed.tier];
   return installed.requirements_sha256 === tier.requirements_sha256 && installed.pilib_version === pinned.pilib_version && (installed.tier === "core" || installed.pageindex_commit === pinned.pageindex.commit);
 }
-var SECRET_NAMES = ["GOOGLE_API_KEY", "GEMINI_API_KEY", "JEV_API_KEY"];
 function childEnv(env, options = {}) {
-  const clean = { ...env };
-  for (const name of SECRET_NAMES) delete clean[name];
+  const clean = allowedEnv(env, options.kind ?? "pageindex");
   if (options.gemini) clean.GEMINI_API_KEY = options.gemini;
   return clean;
 }
@@ -46156,37 +46195,101 @@ function requirementsFile(root, pinned, tier) {
 async function sha256File(file) {
   return createHash2("sha256").update(await readFile(file)).digest("hex");
 }
-function processAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error.code === "EPERM";
-  }
+var LOCK_SCRIPT = [
+  "import os, sys",
+  "fd = os.open(sys.argv[1], os.O_CREAT | os.O_RDWR, 0o600)",
+  "try:",
+  '    if os.name == "nt":',
+  "        import msvcrt",
+  "        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)",
+  "    else:",
+  "        import fcntl",
+  "        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)",
+  "except OSError:",
+  '    print("busy", flush=True)',
+  "    sys.exit(3)",
+  'print("locked", flush=True)',
+  "sys.stdin.read()"
+].join("\n");
+async function takeLock(file, python, env, what) {
+  const child = spawn4(python, ["-c", LOCK_SCRIPT, file], { stdio: ["pipe", "pipe", "ignore"], env: childEnv(env), windowsHide: true });
+  let closed = false;
+  const closing = new Promise((done) => {
+    child.once("close", () => {
+      closed = true;
+      done();
+    });
+  });
+  const answer = await new Promise((settle) => {
+    let text4 = "";
+    const timer = setTimeout(() => {
+      settle("timeout");
+    }, install.probeTimeoutMs);
+    child.stdout?.setEncoding("utf8").on("data", (chunk) => {
+      text4 += chunk;
+      if (text4.includes("\n")) {
+        clearTimeout(timer);
+        settle(text4.trim());
+      }
+    });
+    child.once("error", () => {
+      clearTimeout(timer);
+      settle("error");
+    });
+    child.once("close", () => {
+      clearTimeout(timer);
+      settle(text4.trim() || "closed");
+    });
+  });
+  const release = async () => {
+    if (closed) return;
+    child.stdin?.end();
+    const killer = setTimeout(() => {
+      child.kill("SIGKILL");
+    }, 3e3);
+    await closing;
+    clearTimeout(killer);
+  };
+  if (answer === "locked") return release;
+  child.kill("SIGKILL");
+  if (answer === "busy") throw new LibraryError("exit", `ERROR library ${what}: another install or uninstall is already running; wait for it to finish.`);
+  throw new LibraryError("config", `ERROR library ${what}: could not take the install lock (the Python at ${python} did not start properly). Try another with --python.`);
 }
-async function takeLock(file) {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+function guardHome(home, dataRoot, what) {
+  const refuse = (why) => new LibraryError("config", `ERROR library ${what}: ${why}`);
+  if (!dataRoot) throw refuse("the plugin's data folder is not known (pass --data-dir <folder>), so the helper folder cannot be checked; nothing was touched.");
+  let root;
+  try {
+    root = realpathSync2(resolve5(dataRoot));
+  } catch {
+    throw refuse(`the plugin's data folder ${dataRoot} cannot be resolved; nothing was touched.`);
+  }
+  const expected = join6(root, "pageindex");
+  let actual;
+  if (existsSync3(home) || isLink(home)) {
+    if (isLink(home)) throw refuse(`${home} is a symbolic link; refusing to use it.`);
+    actual = realpathSync2(home);
+  } else {
     try {
-      const handle = await open2(file, "wx");
-      await handle.writeFile(`${process.pid}
-`);
-      await handle.close();
-      return async () => {
-        await rm(file, { force: true });
-      };
-    } catch (error) {
-      if (error.code !== "EEXIST") throw error;
-      const holder = Number((await readFile(file, "utf8").catch(() => "")).trim());
-      if (Number.isInteger(holder) && holder > 0 && processAlive(holder)) throw new LibraryError("exit", "ERROR library install: another install is already running; wait for it to finish.");
-      await rm(file, { force: true });
+      actual = join6(realpathSync2(dirname2(home)), basename4(home));
+    } catch {
+      actual = resolve5(home);
     }
   }
-  throw new LibraryError("exit", "ERROR library install: could not start (the install lock is stuck); remove install.lock in the helper folder and try again.");
+  if (actual !== expected) throw refuse(`${home} is not the plugin's own helper folder (${expected}); nothing was touched.`);
+  for (const path2 of [installPaths(home).venv, installPaths(home).library, installPaths(home).installed]) {
+    if (isLink(path2)) throw refuse(`${path2} is a symbolic link; refusing to use it.`);
+  }
 }
 async function writeAtomic(file, text4) {
   const temp = `${file}.${process.pid}.tmp`;
-  await writeFile2(temp, text4, "utf8");
-  await rename(temp, file);
+  try {
+    await writeFile2(temp, text4, "utf8");
+    await rename(temp, file);
+  } catch (error) {
+    await rm(temp, { force: true });
+    throw error;
+  }
 }
 async function pilibHealth(command3, env, timeoutMs = install.healthTimeoutMs) {
   try {
@@ -46215,7 +46318,20 @@ async function runInstall(options) {
   const system = chosen.tier === "structure" ? pinned.tiers.structure.system_libraries : void 0;
   const warnings = [...chosen.notes];
   if (!chosen.exact) warnings.push(`The packages were locked with Python ${pinned.tiers[chosen.tier].locked_with_python}; this computer uses ${chosen.python.minorName}. The install checks that it works afterwards.`);
+  const venvVerdict = async () => {
+    if (!existsSync3(paths.python)) return null;
+    const minimum = chosen.tier === "structure" ? install.minPython : install.minPythonCore;
+    const existing = await probePython(paths.python, childEnv(options.env));
+    if (!existing) return "the existing private Python folder no longer starts";
+    if (!atLeast(existing, minimum)) return `the existing private Python folder uses Python ${existing.version}, and this tier needs Python ${minimum} or newer`;
+    return null;
+  };
+  let rebuild = await venvVerdict();
+  const rebuildWarning = (reason) => `${reason[0]?.toUpperCase()}${reason.slice(1)}, so it will be removed and rebuilt with Python ${chosen.python.version}. The indexed books are kept.`;
+  if (rebuild) warnings.push(rebuildWarning(rebuild));
   const plan2 = {
+    rebuild_venv: rebuild !== null,
+    rebuild_reason: rebuild,
     tier: chosen.tier,
     requested_tier: chosen.requested,
     python: { path: chosen.python.path, version: chosen.python.version },
@@ -46233,21 +46349,30 @@ async function runInstall(options) {
   if (!options.yes) {
     throw new LibraryError("usage", `ERROR library install: this adds about ${install.approxSizeMb[chosen.tier]} MB of Python packages to ${home}. Ask the researcher first, then run it again with --yes. (--dry-run shows the plan without changing anything.)`);
   }
+  const dataRoot = options.dataDir ?? options.env.CLAUDE_PLUGIN_DATA ?? null;
+  if (dataRoot) await mkdir(resolve5(dataRoot), { recursive: true });
+  guardHome(home, dataRoot, "install");
   await mkdir(home, { recursive: true });
-  const release = await takeLock(paths.lock);
+  const release = await takeLock(paths.lock, chosen.python.path, options.env, "install");
+  let created = false;
+  const abandon = async () => {
+    if (created) await rm(paths.venv, { recursive: true, force: true });
+  };
   try {
-    const env = childEnv({ ...options.env, PIP_DISABLE_PIP_VERSION_CHECK: "1", PIP_NO_INPUT: "1", PYTHONNOUSERSITE: "1" });
+    const env = { ...childEnv(options.env, { kind: "install" }), PIP_DISABLE_PIP_VERSION_CHECK: "1", PIP_NO_INPUT: "1", PYTHONNOUSERSITE: "1" };
     const command3 = installedCommand(home, options.pluginRoot);
+    const verdict = await venvVerdict();
+    if (verdict !== null && rebuild === null) warnings.push(rebuildWarning(verdict));
+    rebuild = verdict;
     const existing = readInstalled(home);
-    if (existing && existing.tier === chosen.tier && matchesPinned(existing, pinned) && existsSync3(paths.python)) {
+    if (!rebuild && existing && existing.tier === chosen.tier && matchesPinned(existing, pinned) && existsSync3(paths.python)) {
       const health2 = await pilibHealth(command3, env);
       if (health2 && health2.tier === chosen.tier) return { ok: true, action: "already_installed", ...plan2, tier: health2.tier, installed_at: existing.installed_at, notes: ["Already installed and up to date."] };
     }
-    if (existsSync3(paths.python)) {
-      const alive = await runCommand([paths.python], ["-c", "pass"], { timeoutMs: install.probeTimeoutMs, maxBuffer: 65536, env }).then(() => true, () => false);
-      if (!alive) await rm(paths.venv, { recursive: true, force: true });
+    if (rebuild) {
+      await rm(paths.installed, { force: true });
+      await rm(paths.venv, { recursive: true, force: true });
     }
-    let created = false;
     if (!existsSync3(paths.python)) {
       try {
         await runCommand([chosen.python.path], ["-m", "venv", paths.venv], { timeoutMs: install.venvTimeoutMs, maxBuffer: 1048576, env });
@@ -46257,27 +46382,23 @@ async function runInstall(options) {
         throw stepFailure("creating the private Python folder", error);
       }
     }
-    const abandon = async () => {
-      if (created) await rm(paths.venv, { recursive: true, force: true });
-    };
     try {
       await runCommand([paths.python], ["-m", "pip", "install", "--quiet", "--require-hashes", "--no-input", "--disable-pip-version-check", "-r", requirements], { timeoutMs: install.pipTimeoutMs, maxBuffer: 16777216, env });
     } catch (error) {
-      await abandon();
       throw stepFailure("installing the packages", error);
     }
     await mkdir(paths.library, { recursive: true });
     const health = await pilibHealth(command3, env);
-    if (!health) await abandon();
     if (!health) throw new LibraryError("exit", "ERROR library install: the packages installed, but the helper does not start. Run `aw library install --dry-run` to see which Python was used, and try another with --python.");
     if (health.tier !== "core" && health.tier !== "structure") throw new LibraryError("exit", "ERROR library install: the packages installed, but the summary helper (LiteLLM) cannot be loaded. Try another Python with --python.");
     const degraded = chosen.tier === "structure" && health.tier !== "structure";
     if (degraded) warnings.push(`The full helper could not start (${health.weasyprint ? "PageIndex did not load" : "the PDF library WeasyPrint did not load"}), so the basic helper is ready and books with no table of contents are not covered yet.${system?.macos && process.platform === "darwin" ? ` On a Mac, run: ${system.macos}, then run this install again.` : system?.debian_ubuntu && process.platform === "linux" ? ` On Linux, run: ${system.debian_ubuntu}, then run this install again.` : " Install the pango system library, then run this install again."}`);
+    const real = await probePython(paths.python, env);
     const record = {
       schema: 1,
       tier: health.tier === "structure" ? "structure" : "core",
       requested_tier: chosen.tier,
-      python: chosen.python.version,
+      python: real?.version ?? chosen.python.version,
       pageindex_commit: health.tier === "structure" ? pinned.pageindex.commit : null,
       requirements_sha256: expected,
       pilib_version: health.pilib_version,
@@ -46287,7 +46408,10 @@ async function runInstall(options) {
     if (degraded) record.requirements_sha256 = pinned.tiers.core.requirements_sha256;
     await writeAtomic(paths.installed, `${JSON.stringify(record, null, 2)}
 `);
-    return { ok: true, action: "installed", ...plan2, tier: record.tier, degraded, pilib_version: record.pilib_version, litellm: record.litellm ?? null, installed_at: record.installed_at, warnings };
+    return { ok: true, action: "installed", ...plan2, rebuild_venv: rebuild !== null, rebuild_reason: rebuild, tier: record.tier, degraded, pilib_version: record.pilib_version, litellm: record.litellm ?? null, installed_at: record.installed_at, warnings };
+  } catch (error) {
+    await abandon();
+    throw error;
   } finally {
     await release();
   }
@@ -46295,14 +46419,22 @@ async function runInstall(options) {
 async function runUninstall(options) {
   const home = resolveHome(options.env, options.dataDir);
   if (!home) throw new LibraryError("config", "ERROR library uninstall: the plugin's data folder is not known. Pass --data-dir <folder>.");
-  if (basename4(home) !== "pageindex") throw new LibraryError("config", `ERROR library uninstall: ${home} is not a folder named "pageindex"; refusing to delete from it.`);
+  guardHome(home, options.dataDir ?? options.env.CLAUDE_PLUGIN_DATA ?? null, "uninstall");
   const paths = installPaths(home);
-  const present = [paths.venv, paths.installed, paths.lock, ...options.purgeLibrary ? [paths.library] : []].filter((path2) => existsSync3(path2) || isLink(path2));
   if (!options.yes) {
     throw new LibraryError("usage", `ERROR library uninstall: this removes the helper's private Python folder${options.purgeLibrary ? " and every indexed book" : " (the indexed books are kept)"} in ${home}. Ask the researcher first, then run it again with --yes.`);
   }
-  for (const path2 of present) await rm(path2, { recursive: true, force: true });
-  return { ok: true, removed: present.map((path2) => basename4(path2)), library_kept: options.purgeLibrary ? null : existsSync3(paths.library) ? paths.library : null, home };
+  if (!existsSync3(home)) return { ok: true, removed: [], library_kept: null, home };
+  const python = (await discoverPythons(childEnv(options.env)))[0]?.path ?? (process.platform !== "win32" && existsSync3(paths.python) ? paths.python : null);
+  if (!python) throw new LibraryError("config", "ERROR library uninstall: no Python was found to hold the install lock, so nothing was removed. Install Python, or remove the folder by hand.");
+  const release = await takeLock(paths.lock, python, options.env, "uninstall");
+  try {
+    const present = [paths.venv, paths.installed, ...options.purgeLibrary ? [paths.library] : []].filter((path2) => existsSync3(path2));
+    for (const path2 of present) await rm(path2, { recursive: true, force: true });
+    return { ok: true, removed: present.map((path2) => basename4(path2)), library_kept: options.purgeLibrary ? null : existsSync3(paths.library) ? paths.library : null, home };
+  } finally {
+    await release();
+  }
 }
 function isLink(path2) {
   try {
@@ -46339,8 +46471,8 @@ function optionalDataDir() {
   }
 }
 function optionalPluginRoot(env) {
-  const bin = dirname2(resolve6(process.argv[1] ?? ""));
-  if (basename5(bin) === "bin") return dirname2(bin);
+  const bin = dirname3(resolve6(process.argv[1] ?? ""));
+  if (basename5(bin) === "bin") return dirname3(bin);
   return env.CLAUDE_PLUGIN_ROOT?.trim() || null;
 }
 function installedPageindex(env, options) {
@@ -46425,8 +46557,8 @@ function profileTroveEnabled(project) {
 // src/library/ledger.ts
 import { createHash as createHash3 } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, mkdir as mkdir2, open as open3, readFile as readFile2, readdir, realpath, rename as rename2, rm as rm2, stat as stat3 } from "node:fs/promises";
-import { basename as basename6, dirname as dirname3, join as join8, sep } from "node:path";
+import { lstat, mkdir as mkdir2, open as open2, readFile as readFile2, readdir, realpath, rename as rename2, rm as rm2, stat as stat3 } from "node:fs/promises";
+import { basename as basename6, dirname as dirname4, join as join8, sep } from "node:path";
 
 // ../schemas/retrieval-row.schema.json
 var retrieval_row_schema_default = {
@@ -46774,7 +46906,7 @@ async function appendRow(project, row) {
     const line = Buffer.from(`${JSON.stringify(row)}
 `, "utf8");
     if (line.length > limits2.ledger.maxRowBytes) return { ok: false, reason: "row is larger than the ledger allows" };
-    const handle = await open3(file, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | (constants.O_NOFOLLOW ?? 0), 420);
+    const handle = await open2(file, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | (constants.O_NOFOLLOW ?? 0), 420);
     try {
       const { bytesWritten } = await handle.write(line, 0, line.length);
       if (bytesWritten !== line.length) return { ok: false, reason: "the ledger write was cut short" };
@@ -46831,12 +46963,12 @@ function spoolFile(project, lookupId, kind) {
 }
 async function writeSpool(project, file, value) {
   try {
-    if (dirname3(file) !== spoolDir(project)) return false;
+    if (dirname4(file) !== spoolDir(project)) return false;
     const dir = await containedDir(project, ["retrieval", "spool"], true);
     if (!dir) return false;
     const target = join8(dir, basename6(file));
     const temp = `${target}.${process.pid}.${Date.now().toString(36)}.tmp`;
-    const handle = await open3(temp, "wx", 420);
+    const handle = await open2(temp, "wx", 420);
     try {
       await handle.writeFile(JSON.stringify(value), "utf8");
     } finally {
@@ -46899,9 +47031,9 @@ async function sweepSpool(project, now = Date.now()) {
 }
 
 // src/library/shadow.ts
-import { spawn as spawn4 } from "node:child_process";
+import { spawn as spawn5 } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdir as mkdir3, open as open4, readFile as readFile3, realpath as realpath2, rm as rm3, stat as stat4 } from "node:fs/promises";
+import { mkdir as mkdir3, open as open3, readFile as readFile3, realpath as realpath2, rm as rm3, stat as stat4 } from "node:fs/promises";
 import { join as join9, resolve as resolve7 } from "node:path";
 init_thresholds();
 
@@ -47030,7 +47162,7 @@ async function acquireSlot(project) {
     const nonce = randomBytes(12).toString("hex");
     for (let slot = 0; slot < limits3.shadow.maxConcurrent; slot += 1) {
       try {
-        const handle = await open4(slotFile(dir, slot), "wx", 420);
+        const handle = await open3(slotFile(dir, slot), "wx", 420);
         try {
           await handle.writeFile(JSON.stringify({ pid: process.pid, nonce, ts: nowIso() }), "utf8");
         } finally {
@@ -47051,7 +47183,7 @@ async function claimSlot(project, held, pid) {
     const dir = await containedDir(project, ["retrieval", "active"]);
     if (!dir) return;
     const file = slotFile(dir, held.slot);
-    const handle = await open4(file, "r+");
+    const handle = await open3(file, "r+");
     try {
       const current = await readToken(file);
       if (current?.nonce !== held.nonce) return;
@@ -47091,13 +47223,13 @@ async function startShadow(spec, mode, env, runner2) {
     const dir = await containedDir(spec.project, ["retrieval"], true);
     if (!dir) throw new Error("no retrieval folder");
     specPath = join9(dir, `spec-${spec.lookup_id}.json`);
-    const handle = await open4(specPath, "wx", 420);
+    const handle = await open3(specPath, "wx", 420);
     try {
       await handle.writeFile(JSON.stringify({ ...spec, slot: slot.slot, slot_nonce: slot.nonce }), "utf8");
     } finally {
       await handle.close();
     }
-    const child = spawn4(process.execPath, [entry, "library", "_shadow", specPath], { detached: true, stdio: "ignore", windowsHide: true, env, cwd: spec.project });
+    const child = spawn5(process.execPath, [entry, "library", "_shadow", specPath], { detached: true, stdio: "ignore", windowsHide: true, env, cwd: spec.project });
     child.on("error", () => void 0);
     child.unref();
     if (child.pid) await claimSlot(spec.project, slot, child.pid);
@@ -47315,10 +47447,10 @@ var Library = class _Library {
   /** AW_LIBRARY_TIMEOUT_MS replaces every timeout (test and troubleshooting seam; the defaults live in thresholds.json). */
   override;
   makeTrove(timeoutMs, readAllTimeoutMs) {
-    return new TroveBackend({ command: this.config.troveCommand, env: this.env, timeoutMs, readAllTimeoutMs, cwd: this.project, scope: this.scope });
+    return new TroveBackend({ command: this.config.troveCommand, env: allowedEnv(this.env, "trove"), timeoutMs, readAllTimeoutMs, cwd: this.project, scope: this.scope });
   }
   makePageIndex(timeoutMs, readAllTimeoutMs) {
-    return new PageIndexBackend({ command: this.config.pageindexCommand, env: this.env, timeoutMs, readAllTimeoutMs, cwd: this.project, scope: this.scope });
+    return new PageIndexBackend({ command: this.config.pageindexCommand, env: allowedEnv(this.env, "pageindex"), timeoutMs, readAllTimeoutMs, cwd: this.project, scope: this.scope });
   }
   get shelf() {
     this.shelfCache ??= loadShelf(this.config.shelfPath);
@@ -48031,7 +48163,7 @@ function voiceSync(direction) {
 
 // src/revise.ts
 import { appendFileSync as appendFileSync6, mkdirSync as mkdirSync6, readFileSync as readFileSync9, writeFileSync as writeFileSync4 } from "node:fs";
-import { dirname as dirname4, join as join13 } from "node:path";
+import { dirname as dirname5, join as join13 } from "node:path";
 init_thresholds();
 var dataOverride2;
 var confirm = async () => false;
@@ -48039,7 +48171,7 @@ function voiceDir() {
   return dataOverride2 ?? join13(dataDir(), "voice");
 }
 function append(file, row) {
-  mkdirSync6(dirname4(file), { recursive: true });
+  mkdirSync6(dirname5(file), { recursive: true });
   appendFileSync6(file, `${JSON.stringify(row)}
 `, "utf8");
 }
@@ -48607,12 +48739,12 @@ Return one JSON object with revised_text.`;
 
 // src/ocr.ts
 import { existsSync as existsSync10, readFileSync as readFileSync13, readdirSync as readdirSync4, statSync as statSync2, writeFileSync as writeFileSync8 } from "node:fs";
-import { dirname as dirname5, extname, join as join16, resolve as resolve9 } from "node:path";
+import { dirname as dirname6, extname, join as join16, resolve as resolve9 } from "node:path";
 import { spawnSync } from "node:child_process";
 init_thresholds();
 var schema2 = { type: "array", items: { type: "object", required: ["page_number", "text", "is_born_digital"], properties: { page_number: { type: "integer" }, text: { type: "string" }, is_born_digital: { type: "boolean" }, confidence: { type: "string", enum: ["high", "medium", "low"] }, notes: { type: "string" } } } };
 function runScript(name, args2) {
-  const plugin2 = resolve9(dirname5(process.argv[1] ?? ""), "..");
+  const plugin2 = resolve9(dirname6(process.argv[1] ?? ""), "..");
   const script = join16(plugin2, "scripts", "ocr", name);
   const result = spawnSync("python3", [script, ...args2], { encoding: "utf8" });
   if (result.status !== 0) throw new AwError("ERROR", "ocr", result.stderr.trim() || result.stdout.trim() || `${name} failed`);
@@ -48777,14 +48909,14 @@ init_thresholds();
 
 // src/library/index-cmd.ts
 init_thresholds();
-import { spawn as spawn5 } from "node:child_process";
+import { spawn as spawn6 } from "node:child_process";
 import { randomBytes as randomBytes4 } from "node:crypto";
 
 // src/library/eval/files.ts
 import { createHash as createHash6, randomBytes as randomBytes3 } from "node:crypto";
-import { existsSync as existsSync12, lstatSync as lstatSync2, realpathSync as realpathSync2 } from "node:fs";
+import { existsSync as existsSync12, lstatSync as lstatSync2, realpathSync as realpathSync3 } from "node:fs";
 import { appendFile, chmod, lstat as lstat2, mkdir as mkdir4, readFile as readFile4, rename as rename3, rm as rm4, writeFile as writeFile3 } from "node:fs/promises";
-import { dirname as dirname7, join as join18, sep as sep2 } from "node:path";
+import { dirname as dirname8, join as join18, sep as sep2 } from "node:path";
 
 // ../schemas/ledger-row.schema.json
 var ledger_row_schema_default = {
@@ -49339,7 +49471,7 @@ function guardEvalDirs(project, evalId) {
   };
   let real;
   try {
-    real = realpathSync2(project);
+    real = realpathSync3(project);
   } catch {
     return refuse("the project folder cannot be resolved");
   }
@@ -49347,7 +49479,7 @@ function guardEvalDirs(project, evalId) {
   if (!existsSync12(helper)) return;
   let helperReal;
   try {
-    helperReal = realpathSync2(helper);
+    helperReal = realpathSync3(helper);
   } catch {
     return refuse(".academic-helper cannot be resolved");
   }
@@ -49418,7 +49550,7 @@ async function writeJson(file, value, mode = 420) {
 `, mode);
 }
 async function writeText(file, text4, mode = 420) {
-  await mkdir4(dirname7(file), { recursive: true });
+  await mkdir4(dirname8(file), { recursive: true });
   try {
     if ((await lstat2(file)).isSymbolicLink()) throw new LibraryError("config", `ERROR library eval: ${file} is a symbolic link; refusing to write it`);
   } catch (error) {
@@ -49492,7 +49624,7 @@ function runCapture(command3, args2, options) {
     let stderr = "";
     let bytes = 0;
     const posix = process.platform !== "win32";
-    const child = spawn5(file, [...prefix, ...args2], { stdio: ["ignore", "pipe", "pipe"], env: options.env, cwd: options.cwd, detached: posix, windowsHide: true });
+    const child = spawn6(file, [...prefix, ...args2], { stdio: ["ignore", "pipe", "pipe"], env: options.env, cwd: options.cwd, detached: posix, windowsHide: true });
     const kill = () => {
       try {
         if (posix && child.pid) process.kill(-child.pid, "SIGKILL");
@@ -49658,7 +49790,7 @@ async function indexBook(indexer, request) {
   if (!SUMMARY_MODES.includes(request.summaries)) throw new LibraryError("usage", "ERROR library index: --summaries must be gemini, hints or none");
   if (request.model !== void 0 && !/^[A-Za-z0-9._/:-]{1,80}$/u.test(request.model)) throw new LibraryError("usage", "ERROR library index: --model must be a plain model name");
   await ensureCanIndex(indexer);
-  const env = pageindexEnv(indexer, request.summaries);
+  const env = pageindexEnv(indexer, request.dryRun ? "none" : request.summaries);
   if (request.summaries === "gemini" && indexer.source === "installed" && !request.dryRun && geminiKeyFrom(indexer.env) === null) {
     return { ok: false, code: "missing_key", message: plainFailure("missing_key", ""), needs_yes: false, result: { trove_id: request.troveId }, read_back: null, ledger_recorded: false };
   }
@@ -49766,7 +49898,7 @@ async function verifyBook(indexer, request, result) {
   let troveCompared = false;
   if (checks.pages && wanted.length > 0) {
     try {
-      const trove = new TroveBackend({ command: indexer.config.troveCommand, env: childEnv(indexer.env), timeoutMs: limits5.timeoutMs.primary, cwd: indexer.project });
+      const trove = new TroveBackend({ command: indexer.config.troveCommand, env: childEnv(indexer.env, { kind: "trove" }), timeoutMs: limits5.timeoutMs.primary, cwd: indexer.project });
       const theirs = await trove.read(request.troveId, wanted);
       troveCompared = true;
       const byPage = new Map(theirs.pages.map((entry) => [entry.page, squash(entry.text)]));
@@ -49797,7 +49929,7 @@ function indexOutput(indexer, outcome, request) {
 var limits6 = thresholds_default.library;
 var whole2 = (value) => typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
 async function listTrove(indexer, selector) {
-  const env = childEnv(indexer.env);
+  const env = childEnv(indexer.env, { kind: "trove" });
   const timeoutMs = limits6.timeoutMs.readAll;
   if (selector.kind === "ids") return selector.ids.map((id) => ({ id, title: "", pages: null }));
   if (selector.kind === "shelf") return (await new TroveBackend({ command: indexer.config.troveCommand, env, timeoutMs, cwd: indexer.project }).list()).map((book) => ({ id: book.id, title: book.title, pages: book.pageCount }));
@@ -49815,8 +49947,13 @@ async function listTrove(indexer, selector) {
   });
 }
 async function candidates(indexer, request) {
-  const base = await listTrove(indexer, request.selector);
-  const trove = new TroveBackend({ command: indexer.config.troveCommand, env: childEnv(indexer.env), timeoutMs: limits6.timeoutMs.primary, cwd: indexer.project });
+  let base;
+  try {
+    base = await listTrove(indexer, request.selector);
+  } catch (error) {
+    throw new LibraryError(error instanceof LibraryError && error.code !== "exit" ? error.code : "exit", `ERROR library backfill: the list of books could not be read from Trove (${clipError(errorMessage(error).replace(/^ERROR library: /u, ""))}). Nothing was indexed.`);
+  }
+  const trove = new TroveBackend({ command: indexer.config.troveCommand, env: childEnv(indexer.env, { kind: "trove" }), timeoutMs: limits6.timeoutMs.primary, cwd: indexer.project });
   const list = [];
   const unreadable = [];
   for (const book of base) {
@@ -49824,7 +49961,7 @@ async function candidates(indexer, request) {
       const toc = await trove.toc(book.id);
       list.push({ id: book.id, title: book.title || toc.title || book.id, pages: book.pages, tocEntries: toc.toc.length, hinted: toc.toc.filter((entry) => entry.title.includes(" - ")).length });
     } catch (error) {
-      unreadable.push({ id: book.id, error: errorMessage(error).replace(/^ERROR library: /u, "") });
+      unreadable.push({ id: book.id, error: clipError(errorMessage(error).replace(/^ERROR library: /u, "")) });
     }
   }
   return { list, unreadable };
@@ -49887,7 +50024,7 @@ async function runBackfill(indexer, request) {
   if (askRequired && !request.yes) {
     return { output: { ok: false, code: "needs_confirmation", error: `This backfill would send book text to Google (Gemini) for about ${estimated} summaries${fallbackBooks > 0 ? ` plus ${fallbackBooks} book${fallbackBooks === 1 ? "" : "s"} without a hinted table of contents, whose cost cannot be counted ahead` : ""}. Show the plan to the researcher, ask, then run it again with --yes.`, ...summary }, exit: 2 };
   }
-  const results = [];
+  const results = unreadable.map((entry) => ({ id: entry.id, title: "", status: "failed", code: "trove_failed", error: plainFailure("trove_failed", entry.error) }));
   let calls = 0;
   let promptTokens = 0;
   let completionTokens = 0;
@@ -50170,7 +50307,7 @@ import { join as join19 } from "node:path";
 
 // src/library/eval/agent.ts
 init_thresholds();
-import { execFile, spawn as spawn6 } from "node:child_process";
+import { execFile, spawn as spawn7 } from "node:child_process";
 var ChildGroup = class {
   children = /* @__PURE__ */ new Set();
   /** Locate attempts in flight, with what is needed to find everything they started. */
@@ -50222,7 +50359,7 @@ function runAgent(command3, args2, options) {
     let stderr = "";
     let timedOut = false;
     let tooLarge = false;
-    const child = spawn6(file, [...prefix, ...args2], { stdio: ["pipe", "pipe", "pipe"], env: options.env, cwd: options.cwd, detached: process.platform !== "win32", windowsHide: true });
+    const child = spawn7(file, [...prefix, ...args2], { stdio: ["pipe", "pipe", "pipe"], env: options.env, cwd: options.cwd, detached: process.platform !== "win32", windowsHide: true });
     options.group.add(child);
     if (child.pid) options.tracker?.(child.pid);
     const finish = (code, spawnError) => {
@@ -52176,7 +52313,7 @@ async function runEvalCli(argv, io) {
       const out = text3(flags, "--out") ? resolve12(paths.root, text3(flags, "--out")) : paths.judgeHtml;
       const inside2 = relative3(paths.root, out);
       if (inside2 === "" || inside2.startsWith("..") || isAbsolute4(inside2)) throw new LibraryError("usage", "ERROR library eval page: --out must be a file inside the evaluation folder");
-      await writeText(out, html.replace(slot, (_whole, open5, _body, close) => `${open5}${payload}${close}`));
+      await writeText(out, html.replace(slot, (_whole, open4, _body, close) => `${open4}${payload}${close}`));
       print({ eval_id: evalId, out, pairs: pairs2.pairs.length });
       return 0;
     }
