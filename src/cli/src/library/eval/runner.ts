@@ -1,8 +1,9 @@
+import { randomBytes } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { appendUsage, readJson, runFile, validate, writeJson, type EvalPaths } from './files.ts';
-import { ChildGroup, parseAgent, parseAnswer, runAgent, type Parsed } from './agent.ts';
+import { appendUsage, canonicalJson, readJson, runFile, sha256, validate, writeJson, type EvalPaths } from './files.ts';
+import { ChildGroup, RUN_TAG_ENV, TreeTracker, parseAgent, parseAnswer, reapTagged, runAgent, type Parsed } from './agent.ts';
 import { evalLimits } from './limits.ts';
 import { LibraryError } from '../types.ts';
 import type { Claim, Engine, Plan, Route, Run } from './types.ts';
@@ -103,13 +104,50 @@ export function deriveBudget(calls: string[], wrapper: string): Pick<Run, 'n_rea
   };
 }
 
-/** Codex cannot be given an allow-list, so check afterwards: every command must be the wrapper (alone or inside `sh -c`). */
-export function offListCommands(calls: string[], wrapper: string): string[] {
-  const unwrap = (call: string): string => {
-    const match = /^(?:\S*\/)?(?:ba|z)?sh\s+-l?c\s+(['"])([\s\S]*)\1\s*$/u.exec(call.trim());
-    return (match ? match[2] as string : call).trim();
-  };
-  return calls.filter((call) => segments([unwrap(call)]).some((part) => !part.startsWith(wrapper)));
+const SHELL_META = /[$`;|&<>()\\\n\r]/u;
+const BOOK_ID = /^[A-Za-z0-9._#:_-]+$/u;
+const PAGE_SPEC = /^\d{1,6}(?:-\d{1,6})?(?:,\d{1,6}(?:-\d{1,6})?)*$/u;
+
+function unquote(token: string): string {
+  const first = token[0];
+  return token.length >= 2 && (first === "'" || first === '"') && token.endsWith(first) ? token.slice(1, -1) : token;
+}
+
+/**
+ * Why a command an agent ran is outside its allowed list, or null when it is allowed: exactly
+ * `<wrapper> toc --source <id>` or `<wrapper> read --source <id> --pages <spec> [--text]`, one command, no shell
+ * metacharacters anywhere, ids and page specs in their plain forms. (Claude Code's own permission matching, which
+ * understands shell operators, is the first guard; this is the second, and the only one for Codex.)
+ */
+export function commandProblem(call: string, wrapper: string): string | null {
+  const shell = /^(?:\S*\/)?(?:ba|z)?sh\s+-l?c\s+(['"])([\s\S]*)\1\s*$/u.exec(call.trim());
+  const command = (shell ? shell[2] as string : call).trim();
+  if (SHELL_META.test(command)) return 'shell metacharacter';
+  if (!command.startsWith(`${wrapper} `)) return 'not the library command';
+  const tokens = command.slice(wrapper.length).trim().split(/\s+/u).map(unquote);
+  const [subcommand, ...rest] = tokens;
+  const seen = new Set<string>();
+  const values = new Map<string, string>();
+  for (let index = 0; index < rest.length; index += 1) {
+    const flag = rest[index] as string;
+    if (flag === '--text' && subcommand === 'read') { if (seen.has(flag)) return 'repeated option'; seen.add(flag); continue; }
+    if (flag !== '--source' && !(flag === '--pages' && subcommand === 'read')) return `option ${flag.slice(0, 20)} is not allowed`;
+    const value = rest[index + 1];
+    if (value === undefined || seen.has(flag)) return 'missing or repeated option value';
+    if (flag === '--source' && !BOOK_ID.test(value)) return 'book id is not plain';
+    if (flag === '--pages' && !PAGE_SPEC.test(value)) return 'page list is not plain';
+    seen.add(flag);
+    values.set(flag, value);
+    index += 1;
+  }
+  if (subcommand === 'toc') return seen.size === 1 && seen.has('--source') ? null : 'toc takes only --source';
+  if (subcommand === 'read') return values.has('--source') && values.has('--pages') ? null : 'read needs --source and --pages';
+  return 'subcommand is not allowed';
+}
+
+/** The commands (clipped, wrapper path hidden) that break the allowed list. */
+export function commandViolations(calls: string[], wrapper: string): string[] {
+  return calls.filter((call) => commandProblem(call, wrapper) !== null).map((call) => call.replaceAll(wrapper, '<wrapper>').slice(0, 120));
 }
 
 /** Characters and (when T2's estimate is present) tokens that this run's lookups returned, from the retrieval ledger. */
@@ -146,8 +184,31 @@ function codexArgs(model: string | null, cwd: string): string[] {
 
 function engineCommand(engine: Engine, env: NodeJS.ProcessEnv): string[] { return [(engine === 'claude' ? env.AW_EVAL_CLAUDE_COMMAND : env.AW_EVAL_CODEX_COMMAND)?.trim() || engine]; }
 
+/** Bump when the prompt or the allowed commands change: runs made with the old ones are not reused. */
+export const PROMPT_VERSION = 'locate-v2';
+
+export function planSha(plan: Plan): string { return sha256(canonicalJson(plan)); }
+export function claimSha(claim: Claim): string { return sha256(claim.text.normalize('NFC')); }
+
+/** What a run is bound to: the plan, the claim's text, the route, the engine, the requested model and the prompt version. */
+export function fingerprintOf(parts: { plan_sha256: string; claim_sha256: string; claim_id: string; route: Route; engine: Engine; model_requested: string; prompt_version: string }): string {
+  return sha256(canonicalJson(parts));
+}
+
+export function modelRequested(options: Pick<RunnerOptions, 'engine' | 'model'>): string {
+  return options.engine === 'claude' ? (options.model ?? evalLimits.locateModel) : (options.model ?? 'default');
+}
+
+export function expectedFingerprint(options: Pick<RunnerOptions, 'engine' | 'model' | 'plan'>, claim: Claim, route: Route): string {
+  return fingerprintOf({
+    plan_sha256: planSha(options.plan), claim_sha256: claimSha(claim), claim_id: claim.id, route, engine: options.engine,
+    model_requested: modelRequested(options), prompt_version: PROMPT_VERSION,
+  });
+}
+
 async function locateOnce(options: RunnerOptions, claim: Claim, route: Route, group: ChildGroup): Promise<{ run: Omit<Run, 'attempts'>; missing: boolean }> {
   const runId = runIdFor(options.plan.eval_id, route, claim.id);
+  const tag = `${runId}.${randomBytes(6).toString('hex')}`;
   const base = await realpath(tmpdir());
   const dir = await mkdtemp(join(base, 'aw-eval-'));
   const started = options.now();
@@ -159,24 +220,34 @@ async function locateOnce(options: RunnerOptions, claim: Claim, route: Route, gr
     const wrapper = join(bin, 'awlib');
     await writeFile(wrapper, wrapperScript({ awCommand: options.awCommand, project: options.project, route, runId, claimId: claim.id, env: options.env }), { mode: 0o700 });
     const prompt = buildPrompt(options.plan, claim, wrapper);
-    const model = options.engine === 'claude' ? (options.model ?? evalLimits.locateModel) : options.model;
-    const env: NodeJS.ProcessEnv = { ...options.env, CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1' };
+    const requested = modelRequested(options);
+    const model = options.engine === 'claude' ? requested : options.model;
+    const env: NodeJS.ProcessEnv = { ...options.env, CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1', [RUN_TAG_ENV]: tag };
     for (const key of ['AW_LIBRARY_ROUTE', 'GOOGLE_API_KEY', 'GEMINI_API_KEY']) delete env[key];
     const [file, ...prefix] = engineCommand(options.engine, options.env) as [string, ...string[]];
-    const exit = await runAgent([file, ...prefix], options.engine === 'claude' ? claudeArgs(model as string, wrapper) : codexArgs(model, cwd), {
-      input: prompt, cwd, env, timeoutMs: options.runTimeoutMs, maxBuffer: evalLimits.maxBufferBytes, group,
-    });
+    let exit;
+    let tracker: TreeTracker | undefined;
+    try {
+      exit = await runAgent([file, ...prefix], options.engine === 'claude' ? claudeArgs(model as string, wrapper) : codexArgs(model, cwd), {
+        input: prompt, cwd, env, timeoutMs: options.runTimeoutMs, maxBuffer: evalLimits.maxBufferBytes, group,
+        tracker: (pid) => { tracker = new TreeTracker(pid); tracker.start(); },
+      });
+    } finally {
+      // The agent's group is gone; the library commands `aw` started run in groups of their own: found by the tag, or by the tree followed while the agent ran.
+      await tracker?.stop();
+      await reapTagged(tag, tracker);
+    }
     const parsed: Parsed = parseAgent(options.engine, exit.stdout);
     const answer = parseAnswer(parsed.text, evalLimits.maxAnswerPages);
     const budget = deriveBudget(parsed.calls, wrapper);
     const returned = await returnedFor(options.project, runId);
-    const offList = options.engine === 'codex' ? offListCommands(parsed.calls, wrapper) : [];
+    const violations = commandViolations(parsed.calls, wrapper).slice(0, 5);
     let error: string | null = null;
     if (exit.spawnError === 'missing') error = `the ${options.engine} command was not found`;
     else if (exit.spawnError) error = `could not start ${options.engine}: ${exit.spawnError}`;
     else if (exit.timedOut) error = `timed out after ${Math.round(options.runTimeoutMs / 1000)} s`;
     else if (exit.tooLarge) error = 'the agent printed more than the output limit';
-    else if (offList.length > 0) error = 'the agent ran a command that is not on its allowed list';
+    else if (violations.length > 0) error = 'the agent ran a command that is not on its allowed list';
     else if (!answer) error = parsed.stopReason ? `no answer (${parsed.stopReason})` : (exit.code !== 0 ? `exit ${exit.code ?? 'signal'} and no answer: ${exit.stderr.trim().slice(0, 200)}` : 'no parsable answer');
     else if (!options.plan.shelf.some((book) => book.id === answer.book)) error = 'the answer names a book that is not on the shelf';
     const usd = parsed.costUsd;
@@ -190,6 +261,8 @@ async function locateOnce(options: RunnerOptions, claim: Claim, route: Route, gr
       ...budget, permission_denials: parsed.permissionDenials, wall_ms: exit.wallMs, agent_ms: parsed.agentMs, turns: parsed.turns,
       input_tokens: parsed.inputTokens, output_tokens: parsed.outputTokens, cost_usd: usd, returned_chars: returned.chars, returned_est_tokens: returned.est,
       agent_version: parsed.version, error,
+      plan_sha256: planSha(options.plan), claim_sha256: claimSha(claim), prompt_version: PROMPT_VERSION, model_requested: requested,
+      fingerprint: expectedFingerprint(options, claim, route), violations,
     };
     return { run, missing: exit.spawnError === 'missing' };
   } finally {
@@ -224,7 +297,10 @@ export async function runAll(options: RunnerOptions): Promise<RunSummary> {
   for (const claim of options.plan.claims) {
     for (const route of options.routes) {
       const existing = await readJson(runFile(options.paths, claim.id, route));
-      if (existing !== null && validate('run', existing).length === 0 && (existing as Run).status === 'ok') skipped += 1;
+      // Reused only when it finished AND is bound to this very plan, claim text, route, engine, model and prompt.
+      const good = existing !== null && validate('run', existing).length === 0 && (existing as Run).status === 'ok'
+        && (existing as Run).fingerprint === expectedFingerprint(options, claim, route);
+      if (good) skipped += 1;
       else jobs.push({ claim, route });
     }
   }

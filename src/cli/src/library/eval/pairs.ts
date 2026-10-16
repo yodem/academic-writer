@@ -3,6 +3,7 @@ import { formatPageRanges } from '../pages.ts';
 import { LibraryError } from '../types.ts';
 import type { AwRunner } from './aw.ts';
 import { readJson, runFile, validate, writeJson, type EvalPaths } from './files.ts';
+import { claimSha, fingerprintOf, planSha } from './runner.ts';
 import { mappingCommitment, newMapping, seededRandom, slotOrders, writeSealed } from './seal.ts';
 import type { Mapping, Pair, PairOption, Pairs, Plan, Route, Run } from './types.ts';
 
@@ -17,7 +18,10 @@ export type PairsOptions = {
   force: boolean;
 };
 
-export type PairsSummary = { eval_id: string; pairs: number; auto_same: number; mapping_sha256: string };
+export type PairsSummary = { eval_id: string; pairs: number; auto_same: number; mapping_sha256: string; excluded: Array<{ claim_id: string; reason: string }> };
+
+/** Shown in place of a page whose canonical text could not be read: the same words on both sides. */
+export const TEXT_UNAVAILABLE = '[The text of this page could not be read.]';
 
 const ROUTE_WORD = /trove|page-?index/iu;
 
@@ -61,17 +65,29 @@ async function fetchTexts(options: PairsOptions, needed: Map<string, Set<number>
   return texts;
 }
 
-function optionFor(plan: Plan, run: Run, texts: Map<string, string>): PairOption {
+type Built = { option: PairOption; valid: boolean; complete: boolean };
+
+function optionFor(plan: Plan, run: Run, texts: Map<string, string>): Built {
   const answer = run.status === 'ok' ? run.answer : null;
-  if (!answer) return { book: null, book_title: null, pages: [] };
+  if (!answer) return { option: { book: null, book_title: null, pages: [] }, valid: false, complete: true };
   const pages = [...new Set(answer.pages)].sort((a, b) => a - b)
-    .map((page) => ({ page, text: texts.get(`${answer.book}\u0000${page}`) }))
-    .filter((entry): entry is { page: number; text: string } => entry.text !== undefined);
-  return { book: answer.book, book_title: plan.shelf.find((book) => book.id === answer.book)?.title ?? answer.book, pages };
+    .map((page) => ({ page, text: texts.get(`${answer.book}\u0000${page}`) }));
+  return {
+    option: { book: answer.book, book_title: plan.shelf.find((book) => book.id === answer.book)?.title ?? answer.book, pages: pages.map((entry) => ({ page: entry.page, text: entry.text ?? TEXT_UNAVAILABLE })) },
+    valid: true, complete: pages.every((entry) => entry.text !== undefined),
+  };
 }
 
 function sameOption(a: PairOption, b: PairOption): boolean {
   return a.book === b.book && a.pages.length === b.pages.length && a.pages.every((page, index) => page.page === b.pages[index]?.page);
+}
+
+/** Whether a run file belongs to this plan and claim and has not been edited: its own fields reproduce its fingerprint. */
+function runIsCurrent(plan: Plan, claim: Plan['claims'][number], run: Run): boolean {
+  return run.plan_sha256 === planSha(plan) && run.claim_sha256 === claimSha(claim) && run.fingerprint === fingerprintOf({
+    plan_sha256: run.plan_sha256, claim_sha256: run.claim_sha256, claim_id: run.claim_id, route: run.route, engine: run.engine,
+    model_requested: run.model_requested, prompt_version: run.prompt_version,
+  });
 }
 
 /**
@@ -88,14 +104,22 @@ export async function buildPairs(options: PairsOptions): Promise<{ pairs: Pairs;
   const routes = plan.routes as [Route, Route];
   const runs = new Map<string, Run>();
   const missing: string[] = [];
+  const excluded: PairsSummary['excluded'] = [];
   for (const claim of plan.claims) {
     for (const route of routes) {
       const value = await readJson(runFile(paths, claim.id, route));
-      if (value === null || validate('run', value).length > 0) missing.push(claim.id);
+      if (value === null || validate('run', value).length > 0 || !runIsCurrent(plan, claim, value as Run)) missing.push(claim.id);
       else runs.set(`${claim.id}:${route}`, value as Run);
     }
   }
-  if (missing.length > 0) throw new LibraryError('usage', `ERROR library eval pairs: ${new Set(missing).size} claim(s) have no finished locate run; run \`aw library eval run\` first`);
+  if (missing.length > 0) throw new LibraryError('usage', `ERROR library eval pairs: ${new Set(missing).size} claim(s) have no finished locate run for this plan; run \`aw library eval run\` first`);
+  // A run that ran a command outside its allowed list is invalid: its claim is left out and reported.
+  const claims = plan.claims.filter((claim) => {
+    const bad = routes.some((route) => (runs.get(`${claim.id}:${route}`) as Run).violations.length > 0);
+    if (bad) excluded.push({ claim_id: claim.id, reason: 'an agent ran a command outside its allowed list' });
+    return !bad;
+  });
+  if (claims.length === 0) throw new LibraryError('usage', 'ERROR library eval pairs: every claim was left out; nothing to compare');
 
   const needed = new Map<string, Set<number>>();
   for (const run of runs.values()) {
@@ -106,17 +130,19 @@ export async function buildPairs(options: PairsOptions): Promise<{ pairs: Pairs;
     }
   }
   const texts = await fetchTexts(options, needed);
-  const orders = slotOrders(plan.claims.length, seededRandom(`${options.seed}:order`));
+  const orders = slotOrders(claims.length, seededRandom(`${options.seed}:order`));
   const pairs: Pair[] = [];
   const mapped: Mapping['pairs'] = [];
-  for (const [index, claim] of plan.claims.entries()) {
+  for (const [index, claim] of claims.entries()) {
     const pairId = `p${String(index + 1).padStart(2, '0')}`;
     const first = optionFor(plan, runs.get(`${claim.id}:${routes[0]}`) as Run, texts);
     const second = optionFor(plan, runs.get(`${claim.id}:${routes[1]}`) as Run, texts);
     const firstInA = orders[index] as boolean;
+    // "Same" is decided by code only when both answers are real, name the same pages, and every page text was read.
     pairs.push({
-      pair_id: pairId, claim: { id: claim.id, text: claim.text }, auto_same: sameOption(first, second),
-      options: firstInA ? { A: first, B: second } : { A: second, B: first },
+      pair_id: pairId, claim: { id: claim.id, text: claim.text },
+      auto_same: first.valid && second.valid && first.complete && second.complete && sameOption(first.option, second.option),
+      options: firstInA ? { A: first.option, B: second.option } : { A: second.option, B: first.option },
     });
     mapped.push({ pair_id: pairId, claim_id: claim.id, A: firstInA ? routes[0] : routes[1], B: firstInA ? routes[1] : routes[0] });
   }
@@ -128,5 +154,5 @@ export async function buildPairs(options: PairsOptions): Promise<{ pairs: Pairs;
   if (leak) throw new LibraryError('parse', `ERROR library eval pairs: a library name would be visible to the judge at ${leak}; nothing was written`);
   await writeSealed(paths.sealedDir, paths.mapping, mapping);
   await writeJson(paths.pairs, document);
-  return { pairs: document, mapping, summary: { eval_id: plan.eval_id, pairs: pairs.length, auto_same: pairs.filter((pair) => pair.auto_same).length, mapping_sha256: document.mapping_sha256 } };
+  return { pairs: document, mapping, summary: { eval_id: plan.eval_id, pairs: pairs.length, auto_same: pairs.filter((pair) => pair.auto_same).length, mapping_sha256: document.mapping_sha256, excluded } };
 }

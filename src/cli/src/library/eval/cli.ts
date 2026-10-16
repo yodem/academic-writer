@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { projectDirOr } from '../../paths.ts';
@@ -116,6 +116,8 @@ export async function runEvalCli(argv: string[], io: EvalIo): Promise<number> {
         seed: text(flags, '--seed') ?? evalId, routes, claimsFile: text(flags, '--claims'), resolve: !flags.has('--no-resolve'), aw, now,
       });
       if (plan.claims.length === 0) throw new LibraryError('usage', `ERROR library eval plan: no usable claims found (skipped: ${JSON.stringify(plan.skipped)}); check that the draft has footnotes and the sources answer on both libraries`);
+      // A replaced plan starts a new evaluation: runs of the old one are removed (they are also bound to the old plan by fingerprint).
+      if (flags.has('--force')) await rm(paths.runsDir, { recursive: true, force: true });
       await writeJson(paths.plan, plan);
       print({ eval_id: evalId, claims: plan.claims.length, runs: plan.estimate.runs, estimated_usd: plan.estimate.usd, skipped: plan.skipped, plan: paths.plan });
       return 0;

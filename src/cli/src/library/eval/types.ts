@@ -63,6 +63,13 @@ export type Run = {
   returned_est_tokens: number | null;
   agent_version: string | null;
   error: string | null;
+  plan_sha256: string;
+  claim_sha256: string;
+  prompt_version: string;
+  model_requested: string;
+  fingerprint: string;
+  /** Commands the agent ran outside its allowed list (clipped); a run with any is invalid and left out of the pairs. */
+  violations: string[];
 };
 
 export type PairOption = { book: string | null; book_title: string | null; pages: Array<{ page: number; text: string }> };

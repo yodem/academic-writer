@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { appendFile, chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { existsSync, lstatSync, realpathSync } from 'node:fs';
+import { appendFile, chmod, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { dirname, join, sep } from 'node:path';
 import ledgerSchema from '../../../../schemas/ledger-row.schema.json' with { type: 'json' };
 import judgmentsSchema from '../../../../schemas/library-eval-judgments.schema.json' with { type: 'json' };
 import mappingSchema from '../../../../schemas/library-eval-mapping.schema.json' with { type: 'json' };
@@ -21,8 +21,33 @@ export type EvalPaths = {
   judgments: string; reportJson: string; reportMd: string; judgeHtml: string;
 };
 
+/**
+ * The evaluation's folders must be real folders inside the project's real `.academic-helper`: nothing from
+ * `library-eval` down may be a symlink (a link would send the plan, the sealed key or the runs somewhere else), and the
+ * project's own `.academic-helper` must resolve to a place inside the project. Folders not made yet are fine.
+ * Known limit (as for the retrieval ledger): a folder swapped for a link between this check and a later write is not caught.
+ */
+export function guardEvalDirs(project: string, evalId: string): void {
+  const refuse = (what: string): never => { throw new LibraryError('config', `ERROR library eval: ${what}; refusing to use it`); };
+  let real: string;
+  try { real = realpathSync(project); } catch { return refuse('the project folder cannot be resolved'); }
+  const helper = join(project, '.academic-helper');
+  if (!existsSync(helper)) return;
+  let helperReal: string;
+  try { helperReal = realpathSync(helper); } catch { return refuse('.academic-helper cannot be resolved'); }
+  if (helperReal !== real && !helperReal.startsWith(`${real}${sep}`)) refuse('.academic-helper points outside the project');
+  const evalRoot = join(helperReal, 'library-eval', evalId);
+  for (const dir of [join(helperReal, 'library-eval'), evalRoot, join(evalRoot, 'runs'), join(evalRoot, 'sealed')]) {
+    let info;
+    try { info = lstatSync(dir); } catch { continue; }
+    if (info.isSymbolicLink()) refuse(`${dir.slice(helperReal.length + 1)} is a symbolic link`);
+    if (!info.isDirectory()) refuse(`${dir.slice(helperReal.length + 1)} is not a folder`);
+  }
+}
+
 export function evalPaths(project: string, evalId: string): EvalPaths {
   if (!EVAL_ID.test(evalId)) throw new LibraryError('usage', 'ERROR library eval: --eval must be a plain id (letters, digits and hyphens, up to 40)');
+  guardEvalDirs(project, evalId);
   const root = join(project, EVAL_ROOT, evalId);
   return {
     root, plan: join(root, 'plan.json'), runsDir: join(root, 'runs'), pairs: join(root, 'pairs.json'),
@@ -65,7 +90,10 @@ export async function writeJson(file: string, value: unknown, mode = 0o644): Pro
 
 export async function readJson(file: string): Promise<unknown | null> {
   let text: string;
-  try { text = await readFile(file, 'utf8'); } catch { return null; }
+  try {
+    if ((await lstat(file)).isSymbolicLink()) throw new LibraryError('config', `ERROR library eval: ${file} is a symbolic link; refusing to read it`);
+    text = await readFile(file, 'utf8');
+  } catch (error) { if (error instanceof LibraryError) throw error; return null; }
   try { return JSON.parse(text); } catch { throw new LibraryError('parse', `ERROR library eval: ${file} is not valid JSON`); }
 }
 

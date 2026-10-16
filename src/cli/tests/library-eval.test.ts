@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import thresholds from '../../thresholds.json' with { type: 'json' };
@@ -8,8 +8,9 @@ import type { AwCall } from '../src/library/eval/aw.ts';
 import { pagesNamedIn, parseDraft, splitSentences } from '../src/library/eval/claims.ts';
 import { evalPaths, readJson, validate, writeJson } from '../src/library/eval/files.ts';
 import { importJudgments, normalizeImport } from '../src/library/eval/judgments.ts';
-import { buildPairs, routeLeak } from '../src/library/eval/pairs.ts';
+import { TEXT_UNAVAILABLE, buildPairs, routeLeak } from '../src/library/eval/pairs.ts';
 import { buildPlan } from '../src/library/eval/plan.ts';
+import { claimSha, fingerprintOf, planSha } from '../src/library/eval/runner.ts';
 import { mappingCommitment, seededRandom, shuffle, slotOrders } from '../src/library/eval/seal.ts';
 import { median, signTestP, wilson95 } from '../src/library/eval/stats.ts';
 import { unblind } from '../src/library/eval/unblind.ts';
@@ -207,6 +208,8 @@ async function scenario(pages: Array<Record<Route, number[] | null>>, over: { au
         answer: answer ? { book: 'T-A', pages: answer, reason: 'the trove tree node says so' } : null, tool_calls: [], n_reads: 1, n_toc: 1, pages_per_read: [2], over_budget: false, permission_denials: 0,
         wall_ms: route === 'trove' ? 4000 : 6000, agent_ms: 1000, turns: 3, input_tokens: route === 'trove' ? 1000 : 2000, output_tokens: 100, cost_usd: route === 'trove' ? 0.05 : 0.07,
         returned_chars: 500, returned_est_tokens: route === 'trove' ? 200 : 300, agent_version: '1.0.0', error: answer ? null : 'no answer',
+        plan_sha256: planSha(plan), claim_sha256: claimSha(claim), prompt_version: 'locate-v2', model_requested: 'm', violations: [],
+        fingerprint: fingerprintOf({ plan_sha256: planSha(plan), claim_sha256: claimSha(claim), claim_id: claim.id, route, engine: 'claude', model_requested: 'm', prompt_version: 'locate-v2' }),
       };
       await writeJson(join(paths.runsDir, `${claim.id}-${route}.json`), run);
     }
@@ -281,6 +284,84 @@ test('pairs: a missing locate run is refused', async () => {
   await assert.rejects(buildPairs({ evalId: 'ev-test', paths, plan, seed: 'x', aw: readAw, now: NOW, force: false }), /no finished locate run/);
   rmSync(dir, { recursive: true, force: true });
 });
+
+test('pairs: a page whose text cannot be read is never dropped; it shows a placeholder and blocks the automatic "same"', async () => {
+  const { dir, plan, paths } = await scenario([{ trove: [3], pageindex: [3] }, { trove: [3, 4], pageindex: [3, 4] }]);
+  // Page 4 cannot be read; page 3 can.
+  const partial = async (call: AwCall): Promise<string> => JSON.stringify({ pages: (JSON.parse(await readAw(call)) as { pages: Array<{ trove_page: number; text: string }> }).pages.filter((page) => page.trove_page !== 4) });
+  const { pairs } = await buildPairs({ evalId: 'ev-test', paths, plan, seed: 's', aw: partial, now: NOW, force: false });
+  const [whole, missing] = pairs.pairs;
+  assert.equal(whole?.auto_same, true, 'complete and identical: decided by code');
+  assert.equal(missing?.auto_same, false, 'a missing text means the judge must look');
+  for (const slot of ['A', 'B'] as const) {
+    const page = missing?.options[slot].pages.find((entry) => entry.page === 4);
+    assert.equal(page?.text, TEXT_UNAVAILABLE, 'the same visible placeholder on both sides');
+    assert.equal(missing?.options[slot].pages.length, 2, 'no page is dropped');
+  }
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('pairs: two failed runs are not an automatic "same"; a run with violations leaves its claim out and is reported', async () => {
+  const { dir, plan, paths } = await scenario([{ trove: null, pageindex: null }, { trove: [3], pageindex: [3] }, { trove: [3], pageindex: [4] }]);
+  const bad = await readJson(join(paths.runsDir, 'c03-pageindex.json')) as Run;
+  await writeJson(join(paths.runsDir, 'c03-pageindex.json'), { ...bad, violations: ['<wrapper> toc --source $(cat x)'] });
+  const { pairs, summary } = await buildPairs({ evalId: 'ev-test', paths, plan, seed: 's', aw: readAw, now: NOW, force: false });
+  assert.deepEqual(pairs.pairs.map((pair) => [pair.claim.id, pair.auto_same]), [['c01', false], ['c02', true]]);
+  assert.deepEqual(summary.excluded, [{ claim_id: 'c03', reason: 'an agent ran a command outside its allowed list' }]);
+  assert.equal(pairs.pairs[0]?.options.A.pages.length + (pairs.pairs[0]?.options.B.pages.length ?? 0), 0);
+  await importJudgments({ paths, evalId: 'ev-test', raw: [{ pair_id: 'p01', verdict: 'neither' }], partial: false, now: NOW });
+  const report = await unblind({ paths, force: false, now: NOW });
+  assert.deepEqual(report.excluded.map((entry) => [entry.claim_id, entry.route]), [['c03', 'pageindex']]);
+  assert.match(readFileSync(paths.reportMd, 'utf8'), /command it was not allowed to run/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('pairs: a run made for another plan or claim text is refused, as is an edited run', async () => {
+  const { dir, plan, paths } = await scenario(SPLIT.slice(0, 3));
+  const stale = { ...plan, seed: 'a different seed' };
+  await assert.rejects(buildPairs({ evalId: 'ev-test', paths, plan: stale, seed: 'x', aw: readAw, now: NOW, force: false }), /no finished locate run for this plan/);
+  const changed: Plan = { ...plan, claims: plan.claims.map((claim, index) => (index === 1 ? { ...claim, text: 'A different claim now.' } : claim)) };
+  await assert.rejects(buildPairs({ evalId: 'ev-test', paths, plan: changed, seed: 'x', aw: readAw, now: NOW, force: false }), /no finished locate run for this plan/);
+  const run = await readJson(join(paths.runsDir, 'c01-trove.json')) as Run;
+  await writeJson(join(paths.runsDir, 'c01-trove.json'), { ...run, model_requested: 'edited' });
+  await assert.rejects(buildPairs({ evalId: 'ev-test', paths, plan, seed: 'x', aw: readAw, now: NOW, force: false }), /no finished locate run for this plan/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('containment: a symbolic link at library-eval, the evaluation, runs or sealed is refused; so is a linked run file', async () => {
+  const outside = mkdtempSync(join(tmpdir(), 'aw-eval-outside-'));
+  const make = (): string => project();
+  const cases: Array<{ name: string; link: (dir: string) => void }> = [
+    { name: 'library-eval', link: (dir) => symlinkSync(outside, join(dir, '.academic-helper', 'library-eval')) },
+    { name: 'the evaluation folder', link: (dir) => { mkdirSync(join(dir, '.academic-helper', 'library-eval')); symlinkSync(outside, join(dir, '.academic-helper', 'library-eval', 'ev-test')); } },
+    { name: 'runs', link: (dir) => { mkdirSync(join(dir, '.academic-helper', 'library-eval', 'ev-test'), { recursive: true }); symlinkSync(outside, join(dir, '.academic-helper', 'library-eval', 'ev-test', 'runs')); } },
+    { name: 'sealed', link: (dir) => { mkdirSync(join(dir, '.academic-helper', 'library-eval', 'ev-test'), { recursive: true }); symlinkSync(outside, join(dir, '.academic-helper', 'library-eval', 'ev-test', 'sealed')); } },
+  ];
+  for (const entry of cases) {
+    const dir = make();
+    entry.link(dir);
+    assert.throws(() => evalPaths(dir, 'ev-test'), /symbolic link/, entry.name);
+    const err: string[] = [];
+    assert.equal(await runEvalCli(['status', '--eval', 'ev-test'], { out: () => undefined, err: (t) => err.push(t), project: dir }), 3, entry.name);
+    assert.equal(readdirOutside(outside), 0, 'nothing was written outside');
+    rmSync(dir, { recursive: true, force: true });
+  }
+  // A project whose .academic-helper is itself a link to somewhere else is refused too.
+  const linked = mkdtempSync(join(tmpdir(), 'aw-eval-linked-'));
+  symlinkSync(outside, join(linked, '.academic-helper'));
+  assert.throws(() => evalPaths(linked, 'ev-test'), /points outside the project/);
+  // A run file that is a link is not read.
+  const { dir, paths } = await scenario(SPLIT.slice(0, 1));
+  writeFileSync(join(outside, 'x.json'), '{}');
+  rmSync(join(paths.runsDir, 'c01-trove.json'));
+  symlinkSync(join(outside, 'x.json'), join(paths.runsDir, 'c01-trove.json'));
+  await assert.rejects(readJson(join(paths.runsDir, 'c01-trove.json')), /symbolic link/);
+  rmSync(dir, { recursive: true, force: true });
+  rmSync(linked, { recursive: true, force: true });
+  rmSync(outside, { recursive: true, force: true });
+});
+
+function readdirOutside(dir: string): number { return existsSync(dir) ? (readdirSync(dir) as string[]).length : 0; }
 
 test('import: shapes, validation, auto-same, partial progress, append-only history with the newest entry counting', async () => {
   const { dir, plan, paths } = await scenario(SPLIT);
@@ -438,7 +519,7 @@ test('the command line: usage errors, status shows progress without library name
   out.length = 0;
   assert.equal(await runEvalCli(['pairs', '--eval', 'ev-test', '--seed', 'cli'], readerIo), 0, err.join(''));
   const summary = JSON.parse(out.join(''));
-  assert.deepEqual(Object.keys(summary).sort(), ['auto_same', 'eval_id', 'mapping_sha256', 'pairs']);
+  assert.deepEqual(Object.keys(summary).sort(), ['auto_same', 'eval_id', 'excluded', 'mapping_sha256', 'pairs']);
   assert.equal(await runEvalCli(['pairs', '--eval', 'ev-test'], readerIo), 2, 'a second pairing needs --force');
   // The judging page.
   const template = join(dir, 'template.html');

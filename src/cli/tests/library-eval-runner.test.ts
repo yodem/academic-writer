@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildPrompt, deriveBudget, offListCommands, returnedFor, runAll, runIdFor, wrapperScript, type RunnerOptions } from '../src/library/eval/runner.ts';
+import { execFileSync } from 'node:child_process';
+import { buildPrompt, commandProblem, commandViolations, deriveBudget, expectedFingerprint, returnedFor, runAll, runIdFor, wrapperScript, type RunnerOptions } from '../src/library/eval/runner.ts';
 import { parseAnswer, parseClaude, parseCodex } from '../src/library/eval/agent.ts';
 import { evalPaths, readJson, validate, writeJson } from '../src/library/eval/files.ts';
 import { runEvalCli } from '../src/library/eval/cli.ts';
@@ -37,6 +38,16 @@ if (sub === 'list') {
   const ids = JSON.parse(process.env['FAKE_BOOKS_' + String(route).toUpperCase()] || '["T-A","T-B","T-C"]');
   console.log(JSON.stringify({ route, items: ids.map((id) => ({ id, title: id })) }));
 } else if (sub === 'toc') {
+  if (process.env.FAKE_DETACH_PIDS) {
+    // 'orphan': a node helper in its own group, left behind at once (found by the environment tag).
+    // 'linger': a system binary in its own group (its environment is hidden on macOS), left behind after aw waits a while.
+    const orphan = process.env.FAKE_DETACH_MODE === 'orphan';
+    const child = orphan ? require('node:child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' })
+      : require('node:child_process').spawn('sleep', ['300'], { detached: true, stdio: 'ignore' });
+    child.unref();
+    fs.appendFileSync(process.env.FAKE_DETACH_PIDS, child.pid + '\\n');
+    if (!orphan) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 700);
+  }
   const text = JSON.stringify({ route, mode: route, source_id: flag('--source'), title: 'Book', toc: [{ title: 'Intro', page: 1, endPage: 9, level: 1 }] });
   ledger(text.length);
   console.log(text);
@@ -78,6 +89,7 @@ function main() {
   const pages = entry[toc.route];
   const reads = mode === 'overbudget' ? 3 : 1;
   for (let i = 0; i < reads; i += 1) { const range = pages[0] + '-' + (pages[0] + (mode === 'overbudget' ? 6 : 1)); calls.push(wrapper + ' read --source ' + entry.book + ' --pages ' + range + ' --text'); run('read', '--source', entry.book, '--pages', range, '--text'); }
+  if (mode === 'chain') calls.push(wrapper + ' toc --source ' + entry.book + ' ; cat /etc/hosts');
   const emit = (event) => console.log(JSON.stringify(event));
   emit({ type: 'system', subtype: 'init', model: 'claude-sonnet-5-5', claude_code_version: '9.9.9' });
   for (const command of calls) emit({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command } }] } });
@@ -203,7 +215,22 @@ test('budget and allow-list checks: chained commands count one by one; codex she
     { n_reads: 2, n_toc: 1, pages_per_read: [2, 4], over_budget: false });
   assert.equal(deriveBudget([`${w} read --source A --pages 1-9`], w).over_budget, true);
   assert.equal(deriveBudget([`${w} read --source A --pages 1-2`, `${w} read --source A --pages 3-4`, `${w} read --source A --pages 5-6`], w).over_budget, true);
-  assert.deepEqual(offListCommands([`bash -lc '${w} toc --source A'`, `/bin/zsh -lc "${w} read --source A --pages 1-2"`, 'cat /etc/hosts', `${w} toc --source A; cat x`], w), ['cat /etc/hosts', `${w} toc --source A; cat x`]);
+  assert.deepEqual(commandViolations([`bash -lc '${w} toc --source A'`, `/bin/zsh -lc "${w} read --source A --pages 1-2"`, 'cat /etc/hosts', `${w} toc --source A; cat x`], w), ['cat /etc/hosts', '<wrapper> toc --source A; cat x']);
+});
+
+test('commands are checked strictly: exact subcommands and options, plain ids and page lists, no shell metacharacters', () => {
+  const w = '/tmp/x/awlib';
+  const fine = [`${w} toc --source T-A`, `${w} toc --source 'cm1.x_y#2:z'`, `${w} read --source T-A --pages 3-4 --text`, `${w} read --text --pages 3,5-6 --source T-A`, `${w} read --source "T-A" --pages 7`];
+  for (const call of fine) assert.equal(commandProblem(call, w), null, call);
+  const bad = [
+    `${w} toc --source $(cat /etc/hosts)`, `${w} toc --source A\`id\``, `${w} toc --source A; ls`, `${w} toc --source A && ls`, `${w} toc --source A | cat`,
+    `${w} toc --source A > out`, `${w} toc --source A < in`, `${w} toc --source (A)`, `${w} toc --source A\nls`, `${w} toc --source A\\x`,
+    `${w} verdict --lookup x --verdict PASS`, `${w} status`, `${w} list`, `${w}`, `${w} toc`, `${w} toc --source A --pages 1`, `${w} toc --source A --source B`,
+    `${w} toc --source A --run other`, `${w} toc --source A --claim c9`, `${w} read --source A`, `${w} read --pages 1-2`, `${w} read --source A --pages 1-2 --all`,
+    `${w} read --source A --pages 1-2 --text --text`, `${w} read --source A --pages all`, `${w} read --source A --pages 1-`, `${w} read --source ../A --pages 1-2`,
+    `${w}x toc --source A`, `${w}  toc --source A extra`, '[Read] {"file_path":"/etc/hosts"}', `cat ${w}`, `${w} read --source "A --pages 1`,
+  ];
+  for (const call of bad) assert.notEqual(commandProblem(call, w), null, call);
 });
 
 test('the wrapper script pins one route and stamps the run and claim; the prompt names no library and has the rules', () => {
@@ -346,6 +373,125 @@ test('runner (codex): commands parsed from events, usage kept, an off-list comma
   rmSync(w.dir, { recursive: true, force: true });
 });
 
+test('a cached run is reused only for the same plan, claim text, route, model, engine and prompt', async () => {
+  const w = world();
+  const { plan, paths } = await planFor(w, 2);
+  await runAll(options(w, plan, paths));
+  const launches = (): number => lines(w.logs.claude).length;
+  assert.equal(launches(), 4);
+  assert.deepEqual([(await runAll(options(w, plan, paths))).skipped, launches()], [4, 4], 'the same plan reuses every run');
+  // Another plan with the same claim ids (as after `plan --force` with a new seed or draft): nothing is reused.
+  const replaced: Plan = { ...plan, seed: 'another seed' };
+  await writeJson(paths.plan, replaced);
+  assert.deepEqual([(await runAll(options(w, replaced, paths))).skipped, launches()], [0, 8]);
+  // Same ids, different claim text.
+  const reworded: Plan = { ...replaced, claims: replaced.claims.map((claim, index) => (index === 0 ? { ...claim, text: `${claim.text} Reworded.` } : claim)) };
+  writeFileSync(w.answersFile, JSON.stringify(Object.fromEntries(reworded.claims.map((claim) => [claim.text, { book: 'T-A', trove: [3], pageindex: [5] }]))));
+  const afterText = await runAll(options(w, reworded, paths));
+  assert.deepEqual([afterText.skipped, afterText.done, launches()], [0, 4, 12], 'the plan changed with the claim, so nothing is reused');
+  // Another model or engine.
+  assert.equal((await runAll(options(w, reworded, paths, 'claude', { model: 'another-model' }))).skipped, 0);
+  assert.equal((await runAll(options(w, reworded, paths, 'codex'))).skipped, 0);
+  assert.notEqual(expectedFingerprint({ plan, engine: 'claude', model: null }, plan.claims[0] as Claim, 'trove'), expectedFingerprint({ plan, engine: 'claude', model: null }, plan.claims[0] as Claim, 'pageindex'));
+  rmSync(w.dir, { recursive: true, force: true });
+});
+
+test('commands outside the allowed list make the run invalid (claude too), and the violation is recorded', async () => {
+  const w = world();
+  const { plan, paths } = await planFor(w, 1);
+  w.env.FAKE_CLAUDE_MODE = 'chain';
+  await runAll(options(w, plan, paths));
+  const run = await readJson(join(paths.runsDir, 'c01-trove.json')) as Run;
+  assert.deepEqual([run.status, run.error, run.violations.length > 0], ['error', 'the agent ran a command that is not on its allowed list', true]);
+  assert.ok(run.violations.every((entry) => entry.length <= 120 && !entry.includes('/awlib')));
+  assert.deepEqual(validate('run', run), []);
+  rmSync(w.dir, { recursive: true, force: true });
+});
+
+for (const mode of ['orphan', 'linger']) {
+  test(`everything an agent started is stopped, including library commands that left its process group (${mode})`, async () => {
+    const w = world();
+    const { plan, paths } = await planFor(w, 1);
+    const pidFile = join(w.dir, 'detached.log');
+    Object.assign(w.env, { FAKE_DETACH_PIDS: pidFile, FAKE_DETACH_MODE: mode });
+    await runAll(options(w, plan, paths));
+    const pids = readFileSync(pidFile, 'utf8').split('\n').filter(Boolean).map(Number);
+    assert.equal(pids.length, 2, 'one detached helper per route');
+    for (const pid of pids) assert.throws(() => process.kill(pid, 0), `detached helper ${pid} is gone`);
+    rmSync(w.dir, { recursive: true, force: true });
+  });
+}
+
+const TROVE_FAKE = `
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.LIB_LOG, 'trove ' + args.join(' ') + '\\n');
+const page = (n) => '── Page ' + n + ' ──\\ntrove text p' + n + '\\n';
+if (args[0] === 'items' && args[1] === 'list') console.log(JSON.stringify({ items: [{ id: 'T-A', title: 'Book A', author: 'Au', pageCount: 9 }] }));
+else if (args[0] === 'items' && args[1] === 'toc' && args.includes('--json')) console.log(JSON.stringify({ items: [{ id: args[2], title: 'Book A', toc: [{ title: 'Intro', page: 1, level: 1 }] }] }));
+else if (args[0] === 'items' && args[1] === 'read') {
+  const spec = args.includes('--pages') ? args[args.indexOf('--pages') + 1] : args[2].split(':')[1];
+  const ids = spec.split(',').flatMap((p) => { const [a, b] = p.split('-').map(Number); return Array.from({ length: (b || a) - a + 1 }, (_, i) => a + i); });
+  process.stdout.write('Book A\\n' + args[2].split(':')[0] + ' | 9 pages\\n' + ids.map(page).join(''));
+} else { console.error('unexpected: ' + args.join(' ')); process.exit(2); }
+`;
+const PILIB_FAKE = `
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.LIB_LOG, 'pilib ' + args.join(' ') + '\\n');
+const [cmd, book, spec] = args;
+const info = { book_id: 'lib-a', title: 'Library A', n_pages: 9, origin: { trove: { trove_id: 'T-A' } }, trove_id: 'T-A', pagemap: null };
+if (cmd === 'catalog') console.log(JSON.stringify({ 'lib-a': { title: 'Library A', author: 'Au', n_pages: 9, toc_source: 'x', top: [] } }));
+else if (cmd === 'meta') console.log(JSON.stringify(info));
+else if (cmd === 'tree') console.log(JSON.stringify({ book_id: book, title: 'Library A', n_pages: 9, structure: [{ node_id: '1', title: 'Top', start_index: 1, end_index: 4 }] }));
+else if (cmd === 'read') {
+  const pages = spec.split(',').flatMap((p) => { const [a, b] = p.split('-').map(Number); return Array.from({ length: (b || a) - a + 1 }, (_, i) => a + i); });
+  if (args.includes('--json')) console.log(JSON.stringify({ book_id: book, pages: pages.map((n) => ({ page: n, content: 'pi text p' + n })) }));
+  else pages.forEach((n) => { console.log('── Page ' + n + ' ──'); console.log('pi text p' + n); });
+} else { console.error('unexpected: ' + args.join(' ')); process.exit(2); }
+`;
+
+/** The real `aw` (bundled from src/main.ts into a temp file), so the route forcing is the adapter's own. */
+function bundleAw(dir: string): string {
+  const root = existsSync(join(process.cwd(), 'src', 'main.ts')) ? process.cwd() : join(process.cwd(), 'src', 'cli');
+  const outfile = join(dir, 'aw.mjs');
+  const code = `import { build } from 'esbuild'; await build({ entryPoints: [${JSON.stringify(join(root, 'src', 'main.ts'))}], outfile: ${JSON.stringify(outfile)}, bundle: true, platform: 'node', target: 'node20', format: 'esm', logLevel: 'error', loader: { '.md': 'text' }, banner: { js: "import { createRequire as __r } from 'node:module'; const require = __r(import.meta.url);" } });`;
+  execFileSync(process.execPath, ['--input-type=module', '-e', code], { cwd: root });
+  return outfile;
+}
+
+test('an eval locate run reaches exactly one library through the real aw, whatever library.json says', async () => {
+  const w = world();
+  const bin = join(w.dir, 'libs');
+  mkdirSync(bin);
+  for (const [name, body] of [['trove', TROVE_FAKE], ['pilib', PILIB_FAKE]] as const) { writeFileSync(join(bin, name), `#!${process.execPath}\n${body}`); chmodSync(join(bin, name), 0o755); }
+  const libLog = join(w.dir, 'lib.log');
+  Object.assign(w.env, { AW_TROVE_COMMAND: join(bin, 'trove'), AW_PAGEINDEX_COMMAND: join(bin, 'pilib'), LIB_LOG: libLog, AW_LIBRARY_ROUTE: undefined });
+  writeFileSync(join(w.project, '.academic-helper', 'library.json'), JSON.stringify({ route: 'both' }));
+  const awScript = bundleAw(w.dir);
+  const { plan, paths } = await planFor(w, 1);
+  writeFileSync(w.answersFile, JSON.stringify(Object.fromEntries(plan.claims.map((claim) => [claim.text, { book: 'T-A', trove: [3], pageindex: [4] }]))));
+  const logged = (): string[] => (existsSync(libLog) ? readFileSync(libLog, 'utf8').split('\n').filter(Boolean) : []);
+  for (const route of ['trove', 'pageindex'] as Route[]) {
+    rmSync(libLog, { force: true });
+    rmSync(join(paths.runsDir), { recursive: true, force: true });
+    rmSync(join(w.project, '.academic-helper', 'retrieval.jsonl'), { force: true });
+    const summary = await runAll(options(w, plan, paths, 'claude', { routes: [route], awCommand: [process.execPath, awScript], parallel: 1 }));
+    assert.deepEqual([summary.done, summary.failed], [1, 0], route);
+    const run = await readJson(join(paths.runsDir, `c01-${route}.json`)) as Run;
+    assert.deepEqual([run.status, run.answer?.pages], ['ok', route === 'trove' ? [3] : [4]], route);
+    const used = logged();
+    assert.ok(used.length > 0);
+    const other = route === 'trove' ? 'pilib' : 'trove';
+    assert.deepEqual(used.filter((line) => line.startsWith(`${other} `)), [], `${route}: the other library is never asked, although library.json says both`);
+    await new Promise((resolve) => setTimeout(resolve, 600)); // a shadow worker, if one had started, would show by now
+    assert.deepEqual(logged().filter((line) => line.startsWith(`${other} `)), [], `${route}: no shadow lookup either`);
+    const rows = lines(join(w.project, '.academic-helper', 'retrieval.jsonl'));
+    assert.ok(rows.length > 0 && rows.every((row) => row.row_type === 'lookup' && row.route_primary === route && row.shadow_status === 'none'), JSON.stringify(rows.map((row) => [row.row_type, row.route_primary, row.shadow_status])));
+  }
+  rmSync(w.dir, { recursive: true, force: true });
+});
+
 test('returnedFor: sums only this run id lookup rows and says null when the ledger has none', async () => {
   const w = world();
   assert.deepEqual(await returnedFor(w.project, 'r1'), { chars: null, est: null });
@@ -384,6 +530,11 @@ test('a full round: plan, run, pairs, import, unblind through runEvalCli with fa
   const plan = await readJson(evalPaths(w.project, 'ev-full').plan) as Plan;
   writeFileSync(w.answersFile, JSON.stringify(Object.fromEntries(plan.claims.map((claim, index) => [claim.text, { book: claim.source_id, trove: [claim.cited_trove_pages[0]], pageindex: index % 3 === 0 ? [claim.cited_trove_pages[0]] : [9] }]))));
   assert.deepEqual(plan.claims.map((claim) => claim.cited_trove_pages), plan.claims.map((claim) => [{ 'T-A': 3, 'T-B': 4, 'T-C': 5 }[claim.source_id] as number]));
+  const staleRun = join(w.project, '.academic-helper', 'library-eval', 'ev-full', 'runs', 'c01-trove.json');
+  mkdirSync(join(staleRun, '..'), { recursive: true });
+  writeFileSync(staleRun, '{}');
+  assert.equal((await call('plan', '--eval', 'ev-full', '--n', '6', '--seed', 'abc', '--force')).code, 0, err.join(''));
+  assert.equal(existsSync(staleRun), false, '`plan --force` clears the runs of the plan it replaces');
   const status0 = await call('status', '--eval', 'ev-full');
   assert.equal(status0.json?.stage, 'planned');
   const ran = await call('run', '--eval', 'ev-full', '--parallel', '3');

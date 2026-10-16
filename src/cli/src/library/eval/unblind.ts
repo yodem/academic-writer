@@ -37,6 +37,8 @@ export type Report = {
   eval_id: string;
   generated_at: string;
   forced: boolean;
+  /** Claims left out of the pairs because an agent ran a command outside its allowed list. */
+  excluded: Array<{ claim_id: string; route: Route; violations: string[] }>;
   n_pairs: number; n_judged: number; n_auto_same: number; n_skipped: number; n_unjudged: number;
   decisive: number;
   routes: Record<string, RouteReport>;
@@ -161,6 +163,7 @@ export async function unblind(options: { paths: EvalPaths; force: boolean; now: 
   const p = decisive === 0 ? null : signTestP(tally[first].wins, decisive);
   const report: Report = {
     schema: 1, eval_id: plan.eval_id, generated_at: options.now.toISOString(), forced: options.force && (raw === null || unjudged.length > 0),
+    excluded: [...runs.values()].filter((run) => run.violations.length > 0).map((run) => ({ claim_id: run.claim_id, route: run.route, violations: run.violations })),
     n_pairs: pairs.pairs.length, n_judged: judged, n_auto_same: autoSame, n_skipped: skipped, n_unjudged: unjudged.length,
     decisive, routes: routesReport, sign_test: { first, second, first_wins: tally[first].wins, decisive, p_value: p },
     enough_pairs: enough, statement: '',
@@ -203,6 +206,7 @@ export function renderMarkdown(report: Report): string {
     ...(report.forced ? ['> The key was opened before every pair was judged (forced). Do not treat this as a finished result.', ''] : []),
     report.statement, '',
     `Pairs: ${report.n_pairs} in all, ${report.n_judged} judged by you, ${report.n_auto_same} identical (marked "same" automatically), ${report.n_skipped} skipped, ${report.n_unjudged} not judged.`, '',
+    ...(report.excluded.length > 0 ? ['Left out because an agent ran a command it was not allowed to run (the run is invalid):', ...report.excluded.map((entry) => `- ${entry.claim_id}, ${NAME[entry.route]}: ${entry.violations.join(' | ')}`), ''] : []),
     '## By library', '',
     `| | ${routes.map((route) => NAME[route.route]).join(' | ')} |`, `| --- | ${routes.map(() => '---').join(' | ')} |`,
     line('Pairs won', (r) => String(r.wins)), line('Pairs lost', (r) => String(r.losses)), line('Same', (r) => String(r.ties)), line('Neither found it', (r) => String(r.neither)),

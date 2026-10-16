@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import thresholds from '../../../../thresholds.json' with { type: 'json' };
 import type { Engine } from './types.ts';
 
 // ---------------------------------------------------------------- running one agent process
@@ -27,7 +28,7 @@ export type AgentExit = { stdout: string; stderr: string; code: number | null; t
  * and the promise settles even if a grandchild keeps the pipes open (same approach as exec.ts, but the output of a
  * failed run is kept: its usage and cost still count).
  */
-export function runAgent(command: string[], args: string[], options: { input: string; cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number; maxBuffer: number; group: ChildGroup }): Promise<AgentExit> {
+export function runAgent(command: string[], args: string[], options: { input: string; cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number; maxBuffer: number; group: ChildGroup; tracker?: (pid: number) => void }): Promise<AgentExit> {
   const [file, ...prefix] = command;
   const started = Date.now();
   if (!file) return Promise.resolve({ stdout: '', stderr: '', code: null, timedOut: false, tooLarge: false, spawnError: 'empty command', wallMs: 0 });
@@ -40,6 +41,7 @@ export function runAgent(command: string[], args: string[], options: { input: st
     let tooLarge = false;
     const child = spawn(file, [...prefix, ...args], { stdio: ['pipe', 'pipe', 'pipe'], env: options.env, cwd: options.cwd, detached: process.platform !== 'win32', windowsHide: true });
     options.group.add(child);
+    if (child.pid) options.tracker?.(child.pid);
     const finish = (code: number | null, spawnError: string | null): void => {
       if (settled) return;
       settled = true;
@@ -197,4 +199,112 @@ export function parseAnswer(text: string | null, maxPages: number): { book: stri
     } catch { /* try an earlier block */ }
   }
   return null;
+}
+
+// ---------------------------------------------------------------- everything an agent started
+
+/**
+ * Every process started for one locate attempt carries this variable (it is inherited through the wrapper, `aw` and the
+ * library commands). The agent's own process group is not enough: `aw` starts library commands in groups of their own.
+ * Where `ps` cannot show a process's environment (system binaries under macOS protection, Windows) the process tree
+ * followed while the agent ran (`TreeTracker`) finds them instead.
+ */
+export const RUN_TAG_ENV = 'AW_EVAL_RUN_TAG';
+
+type Proc = { pid: number; ppid: number; started: string };
+
+function psOutput(args: string[]): Promise<string> {
+  if (process.platform === 'win32') return Promise.resolve('');
+  return new Promise((resolve) => {
+    execFile('ps', args, { maxBuffer: 64 * 1024 * 1024 }, (error, stdout) => { resolve(error ? '' : stdout); });
+  });
+}
+
+/** Every process with its parent and start time (the start time tells a reused pid from the original). */
+async function snapshotProcs(): Promise<Proc[]> {
+  const out: Proc[] = [];
+  for (const line of (await psOutput(['-axo', 'pid=,ppid=,lstart='])).split('\n')) {
+    const match = /^\s*(\d+)\s+(\d+)\s+(.+?)\s*$/u.exec(line);
+    if (match) out.push({ pid: Number(match[1]), ppid: Number(match[2]), started: match[3] as string });
+  }
+  return out;
+}
+
+/** Pids whose environment carries `AW_EVAL_RUN_TAG=<tag>` (via `ps`; none where ps cannot show environments). */
+export async function listTagged(tag: string): Promise<number[]> {
+  const marker = `${RUN_TAG_ENV}=${tag}`;
+  const found: number[] = [];
+  for (const line of (await psOutput(['axeww', '-o', 'pid=,command='])).split('\n')) {
+    const match = /^\s*(\d+)\s/u.exec(line);
+    if (!match) continue;
+    const at = line.indexOf(marker);
+    if (at >= 0 && /\s/u.test(line[at + marker.length] ?? ' ') && Number(match[1]) !== process.pid) found.push(Number(match[1]));
+  }
+  return found;
+}
+
+/**
+ * Follows the descendants of one process while it runs (a snapshot every library.shadow.pollMs), remembering each
+ * pid with its start time. A library command `aw` started in a group of its own, and that outlives its parent, is
+ * then still known when the agent is stopped.
+ */
+export class TreeTracker {
+  private readonly seen = new Map<number, string>();
+  private timer: NodeJS.Timeout | null = null;
+  private busy: Promise<void> = Promise.resolve();
+  constructor(private readonly root: number) {}
+
+  private tick(): Promise<void> {
+    this.busy = this.busy.then(async () => {
+      const procs = await snapshotProcs();
+      const children = new Map<number, Proc[]>();
+      for (const proc of procs) children.set(proc.ppid, [...(children.get(proc.ppid) ?? []), proc]);
+      const visited = new Set<number>();
+      const queue = procs.filter((proc) => proc.pid === this.root || this.seen.get(proc.pid) === proc.started);
+      for (const proc of queue) visited.add(proc.pid);
+      for (let index = 0; index < queue.length; index += 1) {
+        const proc = queue[index] as Proc;
+        if (proc.pid !== this.root) this.seen.set(proc.pid, proc.started);
+        for (const child of children.get(proc.pid) ?? []) if (!visited.has(child.pid)) { visited.add(child.pid); queue.push(child); }
+      }
+    });
+    return this.busy;
+  }
+
+  start(): void {
+    void this.tick();
+    this.timer = setInterval(() => { void this.tick(); }, thresholds.library.shadow.pollMs);
+  }
+
+  async stop(): Promise<void> {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    await this.tick();
+  }
+
+  /** The followed processes that are still running (same pid AND same start time). */
+  async alive(): Promise<number[]> {
+    const procs = await snapshotProcs();
+    return procs.filter((proc) => this.seen.get(proc.pid) === proc.started).map((proc) => proc.pid);
+  }
+}
+
+/**
+ * Kill every tagged or followed process and look again, until none is left or the bound (library.shadow.reapGraceMs,
+ * in steps of library.shadow.pollMs) is used up. Returns how many processes were killed in all.
+ */
+export async function reapTagged(tag: string, tracker?: TreeTracker): Promise<number> {
+  const { reapGraceMs, pollMs } = thresholds.library.shadow;
+  let killed = 0;
+  for (let round = 0; round <= Math.ceil(reapGraceMs / pollMs); round += 1) {
+    const pids = [...new Set([...(await listTagged(tag)), ...(tracker ? await tracker.alive() : [])])].filter((pid) => pid !== process.pid);
+    if (pids.length === 0) return killed;
+    for (const pid of pids) {
+      killed += 1;
+      try { process.kill(-pid, 'SIGKILL'); } catch { /* not a group leader */ }
+      try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
+    }
+    await new Promise<void>((done) => { setTimeout(done, pollMs); });
+  }
+  return killed;
 }

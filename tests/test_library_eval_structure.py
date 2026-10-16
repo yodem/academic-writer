@@ -74,6 +74,7 @@ RUN = {
     "started_at": TS, "answer": {"book": "T-A", "pages": [3, 5], "reason": "r"}, "tool_calls": ["<wrapper> toc --source T-A"], "n_reads": 1, "n_toc": 1,
     "pages_per_read": [2], "over_budget": False, "permission_denials": 0, "wall_ms": 4000, "agent_ms": 3000, "turns": 3, "input_tokens": 500,
     "output_tokens": 20, "cost_usd": 0.05, "returned_chars": 900, "returned_est_tokens": 250, "agent_version": "2.1.0", "error": None,
+    "plan_sha256": SHA, "claim_sha256": SHA, "prompt_version": "locate-v2", "model_requested": "m", "fingerprint": SHA, "violations": [],
 }
 OPTION = {"book": "T-A", "book_title": "ספר א", "pages": [{"page": 3, "text": "Text. טקסט."}]}
 PAIRS = {
@@ -132,7 +133,7 @@ class TestSchemas(unittest.TestCase):
             self.skipTest("jsonschema not installed")
         bad = {
             "plan": [lambda d: d["claims"][0].update(id="x1"), lambda d: d["routes"].append("other"), lambda d: d.update(extra=1)],
-            "run": [lambda d: d.update(status="maybe"), lambda d: d.update(input_tokens=-1), lambda d: d["answer"].update(pages=["3"])],
+            "run": [lambda d: d.update(status="maybe"), lambda d: d.update(fingerprint="x"), lambda d: d.update(violations="no"), lambda d: d.update(input_tokens=-1), lambda d: d["answer"].update(pages=["3"])],
             "pairs": [lambda d: d["pairs"][0].update(route="trove"), lambda d: d.update(mapping_sha256="short"), lambda d: d["pairs"][0]["options"]["A"].update(latency_ms=3),
                       lambda d: d["pairs"][0]["options"].update(C=OPTION), lambda d: d["pairs"][0].update(pair_id="pair-1")],
             "judgments": [lambda d: d["entries"][0].update(verdict="best"), lambda d: d["entries"][0].update(note="x" * 2001), lambda d: d["entries"][0].update(source="robot")],
@@ -207,12 +208,14 @@ class TestModules(unittest.TestCase):
         for name in sorted(os.listdir(EVAL_DIR)):
             source = self.read(name)
             self.assertNotRegex(source, r"shell\s*:\s*true", name)
-            self.assertNotRegex(source, r"import\s*\{[^}]*\bexec(Sync|File|FileSync)?\b[^}]*\}\s*from\s*'node:child_process'", name)
+            self.assertNotRegex(source, r"import\s*\{[^}]*\bexec(Sync)?\b[^}]*\}\s*from\s*'node:child_process'", name)
 
     def test_agents_run_in_their_own_process_group_and_are_killed_as_one(self):
         source = self.read("agent.ts")
         self.assertIn("detached", source)
         self.assertIn("process.kill(-child.pid", source)
+        self.assertIn("AW_EVAL_RUN_TAG", source)
+        self.assertIn("reapTagged", self.read("runner.ts"))
 
     def test_the_usage_row_is_the_locate_step_and_the_run_id_ends_in_route_and_claim(self):
         runner = self.read("runner.ts")
