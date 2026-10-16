@@ -16,3 +16,5 @@ export function setPathArguments(args: string[]): string[] {
 }
 export function dataDir(): string { if (!dataArgument) throw new Error('ERROR: --data-dir is required'); return resolve(dataArgument); }
 export function projectDir(): string { if (!projectArgument) throw new Error('ERROR: --project-dir is required'); return resolve(projectArgument); }
+// Non-throwing variant for `aw library`: --project-dir, else CLAUDE_PROJECT_DIR, else the current directory.
+export function projectDirOr(): string { return resolve(projectArgument ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd()); }

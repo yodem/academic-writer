@@ -25,6 +25,7 @@ Save the selected text and the instruction to temporary files inside the project
   --text-file <text-file> --instruction-file <instruction-file> --lang <he|en> --run <run-id> --out <output-file>
 ```
 
+- Choose one run ID for this edit, e.g. `edit-ashkenazi-creation-20261015-1430` (a short English label, then the date and time). Use only Latin letters, digits and hyphens: transliterate a Hebrew title or use a short English label, because the library refuses any other character in an id. Use the same `<run-id>` for the auditor.
 - For a one-line instruction you may pass `--instruction <text>` instead of `--instruction-file`.
 - Take the language from `.academic-helper/profile.md` (`targetLanguage`); ask the author if it is missing.
 - The command prints `{"revised_text":"..."}` and, with `--out`, writes the output file.
@@ -32,6 +33,6 @@ Save the selected text and the instruction to temporary files inside the project
 ## 3. Check and apply
 
 1. Show the author what changed (a short before/after of each changed passage) before you replace anything in their article.
-2. If the edit touched a factual claim or a citation, send the whole edited unit to the `auditor` agent in one single batched call covering every paragraph. The auditor is the plugin's only hard gate for citations, so it must see edited facts before they are accepted.
+2. If the edit touched a factual claim or a citation, send the whole edited unit to the `auditor` agent in one single batched call covering every paragraph, with `runId: <run-id>` (the `--run` value used for `aw edit`) in the prompt. The auditor is the plugin's only hard gate for citations, so it must see edited facts before they are accepted.
 3. Commit the auditor's `taggedText` for PASS paragraphs only. Correct FAIL or PARTIAL paragraphs and audit them again before accepting them.
 4. Tell the author which passages changed and whether any paragraph still carries a `[NEEDS REVIEW: ...]` tag they should check by hand.

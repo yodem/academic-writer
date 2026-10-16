@@ -1,7 +1,5 @@
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { callGemini } from './gemini.ts';
 import { appendLedger } from './ledger.ts';
@@ -9,14 +7,17 @@ import { dataDir, projectDir } from './paths.ts';
 import { routeFor } from './routing.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
 import { fetchSefaria } from './sefaria.ts';
+import { Library } from './library/adapter.ts';
+import { shadowModeFrom } from './library/shadow.ts';
+import { isPlainId } from './library/backends.ts';
+import type { RouteName } from './library/types.ts';
 import { decide } from './decide.ts';
 import evidenceSchema from '../../schemas/evidence.schema.json' with { type: 'json' };
 
-const execFileAsync = promisify(execFile);
 type Passage = { id: string; sourceId: string; locator: string; quote: string; gloss: string; relevance: number };
 type Source = { id: string; title: string; author: string; role: 'primary' | 'secondary'; isCoreText: boolean };
 type ExtractResult = { passages: Passage[] };
-type Stubs = { fetchCk: (id: string) => Promise<string>; fetchSefaria: typeof fetchSefaria; extract: (sourceId: string, text: string, intent: string, runId: string) => Promise<ExtractResult> };
+type Stubs = { fetchCk: (id: string, route: RouteName) => Promise<string>; fetchSefaria: typeof fetchSefaria; extract: (sourceId: string, text: string, intent: string, runId: string) => Promise<ExtractResult> };
 type BuildOptions = { sources: string[]; sefaria?: string[]; intent?: string; runId: string };
 type BuildResult = { sources: Source[]; passages: Passage[] };
 const sourceCache = new Map<string, string>();
@@ -41,6 +42,10 @@ export function stablePassageId(sourceId: string, quote: string): string {
 }
 
 function normalize(value: string): string { return value.normalize('NFC').replace(/\s+/gu, ' ').trim(); }
+// The source cache is keyed by route: the same Trove id read through PageIndex is different text (other page
+// breaks, other layout), so the two must never share an entry. Trove keeps the plain id, so caches written
+// before routes existed still hit.
+export function cacheKeyFor(route: RouteName, id: string): string { return route === 'trove' ? id : `${route}~${id}`; }
 function cachePath(id: string, text: string): string {
   const digest = createHash('sha256').update(text).digest('hex');
   const directory = join(dataDir(), 'sources', `${encodeURIComponent(id)}@${digest}`);
@@ -66,21 +71,23 @@ export function ckMetadata(text: string): { title?: string; author?: string } {
   return { title, author };
 }
 
-// The trove table of contents names the book reliably on the line before `ID: <id>`; the bold-line
-// heuristic misreads books whose first bold line is a list number (Sefer Yetzirah: "1.").
-export function titleFromToc(toc: string): string | undefined {
-  const lines = toc.split('\n').map((l) => l.replace(/^=+|=+$/gu, '').trim()).filter((l) => l && !/^=+$/u.test(l));
-  const idLine = lines.findIndex((l) => l.startsWith('ID:'));
-  const candidate = idLine > 0 ? lines[idLine - 1] : undefined;
-  return candidate?.replace(/^=+\s*|\s*=+$/gu, '').trim() || undefined;
-}
-async function ckTitle(id: string): Promise<string | undefined> {
-  try { const { stdout } = await execFileAsync('trove', ['items', 'toc', id], { maxBuffer: 8 * 1024 * 1024 }); return titleFromToc(stdout); } catch { return undefined; }
-}
+// The title heuristic lives with the Trove backend; re-exported for the callers that import it from here.
+export { titleFromToc } from './library/backends.ts';
 
-async function fetchCk(id: string): Promise<string> {
-  const { stdout } = await execFileAsync('trove', ['items', 'read', `${id}:all`], { maxBuffer: 64 * 1024 * 1024 });
-  return stdout;
+// A whole-book read through the library adapter (Trove or PageIndex, whichever answers this project). Trove's
+// own output is returned untouched; a route that has no Trove-format text gets page banners and a title line.
+async function fetchViaLibrary(library: Library, id: string, runId: string): Promise<string> {
+  const output = await library.read({ source: id, all: true, op: 'get', run: runId });
+  if (output.raw !== undefined) return output.raw;
+  const body = output.pages.map((page) => `── Page ${page.trove_page} ──\n${page.text}`).join('\n\n');
+  return output.title ? `**${output.title}**\n\n${body}` : body;
+}
+async function titleViaLibrary(library: Library, id: string): Promise<string | undefined> {
+  try {
+    const route = library.config.primary;
+    const { book } = await library.resolveBook(route, id);
+    return await library.backend(route).title(book);
+  } catch { return undefined; }
 }
 async function extract(sourceId: string, text: string, intent: string, runId: string, isCore = false): Promise<ExtractResult> {
   if (stubState.value?.extract) return stubState.value.extract(sourceId, text, intent, runId);
@@ -104,29 +111,37 @@ function event(runId: string, record: Passage, reason: string): void {
 export async function buildEvidence(options: BuildOptions): Promise<BuildResult> {
   dataDir();
   projectDir();
+  // A source id ends up in command lines the auditor and the library run: refuse anything but a plain id before any command runs.
+  for (const id of options.sources) {
+    if (!isPlainId(id)) throw new Error(`ERROR evidence.build: source id ${JSON.stringify(id)} is not a plain id (letters, digits and . _ # : - only); remove it from the source list`);
+  }
   const intent = options.intent ? readFileSync(options.intent, 'utf8') : '';
   // The author's intent decides the core text and primary sources (live rehearsal 2026-09-23: every
   // Trove source defaulted to secondary / not-core, and titles were raw ids).
   const intentJson = (() => { try { return JSON.parse(intent) as { coreTextSourceId?: string; primarySources?: string[] }; } catch { return {}; } })();
   const intentCore = intentJson.coreTextSourceId ?? '';
   const primaryIds = new Set(intentJson.primarySources ?? []);
+  // One adapter for every lookup: with route=both the other route runs as a quiet shadow, and every read is a ledger row.
+  const library = new Library(projectDir(), process.env, { shadow: shadowModeFrom(process.env) });
+  const route = library.config.primary;
   const tasks = [
     ...options.sources.map(async (id) => {
-      const cached = sourceCache.get(id) ?? cachedText(id);
-      const text = cached ?? await (stubState.value?.fetchCk ?? fetchCk)(id);
-      sourceCache.set(id, text);
-      cachePath(id, text);
+      const key = cacheKeyFor(route, id);
+      const cached = sourceCache.get(key) ?? cachedText(key);
+      const text = cached ?? await (stubState.value?.fetchCk ? stubState.value.fetchCk(id, route) : fetchViaLibrary(library, id, options.runId));
+      sourceCache.set(key, text);
+      cachePath(key, text);
       const meta = ckMetadata(text);
-      const tocTitle = stubState.value?.fetchCk ? undefined : await ckTitle(id);
+      const tocTitle = stubState.value?.fetchCk ? undefined : await titleViaLibrary(library, id);
       const isCoreText = id === intentCore;
-      return { id, title: tocTitle ?? meta.title ?? id, author: meta.author ?? '', role: (isCoreText || primaryIds.has(id) ? 'primary' : 'secondary') as 'primary' | 'secondary', isCoreText, text };
+      return { id, key, title: tocTitle ?? meta.title ?? id, author: meta.author ?? '', role: (isCoreText || primaryIds.has(id) ? 'primary' : 'secondary') as 'primary' | 'secondary', isCoreText, text };
     }),
     ...(options.sefaria ?? []).map(async (reference) => {
       const id = `sefaria:${reference}`;
       const cached = cachedText(id);
       const result = cached === undefined ? await (stubState.value?.fetchSefaria ?? fetchSefaria)(reference) : { title: reference, author: '', text: cached };
       cachePath(id, result.text);
-      return { id, title: result.title, author: result.author, role: 'primary' as const, isCoreText: id === intentCore, text: result.text };
+      return { id, key: id, title: result.title, author: result.author, role: 'primary' as const, isCoreText: id === intentCore, text: result.text };
     }),
   ];
   const fetched = await Promise.all(tasks);
@@ -142,10 +157,10 @@ export async function buildEvidence(options: BuildOptions): Promise<BuildResult>
       if (source) extracted[index] = { source, result: await extract(source.id, source.text, intent, options.runId, source.isCoreText) };
     }
   }));
-  const sources: Source[] = fetched.map(({ text: _text, ...source }) => source);
+  const sources: Source[] = fetched.map(({ text: _text, key: _key, ...source }) => source);
   const passages: Passage[] = [];
   for (const { source, result } of extracted) {
-    const cachedText = sourceCache.get(source.id) ?? source.text;
+    const cachedText = sourceCache.get(source.key) ?? source.text;
     for (const passage of result.passages) {
       // An empty quote "occurs" in every text; reject it before the verbatim check.
       if (!normalize(passage.quote) || !normalize(cachedText).includes(normalize(passage.quote))) { event(options.runId, passage, 'quote_not_verbatim'); continue; }
@@ -166,7 +181,7 @@ export async function buildEvidence(options: BuildOptions): Promise<BuildResult>
   if (existsSync(previousPath)) {
     try {
       const previous = JSON.parse(readFileSync(previousPath, 'utf8')) as BuildResult;
-      const texts = new Map(fetched.map((f) => [f.id, normalize(sourceCache.get(f.id) ?? f.text)]));
+      const texts = new Map(fetched.map((f) => [f.id, normalize(sourceCache.get(f.key) ?? f.text)]));
       for (const p of previous.passages ?? []) {
         if (passages.some((q) => q.id === p.id)) continue;
         const text = texts.get(p.sourceId);

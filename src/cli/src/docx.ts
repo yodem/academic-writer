@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { allowedEnv } from './library/backends.ts';
 
 type Unit = { id: string };
 type Section = { title?: string; units?: Unit[] };
@@ -87,7 +88,7 @@ export function generateDocx(args: { outlinePath: string; runId: string; out: st
   const jsonPath = join(runDir, 'article.json');
   writeFileSync(jsonPath, `${JSON.stringify(result.article, null, 2)}\n`, 'utf8');
   const script = join(args.pluginRoot, 'scripts', 'generate-docx.py');
-  const child = spawnSync('python3', [script, '--input', jsonPath, '--output', args.out], { stdio: 'inherit' });
+  const child = spawnSync('python3', [script, '--input', jsonPath, '--output', args.out], { stdio: 'inherit', env: allowedEnv(process.env, 'script') });
   if (child.error) throw new Error(`ERROR docx: ${child.error.message}`);
   if (child.status !== 0) throw new Error(`ERROR docx: generate-docx.py exited ${child.status ?? 1}`);
   return { sections: result.sections, paragraphs: result.paragraphs, footnotes: result.footnotes, words: result.words };

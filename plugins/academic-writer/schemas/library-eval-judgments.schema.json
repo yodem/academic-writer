@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Library evaluation judgments (judgments.json)",
+  "description": "The judge's verdicts, append-only. The newest entry of a pair is the one that counts. definitions.import is the shape `aw library eval import` accepts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "eval_id", "pairs_sha256", "mapping_sha256", "entries"],
+  "properties": {
+    "schema": {"const": 1},
+    "eval_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,39}$"},
+    "pairs_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "mapping_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "entries": {"type": "array", "items": {"$ref": "#/definitions/entry"}}
+  },
+  "definitions": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pair_id", "verdict", "note", "source", "judged_at", "imported_at"],
+      "properties": {
+        "pair_id": {"type": "string", "pattern": "^p[0-9]{2,3}$"},
+        "verdict": {"enum": ["A", "B", "same", "neither", "skip"]},
+        "note": {"type": "string", "maxLength": 2000},
+        "source": {"enum": ["judge", "auto"]},
+        "judged_at": {"type": ["string", "null"]},
+        "imported_at": {"type": "string", "minLength": 1}
+      }
+    },
+    "import": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["judgments"],
+      "properties": {
+        "schema": {"const": 1},
+        "eval_id": {"type": "string"},
+        "judgments": {"type": "array", "items": {"$ref": "#/definitions/import_item"}}
+      }
+    },
+    "import_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pair_id", "verdict"],
+      "properties": {
+        "pair_id": {"type": "string", "pattern": "^p[0-9]{2,3}$"},
+        "verdict": {"enum": ["A", "B", "same", "neither", "skip"]},
+        "note": {"type": "string", "maxLength": 2000},
+        "at": {"type": "string"}
+      }
+    }
+  }
+}

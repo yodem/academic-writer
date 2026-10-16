@@ -596,6 +596,143 @@
       ]
     },
     {
+      "id": "course-dashboard",
+      "name": "Local course dashboard (overview, week agenda, course pages; live over SSE)",
+      "sources": [
+        "src/skills/dashboard/SKILL.md",
+        "src/scripts/courses/dashboard.py",
+        "src/scripts/courses/dashboard/index.html",
+        "src/scripts/courses/tasks.py",
+        "tests/courses/test_dashboard.py"
+      ],
+      "status": "ok",
+      "subfeatures": [
+        {
+          "id": "dashboard-state",
+          "name": "/api/state joins the registry; next task, ready/missing/waiting state, lede and semester-aware agenda computed deterministically",
+          "status": "ok"
+        },
+        {
+          "id": "dashboard-security",
+          "name": "127.0.0.1 only, per-run key and HttpOnly cookie, Host and Origin checks on writes",
+          "status": "ok"
+        },
+        {
+          "id": "dashboard-submit",
+          "name": "I submitted / undo through tasks.py task submit and task unsubmit",
+          "status": "ok"
+        },
+        {
+          "id": "dashboard-fetch-queue",
+          "name": "Fetch selected writes queue/fetch jobs for refs.py fetch",
+          "status": "ok",
+          "notes": "The page only queues jobs; the nightly script drains them with refs.py fetch-queue (retry up to 3 nights, then done/ with status failed). Downloads that need the browser become chores."
+        }
+      ],
+      "notes": "All dashboard features are ok; queue/fetch is drained nightly by refs.py fetch-queue."
+    },
+    {
+      "id": "library-routes",
+      "name": "Library routes, built-in PageIndex, retrieval ledger and blind evaluation (Trove default, PageIndex optional)",
+      "sources": [
+        "src/cli/src/library/",
+        "src/schemas/library-config.schema.json",
+        "src/schemas/retrieval-row.schema.json",
+        "src/agents/auditor.md",
+        "src/cli/src/evidence.ts",
+        "src/skills/init/references/integration-setup.md",
+        "src/skills/update-tools/SKILL.md",
+        "docs/library-routes.md",
+        "tests/test_library_e2e.py",
+        "src/cli/src/library/install.ts",
+        "src/cli/src/library/index-cmd.ts",
+        "src/cli/src/library/backfill.ts",
+        "src/cli/src/library/report.ts",
+        "src/cli/src/library/eval/",
+        "src/scripts/pageindex/",
+        "src/schemas/library-eval-plan.schema.json",
+        "src/skills/library-eval/SKILL.md",
+        "src/skills/library-eval/references/judge-page.html",
+        "src/skills/ingest/references/index-for-pageindex.md",
+        "src/skills/ingest/references/existing-item.md",
+        "src/skills/ocr/references/engines.md",
+        "src/skills/setup/references/pageindex.md",
+        "tests/test_pageindex_e2e.py",
+        "tests/test_pageindex_index.py",
+        "tests/test_pageindex_lib.py"
+      ],
+      "status": "partial",
+      "subfeatures": [
+        {
+          "id": "route-choice",
+          "name": "Per-project route (trove | pageindex | both, with a choice of which answers) asked in init and update-tools, stored in .academic-helper/library.json; no file means Trove only, as before",
+          "status": "ok"
+        },
+        {
+          "id": "library-adapter",
+          "name": "aw library status|list|toc|read|get: one adapter over Trove and an optional PageIndex command (pageindex_command plugin setting), Trove page numbers as the canonical page space with printed-page mapping through sources.json pageMap",
+          "status": "ok"
+        },
+        {
+          "id": "quiet-shadow",
+          "name": "With route=both the other library runs as a detached background lookup that never changes, delays or fails the answering result (tested with a failing and a hanging fake pilib)",
+          "status": "ok"
+        },
+        {
+          "id": "retrieval-ledger",
+          "name": "Schema-validated .academic-helper/retrieval.jsonl: lookup, shadow and verdict rows (PASS/FAIL, corrected page, shadow-supports computed in code, no model call)",
+          "status": "ok"
+        },
+        {
+          "id": "library-report",
+          "name": "aw library report: page agreement, latency, failures and timeouts, auditor pass rate and second-library support by route",
+          "status": "ok",
+          "issue": "The page-agreement (0.6) and quote-support (0.8) cut-offs in thresholds.json are uncalibrated on real Hebrew pairs. Accepted risks, written up in docs/library-routes.md: the shadow worker cap is soft, and a directory swapped for a symlink between the ledger's containment check and its write is not caught."
+        },
+        {
+          "id": "command-resolution",
+          "name": "Which PageIndex command runs: AW_PAGEINDEX_COMMAND (the pageindex_command setting), then library.json, then the plugin-installed helper, then pilib on the path; AW_LIBRARY_ROUTE forces one route",
+          "status": "ok"
+        },
+        {
+          "id": "builtin-install",
+          "name": "aw library install|uninstall: private Python folder in the plugin data folder, hashed pinned requirements, core tier (Python 3.9+) and structure tier (Python 3.10+, pango); the CLI refuses without --yes, the skill asks first",
+          "status": "partial",
+          "notes": "The core tier was installed for real (Python 3.9, hashed pip, status check, uninstall). The structure tier (PageIndex tarball, WeasyPrint, pango) has not been installed or run in any test or CI job; its failure mode (falls back to core with degraded: true) is tested only with a fake."
+        },
+        {
+          "id": "ingest-dual-write",
+          "name": "aw library index --trove-id: PageIndex tree from the hinted table of contents of a Trove item (same page numbers), Gemini summaries or free hints, summary reuse, read-back against Trove; ingest and ingest-book offer it after the Trove read-back, including adding a reading to an existing item",
+          "status": "partial",
+          "notes": "Tested end to end with a fake Trove and a stub Gemini client, including re-indexing a changed item. Not yet run against real Trove and real Gemini at this commit. A book with no hinted table of contents needs the structure tier and Gemini; that fallback is tested only with fakes."
+        },
+        {
+          "id": "backfill",
+          "name": "aw library backfill: copy existing Trove books into PageIndex (--shelf-current, --ids, --all), repeatable, dry-run estimate first",
+          "status": "partial",
+          "notes": "Tested with two fake books and the e2e suite; not yet run against a real Trove shelf."
+        },
+        {
+          "id": "ocr-engines",
+          "name": "OCR choice in the ocr skill: the plugin's Gemini OCR, Claude or Codex reading page images, or local Tesseract",
+          "status": "partial",
+          "notes": "Only the Gemini engine (aw ocr) is code; Claude, Codex and Tesseract are written procedures in the skill (src/skills/ocr/references/engines.md) that no automated test runs."
+        },
+        {
+          "id": "report-tokens",
+          "name": "aw library report: returned-text tokens (estimates, characters divided by a ratio), locating-agent tokens and cost from the usage ledger, indexing runs, latency, auditor pass rate, page agreement and shadow-supports; --eval filters one evaluation",
+          "status": "ok"
+        },
+        {
+          "id": "library-eval",
+          "name": "/academic-writer:library-eval and aw library eval plan|run|pairs|page|import|unblind|status: claims from a draft, locating agents (claude or codex) per route, anonymised A/B pairs with a sealed key, a private judging page (local file), unblinded report with win rate, interval and sign test",
+          "status": "partial",
+          "notes": "Tested end to end with a fake claude. Not yet run with a real claude or codex on a real article. The judging page saves to the browser and a downloaded file; the shared-store back-end for a published private page is a stub that returns null until it is wired to the artifact capability, so the claude.ai page option in the skill depends on that. The codex flags were checked only against its --help output. Blinding holds for the human judge; the locating agent can still see the structural difference between a table of contents and an outline tree."
+        }
+      ],
+      "notes": "Built and tested with fakes (end-to-end test with a fake claude, fake trove and a stub Gemini client), but the live checks are not recorded yet: a real Gemini indexing run, a real backfill of a Trove book and a real blind evaluation on a real article. The structure tier of the install (PageIndex plus WeasyPrint, Python 3.10+ and pango) has never been installed in CI or in the tests. Details in the subfeatures below."
+    },
+    {
       "id": "kotar-fetch",
       "name": "Kotar cited-pages fetch",
       "sources": [

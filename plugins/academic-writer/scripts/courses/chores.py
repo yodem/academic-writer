@@ -1,7 +1,7 @@
 """Chores store for the course pipeline: things Yotam (not a script) must do.
 
 `REG/chores.json` is the store. `REG/digest/` holds only the read-only digest that NanoClaw mounts
-(`chores.md` in Hebrew, `chores.json`); nothing else may live there. No ids or tokens reach the digest.
+(`chores.md` in Hebrew, `chores.json`, and `wispr-unmatched.json`: the Wispr meetings no course claimed, as id/time/reason only); nothing else may live there. No ids or tokens reach the digest.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ KIND_HE = {
     "manual": "משימה",
 }
 FIELDS = ("title", "text", "core_texts", "time_left_text", "due_text", "due_at")
-DIGEST_FILES = ("chores.md", "chores.json")
+DIGEST_FILES = ("chores.md", "chores.json", "wispr-unmatched.json")
 _TOKEN_RE = re.compile(r"((?:wstoken|token|key|sesskey)=)[^&\s]+", re.I)
 
 
@@ -133,6 +133,25 @@ def mark_done(registry: courses.Registry, chore_id_: str) -> dict[str, Any]:
         chore = matches[0]
         if chore["status"] != "done":
             chore["status"] = "done"
+            chore["updated"] = _now()
+            courses._atomic_json(_path(registry), chores)
+        return chore
+    finally:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
+
+
+def reopen(registry: courses.Registry, chore_id_: str) -> dict[str, Any]:
+    """Undo mark_done: set a done chore back to open (the dashboard's undo). Idempotent."""
+    handle = _lock(registry)
+    try:
+        chores = load(registry)
+        matches = [c for c in chores if c["id"].startswith(chore_id_)]
+        if len(matches) != 1:
+            raise ValueError(f"chore {chore_id_!r}: {'no match' if not matches else 'ambiguous'}")
+        chore = matches[0]
+        if chore["status"] != "open":
+            chore["status"] = "open"
             chore["updated"] = _now()
             courses._atomic_json(_path(registry), chores)
         return chore

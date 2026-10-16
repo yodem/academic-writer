@@ -1,6 +1,6 @@
 ---
 name: update-tools
-description: "Turn the optional integrations (Trove source library, NotebookLM) on or off after setup and record the change in the profile. Use when the author wants to connect, disconnect or re-check Trove or NotebookLM without redoing the full setup (/academic-writer:init)."
+description: "Turn the optional integrations (Trove source library, NotebookLM) on or off after setup, change which library an article reads its books from (Trove, PageIndex or both), set up or update the built-in PageIndex helper, prepare existing Trove books for PageIndex, and record the change. Use when the author wants to connect, disconnect or re-check Trove or NotebookLM, switch the library route, add PageIndex or index old books, without redoing the full setup (/academic-writer:init)."
 user-invocable: false
 allowed-tools: [Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.2.23"}
@@ -12,6 +12,7 @@ Change which optional integrations are enabled, without re-running the full setu
 
 - **Trove** is the library where the author's sources are stored and read page by page; the citation checker relies on it.
 - **NotebookLM** is Google's notebook tool; the plugin uses it only for optional extras (background summaries, audio overviews, study guides), never as a citation source.
+- **The library route** says which library this article project reads its books from: Trove (the default), PageIndex (a second library of book outlines, built in or on the author's own server), or both, where one answers and the other is tested quietly in the background.
 
 Only mark a tool enabled after it is detected, because the other skills trust this setting and would otherwise fail midway.
 
@@ -68,6 +69,26 @@ For each tool the user wants to **enable**:
 For each tool the user wants to **disable**:
 1. Mark it as disabled immediately
 2. Warn if it affects existing sources: "Note: disabling Trove won't delete your indexed sources, but new source management will need to be done manually."
+
+## Library Route
+
+Offer this after the tool changes, or on its own when the author asks to switch libraries. Trove is the
+default. Ask with `AskUserQuestion` in plain words (Trove, PageIndex or both; with both, which one
+answers), then save `.academic-helper/library.json`. Offer PageIndex as a route only when a PageIndex
+command is configured or the built-in helper is installed; otherwise explain in one sentence how to
+get it (the next section) and keep Trove. Read the current `.academic-helper/library.json` first and
+show the current choice. Questions, detection and file format:
+`${CLAUDE_PLUGIN_ROOT}/skills/init/references/integration-setup.md` (section "Library route").
+When the current route includes PageIndex but it cannot be reached, ask whether to switch this
+article to Trove ("Keep it as it is" is the default and changes nothing). Never install anything for this step. This step does not touch `profile.md`.
+
+## PageIndex helper (separate, asked first)
+
+When the author wants to add PageIndex, update the built-in helper (`library status --check` shows
+`installed.matches_pinned: false`), connect their own server, or prepare their existing Trove books
+(backfill), follow `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/pageindex.md`: the plan and the
+question come first, the install or the backfill runs only after a yes, and the Gemini estimate is
+shown before any book text is sent to Google. Never ask for a key, host or password in chat.
 
 ## Save Updated Profile
 
@@ -173,4 +194,9 @@ Replace `TOOL_CONFIG` with the actual tools as a Python dict literal (Python spe
 > [list each tool with ✓/✗ status]
 >
 > These changes take effect immediately for `/academic-writer:write`.
+>
+> Your article reads its books from: [Trove / PageIndex / both, with the answering one named].
+>
+> PageIndex: [not set up / built-in helper installed (basic or full) / your own server].
+>
 > If you enabled Trove and haven't added sources yet, run `/academic-writer:init` to add them."

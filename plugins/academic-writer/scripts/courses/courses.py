@@ -1179,12 +1179,26 @@ def main(argv: list[str] | None = None) -> int:
     cdone = chores_sub.add_parser("done", parents=[reg_parent], help="mark a chore done")
     cdone.add_argument("id")
     chores_sub.add_parser("digest", parents=[reg_parent], help="write REG/digest/chores.md and chores.json")
+    sys.path.insert(0, str(Path(__file__).resolve().parent))  # python -I leaves the script dir off sys.path
+    import tasks as tasks_mod
+    tasks_mod.add_task_parser(sub)
+    mig = sub.add_parser("migrate-tasks", help="add tasks[] and task links from chores, specs and refs (backs up every touched JSON)")
+    mig.add_argument("--dry-run", action="store_true", help="report only; write nothing")
+    mig.add_argument("--specs-dir", type=Path, help="tools/specs directory (default: courses-tashpaz/tools/specs)")
+    wispr_p = sub.add_parser("wispr-scan", help="import lecture recordings from Wispr Flow into the lesson pipeline")
+    wispr_p.add_argument("--since", help="only meetings on/after this local date (YYYY-MM-DD)")
+    wispr_p.add_argument("--dry-run", action="store_true", help="match only; write and upload nothing")
+    wispr_p.add_argument("--json", action="store_true")
     bookmarks_p = sub.add_parser("bookmarks", help="rebuild each course's Chrome bookmark folder (AppleScript; Chrome must be open)")
     bookmarks_p.add_argument("slug", nargs="?", help="one course slug (or use --all)")
     bookmarks_p.add_argument("--all", action="store_true", help="every course in the registry")
     bookmarks_p.add_argument("--print-script", action="store_true", help="print the AppleScript and exit without touching Chrome")
     bookmarks_p.add_argument("--check", action="store_true", help="read-only: exit 1 when applying would change Chrome")
+    import dashboard
+    dashboard.add_parser(sub)
     args = parser.parse_args(argv)
+    if args.command == "dashboard":  # before the registry is read: a fresh install shows the empty state
+        return dashboard.run(args)
     try:
         if args.command == "import-docx":
             stubs = parse_docx(args.docx)
@@ -1229,6 +1243,20 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"digest: {chores.write_digest(registry)}")
             return 0
+        if args.command == "task":
+            return tasks_mod.run_task_command(registry.directory, args)
+        if args.command == "migrate-tasks":
+            print(json.dumps(tasks_mod.migrate(registry.directory, args.specs_dir, dry_run=args.dry_run), ensure_ascii=False, indent=2))
+            return 0
+        if args.command == "wispr-scan":
+            import wispr
+            report = wispr.scan(registry, since=args.since, dry_run=args.dry_run)
+            if args.json:
+                print(json.dumps(report, ensure_ascii=False, indent=2))
+            else:
+                print(f"wispr-scan: {len(report['matched'])} matched, {len(report['unmatched'])} unmatched, "
+                      f"{len(report['skipped'])} already imported, {len(report['errors'])} errors" + (f" ({report['note']})" if report.get("note") else ""))
+            return 1 if report["errors"] else 0
         if args.command == "bookmarks":
             import bookmarks
             return bookmarks.run(registry, slug=args.slug, all_courses=args.all, print_script=args.print_script, check_only=args.check)

@@ -28,6 +28,10 @@ Resolve the registry as described in `/academic-writer:courses`. Resolve the scr
 3. For each queue job, read `transcript.txt` completely, its `meta.json`, the course JSON, the course-book rules (`../courses/references/course-book.md`), the book ToC (`trove items toc <book_id> --no-session`), and the course index page. Follow those rules and the existing changelog conventions.
 4. If transcript passages cannot be understood, mark them `[לא ברור]`; never reconstruct them. NotebookLM transcripts may lack speaker labels, so attribute only what the audio/transcript supports.
 
+## Wispr Flow lectures
+
+The nightly job runs `courses.py wispr-scan` before `--pending`. It opens Wispr Flow's database read-only, keeps finished meetings, and matches each recording's local start/end to one course slot (weekday, semester dates, start no more than 20 minutes early, overlap of at least 30 minutes or half the recording). A match is written as a speaker-labelled text transcript plus Wispr's summary and queued like a Zoom transcript (`add-source --transcript`), so this skill processes it as usual; the summary is a hint and the transcript is the source. If a lesson for that course and date already exists (a voice memo, say), the Wispr transcript is only kept as an `alternates` entry on that lesson in `lessons/<slug>/<lesson_key>/wispr-<id>.txt`; never replace an existing Trove page from it. A meeting that matches no course or several is never opened: only its id, times and reason go to `digest/wispr-unmatched.json` for the dashboard. Imported meeting ids live in `term.json` `state.wispr_seen` and in each lesson's `wispr_meeting_id`. `courses.py wispr-scan --dry-run --json` previews it.
+
 ## Write one lesson page
 
 Write a single Hebrew Markdown page with exactly one top-level heading:

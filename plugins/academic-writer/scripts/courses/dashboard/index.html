@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>שולחן הלימודים</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500&family=IBM+Plex+Sans+Hebrew:wght@400;500&display=swap">
+<style>
+/* Course dashboard, ported from mock v4 "Proofreader's ink": state is ink marked on the text (circle, tick, highlighter, strike, caret), never a badge.
+   Shares "The Margin" brand: Frank Ruhl Libre + IBM Plex Sans Hebrew, indigo for interaction, two-tone plates, line-draw. */
+:root{
+  --vellum:oklch(0.972 0.007 95); --vellum-2:oklch(0.948 0.010 92);
+  --ink:oklch(0.24 0.05 268); --ink-2:oklch(0.40 0.03 265); --ink-3:oklch(0.52 0.02 262);
+  --rule:oklch(0.87 0.012 95);
+  --indigo:oklch(0.36 0.11 268);
+  --red-ink:oklch(0.52 0.17 32); --green-ink:oklch(0.50 0.10 165);
+  --marker:oklch(0.92 0.09 95);
+  --on-indigo:oklch(0.972 0.007 95);
+  --plate-blend:multiply; --plate-filter:none;
+  --serif:"Frank Ruhl Libre",Georgia,serif; --sans:"IBM Plex Sans Hebrew",system-ui,sans-serif;
+  --ease:cubic-bezier(.25,1,.5,1);
+  --margin:236px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --vellum:oklch(0.170 0.015 268); --vellum-2:oklch(0.210 0.020 268);
+  --ink:oklch(0.93 0.01 260); --ink-2:oklch(0.80 0.015 262); --ink-3:oklch(0.64 0.02 262);
+  --rule:oklch(0.31 0.025 268); --indigo:oklch(0.76 0.09 270);
+  --red-ink:oklch(0.72 0.14 35); --green-ink:oklch(0.76 0.11 165);
+  --marker:oklch(0.42 0.07 90 / .55); --on-indigo:oklch(0.170 0.015 268);
+  --plate-blend:screen; --plate-filter:invert(1) hue-rotate(180deg);
+  color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --vellum:oklch(0.170 0.015 268); --vellum-2:oklch(0.210 0.020 268);
+  --ink:oklch(0.93 0.01 260); --ink-2:oklch(0.80 0.015 262); --ink-3:oklch(0.64 0.02 262);
+  --rule:oklch(0.31 0.025 268); --indigo:oklch(0.76 0.09 270);
+  --red-ink:oklch(0.72 0.14 35); --green-ink:oklch(0.76 0.11 165);
+  --marker:oklch(0.42 0.07 90 / .55); --on-indigo:oklch(0.170 0.015 268);
+  --plate-blend:screen; --plate-filter:invert(1) hue-rotate(180deg);
+  color-scheme:dark;}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--vellum);color:var(--ink);font:400 16px/1.6 var(--sans);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+h1,h2,h3,b,strong,th,summary{font-weight:500}
+h1,h2,h3,p,ul,ol{margin:0}
+ul,ol{padding:0;list-style:none}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;padding:0}
+bdi{unicode-bidi:isolate}
+bdi:not([dir]){white-space:nowrap}
+::selection{background:var(--marker);color:var(--ink)}
+:focus-visible{outline:2px solid var(--indigo);outline-offset:3px;border-radius:2px}
+input[type=checkbox]{accent-color:var(--indigo);width:18px;height:18px;margin:0;cursor:pointer}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.lnk{color:var(--indigo);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px}
+.lnk:hover{text-decoration-thickness:2px}
+.kind{font:500 13px/1 var(--sans);color:var(--ink-3);margin-inline-end:10px;white-space:nowrap}
+.label{font:500 13px/1.4 var(--sans);color:var(--ink-3)}
+.gloss{font:400 15px/1.45 var(--serif);color:var(--ink-3)}
+.gloss.red{color:var(--red-ink)}
+.q{font:500 15px/1 var(--serif);color:var(--red-ink);margin-inline-end:6px}
+kbd{font:500 12px/1 var(--sans);color:var(--ink-2);padding:3px 6px;border:1px solid var(--rule);border-bottom-width:2px;border-radius:3px;background:var(--vellum);white-space:nowrap}
+.skip{position:absolute;inset-inline-start:16px;top:-60px;background:var(--ink);color:var(--vellum);padding:8px 12px;z-index:20}
+.skip:focus{top:8px}
+
+/* ---------- ink marks ---------- */
+.circ{position:relative;display:inline-block;white-space:nowrap}
+.circ>svg.ink{position:absolute;pointer-events:none;overflow:visible}
+.circ>svg.ink path{fill:none;stroke:var(--red-ink);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tick{display:inline-block;width:22px;height:20px;vertical-align:-3px;margin-inline-start:8px}
+.tick svg{width:100%;height:100%;overflow:visible}
+.tick path{fill:none;stroke:var(--green-ink);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.strike{position:relative;color:var(--ink-3)}
+.strike>svg.ink{position:absolute;pointer-events:none;overflow:visible}
+.strike>svg.ink path{fill:none;stroke:var(--ink-2);stroke-width:1.6;stroke-linecap:round}
+.strike.plain{text-decoration:line-through;text-decoration-color:var(--ink-2)}
+.sent{font:500 13px/1 var(--sans);color:var(--ink-3);margin-inline-start:10px}
+.hl{background-image:linear-gradient(var(--marker),var(--marker));background-repeat:no-repeat;background-position:100% 62%;background-size:100% .95em;padding-inline:2px;margin-inline:-2px;-webkit-box-decoration-break:clone;box-decoration-break:clone;border-radius:2px}
+:root:not(.inked) .tick svg{visibility:hidden}
+:root:not(.inked) .hl{background-size:0% .95em}
+.hl.swipe{animation:swipe .55s var(--ease) both}
+@keyframes swipe{from{background-size:0% .95em}to{background-size:100% .95em}}
+.caret{display:inline-block;width:12px;height:12px;vertical-align:-2px;margin-inline:1px}
+.caret path{fill:none;stroke:var(--indigo);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- top bar ---------- */
+.bar{position:sticky;top:0;z-index:6;background:var(--vellum);border-bottom:1px solid var(--rule)}
+.bar .in{max-width:1220px;margin-inline:auto;padding:0 20px;height:56px;display:flex;align-items:center;gap:32px}
+.mark{font:500 22px/1 var(--serif);white-space:nowrap}
+.views{display:flex;gap:22px}
+.views a{font:500 16px/1 var(--sans);color:var(--ink-2);padding:6px 0;border-bottom:2px solid transparent}
+.views a:hover{color:var(--ink)}
+.views a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--indigo)}
+.bar .end{margin-inline-start:auto;display:flex;gap:14px;align-items:center}
+.tool{display:inline-flex;gap:8px;align-items:center;font:500 13px/1 var(--sans);color:var(--ink-2);padding:6px 4px}
+.tool:hover{color:var(--ink)}
+.theme-ico{width:18px;height:18px}
+.theme-ico circle{fill:none;stroke:currentColor;stroke-width:1.5}.theme-ico path{fill:currentColor}
+
+.wrap{max-width:1220px;margin-inline:auto;padding:32px 20px 64px}
+.view[hidden]{display:none}
+
+/* ---------- overview ---------- */
+.ov-head{max-width:calc(100% - var(--margin) - 32px);margin-bottom:26px}
+.date{font:500 44px/1.1 var(--serif);margin-bottom:12px}
+.lede{font:400 24px/1.55 var(--serif);color:var(--ink);max-width:40em;text-wrap:pretty}
+.lede .circ{margin-inline:6px}
+.tocbar{display:flex;justify-content:space-between;align-items:baseline;gap:16px;padding-bottom:8px;border-bottom:1px solid var(--ink);max-width:calc(100% - var(--margin) - 32px)}
+.sort{display:flex;gap:6px;align-items:baseline;font:500 13px/1 var(--sans);color:var(--ink-3)}
+.sort button{color:var(--ink-3);padding:4px 2px;border-bottom:1.5px solid transparent}
+.sort button[aria-pressed="true"]{color:var(--ink);border-bottom-color:var(--indigo)}
+.sheet{position:relative}
+.sheet::after{content:"";position:absolute;top:0;bottom:0;inset-inline-end:calc(var(--margin) + 15px);width:1px;background:var(--rule)}
+.toc{position:relative;margin-top:4px}
+.toc-row{display:grid;grid-template-columns:minmax(0,1fr) var(--margin);column-gap:32px;align-items:baseline;position:relative}
+.entry{display:flex;align-items:baseline;gap:0;padding:13px 10px 13px 6px;margin-inline:-10px -6px;border-bottom:1px solid var(--rule);min-width:0}
+.entry:hover{background:var(--vellum-2)}
+.entry:focus-visible{outline:none;background:var(--vellum-2)}
+.cname{font:500 22px/1.3 var(--serif);flex:0 0 232px;padding-inline-end:16px}
+.task{flex:0 1 auto;min-width:0}
+.leader{flex:1 1 32px;min-width:24px;height:.4em;margin-inline:12px;display:inline-block;background:radial-gradient(circle,var(--ink-3) .9px,transparent 1.3px) 0 100%/7px 4px repeat-x;opacity:.75}
+.due{white-space:nowrap;font-size:16px}
+.toc-row .gloss{padding-top:15px}
+.toc-row.fresh .entry{position:relative}
+.toc-row.fresh .entry::after{content:"";position:absolute;inset:6px -4px;background:var(--marker);z-index:-1;opacity:0;animation:fresh 2.2s ease-out .9s both}
+@keyframes fresh{0%{opacity:0}12%{opacity:1}100%{opacity:0}}
+.toc-row.fresh .entry{isolation:isolate}
+.ribbon{position:absolute;inset-inline-start:-26px;width:10px;background:var(--indigo);clip-path:polygon(0 0,100% 0,100% 100%,50% calc(100% - 7px),0 100%);transition:top .18s var(--ease),height .18s var(--ease);opacity:0;pointer-events:none;z-index:2}
+.ribbon.on{opacity:1}
+.rest{display:grid;grid-template-columns:minmax(0,1fr) var(--margin);column-gap:32px;margin-top:22px;align-items:start}
+.rest p.names{font:400 22px/1.6 var(--serif);color:var(--ink);text-wrap:pretty}
+.rest p.names .intro{color:var(--ink-3);font-size:18px}
+.rest a.cn{font-weight:500;border-radius:2px}
+.rest a.cn:hover{color:var(--indigo)}
+.rest a.cn:focus-visible{outline-offset:2px}
+.rest .gloss{padding-top:6px}
+.rest .gloss li+li{margin-top:6px}
+.later{margin-top:18px;font:400 15px/1.5 var(--serif);color:var(--ink-3)}
+
+/* ---------- agenda ---------- */
+.ag-head{display:flex;align-items:baseline;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:6px}
+.ag-head h1,.c-title{font:500 36px/1.15 var(--serif)}
+.weeknav{display:flex;gap:18px;font:500 14px/1 var(--sans)}
+.weeknav button{color:var(--indigo)}
+.weeknav button:disabled{color:var(--ink-3);cursor:default}
+.ag-hint{margin-bottom:22px}
+.clear{display:flex;align-items:center;gap:24px;margin:8px 0 22px}
+.clear p{font:400 22px/1.5 var(--serif);max-width:28em}
+.plate{display:block;width:180px;height:auto;mix-blend-mode:var(--plate-blend);filter:var(--plate-filter)}
+.spread{display:grid;grid-template-columns:1fr 1fr;column-gap:56px;border-top:1px solid var(--ink);position:relative}
+.spread::after{content:"";position:absolute;top:0;bottom:0;inset-inline-start:50%;width:1px;background:var(--rule)}
+.page{min-width:0}
+.band{display:grid;grid-template-columns:76px minmax(0,1fr);gap:16px;padding:14px 0 16px;border-bottom:1px solid var(--rule);transition:background .15s}
+.band.empty-day{display:none}
+.dragging .band.empty-day{display:grid}
+.dragging .collapsed{display:none}
+.band.over{background:var(--vellum-2)}
+.dnum{font:500 28px/1 var(--serif);display:block}
+.dname{font:500 13px/1.4 var(--sans);color:var(--ink-3)}
+.band.today .dname{color:var(--ink)}
+.band.past .items{color:var(--ink-3)}
+.items li{display:grid;grid-template-columns:96px 52px minmax(0,1fr);align-items:baseline;gap:0;padding:4px 0}
+.items .tm{font-size:14px;color:var(--ink-3)}
+.items .kind{margin:0}
+.items .what{display:inline}
+.items a.what:hover{color:var(--indigo)}
+.items .gloss{grid-column:3;padding-top:2px}
+.items li.movable{cursor:grab}
+.items li.movable:active{cursor:grabbing}
+.items li.lifted{opacity:.45}
+.collapsed{display:block;padding:12px 0;border-bottom:1px solid var(--rule);font:400 18px/1.4 var(--serif);color:var(--ink-3)}
+.band.shabbat{grid-template-columns:76px 1fr;padding:8px 0;align-items:baseline}
+.band.shabbat .dnum{font-size:16px;font-family:var(--sans);color:var(--ink-3);display:inline}
+.band.shabbat .dname{display:inline;margin-inline-start:6px}
+
+/* ---------- course ---------- */
+.crumb{font:500 13px/1.4 var(--sans);color:var(--ink-3);margin-bottom:10px}
+.crumb a{color:var(--indigo)}
+.c-head{padding-bottom:18px;border-bottom:1px solid var(--ink)}
+.c-meta{margin-top:10px;color:var(--ink-2)}
+.c-links{margin-top:6px;color:var(--ink-3)}
+.c-links .lnk{margin-inline:2px}
+.cgrid{display:grid;grid-template-columns:minmax(0,1fr) var(--margin);gap:56px;margin-top:28px}
+.slip{background:var(--vellum-2);border:1px solid var(--rule);border-radius:2px;padding:20px 24px 22px;max-width:44em}
+.slip h2{font:500 28px/1.25 var(--serif);margin-top:8px}
+.slip .when{margin-top:6px;color:var(--ink)}
+.slip .desc{margin-top:10px;color:var(--ink-2);max-width:62ch}
+.slip .acts{display:flex;align-items:center;gap:18px;margin-top:16px}
+.btn{display:inline-flex;align-items:center;gap:8px;font:500 15px/1 var(--sans);padding:10px 16px;border-radius:3px;background:var(--indigo);color:var(--on-indigo)}
+.btn:hover{filter:brightness(1.12)}
+.btn.ghost{background:none;color:var(--indigo);box-shadow:inset 0 0 0 1px var(--indigo)}
+.slip.done .btn{background:none;color:var(--indigo);box-shadow:inset 0 0 0 1px var(--rule)}
+.slip .acts .label{color:var(--ink-2)}
+.slip.done h2{color:var(--ink-2)}
+.c-sec{margin-top:36px}
+.c-sec h2{font:500 22px/1.3 var(--serif)}
+.bib-head{display:grid;grid-template-columns:28px minmax(0,1fr) 168px;gap:12px;align-items:end;margin-top:14px;padding-bottom:6px;border-bottom:1px solid var(--ink)}
+.bib-head .cols{display:grid;grid-template-columns:repeat(3,1fr);text-align:center}
+.bib-sub{font:500 13px/1.4 var(--sans);color:var(--ink-3);margin:20px 0 0;padding-bottom:6px;border-bottom:1px solid var(--rule)}
+.bib li{display:grid;grid-template-columns:28px minmax(0,1fr) 168px;gap:12px;align-items:baseline;padding:12px 0;border-bottom:1px solid var(--rule)}
+.bib .cite{font:400 16px/1.55 var(--serif)}
+.bib .cite .circ{margin-inline:4px}
+.bib .gloss{display:block;margin-top:4px}
+.bib .marks{display:grid;grid-template-columns:repeat(3,1fr);text-align:center;align-items:baseline}
+.bib .marks .tick{margin:0;width:17px;height:16px}
+.bib .marks .tick path{stroke-width:2.1}
+.bib .marks .no{color:var(--ink-3)}
+.bib .pick{padding-top:3px}
+.fetchbar{position:sticky;bottom:0;z-index:4;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:var(--vellum);border-top:1px solid var(--ink);padding:12px 0 14px;margin-top:8px}
+.fetchbar[hidden]{display:none}
+.fetchbar p{color:var(--ink-2);max-width:46ch}
+.empty{display:flex;gap:28px;align-items:center;margin-top:8px}
+.empty .plate{width:160px}
+.empty p{font:400 22px/1.5 var(--serif)}
+.empty p+p{font:400 16px/1.6 var(--sans);color:var(--ink-2);margin-top:6px}
+.rail section{padding-bottom:18px;margin-bottom:18px;border-bottom:1px solid var(--rule)}
+.rail h3{font:500 13px/1.4 var(--sans);color:var(--ink-3);margin-bottom:8px}
+.rail li{display:flex;justify-content:space-between;gap:12px;padding:4px 0;font-size:15px}
+.rail li span:last-child{color:var(--ink-3);text-align:end}
+.rail p{font:400 15px/1.5 var(--serif);color:var(--ink-2)}
+
+/* ---------- overlays ---------- */
+.toast{position:fixed;bottom:24px;left:50%;transform:translate(-50%,24px);opacity:0;pointer-events:none;background:var(--ink);color:var(--vellum);padding:10px 12px 10px 16px;border-radius:3px;display:flex;gap:16px;align-items:center;max-width:min(92vw,560px);transition:opacity .25s var(--ease),transform .25s var(--ease);z-index:30}
+.toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.toast.lifted{bottom:88px}
+.toast button{color:var(--vellum);font-weight:500;text-decoration:underline;text-underline-offset:4px;padding:4px}
+.toast button:focus-visible{outline-color:var(--vellum)}
+dialog{border:1px solid var(--rule);border-radius:3px;background:var(--vellum);color:var(--ink);padding:0;width:min(92vw,560px);box-shadow:0 24px 60px -24px oklch(0.24 0.05 268 / .45)}
+dialog::backdrop{background:oklch(0.24 0.05 268 / .28)}
+.pal input{width:100%;font:400 18px/1.4 var(--serif);color:var(--ink);background:none;border:0;border-bottom:1px solid var(--rule);padding:16px 18px;outline:none}
+.pal input:focus-visible{box-shadow:inset 0 -2px 0 var(--indigo)}
+.pal ul{max-height:min(56vh,420px);overflow:auto;padding:6px 0}
+.pal li{display:flex;justify-content:space-between;gap:16px;padding:9px 18px;cursor:pointer;align-items:baseline}
+.pal li[aria-selected="true"]{background:var(--vellum-2);box-shadow:inset -3px 0 0 var(--indigo)}
+.pal li .label{white-space:nowrap}
+.pal .none{padding:14px 18px;color:var(--ink-3)}
+.help{padding:20px 24px 22px}
+.help h2{font:500 22px/1.3 var(--serif);margin-bottom:10px}
+.help dl{display:grid;grid-template-columns:auto 1fr;gap:10px 18px;margin:0;align-items:baseline}
+.help dd{margin:0;color:var(--ink-2)}
+.help .close{margin-top:18px}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .toc-row.fresh .entry::after{display:none}
+}
+@media (max-width:980px){
+  :root{--margin:200px}
+  .spread{grid-template-columns:1fr}.spread::after{display:none}
+}
+@media (max-width:760px){
+  .bar .in{gap:12px;padding:0 16px}
+  .bar .scan,.tool .txt,#helpBtn,#palBtn{display:none}
+  .bar .end{gap:6px}
+  .views{gap:12px}
+  .views a{font-size:15px}
+  .mark{font-size:17px}
+  .wrap{padding:22px 16px 96px}
+  .ov-head,.tocbar{max-width:none}
+  .date{font-size:36px}
+  .lede{font-size:21px}
+  .toc-row,.rest{grid-template-columns:1fr}
+  .entry{flex-wrap:wrap;padding:12px 8px 6px;margin-inline:-8px}
+  .cname{flex:1 0 100%;padding:0}
+  .task{flex:1 1 auto}
+  .leader{display:none}
+  .due{margin-inline-start:auto;padding-inline-start:12px;font-size:15px}
+  .toc-row .gloss{padding:0 0 12px;border-bottom:1px solid var(--rule)}
+  .toc-row:has(.gloss) .entry{border-bottom:0}
+  .ribbon{inset-inline-start:-14px;width:7px}
+  .rest .gloss{padding-top:10px}
+  .sheet::after{display:none}
+  .ag-head h1,.c-title{font-size:30px}
+  .band{grid-template-columns:52px minmax(0,1fr);gap:10px}
+  .items li{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8px;padding:6px 0}
+  .items .tm{font-size:13px;order:-1}
+  .items .kind{display:inline}
+  .items li>span:not(.tm):not(.kind):not(.gloss){flex:1 0 100%}
+  .items .gloss{flex:1 0 100%}
+  .cgrid{grid-template-columns:1fr;gap:36px}
+  .slip{padding:16px 16px 18px}
+  .slip h2{font-size:24px}
+  .bib-head,.bib li{grid-template-columns:24px minmax(0,1fr) 108px;gap:8px}
+  .bib-head .cols .long{display:none}
+  .empty{flex-direction:column;align-items:flex-start}
+  .clear{flex-direction:column;align-items:flex-start}
+}
+@media (min-width:761px){.bib-head .cols .short{display:none}}
+/* ---------- dashboard additions (data-driven page) ---------- */
+.due.soon,.due.late{color:var(--red-ink)}
+.bib .cite{overflow-wrap:anywhere;min-width:0}
+.bib .cite bdi[dir]{white-space:normal}
+.cite-sub{display:block;font:400 13px/1.4 var(--sans);color:var(--ink-3);margin-top:2px}
+details.more{margin-top:20px}
+details.more>summary{cursor:pointer;list-style:none;font:500 13px/1.4 var(--sans);color:var(--ink-3);padding-bottom:6px;border-bottom:1px solid var(--rule)}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:"+";display:inline-block;width:1.2em;color:var(--indigo)}
+details.more[open]>summary::before{content:"−"}
+details.more>summary:hover{color:var(--ink)}
+.copy{font:500 13px/1 var(--sans);color:var(--indigo);text-decoration:underline;text-underline-offset:4px;padding:4px 2px}
+code.bid{font:400 13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink-2);overflow-wrap:anywhere;word-break:break-all}
+.slip+.slip{margin-top:18px}
+.prev{margin-top:24px}
+.prev li{padding:6px 0;border-bottom:1px solid var(--rule)}
+.empty code,.lede code{font:400 0.8em/1 ui-monospace,SFMono-Regular,Menlo,monospace;direction:ltr;unicode-bidi:isolate;overflow-wrap:anywhere}
+.stale{margin:0 0 18px;padding:10px 14px;border:1px solid var(--rule);border-radius:2px;color:var(--ink-2);background:var(--vellum-2)}
+.rail li span:first-child{min-width:0;overflow-wrap:anywhere}
+.cname{overflow-wrap:anywhere}
+.task{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">לדלג לתוכן</a>
+<header class="bar"><div class="in">
+  <a class="mark" href="#overview">שולחן הלימודים</a>
+  <nav class="views" aria-label="תצוגות">
+    <a href="#overview" data-view="overview">סקירה</a>
+    <a href="#agenda" data-view="agenda">יומן</a>
+    <a href="#course" data-view="course">קורס</a>
+  </nav>
+  <div class="end">
+    <span class="label scan" id="scan"></span>
+    <button class="tool" id="palBtn" aria-label="חיפוש ופעולות"><span class="txt">חיפוש ופעולות</span> <kbd><bdi id="modKey">⌘K</bdi></kbd></button>
+    <button class="tool" id="helpBtn" aria-label="קיצורי מקלדת"><kbd><bdi>?</bdi></kbd></button>
+    <button class="tool" id="themeBtn" aria-label="מעבר בין מצב בהיר לכהה"><svg class="theme-ico" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7"/><path d="M9 2a7 7 0 0 0 0 14z"/></svg></button>
+  </div>
+</div></header>
+
+<main id="main" class="wrap">
+  <p class="stale" id="stale" hidden></p>
+  <section class="view" id="v-overview" aria-label="סקירה"></section>
+  <section class="view" id="v-agenda" aria-label="יומן" hidden></section>
+  <section class="view" id="v-course" aria-label="קורס" hidden></section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><span id="toastMsg"></span><button id="toastUndo" hidden>לבטל</button></div>
+
+<dialog class="pal" id="pal" aria-label="חיפוש ופעולות">
+  <input id="palIn" type="text" placeholder="לאן לקפוץ, או מה לעשות" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="palList" aria-autocomplete="list">
+  <ul id="palList" role="listbox" aria-label="תוצאות"></ul>
+</dialog>
+
+<dialog class="help" id="help" aria-labelledby="helpT">
+  <h2 id="helpT">קיצורי מקלדת</h2>
+  <dl>
+    <dt><kbd><bdi>↑</bdi></kbd> <kbd><bdi>↓</bdi></kbd></dt><dd>מעבר בין הקורסים ברשימה, או בין הפריטים ביומן</dd>
+    <dt><kbd><bdi>Enter</bdi></kbd></dt><dd>פתיחת הקורס המסומן</dd>
+    <dt><kbd><bdi>g o</bdi></kbd></dt><dd>סקירה</dd>
+    <dt><kbd><bdi>g a</bdi></kbd></dt><dd>יומן</dd>
+    <dt><kbd><bdi>g c</bdi></kbd></dt><dd>הקורס האחרון שפתחת</dd>
+    <dt><kbd><bdi class="modk">⌘K</bdi></kbd></dt><dd>חיפוש ופעולות: קפיצה לקורס, הבאת מקורות, סימון הגשה, מיון</dd>
+    <dt><kbd><bdi>Alt ↑/↓</bdi></kbd></dt><dd>ביומן: הזזת קריאה ליום הקודם או הבא (רק בדפדפן הזה)</dd>
+    <dt><kbd><bdi>Esc</bdi></kbd></dt><dd>סגירת חלון, או חזרה מקורס לסקירה</dd>
+  </dl>
+  <p class="label" style="margin-top:14px">הקיצורים עובדים גם במקלדת עברית.</p>
+  <form method="dialog"><button class="btn ghost close">לסגור</button></form>
+</dialog>
+<script>
+(() => {
+'use strict';
+/* ================= constants ================= */
+const DL = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
+const DN = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+const MONTH = ['בינואר','בפברואר','במרץ','באפריל','במאי','ביוני','ביולי','באוגוסט','בספטמבר','באוקטובר','בנובמבר','בדצמבר'];
+const DAYKEY = {Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6};
+const SEM = {A:'סמסטר א׳', B:'סמסטר ב׳'};
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const b = s => `<bdi>${esc(s)}</bdi>`;
+const auto = s => `<bdi dir="auto">${esc(s)}</bdi>`;
+
+/* ================= per-viewer state (this browser only) ================= */
+const KEY = 'aw.dashboard.v1';
+let S = {sort:'due', moved:{}, lastCourse:null, inked:{}};
+try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(S, JSON.parse(raw)); } catch(e) {}
+/* saved moves are keyed course/task; an older unscoped key could name another course's task, so it is dropped */
+S.moved = Object.fromEntries(Object.entries(S.moved || {}).filter(([k]) => k.includes('/')));
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} };
+try { const t = localStorage.getItem(KEY + '.theme'); if (t) document.documentElement.dataset.theme = t; } catch(e) {}
+
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = (s, r=document) => r.querySelector(s), $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+if (!isMac) { $('#modKey').textContent = 'Ctrl K'; $$('.modk').forEach(e => e.textContent = 'Ctrl K'); }
+
+/* the key in the URL became a cookie on this load: take it out of the address bar */
+if (/[?&]key=/.test(location.search)) history.replaceState(null, '', location.pathname + location.hash);
+
+/* ================= data ================= */
+let ST = null, CM = {}, TM = {}, WEEK = null, CUR_WEEK = null;
+const SEL = new Set();                 /* checked fetch boxes, kept across live re-renders */
+const course = slug => CM[slug];
+/* a task id is unique only inside its course (spec ids such as s-t2 repeat), so every lookup, action,
+   element id and saved move is keyed by course and id together */
+const tkey = t => t.course + '/' + t.id;
+const task = key => TM[key];
+
+async function api(path, body){
+  const opt = body === undefined ? {credentials:'same-origin'} :
+    {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)};
+  const r = await fetch(path, opt);
+  if (r.status === 403) { stale('הקישור של הדף הזה כבר לא תקף. פתחו את הקישור החדש שהופיע בטרמינל כשהלוח הופעל.'); throw new Error('forbidden'); }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+  return data;
+}
+function stale(msg){ const el = $('#stale'); el.textContent = msg; el.hidden = !msg; }
+
+async function load(force){
+  let data;
+  try { data = await api('/api/state' + (WEEK ? '?week=' + encodeURIComponent(WEEK) : '')); }
+  catch(e) { if (e.message !== 'forbidden') stale('לא הצלחתי לקרוא את נתוני הקורסים: ' + e.message); return; }
+  stale('');
+  const same = ST && ST.version === data.version && !force;
+  ST = data; CM = {}; TM = {};
+  ST.courses.forEach(c => { CM[c.slug] = c; c.tasks.forEach(t => TM[tkey(t)] = t); });
+  if (!CUR_WEEK) CUR_WEEK = ST.agenda.start;
+  if (!WEEK) WEEK = ST.agenda.start;
+  if (same) return;
+  renderBar();
+  render(true);
+}
+
+/* ================= dates ================= */
+const D = iso => new Date(iso + 'T12:00:00');
+const isoOf = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const addDays = (s, n) => { const d = D(s); d.setDate(d.getDate()+n); return isoOf(d); };
+const dm = s => { const d = D(s); return `${d.getDate()}.${d.getMonth()+1}`; };
+const dayDiff = (a, c) => Math.round((D(c) - D(a)) / 864e5);
+const effDate = t => (t.reading && S.moved[tkey(t)]) || t.due_date;
+function rel(d){
+  const n = dayDiff(ST.today, d);
+  if (n === 0) return 'היום'; if (n === 1) return 'מחר'; if (n === 2) return 'בעוד יומיים';
+  if (n < 0) return n === -1 ? 'אתמול' : `לפני ${-n} ימים`;
+  return `בעוד ${n} ימים`;
+}
+function dueHTML(t, withRel=true){
+  const d = effDate(t);
+  if (!d) return 'בלי תאריך';
+  let s = `${DL[D(d).getDay()]} ${b(dm(d))}`;
+  if (t.due_time && t.due_time !== '00:00') s += `, ${b(t.due_time)}`;
+  /* red is never the only signal: a soon or late date also says so in words */
+  if (withRel && t.status !== 'submitted' && t.overdue) s += ' · עבר';
+  else if (withRel && t.status !== 'submitted' && t.soon) s += ` · ${rel(d)}`;
+  return s;
+}
+const dueClass = t => t.status === 'submitted' ? '' : (t.overdue ? ' late' : (t.soon ? ' soon' : ''));
+function fromIso(s){ const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(s || ''); return m ? {date:`${m[1]}-${m[2]}-${m[3]}`, hm:`${m[4]}:${m[5]}`} : null; }
+
+/* ================= ink ================= */
+const NS = 'http://www.w3.org/2000/svg';
+function rng(seed){ let s = seed % 2147483647 || 7; return () => (s = s * 16807 % 2147483647) / 2147483647; }
+function hash(str){ let h = 7; for (const ch of str) h = (h * 31 + ch.charCodeAt(0)) % 2147483647; return h; }
+function ellipse(W, H, r){
+  const cx = W/2, cy = H/2, rx = W/2 - 3, ry = H/2 - 3;
+  const a0 = -0.5 - r()*0.4, turns = 1.09 + r()*0.05, ph = r()*6.28, N = 72;
+  let d = '';
+  for (let i = 0; i <= N; i++){
+    const t = i/N, a = a0 - t*turns*2*Math.PI;
+    const k = 1 + 0.03*Math.sin(t*12.6 + ph) + (t - 0.5)*0.07;
+    const x = cx + Math.cos(a)*rx*k, y = cy + Math.sin(a)*ry*k + Math.sin(t*3.1)*1.2;
+    d += (i ? 'L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
+  }
+  return d;
+}
+function svgEl(W, H, d, left, top){
+  const s = document.createElementNS(NS, 'svg');
+  s.setAttribute('class', 'ink'); s.setAttribute('aria-hidden', 'true');
+  s.setAttribute('viewBox', `0 0 ${W} ${H}`); s.setAttribute('width', W); s.setAttribute('height', H);
+  s.style.left = left + 'px'; s.style.top = top + 'px';
+  const p = document.createElementNS(NS, 'path'); p.setAttribute('d', d); s.appendChild(p);
+  return s;
+}
+let drawIndex = 0;
+function draw(path, delay){
+  if (reduced) return;
+  const L = path.getTotalLength();
+  path.style.strokeDasharray = L; path.style.strokeDashoffset = L;
+  const a = path.animate([{strokeDashoffset:L},{strokeDashoffset:0}], {duration:520, delay, easing:'cubic-bezier(.25,1,.5,1)', fill:'forwards'});
+  a.finished.then(() => { path.style.strokeDasharray = ''; path.style.strokeDashoffset = ''; a.cancel(); }).catch(()=>{});
+}
+/* isolate numbers, ranges, dates and times only (Latin runs are left to dir=auto, so long titles can wrap) */
+const BIDI_RE = /\d+(?:[.,:]\d+)*\s?[–-]\s?\d+(?:[.,:]\d+)*|\d{1,2}\.\d{1,2}(?:\.\d{2,4})?|\d{1,2}:\d{2}/g;
+function bidiFix(root){
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), nodes = [];
+  while (w.nextNode()){ const n = w.currentNode, p = n.parentElement;
+    if (!p || p.closest('bdi,script,style,svg,input,code')) continue;
+    BIDI_RE.lastIndex = 0; if (BIDI_RE.test(n.data)) nodes.push(n); }
+  nodes.forEach(n => {
+    const frag = document.createDocumentFragment(); let last = 0; const txt = n.data; BIDI_RE.lastIndex = 0; let m;
+    while ((m = BIDI_RE.exec(txt))){ frag.append(txt.slice(last, m.index)); const bd = document.createElement('bdi'); bd.textContent = m[0]; frag.append(bd); last = m.index + m[0].length; }
+    frag.append(txt.slice(last)); n.replaceWith(frag);
+  });
+}
+/* mode: 'all' draws every mark, 'new' only [data-new] marks, 'none' static */
+function inkify(root, mode='none'){
+  bidiFix(root);
+  drawIndex = 0;
+  const marks = [];
+  $$('.circ', root).forEach(el => {
+    el.querySelector(':scope>svg.ink')?.remove();
+    const w = el.offsetWidth, h = el.offsetHeight; if (!w) return;
+    const px = Math.max(7, w*0.05), py = Math.max(4, h*0.16), W = w + 2*px, H = h + 2*py;
+    const s = svgEl(W, H, ellipse(W, H, rng(hash(el.textContent))), -px, -py);
+    el.appendChild(s); marks.push([s.firstChild, el]);
+  });
+  $$('.strike:not(.plain)', root).forEach(el => {
+    el.querySelector(':scope>svg.ink')?.remove();
+    const w = el.offsetWidth, h = el.offsetHeight; if (!w) return;
+    const y = h*0.56, W = w + 8, r = rng(hash(el.textContent));
+    const d = `M${W-1},${(y+1).toFixed(1)} C${(W*0.66).toFixed(1)},${(y-1.5-r()).toFixed(1)} ${(W*0.33).toFixed(1)},${(y+1.6+r()).toFixed(1)} 1,${(y-0.8).toFixed(1)}`;
+    const s = svgEl(W, h, d, -4, 0); el.appendChild(s); marks.push([s.firstChild, el]);
+  });
+  $$('.tick path', root).forEach(p => marks.push([p, p.closest('.tick')]));
+  $$('.hl', root).forEach(el => marks.push([null, el]));
+  const sorted = marks.sort((a, c) => a[1].getBoundingClientRect().top - c[1].getBoundingClientRect().top);
+  sorted.forEach(([p, el]) => {
+    const isNew = el.hasAttribute('data-new') || el.closest('[data-new]');
+    if (mode === 'all' || (mode === 'new' && isNew)){
+      const delay = Math.min(drawIndex++ * 80, 1200);
+      if (p) draw(p, delay);
+      else if (!reduced){ el.style.animationDelay = delay + 'ms'; el.classList.remove('swipe'); void el.offsetWidth; el.classList.add('swipe'); }
+    }
+  });
+  $$('[data-new]', root).forEach(e => e.removeAttribute('data-new'));
+}
+const TICK = '<span class="tick" role="img" aria-label="יש"><svg viewBox="0 0 22 20" aria-hidden="true"><path d="M2.5 11.5c2 1.6 3.6 3.6 5 6 3-6.4 7-11.6 12.5-15"/></svg></span>';
+const CARET = '<svg class="caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 11 6 2l5 9"/></svg>';
+const NO = '<span class="no" role="img" aria-label="אין">—</span>';
+
+/* ================= task marks ================= */
+const doneWord = t => t.reading ? 'נקרא' : 'נשלח';
+const verbDone = t => t.reading ? 'קראתי' : 'הגשתי';
+function titleHTML(t){
+  const title = esc(t.title);
+  if (t.status === 'submitted') return `<span class="strike" data-mark="${esc(tkey(t))}">${title}</span><span class="sent">${doneWord(t)}</span>`;
+  if (t.state === 'missing') return (t.title.length <= 44 ? `<span class="circ">${title}</span>` : title) + '<span class="sr"> · חסר מקור</span>';
+  if (t.reading) return `<span class="hl">${title}</span><span class="sr"> · לקרוא</span>`;
+  if (t.state === 'ready') return `${title}${TICK}<span class="sr"> · כל המקורות מוכנים</span>`;
+  return title;
+}
+function glossText(t){
+  if (t.status === 'submitted') return null;
+  if (t.state === 'missing') return {red:true, text: t.missing_count === 1 ? 'חסר מקור אחד' : `חסרים ${t.missing_count} מקורות`};
+  if (t.overdue) return {red:true, text:'מועד ההגשה עבר'};
+  if (t.state === 'waiting') return {text: t.items.some(i => i.queued) ? 'Claude יביא את מה שחסר בריצה הלילית' : 'מחכה לבדיקת הזיהוי האוטומטי של הטקסט'};
+  if (t.state === 'pending') return {text:'עוד לא כל המקורות אצלך'};
+  return null;
+}
+function glossHTML(t, tag='p'){
+  const g = glossText(t); if (!g) return '';
+  return `<${tag} class="gloss${g.red ? ' red' : ''}">${esc(g.text)}</${tag}>`;
+}
+
+/* ================= top bar ================= */
+function renderBar(){
+  const el = $('#scan');
+  if (!ST.nightly){ el.textContent = 'עוד לא הייתה סריקה'; return; }
+  const p = fromIso(ST.nightly); if (!p){ el.textContent = ''; return; }
+  const n = dayDiff(p.date, ST.today);
+  const day = n === 0 ? 'היום' : n === 1 ? 'אתמול' : `${DL[D(p.date).getDay()]} ${dm(p.date)}`;
+  el.innerHTML = `סריקה אחרונה: ${esc(day)}, ${b(p.hm)}`;
+  bidiFix(el);
+}
+
+/* ================= empty install ================= */
+function emptyHTML(){
+  if (ST && ST.reason === 'ambiguous-term') return `<div class="empty"><img class="plate" src="img/hero-desk.webp" alt="" width="800" height="447">
+    <div><p>יש כאן יותר מסמסטר אחד, והלוח לא יודע איזה להציג.</p>
+    <p>הפעילו אותו מחדש עם <code dir="ltr">--term</code> ושם הסמסטר, או עם המשתנה <code dir="ltr">ACADEMIC_TERM</code>.</p></div></div>`;
+  return `<div class="empty"><img class="plate" src="img/hero-desk.webp" alt="" width="800" height="447">
+    <div><p>עוד אין קורסים — הריצו <code dir="ltr">/academic-writer:courses</code></p>
+    <p>הפקודה מגדירה את הסמסטר ואת הקורסים. הלוח הזה יתעדכן מעצמו כשהם יופיעו.</p></div></div>`;
+}
+
+/* ================= overview ================= */
+function sortedRows(){
+  const rows = ST.overview.rows.slice();
+  const open = rows.filter(r => !r.submitted), done = rows.filter(r => r.submitted);
+  if (S.sort === 'name') open.sort((a, c) => course(a.course).name.localeCompare(course(c.course).name, 'he'));
+  return open.concat(done);
+}
+function ledeHTML(){
+  return ST.lede.map(seg => seg.mark === 'circ' ? `<span class="circ">${esc(seg.t)}</span>` : esc(seg.t)).join('');
+}
+function countLabel(){
+  const s = ST.overview.counts.submit, r = ST.overview.counts.read;
+  const sw = s === 1 ? 'הגשה אחת' : `${s} הגשות`;
+  return r ? `פתוחות: ${sw} ו־${r === 1 ? 'קריאה אחת' : r + ' קריאות'}` : `פתוחות: ${sw}`;
+}
+function listJoin(items){ return items.length < 2 ? items.join('') : items.slice(0, -1).join(', ') + ' ו' + items.at(-1); }
+function renderOverview(){
+  const v = $('#v-overview');
+  if (ST.empty){ v.innerHTML = `<div class="ov-head"><h1 class="date">שולחן הלימודים</h1></div>${emptyHTML()}`; return; }
+  const d = D(ST.today);
+  const rows = sortedRows().map(r => {
+    const c = course(r.course), t = task(r.course + '/' + r.task);
+    return `<li class="toc-row">
+      <a class="entry" href="#course/${encodeURIComponent(c.slug)}" id="e-${esc(c.slug)}-${esc(t.id)}" data-nav>
+        <span class="cname">${esc(c.name)}</span>
+        <span class="task"><span class="kind">${t.kind_word}</span>${titleHTML(t)}</span>
+        <span class="leader" aria-hidden="true"></span>
+        <span class="due${dueClass(t)}">${dueHTML(t)}</span>
+      </a>${glossHTML(t)}</li>`;
+  }).join('');
+  const quiet = ST.overview.quiet.map(course);
+  const names = quiet.map(c => `<a class="cn" href="#course/${encodeURIComponent(c.slug)}" data-nav>${esc(c.name)}</a>${c.new_lesson ? CARET + '<span class="sr"> (שיעור חדש)</span>' : ''}`);
+  const notes = [];
+  quiet.filter(c => c.new_lesson).forEach(c => notes.push(`${CARET} ${esc(c.name)}: שיעור חדש תומלל`));
+  quiet.filter(c => c.perusall_open).forEach(c => notes.push(`${esc(c.name)}: ${c.perusall_open === 1 ? 'קריאה אחת' : c.perusall_open + ' קריאות'} ב־Perusall עוד לא צולמו.`));
+  ST.wispr_unmatched.forEach(m => { const p = fromIso(m.start); if (p) notes.push(`הקלטה מ־Wispr שלא שויכה לקורס: ${DL[D(p.date).getDay()]} ${b(dm(p.date))}, ${b(p.hm)}`); });
+  const later = {};
+  ST.overview.later.map(course).forEach(c => {
+    const sems = [...new Set(c.slots.map(s => s.semester).filter(s => SEM[s]))];
+    const key = sems.length === 1 ? sems[0] : 'later';
+    (later[key] = later[key] || []).push(esc(c.name));
+  });
+  const laterHTML = Object.entries(later).map(([k, list]) => `<p class="later">${k === 'later' ? 'בהמשך השנה' : 'ב' + SEM[k]}: ${listJoin(list)}.</p>`).join('');
+  v.innerHTML = `
+    <div class="ov-head">
+      <h1 class="date">${DN[d.getDay()]}, ${b(d.getDate())} ${MONTH[d.getMonth()]}</h1>
+      <p class="lede">${ledeHTML()}</p>
+    </div>
+    <div class="tocbar">
+      <span class="label">${countLabel()}</span>
+      <div class="sort" role="group" aria-label="מיון הרשימה">מיון:
+        <button data-sort="due" id="sort-due" aria-pressed="${S.sort === 'due'}">לפי תאריך</button><span aria-hidden="true">·</span>
+        <button data-sort="name" id="sort-name" aria-pressed="${S.sort === 'name'}">לפי שם</button>
+      </div>
+    </div>
+    <div class="sheet"><div class="toc"><span class="ribbon" aria-hidden="true"></span><ul id="tocList">${rows || '<li class="toc-row"><p class="gloss" style="padding:14px 0">אין מטלות פתוחות. כל הכבוד.</p></li>'}</ul></div>
+    ${quiet.length || notes.length ? `<div class="rest">
+      ${quiet.length ? `<p class="names"><span class="intro">בלי משימות פתוחות: </span>${listJoin(names)}.</p>` : '<p></p>'}
+      <ul class="gloss">${notes.map(n => `<li>${n}</li>`).join('')}</ul>
+    </div>` : ''}</div>
+    ${laterHTML}`;
+  $$('[data-sort]', v).forEach(btn => btn.onclick = () => setSort(btn.dataset.sort));
+}
+function setSort(k){ S.sort = k; save(); renderOverview(); inkify($('#v-overview')); toast(k === 'due' ? 'הרשימה ממוינת לפי תאריך.' : 'הרשימה ממוינת לפי שם הקורס.'); }
+
+function placeRibbon(el){
+  const toc = $('.toc'), rib = $('.ribbon'); if (!toc || !rib) return;
+  if (!el || !el.closest('.toc')){ rib.classList.remove('on'); return; }
+  const tr = toc.getBoundingClientRect(), r = el.getBoundingClientRect();
+  rib.style.top = (r.top - tr.top - 4) + 'px'; rib.style.height = (r.height + 8) + 'px'; rib.classList.add('on');
+}
+document.addEventListener('focusin', e => { if (e.target.closest && e.target.closest('#v-overview')) placeRibbon(e.target.closest('.entry')); });
+document.addEventListener('focusout', e => { if (!e.relatedTarget || !e.relatedTarget.closest('.toc')) { const r = $('.ribbon'); r && r.classList.remove('on'); } });
+
+/* ================= agenda ================= */
+function weekDays(){
+  /* server days, with readings this viewer moved (localStorage only) re-placed inside the shown week */
+  const days = ST.agenda.days.map(d => ({...d, items: d.items.slice()}));
+  const inWeek = new Set(days.map(d => d.date));
+  const ik = i => i.course + '/' + i.task;
+  days.forEach(d => { d.items = d.items.filter(i => !(i.type === 'task' && task(ik(i)) && task(ik(i)).reading && S.moved[ik(i)] && S.moved[ik(i)] !== d.date && inWeek.has(S.moved[ik(i)]))); });
+  Object.entries(S.moved).forEach(([key, date]) => {
+    const t = task(key); if (!t || !t.reading || !inWeek.has(date)) return;
+    const day = days.find(d => d.date === date);
+    if (!day.items.some(i => i.type === 'task' && ik(i) === key)) day.items.push({type:'task', course:t.course, task:t.id, time:t.due_time && t.due_time !== '00:00' ? t.due_time : '', sort:'00'});
+  });
+  days.forEach(d => d.items.sort((a, c) => (a.sort || '').localeCompare(c.sort || '')));
+  return days;
+}
+function itemHTML(i){
+  const c = course(i.course);
+  if (i.type === 'task'){
+    const t = task(i.course + '/' + i.task);
+    const tm = i.time ? b(i.time) : 'במהלך היום';
+    const g = t.status === 'submitted' ? '' : (t.state === 'missing' ? glossHTML(t, 'span') : '');
+    const mv = t.reading && t.status !== 'submitted';
+    return `<li class="${mv ? 'movable' : ''}" ${mv ? `draggable="true" data-task="${esc(tkey(t))}"` : ''}>
+      <span class="tm">${tm}</span><span class="kind">${t.kind_word}</span>
+      <span><a class="what" href="#course/${encodeURIComponent(c.slug)}" id="a-${esc(tkey(t))}" data-nav ${mv ? 'title="אפשר לגרור ליום אחר"' : ''}>${esc(c.name)} · ${titleHTML(t)}</a></span>${g}</li>`;
+  }
+  return `<li><span class="tm">${b(i.time)}</span><span class="kind">שיעור</span><span><a class="what" href="#course/${encodeURIComponent(c.slug)}" data-nav>${esc(c.name)}${c.mode === 'zoom' ? ' · בזום' : ''}</a></span></li>`;
+}
+function renderAgenda(){
+  const v = $('#v-agenda');
+  if (ST.empty){ v.innerHTML = `<div class="ag-head"><h1>יומן</h1></div>${emptyHTML()}`; return; }
+  const days = weekDays();
+  const start = days[0].date, end = days[6].date;
+  const hasWork = days.some(d => d.items.some(i => i.type === 'task'));
+  const m1 = D(start).getMonth(), m2 = D(end).getMonth();
+  const range = m1 === m2 ? `${b(D(start).getDate() + '–' + D(end).getDate())} ${MONTH[m1]}` : `${b(dm(start) + '–' + dm(end))}`;
+  const off = dayDiff(CUR_WEEK, start) / 7;
+  const lead = off === 0 ? 'השבוע, ' : off === 1 ? 'השבוע הבא, ' : off === -1 ? 'השבוע שעבר, ' : '';
+  const band = d => {
+    const w = d.dow, items = d.items;
+    const cls = ['band', d.today ? 'today' : '', d.past ? 'past' : '', w === 6 ? 'shabbat' : '', (!items.length && w !== 6) ? 'empty-day' : ''].join(' ');
+    if (w === 6 && !items.length) return `<section class="${cls}" data-date="${d.date}" aria-label="שבת ${dm(d.date)}"><div class="dhead"><span class="dnum">${b(D(d.date).getDate())}</span><span class="dname">שבת</span></div><div></div></section>`;
+    return `<section class="${cls.replace(' shabbat', '')}" data-date="${d.date}" aria-label="${DN[w]} ${dm(d.date)}"><div class="dhead"><span class="dnum">${b(D(d.date).getDate())}</span><span class="dname">${DN[w]}${d.today ? ' · היום' : ''}</span></div><ul class="items">${items.map(itemHTML).join('')}</ul></section>`;
+  };
+  const page = list => {
+    let html = '', run = [];
+    const flush = () => { if (!run.length) return;
+      const a = D(run[0].date), z = D(run.at(-1).date);
+      const label = run.length === 1 ? `${DL[a.getDay()]} ${b(a.getDate())} · פנוי` : `${DL[a.getDay()]}–${DL[z.getDay()]} ${b(a.getDate() + '–' + z.getDate())} · פנוי`;
+      html += `<p class="collapsed">${label}</p>`; run = []; };
+    list.forEach(d => {
+      const empty = !d.items.length && d.dow !== 6;
+      if (empty){ html += band(d); run.push(d); } else { flush(); html += band(d); }
+    });
+    flush();
+    return `<div class="page">${html}</div>`;
+  };
+  const movable = days.some(d => d.items.some(i => i.type === 'task' && task(i.course + '/' + i.task).reading));
+  v.innerHTML = `
+    <div class="ag-head"><h1>${lead}${range}</h1>
+      <div class="weeknav"><button id="wkPrev">שבוע קודם</button><button id="wkNext">שבוע הבא</button></div></div>
+    ${hasWork ? (movable ? `<p class="label ag-hint">קריאות אפשר לגרור ליום אחר, או במקלדת: <kbd>${b('Alt ↑')}</kbd> ליום הקודם, <kbd>${b('Alt ↓')}</kbd> ליום הבא. ההזזה נשמרת רק בדפדפן הזה; שיעורים והגשות נשארים במקום.</p>` : '<p class="label ag-hint">השיעורים הקבועים וההגשות של השבוע.</p>')
+      : `<div class="clear"><img class="plate" src="img/hero-desk.webp" alt="" width="800" height="447"><p>אין בשבוע הזה הגשות או קריאות. רק השיעורים הקבועים.</p></div>`}
+    <div class="spread" id="spread">${page(days.slice(0,3))}${page(days.slice(3))}</div>`;
+  $('#wkPrev').onclick = () => goWeek(-1);
+  $('#wkNext').onclick = () => goWeek(1);
+  wireDrag(v);
+}
+async function goWeek(n){ WEEK = addDays(WEEK || CUR_WEEK, 7*n); await load(true); }
+function moveTask(id, date, how){
+  const t = task(id); if (!t || effDate(t) === date) return;
+  if (date === t.due_date) delete S.moved[id]; else S.moved[id] = date;   /* id is the course/task key */
+  save(); renderAgenda(); inkify($('#v-agenda'));
+  toast(`${esc(t.title)} עבר ליום ${DN[D(date).getDay()]}, ${dm(date)} (רק בדפדפן הזה).`);
+  if (how === 'key') { const el = $(`#a-${CSS.escape(id)}`); el && el.focus(); }
+}
+function wireDrag(v){
+  const spread = $('#spread', v);
+  $$('li.movable', v).forEach(li => {
+    li.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', li.dataset.task); e.dataTransfer.effectAllowed = 'move'; li.classList.add('lifted'); requestAnimationFrame(() => spread.classList.add('dragging')); });
+    li.addEventListener('dragend', () => { li.classList.remove('lifted'); spread.classList.remove('dragging'); $$('.band.over', v).forEach(x => x.classList.remove('over')); });
+  });
+  $$('.band:not(.shabbat)', v).forEach(bd => {
+    bd.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; bd.classList.add('over'); });
+    bd.addEventListener('dragleave', e => { if (!bd.contains(e.relatedTarget)) bd.classList.remove('over'); });
+    bd.addEventListener('drop', e => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); spread.classList.remove('dragging'); moveTask(id, bd.dataset.date, 'drag'); });
+  });
+}
+
+/* ================= course ================= */
+function itemGloss(i){
+  if (i.queued) return `<span class="gloss">Claude יחפש את זה אצל אנה, בספריית בר־אילן ובכותר, בריצה הלילית. מה שדורש הורדה בדפדפן יהפוך למשימה אצלך.</span>`;
+  if (i.type === 'chore') return `<span class="gloss red">לא נמצא בחומרי הקורס</span>`;
+  if (i.missing) return `<span class="gloss red">${i.status === 'not-found' ? 'לא נמצא בספרייה' : 'קיים רק בדפוס, בלי טקסט'}</span>`;
+  if (i.ocr === 'blocked' || i.ocr === 'flagged') return `<span class="gloss"><span class="q" aria-label="לבדיקה">?</span>הזיהוי האוטומטי של הטקסט סומן לבדיקה: כדאי להשוות לסריקה לפני שמצטטים</span>`;
+  if (i.ocr === 'queued') return `<span class="gloss">ממתין לזיהוי הטקסט</span>`;
+  if (i.downloaded || i.in_trove) return '';
+  const words = {online:'זמין ברשת, עוד לא הורד', kotar:'בכותר, עוד לא הורד', pending:'עוד לא חיפשו אותו בספרייה'};
+  return words[i.status] ? `<span class="gloss">${words[i.status]}</span>` : '';
+}
+function bibRow(i, taskId){
+  const marks = [i.downloaded, i.in_trove, i.in_notebooklm].map(h => h ? TICK : NO).join('');
+  const id = `src-${i.type}-${i.key}`;
+  const pick = i.fetchable && i.type === 'ref' ? `<input type="checkbox" id="${esc(id)}" data-src="${esc(i.key)}" data-task="${esc(taskId || '')}" ${SEL.has(i.key) ? 'checked' : ''} aria-label="לבחור את המקור להבאה">` : '';
+  const cite = i.missing && i.title.length <= 44 ? `<span class="circ">${auto(i.title)}</span>` : auto(i.title);
+  return `<li><span class="pick">${pick}</span><span class="cite">${cite}${itemGloss(i)}</span><span class="marks">${marks}</span></li>`;
+}
+function lessonWord(l){ return l.status === 'done' ? 'בטרוב' : l.status === 'appended' ? 'נכתב, עוד לא נבדק' : 'בתור'; }
+function renderCourse(slug){
+  const v = $('#v-course');
+  if (ST.empty){ v.innerHTML = `<h1 class="c-title">קורס</h1>${emptyHTML()}`; return; }
+  const c = course(slug);
+  if (!c){ v.innerHTML = `<p class="crumb"><a href="#overview">סקירה</a></p><h1 class="c-title">אין קורס כזה</h1><p class="c-meta">אולי הוא הוסר מהרישום. אפשר לחזור לסקירה.</p>`; return; }
+  S.lastCourse = slug; save();
+  const open = c.tasks.filter(t => t.status !== 'submitted');
+  const recent = c.tasks.filter(t => t.status === 'submitted' && t.recently_submitted);
+  const older = c.tasks.filter(t => t.status === 'submitted' && !t.recently_submitted);
+  const slip = t => {
+    const done = t.status === 'submitted';
+    const when = t.due_date ? `${t.reading ? 'לקרוא עד' : 'להגיש עד'} ${dueHTML(t, false)} <span class="label">· ${rel(effDate(t))}</span>` : 'בלי תאריך הגשה';
+    const desc = t.desc ? `<p class="desc">${esc(t.desc)}</p>` : '';
+    const core = t.core_texts.length ? `<p class="desc">טקסטי ליבה: ${t.core_texts.map(auto).join('; ')}</p>` : '';
+    const lem = t.lemida_url ? `<a class="lnk" href="${esc(t.lemida_url)}" target="_blank" rel="noopener noreferrer">לפתוח בלמידה</a>` : '';
+    return `<article class="slip${done ? ' done' : ''}" data-slip="${esc(t.id)}">
+      <span class="kind">${t.kind_word}</span>
+      <h2>${titleHTML(t)}</h2>
+      <p class="when">${when}</p>${desc}${core}
+      <div class="acts">${done
+        ? `<button class="btn" id="undo-${esc(tkey(t))}" data-undo="${esc(tkey(t))}">לבטל את הסימון</button><span class="label">${TICK.replace('class="tick"', `class="tick" data-mark="${esc(tkey(t))}"`)} סימנת ש${t.reading ? 'קראת' : 'הגשת'}. ${t.reading ? 'הקריאה' : 'המטלה'} ירדה מהסקירה.</span>`
+        : `<button class="btn" id="done-${esc(tkey(t))}" data-done="${esc(tkey(t))}">${verbDone(t)}</button>${lem}`}</div>
+    </article>`;
+  };
+  const bibHead = `<div class="bib-head label" aria-hidden="true"><span></span><span>לסמן מקור חסר כדי ש־Claude יביא אותו</span>
+        <span class="cols"><span>הורד</span><span>${b('Trove')}</span><span><span class="long">${b('NotebookLM')}</span><span class="short">${b('NLM')}</span></span></span></div>`;
+  const groups = open.filter(t => t.items.length).map(t => `<p class="bib-sub">למטלה: ${esc(t.title)}</p><ul class="bib">${t.items.map(i => bibRow(i, t.id)).join('')}</ul>`).join('');
+  const unlinked = open.filter(t => !t.items.length).map(t => `<p class="bib-sub">למטלה: ${esc(t.title)}</p><p class="label" style="padding:10px 0">עוד לא קושרו מקורות למטלה הזאת.</p>`).join('');
+  const more = c.more.length ? `<details class="more"${c.more.some(i => SEL.has(i.key)) ? ' open' : ''}><summary>המרצה הזכיר עוד · ${b(c.more.length)}</summary><ul class="bib">${c.more.map(i => bibRow(i, '')).join('')}</ul></details>` : '';
+  const bib = (groups || unlinked || more) ? `
+    <section class="c-sec" aria-labelledby="srcT">
+      <h2 id="srcT">מקורות</h2>
+      ${bibHead}${groups}${unlinked}${more}
+      <div class="fetchbar" id="fetchbar" hidden><p id="fetchTxt"></p><button class="btn" id="fetchBtn"></button></div>
+    </section>` : '';
+  const lessons = c.lessons.map((l, k) => `<li><span>שיעור ${k + 1}${l.date ? ' · ' + b(dm(l.date)) : ''}${l.new ? ' ' + CARET + '<span class="sr"> (חדש)</span>' : ''}</span><span>${lessonWord(l)}</span></li>`).join('');
+  const notices = c.notices.slice(0, 6).map(n => { const p = fromIso(n.due_at); return `<li><span>${auto(n.title)}</span><span>${p ? b(dm(p.date)) : ''}</span></li>`; }).join('')
+    + (c.notices.length > 6 ? `<li><span class="label">ועוד ${b(c.notices.length - 6)}</span><span></span></li>` : '');
+  const book = c.storage.trove_book_id;
+  const rail = `<aside class="rail" aria-label="בשולי הקורס">
+    ${lessons ? `<section><h3>שיעורים</h3><ul>${lessons}</ul></section>` : ''}
+    <section><h3>לטיפול שלך</h3>${notices ? `<ul>${notices}</ul>` : '<p>אין דברים פתוחים.</p>'}</section>
+    <section><h3>אחסון</h3><ul>
+      <li><span>ספר בטרוב</span><span>${book ? 'יש' : '—'}</span></li>
+      <li><span>${b('NotebookLM')}</span><span>${c.storage.notebook_sources === 1 ? 'מקור אחד' : b(c.storage.notebook_sources) + ' מקורות'}</span></li>
+      <li><span>דרייב</span><span>${c.links.drive ? 'תיקייה' : '—'}</span></li>
+    </ul></section>
+  </aside>`;
+  const L = c.links, links = [];
+  if (L.lemida) links.push(`<a class="lnk" href="${esc(L.lemida)}" target="_blank" rel="noopener noreferrer">למידה</a>`);
+  if (L.notebook) links.push(`<a class="lnk" href="${esc(L.notebook)}" target="_blank" rel="noopener noreferrer">${b('NotebookLM')}</a>`);
+  if (L.trove_url) links.push(`<a class="lnk" href="${esc(L.trove_url)}" target="_blank" rel="noopener noreferrer">${b('Trove')}</a>`);
+  else if (L.trove_book_id) links.push(`${b('Trove')}: <code class="bid">${esc(L.trove_book_id)}</code> <button class="copy" id="copyBook" data-copy="${esc(L.trove_book_id)}">להעתיק</button>`);
+  if (L.drive) links.push(`<a class="lnk" href="${esc(L.drive)}" target="_blank" rel="noopener noreferrer">דרייב</a>`);
+  const slots = c.slots.map(s => `${DN[DAYKEY[s.day]] || esc(s.day)} ${b((s.start || '') + '–' + (s.end || ''))}${SEM[s.semester] ? ' · ' + SEM[s.semester] : ''}`);
+  const meta = [].concat(slots, c.mode === 'async' ? ['מקוון'] : c.mode === 'zoom' && !slots.length ? ['בזום'] : [],
+    c.lecturer ? [esc(c.lecturer)] : [], c.lessons.length ? [c.lessons.length === 1 ? 'שיעור אחד מתומלל' : `${c.lessons.length} שיעורים מתומללים`] : []).join(' · ');
+  const empty = `<div class="empty"><img class="plate" src="img/revise.webp" alt="" width="800" height="598">
+      <div><p>אין מטלות פתוחות בקורס הזה.</p><p>${c.perusall_open ? `${c.perusall_open === 1 ? 'קריאה אחת' : c.perusall_open + ' קריאות'} ב־Perusall עוד לא צולמו. ` : ''}כשתעלה מטלה ללמידה, היא תופיע כאן אחרי הסריקה הבאה.</p></div></div>`;
+  const prev = older.length ? `<section class="c-sec prev"><h2>מטלות קודמות</h2><ul>${older.map(t => `<li>${titleHTML(t)} <span class="label">${t.due_date ? '· ' + dueHTML(t) : ''}</span></li>`).join('')}</ul></section>` : '';
+  v.innerHTML = `
+    <p class="crumb"><a href="#overview">סקירה</a> / ${esc(c.name)}</p>
+    <header class="c-head">
+      <h1 class="c-title">${esc(c.name)}</h1>
+      ${meta ? `<p class="c-meta">${meta}</p>` : ''}
+      ${links.length ? `<p class="c-links">${links.join(' · ')}</p>` : ''}
+    </header>
+    <div class="cgrid"><div>${open.length || recent.length ? open.concat(recent).map(slip).join('') + bib : empty + bib}${prev}</div>${rail}</div>`;
+  $$('[data-done]', v).forEach(btn => btn.onclick = () => markDone(btn.dataset.done));
+  $$('[data-undo]', v).forEach(btn => btn.onclick = () => undoDone(btn.dataset.undo));
+  $$('input[data-src]', v).forEach(i => i.onchange = () => { i.checked ? SEL.add(i.dataset.src) : SEL.delete(i.dataset.src); updateFetchbar(); });
+  const fb = $('#fetchBtn', v); if (fb) fb.onclick = () => queueFetch(slug, $$('input[data-src]:checked', v));
+  const cp = $('#copyBook', v); if (cp) cp.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(cp.dataset.copy).then(() => toast('מספר הספר בטרוב הועתק.'), () => toast('לא הצלחתי להעתיק.')); };
+  updateFetchbar();
+}
+function updateFetchbar(){
+  const bar = $('#fetchbar'); if (!bar) return;
+  const sel = $$('#v-course input[data-src]:checked');
+  bar.hidden = !sel.length;
+  $('#toast').classList.toggle('lifted', !!sel.length);
+  if (!sel.length) return;
+  $('#fetchTxt').textContent = sel.length === 1 ? 'נבחר מקור אחד. Claude יחפש אותו אצל אנה, בספריית בר־אילן ובכותר.' : `נבחרו ${sel.length} מקורות. Claude יחפש אותם אצל אנה, בספריית בר־אילן ובכותר.`;
+  $('#fetchBtn').textContent = sel.length === 1 ? 'לבקש מ־Claude להביא את המקור' : `לבקש מ־Claude להביא ${sel.length} מקורות`;
+}
+async function queueFetch(slug, boxes){
+  const refs = boxes.map(i => i.dataset.src);
+  if (!refs.length) return;
+  const taskIds = [...new Set(boxes.map(i => i.dataset.task).filter(Boolean))];
+  try {
+    await api('/api/fetch', {course:slug, refs, task: taskIds.length === 1 ? taskIds[0] : null});
+    refs.forEach(k => SEL.delete(k));
+    $('#toast').classList.remove('lifted');
+    toast(refs.length === 1 ? 'Claude יביא את המקור בריצה הלילית. הסימון כאן יתעדכן כשהוא יגיע.' : `Claude יביא את ${refs.length} המקורות בריצה הלילית. הסימון כאן יתעדכן כשהם יגיעו.`);
+    await load(true);
+  } catch(e) { if (e.message !== 'forbidden') toast('הבקשה לא נשמרה: ' + esc(e.message)); }
+}
+
+/* ================= submit + undo (written to the registry through tasks.py) ================= */
+async function markDone(id){
+  const t = task(id); if (!t || t.status === 'submitted') return;
+  try { await api('/api/task/submit', {course:t.course, task:t.id}); }
+  catch(e) { if (e.message !== 'forbidden') toast('הסימון לא נשמר: ' + esc(e.message)); return; }
+  await load(true);
+  const el = $('#v-' + route().view);
+  $$(`[data-mark="${CSS.escape(id)}"]`, el).forEach(s => s.setAttribute('data-new', ''));
+  inkify(el, 'new');
+  toast(`סימנת ש${t.reading ? 'קראת' : 'הגשת'} את ${esc(t.title)}.`, () => undoDone(id), 5000);
+  const u = $(`#undo-${CSS.escape(id)}`); u && u.focus();
+}
+async function undoDone(id){
+  const t = task(id); if (!t) return;
+  try { await api('/api/task/unsubmit', {course:t.course, task:t.id}); }
+  catch(e) { if (e.message !== 'forbidden') toast('הביטול לא נשמר: ' + esc(e.message)); return; }
+  await load(true);
+  toast('הסימון בוטל.');
+  const d = $(`#done-${CSS.escape(id)}`); d && d.focus();
+}
+
+/* ================= toast ================= */
+let toastT;
+function toast(msg, undo, ms=3200){
+  const t = $('#toast'), u = $('#toastUndo');
+  $('#toastMsg').innerHTML = msg; bidiFix($('#toastMsg'));
+  u.hidden = !undo; u.onclick = () => { t.classList.remove('show'); undo && undo(); };
+  t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+/* ================= routing ================= */
+const today = () => (ST && ST.today) || isoOf(new Date());
+function route(){
+  const h = decodeURIComponent(location.hash.replace('#', ''));
+  if (h.startsWith('course')) return {view:'course', id:(h.split('/')[1] || S.lastCourse || (ST && ST.courses[0] && ST.courses[0].slug) || '')};
+  if (h === 'agenda') return {view:'agenda'};
+  return {view:'overview'};
+}
+function render(live){
+  if (!ST) return;
+  const r = route();
+  const focusId = document.activeElement && document.activeElement.id;
+  const scroll = scrollY;
+  $$('.view').forEach(x => x.hidden = x.id !== 'v-' + r.view);
+  $$('.views a').forEach(a => a.dataset.view === r.view ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+  const last = S.lastCourse && course(S.lastCourse) ? S.lastCourse : (ST.courses[0] && ST.courses[0].slug);
+  $('.views a[data-view="course"]').href = '#course/' + encodeURIComponent(last || '');
+  if (r.view === 'overview') renderOverview();
+  else if (r.view === 'agenda') renderAgenda();
+  else renderCourse(r.id);
+  const c = r.view === 'course' ? course(r.id) : null;
+  document.title = c ? c.name + ' · שולחן הלימודים' : (r.view === 'agenda' ? 'יומן · שולחן הלימודים' : 'שולחן הלימודים');
+  const el = $('#v-' + r.view);
+  /* the ink draws once per day per view; live updates and later visits are static */
+  const key = (r.view === 'course' ? 'c:' + r.id : r.view);
+  const first = booted && S.inked[key] !== today();
+  if (booted){ if (first){ S.inked[key] = today(); save(); } inkify(el, first ? 'all' : 'none'); }
+  else bidiFix(el);
+  if (live){
+    if (focusId){ const f = document.getElementById(focusId); f && f.focus({preventScroll:true}); }
+    scrollTo({top:scroll});
+  }
+  if (!$('#v-course input[data-src]:checked')) $('#toast').classList.remove('lifted');
+}
+window.addEventListener('hashchange', () => { render(false); scrollTo({top:0}); });
+let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { inkify($('#v-' + route().view)); placeRibbon(document.activeElement.closest && document.activeElement.closest('.entry')); }, 120); });
+
+/* ================= theme ================= */
+$('#themeBtn').onclick = () => {
+  const r = document.documentElement;
+  const dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  r.dataset.theme = dark ? 'light' : 'dark';
+  try { localStorage.setItem(KEY + '.theme', r.dataset.theme); } catch(e) {}
+};
+
+/* ================= palette ================= */
+const pal = $('#pal'), palIn = $('#palIn'), palList = $('#palList');
+let palItems = [], palSel = 0;
+function commands(){
+  const out = [];
+  if (!ST) return out;
+  ST.courses.forEach(c => out.push({label:esc(c.name), hint:'קורס', run:() => location.hash = '#course/' + encodeURIComponent(c.slug)}));
+  out.push({label:'סקירה', hint:'g o', run:() => location.hash = '#overview'});
+  out.push({label:'יומן', hint:'g a', run:() => location.hash = '#agenda'});
+  ST.courses.forEach(c => c.tasks.forEach(t => {
+    if (t.status === 'submitted'){ if (t.recently_submitted) out.push({label:`לבטל את הסימון: ${esc(t.title)}`, hint:esc(c.name), run:() => undoDone(tkey(t))}); }
+    else out.push({label:`${verbDone(t)}: ${esc(t.title)}`, hint:esc(c.name), run:() => markDone(tkey(t))});
+  }));
+  ST.courses.forEach(c => {
+    const all = c.tasks.filter(t => t.status !== 'submitted').flatMap(t => t.items.map(i => [i, t.id])).concat(c.more.map(i => [i, '']));
+    const miss = all.filter(([i]) => i.fetchable && i.type === 'ref' && (i.missing || i.status === 'pending' || i.status === 'kotar' || i.status === 'online'));
+    const keys = [...new Set(miss.map(([i]) => i.key))];
+    if (keys.length) out.push({label:`לבקש מ־Claude להביא ${keys.length === 1 ? 'את המקור החסר' : keys.length + ' מקורות חסרים'} ב${esc(c.name)}`, hint:'מקורות', run: async () => {
+      const tids = [...new Set(miss.map(([, t]) => t).filter(Boolean))];
+      try { await api('/api/fetch', {course:c.slug, refs:keys, task: tids.length === 1 ? tids[0] : null}); toast(`Claude יביא ${keys.length === 1 ? 'את המקור' : 'את ' + keys.length + ' המקורות'} בריצה הלילית.`); await load(true); }
+      catch(e) { if (e.message !== 'forbidden') toast('הבקשה לא נשמרה: ' + esc(e.message)); }
+    }});
+  });
+  out.push({label:'למיין לפי תאריך', hint:'מיון', run:() => { location.hash = '#overview'; setTimeout(() => setSort('due'), 30); }});
+  out.push({label:'למיין לפי שם', hint:'מיון', run:() => { location.hash = '#overview'; setTimeout(() => setSort('name'), 30); }});
+  out.push({label:'להחליף בין מצב בהיר לכהה', hint:'תצוגה', run:() => $('#themeBtn').click()});
+  out.push({label:'קיצורי מקלדת', hint:'?', run:() => openHelp()});
+  return out;
+}
+const strip = h => { const d = document.createElement('div'); d.innerHTML = h; return d.textContent; };
+function palRender(){
+  const q = palIn.value.trim().split(/\s+/).filter(Boolean);
+  palItems = commands().filter(c => { const s = strip(c.label + ' ' + c.hint); return q.every(w => s.includes(w)); });
+  palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
+  palList.innerHTML = palItems.length ? palItems.map((c, i) => `<li role="option" id="po${i}" aria-selected="${i === palSel}" data-i="${i}"><span>${c.label}</span><span class="label">${/^g |^\?$/.test(c.hint) ? b(c.hint) : c.hint}</span></li>`).join('')
+    : `<li class="none" role="option" aria-disabled="true">אין התאמה. אפשר לחפש שם של קורס או פעולה.</li>`;
+  bidiFix(palList);
+  palIn.setAttribute('aria-activedescendant', palItems.length ? 'po' + palSel : '');
+  const sel = $('#po' + palSel); sel && sel.scrollIntoView({block:'nearest'});
+}
+function openPalette(){ if (pal.open) return; $('#help').open && $('#help').close(); palIn.value = ''; palSel = 0; palRender(); pal.showModal(); palIn.focus(); }
+function runPal(i){ const c = palItems[i]; if (!c) return; pal.close(); c.run(); }
+palIn.addEventListener('input', () => { palSel = 0; palRender(); });
+palIn.addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown'){ e.preventDefault(); palSel = (palSel + 1) % Math.max(1, palItems.length); palRender(); }
+  else if (e.key === 'ArrowUp'){ e.preventDefault(); palSel = (palSel - 1 + palItems.length) % Math.max(1, palItems.length); palRender(); }
+  else if (e.key === 'Enter'){ e.preventDefault(); runPal(palSel); }
+});
+palList.addEventListener('click', e => { const li = e.target.closest('li[data-i]'); li && runPal(+li.dataset.i); });
+pal.addEventListener('click', e => { if (e.target === pal) pal.close(); });
+$('#palBtn').onclick = openPalette;
+function openHelp(){ const h = $('#help'); if (!h.open) h.showModal(); }
+$('#helpBtn').onclick = openHelp;
+$('#help').addEventListener('click', e => { if (e.target.id === 'help') e.target.close(); });
+
+/* ================= keyboard ================= */
+let gWait = false, gT;
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.code === 'KeyK'){ e.preventDefault(); pal.open ? pal.close() : openPalette(); return; }
+  if (document.querySelector('dialog[open]')) return;
+  const t = e.target;
+  if (t.matches && t.matches('input,textarea,select,[contenteditable="true"]')) return;
+  const view = route().view;
+  if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && view === 'agenda'){
+    const li = t.closest && t.closest('li.movable'); if (!li) return;
+    e.preventDefault();
+    const tk = task(li.dataset.task); const cur = effDate(tk);
+    let nd = addDays(cur, e.key === 'ArrowDown' ? 1 : -1);
+    if (D(nd).getDay() === 6) nd = addDays(nd, e.key === 'ArrowDown' ? 1 : -1);
+    const start = ST.agenda.start, end = addDays(start, 6);
+    if (nd < start || nd > end) { toast('אפשר להזיז קריאה רק בתוך השבוע שמוצג.'); return; }
+    moveTask(tkey(tk), nd, 'key'); return;
+  }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (gWait){
+    gWait = false; clearTimeout(gT);
+    const map = {KeyO:'#overview', KeyA:'#agenda', KeyC:'#course/' + encodeURIComponent(S.lastCourse || '')};
+    if (map[e.code]){ e.preventDefault(); location.hash = map[e.code]; }
+    return;
+  }
+  if (e.code === 'KeyG' && !e.shiftKey){ gWait = true; gT = setTimeout(() => gWait = false, 1200); return; }
+  if (e.key === '?' || (e.code === 'Slash' && e.shiftKey)){ e.preventDefault(); openHelp(); return; }
+  if (e.key === 'Escape' && view === 'course'){ location.hash = '#overview'; return; }
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && (view === 'overview' || view === 'agenda')){
+    const items = $$('#v-' + view + ' [data-nav]'); if (!items.length) return;
+    e.preventDefault();
+    let i = items.indexOf(t.closest ? t.closest('[data-nav]') : null);
+    i = i < 0 ? (e.key === 'ArrowDown' ? 0 : items.length - 1) : Math.max(0, Math.min(items.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
+    items[i].focus(); items[i].scrollIntoView({block:'nearest'});
+  }
+});
+
+/* ================= live updates: the server pushes, the page never polls ================= */
+let booted = false;
+function listen(){
+  const es = new EventSource('/api/events');
+  es.addEventListener('state-changed', () => load(false));
+}
+
+/* ================= boot ================= */
+bidiFix(document.querySelector('.bar')); bidiFix($('#help'));
+const fontsReady = document.fonts ? Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1500))]) : Promise.resolve();
+if (reduced) document.documentElement.classList.add('inked');
+load(true).then(() => fontsReady).then(() => {
+  booted = true;
+  render(false);
+  document.documentElement.classList.add('inked');
+  listen();
+});
+window.__dash = {get state(){ return ST; }, S};
+})();
+</script>
+</body>
+</html>

@@ -155,6 +155,27 @@ Check what is published before pinning a version — `gemini-3.8-flash` is curre
 stable text model and the only 3.8 build; the newest pro-tier model of any generation is
 `gemini-3.1-pro-preview`, which is a preview.
 
+## `sources.json` page maps (`pageMap`)
+
+A footnote names the page printed in the book. The library keeps its own page numbers (Trove's, one per page of the stored text), and a source can say how to get from one to the other with a `pageMap` field on its record in `.academic-helper/sources.json`. `aw library read --printed A-B` uses it; without a usable map, `--printed` stops with an error that asks for `--pages` (the library's own numbers) instead of guessing. Nothing here changes how `--pages` works.
+
+`sources.json` is either an array of records or `{"sources": [...]}`. A record is found by its `sourceId` (or `id`), with or without a `#fragment`. `pageMap` is an object with a `kind`:
+
+| `kind` | Extra fields | Meaning |
+|---|---|---|
+| `identity` | none | Printed page N is library page N (the book was stored with its printed numbering). |
+| `offset` | `trove_minus_printed` (whole number) | Library page = printed page + `trove_minus_printed`. A page that lands below 1 is an error. |
+| `crosswalk` | `file` (path under `.academic-helper/`), optional `volume` (default 1), optional `stored_minus_printed` (default 0) | Look the page up in a crosswalk file: `{"volumes": [{"volume": 1, "stored_to_ck": {"<stored page>": <library page>}}]}`. The stored page is the printed page plus `stored_minus_printed`. A page with no entry is an error. The file must stay inside the project folder. |
+
+Examples:
+
+```json
+{ "sourceId": "SOURCE_ID", "workTitle": "…", "pageMap": { "kind": "offset", "trove_minus_printed": 12 } }
+{ "sourceId": "SOURCE_ID", "workTitle": "…", "pageMap": { "kind": "crosswalk", "file": "crosswalks/SOURCE_ID.json", "volume": 2, "stored_minus_printed": 0 } }
+```
+
+Older records may hold `pageMap` as free text (for example a sentence about the offset). That text is kept for people to read, but the library ignores it and warns that it is free text; replace it with one of the shapes above to make `--printed` work for that source.
+
 ## 25-Dimension Style Analysis Rubric
 
 Run via voice-miner agent. Dimensions span 8 categories (A–I):

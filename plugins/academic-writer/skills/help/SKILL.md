@@ -56,13 +56,15 @@ This table is generated from the plugin itself, so it is always complete.
 | `/academic-writer:review` | Score a completed article on six dimensions (structure, argument logic, citation completeness, source coverage, writing quality, academic conventions) and show a scorecard with concrete findings. |
 | `/academic-writer:research` | Investigate a topic or check a claim against the author's indexed sources, returning only passages whose quotations were verified word for word. |
 | `/academic-writer:ideate` | Guided brainstorming that turns a vague topic into a sharp research question, using who/what/when/where/why/how, a gap check against the author's sources and a choice of approach; saves a research brief that /academic-writer:write reads. |
-| `/academic-writer:ocr` | Turn a scanned PDF or photographed page (or a folder of them) into plain text with the bundled Gemini reading tool; pages that already contain text are extracted directly. |
+| `/academic-writer:ocr` | Turn a scan or photo into plain text with Gemini, Claude, Codex or Tesseract, your choice. |
 | `/academic-writer:ingest` | Upload one article or chapter to the source library with printed page numbers, hinted contents and a citation guide. |
 | `/academic-writer:ingest-book` | Upload a whole book (multi-volume, scanned or EPUB) to the source library with a navigable hinted table of contents and a citation guide. |
+| `/academic-writer:library-eval` | Compare Trove and PageIndex on your own article: anonymised pairs you judge yourself, then the unblinded results. |
 | `/academic-writer:voice` | Build or update the author's voice profile: import older voice files, choose exemplar paragraphs from past papers, derive writing rules and sync them to Trove. |
 | `/academic-writer:health` | Check that Academic Writer is ready to use — your profile, the tools it needs (Python and its add-ons, Hebrew spelling, Trove, NotebookLM), the Gemini key and past articles — with a plain-language fix for anything missing. |
 | `/academic-writer:help` | A short list of every command and the three steps to get started. |
 | `/academic-writer:courses` | Use when setting up an academic term from a schedule, validating course resources, syncing your LMS (Moodle) materials, or running the daily course scan. |
+| `/academic-writer:dashboard` | Open the local course dashboard: one page that shows, for every course in the term, what is due next, whether its readings are ready, and what is new, with a week agenda and a page per course. |
 | `/academic-writer:kotar-fetch` | Download the cited pages of a book on Kotar (CET, through the Bar-Ilan OpenAthens proxy) as one PDF in printed-page order, for the author's own study. |
 | `/academic-writer:lesson-notes` | Use when processing a course recording into a structured Hebrew lesson note, or when resuming queued NotebookLM lesson transcripts with --pending. |
 <!-- help:commands:end -->

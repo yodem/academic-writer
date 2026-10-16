@@ -250,6 +250,16 @@ npm install -g notebooklm-mcp-cli
 
 Then ask the researcher to type `! nlm login` to sign in (it opens their browser).
 
+### 4g. PageIndex library (optional; Trove stays the default)
+
+PageIndex is a second way to find pages in the researcher's books. Offer it once, in plain words,
+and only after the Trove step: read `references/pageindex.md` now; it is the source for the
+question, the install plan (what it installs, how big, how long, what is sent to Google) and the
+"I run my own server" path. Three choices through `AskUserQuestion`: set it up on this computer
+(asked, with a dry-run plan first), connect the researcher's own server (the `pageindex_command`
+setting; never a host, address or password in chat), or not now (Trove only). Never install without
+a yes. Failures: "PageIndex" in `references/troubleshooting.md`.
+
 ---
 
 ## Step 5 — Gemini
@@ -363,6 +373,7 @@ every existing field. Show:
 > | Python and its add-ons | ✓ Ready / ⚠ [what's missing and the one-line fix] |
 > | Hebrew spelling (hspell) | ✓ / skipped / not available on Windows / not needed |
 > | Trove / NotebookLM | ✓ / skipped (optional) |
+> | PageIndex library | — Not now (Trove only) / ✓ Built-in helper installed [tier] / ✓ Your own server set in `pageindex_command` / ⚠ [problem in plain words] |
 > | Gemini | ✓ Key works / ⚠ [problem in plain words] / — Not set up yet (needed to write, proofread, read scans) |
 > | Sample paragraph | ✓ Looked good / noted: [feedback] |
 

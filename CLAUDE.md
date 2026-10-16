@@ -10,7 +10,9 @@ researcher on a local machine; the plugin should never assume team workflows.
 - `npm run typecheck` — strict TS check on src/hooks/
 - `python3 tests/test_plugin_structure.py` — structural integrity tests
 - `npm run clean` — wipe plugins/ and src/hooks/dist/
-- `python3 -m pytest -q tests` — full deterministic suite; `npm run test:cli` — `aw` CLI tests
+- `python3 -m pytest -q tests` — full deterministic suite; `npm run test:cli` — `aw` CLI tests; `npm run typecheck:cli` — strict TS check on src/cli/
+- `cd src/cli && npm ci` first on a clean checkout: the CLI tests, `typecheck:cli` and `tests/test_pageindex_e2e.py` (which bundles `aw` from src/cli into a temp folder, never reading `plugins/`) all need it; CI and release run the same install before pytest
+- `python3 -m pytest -q tests/test_pageindex_*.py` — the built-in PageIndex helper (pilib), indexing and the end-to-end routes with fakes
 - `python3 scripts/gen-guide.py` — regenerate the guide/help command lists (`--check` to verify)
 - `bash scripts/smoke-built-plugin.sh` — run the built plugin's shipped artifacts
 - `bash scripts/check-no-private-refs.sh` — privacy gate over tracked files
@@ -25,6 +27,8 @@ researcher on a local machine; the plugin should never assume team workflows.
 | `src/hooks/hooks.json` | Hook registry — what events fire which handlers |
 | `src/thresholds.json` | Single source of truth for all numeric quality gates |
 | `src/cli/src/<command>.ts` | `aw` CLI command implementation |
+| `src/cli/src/library/` | `aw library` (Trove default, optional PageIndex route, retrieval ledger, report, install, index, backfill); `eval/` is the blind Trove-vs-PageIndex evaluation engine |
+| `src/scripts/pageindex/` | `pilib`, the PageIndex helper the plugin installs into `${CLAUDE_PLUGIN_DATA}/pageindex` (pinned commit and hashed requirements in `PINNED.json`, Python 3.9-safe, lazy heavy imports); `aw library install` creates the venv and runs it from here. See `docs/library-routes.md` |
 | `manifests/academic-writer.json` | Plugin manifest (name, version, description) |
 | `scripts/build-plugins.sh` | Build script — assembles `plugins/academic-writer/` from `src/` |
 | `src/guide/index.html` | User guide opened by `/academic-writer:intro`; its commands and version blocks are generated |
@@ -53,6 +57,7 @@ Slash commands are auto-generated from skills with `user-invocable: true`. To ad
 | `/academic-writer:ocr` | ocr | OCR a scanned PDF/image (or directory) into clean text via Gemini vision |
 | `/academic-writer:intro` | intro | Open the bundled HTML guide (`src/guide/index.html`) in the browser |
 | `/academic-writer:courses` | courses | Set up terms and course resources, validate them, sync LMS readings, and run the daily scan |
+| `/academic-writer:dashboard` | dashboard | Serve the local course dashboard (127.0.0.1 only): overview, week agenda and a page per course, live over SSE |
 | `/academic-writer:lesson-notes` | lesson-notes | Turn course recordings and NotebookLM transcripts into structured Trove lesson pages |
 | `/academic-writer:kotar-fetch` | kotar-fetch | Download a Kotar book's cited pages as one PDF (one browser step for page tokens, the rest scripted) |
 | `/academic-writer:init` | init | Full onboarding (first install); pass `--quick` for fast onboarding |
@@ -60,6 +65,7 @@ Slash commands are auto-generated from skills with `user-invocable: true`. To ad
 | `/academic-writer:research` | research | Investigate a topic |
 | `/academic-writer:ingest` | ingest | Upload one article or chapter to the source library with printed page numbers and a citation guide |
 | `/academic-writer:ingest-book` | ingest-book | Upload a whole book (multi-volume, scanned, EPUB) with a navigable hinted table of contents |
+| `/academic-writer:library-eval` | library-eval | Compare Trove and PageIndex on the author's own article: anonymised A/B pairs judged on a private page, then the unblinded report |
 | `/academic-writer:ideate` | ideate | Frame a research question |
 | `/academic-writer:review` | review | Score an article before submission |
 | `/academic-writer:health` | health | Check integration health |
@@ -91,5 +97,7 @@ Auditor is the only mandatory hard gate — it must reject paragraphs whose cita
 - Don't create `.academic-helper/` outside the setup or init skills.
 - Don't author skill descriptions that omit "Use when…" trigger phrases.
 - Don't hand-edit the generated blocks in `src/guide/index.html` or `src/skills/help/SKILL.md`; change skill frontmatter and run `python3 scripts/gen-guide.py` (the build does it too).
+- Don't add PageIndex Cloud (no `cloud.py`, no PageIndex API key): PageIndex is only the pinned local helper or the author's own command.
+- Don't call a model from library or eval code except through the author's own `claude`/`codex` (locating agents) and, for PageIndex summaries and OCR, Gemini with the plugin's key given only to that child process.
 - Don't track internal process notes (plans, handoffs, audits, `.team/`); `scripts/check-no-private-refs.sh` enforces it.
 - User-facing text is for researchers with no technical background: plain words, and ask (AskUserQuestion) before any install.

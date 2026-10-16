@@ -1,0 +1,26 @@
+{
+ "items": [
+  {
+   "id": "flat-demo",
+   "title": "A Flat Book",
+   "pages": [
+    {
+     "pageNum": 1,
+     "content": "# Page 1\n\nFlat page 1 of a book that was uploaded without a table of contents with hints."
+    },
+    {
+     "pageNum": 2,
+     "content": "# Page 2\n\nFlat page 2 of a book that was uploaded without a table of contents with hints."
+    },
+    {
+     "pageNum": 3,
+     "content": "# Page 3\n\nFlat page 3 of a book that was uploaded without a table of contents with hints."
+    },
+    {
+     "pageNum": 4,
+     "content": "# Page 4\n\nFlat page 4 of a book that was uploaded without a table of contents with hints."
+    }
+   ]
+  }
+ ]
+}

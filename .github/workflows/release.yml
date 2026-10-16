@@ -57,7 +57,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -69,6 +69,12 @@ jobs:
       # side effect of one. The typecheck gate itself stays identical either way.
       - name: Install hooks dependencies (for the typecheck gate)
         run: cd src/hooks && npm ci
+
+      # src/cli has its own node_modules, needed by the pytest gate (the end-to-end
+      # tests bundle the `aw` tool from src/cli), `npm run test:cli` and
+      # `npm run typecheck:cli`. ci.yml carries the identical step.
+      - name: Install CLI dependencies (for the pytest, test:cli and typecheck:cli gates)
+        run: cd src/cli && npm ci
 
       - name: Install Python test dependencies
         run: |
@@ -122,6 +128,12 @@ jobs:
 
       - name: Gate — strict TypeScript on hooks
         run: npm run typecheck
+
+      - name: Gate — aw CLI tests
+        run: npm run test:cli
+
+      - name: Gate — strict TypeScript on the aw CLI
+        run: npm run typecheck:cli
 
       - name: Tag the released commit
         run: |

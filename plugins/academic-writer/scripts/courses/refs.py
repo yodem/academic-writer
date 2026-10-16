@@ -10,6 +10,7 @@ Stdlib plus a pandoc subprocess only. The one network call is fetch_url; tests r
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import html
 import json
@@ -20,6 +21,7 @@ import sys
 import tempfile
 import urllib.parse
 import urllib.request
+from datetime import datetime
 from collections import Counter
 from pathlib import Path
 from typing import Any, Callable
@@ -33,6 +35,9 @@ SOURCE_SUFFIXES = (".docx", ".pptx")
 PAGE_MARK = re.compile(r"עמ['׳’]|pp\.")
 CHORE_KIND = {"kotar": "kotar-source", "print-only": "manual", "not-found": "manual"}
 COURSES_PY = Path(__file__).resolve().with_name("courses.py")
+
+ANNAS_SCRIPT = Path(os.environ.get("ANNAS_ARCHIVE_SCRIPT", "~/.claude/skills/annas-archive-ebooks/annas.py")).expanduser()
+OCR_POLICY = ("gemini-text-first", "tesseract-hidden-check", "empty-gemini-page-blocked")
 
 Fetch = Callable[[str], str]
 
@@ -390,6 +395,272 @@ def apply_chores(reg: Path, slug: str, plan: list[dict[str, str]],
             raise RefsError(f"chores add failed for {item['ref']}: {(result.stderr or '').strip()[:200]}")
 
 
+# --- fetch chain ----------------------------------------------------------------------------------
+
+def annas_search(citation: str, runner: Callable[..., Any] = subprocess.run) -> list[dict[str, Any]]:
+    """Top Anna's Archive candidates via the global skill's CLI. Raises on any failure (DDoS-Guard, bad JSON)."""
+    result = runner([sys.executable, str(ANNAS_SCRIPT), "search", primo_query(citation), "--json", "--limit", "3"],
+                    capture_output=True, text=True, timeout=90)
+    if result.returncode != 0:
+        raise RefsError((result.stderr or "annas.py failed").strip()[:150])
+    try:
+        found = json.loads(result.stdout)
+    except ValueError as exc:
+        raise RefsError(f"annas.py gave no JSON: {exc}") from exc
+    return [{k: item.get(k) for k in ("md5", "title", "author", "year", "format")} for item in found if isinstance(item, dict)]
+
+
+def _stamp() -> str:
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def fetch_ref(reg: Path, slug: str, key: str, *, task: str | None = None, dry_run: bool = False, hit: int | None = None,
+              file: Path | None = None, env: dict[str, str] | None = None, lookup: Callable[..., list[dict[str, Any]]] | None = None,
+              annas: Callable[[str], list[dict[str, Any]]] | None = None) -> dict[str, Any]:
+    """Run the documented order for one ref: (0) Anna's Archive, (1) BIU lookup, (2) download/OCR, Kotar chore, or print-only.
+
+    Every step is appended to `fetch_log` ({step, outcome, at}). `--dry-run` runs the read-only steps but writes nothing.
+    A Primo reply with several hits is never auto-picked: pass --hit N (0-based) after reading the logged hits."""
+    env = os.environ if env is None else env
+    lookup = lookup or (lambda citation: propose(citation))
+    annas = annas or annas_search
+    data = load_refs(reg, slug)
+    ref = next((r for r in data["refs"] if r.get("key") == key), None)
+    if ref is None:
+        raise RefsError(f"no ref with key {key} in {refs_path(reg, slug)}")
+    citation = ref.get("citation", "")
+    log: list[dict[str, str]] = []
+
+    def step(name: str, outcome: str, detail: str | None = None) -> None:
+        entry = {"step": name, "outcome": outcome, "at": _stamp()}
+        if detail:
+            entry["detail"] = detail
+        log.append(entry)
+
+    prior_annas, prior_candidates = ref.get("annas"), ref.get("annas_candidates")
+    annas_ran = False
+
+    def set_annas(value: str) -> None:
+        keep = ("found-used", "found-wrong-edition") + (("not-found",) if value == "error" else ())
+        if ref.get("annas") not in keep:
+            ref["annas"] = value
+
+    # step 0: Anna's Archive (never for Kotar; no key means not checked, and the chain goes on)
+    if ref.get("status") == "kotar":
+        step("annas", "skipped-kotar")
+    elif not env.get("ANNAS_ARCHIVE_KEY"):
+        step("annas", "not-checked", "ANNAS_ARCHIVE_KEY unset")
+        if not ref.get("annas"):
+            ref["annas"] = "not-checked"
+    else:
+        annas_ran = True
+        try:
+            candidates = annas(citation)
+        except Exception as exc:  # DDoS-Guard, timeouts, bad JSON: record and continue
+            step("annas", "error", str(exc)[:150])
+            set_annas("error")
+        else:
+            if candidates:
+                step("annas", "candidates", json.dumps(candidates, ensure_ascii=False)[:400])
+                set_annas("candidates")
+                ref["annas_candidates"] = candidates
+            else:
+                step("annas", "not-found")
+                set_annas("not-found")
+
+    # step 1: BIU library (Primo + CTO), only for a pending ref
+    if ref.get("status") == "pending":
+        try:
+            hits = lookup(citation)
+        except Exception as exc:
+            hits = None
+            step("lookup", "error", str(exc)[:150])
+        if hits is not None:
+            chosen = None
+            if not hits:
+                step("lookup", "no-hits")
+            elif hit is not None:
+                if not 0 <= hit < len(hits):
+                    raise RefsError(f"--hit {hit} out of range (0-{len(hits) - 1})")
+                chosen = hits[hit]
+            elif len(hits) == 1:
+                chosen = hits[0]
+            else:
+                brief = [{"i": i, "title": h.get("title"), "suggested": h.get("suggested_status")} for i, h in enumerate(hits)]
+                step("lookup", "needs-choice", json.dumps(brief, ensure_ascii=False)[:400])
+            if chosen is not None:
+                status = chosen.get("suggested_status")
+                if not status:
+                    step("lookup", "undecided", chosen.get("title"))
+                else:
+                    target = next((s["target_url"] for s in chosen.get("services", []) if s.get("target_url")), "")
+                    if status == "online" and not target:
+                        step("lookup", "undecided", "online but no target url")
+                    else:
+                        ref["status"] = status
+                        if status == "kotar" and annas_ran:  # never Anna's for Kotar: undo what step 0 just recorded
+                            ref["annas"] = prior_annas or "not-checked"
+                            ref.pop("annas_candidates", None)
+                            if prior_candidates:
+                                ref["annas_candidates"] = prior_candidates
+                            step("annas", "discarded-kotar", "lookup classified the ref as Kotar")
+                        if target and status == "online":
+                            ref["target_url"] = target
+                        if chosen.get("call_number"):
+                            ref["call_number"] = chosen["call_number"]
+                        step("lookup", status, chosen.get("title"))
+    else:
+        step("lookup", "skipped", f"status already {ref.get('status')}")
+
+    # step 2: act on the status
+    status = ref.get("status")
+    if status in ("online", "downloaded"):
+        found = None
+        if file is not None:  # an explicitly supplied file always wins and must exist
+            found = Path(file).expanduser()
+            if not found.is_file():
+                raise RefsError(f"--file {file} is not a file")
+        recorded = Path(ref["download_path"]).expanduser() if ref.get("download_path") else None
+        if found is None and recorded is not None and recorded.is_file():
+            found = recorded
+        if found is None:
+            for candidate in (reg / "sources" / slug / f"{key}.pdf", Path.home() / "Downloads" / f"{key}.pdf"):
+                if candidate.is_file():
+                    found = candidate
+                    break
+        if found is None and recorded is not None:
+            step("download", "missing-file", f"recorded path not found: {recorded}")
+            status = None  # nothing downloaded: no success, no OCR queued
+        if status is None:
+            pass
+        elif found is None and status == "online":
+            step("download", "needs-browser-download", ref.get("target_url", "no target_url"))
+        else:
+            ref["status"] = "downloaded"
+            if found is not None:
+                ref["download_path"] = str(found)
+            step("download", "downloaded", str(found) if found else "path not recorded")
+            moved = found is not None and recorded is not None and found != recorded  # the queued OCR pointed at the old path
+            if not ref.get("ocr") and (not ref.get("ocr_next") or moved):
+                ref["ocr_next"] = {"state": "queued", "policy": list(OCR_POLICY),
+                                   "note": "Gemini text first; Tesseract only as hidden check; empty Gemini => page blocked"}
+                step("ocr", "queued", " > ".join(OCR_POLICY))
+            else:
+                step("ocr", "skipped", "ocr already recorded")
+    elif status == "kotar":
+        plan = {"kind": "kotar-source", "ref": f"refs:{slug}:{key}", "title": " ".join(citation.split())[:80],
+                "text": f"run /academic-writer:kotar-fetch for: {' '.join(citation.split())}"}
+        if dry_run:
+            step("kotar", "chore-would-be-created", plan["ref"])
+        else:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            import chores as chores_mod
+            import courses
+            chores_mod.add_chore(courses.Registry(reg), course=slug, kind=plan["kind"], ref=plan["ref"], title=plan["title"], text=plan["text"])
+            step("kotar", "chore-created", plan["ref"])
+    elif status == "print-only":
+        step("print-only", "print-only", ref.get("call_number", ""))
+    elif status == "not-found":
+        step("final", "not-found", "find by hand (refs.py chores --apply adds the chore)")
+    elif status == "ingested":
+        step("final", "already-ingested")
+    else:
+        step("final", "pending", "no decision yet")
+
+    if task and not dry_run:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))  # python -I leaves the script dir off sys.path
+        import tasks as tasks_mod
+        ident = tasks_mod.resolve_task(tasks_mod.sync_tasks(reg, slug, write=False), task)["id"]
+        if ident not in ref.setdefault("tasks", []):
+            ref["tasks"].append(ident)
+    if not dry_run:
+        ref.setdefault("fetch_log", []).extend(log)
+        save_json(refs_path(reg, slug), data)
+    return {"key": key, "status": ref.get("status"), "annas": ref.get("annas"), "dry_run": dry_run, "log": log}
+
+
+# --- fetch queue (jobs written by the dashboard) --------------------------------------------------
+
+MAX_ATTEMPTS = 3
+
+
+def _job_error(result: dict[str, Any]) -> str | None:
+    """A ref counts as errored when the chain could not run (exception) or the Primo lookup itself failed."""
+    for entry in result.get("log", []):
+        if entry.get("step") == "lookup" and entry.get("outcome") == "error":
+            return f"lookup error: {entry.get('detail', '')}".strip()
+    return None
+
+
+def _ref_outcome(result: dict[str, Any]) -> str:
+    steps = [e for e in result.get("log", []) if e.get("step") not in ("annas",)]
+    return steps[-1]["outcome"] if steps else "none"
+
+
+def drain_fetch_queue(reg: Path, *, dry_run: bool = False, env: dict[str, str] | None = None,
+                      lookup: Callable[..., list[dict[str, Any]]] | None = None,
+                      annas: Callable[[str], list[dict[str, Any]]] | None = None) -> dict[str, Any]:
+    """Run `fetch_ref` for every ref of every job in queue/fetch/*.json, oldest first (file name = timestamp).
+
+    A finished job moves to queue/fetch/done/ with per-ref `results`. A job whose refs all errored stays with an
+    `attempts` counter and is retried next run; after MAX_ATTEMPTS it moves to done with status "failed".
+    Refs that already finished in an earlier attempt are not run again. A lock file keeps two drains apart."""
+    folder = reg / "queue" / "fetch"
+    report: dict[str, Any] = {"jobs": [], "dry_run": dry_run}
+    if not folder.is_dir():
+        return report
+    lock = (folder / ".drain.lock").open("a+")
+    fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+    try:
+        for path in sorted(folder.glob("*.json")):
+            try:
+                job = json.loads(path.read_text(encoding="utf-8"))
+            except ValueError:
+                report["jobs"].append({"job": path.name, "status": "unreadable"})
+                continue
+            if not isinstance(job, dict) or not job.get("course") or not isinstance(job.get("refs"), list):
+                report["jobs"].append({"job": path.name, "status": "invalid"})
+                continue
+            results: dict[str, Any] = dict(job.get("results") or {})
+            for key in job["refs"]:
+                key = str(key)
+                if results.get(key, {}).get("state") == "ok":
+                    continue
+                try:
+                    res = fetch_ref(reg, job["course"], key, task=job.get("task"), dry_run=dry_run, env=env, lookup=lookup, annas=annas)
+                except Exception as exc:  # unknown course/ref, bad refs file: record, never abort the queue
+                    results[key] = {"state": "error", "detail": str(exc)[:200]}
+                    continue
+                err = _job_error(res)
+                results[key] = ({"state": "error", "detail": err} if err else
+                                {"state": "ok", "outcome": _ref_outcome(res), "status": res.get("status"), "annas": res.get("annas")})
+            errored = [k for k, v in results.items() if v.get("state") == "error"]
+            all_errored = bool(job["refs"]) and len(errored) == len(job["refs"])
+            entry: dict[str, Any] = {"job": path.name, "course": job["course"], "results": results}
+            if all_errored:
+                attempts = int(job.get("attempts") or 0) + 1
+                entry["attempts"] = attempts
+                entry["status"] = "failed" if attempts >= MAX_ATTEMPTS else "retry"
+            else:
+                entry["status"] = "done"
+            report["jobs"].append(entry)
+            if dry_run:
+                continue
+            job.update({"results": results, "status": entry["status"], "processed_at": _stamp()})
+            if "attempts" in entry:
+                job["attempts"] = entry["attempts"]
+            if entry["status"] == "retry":
+                job["status"] = "pending"
+                save_json(path, job)
+            else:
+                save_json(folder / "done" / path.name, job)
+                path.unlink()
+    finally:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+        lock.close()
+    return report
+
+
 # --- index ----------------------------------------------------------------------------------------
 
 def render_index(slug: str, data: dict[str, Any]) -> str:
@@ -437,6 +708,22 @@ def build_parser() -> argparse.ArgumentParser:
     ch = sub.add_parser("chores", help="one chore per kotar, print-only and not-found ref")
     ch.add_argument("slug")
     ch.add_argument("--apply", action="store_true", help="add them with courses.py chores add")
+
+    fe = sub.add_parser("fetch", help="run the fetch chain for one ref: Anna's Archive, BIU lookup, download/OCR, Kotar chore")
+    fe.add_argument("--course", required=True)
+    fe.add_argument("--ref", required=True, help="ref key")
+    fe.add_argument("--task", help="also link the ref to this task")
+    fe.add_argument("--hit", type=int, help="0-based Primo hit to take when several come back")
+    fe.add_argument("--file", type=Path, help="a PDF already downloaded for this ref")
+    fe.add_argument("--dry-run", action="store_true", help="run read-only steps, write nothing")
+
+    fq = sub.add_parser("fetch-queue", help="run the fetch chain for every job the dashboard queued (queue/fetch/*.json), oldest first")
+    fq.add_argument("--dry-run", action="store_true", help="run read-only steps, move nothing")
+    fq.add_argument("--json", action="store_true")
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))  # python -I leaves the script dir off sys.path
+    import tasks as tasks_mod
+    tasks_mod.add_task_parser(sub)
 
     ix = sub.add_parser("index", help="render the מקורות נזכרים page as markdown")
     ix.add_argument("slug")
@@ -504,6 +791,28 @@ def _dispatch(args: argparse.Namespace) -> int:
         else:
             print("not added: re-run with --apply")
         return 0
+
+    if args.command == "fetch":
+        print(json.dumps(fetch_ref(reg, args.course, args.ref, task=args.task, dry_run=args.dry_run, hit=args.hit, file=args.file),
+                         ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "fetch-queue":
+        report = drain_fetch_queue(reg, dry_run=args.dry_run)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            for j in report["jobs"]:
+                print(f"{j['job']}\t{j.get('status')}\t{len(j.get('results', {}))} ref(s)")
+            if not report["jobs"]:
+                print("fetch queue empty")
+        failed = [j for j in report["jobs"] if j.get("status") in ("retry", "failed", "invalid", "unreadable")]
+        return 1 if failed else 0
+
+    if args.command == "task":
+        sys.path.insert(0, str(Path(__file__).resolve().parent))  # python -I leaves the script dir off sys.path
+        import tasks as tasks_mod
+        return tasks_mod.run_task_command(reg, args)
 
     if args.command == "index":
         print(render_index(args.slug, load_refs(reg, args.slug)), end="")

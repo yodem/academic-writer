@@ -119,6 +119,16 @@ from typing import Optional
 
 from lxml import etree
 
+
+
+def _now_stamp() -> str:
+    """The w:date of every tracked change: AW_FIXED_NOW (an ISO UTC stamp) when set, so two builds can be compared byte for byte."""
+    fixed = os.environ.get("AW_FIXED_NOW")
+    if fixed:
+        return fixed
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 CT_NS = "http://schemas.openxmlformats.org/package/2006/content-types"
 REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
@@ -603,7 +613,7 @@ def build_tracked_docx(original_path: str, final_text: str, changes_payload, out
         paragraphs = body.findall(_wtag("p"))
 
         id_alloc = IdAllocator(_max_existing_id(root) + 1)
-        date_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        date_str = _now_stamp()
 
         final_text_norm = _nfc(final_text) or ""
         # `final_text` is PROOF_BASE-shaped (chunk-article.py splits on `##`

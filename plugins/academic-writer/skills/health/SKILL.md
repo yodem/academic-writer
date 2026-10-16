@@ -87,28 +87,39 @@ from `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/gemini-key.md § Checking th
 | live check not `HTTP 200` | ✗ Gemini key | the matching line from the table in `gemini-key.md` |
 | `AW_FAILED` | ✗ Plugin command | "The plugin's own command didn't start. Update or reinstall the plugin (see version check above)." |
 
-## 4. Trove
+## 4. Library (Trove, PageIndex)
 
-**Skip if `tools.trove.enabled` (or the older `tools.candlekeep.enabled`) is false.** Report as "Disabled (enable with `/academic-writer:update-tools`)".
+The project's library route (Trove, PageIndex or both) decides what is checked. Ask the library itself:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$PWD" library status
+```
+
+**Skip if its JSON says `"enabled": false`** (set by `tools.trove.enabled`, or the older `tools.candlekeep.enabled`, being false). Report as "Disabled (enable with `/academic-writer:update-tools`)". If the command exits with an `ERROR library` line (for example the route file is not valid), show that line and one plain fix line: "The library setting file is damaged — run `/academic-writer:update-tools` to choose the library again."
+
+If enabled, check each route that the route setting uses:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$PWD" library status --check
+```
+
+The `check` part of the JSON has one entry per route (`trove`, `pageindex`) with `ok`, `latency_ms`, `count` and `error`. When Trove is one of the routes, also check the command:
 
 ```bash
 command -v trove >/dev/null 2>&1 && echo "CLI: INSTALLED" || echo "CLI: NOT_FOUND"
 ```
 
-If installed:
-```bash
-trove items list 2>&1 | head -20
-```
-
 Report:
-- CLI installed? ✓/✗
-- Can connect? ✓/✗
-- Number of items in library
-- If error: show the error message, then one plain fix line (for example: "Not signed in — type
+- Which route the project uses (Trove, PageIndex or both, and which one answers)
+- Per route: can connect? ✓/✗, the number of items (`count`) and how fast it answered
+- If a route has an `error`: show the message, then one plain fix line (for example: "Not signed in — type
   `! trove login`, which opens your browser.")
+- When both routes are on, a failing second route is only a warning: the answering route still works, and the second one runs quietly in the background.
+- **The PageIndex helper**, from the same status JSON: where the command comes from (`pageindex_source`: `setting` or `library.json` = the author's own command, `installed` = the built-in helper, `default` = `pilib` on the path), for the built-in helper its level (`installed.tier`: `core` = the basic helper, books with a table of contents; `structure` = the full helper), the Python it uses (`installed.python`) and whether it matches the version this plugin pins (`installed.matches_pinned`), and `pilib.index_trove` (can this command prepare new books). Print each `warnings` entry in plain words. A pin mismatch or `index_trove: false` is a warning, not a failure: offer to update it (`/academic-writer:update-tools`, which asks first); never install from here. When PageIndex is not set up at all and the route is Trove only, say nothing.
+- With a server command, say that its own Gemini key is used there; the plugin never sends yours.
 
-**If CLI not installed**: "Trove isn't installed. Run `/academic-writer:setup` — it can
-install it after asking."
+**If the Trove command is not installed** and Trove is a route: "Trove isn't installed. Run `/academic-writer:setup` — it can
+install it after asking." **If PageIndex is a route and its command is not found**: "The PageIndex command isn't set up. Run `/academic-writer:setup` to install the built-in helper or connect your own, or switch to Trove with `/academic-writer:update-tools`."
 
 ---
 
@@ -168,7 +179,7 @@ Show a clean summary table:
 > | Python + add-ons | ✓ Ready / ✗ [what's missing] | Python [version] |
 > | Hebrew spelling | ✓ / ⚠ Missing / — Not needed | |
 > | Gemini key | ✓ Works / ✗ [problem] / — Not set up (needed to write, proofread, read scans) | |
-> | Trove | ✓ Connected / ✗ Error / — Disabled | [N] items |
+> | Library | ✓ Connected / ✗ Error / — Disabled | [route]: [N] items |
 > | NotebookLM | ✓ Connected / ✗ Not found / — Disabled | [N] notebooks |
 > | Plugin agents | ✓ Both present / ✗ Missing [list] | 2/2 |
 >
