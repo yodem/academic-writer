@@ -53,6 +53,33 @@ These apply only to projects whose `.academic-helper/library.json` has `"route":
   plugin could not read. Fix it as in "PageIndex not reachable", or stop the quiet test with
   `"shadow": { "enabled": false }` in `library.json` (or choose a single library).
 
+## PageIndex built-in helper: install and indexing
+
+These apply when the helper was installed with `aw library install` (see `pageindex.md`). Start with
+`"${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" library status --check`:
+`installed`, `pilib` and `warnings` say what is wrong.
+
+- **"needs Python 3.10 or newer"** (full helper only): the full helper, which prepares books that have
+  no table of contents, needs a newer Python. Install one from https://www.python.org/downloads/ (or
+  Homebrew), then run the install again. Until then the basic helper (any Python 3.9 or newer) is
+  enough for books that have a table of contents, which is every book uploaded with
+  `/academic-writer:ingest-book`.
+- **The install stopped or timed out**: it needs the network and gives up after a time limit. Check the
+  connection and run it again; a half-finished install is replaced, nothing else is touched. For pip
+  errors see "pip install failures" below.
+- **The full helper ended as the basic helper**: a system library (`pango`) is missing, so the PDF
+  step cannot start. On a Mac run `brew install pango`, on Linux the `pango` package of your system,
+  then run the install again. It still works for books with a table of contents meanwhile.
+- **"older than the one this plugin pins"**: run the install again to update the helper.
+- **"cannot index books" for your own command**: the helper on your server is older than this plugin
+  or not reachable. Update it there, or switch to the built-in helper; reading books it already holds
+  still works.
+- **Indexing a book failed, Trove upload is fine**: run the same `aw library index --trove-id <id>`
+  command again. It is repeatable and reuses summaries already paid for. A missing or refused Gemini
+  key: use `--summaries hints` (no Gemini), or fix the key with `/academic-writer:health`.
+- **A book has no table of contents**: repair it with `/academic-writer:ingest-book` (cheaper and the
+  same outline as Trove), or install the full helper.
+
 ## pip install failures
 
 - **`No module named pip`**: Python was installed without its package installer. On macOS and

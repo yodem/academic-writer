@@ -157,7 +157,7 @@ def test_write_voice_gate_lets_a_first_time_author_through():
 REFERENCE = SKILLS / "init" / "references" / "integration-setup.md"
 ROUTE_LABELS = (
     "Trove (your current library)",
-    "PageIndex (a library on your own server)",
+    "PageIndex (a second library: on this computer or your own server)",
     "Both: one answers and the other is tested quietly in the background",
 )
 
@@ -216,8 +216,10 @@ def test_pageindex_setting_is_non_sensitive_and_bridged_without_a_host():
 
 def test_setup_points_to_the_pageindex_setting_and_troubleshooting_covers_it():
     setup = _text("setup")
-    assert "pageindex_command" in setup and "Never ask for a host" in setup
-    assert not INSTALL_RE.search(setup.split("### 4g.")[1].split("## Step 5")[0])  # nothing to install
+    assert "pageindex_command" in setup and "references/pageindex.md" in setup
+    # the install itself lives in the reference, behind AskUserQuestion and --yes; the SKILL text installs nothing
+    assert "Never ask for a host" in (SKILLS / "setup" / "references" / "pageindex.md").read_text(encoding="utf-8")
+    assert not INSTALL_RE.search(setup.split("### 4g.")[1].split("## Step 5")[0])
     trouble = (SKILLS / "setup" / "references" / "troubleshooting.md").read_text(encoding="utf-8")
     for heading in ("PageIndex not reachable", "Wrong book list", "Shadow errors in the report"):
         assert f"**{heading}**" in trouble, heading
@@ -267,3 +269,111 @@ def test_detection_snippet_runs_and_follows_the_config_precedence(tmp_path):
         "PAGEINDEX_CONFIGURED", "CURRENT_ROUTE=both CURRENT_PRIMARY=pageindex"]
     assert detect(None, {"AW_PAGEINDEX_COMMAND": "pilib"})[0] == "PAGEINDEX_CONFIGURED"
     assert detect({"route": "trove"}, {})[0] == "PAGEINDEX_NOT_CONFIGURED"
+
+
+# --- Built-in PageIndex helper (Trove stays the default), library-eval ---------------------------
+
+PAGEINDEX_REF = SKILLS / "setup" / "references" / "pageindex.md"
+
+
+def test_pageindex_offer_is_asked_explained_and_trove_stays_the_default():
+    text = PAGEINDEX_REF.read_text(encoding="utf-8")
+    assert ASK in text
+    for label in ("Set it up on this computer", "I run my own PageIndex on a server", "Not now"):
+        assert f'"label": "{label}"' in text, label
+    # the plan is shown before anything changes, and the install is behind a yes
+    assert "library install --dry-run" in text
+    assert text.index(ASK) < text.index("library install --yes")
+    assert text.index("library install --dry-run") < text.index("library install --yes")
+    assert "refuses to run without `--yes`" in text
+    # what it is, what is sent to Google, how big and how long, in plain words
+    for words in ("sent once to Google", "approx_size_mb", "a few minutes", "Trove stays your main library"):
+        assert words in text, words
+    # own server: setting only, placeholder path, nothing secret in chat or files
+    assert "pageindex_command" in text and "/path/to/pilib-wrapper" in text
+    assert "Never ask for a host, address, key or password in chat" in text
+    assert "never put one in a file" in text
+    assert "does not send your Gemini key to a server" in text
+    # old Python is explained, not silently fixed
+    assert "Python 3.10 or newer" in text and "Do not install Python" in text
+    # backfill reads Trove only, shows the plan and the estimate first
+    assert "library backfill --shelf-current --skip-existing --dry-run" in text
+
+
+def test_the_skills_that_offer_pageindex_point_at_the_one_reference():
+    for skill in ("setup", "init", "update-tools"):
+        assert "setup/references/pageindex.md" in _text(skill) or "references/pageindex.md" in _text(skill), skill
+    assert "Trove stays the default" in _text("setup") or "Trove is the default" in _text("setup")
+    assert "Never install without" in _text("setup")
+    health = _text("health")
+    for words in ("pageindex_source", "installed.tier", "matches_pinned", "index_trove", "never install from here"):
+        assert words in health, words
+    assert "Never install anything for this step" in _text("init")
+    assert "Never install anything for this step" in _text("update-tools")
+    integration = REFERENCE.read_text(encoding="utf-8")
+    assert "AW_PAGEINDEX_HOME" in integration and "installed.json" in integration
+    assert "pageindex_command" in json.dumps(json.loads((ROOT / "manifests" / "academic-writer.json").read_text(encoding="utf-8")))
+
+
+def test_pageindex_command_setting_says_the_built_in_helper_is_the_fallback():
+    manifest = json.loads((ROOT / "manifests" / "academic-writer.json").read_text(encoding="utf-8"))
+    description = manifest["userConfig"]["pageindex_command"]["description"] if "userConfig" in manifest else None
+    if description is None:
+        description = json.dumps(manifest)
+    assert "built-in PageIndex helper" in description
+    assert "wins over the built-in helper" in description
+
+
+def test_onboarding_and_ingest_skills_stay_under_500_lines():
+    for skill in ("setup", "init", "health", "update-tools", "library-eval", "ingest", "ingest-book", "ocr"):
+        n = len(_text(skill).splitlines())
+        assert n <= MAX_LINES, f"{skill}/SKILL.md has {n} lines"
+
+
+def test_no_skill_text_inlines_a_threshold_or_a_key():
+    for skill in ("setup", "init", "update-tools", "library-eval", "ingest", "ingest-book", "ocr"):
+        for path in [SKILLS / skill / "SKILL.md", *(SKILLS / skill / "references").glob("*.md")]:
+            body = path.read_text(encoding="utf-8")
+            assert not re.search(r"AIza[0-9A-Za-z_-]{10,}", body), path
+            assert "--api-key" not in body, path
+            assert not re.search(r"\b(?:askAboveCalls|maxCalls|minPairs)\b\s*[:=]\s*\d", body), path
+
+
+LIBRARY_EVAL = SKILLS / "library-eval" / "SKILL.md"
+
+
+def test_library_eval_skill_is_invocable_and_registered():
+    import yaml
+
+    text = LIBRARY_EVAL.read_text(encoding="utf-8")
+    fm = yaml.safe_load(re.match(r"---\n(.*?)\n---\n", text, re.S).group(1))
+    assert fm["name"] == "library-eval" and fm["user-invocable"] is True
+    assert "Use when" in fm["description"] and len(fm["description"]) <= 1024
+    meta = fm["metadata"]
+    assert meta.get("author") and meta.get("version") and meta.get("summary")
+    assert "AskUserQuestion" in fm["allowed-tools"]
+    gen = (ROOT / "scripts" / "gen-guide.py").read_text(encoding="utf-8")
+    assert '"library-eval"' in gen
+    assert "/academic-writer:library-eval" in (SKILLS / "help" / "SKILL.md").read_text(encoding="utf-8")
+    assert "/academic-writer:library-eval" in (ROOT / "src" / "guide" / "index.html").read_text(encoding="utf-8")
+
+
+def test_library_eval_runs_the_steps_in_order_and_keeps_the_blinding():
+    text = LIBRARY_EVAL.read_text(encoding="utf-8")
+    steps = [text.index(f"library eval {step}") for step in ("plan", "run", "pairs", "page", "import", "unblind")]
+    assert steps == sorted(steps), steps
+    assert "eval status" in text
+    # asked before anything is spent and before anything is published
+    assert text.index(ASK) < text.index("library eval run")
+    assert "estimated_usd" in text and "go to Anthropic" in text
+    assert "ask first" in text and "claude.ai" in text
+    # blinding rules for the orchestrating model
+    assert "sealed/" in text and "Do not open" in text
+    assert "--force" in text and "Never add `--force`" in text
+    assert "you must not turn it into" in text
+    # the judging page is a local file by default and the import shape is given
+    assert "judge.html" in text and "Download judgments" in text
+    assert '"verdict": "A|B|same|neither|skip"' in text
+    assert "--partial" in text
+    # claims and Anthropic/OpenAI data flow are stated; no key is ever requested
+    assert "OpenAI" in text and "GOOGLE_API_KEY" not in text

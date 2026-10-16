@@ -3,7 +3,7 @@ name: ingest
 description: "Upload a single academic article or book chapter into the author's Trove library with its printed page numbers preserved, a hinted table of contents, and a page-1 reading-and-citation guide, so research and writing can cite it by the printed page. Use when the author says 'upload this article', 'ingest this paper or chapter', shares a source that is not yet in Trove, or hands you a file with printed page markers or footnotes. Do NOT use for a whole book, a multi-volume set, an EPUB, a 100+ page PDF, or repairing a flat table of contents — use /academic-writer:ingest-book."
 user-invocable: true
 allowed-tools: [Bash, Read, Write, AskUserQuestion]
-metadata: {author: "Yotam Fromm", version: "0.1.0", summary: "Upload one article or chapter to the source library with printed page numbers, hinted contents and a citation guide."}
+metadata: {author: "Yotam Fromm", version: "0.2.0", summary: "Upload one article or chapter to the source library with printed page numbers, hinted contents and a citation guide."}
 ---
 
 # Ingest an article or chapter
@@ -20,7 +20,7 @@ Academic articles and chapters have their own printed page numbers (e.g. 409–4
 
 - **Markdown or text**: read it directly.
 - **Word (.docx)**: convert with `pandoc "<file>" -t markdown`; if pandoc is missing, extract the text with Python's `zipfile` and a tag strip.
-- **PDF, scan or photo**: run the plugin's own OCR (never an external tool):
+- **PDF, scan or photo**: a PDF page that already has text is extracted directly; a scan or photo needs OCR (reading the text out of the picture). Use the plugin's own OCR unless the author picks another engine (see "OCR options" below):
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" ocr \
@@ -29,6 +29,17 @@ Academic articles and chapters have their own printed page numbers (e.g. 409–4
 ```
 
 Take `--lang` from the profile's `targetLanguage` when the source language is unclear. Never modify or overwrite the source file.
+
+**OCR options.** For a scan, ask once with `AskUserQuestion` which reader to use, in plain words, and say that the pages are sent to the service that reads them:
+
+| Choice | Who reads the pages | Good for |
+|---|---|---|
+| **The plugin's own reader (Gemini)** (default) | Google, with your Gemini key | many pages, Hebrew with vowel marks, tables |
+| **Claude** | Anthropic, on your Claude plan | a few pages, difficult layouts |
+| **Codex** | OpenAI, on your Codex plan (only if Codex is installed) | sparing your Claude or Gemini quota |
+| **On this computer (Tesseract)** | nothing leaves your computer; free | clean print, privacy; weaker on scans, vowel marks and mixed Hebrew and English |
+
+The steps for Claude, Codex and Tesseract are in `${CLAUDE_PLUGIN_ROOT}/skills/ocr/references/engines.md`. Whatever the engine, the same rules below apply, and the reading page records which engine produced the text (`OCR engine: <name>`) next to the "OCR, not image-verified" warning.
 
 **OCR failure handling** (each of these has happened on real runs):
 
@@ -72,6 +83,14 @@ trove items enrich <BOOK_ID> --author "<author>" --description "<one-sentence de
 
 Use `trove items import` (it uploads in chunks and handles real documents); `trove items create` has no `--file` flag and whole-document `put --file` caps at 1 MB. Record the `BOOK_ID` it prints. If the upload fails, keep the assembled file and give the author its path.
 
+Then store the contents list as table-of-contents metadata too, so the sidebar and PageIndex read the same outline (the page-1 list alone is only text). One entry per page, page 1 (the reading guide) included, `Title - hint`, level 1, `page` = the Trove page:
+
+```bash
+trove items enrich <BOOK_ID> --toc '[{"title":"How to read and cite this book - <hint>","page":1,"level":1},{"title":"Original page 160 - <hint>","page":2,"level":1}]' --no-session
+```
+
+(Hebrew source: `עמוד מקורי 160 - <hint>`.) Replacing a page later with `trove items put` resets this list, so apply it last.
+
 **Never delete or overwrite an existing book.** If the author wants to replace an earlier upload, ask for explicit confirmation, and delete the old book only after the new one passes the read-back below; before deleting, match the old item's id and title exactly against `trove items list --json`.
 
 ## 6. Read-back (mandatory)
@@ -92,6 +111,19 @@ and check all four:
 4. **Printed-page markers** — content pages carry `[Original print page: NNN]` (or the Hebrew equivalent) and the printed numbers match the source's sequence.
 
 Any failed check is a failed upload: report it plainly with what you found, fix it and re-verify. Only then tell the author the source is in the library, citing the printed page range they can now cite.
+
+## 7. Index for PageIndex (only when the author uses it)
+
+After the read-back passes, when a PageIndex helper is ready, index the same text so PageIndex can find pages in it too. Ask first, with the Gemini estimate; skip silently when PageIndex is not set up. The Trove upload is already complete and a failure here never undoes it. Details, the question to ask and the failure list: `${CLAUDE_PLUGIN_ROOT}/skills/ingest/references/index-for-pageindex.md`. The command, after the author agreed:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" library index \
+  --trove-id <BOOK_ID> --run <run-id> [--summaries gemini|hints|none]
+```
+
+## Adding to a book you already have
+
+When the author wants this reading added to an item that already exists in Trove (a course book, a collected volume), do not create a new book. Follow `${CLAUDE_PLUGIN_ROOT}/skills/ingest/references/existing-item.md`: snapshot the table of contents, append the new pages with `trove items append`, re-apply the merged table of contents last, run the read-back there, then step 7 for the whole item. Never write new content with `trove items put`; it resets the table of contents.
 
 ## Boundary with /academic-writer:ingest-book
 
