@@ -13,7 +13,7 @@ const limits = thresholds.library;
 export const PLAIN_ID = /^[A-Za-z0-9_.#:-]+$/u;
 export function isPlainId(id: string): boolean { return PLAIN_ID.test(id); }
 
-export type EnvKind = 'pageindex' | 'trove' | 'install';
+export type EnvKind = 'pageindex' | 'trove' | 'install' | 'script' | 'pi';
 
 const BASE_NAMES = new Set(['PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'LANGUAGE', 'TMPDIR', 'TEMP', 'TMP', 'TERM', 'SHELL', 'TZ', 'SSH_AUTH_SOCK',
   'SYSTEMROOT', 'SystemRoot', 'WINDIR', 'COMSPEC', 'PATHEXT', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA']);
@@ -22,6 +22,11 @@ const TROVE_PREFIXES = ['TROVE_', 'CANDLEKEEP_', 'CK_'];
 const INSTALL_NAMES = new Set(['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'no_proxy', 'all_proxy', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'REQUESTS_CA_BUNDLE', 'CURL_CA_BUNDLE']);
 // A plugin variable that holds a credential is never passed on by this list (AW_* names are allowed otherwise: AW_LIBRARY_*, AW_PAGEINDEX_HOME, AW_TROVE_COMMAND).
 const SECRET_NAME = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH)/iu;
+// Local helper scripts (python3 in ocr, docx, proofread) need the interpreter's own variables and the plugin's non-secret CLAUDE_* ones, never a model key.
+const SCRIPT_PREFIXES = ['PYTHON', 'CLAUDE_'];
+const SCRIPT_NAMES = new Set(['VIRTUAL_ENV', 'CONDA_PREFIX', 'HSPELL_PATH']);
+// Pi calls OpenRouter itself: it gets that one key (and its own PI_* settings), no other model key.
+const PI_NAMES = new Set(['OPENROUTER_API_KEY']);
 const VALID_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 /** Names the researcher lists in AW_LIBRARY_PASS_ENV (comma separated) are passed on whatever they are called: an explicit opt-in. */
 export const PASS_ENV = 'AW_LIBRARY_PASS_ENV';
@@ -40,6 +45,8 @@ export function allowedEnv(env: NodeJS.ProcessEnv, kind: EnvKind = 'pageindex'):
     const allowed = BASE_NAMES.has(name) || BASE_PREFIXES.some((prefix) => name.startsWith(prefix))
       || (name.startsWith('AW_') && !SECRET_NAME.test(name))
       || (kind === 'trove' && TROVE_PREFIXES.some((prefix) => name.startsWith(prefix)))
+      || (kind === 'script' && (SCRIPT_NAMES.has(name) || (SCRIPT_PREFIXES.some((prefix) => name.startsWith(prefix)) && !SECRET_NAME.test(name))))
+      || (kind === 'pi' && (PI_NAMES.has(name) || name.startsWith('PI_')))
       || (kind === 'install' && (INSTALL_NAMES.has(name) || name.startsWith('PIP_')))
       || listed.has(name);
     if (allowed) out[name] = value;

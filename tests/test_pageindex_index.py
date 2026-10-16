@@ -162,7 +162,7 @@ def test_the_trove_child_never_sees_a_model_key(env, capsys, monkeypatch):
     for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS", "AZURE_OPENAI_KEY", "SOME_SERVICE_API_KEY"):
         monkeypatch.setenv(name, "secret-value-that-must-not-travel")
     monkeypatch.setenv("TROVE_API_KEY", "trove-own-credential")  # Trove's own variables stay: it is how that program logs in
-    monkeypatch.setenv("PATH_EXTRA_FOR_TEST", "kept")
+    monkeypatch.setenv("PATH_EXTRA_FOR_TEST", "dropped")  # the filter is an allow-list: an unlisted name does not travel
     code, out, err = index(capsys)
     assert code == 0, err
     seen = [set(json.loads(line)) for line in envlog.read_text().splitlines()]
@@ -170,15 +170,19 @@ def test_the_trove_child_never_sees_a_model_key(env, capsys, monkeypatch):
     for names in seen:
         assert not names & {"GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY",
                             "GOOGLE_APPLICATION_CREDENTIALS", "AZURE_OPENAI_KEY", "SOME_SERVICE_API_KEY"}, names
-        assert {"PATH", "TROVE_API_KEY", "PATH_EXTRA_FOR_TEST"} <= names
+        assert {"PATH", "TROVE_API_KEY"} <= names and "PATH_EXTRA_FOR_TEST" not in names
     assert env.stub.models, "the model call itself still had the key (the stub saw a call)"
 
 
-def test_trove_env_filter_keeps_other_variables_and_trove_credentials():
+def test_trove_env_is_an_allow_list_matching_the_cli():
     from pilib.trove_source import trove_env
-    kept = trove_env({"PATH": "/bin", "HOME": "/h", "TROVE_TOKEN": "t", "CK_API_KEY": "c", "CANDLEKEEP_API_KEY": "k", "LANG": "C"})
-    assert kept == {"PATH": "/bin", "HOME": "/h", "TROVE_TOKEN": "t", "CK_API_KEY": "c", "CANDLEKEEP_API_KEY": "k", "LANG": "C"}
-    gone = trove_env({"PATH": "/bin", "GEMINI_API_KEY": "g", "google_api_key": "g", "GITHUB_TOKEN": "x", "MY_API_KEY": "y", "ANTHROPIC_AUTH_TOKEN": "z", "AWS_SECRET_ACCESS_KEY": "s", "HF_TOKEN": "h"})
+    kept = trove_env({"PATH": "/bin", "HOME": "/h", "LANG": "C", "LC_ALL": "C", "XDG_CONFIG_HOME": "/x", "TROVE_TOKEN": "t", "CK_API_KEY": "c",
+                      "CANDLEKEEP_API_KEY": "k", "AW_LIBRARY_X": "1", "MY_PROXY_PASS": "p", "OPT_IN": "o", "AW_LIBRARY_PASS_ENV": "OPT_IN, bad name"})
+    assert kept == {"PATH": "/bin", "HOME": "/h", "LANG": "C", "LC_ALL": "C", "XDG_CONFIG_HOME": "/x", "TROVE_TOKEN": "t", "CK_API_KEY": "c",
+                    "CANDLEKEEP_API_KEY": "k", "AW_LIBRARY_X": "1", "OPT_IN": "o", "AW_LIBRARY_PASS_ENV": "OPT_IN, bad name"}
+    assert "MY_PROXY_PASS" not in kept and kept["OPT_IN"] == "o"
+    gone = trove_env({"PATH": "/bin", "GEMINI_API_KEY": "g", "google_api_key": "g", "GITHUB_TOKEN": "x", "MY_API_KEY": "y", "ANTHROPIC_AUTH_TOKEN": "z",
+                      "AWS_SECRET_ACCESS_KEY": "s", "HF_TOKEN": "h", "AW_AUTH_HEADER": "a", "AW_JEV_API_KEY": "j", "EDITOR": "vi", "GIT_ASKPASS": "x"})
     assert gone == {"PATH": "/bin"}
 
 

@@ -23,7 +23,7 @@ OCR (optical character recognition) reads the text out of a scanned or photograp
 
 The commands and rules for Claude, Codex and Tesseract are in `${CLAUDE_PLUGIN_ROOT}/skills/ocr/references/engines.md`; read it when the author picks one of them. For course readings Claude goes first. Whatever engine the author chose, never move a page to another engine on your own: mark unclear pages "OCR, not image-verified" and, if Gemini might read a page better, ask with `AskUserQuestion` whether that page may be sent to Gemini (its text goes to Google). Record which engine produced the text. The steps below are for the plugin's own reader.
 
-For library and Kotar readings (in copyright) the author has already chosen Gemini OCR for the course, so use `aw ocr` directly when step 0 finds no usable copy; for any other reading follow the engine choice above, and never move pages to another engine without asking.
+For library and Kotar readings (in copyright) Gemini is the default (user ruling 2026-10-16): use `aw ocr` directly when step 0 finds no usable copy; for any other reading ask which engine first. For scans, Gemini produces the page text. Tesseract runs only as a silent hallucination check (similarity vs the Gemini text) and its text never enters a source. Pages that drift past the gate are flagged for the user. Pages where Gemini returns empty (a copyright/recitation block) are marked "blocked" and surfaced: never fall back to Claude-vision transcription and never substitute Tesseract text.
 
 1. If the author gave no path, ask for the file or folder.
 2. Choose the language: `he`, `en` or `mixed`. Take it from `.academic-helper/profile.md`, or ask when the source language is unclear.

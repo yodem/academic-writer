@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { allowedEnv } from './library/backends.ts';
 import { callGemini, type ImagePart } from './gemini.ts';
 import { AwError, Budget, budgetFor } from './ledger.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
@@ -12,7 +13,7 @@ function runScript(name: string, args: string[]): unknown {
   const plugin = resolve(dirname(process.argv[1] ?? ''), '..');
   // OCR helpers moved from the retired MCP server to <plugin>/scripts/ocr/ (T15 integration).
   const script = join(plugin, 'scripts', 'ocr', name);
-  const result = spawnSync('python3', [script, ...args], { encoding: 'utf8' });
+  const result = spawnSync('python3', [script, ...args], { encoding: 'utf8', env: allowedEnv(process.env, 'script') });
   if (result.status !== 0) throw new AwError('ERROR', 'ocr', result.stderr.trim() || result.stdout.trim() || `${name} failed`);
   try { return JSON.parse(result.stdout) as unknown; } catch { throw new AwError('ERROR', 'ocr', `${name} returned invalid JSON`); }
 }

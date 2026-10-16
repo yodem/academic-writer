@@ -49,7 +49,7 @@ python3 kf merge <out_dir> ~/Downloads/<refs-key>.pdf
 
 - Report: ref, book id, printed pages, PDF path, any plates and any failed pages.
 - **Transcription and upload (the author's rule for library and Kotar readings, which are in copyright and fetched under the author's own licence):**
-  - The text comes from Gemini OCR with `/academic-writer:ocr`, not from Claude transcribing the page images.
+  - The text comes from Gemini OCR with `/academic-writer:ocr`, not from Claude transcribing the page images. Tesseract runs only as a silent similarity check and its text never enters a source; pages past the gate are flagged for the user, and pages where Gemini returns empty are marked "blocked" and surfaced (no Claude-vision or Tesseract fallback).
   - It goes to the course's Trove book (with `/academic-writer:ingest`) and to its NotebookLM notebook with exact printed pagination: one marker per printed page, or per column for an encyclopedia.
   - The original PDF goes to the course's Drive folder.
   - If a tool or the classifier still blocks a step, stop that item and report it. Never work around the block.

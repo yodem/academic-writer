@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { basename, dirname, join, resolve } from 'node:path';
+import { allowedEnv } from './library/backends.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
 
 export type PiUsage = { in: number; out: number };
@@ -10,7 +11,7 @@ const spawnRunner: PiRunner = async (args, systemPrompt) => {
   // `pi --system-prompt` takes the prompt TEXT (pi --help), not a file path.
   const fullArgs = args.map((arg) => arg === '__SYSTEM_PROMPT__' ? systemPrompt : arg);
   return await new Promise<PiResult>((resolve, reject) => {
-    const child = spawn('pi', fullArgs, { stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn('pi', fullArgs, { stdio: ['pipe', 'pipe', 'pipe'], env: allowedEnv(process.env, 'pi') });
     child.stdin.end();
     let stdout = '';
     let stderr = '';
@@ -38,7 +39,7 @@ export function __setPiReady(value: boolean | undefined): void { readyOverride =
 export async function piReady(): Promise<boolean> {
   if (readyOverride !== undefined) return readyOverride;
   return await new Promise((resolve) => {
-    const child = spawn('pi', ['auth', 'check', '--provider', 'openrouter'], { stdio: 'ignore' });
+    const child = spawn('pi', ['auth', 'check', '--provider', 'openrouter'], { stdio: 'ignore', env: allowedEnv(process.env, 'pi') });
     child.on('error', () => resolve(false));
     child.on('close', (code) => resolve(code === 0));
   });

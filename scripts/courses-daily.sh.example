@@ -9,8 +9,7 @@
 #   d. queued lesson jobs          /academic-writer:lesson-notes --pending
 #   e. tools/toc_audit.py --all    failure -> a manual chore (the job is not failed by it)
 #   f. courses.py chores digest
-#   g. courses.py bookmarks --all  Chrome bookmark folders; failure (e.g. rc 5 = Chrome closed) is logged, not fatal
-#   h. courses-sync-nanoclaw.sh    failure is logged, not fatal
+#   g. courses-sync-nanoclaw.sh    failure is logged, not fatal
 # Exit status is nonzero only when a step failed.
 # COURSES_DRY=1 prints each planned command to stdout instead of running it (no log file).
 export PATH="${PATH:+$PATH:}$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
@@ -119,12 +118,7 @@ except Exception:
     step digest "$PY" "$COURSES" chores digest || FAILED=1
   fi
 
-  # g. Chrome bookmark folders (logged, not fatal: rc 5 = Chrome closed)
-  if ! dry_plan "$PY $COURSES bookmarks --all"; then
-    step bookmarks "$PY" "$COURSES" bookmarks --all || echo "bookmarks failed (not fatal)"
-  fi
-
-  # h. sync to NanoClaw (logged, not fatal)
+  # g. sync to NanoClaw (logged, not fatal)
   if ! dry_plan "$SYNC"; then
     step nanoclaw-sync "$SYNC" || echo "nanoclaw sync failed (not fatal)"
   fi

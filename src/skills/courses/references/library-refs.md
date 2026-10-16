@@ -163,11 +163,11 @@ The browser tool may refuse output that contains query strings, so report counts
 ### A7. OCR and ingest
 
 - Step 0: check Anna's Archive first (A4a).
-- OCR of Hebrew: never plain `aw ocr` or Gemini alone; Gemini-only output invented or paraphrased Hebrew. The route is:
-  1. Tesseract per page (`tess_pages.py`).
-  2. Gemini character correction against the page image (`gemini_correct.py`), with a similarity gate of at least 0.8 between the Tesseract text and the corrected text.
-  3. Pages under the gate keep the Tesseract text and are flagged.
-- If a model returns empty or refuses on a page, stop for that item and report.
+- OCR of scanned library/Kotar readings (user ruling 2026-10-16):
+  1. Gemini (`aw ocr`) produces the page text.
+  2. Tesseract per page (`tess_pages.py`) runs silently as a hallucination check: similarity vs the Gemini text, gate 0.8. Its text never enters a source.
+  3. Pages under the gate are flagged for the user; Gemini's text is kept as is.
+  4. Pages where Gemini returns empty (copyright/recitation block) are marked "blocked" and surfaced. Never fall back to Claude-vision transcription or Tesseract text.
 - JSTOR Hebrew text layers are reversed: never use `pdftotext` on them.
 - Ingest of in-copyright library readings: the full text goes to Trove and NotebookLM with the printed page numbers exact, and the original PDF goes to the course Drive folder. Register it as a library source:
   ```bash
