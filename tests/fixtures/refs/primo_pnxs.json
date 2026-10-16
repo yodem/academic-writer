@@ -1,0 +1,26 @@
+{
+  "_note": "Synthetic. Shaped like a Primo pnxs response (docs[].pnx.display, docs[].delivery). The holding callNumber field is unconfirmed against a live response.",
+  "docs": [
+    {
+      "pnx": {"display": {"title": ["ספרות המקרא: מבואות ומחקרים"], "type": ["book"], "ispartof": [""]}},
+      "delivery": {
+        "availability": ["fulltext"],
+        "almaOpenurl": "https://resolver.example.test/openurl?ctx_ver=1&svc_dat=viewit&rft.title=kotar-book"
+      }
+    },
+    {
+      "pnx": {"display": {"title": ["Index to the biblical references"], "type": ["article"], "ispartof": ["Journal of Examples"]}},
+      "delivery": {
+        "availability": ["fulltext"],
+        "almaOpenurl": "https://resolver.example.test/openurl?ctx_ver=1&svc_dat=viewit&rft.title=online-article"
+      }
+    },
+    {
+      "pnx": {"display": {"title": ["Israel, its life and culture"], "type": ["book"], "ispartof": [""]}},
+      "delivery": {
+        "availability": ["available_in_library"],
+        "holding": [{"callNumber": "BS1199 .P4 1962", "libraryCode": "EXAMPLE"}]
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic Alma CTO response: one publisher package, no Kotar. -->
+<context_services>
+  <context_service id="1">
+    <key id="package_display_name">Brill - All E-Book Titles</key>
+    <key id="service_type_description">Full text available via</key>
+    <key id="Is_free">0</key>
+    <target_url>https://go.openathens.net/redirector/example.ac.il?url=https%3A%2F%2Fpublisher.example.test%2Farticle&amp;x=2</target_url>
+  </context_service>
+</context_services>
