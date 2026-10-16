@@ -3,7 +3,7 @@ import thresholds from '../../../thresholds.json' with { type: 'json' };
 import { PageIndexBackend, TroveBackend, isPlainId } from './backends.ts';
 import type { CommandScope } from './exec.ts';
 import { loadLibraryConfig, profileTroveEnabled, type LibraryConfig } from './config.ts';
-import { appendRow, clipError, nowIso, spoolFile, spoolValue, textSha, writeSpool, type LookupOp, type LookupRow } from './ledger.ts';
+import { TOKENS_BASIS, appendRow, clipError, estimateTokens, nowIso, spoolFile, spoolValue, textSha, writeSpool, type LookupOp, type LookupRow } from './ledger.ts';
 import { noShadow, startShadow, workerSettings, type RouteResult, type ShadowHandle, type ShadowMode, type ShadowRunner, type ShadowSpec } from './shadow.ts';
 import { formatPageRanges, parsePageSpec, printedToTrove, relabelPages, routeToTrovePage, splitComplete, troveToRoutePages, type RoutePages } from './pages.ts';
 import { findSource, loadShelf, stripFragment, type Shelf } from './registry.ts';
@@ -46,10 +46,32 @@ export type ReadOutput = {
   raw?: string;
 };
 
+/** The environment variable that forces one route: `trove` or `pageindex`, with the second lookup off. Empty or unset means no override. */
+export const FORCED_ROUTE_ENV = 'AW_LIBRARY_ROUTE';
+
+/**
+ * The forced route named by AW_LIBRARY_ROUTE, or null. Used by the locating agents of a library-eval run so each
+ * one reaches exactly one route whatever `.academic-helper/library.json` says. Anything but trove or pageindex is
+ * a config error (never silently ignored: a typo must not let an eval agent read from the wrong library).
+ */
+export function forcedRouteFrom(env: NodeJS.ProcessEnv): RouteName | null {
+  const value = env[FORCED_ROUTE_ENV]?.trim();
+  if (!value) return null;
+  if (value === 'trove' || value === 'pageindex') return value;
+  throw new LibraryError('config', `ERROR library: ${FORCED_ROUTE_ENV} must be trove or pageindex (got "${value.slice(0, 40)}")`);
+}
+
+/** One route only, no second lookup: the config of a forced run. The file's other settings (commands, shelf) stay. */
+function forceRoute(config: LibraryConfig, route: RouteName): LibraryConfig {
+  return { ...config, route, primary: route, secondary: null, shadowEnabled: false };
+}
+
 export function newLookupId(): string { return `lk_${Date.now().toString(36)}${randomBytes(4).toString('hex')}`; }
 
 export class Library implements ShadowRunner {
   readonly config: LibraryConfig;
+  /** The route AW_LIBRARY_ROUTE forced, or null. */
+  readonly forced: RouteName | null;
   private readonly trove: TroveBackend;
   private readonly pageindex: PageIndexBackend;
   private shelfCache: Shelf | undefined;
@@ -59,7 +81,9 @@ export class Library implements ShadowRunner {
   private readonly scope: CommandScope | undefined;
 
   constructor(readonly project: string, private readonly env: NodeJS.ProcessEnv = process.env, options: LibraryOptions = {}) {
-    this.config = loadLibraryConfig(project, env);
+    this.forced = forcedRouteFrom(env);
+    const loaded = loadLibraryConfig(project, env);
+    this.config = this.forced === null ? loaded : forceRoute(loaded, this.forced);
     const override = Number(env.AW_LIBRARY_TIMEOUT_MS);
     this.override = Number.isFinite(override) && override > 0 ? override : undefined;
     this.shadowMode = options.shadow ?? 'off';
@@ -215,6 +239,10 @@ export class Library implements ShadowRunner {
   private async writeLookup(p: {
     lookupId: string; op: LookupOp; source: string | null; ids: Ids; request: LookupRow['request']; book: string | null;
     ok: boolean; routePages: string | null; latencyMs: number; bytes: number; chars: number; sha: string | null; error: unknown; shadowStatus: string;
+    /** Estimated tokens of the returned text; only for a call that returned text. */
+    estTokens?: number;
+    /** Distinct canonical pages a page read returned. */
+    pagesReturned?: number;
   }): Promise<void> {
     const route = this.config.primary;
     const row: LookupRow = {
@@ -240,6 +268,8 @@ export class Library implements ShadowRunner {
         text_sha: p.sha,
         error: p.ok ? null : clipError(errorMessage(p.error)),
         error_code: p.ok ? null : (p.error instanceof LibraryError ? p.error.code : 'error'),
+        ...(p.ok && p.estTokens !== undefined ? { est_tokens: p.estTokens, tokens_basis: TOKENS_BASIS } : {}),
+        ...(p.ok && p.pagesReturned !== undefined ? { pages_returned: p.pagesReturned } : {}),
       },
       shadow_status: p.shadowStatus,
     };
@@ -265,6 +295,7 @@ export class Library implements ShadowRunner {
       bytes: Buffer.byteLength(text, 'utf8'),
       chars: text.length,
       text_sha: textSha(text),
+      est_tokens: estimateTokens(text),
       pages: got.canonical.map((page) => ({ page: page.page, text: page.text })),
     };
   }
@@ -277,7 +308,7 @@ export class Library implements ShadowRunner {
     const base = { lookupId, op, source, ids, request: { printed: null, trove_pages: null }, shadowStatus: handle.status };
     try {
       const { value, book, text } = await work(this.config.primary);
-      await this.writeLookup({ ...base, book, ok: true, routePages: null, latencyMs: Date.now() - started, bytes: Buffer.byteLength(text, 'utf8'), chars: text.length, sha: textSha(text), error: null });
+      await this.writeLookup({ ...base, book, ok: true, routePages: null, latencyMs: Date.now() - started, bytes: Buffer.byteLength(text, 'utf8'), chars: text.length, sha: textSha(text), error: null, estTokens: estimateTokens(text) });
       await handle.settle();
       return value;
     } catch (error) {
@@ -347,7 +378,7 @@ export class Library implements ShadowRunner {
       await this.writeLookup({
         lookupId, op, source, ids, request: ledgerRequest, book: got.book, ok: true,
         routePages: formatPageRanges(canonical.flatMap((page) => page.routePages)) || null,
-        latencyMs, bytes: Buffer.byteLength(text, 'utf8'), chars, sha: textSha(text), error: null, shadowStatus: handle.status,
+        latencyMs, bytes: Buffer.byteLength(text, 'utf8'), chars, sha: textSha(text), error: null, shadowStatus: handle.status, estTokens: estimateTokens(text), pagesReturned: new Set(canonical.map((page) => page.page)).size,
       });
       const output: ReadOutput = {
         lookup_id: lookupId,
@@ -388,6 +419,7 @@ export class Library implements ShadowRunner {
       secondary: config.secondary,
       configured: config.configured,
       enabled,
+      forced: this.forced,
       shadow: { enabled: config.shadowEnabled },
       shelf: config.shelfPath !== null,
       commands: { trove: word(config.troveCommand), pageindex: word(config.pageindexCommand) },
@@ -410,5 +442,5 @@ export class Library implements ShadowRunner {
 }
 
 function summarizeText(book: string | null, text: string): RouteResult {
-  return { book, route_pages: null, bytes: Buffer.byteLength(text, 'utf8'), chars: text.length, text_sha: textSha(text) };
+  return { book, route_pages: null, bytes: Buffer.byteLength(text, 'utf8'), chars: text.length, text_sha: textSha(text), est_tokens: estimateTokens(text) };
 }
