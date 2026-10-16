@@ -715,7 +715,7 @@ def check_lesson(registry: Registry, slug: str, date: str, runner: Callable[...,
 MEDIA_EXTENSIONS = {".m4a", ".mp3", ".wav", ".mp4", ".mov", ".mkv", ".webm"}
 READINGS_ENTRY = "חומרי קריאה"
 TITLE_PREFIX_RE = re.compile(r"^(?:\d+|email-\d{4}-\d{2}-\d{2})\s*-\s*")
-ORIGINS = ("lemida", "email", "recording", "other")
+ORIGINS = ("lemida", "email", "recording", "library", "other")
 
 
 def _default_title(path: Path) -> str:
