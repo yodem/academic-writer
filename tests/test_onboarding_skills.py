@@ -391,9 +391,10 @@ def test_library_eval_runs_the_steps_in_order_and_keeps_the_blinding():
 
 def test_no_skill_moves_pages_to_another_ocr_engine_without_asking():
     engines = (SKILLS / "ocr" / "references" / "engines.md").read_text(encoding="utf-8")
-    for path in (SKILLS / "ocr" / "SKILL.md", SKILLS / "ingest-book" / "SKILL.md", SKILLS / "ocr" / "references" / "engines.md"):
+    for path in (SKILLS / "ocr" / "SKILL.md", SKILLS / "ingest-book" / "SKILL.md", SKILLS / "ocr" / "references" / "engines.md", SKILLS / "courses" / "SKILL.md"):
         body = path.read_text(encoding="utf-8")
         assert not re.search(r"escalat\w* (?:those |these |the )?pages? to Gemini", body, re.I), path
+        assert not re.search(r"escalate to (?:the bundled )?Gemini", body, re.I), path
         assert "Gemini is the escalation" not in body and "with Gemini for pages" not in body, path
         assert "Gemini" in body and "AskUserQuestion" in body and "text goes to Google" in body, path
     assert "Never send a page to Gemini" in engines and "on your own" in engines
