@@ -147,3 +147,44 @@ def test_migrate_cli(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("ACADEMIC_TERM", "reg")
     assert courses.main(["migrate-tasks", "--dry-run", "--specs-dir", str(make_specs(tmp_path))]) == 0
     assert json.loads(capsys.readouterr().out)["dry_run"] is True
+
+
+def _dup_reg(tmp_path, chores_spec, spec_tasks, slug="kane"):
+    d, _ = make_reg(tmp_path)
+    for f in (d / "chores.json",):
+        f.write_text("[]", encoding="utf-8")
+    reg = courses.Registry(d)
+    ids = []
+    for kind, ref, title, due in chores_spec:
+        ids.append(chores.add_chore(reg, course=slug, kind=kind, ref=ref, title=title, due_at=due)["id"])
+    specs = tmp_path / "specs2"
+    specs.mkdir()
+    (specs / f"{slug}.json").write_text(json.dumps({"tasks": spec_tasks}, ensure_ascii=False), encoding="utf-8")
+    return d, specs, ids
+
+
+def test_spec_task_merges_into_chore_task_by_due_date(tmp_path):
+    d, specs, ids = _dup_reg(tmp_path, [("assignment", "1", "קריאה ושאלה", "2026-10-18T08:00:00+03:00"),
+                                        ("assignment", "2", "אחרת", "2026-11-30T08:00:00+02:00")],
+                             [{"key": "t1", "title": "מטלה (הגשה 18.10.2026, 08:00) - x", "primary": [{"page": 1, "title": "Cohen Attributes"}]}])
+    report = tasks.migrate(d, specs)
+    course = json.loads((d / "kane.json").read_text())
+    assert not [t for t in course["tasks"] if t["id"].startswith("s-")]
+    assert {t["id"]: t.get("spec_key") for t in course["tasks"]}[ids[0]] == "t1"
+    assert course["sources"][0]["tasks"] == [ids[0]]
+    assert report["merged"] == [{"course": "kane", "spec_task": "t1", "into": ids[0], "why": "due date"}]
+    assert report["possible_duplicates"] == []
+
+
+def test_spec_task_merges_into_only_open_chore_of_its_kind(tmp_path):
+    d, specs, ids = _dup_reg(tmp_path, [("forum-post", "1", "תודעת השליחות", None), ("assignment", "2", "מטלה", None)],
+                             [{"key": "פורום 1", "title": "פורום (שיעור 1)", "primary": []}])
+    report = tasks.migrate(d, specs)
+    assert report["merged"][0]["into"] == ids[0] and report["merged"][0]["why"] == "only open chore of its kind"
+
+
+def test_ambiguous_spec_task_stays_a_possible_duplicate(tmp_path):
+    d, specs, ids = _dup_reg(tmp_path, [("assignment", "1", "א", None), ("assignment", "2", "ב", None)],
+                             [{"key": "מטלה 1", "title": "מטלה (ללא תאריך)", "primary": []}])
+    report = tasks.migrate(d, specs)
+    assert report["merged"] == [] and [x["spec_task"] for x in report["possible_duplicates"]] == ["s-מטלה 1"]

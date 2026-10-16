@@ -261,11 +261,39 @@ def _matches(title: str, text: str) -> bool:
     return len(_norm(title)) >= 4 and (_contains(a, b) or (len(_norm(text)) >= 4 and _contains(b, a)))
 
 
+_DATE_RE = re.compile(r"(\d{1,2})\.(\d{1,2})\.(\d{4})")
+
+
+def _spec_kind(key: str, title: str) -> str | None:
+    for head in (key.strip(), title.strip()):
+        if head.startswith("פורום"):
+            return "forum-post"
+        if head.startswith("מטלה"):
+            return "assignment"
+    return None
+
+
+def _fold_target(tasks: list[dict[str, Any]], key: str, title: str) -> tuple[dict[str, Any], str] | None:
+    """The one chore-backed task a spec task duplicates: same kind, and the due date named in the spec title, else the only open one."""
+    kind = _spec_kind(key, title)
+    if kind is None:
+        return None
+    pool = [t for t in tasks if t.get("chore_ids") and t.get("kind") == kind and not t.get("spec_key")]
+    found = _DATE_RE.search(title)
+    if found:
+        day, month, year = (int(x) for x in found.groups())
+        dated = [t for t in pool if str(t.get("due_at") or "")[:10] == f"{year:04d}-{month:02d}-{day:02d}"]
+        if len(dated) == 1:
+            return dated[0], "due date"
+    open_ones = [t for t in pool if t.get("status") == "open"]
+    return (open_ones[0], "only open chore of its kind") if len(open_ones) == 1 else None
+
+
 def migrate(directory: Path, specs_dir: Path | None = None, *, dry_run: bool = False) -> dict[str, Any]:
     """Add tasks[] and task links from chores, specs/<slug>.json and refs `found_in`. Ambiguity is reported, never guessed."""
     specs_dir = (specs_dir or DEFAULT_SPECS).expanduser()
     stamp = datetime.now().strftime("%Y%m%dT%H%M%S")
-    report: dict[str, Any] = {"dry_run": dry_run, "courses": {}, "backups": [], "ambiguous": [], "unmatched": [], "possible_duplicates": []}
+    report: dict[str, Any] = {"dry_run": dry_run, "courses": {}, "backups": [], "ambiguous": [], "unmatched": [], "possible_duplicates": [], "merged": []}
     registry = courses.Registry(directory)
     for slug in sorted(registry.courses):
         course = load_course(directory, slug)
@@ -287,6 +315,11 @@ def migrate(directory: Path, specs_dir: Path | None = None, *, dry_run: bool = F
                 task = same[0]
                 task["spec_key"] = key
                 changed = True
+            elif len(same) <= 1 and (fold := _fold_target(tasks, key, title)) is not None:
+                task = fold[0]
+                task["spec_key"] = key
+                changed = True
+                report["merged"].append({"course": slug, "spec_task": key, "into": task["id"], "why": fold[1]})
             else:
                 if len(same) > 1:
                     report["ambiguous"].append({"course": slug, "task": key, "why": "several tasks share the title", "candidates": [t["id"] for t in same]})
