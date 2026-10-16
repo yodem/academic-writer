@@ -41,12 +41,12 @@ AskUserQuestion(questions=[{
 
 ## Library route
 
-> Used by `init` Phase 3 and `update-tools`. Decides which library this article project reads its books from, and stores the answer in `.academic-helper/library.json` (schema: `src/schemas/library-config.schema.json`). PageIndex is optional: it is a library the researcher hosts themselves, so nothing here installs it.
+> Used by `init` Phase 3 and `update-tools`. Decides which library this article project reads its books from, and stores the answer in `.academic-helper/library.json` (schema: `src/schemas/library-config.schema.json`). Trove is the default. PageIndex is optional: either the built-in helper (a separate, asked-first install, see `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/pageindex.md`) or a library the researcher hosts themselves. Choosing a route installs nothing.
 
 ### Detect (changes nothing, never prints the command itself)
 
 Read what the project already says and how the command resolves, the same order `aw library` uses
-(`AW_PAGEINDEX_COMMAND`, then `pageindex.command` in `.academic-helper/library.json`, then `pilib`):
+(`AW_PAGEINDEX_COMMAND`, then `pageindex.command` in `.academic-helper/library.json`, then the built-in helper if it is installed, then `pilib`):
 
 ```bash
 python3 - <<'PY'
@@ -59,7 +59,9 @@ env_cmd = os.environ.get('AW_PAGEINDEX_COMMAND', '').strip()
 file_cmd = (cfg.get('pageindex') or {}).get('command')
 cmd = env_cmd or file_cmd or 'pilib'
 words = cmd if isinstance(cmd, list) else shlex.split(cmd)
-found = bool(env_cmd or file_cmd or (words and shutil.which(words[0])))
+home = os.environ.get('AW_PAGEINDEX_HOME') or os.path.join('${CLAUDE_PLUGIN_DATA}', 'pageindex')
+builtin = os.path.exists(os.path.join(home, 'installed.json'))
+found = bool(env_cmd or file_cmd or builtin or (words and shutil.which(words[0])))
 print('PAGEINDEX_CONFIGURED' if found else 'PAGEINDEX_NOT_CONFIGURED')
 print('CURRENT_ROUTE=' + str(cfg.get('route', 'none')) + ' CURRENT_PRIMARY=' + str(cfg.get('primary', 'trove')))
 PY
@@ -85,7 +87,7 @@ AskUserQuestion(questions=[{
 
 "Keep it as it is" is the default: leave the file unchanged unless the researcher explicitly picks "Switch to Trove" (then write `{ "route": "trove" }`, keeping the other keys). Either way, point to the "PageIndex" entries in `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/troubleshooting.md`.
 
-**PageIndex not configured** (and no existing route to keep): do not offer it. Say, in one sentence: "Your books will be read from Trove; if you keep a PageIndex library on your own server you can add it later in `/plugin` → academic-writer → Configure (the `pageindex_command` setting), then run `/academic-writer:update-tools`." Use route `trove`, and write it only when there is no `library.json` yet.
+**PageIndex not configured** (and no existing route to keep): do not offer it as a route yet. Say, in one sentence: "Your books will be read from Trove. PageIndex is an optional second library; I can set it up for you now, or you can do it later with `/academic-writer:update-tools`." If the researcher wants it, follow `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/pageindex.md` (its own question, plan and yes; "Not now" is the default), then run the detection again. If it is still not configured, use route `trove`, and write it only when there is no `library.json` yet.
 
 **PageIndex configured**:
 
@@ -95,7 +97,7 @@ AskUserQuestion(questions=[{
   "header": "Library",
   "options": [
     {"label": "Trove (your current library)", "description": "What you use today. Nothing changes."},
-    {"label": "PageIndex (a library on your own server)", "description": "Books are read from your PageIndex library instead of Trove."},
+    {"label": "PageIndex (a second library: on this computer or your own server)", "description": "Books are read from your PageIndex library instead of Trove."},
     {"label": "Both: one answers and the other is tested quietly in the background", "description": "Your writing only ever waits for the one that answers. The other is tried on the same request and its timing and result are noted in a private log in this project, so you can compare them later."}
   ],
   "multiSelect": false

@@ -3,7 +3,7 @@ name: ingest-book
 description: "Upload a whole academic book — a large or scanned PDF, a multi-volume set, or an EPUB — into the author's Trove library as one book with its printed page numbers preserved, a nested navigable table of contents where every entry jumps to its real page and carries a content hint, and a page-1 reading-and-citation guide. Use when the author says 'upload this book', 'ingest these volumes', 'combine these PDFs into one book', 'ingest this EPUB', or when the input is 100+ pages, over ~50MB, or a scanned PDF, and to repair an existing book whose sidebar is an unusable flat list of 'page N' entries. Do NOT use for a single article, paper or chapter — use /academic-writer:ingest."
 user-invocable: true
 allowed-tools: [Bash, Read, Write, AskUserQuestion]
-metadata: {author: "Yotam Fromm", version: "0.1.0", summary: "Upload a whole book (multi-volume, scanned or EPUB) to the source library with a navigable hinted table of contents and a citation guide."}
+metadata: {author: "Yotam Fromm", version: "0.2.0", summary: "Upload a whole book (multi-volume, scanned or EPUB) to the source library with a navigable hinted table of contents and a citation guide."}
 ---
 
 # Ingest a whole book
@@ -32,9 +32,7 @@ All three encode the tedious, error-prone parts as deterministic code (run from 
 - `scripts/build_crosswalk.py` — derive each page's Trove number, per volume, from the uploaded file (Trove skips blank pages, so this cannot be eyeballed).
 - `scripts/build_toc_enrich.py` — assemble the `--toc` metadata (printed→Trove with interpolation, nesting levels, hints) and optionally apply it.
 
-OCR — of body pages or ToC pages — always goes through the plugin's own `aw ocr` (see `/academic-writer:ocr`), never an external tool:
-
-(When the book is a course reading, OCR with Claude vision first, `pdftoppm -r 150`, and escalate to this Gemini OCR for pages Claude flags unreadable or low-confidence or when the text is degraded; record the engine used.)
+OCR (reading the text out of a scanned page) — of body pages or ToC pages — uses the plugin's own reader, `aw ocr` (Gemini, see `/academic-writer:ocr`), unless the author picks another engine. For a scan, ask once with `AskUserQuestion`, in plain words, who should read the pages and say that the pages go to that service: **the plugin's own reader (Gemini)** (default, best for many pages and Hebrew with vowel marks), **Claude** (a few pages, difficult layouts; Anthropic, on the author's Claude plan), **Codex** (only if installed; on the author's Codex plan), or **Tesseract on this computer** (free, nothing leaves the computer, weaker on scans and mixed Hebrew and English). The steps for Claude, Codex and Tesseract are in `${CLAUDE_PLUGIN_ROOT}/skills/ocr/references/engines.md`. For a course reading the default is Claude first, with Gemini for pages Claude flags as unreadable or low-confidence. Record the engine used (`OCR engine: <name>`) on the reading page, next to any "OCR, not image-verified" warning.
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" ocr \
@@ -50,7 +48,7 @@ OCR — of body pages or ToC pages — always goes through the plugin's own `aw 
 
 ## Workflow
 
-Four phases; finish and sanity-check each before the next, so a failure is easy to localize.
+Five phases; finish and sanity-check each before the next, so a failure is easy to localize. To add a reading to a book that already exists, see "Adding to a book you already have" below instead of Phases B and C.
 
 ### Phase A — Survey & Extract
 
@@ -96,7 +94,7 @@ Four phases; finish and sanity-check each before the next, so a failure is easy 
      --out /tmp/toc_enrich.json --apply <BOOK_ID>
    ```
    Levels: volume=1, unit=2, section=3, subsection=4, sub-subsection=5; appendices/glossary/index=3. Include the appendices, glossary and any combined index — readers specifically want those findable.
-8. **Flesh out page 1** as the "How to read and cite this book" guide, built from `${CLAUDE_PLUGIN_ROOT}/skills/ingest/references/reading-page-template.md` (English or Hebrew variant). It carries the full bibliographic record, how the printed page markers work and the rule **cite the printed page, never the Trove page**, the covered pages and gaps, and footnote templates in **three** citation styles: Chicago notes-bibliography (first note + short note), the Hebrew academic convention (שם המחבר, שם הספר, מקום תשנ״ה, עמ׳ N; short form for subsequent notes), and a third style chosen from the profile's `citationStyle` (MLA or APA) so the author's own style always appears. For a primary text it also carries the structural-locus form (chapter/premise/paragraph). Rewrite it in place with `trove items put <BOOK_ID>:1 --file /tmp/reading-guide.md --no-session`.
+8. **Flesh out page 1** as the "How to read and cite this book" guide, built from `${CLAUDE_PLUGIN_ROOT}/skills/ingest/references/reading-page-template.md` (English or Hebrew variant). It carries the full bibliographic record, how the printed page markers work and the rule **cite the printed page, never the Trove page**, the covered pages and gaps, and footnote templates in **three** citation styles: Chicago notes-bibliography (first note + short note), the Hebrew academic convention (שם המחבר, שם הספר, מקום תשנ״ה, עמ׳ N; short form for subsequent notes), and a third style chosen from the profile's `citationStyle` (MLA or APA) so the author's own style always appears. For a primary text it also carries the structural-locus form (chapter/premise/paragraph). Rewrite it in place with `trove items put <BOOK_ID>:1 --file /tmp/reading-guide.md --no-session`. **`put` makes Trove rebuild the whole table of contents from the page headings, so every hint and level is lost: run step 7's command with `--apply <BOOK_ID>` again right after it, and always as the last write to the book.**
 
 ### Phase D — Read-back (mandatory)
 
@@ -118,6 +116,21 @@ and check all four:
 
 Any failed check is a failed upload: report it plainly, fix and re-verify. Wrong page targets almost always mean a wrong offset — fix it and rerun step 7; re-enriching is cheap and non-destructive. Only then tell the author the book is in the library.
 
+### Phase E — Index for PageIndex (only when the author uses it)
+
+After the read-back passes, when a PageIndex helper is ready, index the same book so PageIndex can find pages in it too: the outline is built from the **same hinted table of contents** that is now in Trove, with a short Gemini summary per entry. Ask first and show the Gemini estimate (the dry run gives the number of calls and characters); skip silently when PageIndex is not set up. The Trove upload is already complete and a failure here never undoes it. Details, the question to ask and the failure list: `${CLAUDE_PLUGIN_ROOT}/skills/ingest/references/index-for-pageindex.md`. The command, after the author agreed:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" library index \
+  --trove-id <BOOK_ID> --run <run-id> [--summaries gemini|hints|none]
+```
+
+A book whose table of contents is still flat (`page N` entries) has no hints to build from: repair it first (Troubleshooting below), because PageIndex would otherwise have to find the structure itself with Gemini, which needs the full helper and cannot be priced ahead.
+
+## Adding to a book you already have
+
+When the author wants a reading or volume added to an item that already exists in Trove, do not create a new book. Follow `${CLAUDE_PLUGIN_ROOT}/skills/ingest/references/existing-item.md`: snapshot the table of contents, append the new pages with `trove items append`, re-apply the merged table of contents **last**, run the read-back there, then Phase E for the whole item. Never write new content with `trove items put <id>:<page>`: it resets the whole table of contents and loses every hint and level.
+
 ## Troubleshooting
 
 - **ToC links land on the wrong pages** — the offset is wrong. Re-read a known printed page, recompute `offset = stored − printed`, rerun step 7. Re-enrich is non-destructive.
@@ -125,6 +138,7 @@ Any failed check is a failed upload: report it plainly, fix and re-verify. Wrong
 - **A volume's pages didn't map** — `build_crosswalk.py` detects volumes by the page-number reset to 1. If a volume doesn't restart numbering, give it a distinct `--page-label` and crosswalk it separately.
 - **`trove items enrich --toc` prints `✓ Enriched` then panics** — a CLI display bug truncating a non-ASCII description on a UTF-8 char boundary. The write already succeeded; ignore it and confirm with `trove items toc <id>`.
 - **`pdftoppm`/`pdftotext` unavailable** — install poppler with the user's permission (`/academic-writer:setup` asks before installing), or fall back to PyMuPDF (`fitz`).
+- **Indexing for PageIndex failed, but the Trove upload is complete** — run the same `aw library index --trove-id <BOOK_ID>` command again (see the failure list in `references/index-for-pageindex.md` in the ingest skill); it is repeatable and reuses summaries already paid for.
 - **Coverage assertion fails while every structural check passes (EPUB)** — see `references/epub-sources.md`: the slicing model is wrong, not the sanitizing.
 
 ## Key rules

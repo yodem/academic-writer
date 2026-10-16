@@ -1,16 +1,25 @@
 ---
 name: ocr
-description: "Turn a scanned PDF or photographed page (or a folder of them) into plain text with the bundled Gemini reading tool; pages that already contain text are extracted directly. Use when the author has a scan, photo or screenshot of a source and needs its text before research or writing. Takes a file or folder path."
+description: "Turn a scanned PDF or photographed page (or a folder of them) into plain text, choosing who reads the pages: the bundled Gemini reader (default), Claude, Codex or Tesseract on this computer; pages that already contain text are extracted directly. Use when the author has a scan, photo or screenshot of a source and needs its text before research or writing. Takes a file or folder path."
 user-invocable: true
-allowed-tools: [Bash, Read, Write, Glob]
-metadata: {author: "Yotam Fromm", version: "0.1.0"}
+allowed-tools: [Bash, Read, Write, Glob, AskUserQuestion]
+metadata: {author: "Yotam Fromm", version: "0.2.0", summary: "Turn a scan or photo into plain text with Gemini, Claude, Codex or Tesseract, your choice."}
 ---
 
 # Academic Writer — OCR
 
-OCR (optical character recognition) reads the text out of a scanned or photographed page. Transcribe a PDF, an image, or a folder of them with `aw ocr`. OCR copies the source text exactly: it never corrects, modernises or paraphrases it, because the text may later be quoted as evidence.
+OCR (optical character recognition) reads the text out of a scanned or photographed page. Transcribe a PDF, an image, or a folder of them. OCR copies the source text exactly: it never corrects, modernises or paraphrases it, because the text may later be quoted as evidence.
 
-For course readings this is the escalation engine, not the first try: read the pages with Claude vision first (`pdftoppm -r 150`), and use `aw ocr` when Claude flags pages as unreadable or low-confidence or the text is degraded. Record which engine produced the text.
+**Who reads the pages is the author's choice.** Ask once with `AskUserQuestion`, in plain words, and say where the pages go (skip the question when the author already named an engine):
+
+| Choice | Who reads the pages | Good for |
+|---|---|---|
+| **The plugin's own reader (Gemini)** (default) | Google, with the author's Gemini key | many pages, Hebrew with vowel marks, tables |
+| **Claude** | Anthropic, in this session | a few pages, hard layouts |
+| **Codex** | OpenAI, if the `codex` program is installed | sparing Claude or Gemini quota |
+| **On this computer (Tesseract)** | nothing leaves the computer; free | clean print, private material; weaker on scans and vowel marks |
+
+The commands and rules for Claude, Codex and Tesseract are in `${CLAUDE_PLUGIN_ROOT}/skills/ocr/references/engines.md`; read it when the author picks one of them. For course readings Claude goes first and Gemini is the escalation for pages Claude flags as unreadable or low-confidence. Record which engine produced the text. The steps below are for the plugin's own reader.
 
 1. If the author gave no path, ask for the file or folder.
 2. Choose the language: `he`, `en` or `mixed`. Take it from `.academic-helper/profile.md`, or ask when the source language is unclear.

@@ -435,9 +435,12 @@ Build the sources array from the listing (id + title + type only — never raw J
 
 Then ask which library this article reads its books from, with `AskUserQuestion` in plain words
 (Trove, PageIndex or both; with both, which one answers), and save `.academic-helper/library.json`.
-Offer PageIndex only when a PageIndex command is configured, otherwise explain in one sentence how
-to set it up and use Trove. Questions, detection and file format: `references/integration-setup.md`
-(section "Library route"). Never install anything for this step.
+Trove is the default. Offer PageIndex as a route when a PageIndex command is configured or the
+built-in helper is installed. Otherwise say in one sentence that PageIndex is an optional second
+library and, only if the researcher wants it, make the separate offer in
+`${CLAUDE_PLUGIN_ROOT}/skills/setup/references/pageindex.md` (what it installs, how big, what is
+sent to Google; "Not now" is the default). Questions, detection and file format:
+`references/integration-setup.md` (section "Library route"). Never install anything for this step.
 
 ---
 

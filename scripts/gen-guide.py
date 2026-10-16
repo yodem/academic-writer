@@ -34,7 +34,7 @@ PREFIX = "/academic-writer:"
 ORDER = [
     "intro", "setup", "init", "write", "revise", "edit", "edit-section",
     "proofread", "review", "research", "ideate", "ocr",
-    "ingest", "ingest-book", "voice", "health", "help",
+    "ingest", "ingest-book", "library-eval", "voice", "health", "help",
 ]
 
 
