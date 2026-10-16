@@ -6,7 +6,7 @@ Rules: every page 1..pageCount starts exactly one entry; each title is
 level is 1 and a level never rises by more than 1.
 
 Importable: audit_toc, load_toc_json, fetch_toc, registry_dir, load_registry,
-audit_book, format_report.
+audit_book, format_report, missing_from.
 """
 from __future__ import annotations
 
@@ -111,6 +111,23 @@ def source_parent_problems(toc: list[dict], sources: list) -> list[dict]:
     return out
 
 
+CROSS_REFERENCE_BLOCKS = ("מקורות ראשוניים", "מקורות משניים")
+
+
+def _cross_reference_entries(toc: list[dict]) -> set[int]:
+    """Indices of a cross-reference block: a level-1 entry titled "מקורות ראשוניים"/"מקורות משניים" and every
+    entry under it up to the next level-1 entry. assignment_toc.py builds these, and they repeat source start
+    pages on purpose, so duplicate and out_of_order skip them. They still need a hint and a level."""
+    out: set[int] = set()
+    in_block = False
+    for i, e in enumerate(toc):
+        if e.get("level", 1) <= 1:
+            in_block = _label(e.get("title", "")).startswith(CROSS_REFERENCE_BLOCKS)
+        if in_block:
+            out.add(i)
+    return out
+
+
 def audit_toc(toc: list[dict], page_count: int, course_name: str | None = None, sources: list | None = None) -> dict:
     """Return {missing, duplicate, no_hint, out_of_order, level_gap, source_parent, ok}.
 
@@ -120,10 +137,14 @@ def audit_toc(toc: list[dict], page_count: int, course_name: str | None = None, 
     missing: pages with no entry starting there; duplicate: pages with >1 entry;
     no_hint: titles lacking " - hint"; out_of_order: (index, prev_page, page)
     where the page decreases; level_gap: (index, level) violating level rules.
+    Cross-reference blocks (see _cross_reference_entries) are exempt from duplicate and out_of_order
+    and do not count toward missing.
     """
+    exempt = _cross_reference_entries(toc)
     counts: dict[int, int] = {}
-    for e in toc:
-        counts[e.get("page")] = counts.get(e.get("page"), 0) + 1
+    for i, e in enumerate(toc):
+        if i not in exempt:
+            counts[e.get("page")] = counts.get(e.get("page"), 0) + 1
     missing = [p for p in range(1, page_count + 1) if counts.get(p, 0) == 0]
     duplicate = sorted(p for p, n in counts.items() if n > 1)
     no_hint = [{"index": i, "page": e.get("page"), "title": e.get("title", "")}
@@ -133,6 +154,8 @@ def audit_toc(toc: list[dict], page_count: int, course_name: str | None = None, 
     out_of_order = []
     last_at: dict[int, int] = {}  # level -> page of the latest entry at that level
     for i, e in enumerate(toc):
+        if i in exempt:
+            continue
         lvl, page = e.get("level", 1), e["page"]
         parent = last_at.get(lvl - 1, 0) if lvl > 1 else 0
         sibling = last_at.get(lvl, 0)
@@ -154,6 +177,19 @@ def audit_toc(toc: list[dict], page_count: int, course_name: str | None = None, 
     result["ok"] = not any(result[k] for k in
                            ("missing", "duplicate", "no_hint", "out_of_order", "level_gap", "source_parent"))
     return result
+
+
+def missing_from(before: list[dict], after: list[dict]) -> list[dict]:
+    """Entries of the saved ToC `before` whose (title, level) no longer appears in `after`, in saved order.
+    Guards against a re-split that drops a merged entry; added entries are fine."""
+    live = {(e.get("title", ""), e.get("level", 1)) for e in after}
+    out, seen = [], set()
+    for e in before:
+        key = (e.get("title", ""), e.get("level", 1))
+        if key not in live and key not in seen:
+            seen.add(key)
+            out.append({"title": key[0], "level": key[1]})
+    return out
 
 
 def load_toc_json(path: str | Path) -> tuple[list[dict], int, str]:
@@ -210,17 +246,29 @@ def format_report(results: list[dict]) -> str:
             lines.append(f"{r['label']}: source {v['title']!r} {v['reason']}")
         for v in r["level_gap"]:
             lines.append(f"{r['label']}: level gap at entry {v['index']} (p.{v['page']}): {v['prev_level']} -> {v['level']}")
+        for v in r.get("dropped", []):
+            lines.append(f"{r['label']}: dropped since the snapshot: {v['title']!r} (level {v['level']})")
     return "\n".join(lines)
+
+
+def _check_keep_from(result: dict, toc: list[dict], snapshot: str | Path) -> None:
+    """Record entries of the saved snapshot that the live ToC dropped; a dropped entry fails the book."""
+    result["dropped"] = missing_from(load_toc_json(snapshot)[0], toc)
+    if result["dropped"]:
+        result["ok"] = False
 
 
 def run(args) -> tuple[list[dict], int]:
     results: list[dict] = []
+    keep_from = getattr(args, "keep_from", None)
     if args.toc_json:
         toc, n, bid = load_toc_json(args.toc_json)
         results.append(audit_book(Path(args.toc_json).name, toc, n, bid))
     elif args.book:
         toc, n, bid = fetch_toc(args.book)
         results.append(audit_book(args.book, toc, n, bid))
+        if keep_from:
+            _check_keep_from(results[-1], toc, keep_from)
     else:
         courses = load_registry()
         if args.course:
@@ -238,6 +286,8 @@ def run(args) -> tuple[list[dict], int]:
             try:
                 toc, n, _ = fetch_toc(bid)
                 results.append(audit_book(c["slug"], toc, n, bid, c.get("name"), registered_source_titles(c)))
+                if keep_from:
+                    _check_keep_from(results[-1], toc, keep_from)
             except Exception as exc:  # noqa: BLE001 - report per book, keep going
                 results.append({"label": c["slug"], "book_id": bid, "pages": 0, "entries": 0, "missing": [],
                                 "duplicate": [], "no_hint": [], "out_of_order": [], "level_gap": [],
@@ -252,8 +302,12 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--course", help="one course slug from the registry")
     g.add_argument("--book", help="a Trove book id")
     g.add_argument("--toc-json", help="a saved `trove items toc --json` file (no network)")
+    ap.add_argument("--keep-from", metavar="TOC_JSON",
+                    help="with --course or --book: fail if a title in this saved toc --json is gone from the live ToC")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     args = ap.parse_args(argv)
+    if args.keep_from and not (args.course or args.book):
+        ap.error("--keep-from needs --course or --book")
     results, code = run(args)
     if args.json:
         print(json.dumps({"ok": code == 0, "books": results}, ensure_ascii=False, indent=2))
