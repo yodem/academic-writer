@@ -12,12 +12,16 @@ def course(slug="a", lid=123):
 
 
 def registry(tmp_path, monkeypatch, courses):
+    root = tmp_path
+    tmp_path = root / "t1"
+    tmp_path.mkdir(exist_ok=True)
     for c in courses:
         (tmp_path / f"{c['slug']}.json").write_text(json.dumps(c))
     (tmp_path / "term.json").write_text(json.dumps({"slug": "x"}))
     (tmp_path / "links.json").write_text("{}")
     (tmp_path / "noslug.json").write_text("{}")
-    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(tmp_path))
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(root))
+    monkeypatch.delenv("ACADEMIC_TERM", raising=False)
 
 
 def test_block_contents():
@@ -47,7 +51,7 @@ def test_registry_skips(tmp_path, monkeypatch):
 
 def test_cli_offline(tmp_path, monkeypatch, capsys):
     registry(tmp_path, monkeypatch, [course("a"), course("b")])
-    d = tmp_path / "pages"
+    d = tmp_path / "t1" / "pages"
     d.mkdir()
     (d / "a.md").write_text(book_audit.render_ids_block(course("a")))
     assert book_audit.main(["--pages-dir", str(d)]) == 1  # b missing

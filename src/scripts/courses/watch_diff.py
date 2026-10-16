@@ -11,6 +11,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+INGESTED_STATUSES = frozenset({"queued", "done"})
+# `--ok` kinds: a module and an assignment share one cmid space, discussions and sections have their own.
+OK_KINDS = ("module", "assign", "discussion", "section")
+_CMID_KINDS = frozenset({"module", "assign"})
+
+
 class WatchSchemaError(ValueError):
     """A page extracted from Chrome does not match the expected shape."""
 
@@ -95,7 +101,10 @@ def diff_course(pages: list[dict[str, Any]], seen: dict[str, Any], *, legacy_see
     """Compare freshly extracted pages with `seen`; suspect course pages are ignored."""
     diff = Diff()
     known = set(seen.get("modules", {})) | {str(k) for k in (legacy_seen or {})}
-    known |= {str(s["origin_ref"])[3:] for s in (sources or []) if str(s.get("origin_ref", "")).startswith("cm:")}
+    # A source counts as seen only once its ingest finished (courses.py add-source reaches "queued" after
+    # Drive and NotebookLM both succeeded); drive_done/uploaded ones must resurface so the retry happens.
+    known |= {str(s["origin_ref"])[3:] for s in (sources or [])
+              if str(s.get("origin_ref", "")).startswith("cm:") and s.get("status") in INGESTED_STATUSES}
     for page in pages:
         validate_page(page)
         kind = page["kind"]
@@ -131,21 +140,55 @@ def diff_course(pages: list[dict[str, Any]], seen: dict[str, Any], *, legacy_see
     return diff
 
 
+def _diff_ids(diff: Diff) -> dict[str, set[str]]:
+    return {
+        "module": {str(m["cmid"]) for m in diff.new_modules},
+        "assign": {str(a["cmid"]) for a in diff.new_assigns + diff.changed_assigns},
+        "discussion": {str(d["id"]) for d in diff.new_discussions + diff.reply_growth},
+        "section": {str(sec["id"]) for sec in diff.new_sections},
+    }
+
+
+def resolve_ok(diff: Diff, ok_ids: set[str]) -> set[tuple[str, str]]:
+    """Turn `--ok` tokens into (kind, id) pairs.
+
+    Tokens are `module:42`, `assign:42`, `discussion:42` or `section:7`. A bare `42` is accepted only when it
+    names exactly one kind in the diff (a module and its assignment share a cmid and count as one kind);
+    otherwise it is rejected as ambiguous so one id never acknowledges two unrelated entities.
+    """
+    ids = _diff_ids(diff)
+    out: set[tuple[str, str]] = set()
+    for token in sorted(str(t) for t in ok_ids):
+        kind, sep, ident = token.partition(":")
+        if sep:
+            if kind not in OK_KINDS:
+                raise WatchSchemaError(f"unknown --ok kind {kind!r} in {token!r}; use one of {', '.join(OK_KINDS)}")
+            out.add((kind, ident))
+            continue
+        hits = [k for k in OK_KINDS if token in ids[k]]
+        if len({"cmid" if k in _CMID_KINDS else k for k in hits}) > 1:
+            raise WatchSchemaError(f"ambiguous --ok id {token!r} matches {', '.join(hits)}; "
+                                   f"say which: " + " or ".join(f"{k}:{token}" for k in hits))
+        out.update((k, token) for k in hits)
+    return out
+
+
 def advance(seen: dict[str, Any], diff: Diff, ok_ids: set[str]) -> dict[str, Any]:
-    """Return a copy of `seen` plus the diff items whose id is in `ok_ids`; never removes anything."""
+    """Return a copy of `seen` plus the diff items acknowledged by `ok_ids` (see resolve_ok); never removes anything."""
+    ok = resolve_ok(diff, ok_ids)
     out = copy.deepcopy(seen)
     for key in _empty_seen():
         out.setdefault(key, {})
     for m in diff.new_modules:
-        if str(m["cmid"]) in ok_ids:
+        if ("module", str(m["cmid"])) in ok:
             out["modules"][str(m["cmid"])] = {"name": m["name"], "type": m["type"], "section": m["section_id"]}
     for sec in diff.new_sections:
-        if str(sec["id"]) in ok_ids:
+        if ("section", str(sec["id"])) in ok:
             out["sections"][str(sec["id"])] = sec["name"]
     for d in diff.new_discussions + diff.reply_growth:
-        if str(d["id"]) in ok_ids:
+        if ("discussion", str(d["id"])) in ok:
             out["discussions"][str(d["id"])] = d["replies"]
     for a in diff.new_assigns + diff.changed_assigns:
-        if str(a["cmid"]) in ok_ids:
+        if ("assign", str(a["cmid"])) in ok:
             out["assigns"][str(a["cmid"])] = {"due_text": a["due_text"], "text_sha": a["text_sha"]}
     return out

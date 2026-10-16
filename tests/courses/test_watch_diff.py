@@ -76,7 +76,7 @@ def test_legacy_lemida_seen_cmids_count_as_seen():
 def test_source_origin_ref_counts_as_seen():
     p = pages()
     d = wd.diff_course(p, {"modules": {}, "discussions": {"100": 0}, "assigns": {}, "sections": {}},
-                       legacy_seen={"11": 0, "12": 0}, sources=[{"origin_ref": "cm:21"}])
+                       legacy_seen={"11": 0, "12": 0}, sources=[{"origin_ref": "cm:21", "status": "done"}])
     assert d.new_modules == []
 
 
@@ -131,3 +131,53 @@ def test_validate_page_rejects_bad_data():
     for bad in ({}, {"kind": "bogus", "url": "x"}, {"kind": "course", "url": "x"}):
         with pytest.raises(wd.WatchSchemaError):
             wd.validate_page(bad)
+
+
+def test_incomplete_source_ingest_resurfaces_module():
+    """Finding 1: drive_done/uploaded (NotebookLM not finished) must not suppress the module."""
+    p = pages()
+    seen = {"modules": {}, "discussions": {"100": 0}, "assigns": {}, "sections": {}}
+    legacy = {"11": 0, "12": 0}
+    for status in ("drive_done", "uploaded"):
+        d = wd.diff_course(p, seen, legacy_seen=legacy, sources=[{"origin_ref": "cm:21", "status": status}])
+        assert [m["cmid"] for m in d.new_modules] == ["21"], status
+    for status in ("queued", "done"):
+        d = wd.diff_course(p, seen, legacy_seen=legacy, sources=[{"origin_ref": "cm:21", "status": status}])
+        assert d.new_modules == [], status
+
+
+def _ambiguous_diff():
+    p = pages()
+    seen = wd.baseline(p)
+    p[0]["sections"][1]["modules"].append(mod("42"))
+    p[0]["declared_module_count"] += 1
+    p[1]["discussions"].append(disc("42"))
+    return seen, wd.diff_course(p, seen)
+
+
+def test_ok_ids_are_namespaced_by_entity_type():
+    """Finding 2: module:42 must not also acknowledge discussion 42."""
+    seen, d = _ambiguous_diff()
+    after = wd.advance(seen, d, {"module:42"})
+    assert "42" in after["modules"] and "42" not in after["discussions"]
+    after = wd.advance(seen, d, {"discussion:42"})
+    assert "42" in after["discussions"] and "42" not in after["modules"]
+
+
+def test_bare_ok_id_ambiguous_across_types_is_rejected():
+    seen, d = _ambiguous_diff()
+    with pytest.raises(wd.WatchSchemaError, match="ambiguous"):
+        wd.advance(seen, d, {"42"})
+
+
+def test_bare_ok_id_still_works_when_unambiguous():
+    seen, d = _ambiguous_diff()
+    d.new_discussions.clear()
+    after = wd.advance(seen, d, {"42"})
+    assert "42" in after["modules"]
+
+
+def test_unknown_ok_prefix_rejected():
+    seen, d = _ambiguous_diff()
+    with pytest.raises(wd.WatchSchemaError, match="unknown"):
+        wd.advance(seen, d, {"forum:42"})

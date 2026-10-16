@@ -129,3 +129,27 @@ def test_registered_sources_nest_under_readings():
     assert [e["level"] for e in toc] == [1, 1, 2, 3, 2]
     assert toc[2]["title"].startswith("Syllabus - ") and toc[4]["title"].startswith("Baumgarten - Poetry - ")
     assert audit_toc(toc, 5)["ok"]
+
+
+def test_source_appended_after_lessons_groups_under_readings_even_when_readings_index_first():
+    """Finding 3: readings index precedes lessons index; an appended source must not nest under lessons."""
+    pages = {1: "# Course · X\n\n> Load this page when: o.\n",
+             2: "# חומרי קריאה\n\n> Load this page when: sources.\n",
+             3: "# תמלולי שיעורים\n\n> Load this page when: lessons.\n",
+             4: "# שיעור 1 · 2026-10-11 · X\n\n> Load this page when: lesson one.\n",
+             5: "# Baumgarten notes\n\n> Load this page when: b.\n",
+             6: "# Baumgarten notes · p. 2\n\nIntro sentence. More.\n"}
+    plan = tr.build_plan(6, [], lambda p: pages[p], sources=[{"title": "Baumgarten", "page": 5}])
+    toc = plan["toc"]
+    assert [e["page"] for e in toc] == [1, 2, 5, 6, 3, 4]
+    assert [e["level"] for e in toc] == [1, 1, 2, 3, 1, 2]
+    assert audit_toc(toc, 6, sources=["Baumgarten"])["ok"]
+
+
+def test_audit_rejects_source_nested_under_lessons():
+    toc = [{"title": "C - h", "page": 1, "level": 1}, {"title": "חומרי קריאה - h", "page": 2, "level": 1},
+           {"title": "תמלולי שיעורים - h", "page": 3, "level": 1}, {"title": "שיעור 1 - h", "page": 4, "level": 2},
+           {"title": "Baumgarten - h", "page": 5, "level": 2}]
+    assert audit_toc(toc, 5)["ok"]  # structure alone is fine
+    r = audit_toc(toc, 5, sources=["Baumgarten"])
+    assert not r["ok"] and r["source_parent"][0]["title"] == "Baumgarten"

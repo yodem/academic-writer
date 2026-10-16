@@ -69,9 +69,18 @@ class Registry:
             self.courses[course["slug"]] = course
 
 
+def courses_root() -> Path:
+    """Root that holds one directory per term (ACADEMIC_COURSES_DIR, default ~/.academic-writer/courses)."""
+    return Path(os.environ.get("ACADEMIC_COURSES_DIR", "~/.academic-writer/courses")).expanduser()
+
+
+def registry_dir(term: str | None = None) -> Path:
+    """The term directory every course tool reads: the root plus --term / ACADEMIC_TERM / the sole term."""
+    return _term_dir(courses_root(), term)
+
+
 def registry_from_args(args: argparse.Namespace) -> Registry:
-    root = Path(os.environ.get("ACADEMIC_COURSES_DIR", "~/.academic-writer/courses")).expanduser()
-    return Registry(_term_dir(root, args.term))
+    return Registry(registry_dir(args.term))
 
 
 WEEKDAYS = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}

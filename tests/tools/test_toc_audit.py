@@ -70,17 +70,24 @@ def test_cli_toc_json(tmp_path, capsys):
 
 
 def test_registry_skips(tmp_path, monkeypatch):
+    tmp_path = tmp_path / "t1"
+    tmp_path.mkdir()
     (tmp_path / "term.json").write_text('{"slug": "t"}')
     (tmp_path / "links.json").write_text('{"slug": "l"}')
     (tmp_path / "noslug.json").write_text('{"a": 1}')
     (tmp_path / "c.json").write_text('{"slug": "c", "book_id": "b"}')
-    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(tmp_path))
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(tmp_path.parent))
+    monkeypatch.delenv("ACADEMIC_TERM", raising=False)
     assert [c["slug"] for c in ta.load_registry()] == ["c"]
 
 
 def test_all_uses_fetch(tmp_path, monkeypatch):
+    tmp_path = tmp_path / "t1"
+    tmp_path.mkdir()
+    (tmp_path / "term.json").write_text('{"slug": "t"}')
     (tmp_path / "c.json").write_text('{"slug": "c", "book_id": "b1"}')
-    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(tmp_path))
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(tmp_path.parent))
+    monkeypatch.delenv("ACADEMIC_TERM", raising=False)
     monkeypatch.setattr(ta, "fetch_toc", lambda b: (GOOD, 4, b))
     assert ta.main(["--all"]) == 0
     monkeypatch.setattr(ta, "fetch_toc", lambda b: (GOOD, 6, b))
@@ -97,3 +104,45 @@ def test_tree_order_rejects_sibling_going_back():
     toc = [{"title": "C - h", "page": 1, "level": 1}, {"title": "R - h", "page": 3, "level": 1},
            {"title": "X - h", "page": 2, "level": 1}]
     assert ta.audit_toc(toc, 3)["out_of_order"]
+
+
+def _term_root(tmp_path, term="t1", extra=()):
+    root = tmp_path / "courses"
+    for name in (term, *extra):
+        (root / name).mkdir(parents=True)
+        (root / name / "term.json").write_text('{"slug": "%s"}' % name)
+        (root / name / f"{name}-c.json").write_text('{"slug": "%s-c", "book_id": "b"}' % name)
+    return root
+
+
+def test_registry_root_with_term_env(tmp_path, monkeypatch):
+    """Finding 4: ACADEMIC_COURSES_DIR is the root; ACADEMIC_TERM picks the term (as courses.py does)."""
+    root = _term_root(tmp_path, "t1", extra=("t2",))
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(root))
+    monkeypatch.setenv("ACADEMIC_TERM", "t2")
+    assert ta.registry_dir() == root / "t2"
+    assert [c["slug"] for c in ta.load_registry()] == ["t2-c"]
+
+
+def test_registry_root_single_term_and_ambiguous(tmp_path, monkeypatch):
+    root = _term_root(tmp_path, "t1")
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(root))
+    monkeypatch.delenv("ACADEMIC_TERM", raising=False)
+    assert [c["slug"] for c in ta.load_registry()] == ["t1-c"]
+    root2 = _term_root(tmp_path / "x", "a", extra=("b",))
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(root2))
+    import pytest
+    with pytest.raises(ValueError):
+        ta.registry_dir()
+
+
+def test_all_tools_resolve_identically(tmp_path, monkeypatch):
+    import book_audit
+    from tools import toc_rebuild as tr
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src" / "scripts" / "courses"))
+    import courses
+    root = _term_root(tmp_path, "t1", extra=("t2",))
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(root))
+    monkeypatch.setenv("ACADEMIC_TERM", "t1")
+    want = courses.registry_dir()
+    assert ta.registry_dir() == book_audit.registry_dir() == tr.registry_dir() == want == root / "t1"
