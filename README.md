@@ -232,6 +232,7 @@ python3 tests/test_plugin_structure.py  # structural integrity tests
 bash scripts/check-no-private-refs.sh   # privacy gate
 python3 scripts/version-sync.py --check # version agrees in every registered location
 npm run clean                           # wipe plugins/ and src/hooks/dist/
+npm run hooks:install                   # once: pre-commit version check and a pre-push guard (set ALE_ALLOW_RUNS=<run-id> to push an ALE run's merge; git push --no-verify skips it)
 ```
 
 - **Privacy gate.** The repository is public. `scripts/check-no-private-refs.sh` fails if a tracked file carries a personal identifier (home paths, private emails, internal host names) or if internal dev-state paths are tracked. It runs in CI and in pytest.
