@@ -711,6 +711,39 @@ def read_dumps(world: World, who: str, exclude: set[str] = frozenset()) -> list[
     return out
 
 
+def keys_held(env: dict[str, str], text: str, allow_plugin_gemini: bool = False) -> list[str]:
+    """What a dump holds that it must not: every secret NAME present in the environment and every sentinel VALUE anywhere in the
+    dump (the argument line, every entry). With `allow_plugin_gemini`, exactly one entry is exempt: the line
+    `GEMINI_API_KEY=<the plugin's key>`. The same value under any other name, or in the arguments, is still flagged."""
+    exempt = f"GEMINI_API_KEY={PLUGIN_KEY}" if allow_plugin_gemini else None
+    remaining, skipped = [], False
+    for line in text.splitlines():
+        if exempt is not None and line == exempt and not skipped:
+            skipped = True
+            continue
+        remaining.append(line)
+    rest = "\n".join(remaining)
+    held = [n for n in PARENT_SECRETS if n in env and not (skipped and n == "GEMINI_API_KEY")]
+    return held + [f"value of {k[:16]}" for k in ALL_KEYS if k in rest]
+
+
+def test_keys_held_flags_the_plugin_key_under_any_other_name_or_in_the_arguments():
+    exempt = f"ARGS: -m pilib index-trove x\nPATH=/bin\nGEMINI_API_KEY={PLUGIN_KEY}\n"
+    parse = lambda text: dict(line.split("=", 1) for line in text.splitlines()[1:] if "=" in line)  # noqa: E731
+    assert keys_held(parse(exempt), exempt, allow_plugin_gemini=True) == []
+    assert keys_held(parse(exempt), exempt) != []                                    # not exempt without the permission
+    extra = exempt + f"EXTRA_TOKEN={PLUGIN_KEY}\n"
+    assert keys_held(parse(extra), extra, allow_plugin_gemini=True) == [f"value of {PLUGIN_KEY[:16]}"]
+    twice = exempt + f"GEMINI_API_KEY={PLUGIN_KEY}\n"                               # only one entry is exempt
+    assert keys_held(parse(twice), twice, allow_plugin_gemini=True) != []
+    in_args = exempt.replace("index-trove x", f"index-trove --key {PLUGIN_KEY}")
+    assert keys_held(parse(in_args), in_args, allow_plugin_gemini=True) != []
+    other = exempt.replace(PLUGIN_KEY, PARENT_GEMINI_KEY)                            # a different Gemini key is not the plugin's
+    assert keys_held(parse(other), other, allow_plugin_gemini=True) != []
+    named = exempt + "OPENAI_API_KEY=x\n"
+    assert keys_held(parse(named), named, allow_plugin_gemini=True) == ["OPENAI_API_KEY"]
+
+
 @pytest.mark.parametrize("kind", KINDS)
 def test_no_key_reaches_a_pageindex_command_except_the_helper_while_it_writes_summaries(kind, make_world, wrapper_world):
     """Reads the environment each invocation really received (it dumps it to its own file), for EVERY invocation: lookups of
@@ -752,7 +785,7 @@ def test_no_key_reaches_a_pageindex_command_except_the_helper_while_it_writes_su
     # Everything is collected first and judged at the end, so one failure does not hide another.
     problems = []
     for args, env, text in lookups:
-        held = [n for n in secret_names if n in env] + [f"value of {k[:16]}" for k in ALL_KEYS if k in text]
+        held = keys_held(env, text)
         if held:
             problems.append(f"lookup {args[-50:]!r} received {held}")
     for args, env, text in indexing:
@@ -761,9 +794,7 @@ def test_no_key_reaches_a_pageindex_command_except_the_helper_while_it_writes_su
         writes_summaries = kind == "installed" and INDEX_COMMAND.search(args) is not None and "--help" not in args
         kind_of_call = ("summary-writing indexing" if writes_summaries else "indexing probe" if "--help" in args
                         else "indexing (supplied command)" if INDEX_COMMAND.search(args) else "read-back")
-        allowed = {"GEMINI_API_KEY"} if writes_summaries else set()
-        held = [n for n in PARENT_SECRETS if n in env and n not in allowed]
-        held += [f"value of {k[:16]}" for k in ALL_KEYS if k in text and not (writes_summaries and k == PLUGIN_KEY)]
+        held = keys_held(env, text, allow_plugin_gemini=writes_summaries)
         if writes_summaries and env.get("GEMINI_API_KEY") != PLUGIN_KEY:
             held.append("no plugin key (the summary-writing call must get the plugin's key as GEMINI_API_KEY)")
         if held:
