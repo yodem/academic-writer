@@ -146,6 +146,6 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
 } else if (command === 'library') {
   process.exitCode = await runLibraryCli(args.slice(1));
 } else {
-  process.stderr.write('ERROR: expected aw models check, aw ledger show <runId>, aw evidence build, or aw decide <point>\n');
+  process.stderr.write('ERROR: expected aw models check, aw ledger show <runId>, aw evidence build, aw decide <point>, or aw library <status|index|backfill|install|eval|...>\n');
   process.exitCode = 2;
 }

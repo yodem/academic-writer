@@ -49,6 +49,12 @@ const PILIB_FAKE = `
 const fs = require('node:fs');
 const args = process.argv.slice(2);
 if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, 'pilib ' + args.join(' ') + '\\n');
+// A handshake instead of a sleep: FAKE_PILIB_BLOCK=<path> writes <path>.started, then waits for <path>.release (at most 30 s, so a failed test cannot leave it running).
+if (process.env.FAKE_PILIB_BLOCK) {
+  fs.writeFileSync(process.env.FAKE_PILIB_BLOCK + '.started', String(process.pid));
+  const limit = Date.now() + 30000;
+  while (!fs.existsSync(process.env.FAKE_PILIB_BLOCK + '.release') && Date.now() < limit) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+}
 if (process.env.FAKE_PILIB_FAIL) { console.error('pilib: boom'); process.exit(1); }
 if (process.env.FAKE_PILIB_HANG) setTimeout(() => {}, 60000);
 else {
@@ -76,7 +82,7 @@ function writeFake(dir: string, name: string, body: string): string {
   return file;
 }
 
-const FAKE_KEYS = ['FAKE_TROVE_FAIL_MSG', 'FAKE_TROVE_HANG_SHELF', 'AW_LIBRARY_WORKER_ENTRY', 'FAKE_TROVE_FAIL', 'FAKE_TROVE_HANG', 'FAKE_PILIB_FAIL', 'FAKE_PILIB_HANG', 'FAKE_PI_TEXT', 'AW_LIBRARY_SHADOW', 'AW_LIBRARY_SHADOW_TIMEOUT_MS', 'AW_LIBRARY_TIMEOUT_MS', 'AW_LIBRARY_ROUTE'];
+const FAKE_KEYS = ['FAKE_TROVE_FAIL_MSG', 'FAKE_TROVE_HANG_SHELF', 'AW_LIBRARY_WORKER_ENTRY', 'FAKE_TROVE_FAIL', 'FAKE_TROVE_HANG', 'FAKE_PILIB_FAIL', 'FAKE_PILIB_HANG', 'FAKE_PILIB_BLOCK', 'FAKE_PI_TEXT', 'AW_LIBRARY_SHADOW', 'AW_LIBRARY_SHADOW_TIMEOUT_MS', 'AW_LIBRARY_TIMEOUT_MS', 'AW_LIBRARY_ROUTE'];
 
 function fixture(config?: unknown, extra: Record<string, string> = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'aw-shadow-'));
@@ -524,7 +530,6 @@ test('detached shadow: a healthy, a failing and a hanging shadow leave the prima
     assert.deepEqual(normalized(slow), normalized(base));
     assert.deepEqual({ ...normalized(quiet), shadow_status: 'pending' }, normalized(base), 'only the shadow status differs when the shadow is off');
     assert.equal((normalized(base) as { shadow_status: string }).shadow_status, 'pending');
-    assert.ok(slow.ms < hangMs - 1000, `the answer came back in ${slow.ms} ms while the shadow hung for ${hangMs} ms`);
 
     // The workers land on their own: healthy agrees, failing reports its error, hanging is cut off.
     const shadowOf = async (fx: Fixture): Promise<ShadowRow> => until('a shadow row', async () => ofType(await rowsOf(fx), 'shadow')[0]);
@@ -534,7 +539,7 @@ test('detached shadow: a healthy, a failing and a hanging shadow leave the prima
     assert.deepEqual([broke.ok, broke.error_code], [false, 'exit']);
     const stuck = await shadowOf(hanging);
     assert.deepEqual([stuck.ok, stuck.timed_out], [false, true]);
-    assert.ok(stuck.latency_ms >= hangMs - 200 && stuck.latency_ms < hangMs + 5000);
+    assert.ok(stuck.latency_ms >= hangMs - 200, `the hanging shadow was cut off after ${stuck.latency_ms} ms, not before its ${hangMs} ms timeout`);
     assert.equal(ofType(await rowsOf(off), 'shadow').length, 0);
     for (const fx of [healthy, failing, hanging]) {
       const lookups = ofType(await rowsOf(fx), 'lookup');
@@ -555,6 +560,37 @@ test('detached shadow: a healthy, a failing and a hanging shadow leave the prima
     // Let any worker still running finish before its folder goes away.
     await sleep(300);
     for (const fx of [healthy, failing, hanging, off]) fx.cleanup();
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test('detached shadow: the answer returns while the shadow is still blocked (handshake, no clock)', async () => {
+  const scratch = mkdtempSync(join(tmpdir(), 'aw-bundle-'));
+  const gate = join(scratch, 'gate');
+  const blocked = fixture({ route: 'both' }, { FAKE_PILIB_BLOCK: gate, AW_LIBRARY_SHADOW_TIMEOUT_MS: '120000' });
+  const reference = fixture({ route: 'both' }, { AW_LIBRARY_SHADOW: 'off' });
+  try {
+    const aw = await buildAw(scratch);
+    const args = ['read', '--source', 'T-A', '--pages', '2-3', '--run', 'R1', '--claim', 'P1'];
+    // runAw resolves only when the primary process has exited; the fake pilib of the shadow cannot finish before it is released.
+    const answer = await runAw(aw, blocked, ...args);
+    assert.equal(answer.code, 0);
+    await until('the shadow to start', async () => (existsSync(`${gate}.started`) ? true : undefined));
+    assert.ok(!existsSync(`${gate}.release`), 'the shadow was never released, so it was still blocked while the primary answered');
+    assert.equal(ofType(await rowsOf(blocked), 'shadow').length, 0, 'no shadow row while the shadow is blocked');
+    const lookups = ofType(await rowsOf(blocked), 'lookup');
+    assert.deepEqual([lookups.length, lookups[0]?.shadow_status, lookups[0]?.primary.ok], [1, 'pending', true]);
+    const same = await runAw(aw, reference, ...args);
+    assert.deepEqual(normalized(answer), { ...normalized(same), shadow_status: 'pending' }, 'the blocked shadow changed nothing in the answer but the shadow status');
+    writeFileSync(`${gate}.release`, 'go');
+    const row = await until('the released shadow row', async () => ofType(await rowsOf(blocked), 'shadow')[0]);
+    assert.deepEqual([row.ok, row.route, row.lookup_id], [true, 'pageindex', lookups[0]?.lookup_id]);
+    await until('the worker slot to be released', async () => (existsSync(join(blocked.project, '.academic-helper', 'retrieval', 'active')) && readdirSync(join(blocked.project, '.academic-helper', 'retrieval', 'active')).length === 0 ? true : undefined));
+  } finally {
+    writeFileSync(`${gate}.release`, 'go');
+    await sleep(300);
+    blocked.cleanup();
+    reference.cleanup();
     rmSync(scratch, { recursive: true, force: true });
   }
 });
