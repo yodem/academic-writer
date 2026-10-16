@@ -4,6 +4,10 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Course-book runbook decisions** in `courses`: a book lock (one writer per Trove course book, held through writes, ToC repair and audit; a lock older than 3 hours goes to the user); ToC repair per book (snapshot, write, `enrich`, `assignment_toc.py` without `--base-toc`, `toc_audit --keep-from`), never a plan re-apply or `toc_rebuild` on books with assignment blocks; Anna's Archive as step 0 before OCR, with an `annas` result per ref and never for Kotar items; Hebrew OCR as Tesseract then gated Gemini correction (similarity of at least 0.8), never Gemini alone; Kotar fetching left to `/academic-writer:kotar-fetch`; in-copyright library readings ingested as full text in Trove and NotebookLM with exact printed page numbers, the original PDF in the course Drive folder, then `check-source`.
+- **Course references and bookmark folders** in `courses`: `refs.py` finds the works a course cites, looks them up in the BIU library and renders the `מקורות נזכרים` index; `courses.py bookmarks` rebuilds each course's Chrome bookmark folder (NotebookLM, Lemida and current-task items; Trove items wait for a confirmed Trove URL form). The nightly script runs it after the digest. The runbook is `references/library-refs.md`.
+
 ## [0.17.0] — 2026-10-15
 
 ### Added
