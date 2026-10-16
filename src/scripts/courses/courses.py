@@ -63,8 +63,10 @@ class Registry:
             if path.name == "term.json":
                 continue
             course = json.loads(path.read_text(encoding="utf-8"))
-            slug = course.get("slug", path.stem)
-            self.courses[slug] = course
+            # links.json and any other non-course JSON carry no "slug": they are not courses
+            if not isinstance(course, dict) or not course.get("slug"):
+                continue
+            self.courses[course["slug"]] = course
 
 
 def registry_from_args(args: argparse.Namespace) -> Registry:
@@ -405,7 +407,7 @@ def ingest_recording(
     meta.update({"weekday": weekday, "transcript_words": len(transcript.split()), "transcript_source": "file" if transcript_file else "notebooklm", "created_at": datetime.now(ZoneInfo(timezone_name)).isoformat(), "status": "queued"})
     _atomic_json(meta_path, meta)
     queue_path = registry.directory / "queue" / f"{slug}-{lesson_key}.json"
-    _atomic_json(queue_path, {"slug": slug, "date": day, "lesson_key": lesson_key, "transcript_path": str(transcript_path), "meta_path": str(meta_path), "manuscript_id": course.get("manuscript_id"), "book_id": course.get("book_id"), "course_name": course.get("name"), "lecturer": course.get("lecturer")})
+    _atomic_json(queue_path, {"slug": slug, "date": day, "lesson_key": lesson_key, "transcript_path": str(transcript_path), "meta_path": str(meta_path), "book_id": course.get("book_id"), "course_name": course.get("name"), "lecturer": course.get("lecturer")})
     with _locked_course(registry.directory, slug) as locked:
         stored_course = locked.payload
         for entry in stored_course.get("lessons", []):
@@ -433,11 +435,11 @@ def validate_registry(registry: Registry, runner: Callable[..., Any] = subproces
     except Exception as exc:
         return [f"NotebookLM lookup failed: {exc}"]
     try:
-        manuscripts = _as_list(_json_from_command(["trove", "ms", "list", "--json", "--no-session"], runner), "manuscripts", "items")
+        books = _as_list(_json_from_command(["trove", "items", "list", "--json", "--no-session"], runner), "items", "books")
     except Exception as exc:
         return [f"Trove lookup failed: {exc}"]
     notebook_by_id = {str(x.get("id")): x for x in notebooks}
-    manuscript_by_id = {str(x.get("id")): x for x in manuscripts}
+    book_by_id = {str(x.get("id")): x for x in books}
 
     drive_cache: dict[str, list[dict[str, Any]] | Exception] = {}
     remote = registry.term.get("drive_remote", "gdrive")
@@ -448,12 +450,14 @@ def validate_registry(registry: Registry, runner: Callable[..., Any] = subproces
         try:
             expected = {
                 key: naming.get(key, "{name}").format_map(context)
-                for key in ("drive", "notebook", "manuscript")
+                for key in ("drive", "notebook")
             }
+            # course books keep the title the manuscript template gave them; a `book` template wins when set
+            expected["book"] = naming.get("book", naming.get("manuscript", "{name}")).format_map(context)
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             problems.append(f"{slug}: naming template error: {exc}")
             continue
-        for key in ("drive_folder_id", "notebook_id", "manuscript_id"):
+        for key in ("drive_folder_id", "notebook_id", "book_id"):
             if not course.get(key):
                 problems.append(f"{slug}: missing {key}")
         notebook_id = course.get("notebook_id")
@@ -463,13 +467,13 @@ def validate_registry(registry: Registry, runner: Callable[..., Any] = subproces
                 problems.append(f"{slug}: NotebookLM notebook {notebook_id} not found")
             elif normalise_name(str(obj.get("title", ""))) != normalise_name(expected["notebook"]):
                 problems.append(f"{slug}: NotebookLM name mismatch (expected {expected['notebook']!r}, got {obj.get('title')!r})")
-        manuscript_id = course.get("manuscript_id")
-        if manuscript_id:
-            obj = manuscript_by_id.get(str(manuscript_id))
+        book_id = course.get("book_id")
+        if book_id:
+            obj = book_by_id.get(str(book_id))
             if obj is None:
-                problems.append(f"{slug}: Trove manuscript {manuscript_id} not found")
-            elif normalise_name(str(obj.get("title", ""))) != normalise_name(expected["manuscript"]):
-                problems.append(f"{slug}: Trove name mismatch (expected {expected['manuscript']!r}, got {obj.get('title')!r})")
+                problems.append(f"{slug}: Trove book {book_id} not found")
+            elif normalise_name(str(obj.get("title", ""))) != normalise_name(expected["book"]):
+                problems.append(f"{slug}: Trove name mismatch (expected {expected['book']!r}, got {obj.get('title')!r})")
         drive_id = course.get("drive_folder_id")
         if drive_id:
             label = course.get("drive_subject_folder") or course.get("drive_subject")
@@ -845,7 +849,7 @@ def _add_source_locked(registry: Registry, file: Path, course_slug: str, *, titl
     _atomic_json(job_path, {
         "slug": course_slug, "sha8": sha8, "title": title, "file": str(file.resolve()),
         "pages": _pdf_pages(file, runner), "kind": _source_kind(file),
-        "book_id": course.get("book_id"), "manuscript_id": course.get("manuscript_id"), "course_name": course.get("name"),
+        "book_id": course.get("book_id"), "course_name": course.get("name"),
     })
     entry = _update_source(registry, course_slug, sha, status="queued")
     return {"status": "added", "slug": course_slug, "sha8": sha8, "title": title, "notebook_source_id": entry.get("notebook_source_id"), "queue_path": str(job_path), "file": str(file.resolve())}
@@ -1033,6 +1037,56 @@ def check_source(registry: Registry, slug: str, sha8: str | None = None, runner:
     return problems
 
 
+CHORE_KINDS = ("assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual")
+BLOCKED_MESSAGE = "lemida: blocked, use chrome watcher"
+_BLOCKED_RE = re.compile(r"radware|captcha|bot manager|text/html|<html|expecting value", re.I)
+
+
+def lemida_blocked(errors: list[Any]) -> bool:
+    """True when Lemida errors look like the Radware captcha page (HTML where Moodle JSON was expected)."""
+    return any(_BLOCKED_RE.search(json.dumps(e, ensure_ascii=False) if not isinstance(e, str) else e) for e in errors)
+
+
+def watch_baseline(registry: Registry, slug: str, pages: list[dict[str, Any]]) -> dict[str, Any]:
+    """Replace the course's watch_seen with everything on `pages` marked seen (clears a `suspect` course)."""
+    import watch_diff as wd
+    if slug not in registry.courses:
+        raise ValueError(f"unknown course {slug!r}")
+    seen = wd.baseline(pages)
+    with _locked_course(registry.directory, slug) as locked:
+        locked.payload["watch_seen"] = seen
+        _atomic_json(locked.path, locked.payload)
+        registry.courses[slug] = locked.payload
+    return seen
+
+
+def watch_diff(registry: Registry, slug: str, pages: list[dict[str, Any]], *, apply: bool = False,
+               ok_ids: list[str] | None = None) -> tuple[dict[str, Any], list[str]]:
+    """Diff Chrome-extracted pages against the course's `watch_seen` (+ legacy `lemida_seen`, sources).
+
+    Seen state advances only with apply=True and only for ok_ids. Returns (diff as dict, ids advanced)."""
+    import dataclasses
+    import watch_diff as wd
+    if slug not in registry.courses:
+        raise ValueError(f"unknown course {slug!r}")
+    empty = {"modules": {}, "discussions": {}, "assigns": {}, "sections": {}}
+
+    def compute(course: dict[str, Any]):
+        seen = course.get("watch_seen") or empty
+        diff = wd.diff_course(pages, seen, legacy_seen=dict(course.get("lemida_seen", {})), sources=course.get("sources", []))
+        return seen, diff
+
+    if not apply:
+        return dataclasses.asdict(compute(registry.courses[slug])[1]), []
+    with _locked_course(registry.directory, slug) as locked:
+        seen, diff = compute(locked.payload)
+        advanced = sorted(set(ok_ids or []))
+        locked.payload["watch_seen"] = wd.advance(seen, diff, set(advanced))
+        _atomic_json(locked.path, locked.payload)
+        registry.courses[slug] = locked.payload
+    return dataclasses.asdict(diff), advanced
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--term", help="term directory name (defaults to ACADEMIC_TERM or the sole configured term)")
@@ -1090,6 +1144,32 @@ def main(argv: list[str] | None = None) -> int:
     csrc = sub.add_parser("check-source", help="verify sources are in Drive, NotebookLM and nested in Trove")
     csrc.add_argument("slug")
     csrc.add_argument("--sha", help="check only the source with this sha prefix")
+    wdiff = sub.add_parser("watch-diff", help="diff Chrome-extracted Lemida pages against the course's watch state")
+    wdiff.add_argument("slug")
+    wdiff.add_argument("--pages", type=Path, required=True, help="JSON file: a list of page objects")
+    wdiff.add_argument("--baseline", action="store_true", help="mark everything on --pages as seen (clears a suspect course)")
+    wdiff.add_argument("--apply", action="store_true", help="advance the seen state (needs --ok)")
+    wdiff.add_argument("--ok", nargs="*", default=None, help="ids (cmid / discussion / section) handled successfully")
+    chores_p = sub.add_parser("chores", help="things Yotam must do by hand (chores.json and its digest)")
+    chores_sub = chores_p.add_subparsers(dest="chores_command", required=True)
+    reg_parent = argparse.ArgumentParser(add_help=False)
+    reg_parent.add_argument("--registry", type=Path, help="registry directory (default: the term directory)")
+    cadd = chores_sub.add_parser("add", parents=[reg_parent], help="add a chore, or update the one with the same course/kind/ref")
+    cadd.add_argument("--course", required=True)
+    cadd.add_argument("--kind", required=True, choices=CHORE_KINDS)
+    cadd.add_argument("--ref", required=True, help="stable reference (e.g. cmid or URL) used to dedupe")
+    cadd.add_argument("--title", default="")
+    cadd.add_argument("--text", default="")
+    cadd.add_argument("--core-text", action="append", default=[], dest="core_texts")
+    cadd.add_argument("--time-left-text", default="")
+    cadd.add_argument("--due-text", default="")
+    cadd.add_argument("--due-at", help="ISO 8601 deadline")
+    clist = chores_sub.add_parser("list", parents=[reg_parent], help="list chores as JSON")
+    clist.add_argument("--status", choices=["open", "done"])
+    clist.add_argument("--course")
+    cdone = chores_sub.add_parser("done", parents=[reg_parent], help="mark a chore done")
+    cdone.add_argument("id")
+    chores_sub.add_parser("digest", parents=[reg_parent], help="write REG/digest/chores.md and chores.json")
     args = parser.parse_args(argv)
     try:
         if args.command == "import-docx":
@@ -1100,7 +1180,41 @@ def main(argv: list[str] | None = None) -> int:
                     (args.out / f"course-{i:02d}.json").write_text(json.dumps(stub, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             print(json.dumps(stubs, ensure_ascii=False, indent=2))
             return 0
-        registry = registry_from_args(args)
+        if args.command == "chores" and args.registry:
+            registry = Registry(args.registry)
+        else:
+            registry = registry_from_args(args)
+        if args.command == "watch-diff":
+            if args.apply and args.ok is None:
+                print("error: --apply needs --ok <ids> (seen advances only for ids you name)", file=sys.stderr)
+                return 2
+            pages = json.loads(args.pages.read_text(encoding="utf-8"))
+            if not isinstance(pages, list):
+                raise ValueError("--pages must hold a JSON list of pages")
+            if args.baseline:
+                seen = watch_baseline(registry, args.slug, pages)
+                print(json.dumps({"baseline": True, "modules": len(seen["modules"]), "discussions": len(seen["discussions"]),
+                                  "assigns": len(seen["assigns"]), "sections": len(seen["sections"])}))
+                return 0
+            diff, advanced = watch_diff(registry, args.slug, pages, apply=args.apply, ok_ids=args.ok)
+            print(json.dumps(diff, ensure_ascii=False, indent=2))
+            if args.apply:
+                print(f"advanced {len(advanced)} id(s)", file=sys.stderr)
+            return 0
+        if args.command == "chores":
+            import chores
+            if args.chores_command == "add":
+                chore = chores.add_chore(registry, course=args.course, kind=args.kind, ref=args.ref, title=args.title, text=args.text,
+                                         core_texts=args.core_texts, time_left_text=args.time_left_text, due_text=args.due_text,
+                                         due_at=args.due_at)
+                print(json.dumps(chore, ensure_ascii=False))
+            elif args.chores_command == "list":
+                print(json.dumps(chores.list_chores(registry, status=args.status, course=args.course), ensure_ascii=False, indent=2))
+            elif args.chores_command == "done":
+                print(json.dumps(chores.mark_done(registry, args.id), ensure_ascii=False))
+            else:
+                print(f"digest: {chores.write_digest(registry)}")
+            return 0
         if args.command == "find-lesson-page":
             found = find_lesson_page(registry, args.slug, args.lesson_key)
             if found is None:
@@ -1145,7 +1259,18 @@ def main(argv: list[str] | None = None) -> int:
                         for error in result.get("errors", []):
                             print(f"{error['slug']}: {error['error']}", file=sys.stderr)
                     return 2 if result.get("errors") else 0
-                result = lemida.daily(registry, dry_run=args.dry_run)
+                def guarded_sync(*a: Any, **k: Any) -> Any:
+                    # Voice Memos are already processed by the time daily calls this: a blocked Lemida must not lose them
+                    try:
+                        return lemida.lemida_sync(*a, **k)
+                    except Exception as exc:
+                        raise lemida.LemidaError(str(exc)) from exc
+
+                result = lemida.daily(registry, dry_run=args.dry_run, sync=guarded_sync)
+                if lemida_blocked(result.get("errors", [])):
+                    result["lemida_blocked"] = True
+                    result["exit_code"] = 5
+                    print(BLOCKED_MESSAGE, file=sys.stderr if args.json else sys.stdout)
                 if args.json:
                     print(json.dumps(result, ensure_ascii=False))
                 else:

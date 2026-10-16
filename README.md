@@ -2,7 +2,7 @@
 
 Academic Writer is a plugin (an add-on) for Claude Code that helps humanities researchers write scholarly articles in Hebrew or English. You talk with Claude in plain language. The plugin takes you from a rough topic to a footnoted Word file: it reads the sources you choose, helps you settle a thesis and an outline, drafts in your own style, checks every citation against your sources, and then folds your Word comments back into the text.
 
-A fuller, step-by-step version of this page is the **[Academic Writer guide](https://yodem.github.io/academic-writer/)**, which you can read online with no install. It also ships with the plugin as an offline guide: after installing, type `/academic-writer:intro` to open it in your browser.
+See it in action on the **[Academic Writer site](https://yodem.github.io/academic-writer/)** (English and Hebrew). A fuller, step-by-step version of this page is the **[Academic Writer guide](https://yodem.github.io/academic-writer/guide/)**, which you can read online with no install. It also ships with the plugin as an offline guide: after installing, type `/academic-writer:intro` to open it in your browser.
 
 ---
 

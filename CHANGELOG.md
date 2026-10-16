@@ -4,11 +4,16 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-10-15
+
 ### Added
+- **Nightly Lemida watcher (Chrome)** in `/academic-writer:courses`, with the full procedure in `skills/courses/references/lemida-watch.md`. Moodle's REST API is blocked by a captcha, so the watch drives your signed-in Chrome: it walks every section of each course, continues from the last section with content, always reads the announcements forum, downloads files from their `pluginfile.php` links, handles Zoom recordings (download, else transcript reduced to the lecturer's main ideas with meaningful asides kept), Perusall items (OCR of the pdf twin, else a `perusall-capture` chore), assignments (time left, task, core texts; `assignment` and `kotar-source` chores) and forums you must post in (`forum-post` chore). Seen state advances only after routing succeeded (`courses.py watch-diff --apply --ok`).
+- **Table of contents rule** in `courses`, `lesson-notes` and `ingest-book`: every page has its own `Title - hint` entry, nested (course, lessons, readings with sections) and in page order, with `tools/toc_rebuild.py` and `tools/toc_audit.py` named as the repo-local check.
 - **Choose where an article project reads its books from.** Setup and `/academic-writer:update-tools` now ask whether to use Trove (the default and the previous behaviour), a PageIndex library you run yourself, or both, where one answers and the other is tested quietly in the background without ever changing, slowing or failing your result. The choice is saved per project in `.academic-helper/library.json`; a project without it behaves exactly as before. PageIndex stays optional: you supply the command through the new `pageindex_command` plugin setting, and nothing private ships in the plugin.
 - **A local log of every library lookup and every citation check**, in `.academic-helper/retrieval.jsonl` (figures and short messages, never uploaded), and **`aw library report`**, which compares the libraries on your real articles: agreement on page text, speed, failures and timeouts, the citation checker's pass rate, and whether the second library's page also supported each claim. See [docs/library-routes.md](docs/library-routes.md).
 
 ### Changed
+- **Course OCR: Claude vision first, Gemini on escalation.** Scanned course readings are read with Claude vision (`pdftoppm -r 150`); pages Claude flags unreadable or low-confidence, or degraded text, go to the bundled `/academic-writer:ocr`, and the engine used is recorded. This replaces the old "never Gemini" rule.
 - The citation check, the evidence build and the source listing in write, ideate, research and health now go through one `aw library` command instead of calling Trove directly.
 
 ## [0.16.1] — 2026-10-14

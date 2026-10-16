@@ -8,7 +8,7 @@ metadata: {author: "Academic Writer", version: "0.1.0"}
 
 # Academic Writer — Courses
 
-Set up and maintain one Drive folder, NotebookLM notebook, and Trove manuscript for each course. Course identities, external resource IDs, naming templates, LMS settings, and local paths belong in the user's private registry, never in this plugin.
+Set up and maintain one Drive folder, NotebookLM notebook, and Trove book for each course (a plain book, not a manuscript; its layout and ToC rules are in `references/course-book.md`). Course identities, external resource IDs, naming templates, LMS settings, and local paths belong in the user's private registry, never in this plugin.
 
 ## Registry and configuration
 
@@ -19,14 +19,14 @@ Document and preserve these `term.json` fields:
 - `term`: display name or academic-term key.
 - `timezone`: IANA time zone used to interpret recording and slot times.
 - `semesters`: A/B objects with inclusive `start` and `end` dates; yearly slots are active in either configured semester.
-- `naming`: `drive`, `notebook`, and `manuscript` templates. Template context includes course fields and `term`.
+- `naming`: `drive`, `notebook`, and `book` templates (a legacy `manuscript` template is used for the book title when `book` is absent). Template context includes course fields and `term`.
 - `drive_subject_folders`: subject-folder labels mapped to Drive folder IDs; `drive_remote` is the rclone remote name.
 - `lemida`: `base_url`, optional `keychain_service` (default `academic-writer-lemida`) and `keychain_account`; the token remains in the OS keychain.
 - `voice_memos_dir`: local recording directory; `local_root`: local LMS download root.
 - `notebook_source_limit`: maximum sources to allow before stopping (default 45).
 - `state.last_voice_memo_scan`: last completed scan boundary, stored as an ISO timestamp.
 
-Each course JSON has `slug`, `code`, `name`, `lecturer`, `slots` (`day`, `start`, `end`, `semester`), `drive_subject_folder`, `drive_folder_id`, `notebook_id`, `manuscript_id`, `book_id`, `lemida_course_id`, `lemida_seen`, and `lessons`. `manuscript_id` identifies the Trove manuscript; `book_id` identifies the manuscript's Trove book/item. Lesson records include date, audio SHA-256, NotebookLM source ID, Trove page, and status. Keep unknown schedule details marked for review; do not infer a course, time, or ID.
+Each course JSON has `slug`, `code`, `name`, `lecturer`, `slots` (`day`, `start`, `end`, `semester`), `drive_subject_folder`, `drive_folder_id`, `notebook_id`, `book_id`, `lemida_course_id`, `lemida_seen`, and `lessons`. `book_id` identifies the course's Trove book; course books have no manuscript, so they never appear in other sessions' manuscript lists. Lesson records include date, audio SHA-256, NotebookLM source ID, Trove page, and status. Keep unknown schedule details marked for review; do not infer a course, time, or ID.
 
 ## Set up a term from a schedule
 
@@ -36,36 +36,56 @@ Each course JSON has `slug`, `code`, `name`, `lecturer`, `slots` (`day`, `start`
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" import-docx "/path/to/schedule.docx" --dry-run
    ```
 
-2. Present a table with course name, code, lecturer, day, hours, semester, proposed Drive subject folder, notebook title, and manuscript title. Identify tentative/admin entries and unresolved slots. Ask the user to confirm the courses and subject-folder choices before creating anything.
-3. After confirmation, create the registry directory and `term.json`, then one JSON per confirmed course. Naming defaults: Drive folder and NotebookLM notebook use the course name exactly; manuscript uses the configured template (for example `Personal · <term> · <course name>`). Do not put real IDs in skill text or examples.
-4. For each missing resource, create a Drive folder named exactly as the course under its configured subject folder using the Drive connector's `create_file` with folder MIME type; create a notebook with `nlm notebook create "<course name>" --json`; check `trove auth whoami --no-session` for the plan/quota, then create a Trove manuscript with `trove ms create "<manuscript title>" --instructions "<configured LMS course ID, Drive URL, and reading-extraction rules>" --json --no-session`. Ask before renaming or replacing any existing resource. Record returned IDs immediately in the course JSON.
+2. Present a table with course name, code, lecturer, day, hours, semester, proposed Drive subject folder, notebook title, and book title. Identify tentative/admin entries and unresolved slots. Ask the user to confirm the courses and subject-folder choices before creating anything.
+3. After confirmation, create the registry directory and `term.json`, then one JSON per confirmed course. Naming defaults: Drive folder and NotebookLM notebook use the course name exactly; the book uses the configured template (for example `Personal · <term> · <course name>`). Do not put real IDs in skill text or examples.
+4. For each missing resource, create a Drive folder named exactly as the course under its configured subject folder using the Drive connector's `create_file` with folder MIME type; create a notebook with `nlm notebook create "<course name>" --json`; check `trove auth whoami --no-session` for the plan/quota, then create the course book as `references/course-book.md` describes (`trove items create`, never `trove ms create`). Ask before renaming or replacing any existing resource. Record returned IDs immediately in the course JSON.
 5. Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" validate`. Resolve each mismatch by renaming the external resource after asking; never make a wrong resource appear valid by changing the registry's expected name. Repeat until exit 0.
 
 ## Validate existing resources
 
-Run `courses.py validate` (add `--json` when machine-readable output is useful). It checks each configured Drive folder, NotebookLM notebook, and Trove manuscript by ID and expected name. Report all mismatches. Do not silently repair or delete resources.
+Run `courses.py validate` (add `--json` when machine-readable output is useful). It checks each configured Drive folder, NotebookLM notebook, and Trove book by ID and expected name. `tools/book_audit.py` checks that page 1 of each book carries the Drive, NotebookLM and Lemida ids. Report all mismatches. Do not silently repair or delete resources.
 
 ## LMS and readings
 
-Use `courses.py lemida-sync --dry-run` to preview API changes when a Lemida token is available in the OS keychain; otherwise use the user's browser session to inspect their LMS (Moodle). Download PDFs and DOCX files; list Zoom, forum, and videostream entries by name. Never bulk-download LTI/Perusall readings: capture pages on demand about a week before the lesson. Keep copyrighted readings only in the user's own Drive and Trove, in the relevant course's manuscript.
+Use `courses.py lemida-sync --dry-run` to preview API changes when a Lemida token is available in the OS keychain; otherwise use the user's browser session to inspect their LMS (Moodle). Download PDFs and DOCX files; list Zoom, forum, and videostream entries by name. Never bulk-download LTI/Perusall readings: capture pages on demand about a week before the lesson. Keep copyrighted readings only in the user's own Drive and Trove, in the relevant course's book.
 
-For scanned readings, use Claude vision OCR: render with `pdftoppm -r 150`, then inspect the PNG pages. Do not use Gemini for course readings. For Google Docs, export native DOCX and convert with `pandoc`. When extracting Hebrew from two-column pages, join columns right to left and preserve reading order. Flag unclear text instead of silently reconstructing it.
+For scanned readings, OCR with Claude vision first: render with `pdftoppm -r 150`, then inspect the PNG pages. Escalate to Gemini's best OCR (the bundled `/academic-writer:ocr`) when Claude flags pages as unreadable or low-confidence, or the text is degraded, and record which engine produced the text in the job. For Google Docs, export native DOCX and convert with `pandoc`. When extracting Hebrew from two-column pages, join columns right to left and preserve reading order. Flag unclear text instead of silently reconstructing it.
+
+## Table of contents rule
+
+ToC rule: one entry per page, "Title - hint", nested in tree order (siblings by page; lesson pages under תמלולי שיעורים).
+
+- Every page of a course book has its own ToC entry titled `Title - hint` (a non-empty content hint after ` - `).
+- Nesting: the course page is level 1; `תמלולי שיעורים` is level 1 with each lesson at level 2; `חומרי קריאה` is level 1, each source level 2, its sections level 3.
+- Entries run in page order, and the Changelog page sits in page order too, not at the end by default.
+- After writing pages, from the plugin repository checkout (these tools live in the repo's `tools/` and are not shipped in the installed plugin): `python3 tools/toc_rebuild.py --course <slug>` (dry run; review the plan), then `--apply`, then `python3 tools/toc_audit.py --course <slug>`. Exit 0 from the audit means every page starts exactly one hinted entry in order. Where the checkout is not available, apply the same rule by hand with `trove items enrich` and check `courses.py check-lesson` / `check-source`.
 
 ## Course sources
 
 Every source (a Lemida file, an email attachment, a recording) follows one contract. Each reaches Drive, NotebookLM and Trove, and `check-source` proves it.
 
 1. **Register.** `courses.py add-source <file> --course <slug> [--title T] [--origin lemida|email|recording|other] [--origin-ref R]`. It dedupes by sha256, copies the file to the course Drive folder, adds it to the course notebook (exit 4 when the notebook is at its source limit), and writes a Trove job under `queue/sources/`. A rerun resumes from the missing step. Recordings and transcripts are sources too: `add-source` copies them to Drive, adds them to NotebookLM through `ingest`, and records them (`kind: media`) with their lesson; their Trove home is the lesson page (`--transcript --date D [--time HHMM]` for a text transcript), and `check-source` verifies Drive, NotebookLM and the lesson.
-2. **Extract the text** (read the job file for `kind` and `pages`). docx: `pandoc`. Born-digital PDF: `pdftotext` per page, keeping the printed page numbers. Scanned PDF (no text layer): `pdftoppm -r 150` and Claude vision, never Gemini. pptx: slide text from the pptx XML. Hebrew RTL two-column pages: join right column, then left. Flag unclear text instead of reconstructing it.
+2. **Extract the text** (read the job file for `kind` and `pages`). docx: `pandoc`. Born-digital PDF: `pdftotext` per page, keeping the printed page numbers. Scanned PDF (no text layer): `pdftoppm -r 150` and Claude vision first; escalate to the bundled Gemini OCR (`/academic-writer:ocr`) for pages Claude flags unreadable or low-confidence or when the text is degraded, and record the engine used. pptx: slide text from the pptx XML. Hebrew RTL two-column pages: join right column, then left. Flag unclear text instead of reconstructing it.
 3. **Place it in Trove.**
-   - **40 pages or fewer:** pages go in the course book under a level-1 `חומרי קריאה` entry page (create it if missing). One level-2 entry per source, titled with the source title and a one-line content hint. Level-3 hinted entries for its sections. The source's first page opens with `> Load this page when:` and a short reading guide: the thesis or claims, the structure, and how to cite by printed page.
+   - **40 pages or fewer:** pages go in the course book under a level-1 `חומרי קריאה` entry page (create it if missing). One level-2 entry per source, titled `Title - hint`. Level-3 hinted entries for its sections, one per page. The source's first page opens with `> Load this page when:` and a short reading guide: the thesis or claims, the structure, and how to cite by printed page.
    - **More than 40 pages:** its own Trove book through `/academic-writer:ingest-book` (nested hinted ToC, page-1 reading guide), plus a hinted level-2 pointer page in the course book, titled with the source title.
    - **A source and its translation are a pair:** ingest both and cross-link them in their guides.
    - Links that cannot be downloaded (licensed viewers, the library catalogue) and assignments go on the course page as notes.
-4. **Rebuild the course book ToC last** with `enrich`; `append` and `put` flatten the sidebar. Take the version from `trove items history --json`.
+4. **Rebuild the course book ToC last** with `enrich`; `append` and `put` flatten the sidebar. Take the version from `trove items history --json`. Then audit it (see "Table of contents rule").
 5. **Close.** `courses.py source-done <slug> <sha8> --trove <book_id>:<page>`, then `courses.py check-source <slug> --sha <sha8>`. It exits 0 only when the file is in Drive, the source is in NotebookLM, and Trove nests the source under `חומרי קריאה`. A course with no sources prints "no sources".
 
 Copyrighted readings stay in the user's own Drive, NotebookLM and Trove.
+
+## Nightly Lemida watcher (Chrome)
+
+Moodle's REST API answers every call with a Radware Bot Manager captcha page, so the nightly watch drives the user's already signed-in Chrome with `claude-in-chrome`. Never ask for or store the user's password. Full procedure: `references/lemida-watch.md`. In outline, per course with a `lemida_course_id`:
+
+1. Open `course/view.php?id=<lemida_course_id>` and walk every section; extract one PageData JSON per section, forum and assignment, then run `courses.py watch-diff <slug> --pages <json>`. The diff remembers the last section with content, so each night continues from it to find new content.
+2. Always read the `לוח הודעות` (announcements) forum and report new posts.
+3. Download `pdf`, `docx`, `pptx` and link items from their `pluginfile.php` URL, never `/mod/resource/view.php`. Zoom recordings: try to download; otherwise use Zoom's transcript and reduce it to the lecturer's main ideas.
+4. Perusall items: OCR the pdf twin in the same section; with no twin, add a `perusall-capture` chore.
+5. Assignments: read the time left and the task, name the core texts, confirm each exists in the course sources, and add an `assignment` chore (`kotar-source` when a text must be fetched from Kotar and cannot be found). Forums the user must post in get a `forum-post` chore.
+6. Route every downloaded item through `courses.py add-source`, run `check-source`, advance seen state with `watch-diff --apply --ok <ids>` only after routing succeeded, and end with `courses.py chores digest`.
 
 ## Daily scan
 

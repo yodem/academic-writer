@@ -20,6 +20,8 @@ Throughout: preserve the ORIGINAL printed page numbers (**cite the printed page,
 
 ## Critical: the ToC is metadata, not page content
 
+ToC rule: one entry per page, "Title - hint", nested in tree order (siblings by page; lesson pages under תמלולי שיעורים). Every page of the book is the start page of its own `Title - hint` entry, nested by level (for a reading that sits in a course book: source level 2, its sections level 3), in page order. After applying the ToC to a course's book, audit it from the plugin repository checkout (repo-local tools, not shipped in the installed plugin): `python3 tools/toc_audit.py --course <slug>`.
+
 Trove's sidebar/outline is built from **ToC metadata** you attach with `trove items enrich <id> --toc '[{"title","page","level"}]'`. It is NOT built from the markdown headings inside a page. A beautiful ToC written into page 1 as `##`/`###` headings makes every entry link back to page 1 — the single most common failure here. Read `references/toc-mechanism.md` before any ToC work, and before "fixing" a flat ToC.
 
 ## Bundled scripts
@@ -31,6 +33,8 @@ All three encode the tedious, error-prone parts as deterministic code (run from 
 - `scripts/build_toc_enrich.py` — assemble the `--toc` metadata (printed→Trove with interpolation, nesting levels, hints) and optionally apply it.
 
 OCR — of body pages or ToC pages — always goes through the plugin's own `aw ocr` (see `/academic-writer:ocr`), never an external tool:
+
+(When the book is a course reading, OCR with Claude vision first, `pdftoppm -r 150`, and escalate to this Gemini OCR for pages Claude flags unreadable or low-confidence or when the text is degraded; record the engine used.)
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" ocr \
