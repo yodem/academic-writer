@@ -1,0 +1,203 @@
+{
+  "schema": 1,
+  "eval_id": "ev-20261016-a",
+  "created_at": "2026-10-16T10:00:00.000Z",
+  "mapping_sha256": "abababababababababababababababababababababababababababababababab",
+  "pairs": [
+    {
+      "pair_id": "p01",
+      "claim": {
+        "id": "c01",
+        "text": "בספר בראשית האור נברא לפני המאורות, ולכן אין לראות בשמש מקור האור הראשון."
+      },
+      "auto_same": false,
+      "options": {
+        "A": {
+          "book": "src-a",
+          "book_title": "פירוש על בראשית",
+          "pages": [
+            {
+              "page": 12,
+              "text": "וַיֹּאמֶר אֱלֹהִים יְהִי אוֹר וַיְהִי אוֹר. וַיַּרְא אֱלֹהִים אֶת הָאוֹר כִּי טוֹב, וַיַּבְדֵּל אֱלֹהִים בֵּין הָאוֹר וּבֵין הַחֹשֶׁךְ."
+            },
+            {
+              "page": 13,
+              "text": "טקסט קצר בעמוד הבא."
+            }
+          ]
+        },
+        "B": {
+          "book": "src-a",
+          "book_title": "פירוש על בראשית",
+          "pages": [
+            {
+              "page": 12,
+              "text": "וַיֹּאמֶר אֱלֹהִים יְהִי אוֹר וַיְהִי אוֹר. וַיַּרְא אֱלֹהִים אֶת הָאוֹר כִּי טוֹב, וַיַּבְדֵּל אֱלֹהִים בֵּין הָאוֹר וּבֵין הַחֹשֶׁךְ."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "pair_id": "p02",
+      "claim": {
+        "id": "c02",
+        "text": "The early witnesses disagree, so a single archetype cannot explain the variant readings."
+      },
+      "auto_same": false,
+      "options": {
+        "A": {
+          "book": "src-b",
+          "book_title": "Textual Transmission",
+          "pages": [
+            {
+              "page": 44,
+              "text": "Paragraph 1. The argument runs through the whole chapter: the author returns to the question of how the text was transmitted, compares the early witnesses, and concludes that the variant readings cannot all derive from a single archetype.\n\nParagraph 2. The argument runs through the whole chapter: the author returns to the question of how the text was transmitted, compares the early witnesses, and concludes that the variant readings cannot all derive from a single archetype.\n\nParagraph 3. The argument runs through the whole chapter: the author returns to the question of how the text was transmitted, compares the early witnesses, and concludes that the variant readings cannot all derive from a single archetype.\n\nParagraph 4. The argument runs through the whole chapter: the author returns to the question of how the text was transmitted, compares the early witnesses, and concludes that the variant readings cannot all derive from a single archetype.\n\nParagraph 5. The argument runs through the whole chapter: the author returns to the question of how the text was transmitted, compares the early witnesses, and concludes that the variant readings cannot all derive from a single archetype.\n\nParagraph 6. The argument runs through the whole chapter: the author returns to the question of how the text was transmitted, compares the early witnesses, and concludes that the variant readings cannot all derive from a single archetype."
+            },
+            {
+              "page": 45,
+              "text": "A short page about the stemma."
+            }
+          ]
+        },
+        "B": {
+          "book": null,
+          "book_title": null,
+          "pages": []
+        }
+      }
+    },
+    {
+      "pair_id": "p03",
+      "claim": {
+        "id": "c03",
+        "text": "R. Yehuda: על שבת ויום טוב, only food preparation is permitted (אוכל נפש)."
+      },
+      "auto_same": false,
+      "options": {
+        "A": {
+          "book": "src-c",
+          "book_title": "מסכת ביצה",
+          "pages": [
+            {
+              "page": 7,
+              "text": "ר' יהודה אומר: אין בין הימים הטובים לבין השבת אלא אוכל נפש בלבד.\n\nוחכמים אומרים: אף המלאכה שאי אפשר לעשותה מערב יום טוב."
+            }
+          ]
+        },
+        "B": {
+          "book": "src-c",
+          "book_title": "מסכת ביצה",
+          "pages": [
+            {
+              "page": 7,
+              "text": "[The text of this page could not be read.]"
+            },
+            {
+              "page": 9,
+              "text": "Plain English summary of the rule."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "pair_id": "p04",
+      "claim": {
+        "id": "c04",
+        "text": "An identical pair that the judge never sees."
+      },
+      "auto_same": true,
+      "options": {
+        "A": {
+          "book": "src-d",
+          "book_title": "Same Book",
+          "pages": [
+            {
+              "page": 3,
+              "text": "Same text."
+            }
+          ]
+        },
+        "B": {
+          "book": "src-d",
+          "book_title": "Same Book",
+          "pages": [
+            {
+              "page": 3,
+              "text": "Same text."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "pair_id": "p05",
+      "claim": {
+        "id": "c05",
+        "text": "The commentary reads the verse as a rhetorical question, not a statement of fact."
+      },
+      "auto_same": false,
+      "options": {
+        "A": {
+          "book": "src-e",
+          "book_title": "Commentary Volume",
+          "pages": [
+            {
+              "page": 101,
+              "text": "On this verse the commentator asks: who, then, could have known? The question is rhetorical."
+            },
+            {
+              "page": 102,
+              "text": "A later gloss repeats the point."
+            }
+          ]
+        },
+        "B": {
+          "book": "src-e",
+          "book_title": "Commentary Volume",
+          "pages": [
+            {
+              "page": 88,
+              "text": "An unrelated discussion of the preceding chapter."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "pair_id": "p06",
+      "claim": {
+        "id": "c06",
+        "text": "הרמב\"ם פוסק כדעת חכמים, וכך גם נהגו בקהילות המזרח."
+      },
+      "auto_same": false,
+      "options": {
+        "A": {
+          "book": "src-f",
+          "book_title": "ספר המצוות",
+          "pages": [
+            {
+              "page": 30,
+              "text": "ר' יהודה אומר: אין בין הימים הטובים לבין השבת אלא אוכל נפש בלבד.\n\nוחכמים אומרים: אף המלאכה שאי אפשר לעשותה מערב יום טוב."
+            }
+          ]
+        },
+        "B": {
+          "book": "src-f",
+          "book_title": "ספר המצוות",
+          "pages": [
+            {
+              "page": 30,
+              "text": "ר' יהודה אומר: אין בין הימים הטובים לבין השבת אלא אוכל נפש בלבד.\n\nוחכמים אומרים: אף המלאכה שאי אפשר לעשותה מערב יום טוב."
+            },
+            {
+              "page": 31,
+              "text": "וַיֹּאמֶר אֱלֹהִים יְהִי אוֹר וַיְהִי אוֹר. וַיַּרְא אֱלֹהִים אֶת הָאוֹר כִּי טוֹב, וַיַּבְדֵּל אֱלֹהִים בֵּין הָאוֹר וּבֵין הַחֹשֶׁךְ."
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
