@@ -70,15 +70,24 @@ def _is_source(entry_title: object, source_title: str) -> bool:
     return t == want or t.startswith(want + " - ")
 
 
-def registered_source_titles(course: dict) -> list[str]:
-    """Titles of the course's finished non-media sources: each must sit under the readings index."""
-    return [str(s["title"]) for s in course.get("sources", [])
-            if s.get("title") and s.get("kind") != "media" and s.get("status") == "done"
-            and isinstance(s.get("trove"), dict) and s["trove"].get("book_id")]
+def registered_source_titles(course: dict) -> list[dict]:
+    """The course's finished non-media sources as {"title", "page"}; page is the registered Trove page when the
+    source lives in this course book, None for a pointer to its own book."""
+    out = []
+    for s in course.get("sources", []):
+        trove = s.get("trove")
+        if not (s.get("title") and s.get("kind") != "media" and s.get("status") == "done"
+                and isinstance(trove, dict) and trove.get("book_id")):
+            continue
+        same = str(trove["book_id"]) == str(course.get("book_id"))
+        out.append({"title": str(s["title"]), "page": trove.get("page") if same else None})
+    return out
 
 
-def source_parent_problems(toc: list[dict], sources: list[str]) -> list[dict]:
-    """Same rule as courses.py check-source: a source is a level-2 entry under the level-1 readings index."""
+def source_parent_problems(toc: list[dict], sources: list) -> list[dict]:
+    """Same rule as courses.py check-source: a source stored in this book (page given) is the level-2 entry
+    at its registered page, titled with the source title, under the level-1 readings index; a pointer
+    (page None) is a level-2 entry with that title. Plain strings mean title-only (pointer)."""
     parent = next((i for i, e in enumerate(toc) if e.get("level", 1) == 1 and _label(e.get("title", "")) == READINGS_ENTRY), None)
     children: list[dict] = []
     if parent is not None:
@@ -88,17 +97,21 @@ def source_parent_problems(toc: list[dict], sources: list[str]) -> list[dict]:
             if e.get("level") == 2:
                 children.append(e)
     out = []
-    for title in sources:
+    for src in sources:
+        title, page = (src, None) if isinstance(src, str) else (src["title"], src.get("page"))
         if parent is None:
-            out.append({"title": title, "reason": f"no level-1 entry {READINGS_ENTRY!r}"})
-        elif not any(_is_source(e.get("title", ""), title) for e in children):
-            at = next((e for e in toc if _is_source(e.get("title", ""), title)), None)
-            out.append({"title": title, "page": at.get("page") if at else None,
-                        "reason": f"not a level-2 entry under {READINGS_ENTRY!r}" if at else "no ToC entry"})
+            out.append({"title": title, "page": page, "reason": f"no level-1 entry {READINGS_ENTRY!r}"})
+            continue
+        ok = any(_is_source(e.get("title", ""), title) and (page is None or e.get("page") == page) for e in children)
+        if not ok:
+            at = next((e for e in toc if _is_source(e.get("title", ""), title) and (page is None or e.get("page") == page)), None)
+            out.append({"title": title, "page": page if page is not None else (at.get("page") if at else None),
+                        "reason": f"not a level-2 entry under {READINGS_ENTRY!r}" if at else "no ToC entry"
+                        + (f" at page {page}" if page is not None else "")})
     return out
 
 
-def audit_toc(toc: list[dict], page_count: int, course_name: str | None = None, sources: list[str] | None = None) -> dict:
+def audit_toc(toc: list[dict], page_count: int, course_name: str | None = None, sources: list | None = None) -> dict:
     """Return {missing, duplicate, no_hint, out_of_order, level_gap, source_parent, ok}.
 
     sources: titles of registered sources; each must be a level-2 entry under the readings index
@@ -164,7 +177,7 @@ def fetch_toc(book_id: str) -> tuple[list[dict], int, str]:
 
 
 def audit_book(label: str, toc: list[dict], page_count: int, book_id: str = "", course_name: str | None = None,
-               sources: list[str] | None = None) -> dict:
+               sources: list | None = None) -> dict:
     res = audit_toc(toc, page_count, course_name, sources)
     res.update(label=label, book_id=book_id, pages=page_count, entries=len(toc))
     return res

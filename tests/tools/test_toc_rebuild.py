@@ -153,3 +153,14 @@ def test_audit_rejects_source_nested_under_lessons():
     assert audit_toc(toc, 5)["ok"]  # structure alone is fine
     r = audit_toc(toc, 5, sources=["Baumgarten"])
     assert not r["ok"] and r["source_parent"][0]["title"] == "Baumgarten"
+
+
+def test_audit_rejects_same_title_on_other_page_when_real_source_page_under_lessons():
+    """Re-review: title-only match false-passes; the registered page must be the level-2 readings entry."""
+    toc = [{"title": "C - h", "page": 1, "level": 1}, {"title": "חומרי קריאה - h", "page": 2, "level": 1},
+           {"title": "Baumgarten - decoy", "page": 3, "level": 2},
+           {"title": "תמלולי שיעורים - h", "page": 4, "level": 1}, {"title": "שיעור 1 - h", "page": 5, "level": 2},
+           {"title": "Baumgarten - h", "page": 6, "level": 2}]
+    r = audit_toc(toc, 6, sources=[{"title": "Baumgarten", "page": 6}])
+    assert not r["ok"] and r["source_parent"][0]["page"] == 6
+    assert audit_toc(toc, 6, sources=[{"title": "Baumgarten", "page": 3}])["ok"]
