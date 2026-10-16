@@ -174,3 +174,22 @@ def test_cli_needs_a_slug_or_all(tmp_path, monkeypatch, capsys):
     make_registry(tmp_path)
     monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(tmp_path))
     assert courses.main(["--term", "2026", "bookmarks", "--print-script"]) == 2
+
+
+def test_cli_add_source_accepts_origin_library(tmp_path, monkeypatch, capsys):
+    registry_dir = make_registry(tmp_path).directory
+    reading = tmp_path / "reading.pdf"
+    reading.write_bytes(b"%PDF-1.4\n%%EOF\n")
+    seen = {}
+
+    def fake_add_source(registry_, file, course_slug, **kwargs):
+        seen.update(course=course_slug, origin=kwargs["origin"])
+        return {"status": "added", "title": "Reading One"}
+
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(registry_dir.parent))
+    monkeypatch.setattr(courses, "add_source", fake_add_source)
+    assert "library" in courses.ORIGINS
+    code = courses.main(["--term", registry_dir.name, "add-source", str(reading), "--course", "kane", "--origin", "library"])
+    assert code == 0
+    assert seen == {"course": "kane", "origin": "library"}
+    assert "added: Reading One" in capsys.readouterr().out
