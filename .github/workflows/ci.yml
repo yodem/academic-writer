@@ -57,6 +57,13 @@ jobs:
       - name: Install hooks dependencies (for the typecheck gate)
         run: cd src/hooks && npm ci
 
+      # The `aw` command-line tool (src/cli) has its own node_modules. The CLI test
+      # gate, the CLI typecheck gate and the pytest gate (tests/_awbuild.py bundles
+      # src/cli into a temporary `aw`, and the end-to-end tests run it) all need it,
+      # and none of them runs a build first. Install it BEFORE the pytest gate.
+      - name: Install CLI dependencies (for the pytest, test:cli and typecheck:cli gates)
+        run: cd src/cli && npm ci
+
       # `src/hooks/dist/` is gitignored, so the compiled hook bundle does not
       # exist in the tree as pushed. tests/test_gate_enforce_hook.py drives the
       # COMPILED bundle through run-hook.mjs — exactly what Claude Code loads —
@@ -86,3 +93,9 @@ jobs:
 
       - name: Gate — strict TypeScript on hooks
         run: npm run typecheck
+
+      - name: Gate — aw CLI tests
+        run: npm run test:cli
+
+      - name: Gate — strict TypeScript on the aw CLI
+        run: npm run typecheck:cli
