@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import thresholds from '../../../thresholds.json' with { type: 'json' };
-import { PageIndexBackend, TroveBackend, isPlainId } from './backends.ts';
+import { PageIndexBackend, TroveBackend, allowedEnv, isPlainId } from './backends.ts';
 import type { CommandScope } from './exec.ts';
 import { loadLibraryConfig, profileTroveEnabled, type LibraryConfig } from './config.ts';
 import { TOKENS_BASIS, appendRow, clipError, estimateTokens, nowIso, spoolFile, spoolValue, textSha, writeSpool, type LookupOp, type LookupRow } from './ledger.ts';
@@ -98,8 +98,8 @@ export class Library implements ShadowRunner {
 
   /** AW_LIBRARY_TIMEOUT_MS replaces every timeout (test and troubleshooting seam; the defaults live in thresholds.json). */
   private readonly override: number | undefined;
-  private makeTrove(timeoutMs: number, readAllTimeoutMs?: number): TroveBackend { return new TroveBackend({ command: this.config.troveCommand, env: this.env, timeoutMs, readAllTimeoutMs, cwd: this.project, scope: this.scope }); }
-  private makePageIndex(timeoutMs: number, readAllTimeoutMs?: number): PageIndexBackend { return new PageIndexBackend({ command: this.config.pageindexCommand, env: this.env, timeoutMs, readAllTimeoutMs, cwd: this.project, scope: this.scope }); }
+  private makeTrove(timeoutMs: number, readAllTimeoutMs?: number): TroveBackend { return new TroveBackend({ command: this.config.troveCommand, env: allowedEnv(this.env, 'trove'), timeoutMs, readAllTimeoutMs, cwd: this.project, scope: this.scope }); }
+  private makePageIndex(timeoutMs: number, readAllTimeoutMs?: number): PageIndexBackend { return new PageIndexBackend({ command: this.config.pageindexCommand, env: allowedEnv(this.env, 'pageindex'), timeoutMs, readAllTimeoutMs, cwd: this.project, scope: this.scope }); }
 
   private get shelf(): Shelf {
     this.shelfCache ??= loadShelf(this.config.shelfPath);

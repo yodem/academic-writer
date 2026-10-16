@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, readFileSync } from 'node:fs';
-import { mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { spawn } from 'node:child_process';
+import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { basename, dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
 import thresholds from '../../../thresholds.json' with { type: 'json' };
+import { allowedEnv, type EnvKind } from './backends.ts';
 import { runCommand } from './exec.ts';
-import { choosePython, discoverPythons, venvPython, type PythonInfo } from './python-discovery.ts';
+import { atLeast, choosePython, discoverPythons, probePython, venvPython, type PythonInfo } from './python-discovery.ts';
 import { LibraryError } from './types.ts';
 
 const install = thresholds.library.install;
@@ -116,16 +118,12 @@ export function matchesPinned(installed: Installed, pinned: Pinned): boolean {
 
 // ---------------------------------------------------------------- the environment of a child
 
-const SECRET_NAMES = ['GOOGLE_API_KEY', 'GEMINI_API_KEY', 'JEV_API_KEY'];
-
 /**
- * The environment of a command the plugin starts. Secrets are removed first. A Gemini key is added back only when `gemini` names
- * the key to hand over (the built-in helper, which writes the summaries); it is then given under LiteLLM's name, GEMINI_API_KEY,
- * and only in this child's environment, never in an argument.
+ * The environment of a command the plugin starts: the allow-list of allowedEnv (no keys, tokens or secrets), plus, when `gemini` names a key, that key
+ * as GEMINI_API_KEY (LiteLLM's name) in this child's environment only, never in an argument. Only the built-in helper that writes the summaries gets it.
  */
-export function childEnv(env: NodeJS.ProcessEnv, options: { gemini?: string | null } = {}): NodeJS.ProcessEnv {
-  const clean: NodeJS.ProcessEnv = { ...env };
-  for (const name of SECRET_NAMES) delete clean[name];
+export function childEnv(env: NodeJS.ProcessEnv, options: { gemini?: string | null; kind?: EnvKind } = {}): NodeJS.ProcessEnv {
+  const clean = allowedEnv(env, options.kind ?? 'pageindex');
   if (options.gemini) clean.GEMINI_API_KEY = options.gemini;
   return clean;
 }
@@ -208,33 +206,81 @@ function requirementsFile(root: string, pinned: Pinned, tier: Tier): string { re
 
 async function sha256File(file: string): Promise<string> { return createHash('sha256').update(await readFile(file)).digest('hex'); }
 
-function processAlive(pid: number): boolean {
-  try { process.kill(pid, 0); return true; } catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM'; }
+// The install lock is an OS advisory lock (flock, or msvcrt on Windows) held on an open file by a small Python process that lives as long as
+// the install or uninstall does. The kernel drops it when that process ends, however it ends, so there is no lock file to go stale or to take over;
+// the file itself is never deleted. Node has no flock of its own, and the install already needs a Python.
+const LOCK_SCRIPT = [
+  'import os, sys',
+  'fd = os.open(sys.argv[1], os.O_CREAT | os.O_RDWR, 0o600)',
+  'try:',
+  '    if os.name == "nt":',
+  '        import msvcrt',
+  '        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)',
+  '    else:',
+  '        import fcntl',
+  '        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)',
+  'except OSError:',
+  '    print("busy", flush=True)',
+  '    sys.exit(3)',
+  'print("locked", flush=True)',
+  'sys.stdin.read()',
+].join('\n');
+
+/** Take the per-folder install lock without waiting. Returns the release function; contention is a plain "busy" error. */
+export async function takeLock(file: string, python: string, env: NodeJS.ProcessEnv, what: 'install' | 'uninstall'): Promise<() => Promise<void>> {
+  const child = spawn(python, ['-c', LOCK_SCRIPT, file], { stdio: ['pipe', 'pipe', 'ignore'], env: childEnv(env), windowsHide: true });
+  let closed = false;
+  const closing = new Promise<void>((done) => { child.once('close', () => { closed = true; done(); }); });
+  const answer = await new Promise<string>((settle) => {
+    let text = '';
+    const timer = setTimeout(() => { settle('timeout'); }, install.probeTimeoutMs);
+    child.stdout?.setEncoding('utf8').on('data', (chunk: string) => { text += chunk; if (text.includes('\n')) { clearTimeout(timer); settle(text.trim()); } });
+    child.once('error', () => { clearTimeout(timer); settle('error'); });
+    child.once('close', () => { clearTimeout(timer); settle(text.trim() || 'closed'); });
+  });
+  const release = async (): Promise<void> => {
+    if (closed) return;
+    child.stdin?.end();
+    const killer = setTimeout(() => { child.kill('SIGKILL'); }, 3000);
+    await closing;
+    clearTimeout(killer);
+  };
+  if (answer === 'locked') return release;
+  child.kill('SIGKILL');
+  if (answer === 'busy') throw new LibraryError('exit', `ERROR library ${what}: another install or uninstall is already running; wait for it to finish.`);
+  throw new LibraryError('config', `ERROR library ${what}: could not take the install lock (the Python at ${python} did not start properly). Try another with --python.`);
 }
 
-/** One install at a time per data folder. A lock whose process is gone is taken over. Returns the release function. */
-async function takeLock(file: string): Promise<() => Promise<void>> {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const handle = await open(file, 'wx');
-      await handle.writeFile(`${process.pid}\n`);
-      await handle.close();
-      return async () => { await rm(file, { force: true }); };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-      const holder = Number((await readFile(file, 'utf8').catch(() => '')).trim());
-      if (Number.isInteger(holder) && holder > 0 && processAlive(holder)) throw new LibraryError('exit', 'ERROR library install: another install is already running; wait for it to finish.');
-      await rm(file, { force: true });
-    }
+/**
+ * The helper's folder must be exactly <plugin data folder>/pageindex once real paths are resolved, and neither it nor anything this code deletes
+ * or builds in may be a symbolic link: a link could send a delete (or an install) to another place.
+ */
+function guardHome(home: string, dataRoot: string | null | undefined, what: 'install' | 'uninstall'): void {
+  const refuse = (why: string): LibraryError => new LibraryError('config', `ERROR library ${what}: ${why}`);
+  if (!dataRoot) throw refuse('the plugin\'s data folder is not known (pass --data-dir <folder>), so the helper folder cannot be checked; nothing was touched.');
+  let root: string;
+  try { root = realpathSync(resolve(dataRoot)); } catch { throw refuse(`the plugin's data folder ${dataRoot} cannot be resolved; nothing was touched.`); }
+  const expected = join(root, 'pageindex');
+  let actual: string;
+  if (existsSync(home) || isLink(home)) {
+    if (isLink(home)) throw refuse(`${home} is a symbolic link; refusing to use it.`);
+    actual = realpathSync(home);
+  } else {
+    try { actual = join(realpathSync(dirname(home)), basename(home)); } catch { actual = resolve(home); }
   }
-  throw new LibraryError('exit', 'ERROR library install: could not start (the install lock is stuck); remove install.lock in the helper folder and try again.');
+  if (actual !== expected) throw refuse(`${home} is not the plugin's own helper folder (${expected}); nothing was touched.`);
+  for (const path of [installPaths(home).venv, installPaths(home).library, installPaths(home).installed]) {
+    if (isLink(path)) throw refuse(`${path} is a symbolic link; refusing to use it.`);
+  }
 }
 
 /** Write a file by temp name + rename, so a reader sees the old record or the new one, never half of one. */
 async function writeAtomic(file: string, text: string): Promise<void> {
   const temp = `${file}.${process.pid}.tmp`;
-  await writeFile(temp, text, 'utf8');
-  await rename(temp, file);
+  try {
+    await writeFile(temp, text, 'utf8');
+    await rename(temp, file);
+  } catch (error) { await rm(temp, { force: true }); throw error; }
 }
 
 type Health = { ok: boolean; tier: string; python: string; litellm: string | null; pilib_version: string; weasyprint: boolean; pageindex: boolean; pageindex_commit: string | null };
@@ -271,7 +317,17 @@ export async function runInstall(options: InstallOptions): Promise<Record<string
   const system = chosen.tier === 'structure' ? pinned.tiers.structure.system_libraries : undefined;
   const warnings = [...chosen.notes];
   if (!chosen.exact) warnings.push(`The packages were locked with Python ${pinned.tiers[chosen.tier].locked_with_python}; this computer uses ${chosen.python.minorName}. The install checks that it works afterwards.`);
+  // A private Python folder made earlier may be too old for this tier (a basic install under Python 3.9, then the full helper): it is rebuilt.
+  let rebuild: string | null = null;
+  if (existsSync(paths.python)) {
+    const minimum = chosen.tier === 'structure' ? install.minPython : install.minPythonCore;
+    const existing = await probePython(paths.python, childEnv(options.env));
+    if (!existing) rebuild = 'the existing private Python folder no longer starts';
+    else if (!atLeast(existing, minimum)) rebuild = `the existing private Python folder uses Python ${existing.version}, and this tier needs Python ${minimum} or newer`;
+  }
+  if (rebuild) warnings.push(`${rebuild[0]?.toUpperCase()}${rebuild.slice(1)}, so it will be removed and rebuilt with Python ${chosen.python.version}. The indexed books are kept.`);
   const plan = {
+    rebuild_venv: rebuild !== null, rebuild_reason: rebuild,
     tier: chosen.tier, requested_tier: chosen.requested, python: { path: chosen.python.path, version: chosen.python.version },
     home, venv: paths.venv, library: paths.library, requirements: pinned.tiers[chosen.tier].requirements,
     approx_size_mb: install.approxSizeMb[chosen.tier], sends_data_to_google: false,
@@ -284,40 +340,44 @@ export async function runInstall(options: InstallOptions): Promise<Record<string
     throw new LibraryError('usage', `ERROR library install: this adds about ${install.approxSizeMb[chosen.tier]} MB of Python packages to ${home}. Ask the researcher first, then run it again with --yes. (--dry-run shows the plan without changing anything.)`);
   }
 
+  const dataRoot = options.dataDir ?? options.env.CLAUDE_PLUGIN_DATA ?? null;
+  if (dataRoot) await mkdir(resolve(dataRoot), { recursive: true });
+  guardHome(home, dataRoot, 'install');
   await mkdir(home, { recursive: true });
-  const release = await takeLock(paths.lock);
+  const release = await takeLock(paths.lock, chosen.python.path, options.env, 'install');
+  let created = false;
+  // A private Python folder made by this run and not finished is removed: no half install is left behind. One that was there before stays.
+  const abandon = async (): Promise<void> => { if (created) await rm(paths.venv, { recursive: true, force: true }); };
   try {
-    const env = childEnv({ ...options.env, PIP_DISABLE_PIP_VERSION_CHECK: '1', PIP_NO_INPUT: '1', PYTHONNOUSERSITE: '1' });
+    const env = { ...childEnv(options.env, { kind: 'install' }), PIP_DISABLE_PIP_VERSION_CHECK: '1', PIP_NO_INPUT: '1', PYTHONNOUSERSITE: '1' };
     const command = installedCommand(home, options.pluginRoot);
     const existing = readInstalled(home);
-    if (existing && existing.tier === chosen.tier && matchesPinned(existing, pinned) && existsSync(paths.python)) {
+    if (!rebuild && existing && existing.tier === chosen.tier && matchesPinned(existing, pinned) && existsSync(paths.python)) {
       const health = await pilibHealth(command, env);
       if (health && health.tier === chosen.tier) return { ok: true, action: 'already_installed', ...plan, tier: health.tier, installed_at: existing.installed_at, notes: ['Already installed and up to date.'] };
     }
-    if (existsSync(paths.python)) {
-      // A private Python whose base interpreter has gone cannot start: start that folder over.
-      const alive = await runCommand([paths.python], ['-c', 'pass'], { timeoutMs: install.probeTimeoutMs, maxBuffer: 65536, env }).then(() => true, () => false);
-      if (!alive) await rm(paths.venv, { recursive: true, force: true });
+    if (rebuild) {
+      // The record described the folder that is going away; the indexed books (library/) are not touched.
+      await rm(paths.installed, { force: true });
+      await rm(paths.venv, { recursive: true, force: true });
     }
-    let created = false;
     if (!existsSync(paths.python)) {
       try { await runCommand([chosen.python.path], ['-m', 'venv', paths.venv], { timeoutMs: install.venvTimeoutMs, maxBuffer: 1048576, env }); created = true; }
       catch (error) { await rm(paths.venv, { recursive: true, force: true }); throw stepFailure('creating the private Python folder', error); }
     }
-    // A private Python folder made by this run and not finished is removed: no half install is left behind. One that was there before stays.
-    const abandon = async (): Promise<void> => { if (created) await rm(paths.venv, { recursive: true, force: true }); };
     try {
       await runCommand([paths.python], ['-m', 'pip', 'install', '--quiet', '--require-hashes', '--no-input', '--disable-pip-version-check', '-r', requirements], { timeoutMs: install.pipTimeoutMs, maxBuffer: 16777216, env });
-    } catch (error) { await abandon(); throw stepFailure('installing the packages', error); }
+    } catch (error) { throw stepFailure('installing the packages', error); }
     await mkdir(paths.library, { recursive: true });
     const health = await pilibHealth(command, env);
-    if (!health) await abandon();
     if (!health) throw new LibraryError('exit', 'ERROR library install: the packages installed, but the helper does not start. Run `aw library install --dry-run` to see which Python was used, and try another with --python.');
     if (health.tier !== 'core' && health.tier !== 'structure') throw new LibraryError('exit', 'ERROR library install: the packages installed, but the summary helper (LiteLLM) cannot be loaded. Try another Python with --python.');
     const degraded = chosen.tier === 'structure' && health.tier !== 'structure';
     if (degraded) warnings.push(`The full helper could not start (${health.weasyprint ? 'PageIndex did not load' : 'the PDF library WeasyPrint did not load'}), so the basic helper is ready and books with no table of contents are not covered yet.${system?.macos && process.platform === 'darwin' ? ` On a Mac, run: ${system.macos}, then run this install again.` : system?.debian_ubuntu && process.platform === 'linux' ? ` On Linux, run: ${system.debian_ubuntu}, then run this install again.` : ' Install the pango system library, then run this install again.'}`);
+    // The Python recorded is the one the private folder really runs.
+    const real = await probePython(paths.python, env);
     const record: Installed = {
-      schema: 1, tier: health.tier === 'structure' ? 'structure' : 'core', requested_tier: chosen.tier, python: chosen.python.version,
+      schema: 1, tier: health.tier === 'structure' ? 'structure' : 'core', requested_tier: chosen.tier, python: real?.version ?? chosen.python.version,
       pageindex_commit: health.tier === 'structure' ? pinned.pageindex.commit : null, requirements_sha256: expected,
       pilib_version: health.pilib_version, litellm: health.litellm, installed_at: (options.now ?? ((): Date => new Date()))().toISOString(),
     };
@@ -325,24 +385,35 @@ export async function runInstall(options: InstallOptions): Promise<Record<string
     if (degraded) record.requirements_sha256 = pinned.tiers.core.requirements_sha256;
     await writeAtomic(paths.installed, `${JSON.stringify(record, null, 2)}\n`);
     return { ok: true, action: 'installed', ...plan, tier: record.tier, degraded, pilib_version: record.pilib_version, litellm: record.litellm ?? null, installed_at: record.installed_at, warnings };
+  } catch (error) {
+    await abandon();
+    throw error;
   } finally { await release(); }
 }
 
 // ---------------------------------------------------------------- uninstall
 
-/** `aw library uninstall --yes [--purge-library]`: removes the private Python folder and the record; the indexed books stay unless asked. */
+/**
+ * `aw library uninstall --yes [--purge-library]`: removes the private Python folder and the record; the indexed books stay unless asked.
+ * Takes the same lock as install, and deletes only inside <plugin data folder>/pageindex (real paths, no symbolic links).
+ */
 export async function runUninstall(options: { yes: boolean; purgeLibrary: boolean; dataDir: string | null; env: NodeJS.ProcessEnv }): Promise<Record<string, unknown>> {
   const home = resolveHome(options.env, options.dataDir);
   if (!home) throw new LibraryError('config', 'ERROR library uninstall: the plugin\'s data folder is not known. Pass --data-dir <folder>.');
-  // Only ever delete inside a folder named pageindex: a mistyped AW_PAGEINDEX_HOME must not point this at anything else.
-  if (basename(home) !== 'pageindex') throw new LibraryError('config', `ERROR library uninstall: ${home} is not a folder named "pageindex"; refusing to delete from it.`);
+  guardHome(home, options.dataDir ?? options.env.CLAUDE_PLUGIN_DATA ?? null, 'uninstall');
   const paths = installPaths(home);
-  const present = [paths.venv, paths.installed, paths.lock, ...(options.purgeLibrary ? [paths.library] : [])].filter((path) => existsSync(path) || isLink(path));
   if (!options.yes) {
     throw new LibraryError('usage', `ERROR library uninstall: this removes the helper's private Python folder${options.purgeLibrary ? ' and every indexed book' : ' (the indexed books are kept)'} in ${home}. Ask the researcher first, then run it again with --yes.`);
   }
-  for (const path of present) await rm(path, { recursive: true, force: true });
-  return { ok: true, removed: present.map((path) => basename(path)), library_kept: options.purgeLibrary ? null : (existsSync(paths.library) ? paths.library : null), home };
+  if (!existsSync(home)) return { ok: true, removed: [], library_kept: null, home };
+  const python = (await discoverPythons(childEnv(options.env)))[0]?.path ?? (process.platform !== 'win32' && existsSync(paths.python) ? paths.python : null);
+  if (!python) throw new LibraryError('config', 'ERROR library uninstall: no Python was found to hold the install lock, so nothing was removed. Install Python, or remove the folder by hand.');
+  const release = await takeLock(paths.lock, python, options.env, 'uninstall');
+  try {
+    const present = [paths.venv, paths.installed, ...(options.purgeLibrary ? [paths.library] : [])].filter((path) => existsSync(path));
+    for (const path of present) await rm(path, { recursive: true, force: true });
+    return { ok: true, removed: present.map((path) => basename(path)), library_kept: options.purgeLibrary ? null : (existsSync(paths.library) ? paths.library : null), home };
+  } finally { await release(); }
 }
 
 function isLink(path: string): boolean {

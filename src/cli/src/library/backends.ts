@@ -13,6 +13,40 @@ const limits = thresholds.library;
 export const PLAIN_ID = /^[A-Za-z0-9_.#:-]+$/u;
 export function isPlainId(id: string): boolean { return PLAIN_ID.test(id); }
 
+export type EnvKind = 'pageindex' | 'trove' | 'install';
+
+const BASE_NAMES = new Set(['PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'LANGUAGE', 'TMPDIR', 'TEMP', 'TMP', 'TERM', 'SHELL', 'TZ', 'SSH_AUTH_SOCK',
+  'SYSTEMROOT', 'SystemRoot', 'WINDIR', 'COMSPEC', 'PATHEXT', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA']);
+const BASE_PREFIXES = ['LC_', 'XDG_'];
+const TROVE_PREFIXES = ['TROVE_', 'CANDLEKEEP_', 'CK_'];
+const INSTALL_NAMES = new Set(['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'no_proxy', 'all_proxy', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'REQUESTS_CA_BUNDLE', 'CURL_CA_BUNDLE']);
+// A plugin variable that holds a credential is never passed on by this list (AW_* names are allowed otherwise: AW_LIBRARY_*, AW_PAGEINDEX_HOME, AW_TROVE_COMMAND).
+const SECRET_NAME = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH)/iu;
+const VALID_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/u;
+/** Names the researcher lists in AW_LIBRARY_PASS_ENV (comma separated) are passed on whatever they are called: an explicit opt-in. */
+export const PASS_ENV = 'AW_LIBRARY_PASS_ENV';
+
+/**
+ * The environment of a command that `aw library` starts for a lookup or an index run: an allow-list, never the whole environment.
+ * The PageIndex command may be an ssh wrapper to another computer, and Trove is a program of its own: neither gets the Gemini key, Claude or
+ * OpenAI keys, tokens or secrets that happen to be set where aw runs. A command that needs a variable gets it from its own environment, or the
+ * researcher names it in AW_LIBRARY_PASS_ENV.
+ */
+export function allowedEnv(env: NodeJS.ProcessEnv, kind: EnvKind = 'pageindex'): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {};
+  const listed = new Set((env[PASS_ENV] ?? '').split(',').map((name) => name.trim()).filter((name) => VALID_NAME.test(name)));
+  for (const [name, value] of Object.entries(env)) {
+    if (value === undefined) continue;
+    const allowed = BASE_NAMES.has(name) || BASE_PREFIXES.some((prefix) => name.startsWith(prefix))
+      || (name.startsWith('AW_') && !SECRET_NAME.test(name))
+      || (kind === 'trove' && TROVE_PREFIXES.some((prefix) => name.startsWith(prefix)))
+      || (kind === 'install' && (INSTALL_NAMES.has(name) || name.startsWith('PIP_')))
+      || listed.has(name);
+    if (allowed) out[name] = value;
+  }
+  return out;
+}
+
 function parseJson(text: string, what: string): unknown {
   try { return JSON.parse(text); } catch { throw new LibraryError('parse', `ERROR library: ${what} did not return JSON`); }
 }

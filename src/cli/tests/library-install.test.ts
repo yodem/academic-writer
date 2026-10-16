@@ -1,18 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import thresholds from '../../thresholds.json' with { type: 'json' };
 import { runLibraryCli } from '../src/library/cli.ts';
-import { childEnv, friendlyInstallError, geminiKeyFrom, installPaths, installedCommand, readInstalled, readPinned, resolveHome, runInstall, runUninstall, type InstallOptions } from '../src/library/install.ts';
+import { childEnv, friendlyInstallError, geminiKeyFrom, installPaths, installedCommand, readInstalled, readPinned, resolveHome, runInstall, runUninstall, takeLock, type InstallOptions } from '../src/library/install.ts';
 import { choosePython, discoverPythons, parseVersion, venvPython } from '../src/library/python-discovery.ts';
 import { LibraryError } from '../src/library/types.ts';
 import { setPathArguments } from '../src/paths.ts';
 
 const SECRET = 'AIzaSyFAKEKEYFORTESTS0123456789abcdef';
 const COMMIT = thresholds.library.install.pageindexCommit;
+// The install lock is an OS advisory lock held by a small real-Python process, so these tests need one real Python 3 (the fake Pythons are node scripts).
+const REAL_PYTHON = execFileSync('python3', ['-c', 'import sys; print(sys.executable)'], { encoding: 'utf8' }).trim();
 
 // A fake Python for each version (what `python3.12 -c ...` answers, and what `-m venv` makes) and the fake private Python inside the venv it
 // creates (pip, the bootstrap that runs pilib, health). Each call is logged as one JSON line in FAKE_LOG, with which secrets its environment held.
@@ -22,12 +25,15 @@ const fs = require('node:fs'); const path = require('node:path');
 const VERSION = ${JSON.stringify(version)};
 const args = process.argv.slice(2);
 const log = (extra) => process.env.FAKE_LOG && fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify(Object.assign({ who: 'base-' + VERSION, args, google: process.env.GOOGLE_API_KEY ? 'set' : 'unset', gemini: process.env.GEMINI_API_KEY ? 'set' : 'unset' }, extra || {})) + '\\n');
-if (args[0] === '-c') { log(); console.log(VERSION); console.log(process.argv[1]); process.exit(0); }
-if (args[0] === '-m' && args[1] === 'venv') {
+if (args[0] === '-c' && String(args[1]).includes('fcntl')) { // the install lock: delegate to a real Python
+  const child = require('node:child_process').spawn(process.env.FAKE_REAL_PYTHON, args, { stdio: 'inherit' });
+  child.on('close', (code) => process.exit(code === null ? 1 : code));
+} else if (args[0] === '-c') { log(); console.log(VERSION); console.log(process.argv[1]); process.exit(0); }
+else if (args[0] === '-m' && args[1] === 'venv') {
   log();
   if (process.env.FAKE_VENV_FAIL) { console.error('No module named venv'); process.exit(1); }
   const dir = args[2]; fs.mkdirSync(path.join(dir, 'bin'), { recursive: true });
-  const body = fs.readFileSync(process.env.FAKE_VENV_SCRIPT, 'utf8');
+  const body = fs.readFileSync(process.env.FAKE_VENV_SCRIPT, 'utf8').replace('__VERSION__', VERSION);
   fs.writeFileSync(path.join(dir, 'bin', 'python'), body, { mode: 0o755 });
   process.exit(0);
 }
@@ -37,6 +43,7 @@ console.error('unexpected: ' + args.join(' ')); process.exit(2);
 const VENV_FAKE = `
 const fs = require('node:fs');
 let args = process.argv.slice(2);
+if (args[0] === '-c' && String(args[1]).startsWith('import sys; print(')) { console.log('__VERSION__'); console.log(process.argv[1]); process.exit(0); }
 const log = (extra) => process.env.FAKE_LOG && fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify(Object.assign({ who: 'venv', args: args.map((a) => a.length > 200 ? a.slice(0, 40) + '...' : a), google: process.env.GOOGLE_API_KEY ? 'set' : 'unset', gemini: process.env.GEMINI_API_KEY ? 'set' : 'unset', jev: process.env.JEV_API_KEY ? 'set' : 'unset', pipNoInput: process.env.PIP_NO_INPUT || '' }, extra || {})) + '\\n');
 if (args[0] === '-c' && args[1] === 'pass') { log(); process.exit(0); }
 if (args[0] === '-m' && args[1] === 'pip') {
@@ -85,7 +92,8 @@ function fixture(pythons: string[], extra: Record<string, string> = {}): Fixture
   }
   const log = join(root, 'calls.log');
   const data = join(root, 'data');
-  const env: NodeJS.ProcessEnv = { PATH: bin, HOME: root, FAKE_LOG: log, FAKE_VENV_SCRIPT: venvScript, GOOGLE_API_KEY: SECRET, GEMINI_API_KEY: SECRET, JEV_API_KEY: 'jev-secret-value', ...extra };
+  const env: NodeJS.ProcessEnv = { PATH: bin, HOME: root, FAKE_LOG: log, FAKE_VENV_SCRIPT: venvScript, GOOGLE_API_KEY: SECRET, GEMINI_API_KEY: SECRET, JEV_API_KEY: 'jev-secret-value', FAKE_REAL_PYTHON: REAL_PYTHON, ...extra };
+  env.AW_LIBRARY_PASS_ENV = ['FAKE_LOG', 'FAKE_VENV_SCRIPT', 'FAKE_REAL_PYTHON', 'FAKE_TIER', 'FAKE_PILIB_VERSION', 'FAKE_PIP_FAIL', 'FAKE_VENV_FAIL', 'FAKE_NO_HEALTH'].join(',');
   return {
     root, bin, pluginRoot, data, home: join(data, 'pageindex'), log, env,
     options: (more = {}) => ({ dryRun: false, yes: true, dataDir: data, pluginRoot, env, ...more }),
@@ -170,7 +178,7 @@ test('a core install on Python 3.9: venv, hashed pip install, health, installed.
     assert.ok(pip.args.includes('-r') && pip.args[pip.args.indexOf('-r') + 1]?.endsWith('requirements-core.txt'));
     assert.equal(pip.pipNoInput, '1');
     for (const call of fx.calls()) assert.deepEqual([call.google, call.gemini], ['unset', 'unset'], JSON.stringify(call));
-    assert.ok(!existsSync(paths.lock), 'the lock is released');
+    await (await takeLock(paths.lock, REAL_PYTHON, process.env, 'install'))();  // released: it can be taken again
     assert.ok(!readFileSync(fx.log, 'utf8').includes(SECRET) && !JSON.stringify(result).includes(SECRET));
     assert.deepEqual(installedCommand(fx.home, fx.pluginRoot).slice(0, 2), [paths.python, '-c']);
   } finally { fx.cleanup(); }
@@ -248,7 +256,7 @@ test('a pip failure is one plain sentence, leaves no half install and releases t
       assert.match(error.message, /^ERROR library install: /);
       assert.ok(!existsSync(installPaths(fx.home).installed), 'no record of a half install');
       assert.ok(!existsSync(installPaths(fx.home).venv), 'the new private Python folder is removed');
-      assert.ok(!existsSync(installPaths(fx.home).lock));
+      await (await takeLock(installPaths(fx.home).lock, REAL_PYTHON, process.env, 'install'))();
     } finally { fx.cleanup(); }
   }
   const noVenv = fixture(['3.12.1'], { FAKE_VENV_FAIL: '1' });
@@ -277,16 +285,34 @@ test('what the plugin pins is checked: a changed requirements file, a missing or
   } finally { fx.cleanup(); }
 });
 
-test('one install at a time: a live lock refuses, a stale one is taken over', async () => {
+test('one install or uninstall at a time: an OS lock held by another process makes both say busy; a leftover lock file is no lock', async () => {
   const fx = fixture(['3.12.1']);
   try {
     mkdirSync(fx.home, { recursive: true });
+    const release = await takeLock(installPaths(fx.home).lock, REAL_PYTHON, process.env, 'install');
+    try {
+      await rejects(runInstall(fx.options()), 'exit', /another install or uninstall is already running/);
+      await rejects(runUninstall({ yes: true, purgeLibrary: false, dataDir: fx.data, env: fx.env }), 'exit', /another install or uninstall is already running/);
+    } finally { await release(); }
+    // the kernel dropped the lock with the process; the file left behind (even one naming a live pid) blocks nobody
     writeFileSync(installPaths(fx.home).lock, `${process.pid}\n`);
-    await rejects(runInstall(fx.options()), 'exit', /another install is already running/);
-    writeFileSync(installPaths(fx.home).lock, '999999999\n');
     const result = await runInstall(fx.options()) as Record<string, any>;
     assert.equal(result.action, 'installed');
-    assert.ok(!existsSync(installPaths(fx.home).lock));
+    const again = await takeLock(installPaths(fx.home).lock, REAL_PYTHON, process.env, 'install');
+    await again();
+  } finally { fx.cleanup(); }
+});
+
+test('uninstall waits for nobody: it takes the same lock as install, so it cannot delete a venv an install is using', async () => {
+  const fx = fixture(['3.12.1']);
+  try {
+    await runInstall(fx.options());
+    const release = await takeLock(installPaths(fx.home).lock, REAL_PYTHON, process.env, 'install');
+    try { await rejects(runUninstall({ yes: true, purgeLibrary: true, dataDir: fx.data, env: fx.env }), 'exit', /busy|already running/); }
+    finally { await release(); }
+    assert.ok(existsSync(installPaths(fx.home).venv) && readInstalled(fx.home) !== null, 'nothing was deleted while the lock was held');
+    await runUninstall({ yes: true, purgeLibrary: false, dataDir: fx.data, env: fx.env });
+    assert.ok(!existsSync(installPaths(fx.home).venv));
   } finally { fx.cleanup(); }
 });
 
@@ -302,7 +328,7 @@ test('with no data folder the install says so in plain words', async () => {
 
 // ---------------------------------------------------------------- uninstall
 
-test('uninstall needs --yes, keeps the indexed books unless asked, and only ever deletes inside a folder named pageindex', async () => {
+test('uninstall needs --yes, keeps the indexed books unless asked, and only ever deletes the plugin data folder\'s own pageindex folder', async () => {
   const fx = fixture(['3.12.1']);
   try {
     await runInstall(fx.options());
@@ -318,9 +344,85 @@ test('uninstall needs --yes, keeps the indexed books unless asked, and only ever
     assert.deepEqual([purged.removed, purged.library_kept], [['library'], null]);
     const elsewhere = join(fx.root, 'precious');
     mkdirSync(join(elsewhere, 'venv'), { recursive: true });
-    await rejects(runUninstall({ yes: true, purgeLibrary: true, dataDir: null, env: { AW_PAGEINDEX_HOME: elsewhere } }), 'config', /not a folder named "pageindex"/);
-    assert.ok(existsSync(join(elsewhere, 'venv')));
+    // no data folder to hold it against: refuse, whatever AW_PAGEINDEX_HOME says
+    await rejects(runUninstall({ yes: true, purgeLibrary: true, dataDir: null, env: { AW_PAGEINDEX_HOME: join(elsewhere, 'pageindex') } }), 'config', /data folder is not known/);
+    // a folder named pageindex somewhere else is not the helper's folder
+    mkdirSync(join(elsewhere, 'pageindex', 'venv'), { recursive: true });
+    await rejects(runUninstall({ yes: true, purgeLibrary: true, dataDir: fx.data, env: { AW_PAGEINDEX_HOME: join(elsewhere, 'pageindex') } }), 'config', /not the plugin's own helper folder/);
+    assert.ok(existsSync(join(elsewhere, 'venv')) && existsSync(join(elsewhere, 'pageindex', 'venv')));
   } finally { fx.cleanup(); }
+});
+
+test('uninstall and install refuse a pageindex folder (or private Python folder) that is a symbolic link, and delete nothing through it', async () => {
+  const fx = fixture(['3.12.1']);
+  try {
+    const target = join(fx.root, 'precious');
+    mkdirSync(join(target, 'venv'), { recursive: true });
+    writeFileSync(join(target, 'installed.json'), '{}');
+    mkdirSync(fx.data, { recursive: true });
+    symlinkSync(target, join(fx.data, 'pageindex'));
+    await rejects(runUninstall({ yes: true, purgeLibrary: true, dataDir: fx.data, env: fx.env }), 'config', /symbolic link/);
+    await rejects(runInstall(fx.options()), 'config', /symbolic link/);
+    assert.ok(existsSync(join(target, 'venv')) && existsSync(join(target, 'installed.json')));
+    // a symbolic link inside the folder: the venv
+    rmSync(join(fx.data, 'pageindex'));
+    mkdirSync(join(fx.data, 'pageindex'));
+    symlinkSync(join(target, 'venv'), join(fx.data, 'pageindex', 'venv'));
+    await rejects(runUninstall({ yes: true, purgeLibrary: false, dataDir: fx.data, env: fx.env }), 'config', /symbolic link/);
+    assert.ok(lstatSync(join(fx.data, 'pageindex', 'venv')).isSymbolicLink());
+    // and a data folder that is itself reached through a link is fine as long as pageindex resolves to <data>/pageindex
+    const viaLink = join(fx.root, 'data-link');
+    symlinkSync(fx.data, viaLink);
+    rmSync(join(fx.data, 'pageindex', 'venv'));
+    const ok = await runUninstall({ yes: true, purgeLibrary: false, dataDir: viaLink, env: fx.env }) as Record<string, any>;
+    assert.equal(ok.ok, true);
+  } finally { fx.cleanup(); }
+});
+
+test('an existing private Python too old for the tier is rebuilt with a suitable one: --dry-run says so, --yes needed, the indexed books stay', async () => {
+  const fx = fixture(['3.9.23', '3.12.1'], { FAKE_TIER: 'core' });
+  try {
+    await runInstall(fx.options({ tier: 'core' }));
+    assert.equal(readInstalled(fx.home)?.python, '3.9.23');
+    writeFileSync(join(installPaths(fx.home).library, 'book.txt'), 'kept');
+    fx.env.FAKE_TIER = 'structure';
+    const plan = await runInstall(fx.options({ tier: 'structure', dryRun: true, yes: false })) as Record<string, any>;
+    assert.equal(plan.rebuild_venv, true);
+    assert.match(plan.rebuild_reason, /Python 3\.9\.23.*3\.10/);
+    assert.match(plan.warnings.join(' '), /removed and rebuilt/);
+    assert.ok(existsSync(installPaths(fx.home).venv), 'a dry run changes nothing');
+    await rejects(runInstall(fx.options({ tier: 'structure', yes: false })), 'usage', /--yes/);
+    const pips = (): Array<Record<string, any>> => fx.calls().filter((call) => call.who === 'venv' && (call.args as string[])[1] === 'pip');
+    const before = pips().length;
+    const result = await runInstall(fx.options({ tier: 'structure' })) as Record<string, any>;
+    assert.deepEqual([result.action, result.tier, result.rebuild_venv], ['installed', 'structure', true]);
+    assert.deepEqual([readInstalled(fx.home)?.python, readInstalled(fx.home)?.tier], ['3.12.1', 'structure']);
+    assert.equal(pips().length, before + 1);
+    assert.ok(fx.calls().some((call) => call.who === 'base-3.12.1' && (call.args as string[])[1] === 'venv'), 'the new private Python folder was made with Python 3.12');
+    assert.equal(readFileSync(join(installPaths(fx.home).library, 'book.txt'), 'utf8'), 'kept');
+    // a venv that is already new enough is reused
+    const reuse = await runInstall(fx.options({ tier: 'structure', dryRun: true, yes: false })) as Record<string, any>;
+    assert.equal(reuse.rebuild_venv, false);
+  } finally { fx.cleanup(); }
+});
+
+test('any failure after the private Python folder exists leaves no half install: unknown health tier, library folder, installed.json', async () => {
+  const unknown = fixture(['3.12.1'], { FAKE_TIER: 'read' });
+  const noLibrary = fixture(['3.12.1']);
+  const noRecord = fixture(['3.12.1']);
+  try {
+    await rejects(runInstall(unknown.options()), 'exit', /summary helper/);
+    assert.ok(!existsSync(installPaths(unknown.home).venv) && readInstalled(unknown.home) === null);
+    mkdirSync(noLibrary.home, { recursive: true });
+    writeFileSync(installPaths(noLibrary.home).library, 'a file where the library folder should be');
+    await assert.rejects(runInstall(noLibrary.options()));
+    assert.ok(!existsSync(installPaths(noLibrary.home).venv) && readInstalled(noLibrary.home) === null);
+    mkdirSync(join(installPaths(noRecord.home).installed, 'blocker'), { recursive: true });
+    await assert.rejects(runInstall(noRecord.options()));
+    assert.ok(!existsSync(installPaths(noRecord.home).venv), 'the new private Python folder is removed');
+    for (const fx of [unknown, noLibrary, noRecord]) assert.ok(fx.calls().length > 0);
+    assert.ok(!existsSync(`${installPaths(noRecord.home).installed}.${process.pid}.tmp`), 'no temp file is left');
+  } finally { unknown.cleanup(); noLibrary.cleanup(); noRecord.cleanup(); }
 });
 
 // ---------------------------------------------------------------- small pure helpers

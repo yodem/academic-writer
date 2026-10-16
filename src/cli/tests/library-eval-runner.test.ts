@@ -591,7 +591,7 @@ test('an eval locate run reaches exactly one library through the real aw, whatev
   mkdirSync(bin);
   for (const [name, body] of [['trove', TROVE_FAKE], ['pilib', PILIB_FAKE]] as const) { writeFileSync(join(bin, name), `#!${process.execPath}\n${body}`); chmodSync(join(bin, name), 0o755); }
   const libLog = join(w.dir, 'lib.log');
-  Object.assign(w.env, { AW_TROVE_COMMAND: join(bin, 'trove'), AW_PAGEINDEX_COMMAND: join(bin, 'pilib'), LIB_LOG: libLog, AW_LIBRARY_ROUTE: undefined });
+  Object.assign(w.env, { AW_TROVE_COMMAND: join(bin, 'trove'), AW_PAGEINDEX_COMMAND: join(bin, 'pilib'), LIB_LOG: libLog, AW_LIBRARY_PASS_ENV: 'LIB_LOG', AW_LIBRARY_ROUTE: undefined });
   writeFileSync(join(w.project, '.academic-helper', 'library.json'), JSON.stringify({ route: 'both' }));
   const awScript = bundleAw(w.dir);
   const { plan, paths } = await planFor(w, 1);

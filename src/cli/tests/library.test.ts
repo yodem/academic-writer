@@ -80,6 +80,8 @@ function writeFake(dir: string, name: string, body: string): string {
   return file;
 }
 
+const FAKE_PASS = ['FAKE_LOG', 'FAKE_CWD_LOG', 'FAKE_TROVE_FAIL', 'FAKE_TROVE_FAIL_MSG', 'FAKE_TROVE_HANG', 'FAKE_TROVE_HANG_SHELF', 'FAKE_PILIB_FAIL', 'FAKE_PILIB_HANG', 'FAKE_PILIB_BLOCK', 'FAKE_NO_JSON', 'FAKE_NO_META', 'FAKE_DROP', 'FAKE_PI_TEXT'].join(',');
+// Commands get an allow-list of the environment; the fakes' switches are named here, as a researcher would name a variable a wrapper needs.
 function fixture(config?: unknown, extra: Record<string, string> = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'aw-library-'));
   const project = join(root, 'project');
@@ -89,6 +91,7 @@ function fixture(config?: unknown, extra: Record<string, string> = {}): Fixture 
   const log = join(root, 'calls.log');
   const env: NodeJS.ProcessEnv = { ...process.env, AW_TROVE_COMMAND: writeFake(bin, 'trove', TROVE_FAKE), AW_PAGEINDEX_COMMAND: writeFake(bin, 'pilib', PILIB_FAKE), FAKE_LOG: log, ...extra };
   for (const key of ['FAKE_TROVE_FAIL', 'FAKE_TROVE_HANG', 'FAKE_PILIB_FAIL', 'FAKE_PILIB_HANG', 'FAKE_NO_JSON', 'FAKE_NO_META', 'FAKE_DROP', 'FAKE_CWD_LOG', 'AW_LIBRARY_ROUTE']) if (!(key in extra)) delete env[key];
+  env.AW_LIBRARY_PASS_ENV = FAKE_PASS;
   if (config !== undefined) writeFileSync(join(project, '.academic-helper', 'library.json'), JSON.stringify(config), 'utf8');
   return { root, project, env, log, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }

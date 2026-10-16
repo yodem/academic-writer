@@ -21,8 +21,8 @@ const SHARED = `const text = (n) => 'the shared sentence number ' + n + ' about 
 const TROVE_FAKE = `
 const fs = require('node:fs');
 const args = process.argv.slice(2);
-if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify({ tool: 'trove', cmd: args, google: process.env.GOOGLE_API_KEY ? 'set' : 'unset', gemini: process.env.GEMINI_API_KEY ? 'set' : 'unset' }) + '\\n');
-if (process.env.FAKE_TROVE_FAIL) { console.error('trove: boom'); process.exit(1); }
+if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify({ tool: 'trove', env: Object.keys(process.env), cmd: args, google: process.env.GOOGLE_API_KEY ? 'set' : 'unset', gemini: process.env.GEMINI_API_KEY ? 'set' : 'unset' }) + '\\n');
+if (process.env.FAKE_TROVE_FAIL || (process.env.FAKE_TROVE_FAIL_ID && args.includes(process.env.FAKE_TROVE_FAIL_ID))) { console.error(process.env.FAKE_TROVE_FAIL_MSG || 'trove: boom'); process.exit(1); }
 ${SHARED}
 const books = (process.env.FAKE_TROVE_BOOKS || 'T-A').split(',');
 const entries = Number(process.env.FAKE_TOC_N || 3);
@@ -45,7 +45,7 @@ let boot = null;
 if (args[0] === '-c') { boot = args[1]; args = args.slice(2); }
 const key = process.env.GEMINI_API_KEY;
 const keyState = !key ? 'unset' : key === process.env.FAKE_EXPECT_KEY ? 'match' : 'other';
-if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify({ tool: 'pilib', cmd: args, boot, gemini: keyState, google: process.env.GOOGLE_API_KEY ? 'set' : 'unset', jev: process.env.JEV_API_KEY ? 'set' : 'unset', cwd: process.cwd() }) + '\\n');
+if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify({ tool: 'pilib', env: Object.keys(process.env), cmd: args, boot, gemini: keyState, google: process.env.GOOGLE_API_KEY ? 'set' : 'unset', jev: process.env.JEV_API_KEY ? 'set' : 'unset', cwd: process.cwd() }) + '\\n');
 ${SHARED}
 const state = process.env.FAKE_STATE;
 const indexed = (id) => (process.env.FAKE_INDEXED || '').split(',').includes(id) || (state && fs.existsSync(path.join(state, id)));
@@ -125,6 +125,8 @@ function fixture(source: Source, extra: Record<string, string> = {}, config?: un
   }
   if (source === 'library.json') config = { ...(config as object), pageindex: { command: pilib } };
   if (config !== undefined) writeFileSync(join(project, '.academic-helper', 'library.json'), JSON.stringify(config), 'utf8');
+  // Commands get an allow-list of the environment: the fakes' own switches are named in AW_LIBRARY_PASS_ENV, as a researcher would for a variable a wrapper needs.
+  env.AW_LIBRARY_PASS_ENV = Object.keys(env).filter((name) => name.startsWith('FAKE_')).join(',');
   return { root, project, env, log, state, pluginRoot, data, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
@@ -145,7 +147,7 @@ async function cli(fx: Fixture, ...argv: string[]): Promise<{ code: number; out:
   }
 }
 
-type LogLine = { tool: string; cmd: string[]; boot?: string | null; gemini: string; google: string; jev?: string; cwd?: string };
+type LogLine = { tool: string; env: string[]; cmd: string[]; boot?: string | null; gemini: string; google: string; jev?: string; cwd?: string };
 function calls(fx: Fixture): LogLine[] { return existsSync(fx.log) ? readFileSync(fx.log, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line) as LogLine) : []; }
 function pilibCalls(fx: Fixture, name?: string): LogLine[] { return calls(fx).filter((line) => line.tool === 'pilib' && (name === undefined || line.cmd[0] === name)); }
 function usageRows(fx: Fixture, run: string): Array<Record<string, unknown>> {
@@ -407,6 +409,33 @@ test('backfill stops at a failure every later book would repeat, continues past 
   } finally { stop.cleanup(); mixed.cleanup(); }
 });
 
+test('a backfill where books cannot be read from Trove fails: unreadable books count as failed, the exit is non-zero, no secret is printed', async () => {
+  const leak = 'trove: login failed. Authorization: Bearer abcdefghijklmnop token=SUPERSECRETVALUE123 AIzaSyFAKEKEYFORTESTS0123456789abcdef';
+  const all = fixture('wrapper', { FAKE_TROVE_FAIL: '1', FAKE_TROVE_FAIL_MSG: leak });
+  const some = fixture('wrapper', { FAKE_TROVE_BOOKS: 'T-A,T-B', FAKE_TROVE_FAIL_ID: 'T-B', FAKE_TROVE_FAIL_MSG: leak });
+  try {
+    const result = await cli(all, 'backfill', '--ids', 'T-A,T-B', '--summaries', 'hints', '--run', 'bf-u');
+    assert.equal(result.code, 4, result.out);
+    const out = JSON.parse(result.out) as { ok: boolean; failed: number; indexed: number; unreadable: Array<{ id: string; error: string }>; results: Array<{ id: string; status: string; code?: string; error?: string }> };
+    assert.deepEqual([out.ok, out.failed, out.indexed], [false, 2, 0]);
+    assert.deepEqual(out.results.map((entry) => [entry.id, entry.status, entry.code]), [['T-A', 'failed', 'trove_failed'], ['T-B', 'failed', 'trove_failed']]);
+    assert.equal(out.unreadable.length, 2);
+    for (const text of [result.out, result.err]) assert.ok(!/abcdefghijklmnop|SUPERSECRETVALUE123|AIzaSy/.test(text), `a secret was printed: ${text}`);
+    assert.match(out.results[0]?.error ?? '', /Trove could not be read/);
+    assert.equal(pilibCalls(all, 'index-trove').filter((line) => !line.cmd.includes('--help')).length, 0);
+    // the plan shows the same, redacted, and does not fail by itself
+    const plan = await cli(all, 'backfill', '--ids', 'T-A', '--dry-run');
+    assert.equal(plan.code, 0, plan.err);
+    assert.ok(!/abcdefghijklmnop|SUPERSECRETVALUE123|AIzaSy/.test(plan.out));
+    assert.equal((JSON.parse(plan.out) as { unreadable: unknown[] }).unreadable.length, 1);
+    // one readable, one not: the readable one is indexed and the run still fails
+    const mixed = await cli(some, 'backfill', '--all', '--summaries', 'hints', '--run', 'bf-u');
+    assert.equal(mixed.code, 4);
+    const mixedOut = JSON.parse(mixed.out) as { ok: boolean; failed: number; indexed: number };
+    assert.deepEqual([mixedOut.ok, mixedOut.failed, mixedOut.indexed], [false, 1, 1]);
+  } finally { all.cleanup(); some.cleanup(); }
+});
+
 test('backfill --limit and --skip-existing (same pages and outline length) decide what is indexed', async () => {
   const fx = fixture('wrapper', { FAKE_TROVE_BOOKS: 'T-A,T-B,T-C', FAKE_INDEXED: 'T-A', FAKE_META_TOC: '2' });
   try {
@@ -445,6 +474,37 @@ for (const source of ['installed', 'wrapper'] as const) {
     }
   });
 }
+
+const SECRET_NAMES = ['GOOGLE_API_KEY', 'GEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GITHUB_TOKEN', 'AWS_SECRET_ACCESS_KEY', 'JEV_API_KEY', 'AW_SOME_API_KEY'];
+
+test('no lookup, index or backfill command ever sees a key, token or secret set where aw runs; an allow-list passes what a command needs', async () => {
+  for (const source of ['wrapper', 'installed'] as const) {
+    const fx = fixture(source, { FAKE_INDEXED: 'T-A', FAKE_TROVE_BOOKS: 'T-A', MY_WRAPPER_VAR: 'needed', LC_ALL: 'C', SSH_AUTH_SOCK: '/tmp/agent.sock', AW_LIBRARY_PASS_ENV_EXTRA: 'x' }, { route: 'both' });
+    try {
+      for (const name of SECRET_NAMES) fx.env[name] = 'secret-value-that-must-not-travel';
+      fx.env.AW_LIBRARY_PASS_ENV = `${fx.env.AW_LIBRARY_PASS_ENV},MY_WRAPPER_VAR`;
+      const library = new Library(fx.project, fx.env, { shadow: 'inline' });
+      await library.read({ source: 'T-A', pages: '2' });
+      await library.toc('T-A');
+      assert.equal((await cli(fx, 'index', '--trove-id', 'T-A', '--summaries', 'hints', '--run', 'env-1')).code, 0);
+      assert.equal((await cli(fx, 'backfill', '--ids', 'T-A', '--summaries', 'hints', '--run', 'env-2')).code, 0);
+      const seen = calls(fx);
+      assert.ok(seen.length > 6, 'both commands ran several times');
+      for (const line of seen) {
+        for (const name of SECRET_NAMES) assert.ok(!line.env.includes(name), `${name} reached ${line.tool} ${line.cmd.join(' ')}`);
+        for (const name of ['PATH', 'HOME', 'LC_ALL', 'SSH_AUTH_SOCK', 'MY_WRAPPER_VAR', 'AW_TROVE_COMMAND']) assert.ok(line.env.includes(name), `${name} should reach ${line.tool}`);
+      }
+    } finally { fx.cleanup(); }
+  }
+  // the one exception, by design: the built-in helper that writes the summaries gets the Gemini key, as GEMINI_API_KEY and nothing else
+  const fx = fixture('installed');
+  try {
+    fx.env.ANTHROPIC_API_KEY = 'secret-value-that-must-not-travel';
+    assert.equal((await cli(fx, 'index', '--trove-id', 'T-A', '--run', 'env-3')).code, 0);
+    const index = pilibCalls(fx, 'index-trove').find((line) => !line.cmd.includes('--help'));
+    assert.deepEqual([index?.env.includes('GEMINI_API_KEY'), index?.env.includes('GOOGLE_API_KEY'), index?.env.includes('ANTHROPIC_API_KEY')], [true, false, false]);
+  } finally { fx.cleanup(); }
+});
 
 test('with no library.json the plugin behaves as before: Trove only, the helper is never started, even when installed', async () => {
   const fx = fixture('installed', { FAKE_INDEXED: 'T-A' });

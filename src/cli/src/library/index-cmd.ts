@@ -318,7 +318,7 @@ export async function verifyBook(indexer: Indexer, request: IndexRequest, result
   let troveCompared = false;
   if (checks.pages && wanted.length > 0) {
     try {
-      const trove = new TroveBackend({ command: indexer.config.troveCommand, env: childEnv(indexer.env), timeoutMs: limits.timeoutMs.primary, cwd: indexer.project });
+      const trove = new TroveBackend({ command: indexer.config.troveCommand, env: childEnv(indexer.env, { kind: 'trove' }), timeoutMs: limits.timeoutMs.primary, cwd: indexer.project });
       const theirs = await trove.read(request.troveId, wanted);
       troveCompared = true;
       const byPage = new Map(theirs.pages.map((entry) => [entry.page, squash(entry.text)]));
