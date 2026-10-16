@@ -165,3 +165,61 @@ def test_cli_dry_run_json(tmp_path, capsys, monkeypatch):
     assert courses.main(["--term", reg.directory.name, "wispr-scan", "--dry-run", "--json"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert len(out["matched"]) == 2 and len(out["unmatched"]) == 4
+
+
+SECOND = ("second-same-day", "x", "2026-10-16 10:25:00.000 +00:00", 1792148100000, 1, 1, 0, 1800000, "sum2", None)
+
+
+def _with_second(tmp_path):
+    reg, wdir = build(tmp_path, extra_meetings=[SECOND])
+    d = wdir / "meetings" / SECOND[0]
+    d.mkdir()
+    (d / "refined.ndjson").write_text(json.dumps({"id": "1", "timestamp": "00:01", "text": "עוד", "speaker": {"id": 1, "name": None}}, ensure_ascii=False) + "\n", encoding="utf-8")
+    return reg, wdir
+
+
+def test_two_same_day_meetings_one_import_one_alternate(tmp_path):
+    reg, _ = _with_second(tmp_path)
+    calls = []
+    report = wispr.scan(reg, add_source=fake_add_source(calls))
+    assert [c[1] for c in calls] == ["havaya"]
+    actions = {m["id"]: m["action"] for m in report["matched"] if m["slug"] == "havaya"}
+    assert sorted(actions.values()) == ["alternate", "import"]
+    havaya = json.loads((reg.directory / "havaya.json").read_text())
+    assert len(havaya["lessons"]) == 1 and havaya["lessons"][0]["alternates"][0]["meeting_id"] in (HAVAYA, SECOND[0])
+    dry = wispr.scan(_with_second(tmp_path / "d")[0], dry_run=True)
+    assert sorted(m["action"] for m in dry["matched"] if m["slug"] == "havaya") == ["alternate", "import"]
+
+
+def test_incomplete_import_is_resumed_not_shelved(tmp_path):
+    reg, _ = build(tmp_path)
+    state = {"fail": True}
+
+    def flaky(registry, path, slug, **kw):
+        # like ingest_recording: the pending lesson is persisted, then the transcript/queue step fails
+        with courses._locked_course(registry.directory, slug) as locked:
+            key = f"{kw['lesson_date']}-{kw['lesson_time']}"
+            if not any(x["lesson_key"] == key for x in locked.payload["lessons"]):
+                locked.payload["lessons"].append({"date": kw["lesson_date"], "lesson_key": key, "status": "pending_transcript",
+                                                  "audio_sha256": courses._file_sha256(Path(path))})
+                courses._atomic_json(locked.path, locked.payload)
+        if state["fail"]:
+            raise courses.IngestError("transcript failed")
+        with courses._locked_course(registry.directory, slug) as locked:
+            for x in locked.payload["lessons"]:
+                if x["lesson_key"] == key:
+                    x["status"] = "queued"
+            courses._atomic_json(locked.path, locked.payload)
+        return {"status": "ingested", "lesson_key": key}
+
+    first = wispr.scan(reg, add_source=flaky)
+    assert [e["id"] for e in first["errors"]] == [HAVAYA]
+    seen = json.loads((reg.directory / "term.json").read_text())["state"]["wispr_seen"]
+    assert HAVAYA not in seen
+    state["fail"] = False
+    second = wispr.scan(courses.Registry(reg.directory), add_source=flaky)
+    assert [m["action"] for m in second["matched"] if m["slug"] == "havaya"] == ["resume"]
+    havaya = json.loads((reg.directory / "havaya.json").read_text())
+    assert len(havaya["lessons"]) == 1 and havaya["lessons"][0]["status"] == "queued"
+    assert havaya["lessons"][0]["wispr_meeting_id"] == HAVAYA and "alternates" not in havaya["lessons"][0]
+    assert HAVAYA in json.loads((reg.directory / "term.json").read_text())["state"]["wispr_seen"]

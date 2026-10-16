@@ -173,6 +173,7 @@ def scan(registry: courses.Registry, *, since: str | None = None, dry_run: bool 
     floor = datetime.fromisoformat(since).replace(tzinfo=tz).astimezone(timezone.utc) if since else None
     seen = _seen_ids(registry, term)
     new_seen: list[str] = []
+    planned: dict[tuple[str, str], str] = {}  # dry run: (course, day) -> key of an import it would make
     for meeting in list_meetings(db):
         if floor and meeting["start"] < floor:
             continue
@@ -186,16 +187,23 @@ def scan(registry: courses.Registry, *, since: str | None = None, dry_run: bool 
         local = meeting["start"].astimezone(tz)
         day, hm = local.date().isoformat(), local.strftime("%H%M")
         entry = {**_stamp(meeting, tz), "slug": slug, "date": day}
-        existing = next((x for x in registry.courses[slug].get("lessons", []) if x.get("date") == day), None)
         mdir = base / "meetings" / meeting["id"]
         try:
+            # the course file is re-read for every meeting: an earlier import in this run changed it
+            lessons = _fresh_lessons(registry, slug)
+            same_day = [x for x in lessons if x.get("date") == day]
+            resume = next((x for x in same_day if _is_ours(x, registry, slug, meeting["id"], day, hm, mdir, db)), None)
+            existing = None if resume else (same_day[0] if same_day else None)
+            if not existing and not resume and (slug, day) in planned:
+                existing = {"lesson_key": planned[(slug, day)]}
             if existing:
                 entry["action"] = "alternate"
                 entry["lesson_key"] = existing.get("lesson_key", existing.get("key"))
                 if not dry_run:
                     _record_alternate(registry, slug, existing, meeting["id"], mdir, db)
             else:
-                entry["action"] = "import"
+                entry["action"] = "resume" if resume else "import"
+                planned[(slug, day)] = f"{day}-{hm}"
                 if not dry_run:
                     entry.update(_import(registry, slug, meeting["id"], day, hm, mdir, db, runner, add_source))
             if not dry_run:
@@ -222,11 +230,31 @@ def _compose(mdir: Path, db: Path, meeting_id: str) -> str:
     return text
 
 
+def _fresh_lessons(registry, slug) -> list[dict[str, Any]]:
+    path = registry.directory / f"{slug}.json"
+    return list(json.loads(path.read_text(encoding="utf-8")).get("lessons", []))
+
+
+def _staged_path(registry, slug, meeting_id, day, hm) -> Path:
+    return registry.directory / "wispr" / slug / f"wispr-{day}-{hm}-{meeting_id[:8]}.txt"
+
+
+def _is_ours(lesson, registry, slug, meeting_id, day, hm, mdir, db) -> bool:
+    """A same-day lesson created by an earlier, incomplete import of this very meeting (resume it, do not shelve it)."""
+    if lesson.get("wispr_meeting_id") == meeting_id:
+        return True
+    if lesson.get("status") in {"done", "appended"} or not lesson.get("audio_sha256"):
+        return False
+    staged = _staged_path(registry, slug, meeting_id, day, hm)
+    return staged.is_file() and courses._file_sha256(staged) == lesson["audio_sha256"]
+
+
 def _import(registry, slug, meeting_id, day, hm, mdir, db, runner, add_source) -> dict[str, Any]:
     staging = registry.directory / "wispr" / slug
     staging.mkdir(parents=True, exist_ok=True)
-    path = staging / f"wispr-{day}-{hm}-{meeting_id[:8]}.txt"
-    courses._atomic_write(path, _compose(mdir, db, meeting_id))
+    path = _staged_path(registry, slug, meeting_id, day, hm)
+    if not path.is_file():  # a resumed import must hand over the same bytes, or it would look like a new recording
+        courses._atomic_write(path, _compose(mdir, db, meeting_id))
     kwargs = {"runner": runner} if runner else {}
     result = (add_source or courses.add_source)(registry, path, slug, origin="recording", transcript=True,
                                                 lesson_date=day, lesson_time=hm, **kwargs)
