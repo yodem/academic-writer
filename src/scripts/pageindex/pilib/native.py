@@ -6,6 +6,7 @@ library needs no page map. Summaries are optional (see summarize.py); the run is
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -252,6 +253,16 @@ def write_book(*, result: dict, structure: list, pages: list, author: str, origi
         raise
 
 
+@contextlib.contextmanager
+def exclusive(book_id: str):
+    """Hold the book's lock for a whole index run; a book already being indexed is the `busy` failure."""
+    try:
+        with lib.book_lock(book_id):
+            yield
+    except lib.BookBusy as busy:
+        raise IndexFailure("busy", str(busy))
+
+
 def check_book_id(book_id: str) -> None:
     try:
         lib.book_dir(book_id)
@@ -259,7 +270,7 @@ def check_book_id(book_id: str) -> None:
         raise IndexFailure("bad_input", str(error))
 
 
-def index_from_toc(*, command: str, book_id: str, title: str, author: str, pages_by_number: dict, raw_toc: list,
+def _index_from_toc(*, command: str, book_id: str, title: str, author: str, pages_by_number: dict, raw_toc: list,
                    origin: dict, mode: str = "gemini", model: str = None, max_calls: int = None,
                    concurrency: int = None, dry_run: bool = False, reuse: bool = True, source: str = "trove-toc",
                    toc_source: str = "trove-toc", page_text_source: str = "origin", warnings: list = None) -> dict:
@@ -297,6 +308,13 @@ def index_from_toc(*, command: str, book_id: str, title: str, author: str, pages
 
 
 # ----------------------------------------------------------------------------- sources
+
+def index_from_toc(**kwargs) -> dict:
+    """The native indexer under the book's lock (a dry run writes nothing and takes none)."""
+    check_book_id(kwargs["book_id"])
+    with (contextlib.nullcontext() if kwargs.get("dry_run") else exclusive(kwargs["book_id"])):
+        return _index_from_toc(**kwargs)
+
 
 def index_trove(a) -> dict:
     from . import structure as fallback

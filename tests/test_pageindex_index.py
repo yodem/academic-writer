@@ -545,7 +545,7 @@ def test_contract_lists_every_field_and_code():
     for key in SUCCESS_KEYS | FAILURE_KEYS:
         assert f"`{key}`" in CONTRACT, f"contract.md does not describe {key}"
     for code in ("trove_failed", "trove_truncated", "no_hinted_toc", "structure_helper_missing", "core_helper_missing",
-                 "missing_key", "call_cap", "model_failed", "bad_input", "empty_book", "no_toc", "empty_tree", "render_failed", "structure_failed", "internal"):
+                 "missing_key", "call_cap", "model_failed", "bad_input", "empty_book", "no_toc", "empty_tree", "render_failed", "structure_failed", "busy", "internal"):
         assert f"`{code}`" in CONTRACT, f"contract.md does not describe the code {code}"
 
 
@@ -555,6 +555,16 @@ def snapshot(book_id):
     """Every file under the book folder, by relative path."""
     d = lib.book_dir(book_id)
     return {str(f.relative_to(d)): f.read_bytes() for f in sorted(d.rglob("*")) if f.is_file()}
+
+
+def prune(book_id):
+    with lib.book_lock(book_id):
+        lib.prune_versions(book_id)
+
+
+def new_version(book_id):
+    with lib.book_lock(book_id):
+        return lib.new_version(book_id)
 
 
 def version_names(book_id):
@@ -598,7 +608,7 @@ def test_a_crash_before_the_pointer_moves_changes_nothing_a_reader_sees(env, cap
     old_tree = (lib.data_dir(HINTED) / "tree.json").read_bytes()
     old_name = lib.current_name(HINTED)
     # a run that finished writing its version and died before publishing: simulated by calling the steps by hand
-    version = lib.new_version(HINTED)
+    version = new_version(HINTED)
     lib.write_json(version / "pages.json", ["x"])
     lib.write_json(version / "tree.json", {"book_id": HINTED, "title": "unpublished", "n_pages": 1, "structure": []})
     lib.write_json(version / "meta.json", {"book_id": HINTED, "title": "unpublished"})
@@ -632,13 +642,13 @@ def test_pruning_waits_an_hour_from_completion_and_never_touches_current_or_the_
         seen.append(lib.current_name(HINTED))
     assert version_names(HINTED) == sorted(seen)            # nothing is an hour old: nothing is removed
     now[0] += lib.PRUNE_GRACE_SECONDS - 60
-    lib.prune_versions(HINTED)
+    prune(HINTED)
     assert version_names(HINTED) == sorted(seen)            # still inside the hour (measured from meta.indexed_at)
     now[0] += 3600
-    lib.prune_versions(HINTED)
+    prune(HINTED)
     assert version_names(HINTED) == sorted(seen[-2:])       # the current one and the newest complete one before it
     now[0] += 10 * 365 * 86400
-    lib.prune_versions(HINTED)
+    prune(HINTED)
     assert version_names(HINTED) == sorted(seen[-2:])       # however old, those two stay
 
 
@@ -651,24 +661,24 @@ def test_the_grace_is_measured_from_the_completion_time_in_meta_not_from_the_fol
     stale = lib.book_dir(HINTED) / "v" / oldest
     os.utime(stale, (0, 0))                                  # an ancient folder time must not make it prunable
     os.utime(stale / "meta.json", (0, 0))
-    lib.prune_versions(HINTED)
+    prune(HINTED)
     assert oldest in version_names(HINTED)
     meta = lib.read_json(stale / "meta.json")
     meta["indexed_at"] = "2001-01-01T00:00:00+00:00"        # but a completion time long ago does
     lib.write_json(stale / "meta.json", meta)
-    lib.prune_versions(HINTED)
+    prune(HINTED)
     assert oldest not in version_names(HINTED) and {middle, current} <= set(version_names(HINTED))
 
 
 def test_an_unfinished_version_is_pruned_only_an_hour_after_it_started(env, capsys, monkeypatch):
     import time
     index(capsys, "--summaries", "none")
-    running = lib.new_version(HINTED)                        # another run, still writing: no meta.json yet
+    running = new_version(HINTED)                        # another run, still writing: no meta.json yet
     (running / "pages.json").write_text("[]")
     index(capsys, "--summaries", "none")
     assert running.name in version_names(HINTED)
     monkeypatch.setattr(lib, "clock", lambda: time.time() + lib.PRUNE_GRACE_SECONDS + 60)
-    lib.prune_versions(HINTED)
+    prune(HINTED)
     assert running.name not in version_names(HINTED)
 
 
@@ -777,11 +787,15 @@ def test_concurrent_indexers_of_the_same_book_leave_one_whole_book(env):
             if folder is not None:
                 tree, meta = lib.read_json(folder / "tree.json"), lib.read_json(folder / "meta.json")
                 assert tree["title"] == meta["title"] and len(lib.read_json(folder / "pages.json")) == 9
-        assert all(p.wait() == 0 for p in procs)
+        results = [(p.wait(), p.communicate()[0].decode()) for p in procs]
+        assert any(code == 0 for code, _ in results)
+        for code, out in results:                            # a loser is told so, as JSON, and changes nothing
+            assert code == 0 or json.loads(out)["code"] == "busy"
     final = lib.data_dir("same")
     assert lib.read_json(final / "tree.json")["title"] == lib.read_json(final / "meta.json")["title"]
     assert lib.catalog()["books"]["same"]["title"] == lib.read_json(final / "meta.json")["title"]
     assert (lib.book_dir("same") / "CURRENT").read_text().strip() in version_names("same")
+    assert not (lib.book_dir("same") / ".index.lock").exists()
 
 
 @pytest.mark.parametrize("bad", ["..", "a/b", ".hidden", "a..b", "", "x y", "../x", "a\\b"])
@@ -892,3 +906,114 @@ def test_any_stray_exit_is_still_one_json_object(env, capsys, monkeypatch):
     monkeypatch.setattr(native, "build_structure", lambda *a, **k: (_ for _ in ()).throw(SystemExit("stray")))
     code, out, err = index(capsys)
     assert code == 1 and out["ok"] is False and out["code"] == "internal" and "stray" in out["error"]
+
+
+# ----------------------------------------------------------------------------- one indexer per book
+
+BUSY = "this book is being indexed by another process \u2014 try again when it finishes"
+
+
+def hold_lock_in_another_process(env, book_id):
+    code = ("import sys; sys.path.insert(0, %r)\nfrom pilib import library as lib\n"
+            "with lib.book_lock(%r):\n    print('locked', flush=True)\n    sys.stdin.read()\n" % (str(PKG), book_id))
+    proc = subprocess.Popen([sys.executable, "-c", code], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+                            env={**os.environ, "AW_LIBRARY": str(env.library)})
+    assert proc.stdout.readline().strip() == "locked"
+    return proc
+
+
+def release(proc):
+    proc.stdin.close()
+    proc.wait(timeout=20)
+
+
+def test_a_second_indexer_of_the_same_book_is_told_busy_at_once(env, capsys):
+    holder = hold_lock_in_another_process(env, HINTED)
+    try:
+        code, out, err = index(capsys, "--summaries", "none")
+        assert code == 1 and out["ok"] is False and out["code"] == "busy" and out["error"] == BUSY
+        assert f"ERROR library index: {BUSY}" in err
+        assert lib.data_dir(HINTED) is None                  # nothing was written
+        code, out, _ = index(capsys, "--summaries", "none", "--dry-run")
+        assert code == 0                                      # a dry run writes nothing, so it needs no lock
+        code, out, _ = index(capsys, "--summaries", "none", "--book-id", "another-book")
+        assert code == 0 and out["book_id"] == "another-book"  # other books index in parallel
+    finally:
+        release(holder)
+    code, out, _ = index(capsys, "--summaries", "none")       # the holder has gone: its lock is free
+    assert code == 0 and not (lib.book_dir(HINTED) / ".index.lock").exists()
+
+
+def test_the_lock_names_its_holder_and_is_released_on_any_exit(env):
+    with lib.book_lock(HINTED):
+        token = json.loads((lib.book_dir(HINTED) / ".index.lock").read_text())
+        assert token["pid"] == os.getpid() and token["nonce"] and token["started"] > 0
+        with pytest.raises(lib.BookBusy):
+            with lib.book_lock(HINTED):                      # not even the same process takes it twice
+                pass
+    assert not (lib.book_dir(HINTED) / ".index.lock").exists()
+    with pytest.raises(KeyboardInterrupt):
+        with lib.book_lock(HINTED):
+            raise KeyboardInterrupt
+    assert not (lib.book_dir(HINTED) / ".index.lock").exists()
+
+
+def test_a_lock_left_by_a_dead_process_is_taken_over(env, capsys):
+    dead = subprocess.Popen([sys.executable, "-c", "pass"])
+    dead.wait()
+    lock = lib.book_dir(HINTED) / ".index.lock"
+    lock.parent.mkdir(parents=True)
+    lock.write_text(json.dumps({"pid": dead.pid, "nonce": "old", "started": __import__("time").time()}))
+    code, out, _ = index(capsys, "--summaries", "none")
+    assert code == 0 and not lock.exists()
+    # a holder that is alive but far too old is also taken over (its pid may have been reused)
+    lock.write_text(json.dumps({"pid": os.getpid(), "nonce": "old", "started": __import__("time").time() - 10 * 3600}))
+    code, out, _ = index(capsys, "--summaries", "none")
+    assert code == 0 and not lock.exists()
+    # an unreadable lock is a creator that is still writing; only an old one is taken over
+    lock.write_text("")
+    code, out, _ = index(capsys, "--summaries", "none")
+    assert code == 1 and out["code"] == "busy"
+    os.utime(lock, (0, 0))
+    code, out, _ = index(capsys, "--summaries", "none")
+    assert code == 0 and not lock.exists()
+
+
+def test_a_live_holder_is_never_taken_over(env, capsys):
+    lock = lib.book_dir(HINTED) / ".index.lock"
+    lock.parent.mkdir(parents=True)
+    lock.write_text(json.dumps({"pid": os.getppid(), "nonce": "other", "started": __import__("time").time()}))
+    code, out, _ = index(capsys, "--summaries", "none")
+    assert code == 1 and out["code"] == "busy" and json.loads(lock.read_text())["nonce"] == "other"
+
+
+def test_a_lock_is_released_only_with_its_own_nonce(env):
+    lock = lib.book_dir(HINTED) / ".index.lock"
+    with lib.book_lock(HINTED):
+        lock.write_text(json.dumps({"pid": os.getppid(), "nonce": "someone-else", "started": __import__("time").time()}))
+    assert json.loads(lock.read_text())["nonce"] == "someone-else"   # ours had been taken over: leave theirs alone
+
+
+def test_publish_and_prune_need_the_lock_and_read_the_pointer_under_it(env, capsys, monkeypatch):
+    import time
+    index(capsys, "--summaries", "none")
+    for call in (lambda: lib.new_version(HINTED), lambda: lib.prune_versions(HINTED),
+                 lambda: lib.publish_version(HINTED, lib.book_dir(HINTED) / "v" / "x")):
+        with pytest.raises(RuntimeError):
+            call()
+    monkeypatch.setattr(lib, "clock", lambda: time.time() + 10 * lib.PRUNE_GRACE_SECONDS)
+    with lib.book_lock(HINTED):
+        first = lib.current_name(HINTED)
+        version = lib.new_version(HINTED)
+        for name in ("pages.json", "tree.json", "meta.json"):
+            shutil_copy = (lib.data_dir(HINTED) / name).read_bytes()
+            (version / name).write_bytes(shutil_copy)
+        lib.publish_version(HINTED, version)
+        assert lib.current_name(HINTED) == version.name
+        lib.prune_versions(HINTED)                            # keeps the pointer it reads now, and the one before
+        assert version_names(HINTED) == sorted([first, version.name])
+        (lib.book_dir(HINTED) / "CURRENT").write_text(first + "\n")   # the pointer moved back: prune follows it
+        lib.prune_versions(HINTED)
+        assert lib.current_name(HINTED) == first and first in version_names(HINTED)
+        lib.discard_unpublished(HINTED, version)              # the pointer never named it now: removed
+        assert version.name not in version_names(HINTED)

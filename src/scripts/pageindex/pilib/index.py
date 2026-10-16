@@ -31,13 +31,17 @@ def strip_llm_fields(nodes) -> None:
 
 def published(build, book_id: str, *args, **kwargs) -> dict:
     """Run `build(version, ...)` in a fresh version folder and publish it; a failure removes the folder."""
-    version = lib.new_version(book_id)
     try:
-        meta = build(version, *args, **kwargs)
-        lib.publish_version(book_id, version)
-    except BaseException:
-        lib.discard_unpublished(book_id, version)  # only if the pointer never moved to it
-        raise
+        with lib.book_lock(book_id):
+            version = lib.new_version(book_id)
+            try:
+                meta = build(version, *args, **kwargs)
+                lib.publish_version(book_id, version)
+            except BaseException:
+                lib.discard_unpublished(book_id, version)  # only if the pointer never moved to it
+                raise
+    except lib.BookBusy as busy:
+        raise SystemExit(f"{book_id}: {busy}")
     return meta
 
 

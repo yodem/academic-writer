@@ -84,6 +84,119 @@ clock = time.time           # seconds since the epoch; tests replace it
 LEGACY_FILES = ("tree.json", "pages.json", "meta.json", "pagemap.json", "source.pdf")
 
 
+# ---------------------------------------------------------------- one indexer per book
+
+LOCK_NAME = ".index.lock"
+LOCK_STALE_SECONDS = 7200      # a holder this old is taken over even if its pid answers (the pid may have been reused)
+LOCK_UNREADABLE_SECONDS = 10   # a lock file nobody can read is a creator still writing it; after this long it is dead
+BUSY_MESSAGE = "this book is being indexed by another process \u2014 try again when it finishes"
+_held: set = set()
+
+
+class BookBusy(Exception):
+    """Another process (or this one) is already indexing this book."""
+
+    def __init__(self):
+        super().__init__(BUSY_MESSAGE)
+
+
+def _pid_alive(pid) -> bool:
+    try:
+        os.kill(int(pid), 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except (OSError, ValueError, TypeError):
+        return False
+    return True
+
+
+def _read_token(path: Path):
+    try:
+        token = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return token if isinstance(token, dict) and isinstance(token.get("nonce"), str) else None
+
+
+def _holder_dead(path: Path) -> bool:
+    token = _read_token(path)
+    if token is None:
+        try:
+            return clock() - path.stat().st_mtime >= LOCK_UNREADABLE_SECONDS
+        except FileNotFoundError:
+            return True
+    started = token.get("started")
+    return not _pid_alive(token.get("pid")) or (isinstance(started, (int, float)) and clock() - started >= LOCK_STALE_SECONDS)
+
+
+def _take_over(path: Path) -> None:
+    """Remove a dead holder's lock by an atomic rename. If what was moved is not the lock that was judged dead (someone
+    took the slot in between), put it back."""
+    seen = _read_token(path)
+    trash = path.with_name(f"{path.name}.dead.{uuid.uuid4().hex[:8]}")
+    try:
+        os.rename(path, trash)
+    except FileNotFoundError:
+        return
+    if _read_token(trash) != seen:
+        try:
+            os.link(trash, path)
+        except OSError:
+            pass
+    try:
+        trash.unlink()
+    except OSError:
+        pass
+
+
+class book_lock:
+    """Exclusive, fail-fast lock for everything that writes one book: books/<id>/.index.lock, created with O_EXCL and
+    holding {pid, nonce, started}. A live holder means BookBusy at once (never a wait). A dead holder (no such pid, or
+    older than LOCK_STALE_SECONDS) is taken over. Only the owner's nonce releases it. Readers do not take it."""
+
+    def __init__(self, book_id: str):
+        self.book_id = book_id
+        self.nonce = uuid.uuid4().hex
+
+    def __enter__(self):
+        container = book_dir(self.book_id)
+        if self.book_id in _held:
+            raise BookBusy()
+        container.mkdir(parents=True, exist_ok=True)
+        self.path = container / LOCK_NAME
+        token = {"pid": os.getpid(), "nonce": self.nonce, "started": clock()}
+        for _ in range(5):
+            try:
+                fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+            except FileExistsError:
+                if not _holder_dead(self.path):
+                    raise BookBusy()
+                _take_over(self.path)
+                continue
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(token, f)
+            _held.add(self.book_id)
+            return self
+        raise BookBusy()
+
+    def __exit__(self, *exc):
+        _held.discard(self.book_id)
+        token = _read_token(self.path)
+        if token is not None and token.get("nonce") == self.nonce:
+            try:
+                self.path.unlink()
+            except FileNotFoundError:
+                pass
+        return False
+
+
+def require_lock(book_id: str) -> None:
+    if book_id not in _held:
+        raise RuntimeError(f"writing book {book_id!r} without holding its lock")
+
+
 def current_name(book_id: str):
     """The version named by books/<id>/CURRENT, or None when the book has no pointer (a flat legacy book)."""
     pointer = book_dir(book_id) / "CURRENT"
@@ -124,7 +237,8 @@ def data_dir(book_id: str):
 
 
 def new_version(book_id: str) -> Path:
-    """A fresh, empty version folder. Nothing points at it until publish_version."""
+    """A fresh, empty version folder. Nothing points at it until publish_version. Needs the book lock."""
+    require_lock(book_id)
     container = book_dir(book_id)
     versions = container / "v"
     if versions.is_symlink():
@@ -138,7 +252,9 @@ def new_version(book_id: str) -> Path:
 
 def publish_version(book_id: str, version: Path) -> None:
     """Point CURRENT at a finished version: write the pointer to a temporary file and rename it over CURRENT (atomic),
-    so a reader sees the previous book or this one, whole. Then tidy up (errors there never undo the publish)."""
+    so a reader sees the previous book or this one, whole. Then tidy up (errors there never undo the publish).
+    Needs the book lock, which is why no other publisher can move the pointer or prune while this runs."""
+    require_lock(book_id)
     container = book_dir(book_id)
     if version.parent != container / "v":
         raise BookIdError("the version to publish is not inside the book folder")
@@ -168,7 +284,8 @@ def publish_version(book_id: str, version: Path) -> None:
 
 
 def discard_unpublished(book_id: str, version: Path) -> None:
-    """Remove a version this run created, unless CURRENT already points at it (the failure came after publishing)."""
+    """Remove a version this run created, unless CURRENT already points at it (the failure came after publishing).
+    Called with the book lock held, so the pointer cannot have moved on for any other reason."""
     try:
         if current_name(book_id) == version.name:
             return
@@ -192,7 +309,9 @@ def completed_at(version: Path) -> float:
 
 def prune_versions(book_id: str) -> None:
     """Keep the current version and the newest complete one before it, always. Any other version goes once
-    PRUNE_GRACE_SECONDS have passed since it was completed (or started, when it never finished)."""
+    PRUNE_GRACE_SECONDS have passed since it was completed (or started, when it never finished).
+    Needs the book lock; CURRENT is read here, under it, never passed in."""
+    require_lock(book_id)
     current = current_name(book_id)
     versions = book_dir(book_id) / "v"
     if current is None or not versions.is_dir():

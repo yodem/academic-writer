@@ -7,6 +7,7 @@ the PDF, so what an agent reads is exactly what Trove holds. Needs the structure
 """
 from __future__ import annotations
 
+import contextlib
 import tempfile
 import time
 from pathlib import Path
@@ -44,7 +45,7 @@ def remap(nodes: list, mapping: list) -> None:
         remap(node.get("nodes") or [], mapping)
 
 
-def index_by_structure(*, command: str, book_id: str, title: str, author: str, pages_by_number: dict, raw_toc: list,
+def _index_by_structure(*, command: str, book_id: str, title: str, author: str, pages_by_number: dict, raw_toc: list,
                        origin: dict, mode: str = "gemini", model: str = None, max_calls: int = None,
                        concurrency: int = None, dry_run: bool = False) -> dict:
     started = time.monotonic()
@@ -130,3 +131,10 @@ def index_by_structure(*, command: str, book_id: str, title: str, author: str, p
                                                   "render_check": render_check},
                       page_text_source="origin", doc_name=result.get("doc_name") or title)
     return out
+
+
+def index_by_structure(**kwargs) -> dict:
+    """The structure fallback under the book's lock (a dry run writes nothing and takes none)."""
+    native.check_book_id(kwargs["book_id"])
+    with (contextlib.nullcontext() if kwargs.get("dry_run") else native.exclusive(kwargs["book_id"])):
+        return _index_by_structure(**kwargs)
