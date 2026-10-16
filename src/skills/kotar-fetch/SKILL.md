@@ -25,21 +25,29 @@ Kotar shows a book as page images, one per page token. A token can only be read 
 1. Print the snippet: `python3 kf tokens-js <book_id> <start_idx> <end_idx>`. It fetches `PrintPages.aspx` with the tab's credentials in batches of at most 10 pages (Kotar's own print limit), reads every `<img src>` for `gPageToken=<uuid>`, and returns the uuids **with dashes replaced by spaces**. The browser tool blocks output that looks like URL query data, and a blob download is held by Chrome's "multiple downloads" prompt, so do not change that format.
 2. Run it with `javascript_tool` in the viewer tab. Keep its leading `await`: without it the tool returns `{}` for the pending promise. Save the returned text verbatim to `<out_dir>/tokens.txt`.
 
-Indices are not printed page numbers. On a new book, first fetch a small probe batch (2–3 indices near the cited pages), look at the page image to read its printed number, and compute the offset: `python3 kf offset <index> <printed> --pages <A-B>` prints the offset and the index range for printed pages A–B. Plates can sit inside the sequence. Some books number them (Gilad's plates are pp. 322 and 324, so the offset holds); others, such as אנציקלופדיה מקראית, insert unnumbered plates (`לוח יח`) that shift every later index. When the range is more than a few pages, check every page's running header, not only the first and last, and fetch the extra indices that the plates cost. An encyclopedia page carries two numbered columns: map the cited columns to pages the same way.
+Indices are not printed page numbers. On a new book, fetch a small probe (2–3 indices near the cited pages), read the printed number on the image, and get a first guess with `python3 kf offset <index> <printed> --pages <A-B>`. That guess is only a guess: plates can shift the mapping anywhere in a range. Some books number their plates (Gilad's plates are pp. 322 and 324, so the offset holds). Others, such as אנציקלופדיה מקראית, insert unnumbered plates (`לוח יח`) that shift every later index. An encyclopedia page carries two numbered columns, so use `--step 2` and number the page by its first column.
 
-## 3. Pages, check, merge
+## 3. Pages, verify, merge
 
 ```bash
-python3 kf fetch <out_dir> --tokens-file <out_dir>/tokens.txt --first-page <A>
+python3 kf fetch <out_dir> --tokens-file <out_dir>/tokens.txt --start-idx <I> --first-page <A> [--step 2] --last-page <B>
+python3 kf peek <out_dir>                     # strips of the header and footer of every batch's first and last image
+python3 kf check <out_dir> --seen <I>:<A> --seen <idx>:<n|plate> ...
 python3 kf merge <out_dir> ~/Downloads/<refs-key>.pdf
 ```
 
-- `fetch` curls each token with no cookies at `nStep=9` (about 1341×1807 JPEG). Higher steps return a 6 KB placeholder, so each page must be a JPEG over 20 KB. Failures are retried once, then listed, and the command exits 1. Pages are named `pNNNN.jpg` by printed page, and `manifest.json` records the result.
-- **Verify by eye** before merging: Read the first and last page images and confirm their printed page numbers are A and B. A wrong first page means a wrong offset: recompute it and fetch again.
-- `merge` writes one PDF in printed-page order (PIL; no img2pdf or ImageMagick needed).
+- `fetch` curls each token with no cookies at `nStep=9` (about 1341×1807 JPEG). Higher steps return a 6 KB placeholder, so each page must be a JPEG over 20 KB. A failure is retried once, then listed, and the command exits 1. Images are named `iNNNN.jpg` by Kotar index, so book order survives plates. `manifest.json` records each fetch as a segment (start index, the printed page expected there, the step) with its batches of 10.
+- **Verify the first AND the last image of every batch. Never assume the mapping.** Read the printed numbers off `peek`'s sheet (or the images themselves) and pass every one to `check` as `--seen IDX:PRINTED`, or `IDX:plate` for an unnumbered plate. `check` compares each against the expected number and exits 1 on any end it has not seen, any mismatch, any failed page, or a range that stops short of `--last-page`.
+- **On a mismatch, re-probe; never guess.** Peek every image in that batch to find where the numbering moved. Then either declare the unnumbered plates (`check --plate IDX`), which shifts the expected numbers after them, or, when the numbering jumps, fetch again from the first wrong index as a new segment with the printed page actually seen there. Seeing a plate where a page was expected stays a mismatch until you declare it. When plates use up indices, `check` reports the range as short: fetch the next indices as another segment and check again.
+- `merge` refuses to run until `check` has passed. Any new `fetch` clears that pass. It writes one PDF in index order (PIL; no img2pdf or ImageMagick needed).
 
 ## 4. After
 
-- Report: ref, book id, printed pages, PDF path, any failed pages.
-- To put the PDF in a course book, use `/academic-writer:ingest` under the book's writer lock (the term's `WRITERS.md`), at the reading's place in the `חומרי קריאה` section, with printed page numbers kept.
-- If a book is not on Kotar, or the fetch still fails after one retry, add a `kotar-source` chore (`courses.py chores add --kind kotar-source ...`) saying what to fetch by hand.
+- Report: ref, book id, printed pages, PDF path, any plates and any failed pages.
+- **Transcription and upload (the author's rule for library and Kotar readings, which are in copyright and fetched under the author's own licence):**
+  - The text comes from Gemini OCR with `/academic-writer:ocr`, not from Claude transcribing the page images.
+  - It goes to the course's Trove book (with `/academic-writer:ingest`) and to its NotebookLM notebook with exact printed pagination: one marker per printed page, or per column for an encyclopedia.
+  - The original PDF goes to the course's Drive folder.
+  - If a tool or the classifier still blocks a step, stop that item and report it. Never work around the block.
+- Course-book writes go through the book's writer lock (the term's `WRITERS.md`), at the reading's place in the `חומרי קריאה` section.
+- If a book is not on Kotar, or a fetch still fails after one retry, add a `kotar-source` chore (`courses.py chores add --kind kotar-source ...`) saying what to fetch by hand.
