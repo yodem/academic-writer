@@ -84,7 +84,7 @@ Moodle's REST API answers every call with a Radware Bot Manager captcha page, so
 2. Always read the `לוח הודעות` (announcements) forum and report new posts.
 3. Download `pdf`, `docx`, `pptx` and link items from their `pluginfile.php` URL, never `/mod/resource/view.php`. Zoom recordings: try to download; otherwise use Zoom's transcript and reduce it to the lecturer's main ideas.
 4. Perusall items: OCR the pdf twin in the same section; with no twin, add a `perusall-capture` chore.
-5. Assignments: read the time left and the task, name the core texts, confirm each exists in the course sources, and add an `assignment` chore (`kotar-source` when a text must be fetched from Kotar and cannot be found). Forums the user must post in get a `forum-post` chore.
+5. Assignments: read the time left and the task, name the core texts, confirm each exists in the course sources, and add an `assignment` chore (for a text on Kotar, run `/academic-writer:kotar-fetch` for the cited pages; add a `kotar-source` chore only if that fails). Forums the user must post in get a `forum-post` chore.
 6. Route every downloaded item through `courses.py add-source`, run `check-source`, advance seen state with `watch-diff --apply --ok <kind:id> ...` (`module:`, `assign:`, `discussion:`, `section:`) only after routing succeeded, and end with `courses.py chores digest`.
 
 ## Daily scan

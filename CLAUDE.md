@@ -54,6 +54,7 @@ Slash commands are auto-generated from skills with `user-invocable: true`. To ad
 | `/academic-writer:intro` | intro | Open the bundled HTML guide (`src/guide/index.html`) in the browser |
 | `/academic-writer:courses` | courses | Set up terms and course resources, validate them, sync LMS readings, and run the daily scan |
 | `/academic-writer:lesson-notes` | lesson-notes | Turn course recordings and NotebookLM transcripts into structured Trove lesson pages |
+| `/academic-writer:kotar-fetch` | kotar-fetch | Download a Kotar book's cited pages as one PDF (one browser step for page tokens, the rest scripted) |
 | `/academic-writer:init` | init | Full onboarding (first install); pass `--quick` for fast onboarding |
 | `/academic-writer:setup` | setup | Guided first-run wizard (Gemini key, Python tools, sample paragraph) — slash-command only (`disable-model-invocation: true`, so Claude will not auto-invoke it) |
 | `/academic-writer:research` | research | Investigate a topic |

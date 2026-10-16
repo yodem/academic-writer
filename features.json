@@ -594,6 +594,28 @@
           "status": "ok"
         }
       ]
+    },
+    {
+      "id": "kotar-fetch",
+      "name": "Kotar cited-pages fetch",
+      "sources": [
+        "src/skills/kotar-fetch/SKILL.md",
+        "src/scripts/kotar/kotar_fetch.py",
+        "tests/kotar/"
+      ],
+      "status": "ok",
+      "subfeatures": [
+        {
+          "id": "kotar-tokens",
+          "name": "Page tokens from the signed-in viewer tab via one javascript_tool snippet (batches of 10, dashes as spaces)",
+          "status": "ok"
+        },
+        {
+          "id": "kotar-fetch-merge",
+          "name": "Cookie-less curl at nStep=9 with a 20 KB size check, merged to one PDF in printed-page order",
+          "status": "ok"
+        }
+      ]
     }
   ]
 }
