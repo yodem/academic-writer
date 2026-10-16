@@ -206,3 +206,26 @@ def test_all_tools_resolve_identically(tmp_path, monkeypatch):
     monkeypatch.setenv("ACADEMIC_TERM", "t1")
     want = courses.registry_dir()
     assert ta.registry_dir() == book_audit.registry_dir() == tr.registry_dir() == want == root / "t1"
+
+
+def test_assignments_block_shared_page_passes():
+    toc = [e("A - a", 1), e("B - b", 2), e("מטלות - רשימה", 2), e("T1 - t", 2, 2), e("T2 - t", 2, 2), e("C - c", 3)]
+    r = ta.audit_toc(toc, 3)
+    assert not r["duplicate"] and not r["out_of_order"] and r["ok"]
+
+
+def test_same_shape_under_other_title_still_fails():
+    toc = [e("A - a", 1), e("B - b", 2), e("רשימות - רשימה", 2), e("T1 - t", 2, 2), e("T2 - t", 2, 2), e("C - c", 3)]
+    r = ta.audit_toc(toc, 3)
+    assert r["duplicate"] == [2] and not r["ok"]
+
+
+def test_assignments_block_still_needs_hint():
+    toc = [e("A - a", 1), e("B - b", 2), e("מטלות - רשימה", 2), e("T1", 2, 2), e("C - c", 3)]
+    r = ta.audit_toc(toc, 3)
+    assert len(r["no_hint"]) == 1 and not r["ok"]
+
+
+def test_assignments_block_pages_count_as_covered():
+    r = ta.audit_toc([e("A - a", 1), e("מטלות - רשימה", 1), e("T1 - t", 2, 2), e("T2 - t", 2, 2)], 2)
+    assert r["missing"] == [] and r["ok"]
