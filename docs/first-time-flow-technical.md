@@ -28,7 +28,7 @@ There is no MCP server, no dynamic workflow runner, and no section-writer, synth
 
 On every `SessionStart`, in this order (see `src/hooks/hooks.json`):
 
-1. `lifecycle/session-env` receives `${user_config.google_api_key}` and `${user_config.jev_api_key}` and, **only if `.academic-helper/profile.md` exists**, appends `export GOOGLE_API_KEY=...` (and `JEV_API_KEY`) to Claude Code's session env file. Unset options that arrive as the literal placeholder text are ignored.
+1. `lifecycle/session-env` reads the plugin options from the environment Claude Code sets for the hook (`CLAUDE_PLUGIN_OPTION_GOOGLE_API_KEY`, `CLAUDE_PLUGIN_OPTION_JEV_API_KEY`, `CLAUDE_PLUGIN_OPTION_PAGEINDEX_COMMAND`, falling back to `USER_CONFIG_<KEY>`) and, **only if `.academic-helper/profile.md` exists**, appends `export GOOGLE_API_KEY=...` (and `JEV_API_KEY`) to Claude Code's session env file. When the built-in PageIndex helper is installed it also exports `AW_PAGEINDEX_HOME`. It never prints a key.
 2. `lifecycle/session-dashboard` prints the dashboard.
 3. `lifecycle/voice-pull` runs `skills/voice/voice-sync.sh pull` (non-fatal on failure).
 4. `skills/voice/voice-migrate.sh` migrates legacy voice files.
