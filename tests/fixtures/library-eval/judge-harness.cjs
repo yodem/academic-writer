@@ -13,16 +13,22 @@ const pairsBody = /<script type="application\/json" id="pairs">([\s\S]*?)<\/scri
 let source = /<script>([\s\S]*?)<\/script>/.exec(html)[1];
 const ids = [...html.matchAll(/<[a-z0-9]+[^>]*\sid="([^"]+)"/g)].map((match) => match[1]);
 
-if (mode === 'shared') {
+const flags = { fail: false, hold: false };
+let sharedSource = source;
+{
   // Stand-in for the artifact capability: proves the three-method contract is enough to run the page.
   const patched = source.replace(/function createSharedStore\(\) \{\n    return null;[^\n]*\n  \}/, `function createSharedStore() {
     var backing = window.__sharedBacking;
     function all() { return Promise.resolve(Object.keys(backing).filter(function (k) { return k.indexOf('judgments/') === 0; }).map(function (k) { return JSON.parse(backing[k]); })); }
     return { kind: 'shared', canDownload: false, load: all, list: all,
-      save: function (j) { backing['judgments/' + j.pair_id] = JSON.stringify(j); return Promise.resolve(); } };
+      save: function (j) {
+        if (window.__flags.fail) return Promise.reject(new Error('rejected'));
+        if (window.__flags.hold) return new Promise(function () {});
+        backing['judgments/' + j.pair_id] = JSON.stringify(j); return Promise.resolve();
+      } };
   }`);
   if (patched === source) throw new Error('createSharedStore block not found');
-  source = patched;
+  sharedSource = patched;
 }
 
 class TextNode {
@@ -61,7 +67,7 @@ function findAll(root, test) { const out = []; walk(root, (node) => { if (node.n
 const tag = (name) => (node) => node.tagName === name.toUpperCase();
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
-function boot(storage, shared) {
+function boot(storage, shared, useShared) {
   const downloads = [];
   const blobs = new Map();
   const document = {
@@ -80,14 +86,14 @@ function boot(storage, shared) {
     getItem: (key) => (storage.has(key) ? storage.get(key) : null),
     setItem: (key, value) => { if (storage.broken) throw new Error('blocked'); storage.set(key, String(value)); },
   };
-  const window = { localStorage, addEventListener(type, fn) { (windowListeners[type] = windowListeners[type] || []).push(fn); }, __sharedBacking: shared };
+  const window = { localStorage, addEventListener(type, fn) { (windowListeners[type] = windowListeners[type] || []).push(fn); }, __sharedBacking: shared, __flags: flags };
   let count = 0;
   const sandbox = {
     window, document, navigator: { clipboard: { writeText: async () => {} } }, setTimeout, clearTimeout, console,
     Blob: class { constructor(parts) { this.text = parts.join(''); } },
     URL: { createObjectURL(blob) { count += 1; const url = `blob:stub-${count}`; blobs.set(url, blob.text); return url; }, revokeObjectURL() {} },
   };
-  vm.runInNewContext(source, sandbox, { filename: 'judge-page.inline.js' });
+  vm.runInNewContext(useShared ? sharedSource : source, sandbox, { filename: 'judge-page.inline.js' });
   const app = document.byId.get('app');
   const root = () => app;
   return {
@@ -149,7 +155,7 @@ async function main() {
 
   // Every pair, in order, in a throwaway session.
   out.sweep = [];
-  const sweep = boot(new Map(), {}); await tick();
+  const sweep = boot(new Map(), {}, false); await tick();
   for (let guard = 0; guard < 50; guard += 1) {
     const view = sweep.snapshot();
     out.sweep.push({ heading: view.heading, claim: view.claim, radios: view.radios, results: view.results.map((r) => ({ heading: r.heading, meta: r.meta, labelledby: r.labelledby })), fieldsets: view.fieldsets, legends: view.legends, note: view.note });
@@ -157,7 +163,7 @@ async function main() {
     sweep.click('Next'); await tick();
   }
 
-  let page = boot(storage, shared); await tick();
+  let page = boot(storage, shared, mode === 'shared'); await tick();
   out.first = page.snapshot();
   // The long page text starts collapsed and opens on request.
   page.click('Next'); await tick();
@@ -175,7 +181,7 @@ async function main() {
   out.fourth = page.snapshot();
 
   // Close the tab and open the page again against the same store.
-  page = boot(storage, shared); await tick();
+  page = boot(storage, shared, mode === 'shared'); await tick();
   out.resumed = page.snapshot();
   page.click('Previous'); await tick();
   out.resumed_prev = page.snapshot();
@@ -193,10 +199,75 @@ async function main() {
 
   // A browser that refuses storage: the page still works and tells the judge.
   const blocked = new Map(); blocked.broken = true;
-  const lone = boot(blocked, {}); await tick();
+  const lone = boot(blocked, {}, false); await tick();
   lone.choose('A'); await tick();
   out.blocked_notice = lone.snapshot().allText;
   process.stdout.write(`${JSON.stringify(out)}\n`);
 }
 
-main().catch((error) => { process.stderr.write(`${error.stack}\n`); process.exit(1); });
+const PREFIX = `judge-page:ev-20261016-a:${'ab'.repeat(6)}`;
+const GOOD_AT = '2026-10-16T08:00:00.000Z';
+
+async function edge() {
+  const out = {};
+  // A resumed judgment keeps its saved note when only the verdict changes.
+  const stored = new Map([[`${PREFIX}:judgments`, JSON.stringify([{ pair_id: 'p01', verdict: 'B', note: 'saved note', at: GOOD_AT }])]]);
+  let page = boot(stored, {}, false); await tick();
+  page.click('Previous'); await tick();
+  out.note_shown = page.snapshot().note.value;
+  page.choose('A'); await tick();
+  page.click('Review and export'); await tick();
+  out.note_kept = page.exportText();
+
+  // A shared store that rejects saves: failures stay visible and the summary does not claim they are saved.
+  flags.fail = true;
+  const shared = {};
+  page = boot(new Map(), shared, true); await tick();
+  page.choose('B'); await tick();
+  out.fail_pair = page.snapshot();
+  page.click('Next'); await tick();
+  out.fail_other_pair = page.snapshot();
+  page.click('Review and export'); await tick();
+  out.fail_export = page.snapshot();
+  out.fail_export_text = page.exportText();
+  page.click('Try saving pair 1 again'); await tick();
+  out.fail_retry_still_failing = page.snapshot();
+  out.fail_keys_while_failing = Object.keys(shared);
+  flags.fail = false;
+  page.click('Try saving pair 1 again'); await tick();
+  out.fail_retry_ok = page.snapshot();
+  out.fail_keys_after = Object.keys(shared);
+
+  // A save that never answers: the page says it is still saving.
+  flags.hold = true;
+  page = boot(new Map(), {}, true); await tick();
+  page.choose('same'); await tick();
+  page.click('Review and export'); await tick();
+  out.hold_export = page.snapshot();
+  flags.hold = false;
+
+  // Restored records that do not fit the schema are dropped and reported.
+  const bad = [
+    { pair_id: 'p01', verdict: 'B', note: 'ok', at: 123 },
+    { pair_id: 'p99', verdict: 'A', note: '', at: GOOD_AT },
+    { pair_id: 'p02', verdict: 'bogus', note: '', at: GOOD_AT },
+    { pair_id: 'p03', verdict: 'A', note: 7, at: GOOD_AT },
+    { pair_id: 'p05', verdict: 'A', note: 'x'.repeat(2001), at: GOOD_AT },
+    { pair_id: 'p04', verdict: 'same', note: '', at: GOOD_AT },
+    { pair_id: 'p06', verdict: 'neither', note: 'fine', at: GOOD_AT, extra: 'zzz' },
+    null, 'text',
+  ];
+  page = boot(new Map([[`${PREFIX}:judgments`, JSON.stringify(bad)]]), {}, false); await tick();
+  out.bad_local_view = page.snapshot();
+  page.click('Review and export'); await tick();
+  out.bad_local_export = page.exportText();
+  out.bad_local_summary = page.snapshot().allText;
+  const backing = {};
+  bad.forEach((item, index) => { backing[`judgments/${item && item.pair_id ? item.pair_id : `x${index}`}`] = JSON.stringify(item); });
+  page = boot(new Map(), backing, true); await tick();
+  page.click('Review and export'); await tick();
+  out.bad_shared_export = page.exportText();
+  process.stdout.write(`${JSON.stringify(out)}\n`);
+}
+
+(mode === 'edge' ? edge() : main()).catch((error) => { process.stderr.write(`${error.stack}\n`); process.exit(1); });

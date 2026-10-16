@@ -225,7 +225,7 @@ class PageRun(unittest.TestCase):
         cls.filled = os.path.join(cls.tmp, "judge.html")
         with open(cls.filled, "w", encoding="utf-8") as stream:
             stream.write(fill(read(TEMPLATE), cls.document))
-        cls.runs = {mode: cls.run_harness(mode) for mode in ("local", "shared")}
+        cls.runs = {mode: cls.run_harness(mode) for mode in ("local", "shared", "edge")}
 
     @classmethod
     def tearDownClass(cls):
@@ -316,6 +316,8 @@ class PageRun(unittest.TestCase):
 
     def test_export_is_valid_against_the_judgments_schema(self):
         for mode, run in self.runs.items():
+            if mode == "edge":
+                continue
             exported = json.loads(run["export_text"])
             check_import(self, exported)
             self.assertEqual(exported["eval_id"], self.document["eval_id"])
@@ -339,10 +341,53 @@ class PageRun(unittest.TestCase):
         self.assertEqual(shared["shared_keys"], ["judgments/p01", "judgments/p02", "judgments/p03"])
 
     def test_refused_storage_is_reported_not_fatal(self):
-        self.assertIn("could not be stored here", self.runs["local"]["blocked_notice"])
+        self.assertIn("not saved yet", self.runs["local"]["blocked_notice"])
+        self.assertIn("Try saving again", self.runs["local"]["blocked_notice"])
+
+    def test_changing_a_verdict_keeps_the_saved_note(self):
+        edge = self.runs["edge"]
+        self.assertEqual(edge["note_shown"], "saved note")
+        kept = json.loads(edge["note_kept"])["judgments"]
+        self.assertEqual([(j["pair_id"], j["verdict"], j["note"]) for j in kept], [("p01", "A", "saved note")])
+
+    def test_failed_or_pending_saves_are_never_reported_as_saved(self):
+        edge = self.runs["edge"]
+        failed = edge["fail_pair"]
+        self.assertIn("This answer is not saved yet", failed["allText"])
+        self.assertIn("Try saving again", failed["buttons"])
+        # The failure follows the judge to the next pair and into the export, until it is resolved.
+        self.assertIn("1 answer is not saved yet", edge["fail_other_pair"]["allText"])
+        summary = edge["fail_export"]["allText"]
+        self.assertIn("1 answer could not be saved", summary)
+        self.assertNotIn("Your answers are saved with this page", summary)
+        self.assertIn("Copy judgments", summary)
+        self.assertIn("Try saving pair 1 again", edge["fail_export"]["buttons"])
+        self.assertEqual([j["pair_id"] for j in json.loads(edge["fail_export_text"])["judgments"]], ["p01"])
+        # Retry happens only on a click, and a retry that fails leaves the failure showing.
+        self.assertEqual(edge["fail_keys_while_failing"], [])
+        self.assertIn("1 answer could not be saved", edge["fail_retry_still_failing"]["allText"])
+        self.assertEqual(edge["fail_keys_after"], ["judgments/p01"])
+        resolved = edge["fail_retry_ok"]["allText"]
+        self.assertNotIn("could not be saved", resolved)
+        self.assertIn("Your answers are saved with this page", resolved)
+        self.assertNotIn("Try saving pair 1 again", edge["fail_retry_ok"]["buttons"])
+        pending = edge["hold_export"]["allText"]
+        self.assertIn("1 answer still saving", pending)
+        self.assertNotIn("Your answers are saved with this page", pending)
+
+    def test_malformed_stored_records_are_dropped_and_reported(self):
+        edge = self.runs["edge"]
+        self.assertIn("8 saved answers could not be used and were ignored", edge["bad_local_view"]["allText"])
+        self.assertIn("8 saved answers could not be used and were ignored", edge["bad_local_summary"])
+        for key in ("bad_local_export", "bad_shared_export"):
+            exported = json.loads(edge[key])
+            check_import(self, exported)
+            self.assertEqual(exported["judgments"], [{"pair_id": "p06", "verdict": "neither", "note": "fine", "at": "2026-10-16T08:00:00.000Z"}], key)
 
     def test_nothing_the_judge_sees_names_a_route(self):
         for mode, run in self.runs.items():
+            if mode == "edge":
+                continue
             shown = json.dumps([run["first"], run["second_before_toggle"], run["third"], run["export_view"], run["sweep"]], ensure_ascii=False)
             # The fixture texts are neutral, so any hit would come from the page's own words.
             self.assertEqual(ROUTE_WORDS.findall(shown), [], mode)

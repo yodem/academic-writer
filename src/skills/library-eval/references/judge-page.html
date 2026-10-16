@@ -180,7 +180,7 @@ textarea { display: block; width: 100%; min-height: 5.5rem; padding: 0.6rem 0.75
       load: function () {
         var stored = read();
         (stored || []).forEach(function (item) { if (item && typeof item.pair_id === 'string') memory[item.pair_id] = item; });
-        return Promise.resolve(Object.keys(memory).map(function (id) { return memory[id]; }));
+        return Promise.resolve(stored || []); // handed over as found: the page checks every record and reports the ones it drops
       },
       save: function (judgment) {
         memory[judgment.pair_id] = judgment;
@@ -235,7 +235,7 @@ textarea { display: block; width: 100%; min-height: 5.5rem; padding: 0.6rem 0.75
   var prefix = 'judge-page:' + evalId + ':' + String(doc && doc.mapping_sha256 || '').slice(0, 12);
 
   var store = createSharedStore() || createLocalStore(prefix);
-  var state = { index: 0, view: 'pair', judgments: {}, drafts: {}, saveProblem: false, resumed: false };
+  var state = { index: 0, view: 'pair', judgments: {}, drafts: {}, saves: {}, ignored: 0, resumed: false };
   var queue = Promise.resolve();
   var pending = null;
 
@@ -251,11 +251,26 @@ textarea { display: block; width: 100%; min-height: 5.5rem; padding: 0.6rem 0.75
     catch (error) { /* fine: the judgments themselves go through the back-end */ }
   }
 
+  // Every answer has its own save state: 'pending' (sent, no reply yet), 'saved', or 'failed'. Nothing is called saved before the store says so.
   function persist(judgment) {
+    var id = judgment.pair_id;
+    state.saves[id] = 'pending';
+    updateStatus();
     queue = queue.then(function () { return store.save(judgment); }).then(function () {
-      state.saveProblem = false; showSaved();
-    }, function () { state.saveProblem = true; showSaved(); });
+      if (state.judgments[id] === judgment) state.saves[id] = 'saved';
+      updateStatus();
+    }, function () {
+      if (state.judgments[id] === judgment) { state.saves[id] = 'failed'; announce('An answer could not be saved. It stays on this page; use Try saving again, or copy the judgments.'); }
+      updateStatus();
+    });
     return queue;
+  }
+  function retry(id) {
+    var current = state.judgments[id];
+    if (!current || state.saves[id] !== 'failed') return;
+    var again = { pair_id: current.pair_id, verdict: current.verdict, note: current.note, at: current.at };
+    state.judgments[id] = again;
+    persist(again);
   }
   function flush() { if (pending) { var run = pending; pending = null; run(); } }
   function schedule(run) { pending = run; setTimeout(flush, 400); }
@@ -269,9 +284,22 @@ textarea { display: block; width: 100%; min-height: 5.5rem; padding: 0.6rem 0.75
     });
     return { judged: judged, skipped: skipped, open: pairs.length - judged - skipped };
   }
+  function saveCounts() {
+    var out = { pending: 0, failed: 0, ids: [] };
+    pairs.forEach(function (pair) {
+      if (!state.judgments[pair.pair_id]) return;
+      if (state.saves[pair.pair_id] === 'failed') { out.failed += 1; out.ids.push(pair.pair_id); }
+      else if (state.saves[pair.pair_id] === 'pending') out.pending += 1;
+    });
+    return out;
+  }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
 
   function record(pair, verdict) {
-    var judgment = { pair_id: pair.pair_id, verdict: verdict, note: (state.drafts[pair.pair_id] || '').slice(0, NOTE_MAX), at: new Date().toISOString() };
+    // The note is whatever the judge typed; with nothing typed, the note already saved for this pair stays as it was.
+    var earlier = state.judgments[pair.pair_id];
+    var note = state.drafts[pair.pair_id] !== undefined ? state.drafts[pair.pair_id] : (earlier ? earlier.note : '');
+    var judgment = { pair_id: pair.pair_id, verdict: verdict, note: String(note).slice(0, NOTE_MAX), at: new Date().toISOString() };
     state.judgments[pair.pair_id] = judgment;
     persist(judgment);
     savePrefs();
@@ -280,13 +308,55 @@ textarea { display: block; width: 100%; min-height: 5.5rem; padding: 0.6rem 0.75
   // ---------- views ----------
   var refs = {};
 
-  function showSaved() {
-    if (!refs.saved) return;
-    refs.saved.textContent = state.saveProblem
-      ? 'This answer could not be stored here. Use "Review and export" before you close the page.'
-      : (store.kind === 'shared' ? 'Saved.' : 'Saved on this device.');
-    refs.saved.setAttribute('class', state.saveProblem ? 'saved problem' : 'saved');
+  function updateStatus() {
+    if (refs.saved) renderSaved();
+    if (refs.banner) renderBanner();
+    if (refs.exportStatus) renderExportStatus();
   }
+
+  function renderSaved() {
+    var pair = pairs[state.index];
+    var status = state.saves[pair.pair_id];
+    var kids = [];
+    if (status === 'pending') kids.push(el('p', { 'class': 'saved' }, ['Saving\u2026']));
+    else if (status === 'saved') kids.push(el('p', { 'class': 'saved' }, [store.kind === 'shared' ? 'Saved.' : 'Saved on this device.']));
+    else if (status === 'failed') {
+      kids.push(el('p', { 'class': 'saved problem' }, ['This answer is not saved yet. It is kept on this page, so "Review and export" still includes it.']));
+      kids.push(el('button', { type: 'button', 'class': 'linklike', 'on:click': function () { retry(pair.pair_id); refs.saved.focus(); } }, ['Try saving again']));
+    }
+    refs.saved.replaceChildren.apply(refs.saved, kids);
+  }
+
+  function renderBanner() {
+    var failed = saveCounts().failed;
+    refs.banner.replaceChildren.apply(refs.banner, failed ? [el('p', { 'class': 'notice' }, [plural(failed, 'answer is', 'answers are') + ' not saved yet. "Review and export" lets you copy them.'])] : []);
+  }
+
+  function renderExportStatus() {
+    var c = counts();
+    var unsaved = saveCounts();
+    var kids = [el('p', {}, [c.judged + ' answered, ' + c.skipped + ' skipped, ' + c.open + ' not answered yet.' + (c.open ? ' You can still go back and answer them, or export what you have.' : '')])];
+    if (state.ignored) kids.push(el('p', { 'class': 'notice' }, [ignoredText()]));
+    if (unsaved.failed || unsaved.pending) {
+      var parts = [];
+      if (unsaved.failed) parts.push(plural(unsaved.failed, 'answer', 'answers') + ' could not be saved');
+      if (unsaved.pending) parts.push(plural(unsaved.pending, 'answer', 'answers') + (unsaved.pending === 1 ? ' still saving' : ' still saving'));
+      kids.push(el('p', { 'class': 'notice' }, [parts.join('; ') + '. The judgments below are complete: copy them and give them to Claude.']));
+      unsaved.ids.forEach(function (id) {
+        var number = 1 + pairs.indexOf(pairById(id));
+        kids.push(el('button', { type: 'button', 'class': 'btn', 'on:click': function () { retry(id); refs.exportStatus.focus(); } }, ['Try saving pair ' + number + ' again']));
+      });
+    }
+    refs.exportStatus.replaceChildren.apply(refs.exportStatus, kids);
+    if (refs.exportIntro) {
+      refs.exportIntro.textContent = store.kind === 'shared'
+        ? (unsaved.failed || unsaved.pending ? 'Not everything is saved with this page yet. Use "Copy judgments" below and give the text to Claude.'
+          : 'Your answers are saved with this page. Tell Claude you have finished and it will read them from here.')
+        : 'Download the file, then tell Claude where it is saved (or move it into the evaluation folder) and ask it to import your judgments.';
+    }
+  }
+
+  function ignoredText() { return plural(state.ignored, 'saved answer', 'saved answers') + ' could not be used and ' + (state.ignored === 1 ? 'was' : 'were') + ' ignored.'; }
 
   function updateProgress() {
     var c = counts();
@@ -359,7 +429,8 @@ textarea { display: block; width: 100%; min-height: 5.5rem; padding: 0.6rem 0.75
     refs.progress = el('progress', { max: pairs.length, value: c.judged + c.skipped, 'aria-label': 'Pairs answered' });
     refs.count = el('span', { 'class': 'count' }, [(c.judged + c.skipped) + ' of ' + pairs.length + ' answered']);
     refs.heading = el('h2', { tabindex: '-1', id: 'pair-heading' }, ['Pair ' + (state.index + 1) + ' of ' + pairs.length]);
-    refs.saved = el('p', { 'class': 'saved', 'aria-hidden': 'true' }, []);
+    refs.saved = el('div', { tabindex: '-1' }, []);
+    refs.banner = el('div', {}, []);
 
     var bar = el('div', { 'class': 'bar' }, [refs.heading, refs.progress, refs.count,
       el('button', { type: 'button', 'class': 'linklike', 'on:click': function () { flush(); state.view = 'export'; render(); } }, ['Review and export'])]);
@@ -398,9 +469,12 @@ textarea { display: block; width: 100%; min-height: 5.5rem; padding: 0.6rem 0.75
     var parts = [bar];
     if (state.resumed) { parts.push(el('p', { 'class': 'notice' }, ['Welcome back. This is where you left off.'])); state.resumed = false; }
     if (store.isPersistent && !store.isPersistent()) parts.push(el('p', { 'class': 'notice' }, ['This browser is not keeping answers between visits. Use "Review and export" before you close the page.']));
-    parts.push(claim, results, verdict,
+    if (state.ignored) parts.push(el('p', { 'class': 'notice' }, [ignoredText()]));
+    parts.push(refs.banner, claim, results, verdict,
       el('div', {}, [el('label', { 'class': 'note-label', 'for': 'note' }, ['Note ', el('span', {}, ['(optional)'])]), note, refs.saved]),
       nav);
+    renderSaved();
+    renderBanner();
     return el('div', {}, parts);
   }
 
@@ -432,8 +506,9 @@ textarea { display: block; width: 100%; min-height: 5.5rem; padding: 0.6rem 0.75
 
   function exportView() {
     refs = {};
-    var c = counts();
     var json = JSON.stringify(exportDocument(), null, 2);
+    refs.exportStatus = el('div', { tabindex: '-1', 'aria-live': 'polite' }, []);
+    refs.exportIntro = el('p', {}, []);
     refs.heading = el('h2', { tabindex: '-1', id: 'pair-heading' }, ['Review and export']);
     var grid = el('ul', { 'class': 'grid', 'aria-label': 'Jump to a pair' }, pairs.map(function (pair, index) {
       var item = state.judgments[pair.pair_id];
@@ -451,15 +526,12 @@ textarea { display: block; width: 100%; min-height: 5.5rem; padding: 0.6rem 0.75
       var fail = function () { if (area.select) area.select(); status.textContent = 'Select the text and copy it by hand.'; };
       try { navigator.clipboard.writeText(json).then(done, fail); } catch (error) { fail(); }
     } }, ['Copy judgments']));
-    var intro = store.kind === 'shared'
-      ? 'Your answers are saved with this page. Tell Claude you have finished and it will read them from here.'
-      : 'Download the file, then tell Claude where it is saved (or move it into the evaluation folder) and ask it to import your judgments.';
-    var summary = c.judged + ' answered, ' + c.skipped + ' skipped, ' + c.open + ' not answered yet.';
     var parts = [
       el('div', { 'class': 'bar' }, [refs.heading, el('button', { type: 'button', 'class': 'linklike', 'on:click': function () { go(state.index); } }, ['Back to the pairs'])]),
-      el('p', { 'aria-live': 'polite' }, [summary + (c.open ? ' You can still go back and answer them, or export what you have.' : '')]),
+      refs.exportStatus,
       grid,
-      el('div', { 'class': 'panel' }, [el('p', {}, [intro]), el('div', { 'class': 'nav' }, buttons), status, area])];
+      el('div', { 'class': 'panel' }, [refs.exportIntro, el('div', { 'class': 'nav' }, buttons), status, area])];
+    renderExportStatus();
     return el('div', {}, parts);
   }
 
@@ -475,12 +547,28 @@ textarea { display: block; width: 100%; min-height: 5.5rem; padding: 0.6rem 0.75
   }
 
   // ---------- start ----------
+  // Whatever a store hands back is checked field by field; a record that does not fit the judgments schema is dropped and counted.
+  var ISO_TIME = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)$/;
+  function cleanJudgment(item) {
+    if (!item || typeof item !== 'object' || typeof item.pair_id !== 'string' || !pairById(item.pair_id)) return null;
+    if (VERDICTS.indexOf(item.verdict) < 0 && item.verdict !== 'skip') return null;
+    if (typeof item.note !== 'string' || item.note.length > NOTE_MAX) return null;
+    if (typeof item.at !== 'string' || !ISO_TIME.test(item.at) || isNaN(Date.parse(item.at))) return null;
+    return { pair_id: item.pair_id, verdict: item.verdict, note: item.note, at: item.at };
+  }
+
   function start(saved) {
+    if (!Array.isArray(saved)) saved = saved === null || saved === undefined ? [] : [null];
     saved.forEach(function (item) {
-      if (item && pairById(item.pair_id) && (VERDICTS.indexOf(item.verdict) >= 0 || item.verdict === 'skip')) state.judgments[item.pair_id] = item;
+      var clean = cleanJudgment(item);
+      if (!clean) { state.ignored += 1; return; }
+      state.judgments[clean.pair_id] = clean;
+      state.saves[clean.pair_id] = 'saved';
     });
     var prefs = loadPrefs();
-    if (prefs.drafts && typeof prefs.drafts === 'object') state.drafts = prefs.drafts;
+    if (prefs.drafts && typeof prefs.drafts === 'object') {
+      Object.keys(prefs.drafts).forEach(function (id) { if (pairById(id) && typeof prefs.drafts[id] === 'string') state.drafts[id] = prefs.drafts[id].slice(0, NOTE_MAX); });
+    }
     var at = -1;
     for (var i = 0; i < pairs.length; i += 1) if (pairs[i].pair_id === prefs.position) at = i;
     if (at < 0) { at = 0; for (var j = 0; j < pairs.length; j += 1) { if (!state.judgments[pairs[j].pair_id]) { at = j; break; } } }
