@@ -193,3 +193,11 @@ def test_cli_add_source_accepts_origin_library(tmp_path, monkeypatch, capsys):
     assert code == 0
     assert seen == {"course": "kane", "origin": "library"}
     assert "added: Reading One" in capsys.readouterr().out
+
+
+def test_scripts_address_chrome_by_bundle_id(tmp_path):
+    reg = make_registry(tmp_path)
+    plans = [bookmarks.plan(reg, s) for s in sorted(reg.courses)]
+    for script in (bookmarks.build_script(plans), bookmarks.read_script(plans)):
+        assert 'application id "com.google.Chrome"' in script
+        assert 'application "Google Chrome"' not in script
