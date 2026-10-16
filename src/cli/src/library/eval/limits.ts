@@ -1,33 +1,45 @@
 import thresholds from '../../../../thresholds.json' with { type: 'json' };
 
-type EvalBlock = {
-  maxClaims: number; minPairs: number; maxTurns: number; maxBudgetUsdPerRun: number; parallel: number;
-  locateModel: string; expectedUsdPerRun: number; maxPagesPerRead: number; maxReads: number;
-  /** Optional keys: the defaults below apply until src/thresholds.json carries them. */
-  runTimeoutMs?: number; minClaimWords?: number; maxAnswerPages?: number; perSourceShare?: number;
-};
+const KEYS = [
+  'maxClaims', 'minPairs', 'maxTurns', 'maxBudgetUsdPerRun', 'parallel', 'expectedUsdPerRun', 'maxPagesPerRead', 'maxReads',
+  'runTimeoutMs', 'minClaimWords', 'maxAnswerPages', 'perSourceShare',
+] as const;
 
-const block = thresholds.library.eval as EvalBlock;
+const block = thresholds.library.eval as Record<string, unknown>;
 
-/** Every number the evaluation uses: the seeded `library.eval` block, plus optional keys with a default each. */
+function number(key: (typeof KEYS)[number]): number {
+  const value = block[key];
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    throw new Error(`ERROR library eval: src/thresholds.json library.eval.${key} is missing or not a positive number`);
+  }
+  return value;
+}
+
+function text(key: 'locateModel'): string {
+  const value = block[key];
+  if (typeof value !== 'string' || !value) throw new Error(`ERROR library eval: src/thresholds.json library.eval.${key} is missing`);
+  return value;
+}
+
+/** Every number the evaluation uses, all from the `library.eval` block of src/thresholds.json (no defaults here). */
 export const evalLimits = {
-  maxClaims: block.maxClaims,
-  minPairs: block.minPairs,
-  maxTurns: block.maxTurns,
-  maxBudgetUsdPerRun: block.maxBudgetUsdPerRun,
-  parallel: block.parallel,
-  locateModel: block.locateModel,
-  expectedUsdPerRun: block.expectedUsdPerRun,
-  maxPagesPerRead: block.maxPagesPerRead,
-  maxReads: block.maxReads,
-  /** Wall clock for one locate agent (a bench run took well under it). */
-  runTimeoutMs: block.runTimeoutMs ?? 600000,
+  maxClaims: number('maxClaims'),
+  minPairs: number('minPairs'),
+  maxTurns: number('maxTurns'),
+  maxBudgetUsdPerRun: number('maxBudgetUsdPerRun'),
+  parallel: number('parallel'),
+  locateModel: text('locateModel'),
+  expectedUsdPerRun: number('expectedUsdPerRun'),
+  maxPagesPerRead: number('maxPagesPerRead'),
+  maxReads: number('maxReads'),
+  /** Wall clock for one locate agent. */
+  runTimeoutMs: number('runTimeoutMs'),
   /** A sentence shorter than this many words is not a claim worth locating. */
-  minClaimWords: block.minClaimWords ?? 5,
+  minClaimWords: number('minClaimWords'),
   /** Pages one locate answer may name. */
-  maxAnswerPages: block.maxAnswerPages ?? 3,
+  maxAnswerPages: number('maxAnswerPages'),
   /** No source may supply more than ceil(N / this) of the N claims. */
-  perSourceShare: block.perSourceShare ?? 3,
+  perSourceShare: number('perSourceShare'),
   maxBufferBytes: thresholds.library.maxBufferBytes,
   maxRequestPages: thresholds.library.maxRequestPages,
   timeoutMs: thresholds.library.timeoutMs,

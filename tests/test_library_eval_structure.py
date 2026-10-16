@@ -223,8 +223,9 @@ class TestModules(unittest.TestCase):
 
     def test_numbers_come_from_thresholds(self):
         self.assertIn("thresholds.json", self.read("limits.ts"))
+        self.assertNotRegex(self.read("limits.ts"), r"\?\?\s*\d")
         block = load(THRESHOLDS)["library"]["eval"]
-        for key in ("maxClaims", "minPairs", "maxTurns", "maxBudgetUsdPerRun", "parallel", "locateModel", "expectedUsdPerRun", "maxPagesPerRead", "maxReads"):
+        for key in ("maxClaims", "minPairs", "maxTurns", "maxBudgetUsdPerRun", "parallel", "locateModel", "expectedUsdPerRun", "maxPagesPerRead", "maxReads", "runTimeoutMs", "minClaimWords", "maxAnswerPages", "perSourceShare"):
             self.assertIn(key, block)
         self.assertRegex(self.read("runner.ts"), r"evalLimits\.maxTurns")
         self.assertRegex(self.read("unblind.ts"), r"evalLimits\.minPairs")
