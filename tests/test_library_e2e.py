@@ -131,6 +131,8 @@ class Project:
             "AW_PAGEINDEX_COMMAND": str(self.pilib),
             "AW_LIBRARY_SHADOW_TIMEOUT_MS": str(shadow_timeout_ms),
             "FAKE_LOG": str(self.log),
+            # aw passes children an allow-list of the environment; the fakes' log variable is named on purpose.
+            "AW_LIBRARY_PASS_ENV": "FAKE_LOG",
         }
 
     @staticmethod

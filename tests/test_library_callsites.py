@@ -35,6 +35,7 @@ ALLOWED = {
     "src/scripts/build_crosswalk.py": "a maintenance script for a book uploaded to Trove",
     "src/scripts/build_toc_enrich.py": "a maintenance script that edits a Trove book's table of contents",
     "src/scripts/courses/courses.py": "courses reads and writes its own Trove books",
+    "src/skills/courses/references/library-refs.md": "course-book runbook: book lock, per-book ToC repair and ingest of library readings (a write path)",
 }
 
 # Files that look books up for an article and so must use the adapter.
