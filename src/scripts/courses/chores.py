@@ -141,6 +141,25 @@ def mark_done(registry: courses.Registry, chore_id_: str) -> dict[str, Any]:
         handle.close()
 
 
+def reopen(registry: courses.Registry, chore_id_: str) -> dict[str, Any]:
+    """Undo mark_done: set a done chore back to open (the dashboard's undo). Idempotent."""
+    handle = _lock(registry)
+    try:
+        chores = load(registry)
+        matches = [c for c in chores if c["id"].startswith(chore_id_)]
+        if len(matches) != 1:
+            raise ValueError(f"chore {chore_id_!r}: {'no match' if not matches else 'ambiguous'}")
+        chore = matches[0]
+        if chore["status"] != "open":
+            chore["status"] = "open"
+            chore["updated"] = _now()
+            courses._atomic_json(_path(registry), chores)
+        return chore
+    finally:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
+
+
 def _clean(value: Any) -> Any:
     if isinstance(value, str):
         return _TOKEN_RE.sub(r"\1[REDACTED]", value)

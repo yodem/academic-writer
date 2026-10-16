@@ -188,3 +188,31 @@ def test_ambiguous_spec_task_stays_a_possible_duplicate(tmp_path):
                              [{"key": "מטלה 1", "title": "מטלה (ללא תאריך)", "primary": []}])
     report = tasks.migrate(d, specs)
     assert report["merged"] == [] and [x["spec_task"] for x in report["possible_duplicates"]] == ["s-מטלה 1"]
+
+
+def test_unsubmit_reopens_only_what_submit_closed(tmp_path, capsys, monkeypatch):
+    d, c = make_reg(tmp_path)
+    tasks.task_submit(d, "kane", c["id"])
+    stored = json.loads((d / "kane.json").read_text())["tasks"][0]
+    assert stored["closed_chores"] == [c["id"]]
+    tasks.task_submit(d, "kane", c["id"])  # a repeat submit keeps the first list
+    assert json.loads((d / "kane.json").read_text())["tasks"][0]["closed_chores"] == [c["id"]]
+    out = tasks.task_unsubmit(d, "kane", c["id"])
+    assert out == {"task": c["id"], "status": "open", "reopened_chores": [c["id"]]}
+    assert [x for x in chores.load(courses.Registry(d)) if x["id"] == c["id"]][0]["status"] == "open"
+    stored = json.loads((d / "kane.json").read_text())["tasks"][0]
+    assert stored["status"] == "open" and stored["submitted_at"] is None and "closed_chores" not in stored
+    assert tasks.task_unsubmit(d, "kane", c["id"])["reopened_chores"] == []  # idempotent
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(d.parent))
+    monkeypatch.setenv("ACADEMIC_TERM", d.name)
+    tasks.task_submit(d, "kane", c["id"])
+    assert courses.main(["task", "unsubmit", "--course", "kane", "--task", c["id"]]) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "open"
+
+
+def test_reopen_chore(tmp_path):
+    d, c = make_reg(tmp_path)
+    reg = courses.Registry(d)
+    chores.mark_done(reg, c["id"])
+    assert chores.reopen(reg, c["id"][:6])["status"] == "open"
+    assert chores.reopen(reg, c["id"])["status"] == "open"

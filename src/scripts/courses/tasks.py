@@ -232,9 +232,38 @@ def task_submit(directory: Path, slug: str, ident: str) -> dict[str, Any]:
         if task.get("status") != "submitted":
             task["status"] = "submitted"
             task["submitted_at"] = _now()
+            task["closed_chores"] = closed  # what unsubmit reopens; a repeat submit keeps the first list
         course["tasks"] = tasks
         courses._atomic_json(course_path(directory, slug), course)
         return {"task": task["id"], "status": task["status"], "submitted_at": task["submitted_at"], "closed_chores": closed}
+    finally:
+        _unlock(handle)
+
+
+def task_unsubmit(directory: Path, slug: str, ident: str) -> dict[str, Any]:
+    """Undo task_submit: reopen the task and the chores that submit closed. Idempotent.
+
+    A task submitted before `closed_chores` was recorded reopens all of its chore_ids."""
+    handle = _lock(directory)
+    try:
+        course = load_course(directory, slug)
+        tasks, _ = derive_tasks(course.get("tasks", []), _chores(directory, slug))
+        task = resolve_task(tasks, ident)
+        reopened = []
+        if task.get("status") == "submitted":
+            registry = courses.Registry(directory)
+            wanted = task.get("closed_chores", task.get("chore_ids", []))
+            for cid in wanted:
+                chore = next((c for c in chores_mod.load(registry) if c["id"] == cid), None)
+                if chore and chore.get("status") == "done":
+                    chores_mod.reopen(registry, cid)
+                    reopened.append(cid)
+            task["status"] = "open"
+            task["submitted_at"] = None
+            task.pop("closed_chores", None)
+            course["tasks"] = tasks
+            courses._atomic_json(course_path(directory, slug), course)
+        return {"task": task["id"], "status": task["status"], "reopened_chores": reopened}
     finally:
         _unlock(handle)
 
@@ -380,8 +409,8 @@ def migrate(directory: Path, specs_dir: Path | None = None, *, dry_run: bool = F
 # --- CLI glue ---------------------------------------------------------------------------------------
 
 def add_task_parser(sub) -> None:
-    """Register `task list|show|link|submit` on a subparsers object."""
-    task_p = sub.add_parser("task", help="per-task sources: list, show, link, submit")
+    """Register `task list|show|link|submit|unsubmit` on a subparsers object."""
+    task_p = sub.add_parser("task", help="per-task sources: list, show, link, submit, unsubmit")
     tsub = task_p.add_subparsers(dest="task_command", required=True)
     tl = tsub.add_parser("list", help="list a course's tasks")
     tl.add_argument("--course", required=True)
@@ -397,6 +426,9 @@ def add_task_parser(sub) -> None:
     tb = tsub.add_parser("submit", help="mark a task submitted and close its chores")
     tb.add_argument("--course", required=True)
     tb.add_argument("--task", required=True)
+    tu = tsub.add_parser("unsubmit", help="undo submit: reopen the task and the chores submit closed")
+    tu.add_argument("--course", required=True)
+    tu.add_argument("--task", required=True)
 
 
 def run_task_command(directory: Path, args) -> int:
@@ -416,6 +448,8 @@ def run_task_command(directory: Path, args) -> int:
                           f"notebooklm {mark(s['in_notebooklm'])}, annas {s['annas']}  {s['title'][:60]}")
         elif args.task_command == "link":
             print(json.dumps(task_link(directory, args.course, args.task, ref=args.ref, source=args.source), ensure_ascii=False))
+        elif args.task_command == "unsubmit":
+            print(json.dumps(task_unsubmit(directory, args.course, args.task), ensure_ascii=False))
         else:
             print(json.dumps(task_submit(directory, args.course, args.task), ensure_ascii=False))
         return 0
