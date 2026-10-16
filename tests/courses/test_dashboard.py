@@ -283,3 +283,46 @@ def test_busy_port_falls_back_and_other_hosts_are_refused(tmp_path):
     with pytest.raises(ValueError):
         dashboard.DashboardServer(lambda: None, host="0.0.0.0")
     assert courses.main(["dashboard", "--host", "0.0.0.0", "--no-open"]) == 2
+
+
+def test_a_chore_closed_elsewhere_offers_no_undo(tmp_path):
+    d, a, *_ = make_reg(tmp_path)
+    chores.mark_done(courses.Registry(d), a["id"])  # the watcher saw it handed in; the student never pressed submit
+    s = dashboard.build_state(d, now=NOW)
+    task = by_slug(s)["alpha"]["tasks"][0]
+    assert task["status"] == "submitted" and task["recently_submitted"] is False
+    assert not any(r["submitted"] for r in s["overview"]["rows"])
+    tasks.task_submit(d, "beta", by_slug(s)["beta"]["next_task"])
+    later = dashboard.build_state(d, now=datetime.now(TZ))
+    assert by_slug(later)["beta"]["tasks"][0]["recently_submitted"] is True
+
+
+def test_reading_tasks_are_marked_as_readings(tmp_path):
+    d, *_ = make_reg(tmp_path)
+    data = json.loads((d / "delta.json").read_text())
+    data["tasks"] = [{"id": "s-read1", "title": "Chapter two", "due_at": "2026-10-20T00:00:00+03:00", "chore_ids": [],
+                      "status": "open", "submitted_at": None, "kind": "reading"}]
+    _w(d / "delta.json", data)
+    s = dashboard.build_state(d, now=NOW)
+    t = by_slug(s)["delta"]["tasks"][0]
+    assert t["reading"] is True and t["kind_word"] == "קריאה" and t["due_time"] == "00:00"
+    assert s["overview"]["counts"] == {"submit": 3, "read": 1}
+    assert "עד יום שלישי צריך לקרוא את Chapter two." in "".join(seg["t"] for seg in s["lede"])
+
+
+def test_only_https_links_reach_the_page(tmp_path):
+    d, *_ = make_reg(tmp_path)
+    _w(d / "links.json", {"alpha": {"lemida_url": "javascript:alert(1)", "drive_url": "https://drive.example/x"}})
+    links = by_slug(dashboard.build_state(d, now=NOW))["alpha"]["links"]
+    assert links["lemida"] is None and links["drive"] == "https://drive.example/x"
+
+
+def test_two_terms_without_a_choice_say_so(tmp_path, monkeypatch):
+    root = tmp_path / "courses"
+    (root / "T1").mkdir(parents=True)
+    (root / "T2").mkdir()
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(root))
+    monkeypatch.delenv("ACADEMIC_TERM", raising=False)
+    assert dashboard.resolve_directory() is None and dashboard.missing_reason() == "ambiguous-term"
+    assert dashboard.missing_reason("T1") == "no-registry"
+    assert dashboard.build_state(None, now=NOW, reason="ambiguous-term")["reason"] == "ambiguous-term"

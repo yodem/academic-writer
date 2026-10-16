@@ -432,13 +432,14 @@ function rel(d){
   if (n < 0) return n === -1 ? 'אתמול' : `לפני ${-n} ימים`;
   return `בעוד ${n} ימים`;
 }
-function dueHTML(t){
+function dueHTML(t, withRel=true){
   const d = effDate(t);
   if (!d) return 'בלי תאריך';
   let s = `${DL[D(d).getDay()]} ${b(dm(d))}`;
   if (t.due_time && t.due_time !== '00:00') s += `, ${b(t.due_time)}`;
-  if (t.status !== 'submitted' && t.overdue) s += '<span class="sr"> · המועד עבר</span>';
-  else if (t.status !== 'submitted' && t.soon) s += '<span class="sr"> · בקרוב</span>';
+  /* red is never the only signal: a soon or late date also says so in words */
+  if (withRel && t.status !== 'submitted' && t.overdue) s += ' · עבר';
+  else if (withRel && t.status !== 'submitted' && t.soon) s += ` · ${rel(d)}`;
   return s;
 }
 const dueClass = t => t.status === 'submitted' ? '' : (t.overdue ? ' late' : (t.soon ? ' soon' : ''));
@@ -562,6 +563,9 @@ function renderBar(){
 
 /* ================= empty install ================= */
 function emptyHTML(){
+  if (ST && ST.reason === 'ambiguous-term') return `<div class="empty"><img class="plate" src="img/hero-desk.webp" alt="" width="800" height="447">
+    <div><p>יש כאן יותר מסמסטר אחד, והלוח לא יודע איזה להציג.</p>
+    <p>הפעילו אותו מחדש עם <code dir="ltr">--term</code> ושם הסמסטר, או עם המשתנה <code dir="ltr">ACADEMIC_TERM</code>.</p></div></div>`;
   return `<div class="empty"><img class="plate" src="img/hero-desk.webp" alt="" width="800" height="447">
     <div><p>עוד אין קורסים — הריצו <code dir="ltr">/academic-writer:courses</code></p>
     <p>הפקודה מגדירה את הסמסטר ואת הקורסים. הלוח הזה יתעדכן מעצמו כשהם יופיעו.</p></div></div>`;
@@ -759,7 +763,7 @@ function renderCourse(slug){
   const older = c.tasks.filter(t => t.status === 'submitted' && !t.recently_submitted);
   const slip = t => {
     const done = t.status === 'submitted';
-    const when = t.due_date ? `${t.reading ? 'לקרוא עד' : 'להגיש עד'} ${dueHTML(t)} <span class="label">· ${rel(effDate(t))}</span>` : 'בלי תאריך הגשה';
+    const when = t.due_date ? `${t.reading ? 'לקרוא עד' : 'להגיש עד'} ${dueHTML(t, false)} <span class="label">· ${rel(effDate(t))}</span>` : 'בלי תאריך הגשה';
     const desc = t.desc ? `<p class="desc">${esc(t.desc)}</p>` : '';
     const core = t.core_texts.length ? `<p class="desc">טקסטי ליבה: ${t.core_texts.map(auto).join('; ')}</p>` : '';
     const lem = t.lemida_url ? `<a class="lnk" href="${esc(t.lemida_url)}" target="_blank" rel="noopener noreferrer">לפתוח בלמידה</a>` : '';

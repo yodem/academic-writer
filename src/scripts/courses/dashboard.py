@@ -249,18 +249,34 @@ def _agenda_frame(start: date) -> Dict[str, Any]:
 
 
 def resolve_directory(term: Optional[str] = None) -> Optional[Path]:
-    """The term directory, or None for a fresh install (no registry yet). Never raises."""
+    """The term directory, or None for a fresh install (no registry yet) or an ambiguous term. Never raises."""
     try:
         return courses.registry_dir(term)
     except (ValueError, OSError):
         return None
 
 
-def build_state(directory: Optional[Path], now: Optional[datetime] = None, week: Optional[str] = None) -> Dict[str, Any]:
+def missing_reason(term: Optional[str] = None) -> str:
+    """Why resolve_directory found nothing: `ambiguous-term` (several terms, none chosen) or `no-registry`."""
+    root = courses.courses_root()
+    try:
+        terms = [p for p in root.iterdir() if p.is_dir()] if root.is_dir() else []
+    except OSError:
+        terms = []
+    return "ambiguous-term" if len(terms) > 1 and not (term or os.environ.get("ACADEMIC_TERM")) else "no-registry"
+
+
+def _https(url: Any) -> Optional[str]:
+    """Only https links reach the page (a registry value can never become a javascript: link)."""
+    return url if isinstance(url, str) and url.startswith("https://") else None
+
+
+def build_state(directory: Optional[Path], now: Optional[datetime] = None, week: Optional[str] = None,
+                reason: str = "no-registry") -> Dict[str, Any]:
     """Join the registry files into the page's one JSON. Pure read: nothing is written or locked."""
     warnings: List[str] = []
     if directory is None or not (directory / "term.json").is_file():
-        state = _empty_state("no-registry", (now or datetime.now().astimezone()))
+        state = _empty_state(reason if directory is None else "no-registry", (now or datetime.now().astimezone()))
         return _finish(state)
     term = _read_json(directory / "term.json", warnings) or {}
     try:
@@ -328,9 +344,12 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
                 "soon": bool(due and timedelta(0) <= due - now <= timedelta(hours=SOON_HOURS)),
                 "overdue": bool(due and due < now),
                 "submitted_at": submitted_at.isoformat() if submitted_at else None,
-                "recently_submitted": bool(submitted_at and now - submitted_at <= timedelta(hours=RECENT_SUBMIT_HOURS)),
+                # only a submit made through task_submit (it records closed_chores) can be undone or called "you marked it";
+                # a task whose chore the watcher closed is just a past task
+                "recently_submitted": bool(submitted_at and "closed_chores" in task
+                                           and now - submitted_at <= timedelta(hours=RECENT_SUBMIT_HOURS)),
                 "desc": first_chore.get("text") or "", "core_texts": list(first_chore.get("core_texts") or []),
-                "lemida_url": f"{lemida_base}/mod/view.php?id={lemida_ref}" if lemida_base and lemida_ref else None,
+                "lemida_url": _https(f"{lemida_base}/mod/view.php?id={lemida_ref}") if lemida_base and lemida_ref else None,
                 "state": task_state(task, items), "items": items,
                 "missing_count": sum(1 for i in items if i["missing"]),
             })
@@ -369,7 +388,8 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
             "slug": slug, "name": course.get("name") or slug, "lecturer": course.get("lecturer") or "",
             "mode": course.get("mode"), "slots": [s for s in course.get("slots") or [] if isinstance(s, dict)],
             "season": course_season(term, course, today),
-            "links": {"lemida": lemida_course, "notebook": notebook, "drive": drive, "trove_book_id": book_id, "trove_url": trove_url},
+            "links": {"lemida": _https(lemida_course), "notebook": _https(notebook), "drive": _https(drive),
+                      "trove_book_id": book_id, "trove_url": _https(trove_url)},
             "tasks": sorted(task_rows, key=_due_sort), "next_task": open_tasks[0]["id"] if open_tasks else None,
             "state": open_tasks[0]["state"] if open_tasks else None, "open_count": len(open_tasks), "more": more,
             "lessons": lessons, "new_lesson": any(l["new"] for l in lessons), "notices": notices,
@@ -572,7 +592,8 @@ class DashboardServer:
     COOKIE = "aw_dashboard"
 
     def __init__(self, resolve: Callable[[], Optional[Path]], *, host: str = "127.0.0.1", port: int = DEFAULT_PORT,
-                 key: Optional[str] = None, interval: float = 1.0, now: Optional[Callable[[], datetime]] = None):
+                 key: Optional[str] = None, interval: float = 1.0, now: Optional[Callable[[], datetime]] = None,
+                 reason: Optional[Callable[[], str]] = None):
         if host not in ("127.0.0.1", "localhost"):
             raise ValueError("the dashboard binds 127.0.0.1 only")
         self.resolve = resolve
@@ -580,6 +601,7 @@ class DashboardServer:
         self.key = key or secrets.token_urlsafe(24)
         self.interval = interval
         self.now = now
+        self.reason = reason or (lambda: "no-registry")
         self.httpd: Optional[_HTTPServer] = None
         self.version = 0
         self._cond = threading.Condition()
@@ -634,7 +656,9 @@ class DashboardServer:
             thread.join(timeout=2)
 
     def state(self, week: Optional[str] = None) -> Dict[str, Any]:
-        return build_state(self.resolve(), now=self.now() if self.now else None, week=week)
+        directory = self.resolve()
+        return build_state(directory, now=self.now() if self.now else None, week=week,
+                           reason=self.reason() if directory is None else "no-registry")
 
     def _handler(self):
         board = self
@@ -823,11 +847,14 @@ def run(args: argparse.Namespace) -> int:
         print(f"error: the dashboard listens on 127.0.0.1 only (got --host {args.host})", file=sys.stderr)
         return 2
     term = getattr(args, "term", None)
-    server = DashboardServer(lambda: resolve_directory(term), host=args.host, port=args.port).start()
+    server = DashboardServer(lambda: resolve_directory(term), host=args.host, port=args.port,
+                             reason=lambda: missing_reason(term)).start()
     directory = resolve_directory(term)
     print(f"Dashboard: {server.url}", flush=True)
     print("Local only: listening on 127.0.0.1; the key in the URL is the password for this run. Ctrl-C stops it.", flush=True)
-    if directory is None:
+    if directory is None and missing_reason(term) == "ambiguous-term":
+        print("Several terms are registered: restart with --term <name> (or set ACADEMIC_TERM) to choose one.", flush=True)
+    elif directory is None:
         print("No course registry yet: the page shows the empty state until /academic-writer:courses creates one.", flush=True)
     if not args.no_open:
         try:
