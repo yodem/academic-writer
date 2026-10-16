@@ -51,8 +51,12 @@ SERVER_KEY = "test-server-key-bbbb2222"   # the key a wrapper's own computer hol
 PARENT_GEMINI_KEY = "test-parent-gemini-cccc3333"
 ANTHROPIC_KEY = "test-anthropic-key-dddd4444"
 JEV_KEY = "test-jev-key-eeee5555"
-PARENT_SECRETS = {"GOOGLE_API_KEY": PLUGIN_KEY, "GEMINI_API_KEY": PARENT_GEMINI_KEY, "ANTHROPIC_API_KEY": ANTHROPIC_KEY, "JEV_API_KEY": JEV_KEY}
-ALL_KEYS = (PLUGIN_KEY, SERVER_KEY, PARENT_GEMINI_KEY, ANTHROPIC_KEY, JEV_KEY)
+OPENAI_KEY = "test-openai-key-ffff6666"
+GITHUB_TOKEN = "test-github-token-gggg7777"
+AWS_SECRET = "test-aws-secret-hhhh8888"
+PARENT_SECRETS = {"GOOGLE_API_KEY": PLUGIN_KEY, "GEMINI_API_KEY": PARENT_GEMINI_KEY, "ANTHROPIC_API_KEY": ANTHROPIC_KEY, "JEV_API_KEY": JEV_KEY,
+                  "OPENAI_API_KEY": OPENAI_KEY, "GITHUB_TOKEN": GITHUB_TOKEN, "AWS_SECRET_ACCESS_KEY": AWS_SECRET}
+ALL_KEYS = (PLUGIN_KEY, SERVER_KEY, PARENT_GEMINI_KEY, ANTHROPIC_KEY, JEV_KEY, OPENAI_KEY, GITHUB_TOKEN, AWS_SECRET)
 SHADOW_TIMEOUT_MS = 120_000               # far above any scheduling delay: no test races it
 ROUTE_WORDS = re.compile(r"trove|page-?index", re.IGNORECASE)
 
@@ -754,17 +758,18 @@ def test_no_key_reaches_a_pageindex_command_except_the_helper_while_it_writes_su
         if held:
             problems.append(f"lookup {args[-50:]!r} received {held}")
     for args, env, text in indexing:
-        kind_of_call = "indexing" if INDEX_COMMAND.search(args) else "read-back"
-        held = [n for n in ("GOOGLE_API_KEY", "ANTHROPIC_API_KEY", "JEV_API_KEY") if n in env]
-        held += [f"value of {k[:16]}" for k in (SERVER_KEY, PARENT_GEMINI_KEY, ANTHROPIC_KEY, JEV_KEY) if k in text]
-        if kind == "wrapper" and ("GEMINI_API_KEY" in env or PLUGIN_KEY in text):
-            held.append("the plugin's Gemini key (a command the researcher supplied must use its own)")
-        if kind == "installed" and env.get("GEMINI_API_KEY") not in (None, PLUGIN_KEY):
-            held.append("a Gemini key that is not the plugin's")
+        # Only the summary-writing call of the built-in helper (a real `index-*` run) may hold the plugin's key, as GEMINI_API_KEY.
+        # Probes (`--help`) and the read-back lookups made while indexing get no key at all.
+        writes_summaries = kind == "installed" and INDEX_COMMAND.search(args) is not None and "--help" not in args
+        kind_of_call = ("summary-writing indexing" if writes_summaries else "indexing probe" if "--help" in args
+                        else "indexing (supplied command)" if INDEX_COMMAND.search(args) else "read-back")
+        allowed = {"GEMINI_API_KEY"} if writes_summaries else set()
+        held = [n for n in PARENT_SECRETS if n in env and n not in allowed]
+        held += [f"value of {k[:16]}" for k in ALL_KEYS if k in text and not (writes_summaries and k == PLUGIN_KEY)]
+        if writes_summaries and env.get("GEMINI_API_KEY") != PLUGIN_KEY:
+            held.append("no plugin key (the summary-writing call must get the plugin's key as GEMINI_API_KEY)")
         if held:
             problems.append(f"{kind_of_call} {args[-50:]!r} received {held}")
-    if kind == "installed":
-        assert any(env.get("GEMINI_API_KEY") == PLUGIN_KEY for _, env, _ in real_indexing), "the built-in helper gets the plugin's key while it indexes"
     assert_no_secret_anywhere(world, json.dumps(done), json.dumps(read))
     assert not problems, "keys reached commands (adapter.ts and install.ts childEnv must strip them; only the built-in helper while indexing gets GEMINI_API_KEY): " + "; ".join(problems)
 
