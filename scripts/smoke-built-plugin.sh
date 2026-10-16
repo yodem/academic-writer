@@ -27,6 +27,19 @@ o="$("$AW" --data-dir "$T/data" --project-dir "$T/proj" library status 2>&1)"
 o="$("$AW" --data-dir "$T/data" --project-dir "$T/proj" library report 2>&1)"
 [[ "$o" == *"Library report"* && "$o" == *"No lookups are recorded yet"* && "$o" != *"Dynamic require"* ]] && ok "aw library report on an empty project" || bad "aw library report: ${o:0:200}"
 [[ ! -e "$T/proj/.academic-helper/retrieval.jsonl" ]] && ok "an empty report writes no ledger" || bad "report created retrieval.jsonl"
+# PageIndex built in: a dry-run install only describes itself (no folder, no pip, no network), the evaluation says in plain words
+# that it has no plan yet, and pilib starts from the plugin's own copy of its source (it is also what `aw library index` probes).
+o="$("$AW" --data-dir "$T/data" --project-dir "$T/proj" library install --dry-run 2>&1)"
+[[ "$o" == *'"dry_run":true'* && "$o" == *'"steps"'* && "$o" != *"Dynamic require"* && "$o" != *"Cannot find module"* ]] && [[ ! -e "$T/data/pageindex" ]] \
+  && ok "aw library install --dry-run (describes the install, writes nothing)" || bad "aw library install --dry-run: ${o:0:200}"
+o="$("$AW" --data-dir "$T/data" --project-dir "$T/proj" library eval status --eval smoke-none 2>&1)"
+[[ "$o" == *"no plan for smoke-none"* && "$o" != *"Dynamic require"* && "$o" != *"Cannot find module"* ]] && ok "aw library eval status (no plan yet, plain message)" || bad "aw library eval status: ${o:0:200}"
+[[ ! -e "$T/proj/.academic-helper/library-eval" ]] && ok "eval status writes nothing" || bad "eval status created library-eval/"
+if [[ -d "$P/scripts/pageindex/pilib" ]]; then
+  PYTHONPATH="$P/scripts/pageindex" AW_LIBRARY="$T/pilib-library" python3 -m pilib --help >/dev/null 2>"$T/e" && ok "built pilib --help" || bad "pilib --help: $(tail -1 "$T/e")"
+  PYTHONPATH="$P/scripts/pageindex" AW_LIBRARY="$T/pilib-library" python3 -m pilib index-trove --help >/dev/null 2>"$T/e" && ok "built pilib index-trove --help (the probe aw library index runs)" || bad "pilib index-trove --help: $(tail -1 "$T/e")"
+  [[ -f "$P/scripts/pageindex/PINNED.json" ]] && ok "built PINNED.json ships" || bad "scripts/pageindex/PINNED.json missing from the built plugin"
+else bad "scripts/pageindex/pilib missing from the built plugin"; fi
 printf 'פסקה ראשונה.\n\nפסקה שנייה.\n' > "$T/a.md"
 python3 "$P/scripts/chunk-article.py" --input "$T/a.md" >/dev/null 2>"$T/e" && ok "built chunk-article.py finds config" || bad "chunk-article.py: $(tail -1 "$T/e")"
 python3 "$P/scripts/gate.py" --help >/dev/null 2>"$T/e" && ok "built gate.py imports" || bad "gate.py: $(tail -1 "$T/e")"
