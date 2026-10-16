@@ -14,7 +14,7 @@ from pathlib import Path
 from . import native
 from . import render_trove as rt
 from .config import index_settings, pageindex_commit
-from .errors import IndexFailure
+from .errors import IndexFailure, scrub
 from .meter import CallCapExceeded, LLMMeter
 
 MISSING = "this book has no hinted table of contents and the structure helper is not installed"
@@ -48,6 +48,7 @@ def index_by_structure(*, command: str, book_id: str, title: str, author: str, p
                        origin: dict, mode: str = "gemini", model: str = None, max_calls: int = None,
                        concurrency: int = None, dry_run: bool = False) -> dict:
     started = time.monotonic()
+    native.check_book_id(book_id)
     settings = index_settings()
     model = model or settings["summaryModel"]
     max_calls = settings["maxCalls"] if max_calls is None else max_calls
@@ -85,8 +86,15 @@ def index_by_structure(*, command: str, book_id: str, title: str, author: str, p
                           summary_reasoning_effort="low")
     with tempfile.TemporaryDirectory(prefix="pilib-") as tmp:
         pdf = Path(tmp) / "book.pdf"
-        mapping = rt.render(cleaned, title, pdf)
-        check = rt.verify(pdf, cleaned, mapping)
+        try:
+            mapping = rt.render(cleaned, title, pdf)
+            check = rt.verify(pdf, cleaned, mapping)
+        except IndexFailure:
+            raise
+        except SystemExit as error:  # the renderer reports problems by exiting with a message
+            raise IndexFailure("render_failed", f"the book could not be rendered for structure detection: {error.code}")
+        except Exception as error:
+            raise IndexFailure("render_failed", f"the book could not be rendered for structure detection: {scrub(f'{type(error).__name__}: {error}')}")
         try:
             if gemini:
                 with meter:
@@ -96,6 +104,10 @@ def index_by_structure(*, command: str, book_id: str, title: str, author: str, p
         except CallCapExceeded:
             raise IndexFailure("call_cap", f"stopped at the model call cap ({max_calls}); raise --max-calls and run again",
                                **native.usage_fields(meter.summary()))
+        except SystemExit as error:
+            if isinstance(error, IndexFailure):
+                raise
+            raise IndexFailure("structure_failed", f"PageIndex stopped: {error.code}", **native.usage_fields(meter.summary()))
     structure = result.get("structure") or []
     if not structure:
         raise IndexFailure("empty_tree", f"PageIndex found no structure in this book (toc_source={result.get('toc_source')})")

@@ -106,6 +106,33 @@ def test_split_pages_on_level_one_headings_only():
                                                  2: "# Page B\nmore"}
 
 
+def test_a_parent_never_ends_before_its_last_child():
+    # A(1) > A1(5), then B(5): A1 ends on 5, so A must reach 5 too; page 5 is shared by A (through A1) and B
+    toc = entries(("A", 1, 1), ("A1", 5, 2), ("B", 5, 1))
+    assert ranges(native.build_structure(native.normalize_toc(toc, 8)[0], 8)) == [("0000", 1, 5), ("0001", 5, 5), ("0002", 5, 8)]
+    deep = entries(("A", 1, 1), ("A1", 3, 2), ("A1a", 5, 3), ("B", 5, 1))
+    assert ranges(native.build_structure(native.normalize_toc(deep, 8)[0], 8)) == [
+        ("0000", 1, 5), ("0001", 3, 5), ("0002", 5, 5), ("0003", 5, 8)]
+    shared = entries(("X", 2, 1), ("Y", 2, 2), ("Z", 2, 2), ("W", 2, 1))
+    assert ranges(native.build_structure(native.normalize_toc(shared, 4)[0], 4)) == [
+        ("0000", 2, 2), ("0001", 2, 2), ("0002", 2, 2), ("0003", 2, 4)]
+
+
+def test_every_node_contains_its_children_for_any_toc():
+    import random
+    rng = random.Random(7)
+    for _ in range(300):
+        n = rng.randint(1, 12)
+        toc = [{"title": f"t{i}", "page": rng.randint(1, n), "level": rng.randint(1, 4)} for i in range(rng.randint(1, 15))]
+        structure = native.build_structure(native.normalize_toc(toc, n)[0], n)
+
+        def check(nodes, lo, hi):
+            for node in nodes:
+                assert lo <= node["start_index"] <= node["end_index"] <= hi
+                check(node.get("nodes") or [], node["start_index"], node["end_index"])
+        check(structure, 1, n)
+
+
 # ----------------------------------------------------------------------------- index-trove with summaries
 
 def test_index_trove_writes_the_hinted_tree_and_gemini_summaries(env, capsys):
@@ -518,5 +545,178 @@ def test_contract_lists_every_field_and_code():
     for key in SUCCESS_KEYS | FAILURE_KEYS:
         assert f"`{key}`" in CONTRACT, f"contract.md does not describe {key}"
     for code in ("trove_failed", "trove_truncated", "no_hinted_toc", "structure_helper_missing", "core_helper_missing",
-                 "missing_key", "call_cap", "model_failed", "bad_input", "empty_book", "no_toc", "empty_tree", "internal"):
+                 "missing_key", "call_cap", "model_failed", "bad_input", "empty_book", "no_toc", "empty_tree", "render_failed", "structure_failed", "internal"):
         assert f"`{code}`" in CONTRACT, f"contract.md does not describe the code {code}"
+
+
+# ----------------------------------------------------------------------------- review fixes: publish, catalog, ids, intro
+
+def snapshot(book_id):
+    d = lib.book_dir(book_id)
+    return {f.name: f.read_bytes() for f in sorted(d.iterdir())}
+
+
+def test_a_failed_write_leaves_the_previous_book_exactly_as_it_was(env, capsys, monkeypatch):
+    index(capsys, "--summaries", "none")
+    before = snapshot(HINTED)
+    catalog_before = lib.catalog()
+    path = env.data / "books" / HINTED / "read.json"
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    doc["items"][0]["pages"][0]["content"] = "a changed first page"
+    path.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    real = lib.write_json
+
+    def failing(target, data):
+        if Path(target).name == "tree.json":
+            raise OSError("disk full")
+        return real(target, data)
+    monkeypatch.setattr(lib, "write_json", failing)
+    code, out, err = index(capsys, "--summaries", "none")
+    assert code == 1 and out["ok"] is False
+    monkeypatch.setattr(lib, "write_json", real)
+    assert snapshot(HINTED) == before                       # not one file of the new generation is visible
+    assert lib.catalog() == catalog_before
+    staging = env.library / ".staging"
+    assert not staging.exists() or list(staging.iterdir()) == []             # nothing left staged
+    code, out, _ = run_main(["read", HINTED, "1", "--json"], capsys)
+    assert "a changed first page" not in out
+
+
+def test_a_failed_swap_puts_the_old_book_back(env, capsys, monkeypatch):
+    index(capsys, "--summaries", "none")
+    before = snapshot(HINTED)
+    real, calls = os.rename, []
+
+    def flaky(src, dst):
+        calls.append(dst)
+        if len(calls) == 2:  # the second rename moves the new book in
+            raise OSError("rename failed")
+        return real(src, dst)
+    monkeypatch.setattr(lib.os, "rename", flaky)
+    code, out, _ = index(capsys, "--summaries", "none")
+    monkeypatch.setattr(lib.os, "rename", real)
+    assert code == 1 and snapshot(HINTED) == before
+
+
+def test_reindex_removes_a_stale_page_map(env, capsys):
+    index(capsys, "--summaries", "none")
+    lib.write_json(lib.book_dir(HINTED) / "pagemap.json", {"trove_id": HINTED, "pdf_to_trove": [1, 1, 2]})
+    code, out, _ = run_main(["meta", HINTED], capsys)
+    assert json.loads(out)["pagemap"] == [1, 1, 2]
+    index(capsys, "--summaries", "none")
+    assert not (lib.book_dir(HINTED) / "pagemap.json").exists()
+    code, out, _ = run_main(["meta", HINTED], capsys)
+    assert json.loads(out)["pagemap"] is None
+
+
+def test_the_summary_cache_survives_the_swap(env, capsys):
+    index(capsys)
+    assert len(lib.read_json(lib.book_dir(HINTED) / "summaries.json")["entries"]) == NODES
+    code, out, _ = index(capsys)
+    assert out["calls"] == 0
+
+
+def test_the_catalog_is_derived_so_it_never_loses_a_book(env, capsys):
+    index(capsys, "--summaries", "none")
+    index(capsys, "--summaries", "none", "--book-id", "second")
+    stale = {"books": {HINTED: lib.catalog()["books"][HINTED]}}          # a writer that raced and lost "second"
+    lib.write_json(env.library / "catalog.json", stale)
+    assert set(lib.catalog()["books"]) == {HINTED, "second"}
+    (env.library / "catalog.json").unlink()                              # missing file: readers scan
+    assert set(lib.catalog()["books"]) == {HINTED, "second"}
+    code, out, _ = run_main(["list"], capsys)
+    assert out.count("\n") == 2
+    import time
+    time.sleep(0.02)
+    meta = lib.read_json(lib.book_dir("second") / "meta.json")
+    meta["title"] = "Renamed"
+    lib.write_json(lib.book_dir("second") / "meta.json", meta)           # a re-index after the cache was written
+    assert lib.catalog()["books"]["second"]["title"] == "Renamed"
+
+
+def test_concurrent_indexers_all_appear_in_the_catalog(env, tmp_path):
+    pages_md, toc = md_inputs(env.tmp)
+    child_env = {**os.environ, "PYTHONPATH": str(PKG), "AW_LIBRARY": str(env.library)}
+    for round_ in range(2):
+        procs = [subprocess.Popen([sys.executable, "-m", "pilib", "index-md", "--pages", str(pages_md), "--toc", str(toc),
+                                   "--book-id", f"par-{round_}-{i}", "--title", f"P{i}", "--summaries", "none"],
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=child_env) for i in range(6)]
+        for proc in procs:
+            proc.communicate()
+            assert proc.returncode == 0
+    proc = subprocess.run([sys.executable, "-m", "pilib", "catalog"], capture_output=True, text=True, env=child_env)
+    assert sorted(json.loads(proc.stdout)) == sorted(f"par-{r}-{i}" for r in range(2) for i in range(6))
+    cached = json.loads((env.library / "catalog.json").read_text())
+    assert len(cached["books"]) <= 12
+
+
+@pytest.mark.parametrize("bad", ["..", "a/b", ".hidden", "a..b", "", "x y", "../x", "a\\b"])
+def test_book_ids_are_validated(env, bad):
+    with pytest.raises(ValueError):
+        lib.book_dir(bad)
+
+
+def test_a_book_directory_cannot_leave_the_library(env, capsys):
+    outside = env.tmp / "outside"
+    outside.mkdir()
+    (env.library / "books").mkdir(parents=True)
+    (env.library / "books" / "evil").symlink_to(outside)
+    with pytest.raises(ValueError):
+        lib.book_dir("evil")
+    code, out, err = index(capsys, "--summaries", "none", "--book-id", "evil")
+    assert code == 1 and out["code"] == "bad_input" and list(outside.iterdir()) == []
+    code, _, err = run_main(["read", "evil", "1"], capsys)
+    assert code == 1 and "evil" in err
+    (env.library / "books" / "evil").unlink()
+    (env.library / "books").rmdir()
+    (env.library / "books").symlink_to(outside)                           # the whole books folder points out
+    with pytest.raises(ValueError):
+        lib.book_dir("fine")
+    code, out, _ = index(capsys, "--summaries", "none")
+    assert code == 1 and out["code"] == "bad_input" and list(outside.iterdir()) == []
+
+
+def test_text_before_a_parents_first_child_reaches_its_summary(env, capsys):
+    pages = [f"# Page {i}\n\nUnique text of page {i}." for i in range(1, 6)]
+    pages_md = env.tmp / "p.md"
+    pages_md.write_text("\n\n".join(pages) + "\n", encoding="utf-8")
+    toc = env.tmp / "t.json"
+    toc.write_text(json.dumps(entries(("Parent", 1, 1), ("Child", 3, 2), ("Other", 5, 1))), encoding="utf-8")
+    argv = ["index-md", "--pages", str(pages_md), "--toc", str(toc), "--book-id", "intro", "--title", "I", "--concurrency", "1"]
+    code, out, _ = run_json(argv, capsys)
+    assert code == 0 and out["calls"] == 3
+    parent = [p for p in env.stub.prompts if "Parts:" in p][0]
+    assert "Unique text of page 1." in parent and "Unique text of page 2." in parent and "Unique text of page 3." not in parent
+    assert parent.index("Unique text of page 2.") < parent.index("Child")                     # intro first, then the subsections
+    pages[1] = "# Page 2\n\nA rewritten opening."
+    pages_md.write_text("\n\n".join(pages) + "\n", encoding="utf-8")
+    env.stub.prompts.clear()
+    code, out, _ = run_json(argv, capsys)
+    assert code == 0 and out["calls"] == 1 and out["summaries_reused"] == 2                  # only the parent is rewritten
+
+
+def test_a_render_failure_is_a_json_failure_not_a_bare_exit(env, capsys, monkeypatch):
+    def flash(pdf, **kwargs):
+        return {"structure": []}
+    install_structure_stubs(monkeypatch, env.tmp, flash)
+    from pilib import render_trove
+
+    def broken(pages, title, out):
+        raise SystemExit("anchors lost for Trove pages [2]")
+    monkeypatch.setattr(render_trove, "render", broken)
+    code, out, err = index(capsys, "--summaries", "none", book="flat-demo")
+    assert code == 1 and out["code"] == "render_failed" and "anchors lost" in out["error"]
+    assert "ERROR library index:" in err
+    monkeypatch.setattr(render_trove, "render", lambda pages, title, path: [1, 2, 3, 4])
+
+    def bad_verify(pdf, pages, mapping):
+        raise SystemExit("pagemap has 4 entries but the PDF has 5 pages")
+    monkeypatch.setattr(render_trove, "verify", bad_verify)
+    code, out, _ = index(capsys, "--summaries", "none", book="flat-demo")
+    assert code == 1 and out["code"] == "render_failed"
+
+
+def test_any_stray_exit_is_still_one_json_object(env, capsys, monkeypatch):
+    monkeypatch.setattr(native, "build_structure", lambda *a, **k: (_ for _ in ()).throw(SystemExit("stray")))
+    code, out, err = index(capsys)
+    assert code == 1 and out["ok"] is False and out["code"] == "internal" and "stray" in out["error"]

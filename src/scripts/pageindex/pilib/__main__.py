@@ -88,6 +88,15 @@ def run_index(command: str, fn, a) -> None:
                           **failure.extra}, ensure_ascii=False))
         print(f"ERROR library index: {failure.message}", file=sys.stderr)
         sys.exit(1)
+    except SystemExit as stray:  # a helper that exits with a message must still leave a JSON object
+        message = scrub(stray.code if isinstance(stray.code, str) else f"exit {stray.code}")
+        print(json.dumps({"ok": False, "command": command, "code": "internal", "error": message}, ensure_ascii=False))
+        print(f"ERROR library index: {message}", file=sys.stderr)
+        sys.exit(1)
+    except lib.BookIdError as error:
+        print(json.dumps({"ok": False, "command": command, "code": "bad_input", "error": str(error)}, ensure_ascii=False))
+        print(f"ERROR library index: {error}", file=sys.stderr)
+        sys.exit(1)
     except Exception as error:
         message = scrub(f"{type(error).__name__}: {error}")
         print(json.dumps({"ok": False, "command": command, "code": "internal", "error": message}, ensure_ascii=False))
@@ -294,7 +303,10 @@ def main(argv=None):
     g.add_argument("--no-summary", action="store_true"); g.add_argument("--require-summary", action="store_true")
     s.set_defaults(fn=cmd_verify)
     a = ap.parse_args(argv)
-    a.fn(a)
+    try:
+        a.fn(a)
+    except lib.BookIdError as error:
+        raise SystemExit(f"ERROR: {error}")
 
 
 if __name__ == "__main__":

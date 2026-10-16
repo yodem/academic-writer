@@ -21,6 +21,7 @@ from .render_trove import clean
 
 MAX_NODE_CHARS = 48000      # leaf text sent per call; longer sections are cut at this many characters
 MAX_CHILD_CHARS = 40000     # parent input: titles and child summaries are cut at this many characters
+MAX_INTRO_CHARS = 12000     # parent input: the parent's own opening pages (before its first child) are cut at this many
 SUMMARY_WORDS = 90          # the length the model is asked for
 ATTEMPTS = 2                # one retry per node on a model error
 RETRY_PAUSE = 1.0           # seconds before the retry
@@ -60,6 +61,24 @@ def child_text(node: dict) -> str:
         if summary:
             lines.append(f"- {child['title'][:200]}: {summary}")
     return "\n".join(lines)[:MAX_CHILD_CHARS]
+
+
+def intro_text(node: dict, pages: list) -> str:
+    """The parent's own opening: its pages before its first child starts."""
+    first = (node.get("nodes") or [{}])[0].get("start_index")
+    if not isinstance(first, int) or first <= node["start_index"]:
+        return ""
+    text = "\n\n".join(pages[node["start_index"] - 1:first - 1])
+    return _DATA_URI.sub("[diagram]", clean(text)).strip()[:MAX_INTRO_CHARS]
+
+
+def parent_text(node: dict, pages: list) -> str:
+    """What a parent is summarised from: its opening pages (if any), then the summaries of its parts."""
+    children = child_text(node)
+    if not children:
+        return ""
+    intro = intro_text(node, pages)
+    return (f"Opening of this part, before its first section:\n{intro}\n\nSections:\n" if intro else "") + children
 
 
 def cache_key(kind: str, model: str, node: dict, text: str) -> str:
@@ -114,7 +133,7 @@ def summarize(structure: list, pages: list, model: str, meter, concurrency: int,
                 unknown.add(id(node))
                 stats["expected_calls"] += 1
                 continue
-            text = child_text(node) if parent else node_text(node, pages)
+            text = parent_text(node, pages) if parent else node_text(node, pages)
             if not text:
                 stats["empty"] += 1
                 continue

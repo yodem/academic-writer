@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import time
 from datetime import datetime, timezone
 
@@ -67,13 +68,17 @@ def normalize_toc(raw, n_pages: int):
 
 def build_structure(entries: list, n_pages: int) -> list:
     """Nested nodes from the ToC. A node spans from its page to the page before the next entry of the same or a
-    higher level (the last one to the end of the book); a parent therefore spans its whole subtree. An entry
-    that shares its page with the next one keeps that single page."""
+    higher level (the last one to the end of the book) and always includes its children, so a boundary page
+    shared with the next entry is in both ranges (inclusive, as PageIndex counts). An entry that shares its page
+    with the next one keeps that single page."""
     roots: list = []
     stack: list = []  # (level, node)
 
     def close(node, next_page):
-        node["end_index"] = max(node["start_index"], min(next_page - 1, n_pages))
+        # a node ends before the next entry of its level, but never before its last child: a page shared by the
+        # end of one entry and the start of the next belongs to both
+        end = max(node["start_index"], min(next_page - 1, n_pages))
+        node["end_index"] = max([end] + [child["end_index"] for child in node["nodes"]])
 
     for entry in entries:
         while stack and stack[-1][0] >= entry["level"]:
@@ -222,11 +227,11 @@ def build_result(*, command: str, book_id: str, title: str, origin: dict, struct
 def write_book(*, result: dict, structure: list, pages: list, author: str, origin: dict, toc_source: str,
                usage: dict, mode: str, model: str, stats: dict, extra_indexer: dict, page_text_source: str,
                doc_name: str) -> None:
-    """Write pages, tree, meta, then the catalog entry last, so a half-written book is never listed."""
+    """Build the whole book in a staging folder under the library root, then swap it in as one unit
+    (lib.publish_book). A failure at any point leaves the previous book exactly as it was; files of the previous
+    generation that this one does not write (a page map) are gone with it. The summary cache is carried over."""
     book_id, title = result["book_id"], result["title"]
     nodes = list(sm.walk(structure))
-    dest = lib.book_dir(book_id)
-    dest.mkdir(parents=True, exist_ok=True)
     tree = {"book_id": book_id, "doc_name": doc_name, "title": title, "author": author, "n_pages": len(pages),
             "toc_source": toc_source, "structure": with_summaries_last(structure)}
     indexer = {"pilib_version": __version__, "summaries": mode, "summary_model": model if mode == "gemini" else None,
@@ -235,12 +240,25 @@ def write_book(*, result: dict, structure: list, pages: list, author: str, origi
     meta = {"book_id": book_id, "title": title, "author": author, "origin": origin, "indexer": indexer,
             "n_pages": len(pages), "node_count": len(nodes), "nodes_with_summary": result["nodes_with_summary"],
             "toc_source": toc_source, "page_text_source": page_text_source, "seconds": result["seconds"],
-            "indexed_at": result["indexed_at"]}
-    lib.write_json(dest / "pages.json", pages)
-    lib.write_json(dest / "tree.json", tree)
-    lib.write_json(dest / "meta.json", meta)
-    lib.update_catalog(book_id, {"title": title, "author": author, "n_pages": len(pages), "toc_source": toc_source,
-                                 "node_count": len(nodes), "top": [n["title"][:160] for n in tree["structure"][:60]]})
+            "indexed_at": result["indexed_at"], "top": [n["title"][:160] for n in tree["structure"][:60]]}
+    staging = lib.new_staging(book_id)
+    try:
+        lib.write_json(staging / "pages.json", pages)
+        lib.write_json(staging / "tree.json", tree)
+        cache = lib.book_dir(book_id) / "summaries.json"
+        if cache.is_file():
+            shutil.copyfile(cache, staging / "summaries.json")
+        lib.write_json(staging / "meta.json", meta)  # last: a folder without meta.json is not a listed book
+        lib.publish_book(staging, book_id)
+    finally:
+        lib.drop_staging(staging)
+
+
+def check_book_id(book_id: str) -> None:
+    try:
+        lib.book_dir(book_id)
+    except lib.BookIdError as error:
+        raise IndexFailure("bad_input", str(error))
 
 
 def index_from_toc(*, command: str, book_id: str, title: str, author: str, pages_by_number: dict, raw_toc: list,
@@ -249,6 +267,7 @@ def index_from_toc(*, command: str, book_id: str, title: str, author: str, pages
                    toc_source: str = "trove-toc", page_text_source: str = "origin", warnings: list = None) -> dict:
     """The native indexer. Raises IndexFailure; on success returns the stdout JSON object."""
     started = time.monotonic()
+    check_book_id(book_id)
     settings = index_settings()
     model = model or settings["summaryModel"]
     max_calls = settings["maxCalls"] if max_calls is None else max_calls
@@ -286,6 +305,7 @@ def index_trove(a) -> dict:
     from .trove_source import fetch
 
     book_id = a.book_id or a.trove_id
+    check_book_id(book_id)
     book = fetch(a.trove_id)
     title, author = a.title or book["title"], a.author or book["author"]
     pages_list, _ = page_list(book["pages"])

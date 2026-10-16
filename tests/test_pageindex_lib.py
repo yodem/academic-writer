@@ -49,8 +49,7 @@ def seed_book(book_id="b1", pages=None, structure=None, extra_meta=None, pagemap
     lib.write_json(d / "meta.json", meta)
     if pagemap:
         lib.write_json(d / "pagemap.json", {"trove_id": "tid1", "pdf_to_trove": pagemap})
-    lib.update_catalog(book_id, {"title": "A Title", "author": "Au", "n_pages": len(pages), "toc_source": "trove-toc",
-                                 "node_count": 3, "top": ["Intro", "Ending"]})
+    lib.rebuild_catalog()
     return d
 
 

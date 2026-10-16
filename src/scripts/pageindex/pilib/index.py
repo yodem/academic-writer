@@ -69,9 +69,7 @@ def index_pdf(pdf: Path, book_id: str, title: str, author: str = "", origin: dic
     lib.write_json(dest / "tree.json", tree)
     lib.write_json(dest / "pages.json", pages)
     lib.write_json(dest / "meta.json", meta)
-    lib.update_catalog(book_id, {"title": title, "author": author, "n_pages": len(pages),
-                                 "toc_source": toc_source, "node_count": len(nodes),
-                                 "top": [n["title"][:160] for n in structure[:60]]})
+    lib.rebuild_catalog()
     return meta
 
 
@@ -128,7 +126,5 @@ def index_pdf_full(pdf: Path, book_id: str, title: str, author: str = "", model:
     lib.write_json(dest / "tree.json", tree)
     lib.write_json(dest / "pages.json", pages)
     lib.write_json(dest / "meta.json", meta)
-    lib.update_catalog(book_id, {"title": title, "author": author, "n_pages": len(pages),
-                                 "toc_source": toc_source, "node_count": len(nodes),
-                                 "top": [n["title"][:160] for n in structure[:60]]})
+    lib.rebuild_catalog()
     return meta

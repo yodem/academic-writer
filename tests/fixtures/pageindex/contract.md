@@ -26,7 +26,7 @@ pilib health [--require core|structure]
 - **stdout is exactly one JSON object on one line**, success or failure. Anything a library prints is sent to stderr.
 - Exit code `0` on success, `1` on any failure (usage errors from argument parsing exit `2` with no JSON).
 - On failure stderr also carries one plain line: `ERROR library index: <message>`.
-- Nothing is written to the library when a run fails; a book that was indexed before stays exactly as it was.
+- A book is built in a staging folder and swapped in as one unit, so a reader sees the old book or the new one, never a mixture; a re-index drops files of the old generation that the new one does not write (a page map). Nothing is written to the library when a run fails; a book that was indexed before stays exactly as it was.
   Summaries already paid for are kept in `books/<id>/summaries.json` and reused by the next run.
 - The key never appears in stdout, stderr, or the JSON.
 
@@ -69,7 +69,7 @@ pilib health [--require core|structure]
 
 Files written (`$AW_LIBRARY/books/<book_id>/`): `pages.json` (Trove text, page i at index i-1), `tree.json`, `meta.json`
 (`origin.trove` = `trove_id`, `title`, `trove_pages`, `toc_entries`, `hinted_entries`, `toc_sha`, `pages_sha`; `indexer`
-with the `llm_*` usage), `summaries.json` (the summary cache), and the `catalog.json` entry, written last.
+with the `llm_*` usage), `summaries.json` (the summary cache). `catalog.json` is a cache derived from the books' `meta.json` files; readers rescan when it is missing or out of date.
 `pilib meta` reports `pagemap: null`: library pages are Trove pages.
 
 ## Failure object
@@ -87,11 +87,13 @@ with the `llm_*` usage), `summaries.json` (the summary cache), and the `catalog.
 | `missing_key` | `--summaries gemini` with a Gemini model and no key in the environment | ask for the key, or offer `--summaries hints` or `none` |
 | `call_cap` | the call cap was reached | summaries so far are kept; raise `--max-calls` and run again |
 | `model_failed` | five calls in a row failed with none succeeding (wrong key, wrong model name, no network) | show `error` (key text removed) |
-| `bad_input` | unreadable pages or table of contents file, or a wrong `--summaries` value | fix the input |
+| `bad_input` | unreadable pages or table of contents file, a wrong `--summaries` value, or a book id that is not allowed (letters, digits, `. _ # : -`; no `..`; the book folder may not be a symbolic link out of the library) | fix the input |
 | `empty_book` | the book has no pages (or no page starts with the marker) | |
 | `no_toc` | no usable table of contents entry (a title and a page inside the book) | |
+| `render_failed` | (fallback) the book could not be rendered to a PDF or the render did not match the Trove text; `error` says what | show `error`; the Trove upload is unaffected |
+| `structure_failed` | (fallback) PageIndex stopped with a message | show `error` |
 | `empty_tree` | PageIndex found no structure (fallback) | |
-| `internal` | an unexpected error; `error` is the exception name and a short message | report it |
+| `internal` | an unexpected error or a helper that exited with a message; `error` is the exception name and a short message | report it |
 
 ## health
 
