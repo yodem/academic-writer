@@ -26,7 +26,7 @@ pilib health [--require core|structure]
 - **stdout is exactly one JSON object on one line**, success or failure. Anything a library prints is sent to stderr.
 - Exit code `0` on success, `1` on any failure (usage errors from argument parsing exit `2` with no JSON).
 - On failure stderr also carries one plain line: `ERROR library index: <message>`.
-- A book is written as a complete new version folder and published by one atomic rename of `books/<id>/CURRENT`, so a reader sees the old book or the new one, never a mixture, and indexing, publishing, pruning and cleaning up one book run under an exclusive per-book lock (`books/<id>/.index.lock`: pid, nonce, start time; created with O_EXCL, fail-fast `busy` when a live process holds it, taken over when the holder is dead or older than two hours, released only with its own nonce), so two indexers of the same book never overlap. Readers take no lock. Nothing a reader can see changes when a run fails; a book that was indexed before stays exactly as it was.
+- A book is written as a complete new version folder and published by one atomic rename of `books/<id>/CURRENT`, so a reader sees the old book or the new one, never a mixture, and indexing, publishing, pruning and cleaning up one book run under an exclusive per-book lock: an OS advisory lock (`flock`) on `books/<id>/.index.lock`, taken without waiting (`busy` at once if another process holds it) and released by the kernel when the process ends, however it ends, so there is no stale lock and nothing to take over. The file is never deleted; the pid and start time written in it are for people to read only. The lock needs a local filesystem (`flock` on a network filesystem such as NFS is not guaranteed). Two indexers of the same book never overlap. Readers take no lock. Nothing a reader can see changes when a run fails; a book that was indexed before stays exactly as it was.
   Summaries already paid for are kept in `books/<id>/summaries.json` and reused by the next run.
 - The key never appears in stdout, stderr, or the JSON.
 
@@ -105,7 +105,7 @@ and `meta.json` flat in `books/<book_id>/`; it is read from there until it is in
 | `render_failed` | (fallback) the book could not be rendered to a PDF or the render did not match the Trove text; `error` says what | show `error`; the Trove upload is unaffected |
 | `structure_failed` | (fallback) PageIndex stopped with a message | show `error` |
 | `empty_tree` | PageIndex found no structure (fallback) | |
-| `busy` | another process is indexing this same book (the book's lock, `books/<id>/.index.lock`, is held by a live process); `error` is `this book is being indexed by another process \u2014 try again when it finishes` | do not retry at once; tell the researcher to try again when it finishes. Different books never block each other |
+| `busy` | another process is indexing this same book (the book's lock, `books/<id>/.index.lock`, is held by a running process); `error` is `this book is being indexed by another process \u2014 try again when it finishes` | do not retry at once; tell the researcher to try again when it finishes. Different books never block each other |
 | `internal` | an unexpected error or a helper that exited with a message; `error` is the exception name and a short message | report it |
 
 ## health

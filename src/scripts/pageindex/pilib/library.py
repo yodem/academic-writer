@@ -87,10 +87,14 @@ LEGACY_FILES = ("tree.json", "pages.json", "meta.json", "pagemap.json", "source.
 # ---------------------------------------------------------------- one indexer per book
 
 LOCK_NAME = ".index.lock"
-LOCK_STALE_SECONDS = 7200      # a holder this old is taken over even if its pid answers (the pid may have been reused)
-LOCK_UNREADABLE_SECONDS = 10   # a lock file nobody can read is a creator still writing it; after this long it is dead
 BUSY_MESSAGE = "this book is being indexed by another process \u2014 try again when it finishes"
-_held: set = set()
+_held: dict = {}  # book id -> the open file descriptor that holds its lock, in this process
+
+try:
+    import fcntl
+except ImportError:  # Windows
+    fcntl = None
+    import msvcrt
 
 
 class BookBusy(Exception):
@@ -100,95 +104,50 @@ class BookBusy(Exception):
         super().__init__(BUSY_MESSAGE)
 
 
-def _pid_alive(pid) -> bool:
-    try:
-        os.kill(int(pid), 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except (OSError, ValueError, TypeError):
-        return False
-    return True
-
-
-def _read_token(path: Path):
-    try:
-        token = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    return token if isinstance(token, dict) and isinstance(token.get("nonce"), str) else None
-
-
-def _holder_dead(path: Path) -> bool:
-    token = _read_token(path)
-    if token is None:
-        try:
-            return clock() - path.stat().st_mtime >= LOCK_UNREADABLE_SECONDS
-        except FileNotFoundError:
-            return True
-    started = token.get("started")
-    return not _pid_alive(token.get("pid")) or (isinstance(started, (int, float)) and clock() - started >= LOCK_STALE_SECONDS)
-
-
-def _take_over(path: Path) -> None:
-    """Remove a dead holder's lock by an atomic rename. If what was moved is not the lock that was judged dead (someone
-    took the slot in between), put it back."""
-    seen = _read_token(path)
-    trash = path.with_name(f"{path.name}.dead.{uuid.uuid4().hex[:8]}")
-    try:
-        os.rename(path, trash)
-    except FileNotFoundError:
-        return
-    if _read_token(trash) != seen:
-        try:
-            os.link(trash, path)
-        except OSError:
-            pass
-    try:
-        trash.unlink()
-    except OSError:
-        pass
+def _lock_fd(fd: int) -> None:
+    """Take the OS lock without waiting; BlockingIOError/OSError when someone holds it."""
+    if fcntl is not None:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    else:  # best effort on Windows
+        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
 
 
 class book_lock:
-    """Exclusive, fail-fast lock for everything that writes one book: books/<id>/.index.lock, created with O_EXCL and
-    holding {pid, nonce, started}. A live holder means BookBusy at once (never a wait). A dead holder (no such pid, or
-    older than LOCK_STALE_SECONDS) is taken over. Only the owner's nonce releases it. Readers do not take it."""
+    """Exclusive, fail-fast lock for everything that writes one book: an OS advisory lock (flock) on
+    books/<id>/.index.lock. The kernel drops it when the process exits, however it dies, so there is no stale lock to
+    detect or take over; the file itself is never deleted. Held for the whole run by keeping the descriptor open;
+    closing it releases it. pid and start time are written into the file for people to read, never used to decide.
+    The lock needs a local filesystem (flock on a network filesystem is not guaranteed). Readers do not take it."""
 
     def __init__(self, book_id: str):
         self.book_id = book_id
-        self.nonce = uuid.uuid4().hex
 
     def __enter__(self):
         container = book_dir(self.book_id)
         if self.book_id in _held:
             raise BookBusy()
         container.mkdir(parents=True, exist_ok=True)
-        self.path = container / LOCK_NAME
-        token = {"pid": os.getpid(), "nonce": self.nonce, "started": clock()}
-        for _ in range(5):
-            try:
-                fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-            except FileExistsError:
-                if not _holder_dead(self.path):
-                    raise BookBusy()
-                _take_over(self.path)
-                continue
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(token, f)
-            _held.add(self.book_id)
-            return self
-        raise BookBusy()
+        path = container / LOCK_NAME
+        if path.is_symlink():
+            raise BookIdError(f"the lock file of {self.book_id!r} is a symbolic link; refusing to use it")
+        fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o644)
+        try:
+            _lock_fd(fd)
+        except OSError:
+            os.close(fd)
+            raise BookBusy()
+        try:
+            os.ftruncate(fd, 0)
+            os.write(fd, json.dumps({"pid": os.getpid(), "started": clock()}).encode("utf-8"))
+        except OSError:
+            pass  # diagnostics only
+        _held[self.book_id] = fd
+        return self
 
     def __exit__(self, *exc):
-        _held.discard(self.book_id)
-        token = _read_token(self.path)
-        if token is not None and token.get("nonce") == self.nonce:
-            try:
-                self.path.unlink()
-            except FileNotFoundError:
-                pass
+        fd = _held.pop(self.book_id, None)
+        if fd is not None:
+            os.close(fd)  # releases the lock
         return False
 
 

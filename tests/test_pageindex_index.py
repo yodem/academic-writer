@@ -554,7 +554,7 @@ def test_contract_lists_every_field_and_code():
 def snapshot(book_id):
     """Every file under the book folder, by relative path."""
     d = lib.book_dir(book_id)
-    return {str(f.relative_to(d)): f.read_bytes() for f in sorted(d.rglob("*")) if f.is_file()}
+    return {str(f.relative_to(d)): f.read_bytes() for f in sorted(d.rglob("*")) if f.is_file() and f.name != ".index.lock"}
 
 
 def prune(book_id):
@@ -795,7 +795,6 @@ def test_concurrent_indexers_of_the_same_book_leave_one_whole_book(env):
     assert lib.read_json(final / "tree.json")["title"] == lib.read_json(final / "meta.json")["title"]
     assert lib.catalog()["books"]["same"]["title"] == lib.read_json(final / "meta.json")["title"]
     assert (lib.book_dir("same") / "CURRENT").read_text().strip() in version_names("same")
-    assert not (lib.book_dir("same") / ".index.lock").exists()
 
 
 @pytest.mark.parametrize("bad", ["..", "a/b", ".hidden", "a..b", "", "x y", "../x", "a\\b"])
@@ -941,57 +940,56 @@ def test_a_second_indexer_of_the_same_book_is_told_busy_at_once(env, capsys):
     finally:
         release(holder)
     code, out, _ = index(capsys, "--summaries", "none")       # the holder has gone: its lock is free
-    assert code == 0 and not (lib.book_dir(HINTED) / ".index.lock").exists()
+    assert code == 0
 
 
-def test_the_lock_names_its_holder_and_is_released_on_any_exit(env):
+def test_the_lock_is_an_os_lock_released_on_any_exit_and_never_deleted(env):
+    lock = lib.book_dir(HINTED) / ".index.lock"
     with lib.book_lock(HINTED):
-        token = json.loads((lib.book_dir(HINTED) / ".index.lock").read_text())
-        assert token["pid"] == os.getpid() and token["nonce"] and token["started"] > 0
+        note = json.loads(lock.read_text())                  # who holds it: for people to read, never used to decide
+        assert note["pid"] == os.getpid() and note["started"] > 0
         with pytest.raises(lib.BookBusy):
             with lib.book_lock(HINTED):                      # not even the same process takes it twice
                 pass
-    assert not (lib.book_dir(HINTED) / ".index.lock").exists()
+    assert lock.exists()                                     # the file stays; the OS lock is what is released
     with pytest.raises(KeyboardInterrupt):
         with lib.book_lock(HINTED):
             raise KeyboardInterrupt
-    assert not (lib.book_dir(HINTED) / ".index.lock").exists()
+    with lib.book_lock(HINTED):                              # free again after an interrupt
+        pass
 
 
-def test_a_lock_left_by_a_dead_process_is_taken_over(env, capsys):
-    dead = subprocess.Popen([sys.executable, "-c", "pass"])
-    dead.wait()
-    lock = lib.book_dir(HINTED) / ".index.lock"
-    lock.parent.mkdir(parents=True)
-    lock.write_text(json.dumps({"pid": dead.pid, "nonce": "old", "started": __import__("time").time()}))
-    code, out, _ = index(capsys, "--summaries", "none")
-    assert code == 0 and not lock.exists()
-    # a holder that is alive but far too old is also taken over (its pid may have been reused)
-    lock.write_text(json.dumps({"pid": os.getpid(), "nonce": "old", "started": __import__("time").time() - 10 * 3600}))
-    code, out, _ = index(capsys, "--summaries", "none")
-    assert code == 0 and not lock.exists()
-    # an unreadable lock is a creator that is still writing; only an old one is taken over
-    lock.write_text("")
+def test_a_holder_killed_with_sigkill_releases_the_lock_at_once(env, capsys):
+    import signal
+    holder = hold_lock_in_another_process(env, HINTED)
     code, out, _ = index(capsys, "--summaries", "none")
     assert code == 1 and out["code"] == "busy"
-    os.utime(lock, (0, 0))
-    code, out, _ = index(capsys, "--summaries", "none")
-    assert code == 0 and not lock.exists()
+    holder.send_signal(signal.SIGKILL)
+    holder.wait(timeout=20)
+    code, out, _ = index(capsys, "--summaries", "none")      # the kernel dropped the lock with the process
+    assert code == 0 and lib.data_dir(HINTED) is not None
 
 
-def test_a_live_holder_is_never_taken_over(env, capsys):
+def test_what_the_lock_file_says_is_never_used_to_decide(env, capsys):
     lock = lib.book_dir(HINTED) / ".index.lock"
     lock.parent.mkdir(parents=True)
-    lock.write_text(json.dumps({"pid": os.getppid(), "nonce": "other", "started": __import__("time").time()}))
+    lock.write_text(json.dumps({"pid": os.getppid(), "nonce": "x", "started": __import__("time").time()}))  # looks held
     code, out, _ = index(capsys, "--summaries", "none")
-    assert code == 1 and out["code"] == "busy" and json.loads(lock.read_text())["nonce"] == "other"
+    assert code == 0
+    lock.write_text("not json at all")
+    code, out, _ = index(capsys, "--summaries", "none")
+    assert code == 0
 
 
-def test_a_lock_is_released_only_with_its_own_nonce(env):
-    lock = lib.book_dir(HINTED) / ".index.lock"
-    with lib.book_lock(HINTED):
-        lock.write_text(json.dumps({"pid": os.getppid(), "nonce": "someone-else", "started": __import__("time").time()}))
-    assert json.loads(lock.read_text())["nonce"] == "someone-else"   # ours had been taken over: leave theirs alone
+def test_exactly_one_of_two_overlapping_indexers_proceeds(env, capsys):
+    holder = hold_lock_in_another_process(env, HINTED)       # the first indexer, mid-run
+    try:
+        results = [index(capsys, "--summaries", "none") for _ in range(2)]
+    finally:
+        release(holder)
+    assert [r[1]["code"] for r in results] == ["busy", "busy"] and lib.data_dir(HINTED) is None
+    code, out, _ = index(capsys, "--summaries", "none")
+    assert code == 0
 
 
 def test_publish_and_prune_need_the_lock_and_read_the_pointer_under_it(env, capsys, monkeypatch):
