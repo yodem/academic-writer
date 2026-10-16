@@ -4,6 +4,9 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Course references and bookmark folders** in `courses`: `refs.py` finds the works a course cites, looks them up in the BIU library and renders the `מקורות נזכרים` index; `courses.py bookmarks` rebuilds each course's Chrome bookmark folder (NotebookLM, Lemida and current-task items; Trove items wait for a confirmed Trove URL form). The nightly script runs it after the digest. The runbook is `references/library-refs.md`.
+
 ## [0.17.0] — 2026-10-15
 
 ### Added

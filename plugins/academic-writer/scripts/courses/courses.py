@@ -1179,6 +1179,11 @@ def main(argv: list[str] | None = None) -> int:
     cdone = chores_sub.add_parser("done", parents=[reg_parent], help="mark a chore done")
     cdone.add_argument("id")
     chores_sub.add_parser("digest", parents=[reg_parent], help="write REG/digest/chores.md and chores.json")
+    bookmarks_p = sub.add_parser("bookmarks", help="rebuild each course's Chrome bookmark folder (AppleScript; Chrome must be open)")
+    bookmarks_p.add_argument("slug", nargs="?", help="one course slug (or use --all)")
+    bookmarks_p.add_argument("--all", action="store_true", help="every course in the registry")
+    bookmarks_p.add_argument("--print-script", action="store_true", help="print the AppleScript and exit without touching Chrome")
+    bookmarks_p.add_argument("--check", action="store_true", help="read-only: exit 1 when applying would change Chrome")
     args = parser.parse_args(argv)
     try:
         if args.command == "import-docx":
@@ -1224,6 +1229,9 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"digest: {chores.write_digest(registry)}")
             return 0
+        if args.command == "bookmarks":
+            import bookmarks
+            return bookmarks.run(registry, slug=args.slug, all_courses=args.all, print_script=args.print_script, check_only=args.check)
         if args.command == "find-lesson-page":
             found = find_lesson_page(registry, args.slug, args.lesson_key)
             if found is None:
