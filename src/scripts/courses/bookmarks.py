@@ -15,6 +15,8 @@ import chores
 import courses
 
 EXIT_CHROME = 5  # Chrome not running or osascript failing: the nightly step logs it, it is not fatal
+# AppleScript must address Chrome by bundle id: the name "Google Chrome" resolves to "Google Chrome for Testing" here.
+CHROME_BUNDLE_ID = "com.google.Chrome"
 NOT_RUNNING = "not running"
 ABSENT = "ABSENT"
 US = "\x1f"  # field separator in the read-back text (titles and URLs never contain it)
@@ -85,8 +87,8 @@ def _q(text: str) -> str:
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-_FIND_HANDLER = """on findFolder(parentFolder, folderName)
-	tell application "Google Chrome"
+_FIND_HANDLER = f"""on findFolder(parentFolder, folderName)
+	tell application id "{CHROME_BUNDLE_ID}"
 		repeat with f in (bookmark folders of parentFolder)
 			if title of f is folderName then return f
 		end repeat
@@ -96,12 +98,12 @@ end findFolder
 """
 
 # The only handler that creates folders: the read-only script must not carry it.
-_ENSURE_HANDLER = """on ensureFolder(parentFolder, folderName)
-	tell application "Google Chrome"
+_ENSURE_HANDLER = f"""on ensureFolder(parentFolder, folderName)
+	tell application id "{CHROME_BUNDLE_ID}"
 		repeat with f in (bookmark folders of parentFolder)
 			if title of f is folderName then return f
 		end repeat
-		return make new bookmark folder with properties {title:folderName} at end of bookmark folders of parentFolder
+		return make new bookmark folder with properties {{title:folderName}} at end of bookmark folders of parentFolder
 	end tell
 end ensureFolder
 
@@ -148,8 +150,8 @@ def build_script(plans: list[dict[str, Any]]) -> str:
         _ENSURE_HANDLER
         + _FIND_HANDLER
         + "\non run\n"
-        + f'\tif application "Google Chrome" is not running then return "{NOT_RUNNING}"\n'
-        + '\ttell application "Google Chrome"\n'
+        + f'\tif application id "{CHROME_BUNDLE_ID}" is not running then return "{NOT_RUNNING}"\n'
+        + f'\ttell application id "{CHROME_BUNDLE_ID}"\n'
         + "".join(_apply_lines(p) for p in plans)
         + "\tend tell\n"
         + '\treturn "ok"\nend run\n'
@@ -161,9 +163,9 @@ def read_script(plans: list[dict[str, Any]]) -> str:
     return (
         _FIND_HANDLER
         + "\non run\n"
-        + f'\tif application "Google Chrome" is not running then return "{NOT_RUNNING}"\n'
+        + f'\tif application id "{CHROME_BUNDLE_ID}" is not running then return "{NOT_RUNNING}"\n'
         + "\tset fieldSep to ASCII character 31\n\tset recSep to ASCII character 30\n\tset out to \"\"\n"
-        + '\ttell application "Google Chrome"\n'
+        + f'\ttell application id "{CHROME_BUNDLE_ID}"\n'
         + "".join(_read_lines(p) for p in plans)
         + "\tend tell\n\treturn out\nend run\n"
     )
