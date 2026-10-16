@@ -32,9 +32,11 @@ All three encode the tedious, error-prone parts as deterministic code (run from 
 - `scripts/build_crosswalk.py` — derive each page's Trove number, per volume, from the uploaded file (Trove skips blank pages, so this cannot be eyeballed).
 - `scripts/build_toc_enrich.py` — assemble the `--toc` metadata (printed→Trove with interpolation, nesting levels, hints) and optionally apply it.
 
+**Step 0 — Anna's Archive first, for a published work.** Before any OCR, search Anna's Archive for the work: use the `annas-archive-ebooks` skill when it is installed, otherwise search by title, author and ISBN. For a chapter or article, look for the whole book or journal issue. If a copy of the **same edition** exists (same publisher, year and printed pagination), use its text layer or EPUB text, keep the printed page numbers exactly, and skip OCR. Run Gemini OCR (`aw ocr`) only when there is no matching copy or the copy has no usable text. Record the outcome for each item: `annas: found-used`, `annas: found-wrong-edition` or `annas: not-found`.
+
 OCR — of body pages or ToC pages — always goes through the plugin's own `aw ocr` (see `/academic-writer:ocr`), never an external tool:
 
-(When the book is a course reading, OCR with Claude vision first, `pdftoppm -r 150`, and escalate to this Gemini OCR for pages Claude flags unreadable or low-confidence or when the text is degraded; record the engine used.)
+(When the book is a course reading from the library or Kotar, which is in copyright, use Gemini OCR directly. For any other course reading, OCR with Claude vision first, `pdftoppm -r 150`, and escalate to this Gemini OCR for pages Claude flags unreadable or low-confidence or when the text is degraded; record the engine used.)
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" ocr \

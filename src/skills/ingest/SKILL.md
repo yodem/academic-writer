@@ -20,7 +20,11 @@ Academic articles and chapters have their own printed page numbers (e.g. 409–4
 
 - **Markdown or text**: read it directly.
 - **Word (.docx)**: convert with `pandoc "<file>" -t markdown`; if pandoc is missing, extract the text with Python's `zipfile` and a tag strip.
-- **PDF, scan or photo**: run the plugin's own OCR (never an external tool):
+- **PDF, scan or photo of a published work**: do step 0 first.
+
+  **Step 0 — Anna's Archive first, for a published work.** Before any OCR, search Anna's Archive for the work: use the `annas-archive-ebooks` skill when it is installed, otherwise search by title, author and ISBN. For a chapter or article, look for the whole book or journal issue. If a copy of the **same edition** exists (same publisher, year and printed pagination), use its text layer or EPUB text, keep the printed page numbers exactly, and skip OCR. Run Gemini OCR (`aw ocr`) only when there is no matching copy or the copy has no usable text. Record the outcome for each item: `annas: found-used`, `annas: found-wrong-edition` or `annas: not-found`.
+
+- **PDF, scan or photo** (no usable same-edition copy): run the plugin's own OCR (never an external tool):
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" ocr \
