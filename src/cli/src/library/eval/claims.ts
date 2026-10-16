@@ -176,6 +176,9 @@ export class KeyResolver {
   /** True when only some citations of the note matched a source: the note is unresolved, and a sentence carrying it is not used. */
   isPartial(key: string): boolean { return this.partialKeys.has(key); }
 
+  /** True when the note is partial or matched no source at all (an Ibid. after an unmatched note, an unknown citation). */
+  isUnresolved(key: string): boolean { return this.partialKeys.has(key) || this.byKey.get(key)?.length === 0; }
+
   resolve(key: string): ResolvedKey[] {
     const cached = this.byKey.get(key);
     if (cached) return cached;

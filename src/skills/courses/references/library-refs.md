@@ -189,6 +189,26 @@ The browser tool may refuse output that contains query strings, so report counts
 
 Chores are deduplicated on course, kind and `ref` (`refs:<slug>:<key>`), so a re-run does not add a second one. Show them with `courses.py chores digest`.
 
+### A10. Sources per task and the fetch chain
+
+**Task linkage (additive).** `<slug>.json` carries `tasks: [{id, title, due_at, chore_ids[], status open|submitted, submitted_at, kind, spec_key?}]`. The canonical task `id` is the id of the chore it came from (`assignment`, `forum-post`; `perusall-capture` chores are readings, not hand-ins); a task that exists only in `tools/specs/<slug>.json` gets `s-<spec key>`. Commands accept the id, a unique prefix, or the spec key. A ref or a `sources[]` entry may carry `tasks: [<task id>, ...]`; nothing else changes.
+
+| Command (`refs.py` or `courses.py`) | What it does |
+|---|---|
+| `task list --course X` | Tasks, derived from chores.json when `tasks[]` is missing, with a source count |
+| `task show --course X --task T [--json]` | The task and its refs/sources, each with `downloaded`, `in_trove` (+`trove`), `in_notebooklm` (+`notebook_source_id`), `annas` |
+| `task link --course X --task T --ref KEY` (or `--source SHA8`) | Links a ref or source to the task |
+| `task submit --course X --task T` | Marks the task submitted and closes its linked chores (the dashboard's "I submitted" button). Idempotent |
+| `courses.py migrate-tasks [--dry-run] [--specs-dir D]` | Backs up each touched JSON (`<name>.bak-<timestamp>` beside it), adds `tasks[]` and links from the specs and from `found_in`. Ambiguous or unmatched items are listed in the report, never guessed |
+
+**`refs.py fetch --course X --ref KEY [--task T] [--hit N] [--file PDF] [--dry-run]`** runs the order below and appends each outcome to the ref's `fetch_log: [{step, outcome, at, detail?}]`:
+
+0. Anna's Archive (skipped for Kotar). With `ANNAS_ARCHIVE_KEY` unset it records `annas: not-checked` and goes on; with a key it searches through the global skill's `annas.py`, and a failure (DDoS-Guard) is `annas: error`. A hit is only `annas: candidates` (with `annas_candidates`); a person confirms the edition (A4a).
+1. BIU lookup (Primo + CTO), for a pending ref. Several hits are never auto-picked: the log says `needs-choice`; re-run with `--hit N`.
+2. By status: `online` with a PDF in hand (`--file`, `sources/<slug>/<key>.pdf` or `~/Downloads/<key>.pdf`) becomes `downloaded` with `download_path` and `ocr_next: {state: queued, policy: [gemini-text-first, tesseract-hidden-check, empty-gemini-page-blocked]}`; without a PDF the step is `needs-browser-download` (A5). `kotar` adds a `kotar-source` chore that points to `/academic-writer:kotar-fetch`. `print-only` stays `print-only`.
+
+`--dry-run` runs the read-only steps and writes nothing. The fetch command does not run OCR; `ocr_next` records what is queued.
+
 ### A9. The index page and the book layout
 
 Each course book ends with a `מקורות נזכרים` section: an index page with one line per ref (citation, role, status, where it was cited, and a Trove page link for ingested refs), followed by one appendix page per ingested article.

@@ -188,3 +188,17 @@ test('the resolver marks a partly matched note as partial with no sources, and a
   assert.match(resolver.resolve('2', 'Ibid., 4').unmatched[0]?.reason ?? '', /previous note is unmatched/u);
   assert.equal(resolver.resolve('3', 'Pedersén, South Palace Archives, 14.').partial, false);
 });
+
+test('a sentence carrying an unresolved Ibid. plus a valid footnote is not a claim', async () => {
+  const { claims, noSource } = await planOf([
+    'This claim cites one known source and one unknown one.[^1] A later claim carries an Ibid. note and a valid one together.[^2][^3] A clean claim cites a known source alone.[^4]',
+    '',
+    '[^1]: Pedersén, South Palace Archives, 14; Unknown, Other Book, 3.',
+    '[^2]: Ibid., 15.',
+    '[^3]: Alstola, Judeans in Babylonia, 27.',
+    '[^4]: Alstola, Judeans in Babylonia, 30.',
+    '',
+  ].join('\n'));
+  assert.deepEqual(claims.map((claim) => claim.text.slice(0, 7)), ['A clean'], 'the mixed sentence is rejected whole');
+  assert.equal(noSource, 2);
+});
