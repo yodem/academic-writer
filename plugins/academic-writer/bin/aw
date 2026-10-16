@@ -22760,13 +22760,541 @@ var require_websocket_server = __commonJS({
 });
 
 // src/pi.ts
+import { spawn as spawn2 } from "node:child_process";
+import { basename, dirname, join, resolve as resolve2 } from "node:path";
+
+// src/library/backends.ts
 init_thresholds();
+
+// src/library/exec.ts
 import { spawn } from "node:child_process";
-import { basename, dirname, join, resolve } from "node:path";
+
+// src/library/types.ts
+var LibraryError = class extends Error {
+  code;
+  stderr;
+  constructor(code, message, stderr = "") {
+    super(message);
+    this.name = "LibraryError";
+    this.code = code;
+    this.stderr = stderr;
+  }
+};
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+// src/library/exec.ts
+var STDERR_KEEP = 8192;
+var CommandScope = class {
+  stopped = false;
+  children = /* @__PURE__ */ new Set();
+  get aborted() {
+    return this.stopped;
+  }
+  add(child) {
+    this.children.add(child);
+  }
+  remove(child) {
+    this.children.delete(child);
+  }
+  abort() {
+    this.stopped = true;
+    for (const child of this.children) {
+      try {
+        if (process.platform !== "win32" && child.pid) process.kill(-child.pid, "SIGKILL");
+        else child.kill("SIGKILL");
+      } catch {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+        }
+      }
+    }
+    this.children.clear();
+  }
+};
+function runCommand(command3, args2, options) {
+  const [file, ...prefix] = command3;
+  if (!file) return Promise.reject(new LibraryError("config", "ERROR library: empty command"));
+  const label = file.split("/").pop() ?? file;
+  if (options.scope?.aborted) return Promise.reject(new LibraryError("timeout", `ERROR library: ${label} not started: this lookup was stopped`));
+  return new Promise((resolve13, reject) => {
+    let settled = false;
+    const chunks = [];
+    let size = 0;
+    let stderr = "";
+    const posix = process.platform !== "win32";
+    const child = spawn(file, [...prefix, ...args2], { stdio: ["ignore", "pipe", "pipe"], env: options.env, cwd: options.cwd, detached: posix, windowsHide: true });
+    options.scope?.add(child);
+    const killTree = () => {
+      try {
+        if (posix && child.pid) process.kill(-child.pid, "SIGKILL");
+        else child.kill("SIGKILL");
+      } catch {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+        }
+      }
+    };
+    const finish = (fn) => {
+      if (settled) return;
+      settled = true;
+      options.scope?.remove(child);
+      clearTimeout(timer);
+      fn();
+    };
+    const timer = setTimeout(() => {
+      finish(() => {
+        killTree();
+        options.scope?.abort();
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        reject(new LibraryError("timeout", `ERROR library: ${label} did not answer within ${options.timeoutMs} ms`));
+      });
+    }, options.timeoutMs);
+    child.stdout?.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > options.maxBuffer) {
+        finish(() => {
+          killTree();
+          reject(new LibraryError("too_large", `ERROR library: ${label} output is larger than ${options.maxBuffer} bytes`));
+        });
+        return;
+      }
+      chunks.push(chunk);
+    });
+    child.stderr?.on("data", (chunk) => {
+      if (stderr.length < STDERR_KEEP) stderr += chunk.toString("utf8");
+    });
+    child.on("error", (error) => {
+      finish(() => reject(new LibraryError("spawn", error.code === "ENOENT" ? `ERROR library: command not found: ${file}` : `ERROR library: could not start ${label}: ${error.message}`)));
+    });
+    child.on("close", (code) => {
+      finish(() => {
+        if (code === 0) resolve13(Buffer.concat(chunks).toString("utf8"));
+        else reject(new LibraryError("exit", `ERROR library: ${label} exited with code ${code ?? "signal"}: ${stderr.trim().slice(0, 300)}`, stderr));
+      });
+    });
+  });
+}
+function splitCommand(text4) {
+  const words = [];
+  let current = "";
+  let quote2 = null;
+  let started = false;
+  for (const char of text4) {
+    if (quote2) {
+      if (char === quote2) quote2 = null;
+      else current += char;
+    } else if (char === '"' || char === "'") {
+      quote2 = char;
+      started = true;
+    } else if (/\s/u.test(char)) {
+      if (started) {
+        words.push(current);
+        current = "";
+        started = false;
+      }
+    } else {
+      current += char;
+      started = true;
+    }
+  }
+  if (quote2) throw new LibraryError("config", "ERROR library: unbalanced quote in the command setting");
+  if (started) words.push(current);
+  return words;
+}
+
+// src/library/pages.ts
+init_thresholds();
+import { existsSync, readFileSync } from "node:fs";
+import { isAbsolute, relative, resolve } from "node:path";
+var maxRequestPages = thresholds_default.library.maxRequestPages;
+var maxPageNumber = thresholds_default.library.maxPageNumber;
+function parsePageSpec(spec) {
+  const text4 = spec.trim();
+  if (text4 === "all") return "all";
+  const out = /* @__PURE__ */ new Set();
+  for (const part of text4.split(",")) {
+    const piece = part.trim();
+    if (!piece) continue;
+    const match = piece.match(/^(\d+)(?:\s*-\s*(\d+))?$/u);
+    if (!match) throw new LibraryError("usage", `ERROR library: bad page list "${spec}" (use 7, 7-9, 7-9,12 or all)`);
+    const low = Number(match[1]);
+    const high = Number(match[2] ?? match[1]);
+    if (!Number.isSafeInteger(low) || !Number.isSafeInteger(high) || high > maxPageNumber) throw new LibraryError("usage", `ERROR library: page "${piece}" is out of range (pages are whole numbers from 1 to ${maxPageNumber})`);
+    if (low < 1 || high < low) throw new LibraryError("usage", `ERROR library: bad page range "${piece}"`);
+    if (out.size + (high - low + 1) > maxRequestPages) throw new LibraryError("usage", `ERROR library: more than ${maxRequestPages} pages requested; use all`);
+    for (let page = low; page <= high; page += 1) out.add(page);
+  }
+  if (out.size === 0) throw new LibraryError("usage", "ERROR library: no pages requested");
+  return [...out].sort((a, b) => a - b);
+}
+function formatPageRanges(pages) {
+  const sorted = [...new Set(pages)].sort((a, b) => a - b);
+  const parts = [];
+  for (let index = 0; index < sorted.length; ) {
+    let end = index;
+    while (end + 1 < sorted.length && sorted[end + 1] === sorted[end] + 1) end += 1;
+    parts.push(end === index ? String(sorted[index]) : `${sorted[index]}-${sorted[end]}`);
+    index = end + 1;
+  }
+  return parts.join(",");
+}
+var BANNER = /^[─—-]{2}\s*Page\s+(\d+)\s*[─—-]{2}\s*$/u;
+function parseBanners(output) {
+  const header = [];
+  const pages = [];
+  let current;
+  for (const line of output.split("\n")) {
+    const banner = line.match(BANNER);
+    if (banner) {
+      if (current) pages.push({ page: current.page, text: current.lines.join("\n").replace(/\s+$/u, "") });
+      current = { page: Number(banner[1]), lines: [] };
+    } else if (current) current.lines.push(line);
+    else header.push(line);
+  }
+  if (current) pages.push({ page: current.page, text: current.lines.join("\n").replace(/\s+$/u, "") });
+  const count2 = header.join("\n").match(/\|\s*(\d+)\s+pages?\b/iu);
+  return { header: header.filter((line) => line.trim() && !/^[─=\-\s]+$/u.test(line)), pageCount: count2 ? Number(count2[1]) : null, pages };
+}
+function parseSourcePageMap(raw) {
+  if (raw === void 0 || raw === null) return {};
+  if (typeof raw !== "object" || Array.isArray(raw)) return { warning: 'pageMap is free text; use {"kind":"identity"|"offset"|"crosswalk"} (ignored)' };
+  const record = raw;
+  if (record.kind === "identity") return { map: { kind: "identity" } };
+  if (record.kind === "offset" && Number.isInteger(record.trove_minus_printed)) return { map: { kind: "offset", trove_minus_printed: record.trove_minus_printed } };
+  if (record.kind === "crosswalk" && typeof record.file === "string" && record.file) {
+    const volume = Number.isInteger(record.volume) ? record.volume : void 0;
+    const shift = Number.isInteger(record.stored_minus_printed) ? record.stored_minus_printed : void 0;
+    return { map: { kind: "crosswalk", file: record.file, ...volume !== void 0 ? { volume } : {}, ...shift !== void 0 ? { stored_minus_printed: shift } : {} } };
+  }
+  return { warning: "pageMap has an unknown shape (ignored)" };
+}
+function printedToTrove(printed, map, project) {
+  if (!map) throw new LibraryError("page_map", "ERROR library: this source has no structured pageMap in sources.json, so --printed cannot be resolved; pass --pages (Trove pages)");
+  if (map.kind === "identity") return printed;
+  if (map.kind === "offset") {
+    return printed.map((page) => {
+      const trove = page + map.trove_minus_printed;
+      if (trove < 1) throw new LibraryError("page_map", `ERROR library: printed page ${page} maps below Trove page 1`);
+      return trove;
+    });
+  }
+  const dir = resolve(project, ".academic-helper");
+  const file = resolve(dir, map.file);
+  const inside2 = relative(resolve(project), file);
+  if (inside2.startsWith("..") || isAbsolute(inside2)) throw new LibraryError("page_map", "ERROR library: the crosswalk file must be inside the project folder");
+  if (!existsSync(file)) throw new LibraryError("page_map", `ERROR library: crosswalk file not found: ${map.file}`);
+  let crosswalk;
+  try {
+    crosswalk = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    throw new LibraryError("page_map", `ERROR library: crosswalk file is not valid JSON: ${map.file}`);
+  }
+  const wanted = map.volume ?? 1;
+  const volume = (crosswalk.volumes ?? []).find((entry) => entry.volume === wanted);
+  if (!volume?.stored_to_ck) throw new LibraryError("page_map", `ERROR library: crosswalk has no volume ${wanted}`);
+  return printed.map((page) => {
+    const stored = page + (map.stored_minus_printed ?? 0);
+    const trove = volume.stored_to_ck?.[String(stored)];
+    if (!Number.isInteger(trove)) throw new LibraryError("page_map", `ERROR library: printed page ${page} has no Trove page in the crosswalk; pass --pages`);
+    return trove;
+  });
+}
+function troveToRoutePages(trove, routePages) {
+  if (routePages.kind === "identity") return { route: trove, missing: [] };
+  const byTrove = /* @__PURE__ */ new Map();
+  routePages.pdfToTrove.forEach((troveNumber, index) => {
+    const list = byTrove.get(troveNumber) ?? [];
+    list.push(index + 1);
+    byTrove.set(troveNumber, list);
+  });
+  const route = [];
+  const missing = [];
+  for (const page of trove) {
+    const found = byTrove.get(page);
+    if (found) route.push(...found);
+    else missing.push(page);
+  }
+  return { route, missing };
+}
+function routeToTrovePage(page, routePages) {
+  if (routePages.kind === "identity") return page;
+  return routePages.pdfToTrove[page - 1] ?? null;
+}
+function splitComplete(pages, routePages) {
+  if (routePages.kind === "identity") return { complete: pages, incomplete: [] };
+  const expected = /* @__PURE__ */ new Map();
+  for (const trove of routePages.pdfToTrove) expected.set(trove, (expected.get(trove) ?? 0) + 1);
+  const complete = [];
+  const incomplete = [];
+  for (const page of pages) {
+    if (new Set(page.routePages).size >= (expected.get(page.page) ?? 0)) complete.push(page);
+    else incomplete.push(page.page);
+  }
+  return { complete, incomplete };
+}
+function relabelPages(pages, routePages) {
+  if (routePages.kind === "identity") return pages.map((entry) => ({ page: entry.page, text: entry.text, routePages: [entry.page] })).sort((a, b) => a.page - b.page);
+  const grouped = /* @__PURE__ */ new Map();
+  for (const entry of pages) {
+    const trove = routeToTrovePage(entry.page, routePages);
+    if (trove === null) continue;
+    const existing = grouped.get(trove);
+    if (existing) {
+      existing.text += `
+${entry.text}`;
+      existing.routePages.push(entry.page);
+    } else grouped.set(trove, { page: trove, text: entry.text, routePages: [entry.page] });
+  }
+  return [...grouped.values()].sort((a, b) => a.page - b.page);
+}
+
+// src/library/backends.ts
+var limits = thresholds_default.library;
+var PLAIN_ID = /^[A-Za-z0-9_.#:-]+$/u;
+function isPlainId(id) {
+  return PLAIN_ID.test(id);
+}
+var BASE_NAMES = /* @__PURE__ */ new Set([
+  "PATH",
+  "HOME",
+  "USER",
+  "LOGNAME",
+  "LANG",
+  "LANGUAGE",
+  "TMPDIR",
+  "TEMP",
+  "TMP",
+  "TERM",
+  "SHELL",
+  "TZ",
+  "SSH_AUTH_SOCK",
+  "SYSTEMROOT",
+  "SystemRoot",
+  "WINDIR",
+  "COMSPEC",
+  "PATHEXT",
+  "USERPROFILE",
+  "APPDATA",
+  "LOCALAPPDATA",
+  "PROGRAMDATA"
+]);
+var BASE_PREFIXES = ["LC_", "XDG_"];
+var TROVE_PREFIXES = ["TROVE_", "CANDLEKEEP_", "CK_"];
+var INSTALL_NAMES = /* @__PURE__ */ new Set(["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "no_proxy", "all_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"]);
+var SECRET_NAME = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH)/iu;
+var SCRIPT_PREFIXES = ["PYTHON", "CLAUDE_"];
+var SCRIPT_NAMES = /* @__PURE__ */ new Set(["VIRTUAL_ENV", "CONDA_PREFIX", "HSPELL_PATH"]);
+var PI_NAMES = /* @__PURE__ */ new Set(["OPENROUTER_API_KEY"]);
+var VALID_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/u;
+var PASS_ENV = "AW_LIBRARY_PASS_ENV";
+function allowedEnv(env, kind = "pageindex") {
+  const out = {};
+  const listed = new Set((env[PASS_ENV] ?? "").split(",").map((name) => name.trim()).filter((name) => VALID_NAME.test(name)));
+  for (const [name, value] of Object.entries(env)) {
+    if (value === void 0) continue;
+    const allowed = BASE_NAMES.has(name) || BASE_PREFIXES.some((prefix) => name.startsWith(prefix)) || name.startsWith("AW_") && !SECRET_NAME.test(name) || kind === "trove" && TROVE_PREFIXES.some((prefix) => name.startsWith(prefix)) || kind === "script" && (SCRIPT_NAMES.has(name) || SCRIPT_PREFIXES.some((prefix) => name.startsWith(prefix)) && !SECRET_NAME.test(name)) || kind === "pi" && (PI_NAMES.has(name) || name.startsWith("PI_")) || kind === "install" && (INSTALL_NAMES.has(name) || name.startsWith("PIP_")) || listed.has(name);
+    if (allowed) out[name] = value;
+  }
+  return out;
+}
+function parseJson(text4, what) {
+  try {
+    return JSON.parse(text4);
+  } catch {
+    throw new LibraryError("parse", `ERROR library: ${what} did not return JSON`);
+  }
+}
+function asRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value : void 0;
+}
+function text(value) {
+  return typeof value === "string" ? value : "";
+}
+function whole(value) {
+  return typeof value === "number" && Number.isInteger(value) ? value : null;
+}
+function titleFromToc(toc) {
+  const lines = toc.split("\n").map((l) => l.replace(/^=+|=+$/gu, "").trim()).filter((l) => l && !/^=+$/u.test(l));
+  const idLine = lines.findIndex((l) => l.startsWith("ID:"));
+  const candidate = idLine > 0 ? lines[idLine - 1] : void 0;
+  return candidate?.replace(/^=+\s*|\s*=+$/gu, "").trim() || void 0;
+}
+var TroveBackend = class {
+  constructor(options) {
+    this.options = options;
+  }
+  route = "trove";
+  run(args2, timeoutMs = this.options.timeoutMs) {
+    return runCommand(this.options.command, args2, { timeoutMs, maxBuffer: limits.maxBufferBytes, env: this.options.env, cwd: this.options.cwd, scope: this.options.scope });
+  }
+  /** The active shelf of this project, so a listing is not the whole library. Best effort: no shelf means none. */
+  async activeShelf() {
+    try {
+      const out = (await this.run(["shelf", "current"])).trim();
+      if (!out || /^no active shelf/iu.test(out)) return void 0;
+      const named = out.match(/^(?:active shelf|shelf)\s*[:=]\s*(.+)$/imu)?.[1];
+      const line = (named ?? out.split("\n")[0] ?? "").trim();
+      return line || void 0;
+    } catch {
+      return void 0;
+    }
+  }
+  async list() {
+    const shelf = await this.activeShelf();
+    const raw = asRecord(parseJson(await this.run(["items", "list", ...shelf ? ["--shelf", shelf] : [], "--json"]), "trove items list"));
+    const items = Array.isArray(raw?.items) ? raw.items : [];
+    return items.flatMap((item) => {
+      const record = asRecord(item);
+      return record && text(record.id) ? [{ id: text(record.id), title: text(record.title), author: text(record.author), pageCount: whole(record.pageCount) }] : [];
+    });
+  }
+  async toc(book) {
+    const raw = asRecord(parseJson(await this.run(["items", "toc", book, "--json"]), "trove items toc"));
+    const first = Array.isArray(raw?.items) ? asRecord(raw.items[0]) : void 0;
+    const entries = (Array.isArray(first?.toc) ? first.toc : []).flatMap((entry) => {
+      const record = asRecord(entry);
+      const page = whole(record?.page);
+      return record && page !== null ? [{ title: text(record.title), page, endPage: null, level: whole(record.level) ?? 1 }] : [];
+    });
+    return { title: text(first?.title) || await this.title(book), toc: entries };
+  }
+  async title(book) {
+    try {
+      return titleFromToc(await this.run(["items", "toc", book]));
+    } catch {
+      return void 0;
+    }
+  }
+  async read(book, pages) {
+    const args2 = pages === "all" ? ["items", "read", `${book}:all`] : ["items", "read", book, "--pages", formatPageRanges(pages)];
+    const raw = await this.run(args2, pages === "all" ? this.options.readAllTimeoutMs ?? this.options.timeoutMs : this.options.timeoutMs);
+    const parsed = parseBanners(raw);
+    return { pages: parsed.pages, raw, title: parsed.header[0], pageCount: parsed.pageCount };
+  }
+};
+var PageIndexBackend = class {
+  constructor(options) {
+    this.options = options;
+  }
+  route = "pageindex";
+  catalogCache;
+  metaCache = /* @__PURE__ */ new Map();
+  jsonRead;
+  run(args2, timeoutMs = this.options.timeoutMs) {
+    return runCommand(this.options.command, args2, { timeoutMs, maxBuffer: limits.maxBufferBytes, env: this.options.env, cwd: this.options.cwd, scope: this.options.scope });
+  }
+  async catalog() {
+    if (this.catalogCache) return this.catalogCache;
+    const raw = asRecord(parseJson(await this.run(["catalog"]), "pilib catalog")) ?? {};
+    const map = /* @__PURE__ */ new Map();
+    for (const [id, value] of Object.entries(raw)) {
+      const record = asRecord(value);
+      if (record) map.set(id, { title: text(record.title), author: text(record.author), n_pages: whole(record.n_pages) });
+    }
+    this.catalogCache = map;
+    return map;
+  }
+  /** `pilib meta <book>`; null when this pilib has no meta command or the book is unknown. */
+  async meta(book) {
+    if (this.metaCache.has(book)) return this.metaCache.get(book) ?? null;
+    let meta = null;
+    try {
+      const raw = asRecord(parseJson(await this.run(["meta", book]), "pilib meta"));
+      if (raw) {
+        const pagemap = Array.isArray(raw.pagemap) && raw.pagemap.every((n) => Number.isInteger(n)) ? raw.pagemap : null;
+        meta = { book_id: text(raw.book_id) || book, title: text(raw.title), n_pages: whole(raw.n_pages), origin: asRecord(raw.origin) ?? {}, trove_id: text(raw.trove_id) || null, pagemap };
+      }
+    } catch (error) {
+      if (error instanceof LibraryError && (error.code === "timeout" || error.code === "spawn")) throw error;
+    }
+    this.metaCache.set(book, meta);
+    return meta;
+  }
+  async list() {
+    return [...await this.catalog()].map(([id, entry]) => ({ id, title: entry.title, author: entry.author, pageCount: entry.n_pages }));
+  }
+  async toc(book) {
+    const raw = asRecord(parseJson(await this.run(["tree", book]), "pilib tree"));
+    const entries = [];
+    const walk = (nodes, level) => {
+      if (!Array.isArray(nodes)) return;
+      for (const node of nodes) {
+        const record = asRecord(node);
+        const start = whole(record?.start_index);
+        if (record && start !== null) entries.push({ title: text(record.title), page: start, endPage: whole(record.end_index), level });
+        walk(record?.nodes, level + 1);
+      }
+    };
+    walk(raw?.structure, 1);
+    return { title: text(raw?.title) || void 0, toc: entries };
+  }
+  async title(book) {
+    try {
+      return (await this.catalog()).get(book)?.title || void 0;
+    } catch {
+      return void 0;
+    }
+  }
+  async read(book, pages) {
+    if (this.jsonRead !== false) {
+      try {
+        const spec = pages === "all" ? "all" : formatPageRanges(pages);
+        const raw = asRecord(parseJson(await this.run(["read", book, spec, "--json"], this.readTimeout(pages)), "pilib read"));
+        const list = Array.isArray(raw?.pages) ? raw.pages : void 0;
+        if (!list) throw new LibraryError("parse", "ERROR library: pilib read --json returned no pages");
+        this.jsonRead = true;
+        return { pages: list.flatMap((entry) => {
+          const record = asRecord(entry);
+          const page = whole(record?.page);
+          return record && page !== null ? [{ page, text: text(record.content) }] : [];
+        }) };
+      } catch (error) {
+        const old = error instanceof LibraryError && error.code === "exit" && /unrecognized arguments/iu.test(error.stderr);
+        if (!old) throw error;
+        this.jsonRead = false;
+      }
+    }
+    return { pages: await this.readPlain(book, pages) };
+  }
+  /** A whole-book read gets the longer timeout; page ranges keep the lookup timeout. */
+  readTimeout(pages) {
+    return pages === "all" ? this.options.readAllTimeoutMs ?? this.options.timeoutMs : this.options.timeoutMs;
+  }
+  async readPlain(book, pages) {
+    let wanted;
+    if (pages === "all") {
+      const count2 = (await this.catalog()).get(book)?.n_pages ?? (await this.meta(book))?.n_pages ?? null;
+      if (count2 === null) throw new LibraryError("page_map", `ERROR library: PageIndex does not say how many pages ${book} has, so the whole book cannot be read in chunks`);
+      wanted = Array.from({ length: count2 }, (_, index) => index + 1);
+    } else wanted = pages;
+    const chunkSize = limits.pageindex.readChunkPages;
+    const chunks = [];
+    for (let index = 0; index < wanted.length; index += chunkSize) chunks.push(wanted.slice(index, index + chunkSize));
+    const results = new Array(chunks.length);
+    let next = 0;
+    const worker = async () => {
+      while (next < chunks.length) {
+        const mine = next;
+        next += 1;
+        results[mine] = parseBanners(await this.run(["read", book, formatPageRanges(chunks[mine])], this.readTimeout(pages))).pages;
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(limits.pageindex.chunkConcurrency, chunks.length) }, worker));
+    return results.flat();
+  }
+};
+
+// src/pi.ts
+init_thresholds();
 var spawnRunner = async (args2, systemPrompt) => {
   const fullArgs = args2.map((arg) => arg === "__SYSTEM_PROMPT__" ? systemPrompt : arg);
   return await new Promise((resolve13, reject) => {
-    const child = spawn("pi", fullArgs, { stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn2("pi", fullArgs, { stdio: ["pipe", "pipe", "pipe"], env: allowedEnv(process.env, "pi") });
     child.stdin.end();
     let stdout = "";
     let stderr = "";
@@ -22803,7 +23331,7 @@ var readyOverride;
 async function piReady() {
   if (readyOverride !== void 0) return readyOverride;
   return await new Promise((resolve13) => {
-    const child = spawn("pi", ["auth", "check", "--provider", "openrouter"], { stdio: "ignore" });
+    const child = spawn2("pi", ["auth", "check", "--provider", "openrouter"], { stdio: "ignore", env: allowedEnv(process.env, "pi") });
     child.on("error", () => resolve13(false));
     child.on("close", (code) => resolve13(code === 0));
   });
@@ -22820,7 +23348,7 @@ function piModelFor(step) {
   return model;
 }
 function pluginRoot(argv1 = process.argv[1] ?? "") {
-  const bin = dirname(resolve(argv1));
+  const bin = dirname(resolve2(argv1));
   if (basename(bin) === "bin") return dirname(bin);
   const env = (process.env.CLAUDE_PLUGIN_ROOT ?? "").trim();
   if (env) return env;
@@ -22828,7 +23356,7 @@ function pluginRoot(argv1 = process.argv[1] ?? "") {
 }
 
 // src/paths.ts
-import { resolve as resolve2 } from "node:path";
+import { resolve as resolve3 } from "node:path";
 var dataArgument;
 var projectArgument;
 function setPathArguments(args2) {
@@ -22845,14 +23373,14 @@ function setPathArguments(args2) {
 }
 function dataDir() {
   if (!dataArgument) throw new Error("ERROR: --data-dir is required");
-  return resolve2(dataArgument);
+  return resolve3(dataArgument);
 }
 function projectDir() {
   if (!projectArgument) throw new Error("ERROR: --project-dir is required");
-  return resolve2(projectArgument);
+  return resolve3(projectArgument);
 }
 function projectDirOr() {
-  return resolve2(projectArgument ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd());
+  return resolve3(projectArgument ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd());
 }
 
 // src/main.ts
@@ -22870,10 +23398,10 @@ function routeFor(step) {
 }
 
 // src/proofread.ts
-import { readFileSync as readFileSync2, writeFileSync, mkdirSync as mkdirSync3, existsSync, appendFileSync as appendFileSync3 } from "node:fs";
-import { spawn as spawn2 } from "node:child_process";
+import { readFileSync as readFileSync3, writeFileSync, mkdirSync as mkdirSync3, existsSync as existsSync2, appendFileSync as appendFileSync3 } from "node:fs";
+import { spawn as spawn3 } from "node:child_process";
 import { createHash } from "node:crypto";
-import { join as join4, resolve as resolve3 } from "node:path";
+import { join as join4, resolve as resolve4 } from "node:path";
 
 // node_modules/@google/genai/dist/node/index.mjs
 var import_p_retry = __toESM(require_p_retry(), 1);
@@ -41052,7 +41580,7 @@ Validation error: ${lastError}. Return one corrected JSON object.`;
 
 // src/decide.ts
 init_thresholds();
-import { appendFileSync as appendFileSync2, mkdirSync as mkdirSync2, readFileSync } from "node:fs";
+import { appendFileSync as appendFileSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync2 } from "node:fs";
 import { join as join3 } from "node:path";
 
 // src/jev.ts
@@ -41136,7 +41664,7 @@ async function runDecideCli(args2) {
   const options = rawOptions.split(",").map((item) => item.trim()).filter(Boolean);
   if (options.length < 2) throw new Error("ERROR decide: --options requires at least two comma-separated answers");
   if (!options.includes(fallback)) throw new Error("ERROR decide: --fallback must match one of --options");
-  const context = readFileSync(contextFile, "utf8");
+  const context = readFileSync2(contextFile, "utf8");
   return decide({ point: pointValue, question, options, context, runId: runIdValue, fallback: async () => fallback, label });
 }
 
@@ -41189,7 +41717,7 @@ function contractChange(change) {
 }
 async function command(bin, args2, cwd) {
   return await new Promise((resolvePromise, reject) => {
-    const child = spawn2(bin, args2, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn3(bin, args2, { cwd, env: allowedEnv(process.env, "script"), stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8").on("data", (data) => {
@@ -41205,10 +41733,10 @@ async function command(bin, args2, cwd) {
 function importLegacyJev(runId2, project) {
   const legacyPath = join4(project, ".academic-helper", "jev-shadow.jsonl");
   const marker = join4(project, ".academic-helper", "jev-shadow-imported");
-  if (!existsSync(legacyPath) || existsSync(marker)) return;
+  if (!existsSync2(legacyPath) || existsSync2(marker)) return;
   const ledgerDir = join4(project, ".academic-helper", "runs", runId2);
   mkdirSync3(ledgerDir, { recursive: true });
-  const rows = readFileSync2(legacyPath, "utf8").split("\n").filter((line) => line.trim());
+  const rows = readFileSync3(legacyPath, "utf8").split("\n").filter((line) => line.trim());
   for (const line of rows) {
     let evidence;
     try {
@@ -41255,12 +41783,12 @@ ${chunk.text}`], responseSchema: findSchema, runId: options.runId, budget })).js
 }
 async function runProofread(options) {
   const root = options.article ? pluginRoot() : "";
-  const outDir = resolve3(options.out ?? ".");
+  const outDir = resolve4(options.out ?? ".");
   mkdirSync3(outDir, { recursive: true });
   const project = options.projectDir ?? process.env.CLAUDE_PROJECT_DIR ?? "";
   if (project) importLegacyJev(options.runId, project);
-  const article = options.article ? resolve3(options.article) : "";
-  const content = article ? readFileSync2(article, "utf8") : "";
+  const article = options.article ? resolve4(options.article) : "";
+  const content = article ? readFileSync3(article, "utf8") : "";
   const numbered = Array.isArray(options.chunks) ? numberedChunks(options.chunks) : [];
   const chunks = numbered.length ? numbered : content ? JSON.parse(await command("python3", [join4(root, "scripts/chunk-article.py"), "--input", article, "--numbered"])) : Array.from({ length: typeof options.chunks === "number" ? options.chunks : 0 }, (_, index) => ({ id: `chunk-${index}`, index, startLine: index + 1, endLine: index + 1, text: `L${index + 1}	x` }));
   const budget = new Budget(options.runId, budgetFor("proofread"));
@@ -41268,8 +41796,8 @@ async function runProofread(options) {
   if (article) {
     const stylesPath = join4(options.dataDir ?? process.env.CLAUDE_PLUGIN_DATA ?? "", "voice", "style-words.json");
     const termsPath = join4(options.projectDir ?? process.env.CLAUDE_PROJECT_DIR ?? "", ".academic-helper", "terms.json");
-    const actualStyles = existsSync(stylesPath) ? stylesPath : join4(outDir, ".empty-style-words.json");
-    const actualTerms = existsSync(termsPath) ? termsPath : join4(outDir, ".empty-terms.json");
+    const actualStyles = existsSync2(stylesPath) ? stylesPath : join4(outDir, ".empty-style-words.json");
+    const actualTerms = existsSync2(termsPath) ? termsPath : join4(outDir, ".empty-terms.json");
     if (actualStyles !== stylesPath) writeFileSync(actualStyles, JSON.stringify({}));
     if (actualTerms !== termsPath) writeFileSync(actualTerms, JSON.stringify({}));
     const tempText = join4(outDir, ".proofread-input.md");
@@ -41282,7 +41810,7 @@ async function runProofread(options) {
     await decide({ point: "style.filler", question: "Is this capped style-word use filler?", options: ["flag", "allow"], context: JSON.stringify(hit), runId: options.runId, fallback: async () => "flag" });
   }
   const voicePath = join4(options.dataDir ?? process.env.CLAUDE_PLUGIN_DATA ?? "", "voice", "rules.md");
-  const voiceRules = options.voiceRules ?? (existsSync(voicePath) ? readFileSync2(voicePath, "utf8") : "");
+  const voiceRules = options.voiceRules ?? (existsSync2(voicePath) ? readFileSync3(voicePath, "utf8") : "");
   const stageOptions = { ...options, voiceRules };
   const hspell = deterministic.filter((change) => change.class === "typo" && change.after === null);
   const found = options.only === "editorial" ? [] : await mapLimit(chunks, routeFor("proofread.find").concurrency, (chunk) => find(chunk, stageOptions, budget, hspell.filter((item) => item.line >= chunk.startLine && item.line <= chunk.endLine)));
@@ -41328,9 +41856,9 @@ ${JSON.stringify(changes)}`, schema: verifySchema, runId: options.runId, finderP
   const statusMap = new Map(verified.flat().map((change) => [change.id, change]));
   const all = [...deterministic.map((change) => ({ ...change, status: change.status ?? (change.after === null ? "flag" : "must-catch"), applied: change.after !== null })), ...candidates2.map((change) => statusMap.get(change.id) ?? { ...change, status: "unverified" })];
   const editorialChecksPath = join4(root, "skills", "proofread", "references", "editorial-checks.md");
-  const editorialChecks = article && existsSync(editorialChecksPath) ? readFileSync2(editorialChecksPath, "utf8") : "";
+  const editorialChecks = article && existsSync2(editorialChecksPath) ? readFileSync3(editorialChecksPath, "utf8") : "";
   const venuePath = options.venue && project ? join4(project, ".academic-helper", "venues", `${options.venue}.md`) : "";
-  const venueProfile = venuePath && existsSync(venuePath) ? readFileSync2(venuePath, "utf8") : "";
+  const venueProfile = venuePath && existsSync2(venuePath) ? readFileSync3(venuePath, "utf8") : "";
   const memo = options.only && options.only !== "editorial" ? "" : stubs.memo ? await stubs.memo() : (await callGemini({ step: "proofread.memo", system: prompt("proofread-memo.md"), parts: [`Global editorial checks (always apply):
 ${editorialChecks}
 
@@ -41375,7 +41903,7 @@ ${content}`], runId: options.runId, budget })).text;
         const outcome = appliedById.get(contract[index].change_id);
         if (outcome) all[index] = { ...change, applied: outcome.applied, skipReason: outcome.skipReason ?? void 0 };
       }
-      proofed = readFileSync2(proofedPath, "utf8");
+      proofed = readFileSync3(proofedPath, "utf8");
     }
     const finalContract = all.map(contractChange);
     writeFileSync(changesPath, JSON.stringify({ stage: "language", changes: finalContract }, null, 2));
@@ -41420,529 +41948,6 @@ async function fetchSefaria(reference) {
 // src/library/adapter.ts
 init_thresholds();
 import { randomBytes as randomBytes2 } from "node:crypto";
-
-// src/library/backends.ts
-init_thresholds();
-
-// src/library/exec.ts
-import { spawn as spawn3 } from "node:child_process";
-
-// src/library/types.ts
-var LibraryError = class extends Error {
-  code;
-  stderr;
-  constructor(code, message, stderr = "") {
-    super(message);
-    this.name = "LibraryError";
-    this.code = code;
-    this.stderr = stderr;
-  }
-};
-function errorMessage(error) {
-  return error instanceof Error ? error.message : String(error);
-}
-
-// src/library/exec.ts
-var STDERR_KEEP = 8192;
-var CommandScope = class {
-  stopped = false;
-  children = /* @__PURE__ */ new Set();
-  get aborted() {
-    return this.stopped;
-  }
-  add(child) {
-    this.children.add(child);
-  }
-  remove(child) {
-    this.children.delete(child);
-  }
-  abort() {
-    this.stopped = true;
-    for (const child of this.children) {
-      try {
-        if (process.platform !== "win32" && child.pid) process.kill(-child.pid, "SIGKILL");
-        else child.kill("SIGKILL");
-      } catch {
-        try {
-          child.kill("SIGKILL");
-        } catch {
-        }
-      }
-    }
-    this.children.clear();
-  }
-};
-function runCommand(command3, args2, options) {
-  const [file, ...prefix] = command3;
-  if (!file) return Promise.reject(new LibraryError("config", "ERROR library: empty command"));
-  const label = file.split("/").pop() ?? file;
-  if (options.scope?.aborted) return Promise.reject(new LibraryError("timeout", `ERROR library: ${label} not started: this lookup was stopped`));
-  return new Promise((resolve13, reject) => {
-    let settled = false;
-    const chunks = [];
-    let size = 0;
-    let stderr = "";
-    const posix = process.platform !== "win32";
-    const child = spawn3(file, [...prefix, ...args2], { stdio: ["ignore", "pipe", "pipe"], env: options.env, cwd: options.cwd, detached: posix, windowsHide: true });
-    options.scope?.add(child);
-    const killTree = () => {
-      try {
-        if (posix && child.pid) process.kill(-child.pid, "SIGKILL");
-        else child.kill("SIGKILL");
-      } catch {
-        try {
-          child.kill("SIGKILL");
-        } catch {
-        }
-      }
-    };
-    const finish = (fn) => {
-      if (settled) return;
-      settled = true;
-      options.scope?.remove(child);
-      clearTimeout(timer);
-      fn();
-    };
-    const timer = setTimeout(() => {
-      finish(() => {
-        killTree();
-        options.scope?.abort();
-        child.stdout?.destroy();
-        child.stderr?.destroy();
-        reject(new LibraryError("timeout", `ERROR library: ${label} did not answer within ${options.timeoutMs} ms`));
-      });
-    }, options.timeoutMs);
-    child.stdout?.on("data", (chunk) => {
-      size += chunk.length;
-      if (size > options.maxBuffer) {
-        finish(() => {
-          killTree();
-          reject(new LibraryError("too_large", `ERROR library: ${label} output is larger than ${options.maxBuffer} bytes`));
-        });
-        return;
-      }
-      chunks.push(chunk);
-    });
-    child.stderr?.on("data", (chunk) => {
-      if (stderr.length < STDERR_KEEP) stderr += chunk.toString("utf8");
-    });
-    child.on("error", (error) => {
-      finish(() => reject(new LibraryError("spawn", error.code === "ENOENT" ? `ERROR library: command not found: ${file}` : `ERROR library: could not start ${label}: ${error.message}`)));
-    });
-    child.on("close", (code) => {
-      finish(() => {
-        if (code === 0) resolve13(Buffer.concat(chunks).toString("utf8"));
-        else reject(new LibraryError("exit", `ERROR library: ${label} exited with code ${code ?? "signal"}: ${stderr.trim().slice(0, 300)}`, stderr));
-      });
-    });
-  });
-}
-function splitCommand(text4) {
-  const words = [];
-  let current = "";
-  let quote2 = null;
-  let started = false;
-  for (const char of text4) {
-    if (quote2) {
-      if (char === quote2) quote2 = null;
-      else current += char;
-    } else if (char === '"' || char === "'") {
-      quote2 = char;
-      started = true;
-    } else if (/\s/u.test(char)) {
-      if (started) {
-        words.push(current);
-        current = "";
-        started = false;
-      }
-    } else {
-      current += char;
-      started = true;
-    }
-  }
-  if (quote2) throw new LibraryError("config", "ERROR library: unbalanced quote in the command setting");
-  if (started) words.push(current);
-  return words;
-}
-
-// src/library/pages.ts
-init_thresholds();
-import { existsSync as existsSync2, readFileSync as readFileSync3 } from "node:fs";
-import { isAbsolute, relative, resolve as resolve4 } from "node:path";
-var maxRequestPages = thresholds_default.library.maxRequestPages;
-var maxPageNumber = thresholds_default.library.maxPageNumber;
-function parsePageSpec(spec) {
-  const text4 = spec.trim();
-  if (text4 === "all") return "all";
-  const out = /* @__PURE__ */ new Set();
-  for (const part of text4.split(",")) {
-    const piece = part.trim();
-    if (!piece) continue;
-    const match = piece.match(/^(\d+)(?:\s*-\s*(\d+))?$/u);
-    if (!match) throw new LibraryError("usage", `ERROR library: bad page list "${spec}" (use 7, 7-9, 7-9,12 or all)`);
-    const low = Number(match[1]);
-    const high = Number(match[2] ?? match[1]);
-    if (!Number.isSafeInteger(low) || !Number.isSafeInteger(high) || high > maxPageNumber) throw new LibraryError("usage", `ERROR library: page "${piece}" is out of range (pages are whole numbers from 1 to ${maxPageNumber})`);
-    if (low < 1 || high < low) throw new LibraryError("usage", `ERROR library: bad page range "${piece}"`);
-    if (out.size + (high - low + 1) > maxRequestPages) throw new LibraryError("usage", `ERROR library: more than ${maxRequestPages} pages requested; use all`);
-    for (let page = low; page <= high; page += 1) out.add(page);
-  }
-  if (out.size === 0) throw new LibraryError("usage", "ERROR library: no pages requested");
-  return [...out].sort((a, b) => a - b);
-}
-function formatPageRanges(pages) {
-  const sorted = [...new Set(pages)].sort((a, b) => a - b);
-  const parts = [];
-  for (let index = 0; index < sorted.length; ) {
-    let end = index;
-    while (end + 1 < sorted.length && sorted[end + 1] === sorted[end] + 1) end += 1;
-    parts.push(end === index ? String(sorted[index]) : `${sorted[index]}-${sorted[end]}`);
-    index = end + 1;
-  }
-  return parts.join(",");
-}
-var BANNER = /^[─—-]{2}\s*Page\s+(\d+)\s*[─—-]{2}\s*$/u;
-function parseBanners(output) {
-  const header = [];
-  const pages = [];
-  let current;
-  for (const line of output.split("\n")) {
-    const banner = line.match(BANNER);
-    if (banner) {
-      if (current) pages.push({ page: current.page, text: current.lines.join("\n").replace(/\s+$/u, "") });
-      current = { page: Number(banner[1]), lines: [] };
-    } else if (current) current.lines.push(line);
-    else header.push(line);
-  }
-  if (current) pages.push({ page: current.page, text: current.lines.join("\n").replace(/\s+$/u, "") });
-  const count2 = header.join("\n").match(/\|\s*(\d+)\s+pages?\b/iu);
-  return { header: header.filter((line) => line.trim() && !/^[─=\-\s]+$/u.test(line)), pageCount: count2 ? Number(count2[1]) : null, pages };
-}
-function parseSourcePageMap(raw) {
-  if (raw === void 0 || raw === null) return {};
-  if (typeof raw !== "object" || Array.isArray(raw)) return { warning: 'pageMap is free text; use {"kind":"identity"|"offset"|"crosswalk"} (ignored)' };
-  const record = raw;
-  if (record.kind === "identity") return { map: { kind: "identity" } };
-  if (record.kind === "offset" && Number.isInteger(record.trove_minus_printed)) return { map: { kind: "offset", trove_minus_printed: record.trove_minus_printed } };
-  if (record.kind === "crosswalk" && typeof record.file === "string" && record.file) {
-    const volume = Number.isInteger(record.volume) ? record.volume : void 0;
-    const shift = Number.isInteger(record.stored_minus_printed) ? record.stored_minus_printed : void 0;
-    return { map: { kind: "crosswalk", file: record.file, ...volume !== void 0 ? { volume } : {}, ...shift !== void 0 ? { stored_minus_printed: shift } : {} } };
-  }
-  return { warning: "pageMap has an unknown shape (ignored)" };
-}
-function printedToTrove(printed, map, project) {
-  if (!map) throw new LibraryError("page_map", "ERROR library: this source has no structured pageMap in sources.json, so --printed cannot be resolved; pass --pages (Trove pages)");
-  if (map.kind === "identity") return printed;
-  if (map.kind === "offset") {
-    return printed.map((page) => {
-      const trove = page + map.trove_minus_printed;
-      if (trove < 1) throw new LibraryError("page_map", `ERROR library: printed page ${page} maps below Trove page 1`);
-      return trove;
-    });
-  }
-  const dir = resolve4(project, ".academic-helper");
-  const file = resolve4(dir, map.file);
-  const inside2 = relative(resolve4(project), file);
-  if (inside2.startsWith("..") || isAbsolute(inside2)) throw new LibraryError("page_map", "ERROR library: the crosswalk file must be inside the project folder");
-  if (!existsSync2(file)) throw new LibraryError("page_map", `ERROR library: crosswalk file not found: ${map.file}`);
-  let crosswalk;
-  try {
-    crosswalk = JSON.parse(readFileSync3(file, "utf8"));
-  } catch {
-    throw new LibraryError("page_map", `ERROR library: crosswalk file is not valid JSON: ${map.file}`);
-  }
-  const wanted = map.volume ?? 1;
-  const volume = (crosswalk.volumes ?? []).find((entry) => entry.volume === wanted);
-  if (!volume?.stored_to_ck) throw new LibraryError("page_map", `ERROR library: crosswalk has no volume ${wanted}`);
-  return printed.map((page) => {
-    const stored = page + (map.stored_minus_printed ?? 0);
-    const trove = volume.stored_to_ck?.[String(stored)];
-    if (!Number.isInteger(trove)) throw new LibraryError("page_map", `ERROR library: printed page ${page} has no Trove page in the crosswalk; pass --pages`);
-    return trove;
-  });
-}
-function troveToRoutePages(trove, routePages) {
-  if (routePages.kind === "identity") return { route: trove, missing: [] };
-  const byTrove = /* @__PURE__ */ new Map();
-  routePages.pdfToTrove.forEach((troveNumber, index) => {
-    const list = byTrove.get(troveNumber) ?? [];
-    list.push(index + 1);
-    byTrove.set(troveNumber, list);
-  });
-  const route = [];
-  const missing = [];
-  for (const page of trove) {
-    const found = byTrove.get(page);
-    if (found) route.push(...found);
-    else missing.push(page);
-  }
-  return { route, missing };
-}
-function routeToTrovePage(page, routePages) {
-  if (routePages.kind === "identity") return page;
-  return routePages.pdfToTrove[page - 1] ?? null;
-}
-function splitComplete(pages, routePages) {
-  if (routePages.kind === "identity") return { complete: pages, incomplete: [] };
-  const expected = /* @__PURE__ */ new Map();
-  for (const trove of routePages.pdfToTrove) expected.set(trove, (expected.get(trove) ?? 0) + 1);
-  const complete = [];
-  const incomplete = [];
-  for (const page of pages) {
-    if (new Set(page.routePages).size >= (expected.get(page.page) ?? 0)) complete.push(page);
-    else incomplete.push(page.page);
-  }
-  return { complete, incomplete };
-}
-function relabelPages(pages, routePages) {
-  if (routePages.kind === "identity") return pages.map((entry) => ({ page: entry.page, text: entry.text, routePages: [entry.page] })).sort((a, b) => a.page - b.page);
-  const grouped = /* @__PURE__ */ new Map();
-  for (const entry of pages) {
-    const trove = routeToTrovePage(entry.page, routePages);
-    if (trove === null) continue;
-    const existing = grouped.get(trove);
-    if (existing) {
-      existing.text += `
-${entry.text}`;
-      existing.routePages.push(entry.page);
-    } else grouped.set(trove, { page: trove, text: entry.text, routePages: [entry.page] });
-  }
-  return [...grouped.values()].sort((a, b) => a.page - b.page);
-}
-
-// src/library/backends.ts
-var limits = thresholds_default.library;
-var PLAIN_ID = /^[A-Za-z0-9_.#:-]+$/u;
-function isPlainId(id) {
-  return PLAIN_ID.test(id);
-}
-var BASE_NAMES = /* @__PURE__ */ new Set([
-  "PATH",
-  "HOME",
-  "USER",
-  "LOGNAME",
-  "LANG",
-  "LANGUAGE",
-  "TMPDIR",
-  "TEMP",
-  "TMP",
-  "TERM",
-  "SHELL",
-  "TZ",
-  "SSH_AUTH_SOCK",
-  "SYSTEMROOT",
-  "SystemRoot",
-  "WINDIR",
-  "COMSPEC",
-  "PATHEXT",
-  "USERPROFILE",
-  "APPDATA",
-  "LOCALAPPDATA",
-  "PROGRAMDATA"
-]);
-var BASE_PREFIXES = ["LC_", "XDG_"];
-var TROVE_PREFIXES = ["TROVE_", "CANDLEKEEP_", "CK_"];
-var INSTALL_NAMES = /* @__PURE__ */ new Set(["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "no_proxy", "all_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"]);
-var SECRET_NAME = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH)/iu;
-var VALID_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/u;
-var PASS_ENV = "AW_LIBRARY_PASS_ENV";
-function allowedEnv(env, kind = "pageindex") {
-  const out = {};
-  const listed = new Set((env[PASS_ENV] ?? "").split(",").map((name) => name.trim()).filter((name) => VALID_NAME.test(name)));
-  for (const [name, value] of Object.entries(env)) {
-    if (value === void 0) continue;
-    const allowed = BASE_NAMES.has(name) || BASE_PREFIXES.some((prefix) => name.startsWith(prefix)) || name.startsWith("AW_") && !SECRET_NAME.test(name) || kind === "trove" && TROVE_PREFIXES.some((prefix) => name.startsWith(prefix)) || kind === "install" && (INSTALL_NAMES.has(name) || name.startsWith("PIP_")) || listed.has(name);
-    if (allowed) out[name] = value;
-  }
-  return out;
-}
-function parseJson(text4, what) {
-  try {
-    return JSON.parse(text4);
-  } catch {
-    throw new LibraryError("parse", `ERROR library: ${what} did not return JSON`);
-  }
-}
-function asRecord(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value : void 0;
-}
-function text(value) {
-  return typeof value === "string" ? value : "";
-}
-function whole(value) {
-  return typeof value === "number" && Number.isInteger(value) ? value : null;
-}
-function titleFromToc(toc) {
-  const lines = toc.split("\n").map((l) => l.replace(/^=+|=+$/gu, "").trim()).filter((l) => l && !/^=+$/u.test(l));
-  const idLine = lines.findIndex((l) => l.startsWith("ID:"));
-  const candidate = idLine > 0 ? lines[idLine - 1] : void 0;
-  return candidate?.replace(/^=+\s*|\s*=+$/gu, "").trim() || void 0;
-}
-var TroveBackend = class {
-  constructor(options) {
-    this.options = options;
-  }
-  route = "trove";
-  run(args2, timeoutMs = this.options.timeoutMs) {
-    return runCommand(this.options.command, args2, { timeoutMs, maxBuffer: limits.maxBufferBytes, env: this.options.env, cwd: this.options.cwd, scope: this.options.scope });
-  }
-  /** The active shelf of this project, so a listing is not the whole library. Best effort: no shelf means none. */
-  async activeShelf() {
-    try {
-      const out = (await this.run(["shelf", "current"])).trim();
-      if (!out || /^no active shelf/iu.test(out)) return void 0;
-      const named = out.match(/^(?:active shelf|shelf)\s*[:=]\s*(.+)$/imu)?.[1];
-      const line = (named ?? out.split("\n")[0] ?? "").trim();
-      return line || void 0;
-    } catch {
-      return void 0;
-    }
-  }
-  async list() {
-    const shelf = await this.activeShelf();
-    const raw = asRecord(parseJson(await this.run(["items", "list", ...shelf ? ["--shelf", shelf] : [], "--json"]), "trove items list"));
-    const items = Array.isArray(raw?.items) ? raw.items : [];
-    return items.flatMap((item) => {
-      const record = asRecord(item);
-      return record && text(record.id) ? [{ id: text(record.id), title: text(record.title), author: text(record.author), pageCount: whole(record.pageCount) }] : [];
-    });
-  }
-  async toc(book) {
-    const raw = asRecord(parseJson(await this.run(["items", "toc", book, "--json"]), "trove items toc"));
-    const first = Array.isArray(raw?.items) ? asRecord(raw.items[0]) : void 0;
-    const entries = (Array.isArray(first?.toc) ? first.toc : []).flatMap((entry) => {
-      const record = asRecord(entry);
-      const page = whole(record?.page);
-      return record && page !== null ? [{ title: text(record.title), page, endPage: null, level: whole(record.level) ?? 1 }] : [];
-    });
-    return { title: text(first?.title) || await this.title(book), toc: entries };
-  }
-  async title(book) {
-    try {
-      return titleFromToc(await this.run(["items", "toc", book]));
-    } catch {
-      return void 0;
-    }
-  }
-  async read(book, pages) {
-    const args2 = pages === "all" ? ["items", "read", `${book}:all`] : ["items", "read", book, "--pages", formatPageRanges(pages)];
-    const raw = await this.run(args2, pages === "all" ? this.options.readAllTimeoutMs ?? this.options.timeoutMs : this.options.timeoutMs);
-    const parsed = parseBanners(raw);
-    return { pages: parsed.pages, raw, title: parsed.header[0], pageCount: parsed.pageCount };
-  }
-};
-var PageIndexBackend = class {
-  constructor(options) {
-    this.options = options;
-  }
-  route = "pageindex";
-  catalogCache;
-  metaCache = /* @__PURE__ */ new Map();
-  jsonRead;
-  run(args2, timeoutMs = this.options.timeoutMs) {
-    return runCommand(this.options.command, args2, { timeoutMs, maxBuffer: limits.maxBufferBytes, env: this.options.env, cwd: this.options.cwd, scope: this.options.scope });
-  }
-  async catalog() {
-    if (this.catalogCache) return this.catalogCache;
-    const raw = asRecord(parseJson(await this.run(["catalog"]), "pilib catalog")) ?? {};
-    const map = /* @__PURE__ */ new Map();
-    for (const [id, value] of Object.entries(raw)) {
-      const record = asRecord(value);
-      if (record) map.set(id, { title: text(record.title), author: text(record.author), n_pages: whole(record.n_pages) });
-    }
-    this.catalogCache = map;
-    return map;
-  }
-  /** `pilib meta <book>`; null when this pilib has no meta command or the book is unknown. */
-  async meta(book) {
-    if (this.metaCache.has(book)) return this.metaCache.get(book) ?? null;
-    let meta = null;
-    try {
-      const raw = asRecord(parseJson(await this.run(["meta", book]), "pilib meta"));
-      if (raw) {
-        const pagemap = Array.isArray(raw.pagemap) && raw.pagemap.every((n) => Number.isInteger(n)) ? raw.pagemap : null;
-        meta = { book_id: text(raw.book_id) || book, title: text(raw.title), n_pages: whole(raw.n_pages), origin: asRecord(raw.origin) ?? {}, trove_id: text(raw.trove_id) || null, pagemap };
-      }
-    } catch (error) {
-      if (error instanceof LibraryError && (error.code === "timeout" || error.code === "spawn")) throw error;
-    }
-    this.metaCache.set(book, meta);
-    return meta;
-  }
-  async list() {
-    return [...await this.catalog()].map(([id, entry]) => ({ id, title: entry.title, author: entry.author, pageCount: entry.n_pages }));
-  }
-  async toc(book) {
-    const raw = asRecord(parseJson(await this.run(["tree", book]), "pilib tree"));
-    const entries = [];
-    const walk = (nodes, level) => {
-      if (!Array.isArray(nodes)) return;
-      for (const node of nodes) {
-        const record = asRecord(node);
-        const start = whole(record?.start_index);
-        if (record && start !== null) entries.push({ title: text(record.title), page: start, endPage: whole(record.end_index), level });
-        walk(record?.nodes, level + 1);
-      }
-    };
-    walk(raw?.structure, 1);
-    return { title: text(raw?.title) || void 0, toc: entries };
-  }
-  async title(book) {
-    try {
-      return (await this.catalog()).get(book)?.title || void 0;
-    } catch {
-      return void 0;
-    }
-  }
-  async read(book, pages) {
-    if (this.jsonRead !== false) {
-      try {
-        const spec = pages === "all" ? "all" : formatPageRanges(pages);
-        const raw = asRecord(parseJson(await this.run(["read", book, spec, "--json"], this.readTimeout(pages)), "pilib read"));
-        const list = Array.isArray(raw?.pages) ? raw.pages : void 0;
-        if (!list) throw new LibraryError("parse", "ERROR library: pilib read --json returned no pages");
-        this.jsonRead = true;
-        return { pages: list.flatMap((entry) => {
-          const record = asRecord(entry);
-          const page = whole(record?.page);
-          return record && page !== null ? [{ page, text: text(record.content) }] : [];
-        }) };
-      } catch (error) {
-        const old = error instanceof LibraryError && error.code === "exit" && /unrecognized arguments/iu.test(error.stderr);
-        if (!old) throw error;
-        this.jsonRead = false;
-      }
-    }
-    return { pages: await this.readPlain(book, pages) };
-  }
-  /** A whole-book read gets the longer timeout; page ranges keep the lookup timeout. */
-  readTimeout(pages) {
-    return pages === "all" ? this.options.readAllTimeoutMs ?? this.options.timeoutMs : this.options.timeoutMs;
-  }
-  async readPlain(book, pages) {
-    let wanted;
-    if (pages === "all") {
-      const count2 = (await this.catalog()).get(book)?.n_pages ?? (await this.meta(book))?.n_pages ?? null;
-      if (count2 === null) throw new LibraryError("page_map", `ERROR library: PageIndex does not say how many pages ${book} has, so the whole book cannot be read in chunks`);
-      wanted = Array.from({ length: count2 }, (_, index) => index + 1);
-    } else wanted = pages;
-    const chunkSize = limits.pageindex.readChunkPages;
-    const chunks = [];
-    for (let index = 0; index < wanted.length; index += chunkSize) chunks.push(wanted.slice(index, index + chunkSize));
-    const results = new Array(chunks.length);
-    let next = 0;
-    const worker = async () => {
-      while (next < chunks.length) {
-        const mine = next;
-        next += 1;
-        results[mine] = parseBanners(await this.run(["read", book, formatPageRanges(chunks[mine])], this.readTimeout(pages))).pages;
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(limits.pageindex.chunkConcurrency, chunks.length) }, worker));
-    return results.flat();
-  }
-};
 
 // src/library/config.ts
 import { existsSync as existsSync4, readFileSync as readFileSync5 } from "node:fs";
@@ -48125,13 +48130,13 @@ function voiceSync(direction) {
     local["profile.json"] = readFileSync8(join12(dir, "profile.json"), "utf8");
     local["CHANGELOG.jsonl"] = readFileSync8(join12(dir, "CHANGELOG.jsonl"), "utf8");
     const localProfile = local["profile.json"] ? JSON.parse(local["profile.json"]) : {};
-    const listingText = execFileSync("trove", ["items", "list", "--json"], { encoding: "utf8" });
+    const listingText = execFileSync("trove", ["items", "list", "--json"], { encoding: "utf8", env: allowedEnv(process.env, "trove") });
     const listing = JSON.parse(listingText);
     const item = listing.items?.find((row) => row.title === title && typeof row.id === "string");
     if (direction === "pull" && !item?.id) throw new AwError("ERROR", "voice.pull", "no Trove voice store found");
     let remote;
     if (item?.id) {
-      const text4 = execFileSync("trove", ["items", "get", item.id], { encoding: "utf8" });
+      const text4 = execFileSync("trove", ["items", "get", item.id], { encoding: "utf8", env: allowedEnv(process.env, "trove") });
       remote = JSON.parse(text4);
     }
     if (direction === "pull") {
@@ -48152,8 +48157,8 @@ function voiceSync(direction) {
     }
     const file = join12(dir, ".trove-voice.md");
     writeFileSync3(file, body);
-    if (item?.id) execFileSync("trove", ["items", "put", item.id, "-f", file], { encoding: "utf8" });
-    else execFileSync("trove", ["items", "import", file, "--title", title], { encoding: "utf8" });
+    if (item?.id) execFileSync("trove", ["items", "put", item.id, "-f", file], { encoding: "utf8", env: allowedEnv(process.env, "trove") });
+    else execFileSync("trove", ["items", "import", file, "--title", title], { encoding: "utf8", env: allowedEnv(process.env, "trove") });
     return `voice push: synchronized ${title}`;
   } catch (error) {
     if (error instanceof AwError) throw error;
@@ -48746,7 +48751,7 @@ var schema2 = { type: "array", items: { type: "object", required: ["page_number"
 function runScript(name, args2) {
   const plugin2 = resolve9(dirname6(process.argv[1] ?? ""), "..");
   const script = join16(plugin2, "scripts", "ocr", name);
-  const result = spawnSync("python3", [script, ...args2], { encoding: "utf8" });
+  const result = spawnSync("python3", [script, ...args2], { encoding: "utf8", env: allowedEnv(process.env, "script") });
   if (result.status !== 0) throw new AwError("ERROR", "ocr", result.stderr.trim() || result.stdout.trim() || `${name} failed`);
   try {
     return JSON.parse(result.stdout);
@@ -48895,7 +48900,7 @@ function generateDocx(args2) {
   writeFileSync9(jsonPath, `${JSON.stringify(result.article, null, 2)}
 `, "utf8");
   const script = join17(args2.pluginRoot, "scripts", "generate-docx.py");
-  const child = spawnSync2("python3", [script, "--input", jsonPath, "--output", args2.out], { stdio: "inherit" });
+  const child = spawnSync2("python3", [script, "--input", jsonPath, "--output", args2.out], { stdio: "inherit", env: allowedEnv(process.env, "script") });
   if (child.error) throw new Error(`ERROR docx: ${child.error.message}`);
   if (child.status !== 0) throw new Error(`ERROR docx: generate-docx.py exited ${child.status ?? 1}`);
   return { sections: result.sections, paragraphs: result.paragraphs, footnotes: result.footnotes, words: result.words };
@@ -51640,6 +51645,10 @@ var KeyResolver = class {
   isPartial(key) {
     return this.partialKeys.has(key);
   }
+  /** True when the note is partial or matched no source at all (an Ibid. after an unmatched note, an unknown citation). */
+  isUnresolved(key) {
+    return this.partialKeys.has(key) || this.byKey.get(key)?.length === 0;
+  }
   resolve(key) {
     const cached = this.byKey.get(key);
     if (cached) return cached;
@@ -51720,7 +51729,7 @@ function candidatesFromDrafts(project, files, skips, unmatched) {
     const resolved = draft.sentences.map((sentence) => ({
       sentence,
       keys: sentence.keys.flatMap((key) => keysOf.resolve(key)),
-      partial: sentence.keys.some((key) => keysOf.isPartial(key))
+      partial: sentence.keys.some((key) => keysOf.isUnresolved(key))
     }));
     for (const { sentence, keys, partial } of resolved) {
       order += 1;
