@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Library evaluation sealed mapping (sealed/mapping.json)",
+  "description": "Which library stood behind option A and B of each pair. Never shown to the judge; its sha256 (with the nonce) is committed in pairs.json and checked on unblind.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "eval_id", "seed", "nonce", "pairs"],
+  "properties": {
+    "schema": {"const": 1},
+    "eval_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,39}$"},
+    "seed": {"type": "string", "minLength": 1},
+    "nonce": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "pairs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pair_id", "claim_id", "A", "B"],
+        "properties": {
+          "pair_id": {"type": "string", "pattern": "^p[0-9]{2,3}$"},
+          "claim_id": {"type": "string", "pattern": "^c[0-9]{2,3}$"},
+          "A": {"enum": ["trove", "pageindex"]},
+          "B": {"enum": ["trove", "pageindex"]}
+        }
+      }
+    }
+  }
+}
