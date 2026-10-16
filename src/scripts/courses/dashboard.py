@@ -226,6 +226,36 @@ def kind_word(kind: Any) -> str:
 
 # --- state ---------------------------------------------------------------------------------------
 
+# --- time windows: one definition, used by build_state and next_boundary alike --------------------
+# Aware datetimes that share a ZoneInfo subtract as wall-clock times, so across a DST switch "72 hours" would
+# drift by an hour. Every window is computed on UTC instants instead.
+
+def _utc(moment: datetime) -> datetime:
+    return moment.astimezone(timezone.utc)
+
+
+def soon_from(due: datetime) -> datetime:
+    """The instant a deadline enters the SOON_HOURS window (72 real hours before it)."""
+    return _utc(due) - timedelta(hours=SOON_HOURS)
+
+
+def undo_until(submitted_at: datetime) -> datetime:
+    """The instant a dashboard submit leaves the RECENT_SUBMIT_HOURS undo window."""
+    return _utc(submitted_at) + timedelta(hours=RECENT_SUBMIT_HOURS)
+
+
+def is_soon(due: datetime, now: datetime) -> bool:
+    return soon_from(due) <= _utc(now) <= _utc(due)
+
+
+def is_overdue(due: datetime, now: datetime) -> bool:
+    return _utc(due) < _utc(now)
+
+
+def in_undo_window(submitted_at: datetime, now: datetime) -> bool:
+    return _utc(now) < undo_until(submitted_at)
+
+
 def _due_sort(task: Dict[str, Any]) -> Tuple[int, str, str]:
     return (0, task["due_utc"], task["id"]) if task.get("due_utc") else (1, "", task["id"])
 
@@ -341,13 +371,13 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
                 "status": task.get("status") or "open", "due_at": due.isoformat() if due else None,
                 "due_date": due.date().isoformat() if due else None, "due_time": due.strftime("%H:%M") if due else None,
                 "due_utc": due.astimezone(timezone.utc).isoformat() if due else None,
-                "soon": bool(due and timedelta(0) <= due - now <= timedelta(hours=SOON_HOURS)),
-                "overdue": bool(due and due < now),
+                "soon": bool(due and is_soon(due, now)),
+                "overdue": bool(due and is_overdue(due, now)),
                 "submitted_at": submitted_at.isoformat() if submitted_at else None,
                 # only a submit made through task_submit (it records closed_chores) can be undone or called "you marked it";
                 # a task whose chore the watcher closed is just a past task
                 "recently_submitted": bool(submitted_at and "closed_chores" in task
-                                           and now - submitted_at <= timedelta(hours=RECENT_SUBMIT_HOURS)),
+                                           and in_undo_window(submitted_at, now)),
                 "desc": first_chore.get("text") or "", "core_texts": list(first_chore.get("core_texts") or []),
                 "lemida_url": _https(f"{lemida_base}/mod/view.php?id={lemida_ref}") if lemida_base and lemida_ref else None,
                 "state": task_state(task, items), "items": items,
@@ -474,7 +504,7 @@ def lede(course_list: List[Dict[str, Any]], now: datetime) -> List[Dict[str, str
         course = names.get(first["course"], first["course"])
         if first["due_at"]:
             due = datetime.fromisoformat(first["due_at"])
-            verb = "היה צריך להגיש" if due < now else "מגישים"
+            verb = "היה צריך להגיש" if is_overdue(due, now) else "מגישים"
             head = f"{_when_phrase(due, now)} {verb} את {first['title']} ב{course}"
         else:
             head = f"ההגשה הפתוחה הבאה, בלי תאריך, היא {first['title']} ב{course}"
@@ -538,11 +568,11 @@ def next_boundary(state: Dict[str, Any], now: datetime) -> Optional[datetime]:
         for t in c.get("tasks", []):
             if t.get("status") != "submitted" and t.get("due_at"):
                 due = datetime.fromisoformat(t["due_at"])
-                candidates += [due, due - timedelta(hours=SOON_HOURS)]
+                candidates += [_utc(due), soon_from(due)]
             if t.get("recently_submitted") and t.get("submitted_at"):
-                candidates.append(datetime.fromisoformat(t["submitted_at"]) + timedelta(hours=RECENT_SUBMIT_HOURS))
-    future = [c for c in candidates if c > now]
-    return min(future).astimezone(tz) if future else None
+                candidates.append(undo_until(datetime.fromisoformat(t["submitted_at"])))
+    future = [c for c in candidates if _utc(c) > _utc(now)]
+    return min(future, key=_utc).astimezone(tz) if future else None
 
 
 # --- writes --------------------------------------------------------------------------------------

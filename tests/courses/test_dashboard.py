@@ -3,7 +3,7 @@ import json
 import socket
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -398,3 +398,35 @@ def test_sse_emits_when_the_clock_crosses_a_boundary(tmp_path):
         assert b"event: state-changed" in buf
     finally:
         srv.close()
+
+
+def test_soon_mark_flips_exactly_at_the_scheduled_boundary_across_dst(tmp_path):
+    """72 hours before a deadline after the 25.10 switch: build_state and next_boundary must agree to the second."""
+    d, *_ = make_reg(tmp_path)
+    data = json.loads((d / "gamma.json").read_text())
+    data["tasks"] = [{"id": "s-dst", "title": "After the switch", "due_at": "2026-10-26T12:00:00+02:00", "chore_ids": [],
+                      "status": "open", "submitted_at": None, "kind": "spec"}]
+    _w(d / "gamma.json", data)
+    gamma = lambda s: by_slug(s)["gamma"]["tasks"][0]  # noqa: E731
+    start = datetime(2026, 10, 23, 9, 0, tzinfo=TZ)
+    boundary = dashboard.next_boundary(dashboard.build_state(d, now=start), start)
+    while boundary is not None and boundary.hour == 0 and boundary.minute == 0:  # skip midnights
+        boundary = dashboard.next_boundary(dashboard.build_state(d, now=boundary), boundary)
+    assert boundary == datetime(2026, 10, 23, 13, 0, tzinfo=TZ)  # 72 real hours before 26.10 12:00 +02:00
+    before = boundary - timedelta(seconds=1)
+    assert gamma(dashboard.build_state(d, now=before))["soon"] is False
+    assert gamma(dashboard.build_state(d, now=boundary))["soon"] is True
+
+
+def test_undo_window_closes_exactly_at_the_scheduled_boundary_across_dst(tmp_path):
+    d, *_ = make_reg(tmp_path)
+    data = json.loads((d / "gamma.json").read_text())
+    data["tasks"] = [{"id": "s-sub", "title": "Handed in", "due_at": None, "chore_ids": [], "closed_chores": [],
+                      "status": "submitted", "submitted_at": "2026-10-25T00:30:00+03:00", "kind": "spec"}]
+    _w(d / "gamma.json", data)
+    gamma = lambda s: by_slug(s)["gamma"]["tasks"][0]  # noqa: E731
+    start = datetime(2026, 10, 25, 1, 0, tzinfo=TZ)
+    boundary = dashboard.next_boundary(dashboard.build_state(d, now=start), start)
+    assert boundary == datetime(2026, 10, 25, 11, 30, tzinfo=TZ)  # 12 real hours; the clock fell back at 02:00
+    assert gamma(dashboard.build_state(d, now=boundary - timedelta(seconds=1)))["recently_submitted"] is True
+    assert gamma(dashboard.build_state(d, now=boundary))["recently_submitted"] is False
