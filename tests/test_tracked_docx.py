@@ -26,6 +26,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import unittest
+from unittest import mock
 import zipfile
 
 from docx import Document
@@ -478,14 +479,17 @@ class NoMatchSkipTests(TrackedDocxTestCase):
         output_with_bad = os.path.join(self.tmpdir, "with_bad.proofed.docx")
         output_without_bad = os.path.join(self.tmpdir, "without_bad.proofed.docx")
 
-        btd.build_tracked_docx(original_path, final_text, [good_change, bad_change], output_with_bad)
-        btd.build_tracked_docx(original_path, final_text, [good_change], output_without_bad)
+        # w:date has one-second resolution: freeze the clock so the two builds cannot straddle a second.
+        with mock.patch.dict(os.environ, {"AW_FIXED_NOW": "2026-01-02T03:04:05Z"}):
+            btd.build_tracked_docx(original_path, final_text, [good_change, bad_change], output_with_bad)
+            btd.build_tracked_docx(original_path, final_text, [good_change], output_without_bad)
 
         with zipfile.ZipFile(output_with_bad) as zf:
             xml_with_bad = zf.read("word/document.xml")
         with zipfile.ZipFile(output_without_bad) as zf:
             xml_without_bad = zf.read("word/document.xml")
         self.assertEqual(xml_with_bad, xml_without_bad)
+        self.assertIn(b'w:date="2026-01-02T03:04:05Z"', xml_with_bad)
 
 
 class EmptyChangesTests(TrackedDocxTestCase):
