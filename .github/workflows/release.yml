@@ -70,6 +70,12 @@ jobs:
       - name: Install hooks dependencies (for the typecheck gate)
         run: cd src/hooks && npm ci
 
+      # src/cli has its own node_modules, needed by the pytest gate (the end-to-end
+      # tests bundle the `aw` tool from src/cli), `npm run test:cli` and
+      # `npm run typecheck:cli`. ci.yml carries the identical step.
+      - name: Install CLI dependencies (for the pytest, test:cli and typecheck:cli gates)
+        run: cd src/cli && npm ci
+
       - name: Install Python test dependencies
         run: |
           python -m pip install --upgrade pip
@@ -122,6 +128,12 @@ jobs:
 
       - name: Gate — strict TypeScript on hooks
         run: npm run typecheck
+
+      - name: Gate — aw CLI tests
+        run: npm run test:cli
+
+      - name: Gate — strict TypeScript on the aw CLI
+        run: npm run typecheck:cli
 
       - name: Tag the released commit
         run: |

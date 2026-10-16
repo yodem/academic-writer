@@ -134,6 +134,7 @@ footer { margin-top: 48px; color: var(--muted); font-size: .9rem; border-top: 1p
     <li><a href="#privacy">Privacy</a></li>
     <li><a href="#trouble">Troubleshooting</a></li>
     <li><a href="#update">Updating and uninstalling</a></li>
+    <li><a href="#library">Choosing a library (optional)</a></li>
   </ol>
 </nav>
 
@@ -215,6 +216,7 @@ claude plugin install academic-writer@yodem</code></pre></div>
 <p>After setup, if you want the plugin to learn your personal style, put 5 to 10 of your published articles in the <code>past-articles</code> folder that setup created, then run:</p>
 <div class="cmd"><pre><code>/academic-writer:init</code></pre></div>
 <p><code>init</code> reads your articles, shows you what it learned about your style so you can correct it, and helps you connect your source library. It is safe to run setup or init again later; they update your profile and never erase it.</p>
+<p>Setup and init also ask whether to add <strong>PageIndex</strong>, an optional second library for your books. The safe answer is "Not now": your books are then read from Trove, exactly as before. Section 11 explains the choice.</p>
 </section>
 
 <section id="first-article">
@@ -281,13 +283,14 @@ claude plugin install academic-writer@yodem</code></pre></div>
     <tr><td><code>.academic-helper/</code></td><td>The project's working files: your profile (<code>profile.md</code>), the list of sources and their citation details, the outline, the drafts of each paragraph, and a log of each run.</td></tr>
     <tr><td><code>ocr-output/</code></td><td>Text extracted from scanned pages by <code>/academic-writer:ocr</code>.</td></tr>
     <tr><td>Your <code>.docx</code> files</td><td>The finished articles. Claude tells you the file name each time.</td></tr>
+    <tr><td><code>.academic-helper/library-eval/</code></td><td>Only if you run a library comparison (section 11): its plan, the anonymous answers, your judgments, a sealed key that says which side was which, and the final report.</td></tr>
   </tbody>
 </table></div>
 <div class="note">
   <p>Folders whose names start with a dot, like <code>.academic-helper</code>, are <em>hidden</em> by default. To see them: on a Mac, press <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>.</kbd> in Finder; on Windows, open File Explorer, choose <strong>View</strong>, then <strong>Show</strong>, then <strong>Hidden items</strong>.</p>
 </div>
 <h3>In the plugin's own data folder (shared by all your projects)</h3>
-<p>Your <strong>voice data</strong> (the passages you chose as examples of your style, the writing habits the plugin learned, your preferred terms, and the before-and-after pairs from your own corrections) lives in one place so every project benefits. It is inside your home folder under <code>.claude/plugins/data/</code>, in a folder whose name starts with <code>academic-writer</code>. The same folder keeps a small log of plugin mistakes you flagged during <code>/academic-writer:revise</code>, so they can be fixed.</p>
+<p>Your <strong>voice data</strong> (the passages you chose as examples of your style, the writing habits the plugin learned, your preferred terms, and the before-and-after pairs from your own corrections) lives in one place so every project benefits. It is inside your home folder under <code>.claude/plugins/data/</code>, in a folder whose name starts with <code>academic-writer</code>. The same folder keeps a small log of plugin mistakes you flagged during <code>/academic-writer:revise</code>, so they can be fixed. If you chose to install the plugin's own PageIndex helper (section 11), it lives here too, in a folder called <code>pageindex</code>, together with the books you prepared for it.</p>
 <p>This folder survives plugin updates. It is removed if you uninstall the plugin, unless you ask to keep it (see section 10).</p>
 </section>
 
@@ -296,6 +299,8 @@ claude plugin install academic-writer@yodem</code></pre></div>
 <ul>
   <li><strong>Anthropic (Claude).</strong> Your conversation with Claude, and the text Claude reads to help you (your drafts, the passages of sources it checks), are sent to Anthropic, as with any use of Claude Code.</li>
   <li><strong>Google (Gemini).</strong> If you set up a Gemini key, the paragraphs being drafted, edited, proofread or summarised, the source passages they rely on, and any scanned pages you ask it to read are sent to Google's Gemini service. On Google's free tier, Google may use what you send to improve its products; check Google's current terms, and consider a paid key for unpublished work you consider sensitive.</li>
+  <li><strong>Google and PageIndex (optional).</strong> If you prepare a book for PageIndex and choose Gemini summaries, the text of each section of the book is sent to Google so Gemini can write a short outline. The plugin tells you how much text and asks first, every time. There is a free choice that sends nothing to Google: it reuses the notes already written for Trove. Nothing is ever sent to PageIndex Cloud; the plugin has no code for it and needs no PageIndex account.</li>
+  <li><strong>Anthropic or OpenAI and the library comparison (optional).</strong> The comparison in section 11 runs a separate Claude Code (or Codex, if you choose it). The claims from your draft and the page text it reads go to Anthropic (or OpenAI), on your own plan, after you have seen an estimate and said yes. The quiet background test of a second library uses no AI model at all.</li>
   <li><strong>Trove (optional).</strong> Only the sources you choose to upload to your Trove library are stored there.</li>
   <li><strong>Your keys.</strong> When you save your Gemini key through the plugin's settings, Claude Code stores it in your computer's secure keychain (or a protected credentials file), never in a plain text file in your project. The plugin never prints it or writes it into your research folder.</li>
   <li><strong>Nothing else.</strong> The plugin writes only inside your research folder and its own data folder. It does not send your files anywhere else.</li>
@@ -324,6 +329,10 @@ claude plugin install academic-writer@yodem</code></pre></div>
   <p>If the computer says <code>python3</code> was not found, install Python 3 from <a href="https://www.python.org/downloads/">python.org/downloads</a> (on Windows, tick "Add Python to PATH" during installation), then try again.</p>
 </details>
 <details>
+  <summary>The PageIndex helper will not install, or PageIndex is "not reachable"</summary>
+  <p>Run <code>/academic-writer:health</code>. It says in plain words what is wrong: usually your Python is older than 3.10 (needed only for the larger helper), the <code>pango</code> add-on is missing on a Mac, there is no network connection, or the <code>pageindex_command</code> setting points at something that no longer exists. The basic helper works with Python 3.9. Your books stay safe in Trove whatever happens here, and Trove keeps working.</p>
+</details>
+<details>
   <summary>Hebrew text looks reversed or punctuation is in the wrong place</summary>
   <p>In Claude Code's window, mixed Hebrew and English can look jumbled; that is only the display. The Word file is laid out right to left. If the Word file itself looks wrong, make sure your article language in the profile is Hebrew (run <code>/academic-writer:setup</code> to check) and tell Claude what you see.</p>
 </details>
@@ -347,6 +356,46 @@ claude plugin update academic-writer@yodem</code></pre></div>
   <div class="cmd"><pre><code>claude plugin uninstall academic-writer@yodem --keep-data</code></pre></div>
   <p>Your research folders, drafts and Word files are never touched by uninstalling.</p>
 </div>
+</section>
+
+<section id="library">
+<h2>11. Choosing a library (optional)</h2>
+<p>You can skip this section. Unless you choose otherwise, your books are read from <strong>Trove</strong>, as before, and nothing here changes how the plugin works for you.</p>
+
+<h3>The choices</h3>
+<p><strong>PageIndex</strong> is a second library that keeps a short outline of every book, with a few lines on each section, so Claude can go straight to the likely page. For each article you choose where its books are read from, and you can change your mind later with <code>/academic-writer:update-tools</code>.</p>
+<div class="cards">
+  <div class="card"><h3>Trove</h3><p>The default. Your books are read from Trove. Nothing else runs.</p></div>
+  <div class="card"><h3>PageIndex</h3><p>Your books are read from PageIndex instead. You need to prepare the books for it first.</p></div>
+  <div class="card"><h3>Both</h3><p>One library answers. The other is tested quietly in the background on the same questions and can never change, slow down or break your result.</p></div>
+</div>
+
+<h3>Adding PageIndex</h3>
+<p>Setup, init and update-tools offer two ways, explain each in plain words, and ask before doing anything:</p>
+<ol>
+  <li><strong>The plugin's own helper.</strong> A small program that the plugin installs in its own data folder, not in your system. The basic helper is about 100 MB and needs Python 3.9 or newer; it prepares books that have a table of contents. A larger helper (about 500 MB, Python 3.10 or newer and, on a Mac, the <code>pango</code> add-on) can also prepare a book that has no table of contents. The plugin shows you the plan and the size, installs only after you say yes, never installs Python for you, and can remove the helper again.</li>
+  <li><strong>Your own PageIndex.</strong> If you already run PageIndex yourself, for example on a server, you type its command into the plugin's <code>pageindex_command</code> setting (type <code>/plugin</code>, open <strong>Installed</strong>, choose <strong>academic-writer</strong>, then <strong>Configure</strong>). A command you set yourself always wins over the built-in helper. Never put a password in that setting.</li>
+</ol>
+<div class="cmd"><pre><code>/academic-writer:update-tools</code></pre></div>
+<p>Say you want PageIndex and choose <strong>Set it up on this computer</strong>. Then run <code>/academic-writer:health</code> to see which helper is in use and that it is ready.</p>
+
+<h3>Preparing your books</h3>
+<p>A book must be prepared once before PageIndex can read it. When you add a book with <code>/academic-writer:ingest</code> or <code>/academic-writer:ingest-book</code>, the plugin writes it to Trove first, checks it, and then offers to prepare it for PageIndex too. It uses the same table of contents and the same page numbers, so a citation means the same page in both libraries. For each book it tells you how much text would be sent to Google for the summaries, and you choose: <strong>Gemini summaries</strong>, the <strong>free option</strong> that sends nothing, or <strong>not now</strong>. A problem here never undoes the Trove upload.</p>
+<p>You can also add a reading to a book you already have, and prepare the books already in Trove in one go (a "backfill"). Both are safe to repeat: summaries already paid for are reused, and Trove is never changed.</p>
+
+<h3>Measuring the libraries</h3>
+<p>Every lookup and every citation check is noted on your computer, in <code>.academic-helper/retrieval.jsonl</code>: how long it took, an estimate of how much text came back, and the citation checker's verdict. Ask Claude to "show me the library report" for a plain-language comparison on your real articles: speed, failures, how often the two libraries return the same page, how often the citation checker passes, the size of the text returned and the cost of any preparation or comparison runs. The size figures are estimates, not a bill. Nothing in that log is uploaded.</p>
+
+<h3>The blind comparison: judge it yourself</h3>
+<p><code>/academic-writer:library-eval</code> answers a sharper question on your own sources: for the claims in this article, which library finds the better pages?</p>
+<ol class="steps">
+  <li><strong>Plan.</strong> The plugin picks claims from one of your drafts and tells you how many helper runs this needs and what they are likely to cost. Nothing is spent until you say yes.</li>
+  <li><strong>Find.</strong> For each claim, a separate Claude (or Codex) looks up the supporting pages in each library, one library at a time.</li>
+  <li><strong>Judge.</strong> You open one private page that works offline, in Hebrew and English. For each claim it shows two answers, "A" and "B", in random order, with no library names. You choose <em>Better: A</em>, <em>Better: B</em>, <em>Same</em> or <em>Neither</em>, and may add a note. You can stop and come back, and then save your judgments as a file.</li>
+  <li><strong>Reveal.</strong> The plugin imports your judgments and only then reveals which library was which, with how many pairs each won, a confidence range, the time, tokens and cost of each, and how often each found the page the citation checker had confirmed.</li>
+</ol>
+<div class="note"><p>Be careful with small numbers. With only a handful of judged pairs the report says it is a first look, not a verdict, and so should you. The blind judging protects <em>you</em> as the judge; the helpers that find the pages can still tell from the shape of what they read which library they are looking at.</p></div>
+<p>Full details, the report explained line by line and the known limits are in <a href="https://github.com/yodem/academic-writer/blob/main/docs/library-routes.md">docs/library-routes.md</a> in the project repository.</p>
 </section>
 
 <footer>

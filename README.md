@@ -96,7 +96,8 @@ Type any of these in Claude Code. You can also describe what you want in your ow
 | `/academic-writer:ingest` | Upload a single article or chapter to your source library, keeping its printed page numbers and adding a citation guide. |
 | `/academic-writer:ingest-book` | Upload a whole book (multi-volume, scanned or EPUB) with a clickable table of contents that jumps to the right page. |
 | `/academic-writer:ideate` | Turn a vague topic into a sharp research question; saves a research brief that write reads. |
-| `/academic-writer:ocr` | Turn a scanned PDF or photographed page (or a folder of them) into plain text. |
+| `/academic-writer:ocr` | Turn a scanned PDF or photographed page (or a folder of them) into plain text, with Gemini, Claude, Codex or local Tesseract, your choice. |
+| `/academic-writer:library-eval` | Compare Trove and PageIndex on your own article: you judge anonymous A and B answers, then see which library was which. |
 | `/academic-writer:voice` | Build or update your voice profile: exemplar paragraphs you choose and your writing habits. |
 | `/academic-writer:health` | Check that everything is ready, with a plain-language fix for anything missing. |
 | `/academic-writer:help` | A short list of every command and the three steps to get started. |
@@ -112,7 +113,29 @@ A few more things the plugin can do have no command of their own. Ask for them i
 
 ## Choosing a library (optional)
 
-Each article project can read its books from Trove (the default), from a PageIndex library you run yourself, or from both, where one answers and the other is tested quietly in the background. Every lookup and every citation check is logged on your computer in `.academic-helper/retrieval.jsonl`, and `aw library report` compares the libraries on your real articles. See [docs/library-routes.md](docs/library-routes.md).
+Your books are read from **Trove** unless you choose otherwise. Nothing here changes how the plugin works for you today, and you can skip this whole section.
+
+**What the choices are.** Each article project can read its books from Trove (the default), from **PageIndex**, or from both, where one library answers and the other is tested quietly in the background without ever changing, slowing or failing your result. PageIndex is a second library that keeps a short outline of every book, with a few lines on each section, so Claude can go straight to the likely page. You choose per article, and you can change your mind with `/academic-writer:update-tools`.
+
+**Two ways to get PageIndex.** Setup, init and update-tools offer both, in plain words, and ask before doing anything:
+
+1. **The plugin's own helper.** The plugin sets up a small helper in its own data folder (not in your system). The basic helper is about 100 MB and needs Python 3.9 or newer; a larger one (about 500 MB, Python 3.10 or newer and, on a Mac, the `pango` library) can also prepare a book that has no table of contents. You can remove it again. The steps are below.
+2. **Your own PageIndex.** If you already run PageIndex yourself, for example on a server, you type its command into the plugin's `pageindex_command` setting (`/plugin`, then **Installed**, then **academic-writer**, then **Configure**). A command you set yourself always wins over the built-in helper.
+
+**Preparing your books.** A book must be prepared once before PageIndex can read it. When you add a book with `/academic-writer:ingest` or `/academic-writer:ingest-book`, the plugin writes it to Trove first, checks it, and then offers to prepare it for PageIndex too, with the same table of contents and the same page numbers, so a citation means the same page in both. You can also add a reading to a book you already have, and prepare the books already in Trove (a "backfill") in one go. For each preparation the plugin tells you in advance how much text would be sent to Google and asks you; the free choice sends nothing (see Privacy).
+
+**What is measured.** Every lookup and every citation check is logged on your computer in `.academic-helper/retrieval.jsonl`, with the time it took, an estimate of how many tokens of text it returned, and the citation checker's verdict. `aw library report` turns that into a comparison on your real articles: speed, failures, how often the two libraries return the same page, the citation checker's pass rate, tokens, and the cost of any preparation and evaluation runs. Token figures from the log are estimates, not a bill.
+
+**Judge it yourself: a blind evaluation.** `/academic-writer:library-eval` picks claims from one of your drafts, has a separate Claude (or Codex) look up the supporting pages in each library, and shows you the two answers side by side as "A" and "B" in random order on a private page that works offline, in Hebrew and English. You mark each pair better A, better B, same or neither, with a note. Only after you finish does the plugin reveal which library was which, with win rates, a confidence range, time, cost and how often each found the page the citation checker had confirmed. With too few pairs it tells you it is only a first look.
+
+**Install steps for the built-in helper.** Run these in Claude Code, started in your research folder, and answer the questions it asks:
+
+1. Type `/academic-writer:update-tools` (or `/academic-writer:setup`, the first time) and say you want PageIndex. Among the choices it offers, pick **Set it up on this computer**.
+2. Read the plan it shows (which size, how much disk space, where it goes) and say yes if you want it. Nothing is installed before that.
+3. If it says your Python is too old or `pango` is missing for the larger helper, you can accept the basic helper or follow the short steps it gives for your system. It never installs Python for you.
+4. Type `/academic-writer:health` to confirm it is ready. It shows which helper is in use.
+
+Full details, commands, the report explained line by line and the known limits are in [docs/library-routes.md](docs/library-routes.md).
 
 ---
 
@@ -137,6 +160,8 @@ Either way, the key is picked up only when a **new** Claude Code session starts.
 
 - **Anthropic (Claude).** Your conversation with Claude, and the text Claude reads to help you (your drafts, the source passages it checks), go to Anthropic, as with any use of Claude Code.
 - **Google (Gemini).** With a Gemini key, the text being drafted, edited, proofread or summarised, the source passages it relies on, and any scanned pages you ask it to read are sent to Google. On Google's free tier, Google may use what you send to improve its products. Check Google's current terms, and consider a paid key for unpublished work you consider sensitive.
+- **Google (Gemini) and PageIndex.** If you prepare books for PageIndex and choose **Gemini summaries**, the text of each section of the book is sent to Google, with your Gemini key, so Gemini can write the short outline. The plugin tells you how much text, and asks first, every time. The free option (`--summaries hints`, offered alongside) sends nothing: it reuses the hints already written for Trove. The same Google terms as above apply. Nothing is ever sent to PageIndex Cloud: the plugin has no code for it and needs no PageIndex account.
+- **Anthropic (or OpenAI) and the blind evaluation.** `/academic-writer:library-eval` runs a separate Claude Code (or Codex, if you choose it) to find supporting pages. The claims from your draft and the page text it reads go to Anthropic (or OpenAI), on your own plan, after you have seen an estimate and said yes. The quiet background test of a second library uses no AI model at all.
 - **Trove (optional).** Only the sources you choose to upload are stored there. If you use Trove, your voice profile is also synced there so it follows you between computers.
 - **Jev (advanced, off by default).** Only if you enter the optional `jev_api_key` setting, the question and context at a few decision points are also sent to the Jev service. In this version its answers are only logged and never change your results. Most users should leave it empty.
 - **Your keys.** Saved through the plugin settings, the key is kept in your keychain. The plugin never prints it or writes it into your research folder.
@@ -145,9 +170,9 @@ Either way, the key is picked up only when a **new** Claude Code session starts.
 
 | Where | What |
 |---|---|
-| `.academic-helper/` in your research folder | This project's working files: your profile (`profile.md`), the source list, the outline, drafts, verified evidence, a log of each run and a log of library lookups (`retrieval.jsonl`). |
+| `.academic-helper/` in your research folder | This project's working files: your profile (`profile.md`), the source list, the outline, drafts, verified evidence, a log of each run, a log of library lookups (`retrieval.jsonl`) and, if you run an evaluation, its files (`library-eval/`), including the sealed key that says which side was which. |
 | `past-articles/`, `ocr-output/` and your `.docx` files, in your research folder | Your published articles, text from scanned pages, and the finished articles. |
-| The plugin's data folder, `~/.claude/plugins/data/` (the folder whose name starts with `academic-writer`) | Your voice data, shared by all your projects, and a small log of plugin mistakes you flagged during revise. |
+| The plugin's data folder, `~/.claude/plugins/data/` (the folder whose name starts with `academic-writer`) | Your voice data, shared by all your projects, a small log of plugin mistakes you flagged during revise, and, only if you installed it, the built-in PageIndex helper and the books prepared for it (the `pageindex` folder). |
 
 Folders whose names start with a dot are hidden by default. On a Mac, press Cmd+Shift+. in Finder; on Windows, choose View, then Show, then Hidden items in File Explorer.
 
@@ -171,6 +196,7 @@ Start with **`/academic-writer:health`**. It checks your profile, key, tools and
 - **Write asks about your voice profile.** Choose "Build my voice first" and run `/academic-writer:voice`, or continue without it and build it later.
 - **The Word file is not created, or a "missing Python package" message.** Run `/academic-writer:setup`; it offers to install the add-ons. To do it yourself: `python3 -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema`.
 - **Proofreading a Word file fails.** The proofread command converts `.docx` files with `pandoc`, a free document converter, which setup does not install. Install it from [pandoc.org/installing.html](https://pandoc.org/installing.html), or proofread a Markdown copy.
+- **The PageIndex helper will not install, or `aw library status` says PageIndex is not reachable.** Run `/academic-writer:health`; it names the cause (Python older than 3.10 for the larger helper, a missing `pango` library on a Mac, no network, or an old command in `pageindex_command`). The basic helper works with Python 3.9. Trove keeps working either way.
 - **Hebrew looks reversed in the Claude Code window.** That is only the display; the Word file is laid out right to left.
 
 Still stuck? Open an issue at [github.com/yodem/academic-writer/issues](https://github.com/yodem/academic-writer/issues) and include the output of `/academic-writer:health`.
@@ -198,6 +224,9 @@ Source lives in `src/`. Never edit `plugins/` directly: `npm run build` generate
 npm run build                           # assemble plugins/academic-writer/ from src/
 npm run build:hooks                     # rebuild only the TypeScript hooks
 npm run typecheck                       # strict TypeScript check on src/hooks/
+(cd src/cli && npm ci)                  # once: dependencies of the aw tool (CLI tests and the end-to-end test need them)
+npm run test:cli                        # tests of the aw command-line tool
+npm run typecheck:cli                   # strict TypeScript check on src/cli/
 python3 -m pytest -q tests              # full test suite
 python3 tests/test_plugin_structure.py  # structural integrity tests
 bash scripts/check-no-private-refs.sh   # privacy gate
@@ -207,6 +236,8 @@ npm run clean                           # wipe plugins/ and src/hooks/dist/
 
 - **Privacy gate.** The repository is public. `scripts/check-no-private-refs.sh` fails if a tracked file carries a personal identifier (home paths, private emails, internal host names) or if internal dev-state paths are tracked. It runs in CI and in pytest.
 - **Generated guide blocks.** The command table and version stamp in `src/guide/index.html` and the command list in `src/skills/help/SKILL.md` are generated from skill frontmatter by `scripts/gen-guide.py`, which the build runs. Edit the text around the `guide:` markers, never inside them; `python3 scripts/gen-guide.py --check` reports drift.
+- **CI.** The CI and release workflows install the dependencies of `src/hooks` and `src/cli`, then run the version, privacy and test gates, `npm run test:cli` and both typechecks. They do not install the larger PageIndex helper, so the tests use fakes for it.
+- **PageIndex helper.** `src/scripts/pageindex/` holds `pilib`, the helper the plugin installs on request (pinned version and hashes in `PINNED.json`; third-party licences in `THIRD_PARTY_NOTICES.md`). Its tests run on Python 3.9 or newer.
 - **Thresholds.** Numeric limits live only in `src/thresholds.json`.
 - **Versions and releases.** Bump with `python3 scripts/version-sync.py --bump patch|minor|major` in the same commit that writes the CHANGELOG section. The Release workflow is started by hand; it verifies and tags what is committed and does not bump anything.
 
