@@ -324,14 +324,21 @@
       "concurrency": 16,
       "askAboveCalls": 400,
       "timeoutMs": 1800000,
-      "_comment": "aw library index (PageIndex tree build): summaryModel is the LiteLLM model for page summaries, maxCalls the hard cap on model calls per run, concurrency the parallel calls, askAboveCalls the estimated call count above which the skill asks the researcher before starting (with a cost estimate), timeoutMs bounds one whole indexing run (30 minutes)."
+      "verifyPages": 2,
+      "minSummaryShare": 0.8,
+      "probeTimeoutMs": 30000,
+      "_comment": "aw library index (PageIndex tree build): summaryModel is the LiteLLM model for page summaries, maxCalls the hard cap on model calls per run, concurrency the parallel calls, askAboveCalls the estimated call count above which the skill asks the researcher before starting (with a cost estimate) and the call cap a run without --yes gets, timeoutMs bounds one whole indexing run (30 minutes). verifyPages is how many pages the read-back compares with Trove, minSummaryShare the share of nodes that must carry a summary when summaries were asked for, probeTimeoutMs bounds the up-front check that the command can index at all."
     },
     "install": {
       "pageindexCommit": "af92d9658a6a9c0ae31171b43198db28951af2f4",
       "minPython": "3.10",
       "minPythonCore": "3.9",
       "pipTimeoutMs": 900000,
-      "_comment": "aw library install: pageindexCommit is the pinned PageIndex commit (its tarball sha256 lives in PINNED.json), minPython the least Python for the structure tier, minPythonCore the least for the core tier (index from the table of contents), pipTimeoutMs bounds one pip install (15 minutes)."
+      "venvTimeoutMs": 180000,
+      "healthTimeoutMs": 90000,
+      "probeTimeoutMs": 15000,
+      "approxSizeMb": { "core": 100, "structure": 500 },
+      "_comment": "aw library install: pageindexCommit is the pinned PageIndex commit (its tarball sha256 lives in PINNED.json), minPython the least Python for the structure tier, minPythonCore the least for the core tier (index from the table of contents), pipTimeoutMs bounds one pip install (15 minutes), venvTimeoutMs the creation of the private Python folder, healthTimeoutMs the check after the install, probeTimeoutMs asking one Python what version it is. approxSizeMb is the rough disk size quoted to the researcher before an install (an estimate, not a measurement)."
     },
     "eval": {
       "maxClaims": 30,
@@ -343,7 +350,11 @@
       "expectedUsdPerRun": 0.1,
       "maxPagesPerRead": 5,
       "maxReads": 2,
-      "_comment": "aw library eval (blind comparison of Trove and PageIndex): maxClaims is the most claims sampled from an article, minPairs the fewest judged pairs before a verdict is shown, maxTurns, maxBudgetUsdPerRun, maxPagesPerRead and maxReads bound one locate run, parallel the runs at once, locateModel the model that locates a quote, expectedUsdPerRun the figure quoted to the researcher before running."
+      "runTimeoutMs": 600000,
+      "minClaimWords": 5,
+      "maxAnswerPages": 3,
+      "perSourceShare": 3,
+      "_comment": "aw library eval (blind comparison of Trove and PageIndex): runTimeoutMs bounds one locate run, minClaimWords is the shortest sentence taken as a claim, maxAnswerPages the most pages one answer may name, perSourceShare the most sampled claims per cited source. maxClaims is the most claims sampled from an article, minPairs the fewest judged pairs before a verdict is shown, maxTurns, maxBudgetUsdPerRun, maxPagesPerRead and maxReads bound one locate run, parallel the runs at once, locateModel the model that locates a quote, expectedUsdPerRun the figure quoted to the researcher before running."
     },
     "_comment": "aw library: one adapter in front of the Trove and PageIndex routes. timeoutMs.primary bounds each page-range lookup on the answering route, timeoutMs.readAll bounds a whole-book read (evidence builds, read all, get; a book of about 1,000 pages over a remote command) and timeoutMs.check each call of status --check. maxBufferBytes caps one command's output (a whole book). maxRequestPages caps one requested page list. maxPageNumber is the highest page number a request may name. pageindex.readChunkPages is pilib's per-call read cap, used only when pilib has no read --json; chunkConcurrency runs those chunks in parallel; metaScanMax is the most shelf books looked up one by one to find a Trove id (more than that needs an explicit shelf map). Retrieval ledger and shadow: timeoutMs.shadow bounds the quiet second lookup (the detached worker) and timeoutMs.verdictSettle is how long aw library verdict waits for a still-running shadow before it records shadow_pending. shadow.ops are the lookups that get a shadow; shadow.maxConcurrent caps live workers per project (more are skipped as busy); shadow.readAllMaxPages is the most pages one read may have and still be shadowed; shadow.lockStaleMs drops a worker slot nobody released and shadow.reapGraceMs is how long a slot must be idle before a dead holder's slot is taken over; shadow.pollMs is the file poll step. spool.maxBytes caps one spooled page set and spool.ttlHours deletes spool files. ledger.maxRowBytes, maxErrorChars and maxAgreePages keep each retrieval.jsonl row small. agree.jaccardMin is the word overlap at which two routes count as returning the same page; supports.tokenCoverageMin is the share of the auditor quote's words that must appear in the shadow page text, and minQuoteTokens the shortest quote that is tested. report.minLookups is the fewest lookups per route before the report stops calling its rates rough."
   }

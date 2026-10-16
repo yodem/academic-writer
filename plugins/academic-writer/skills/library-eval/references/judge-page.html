@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<title>Judge the results</title>
+<style>
+:root {
+  --gutter: 16px;
+  --bg: #f4efe6;
+  --surface: #fffdf8;
+  --surface-2: #f0eadd;
+  --ink: #211d17;
+  --muted: #655d51;
+  --rule: #d9d0be;
+  --accent: #2c5b60;
+  --accent-ink: #fffdf8;
+  --focus: #1f5fbf;
+  --warn: #8a4b12;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Noto Serif Hebrew", "Frank Ruhl Libre", "Times New Roman", "David", Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Hebrew", "Arial Hebrew", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15130f;
+    --surface: #1d1a15;
+    --surface-2: #26221b;
+    --ink: #ece6d9;
+    --muted: #a69d8d;
+    --rule: #3a342a;
+    --accent: #86bdb6;
+    --accent-ink: #12100c;
+    --focus: #8ab4ff;
+    --warn: #e0a366;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+html, body { margin: 0; overflow-x: hidden; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+.wrap { max-width: 68rem; margin-inline: auto; padding-inline: var(--gutter); }
+header.site { padding-block: 1.25rem 0.5rem; }
+header.site h1 { font: 600 0.8125rem/1.3 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+header.site p { margin: 0.35rem 0 0; color: var(--muted); font-size: 0.9375rem; max-width: 42rem; }
+main { padding-block: 0.75rem 3rem; }
+h2, h3 { margin: 0; font-weight: 600; line-height: 1.3; }
+h2 { font-size: 1.25rem; }
+h3 { font: 600 0.8125rem/1.3 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+p { margin: 0 0 0.75em; }
+button, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+[tabindex="-1"]:focus { outline: none; }
+
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; padding-block: 0.75rem; border-bottom: 1px solid var(--rule); margin-bottom: 1.25rem; }
+.bar h2 { font-family: var(--sans); font-size: 1rem; }
+.bar .count { font: 0.875rem/1.3 var(--sans); color: var(--muted); }
+.bar progress { flex: 1 1 8rem; min-width: 6rem; height: 0.5rem; accent-color: var(--accent); }
+.linklike { background: none; border: 0; padding: 0.5rem 0.25rem; min-height: 44px; font: 0.9375rem var(--sans); color: var(--accent); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+.claim-card { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 1rem var(--gutter) 1.1rem; margin-bottom: 1.25rem; }
+.claim { margin: 0.5rem 0 0; padding-inline-start: 0.9rem; border-inline-start: 3px solid var(--accent); font-size: 1.3125rem; line-height: 1.5; overflow-wrap: anywhere; }
+
+.results { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); margin-bottom: 1.5rem; }
+@media (min-width: 56rem) { .results { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.25rem; } }
+.result { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 0.9rem var(--gutter) 1rem; min-width: 0; }
+.result > header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.75rem; border-bottom: 1px solid var(--rule); padding-bottom: 0.6rem; margin-bottom: 0.75rem; }
+.result h3 { font: 600 1.125rem/1.3 var(--serif); letter-spacing: 0; text-transform: none; color: var(--ink); }
+.result .meta { font: 0.8125rem/1.4 var(--sans); color: var(--muted); }
+.book { font: 0.875rem/1.4 var(--sans); color: var(--muted); margin: 0 0 0.75rem; overflow-wrap: anywhere; }
+.page { border-top: 1px dashed var(--rule); padding-top: 0.6rem; margin-top: 0.6rem; }
+.page:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+.page-label { font: 600 0.8125rem/1.3 var(--sans); letter-spacing: 0.04em; color: var(--accent); margin: 0 0 0.35rem; }
+.page-text { overflow-wrap: anywhere; }
+.page-text p { white-space: pre-wrap; margin-bottom: 0.6em; }
+.page-text.clamped { max-height: 10.5rem; overflow: hidden; -webkit-mask-image: linear-gradient(black 70%, transparent); mask-image: linear-gradient(black 70%, transparent); }
+.empty { color: var(--muted); font-style: italic; margin: 0; }
+
+fieldset.verdict { border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); padding: 0.9rem var(--gutter) 1rem; margin: 0 0 1rem; min-width: 0; }
+fieldset.verdict legend { font: 600 1rem/1.4 var(--sans); padding-inline: 0.4rem; }
+.choices { display: grid; gap: 0.6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 0.4rem; }
+@media (min-width: 40rem) { .choices { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.choice { position: relative; display: block; }
+.choice input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.choice-body { display: block; height: 100%; min-height: 4.25rem; padding: 0.6rem 0.75rem; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface-2); font-family: var(--sans); }
+.choice-body strong { display: block; font-size: 1rem; }
+.choice-body small { display: block; color: var(--muted); font-size: 0.8125rem; line-height: 1.35; margin-top: 0.15rem; }
+.choice input:checked + .choice-body { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.choice input:checked + .choice-body small { color: inherit; opacity: 0.85; }
+.choice input:focus-visible + .choice-body { outline: 3px solid var(--focus); outline-offset: 2px; }
+.choice:hover .choice-body { border-color: var(--accent); }
+
+.note-label { display: block; font: 600 0.9375rem/1.4 var(--sans); margin-bottom: 0.35rem; }
+.note-label span { font-weight: 400; color: var(--muted); }
+textarea { display: block; width: 100%; min-height: 5.5rem; padding: 0.6rem 0.75rem; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; font-family: var(--serif); font-size: 1rem; line-height: 1.5; resize: vertical; }
+.saved { min-height: 1.4em; margin: 0.4rem 0 0; font: 0.8125rem/1.4 var(--sans); color: var(--muted); }
+.saved.problem { color: var(--warn); }
+
+.nav { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-top: 1rem; }
+.nav .spacer { flex: 1 1 auto; }
+.btn { min-height: 44px; padding: 0.55rem 1.1rem; border-radius: 6px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font: 600 0.9375rem var(--sans); cursor: pointer; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.btn[disabled] { opacity: 0.45; cursor: default; }
+
+.grid { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0 1.25rem; padding: 0; list-style: none; }
+.grid button { min-width: 44px; min-height: 44px; padding: 0.25rem 0.6rem; border-radius: 6px; border: 1px solid var(--rule); background: var(--surface); font: 0.9375rem var(--sans); cursor: pointer; }
+.grid button.done { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.grid button.skipped { border-style: dashed; border-color: var(--warn); }
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 1rem var(--gutter); margin-bottom: 1rem; }
+.panel p { font-family: var(--sans); font-size: 0.9375rem; }
+.panel textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8125rem; min-height: 9rem; direction: ltr; }
+.notice { border-inline-start: 3px solid var(--warn); padding: 0.25rem 0.75rem; font: 0.875rem/1.5 var(--sans); color: var(--muted); margin: 0 0 1rem; }
+.sr-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (forced-colors: active) { .choice input:checked + .choice-body { outline: 3px solid Highlight; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <h1>Blind comparison</h1>
+    <p>For each claim, two anonymous results list pages that may support it. Read both and say which supports the claim better. Your answers are saved as you go.</p>
+  </header>
+  <noscript><p class="notice">This page needs JavaScript to show the results.</p></noscript>
+  <main id="app" aria-label="Comparison"></main>
+  <div id="live" class="sr-live" role="status" aria-live="polite"></div>
+</div>
+
+<script type="application/json" id="pairs">{"schema":1,"eval_id":"","created_at":"","mapping_sha256":"","pairs":[]}</script>
+
+<script>
+(function () {
+  'use strict';
+
+  // ============================================================================================================
+  // STORAGE ADAPTER: the only block that knows where the judge's answers live.
+  //
+  // A back-end is an object with three methods, all returning Promises:
+  //   load()   -> Judgment[]   what was saved earlier (used once, to resume where the judge left off)
+  //   save(j)  -> void         persist ONE judgment; replace any earlier one with the same pair_id
+  //   list()   -> Judgment[]   everything saved right now (used for the export and the counts)
+  // Judgment = { pair_id: "p01", verdict: "A"|"B"|"same"|"neither"|"skip", note: string (<= 2000), at: ISO time }
+  // It also carries two plain fields: kind ("shared" | "local") and canDownload (boolean).
+  //
+  // Back-end 1, SHARED STORE (a claude.ai artifact; file downloads are blocked there, so this one must be used).
+  //   Wire createSharedStore() to the artifact's shared-state capability. One record per pair, key "judgments/<pair_id>",
+  //   value = the Judgment above. load() and list() read every record under "judgments/"; save(j) writes one record.
+  //   Return null while no such capability exists; the page then falls back to back-end 2.
+  // Back-end 2, LOCAL (a researcher opens this file straight from disk): localStorage inside try/catch, plus the
+  //   "Download judgments" button. If localStorage is refused, answers stay in memory until the tab closes.
+  // ============================================================================================================
+  function createSharedStore() {
+    return null; // TODO(lead): return { kind: 'shared', canDownload: false, load, save, list } once the capability is known.
+  }
+
+  function createLocalStore(prefix) {
+    var key = prefix + ':judgments';
+    var memory = {};
+    var persistent = true;
+    function read() {
+      try {
+        var raw = window.localStorage.getItem(key);
+        var data = raw ? JSON.parse(raw) : [];
+        return Array.isArray(data) ? data : [];
+      } catch (error) { persistent = false; return null; }
+    }
+    function write() {
+      var all = Object.keys(memory).map(function (id) { return memory[id]; });
+      try { window.localStorage.setItem(key, JSON.stringify(all)); } catch (error) { persistent = false; throw error; }
+    }
+    return {
+      kind: 'local',
+      canDownload: true,
+      load: function () {
+        var stored = read();
+        (stored || []).forEach(function (item) { if (item && typeof item.pair_id === 'string') memory[item.pair_id] = item; });
+        return Promise.resolve(Object.keys(memory).map(function (id) { return memory[id]; }));
+      },
+      save: function (judgment) {
+        memory[judgment.pair_id] = judgment;
+        try { write(); } catch (error) { return Promise.reject(error); }
+        return Promise.resolve();
+      },
+      list: function () { return Promise.resolve(Object.keys(memory).map(function (id) { return memory[id]; })); },
+      isPersistent: function () { return persistent; }
+    };
+  }
+  // ============================================================================================================
+  // END OF STORAGE ADAPTER
+  // ============================================================================================================
+
+  var COLLAPSE_CHARS = 700;   // page text longer than this starts collapsed
+  var NOTE_MAX = 2000;        // matches the judgments schema
+  var VERDICTS = ['A', 'B', 'same', 'neither'];
+  var CHOICES = [
+    { value: 'A', title: 'A better', hint: 'Result A supports the claim better' },
+    { value: 'B', title: 'B better', hint: 'Result B supports the claim better' },
+    { value: 'same', title: 'Same', hint: 'Both support it about equally well' },
+    { value: 'neither', title: 'Neither', hint: 'Neither supports the claim' }
+  ];
+
+  var app = document.getElementById('app');
+  var live = document.getElementById('live');
+
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (name) {
+      var value = attrs[name];
+      if (value === null || value === undefined || value === false) return;
+      if (name.slice(0, 3) === 'on:') node.addEventListener(name.slice(3), value);
+      else node.setAttribute(name, value === true ? '' : String(value));
+    });
+    (children || []).forEach(function (child) {
+      if (child === null || child === undefined) return;
+      node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
+    });
+    return node;
+  }
+  function announce(message) { live.textContent = message; }
+  function number(value) { return value.toLocaleString('en-US'); }
+
+  // ---------- data ----------
+  var doc;
+  try { doc = JSON.parse(document.getElementById('pairs').textContent); } catch (error) { doc = null; }
+  var allPairs = doc && Array.isArray(doc.pairs) ? doc.pairs : [];
+  // Pairs whose two results are identical were marked "same" automatically; the judge never sees them.
+  var pairs = allPairs.filter(function (pair) { return !pair.auto_same; });
+  var evalId = doc && typeof doc.eval_id === 'string' ? doc.eval_id : '';
+  var prefix = 'judge-page:' + evalId + ':' + String(doc && doc.mapping_sha256 || '').slice(0, 12);
+
+  var store = createSharedStore() || createLocalStore(prefix);
+  var state = { index: 0, view: 'pair', judgments: {}, drafts: {}, saveProblem: false, resumed: false };
+  var queue = Promise.resolve();
+  var pending = null;
+
+  function pairById(id) { for (var i = 0; i < pairs.length; i += 1) if (pairs[i].pair_id === id) return pairs[i]; return null; }
+
+  // Position and unsent notes are per-viewer conveniences, kept locally in try/catch whatever the back-end is.
+  function loadPrefs() {
+    try { var raw = window.localStorage.getItem(prefix + ':prefs'); var data = raw ? JSON.parse(raw) : {}; return data && typeof data === 'object' ? data : {}; }
+    catch (error) { return {}; }
+  }
+  function savePrefs() {
+    try { window.localStorage.setItem(prefix + ':prefs', JSON.stringify({ position: pairs[state.index] ? pairs[state.index].pair_id : null, drafts: state.drafts })); }
+    catch (error) { /* fine: the judgments themselves go through the back-end */ }
+  }
+
+  function persist(judgment) {
+    queue = queue.then(function () { return store.save(judgment); }).then(function () {
+      state.saveProblem = false; showSaved();
+    }, function () { state.saveProblem = true; showSaved(); });
+    return queue;
+  }
+  function flush() { if (pending) { var run = pending; pending = null; run(); } }
+  function schedule(run) { pending = run; setTimeout(flush, 400); }
+
+  function counts() {
+    var judged = 0; var skipped = 0;
+    pairs.forEach(function (pair) {
+      var item = state.judgments[pair.pair_id];
+      if (!item) return;
+      if (item.verdict === 'skip') skipped += 1; else judged += 1;
+    });
+    return { judged: judged, skipped: skipped, open: pairs.length - judged - skipped };
+  }
+
+  function record(pair, verdict) {
+    var judgment = { pair_id: pair.pair_id, verdict: verdict, note: (state.drafts[pair.pair_id] || '').slice(0, NOTE_MAX), at: new Date().toISOString() };
+    state.judgments[pair.pair_id] = judgment;
+    persist(judgment);
+    savePrefs();
+  }
+
+  // ---------- views ----------
+  var refs = {};
+
+  function showSaved() {
+    if (!refs.saved) return;
+    refs.saved.textContent = state.saveProblem
+      ? 'This answer could not be stored here. Use "Review and export" before you close the page.'
+      : (store.kind === 'shared' ? 'Saved.' : 'Saved on this device.');
+    refs.saved.setAttribute('class', state.saveProblem ? 'saved problem' : 'saved');
+  }
+
+  function updateProgress() {
+    var c = counts();
+    if (refs.progress) { refs.progress.setAttribute('value', String(c.judged + c.skipped)); refs.progress.value = c.judged + c.skipped; }
+    if (refs.count) refs.count.textContent = (c.judged + c.skipped) + ' of ' + pairs.length + ' answered';
+  }
+
+  function pageBlock(page, idPrefix, index) {
+    var text = String(page.text || '');
+    var long = text.length > COLLAPSE_CHARS;
+    var textId = idPrefix + '-t' + index;
+    var paragraphs = text.split(/\n{2,}/).filter(function (part) { return part.trim() !== ''; });
+    var body = el('div', { 'class': 'page-text' + (long ? ' clamped' : ''), id: textId },
+      paragraphs.map(function (part) { return el('p', { dir: 'auto' }, [part.replace(/\s+$/, '')]); }));
+    var block = el('div', { 'class': 'page' }, [el('p', { 'class': 'page-label' }, ['Page ' + page.page]), body]);
+    if (long) {
+      var toggle = el('button', { type: 'button', 'class': 'linklike', 'aria-expanded': 'false', 'aria-controls': textId }, ['Show full text']);
+      toggle.addEventListener('click', function () {
+        var open = toggle.getAttribute('aria-expanded') !== 'true';
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        toggle.textContent = open ? 'Show less' : 'Show full text';
+        body.setAttribute('class', open ? 'page-text' : 'page-text clamped');
+      });
+      block.appendChild(toggle);
+    }
+    return block;
+  }
+
+  function resultPanel(pair, side) {
+    var option = pair.options[side];
+    var headingId = pair.pair_id + '-' + side + '-h';
+    var pagesList = Array.isArray(option.pages) ? option.pages : [];
+    var chars = pagesList.reduce(function (sum, page) { return sum + String(page.text || '').length; }, 0);
+    var kids = [el('header', {}, [
+      el('h3', { id: headingId }, ['Result ' + side]),
+      el('span', { 'class': 'meta' }, [pagesList.length + (pagesList.length === 1 ? ' page' : ' pages') + ' · ' + number(chars) + ' characters'])
+    ])];
+    if (option.book_title) kids.push(el('p', { 'class': 'book', dir: 'auto' }, [option.book_title]));
+    if (pagesList.length === 0) kids.push(el('p', { 'class': 'empty' }, ['This result returned no pages.']));
+    pagesList.forEach(function (page, index) { kids.push(pageBlock(page, pair.pair_id + '-' + side, index)); });
+    return el('section', { 'class': 'result', 'aria-labelledby': headingId }, kids);
+  }
+
+  function choiceLabel(pair, choice) {
+    var current = state.judgments[pair.pair_id];
+    var input = el('input', { type: 'radio', name: 'verdict-' + pair.pair_id, value: choice.value, id: 'v-' + pair.pair_id + '-' + choice.value });
+    if (current && current.verdict === choice.value) { input.checked = true; input.setAttribute('checked', ''); }
+    input.addEventListener('change', function () {
+      if (!input.checked) return;
+      flush();
+      record(pair, choice.value);
+      updateProgress();
+      announce(choice.title + ' saved. ' + counts().judged + ' of ' + pairs.length + ' judged.');
+    });
+    return el('label', { 'class': 'choice' }, [input, el('span', { 'class': 'choice-body' }, [el('strong', {}, [choice.title]), el('small', {}, [choice.hint])])]);
+  }
+
+  function go(index, view) {
+    flush();
+    state.index = Math.max(0, Math.min(pairs.length - 1, index));
+    state.view = view || 'pair';
+    savePrefs();
+    render();
+  }
+
+  function pairView() {
+    var pair = pairs[state.index];
+    var c = counts();
+    refs = {};
+    refs.progress = el('progress', { max: pairs.length, value: c.judged + c.skipped, 'aria-label': 'Pairs answered' });
+    refs.count = el('span', { 'class': 'count' }, [(c.judged + c.skipped) + ' of ' + pairs.length + ' answered']);
+    refs.heading = el('h2', { tabindex: '-1', id: 'pair-heading' }, ['Pair ' + (state.index + 1) + ' of ' + pairs.length]);
+    refs.saved = el('p', { 'class': 'saved', 'aria-hidden': 'true' }, []);
+
+    var bar = el('div', { 'class': 'bar' }, [refs.heading, refs.progress, refs.count,
+      el('button', { type: 'button', 'class': 'linklike', 'on:click': function () { flush(); state.view = 'export'; render(); } }, ['Review and export'])]);
+
+    var claim = el('section', { 'class': 'claim-card', 'aria-labelledby': 'claim-h' }, [
+      el('h3', { id: 'claim-h' }, ['Claim']),
+      el('blockquote', { 'class': 'claim', dir: 'auto' }, [pair.claim.text])]);
+
+    var results = el('div', { 'class': 'results' }, [resultPanel(pair, 'A'), resultPanel(pair, 'B')]);
+
+    var verdict = el('fieldset', { 'class': 'verdict' }, [
+      el('legend', {}, ['Which result supports the claim better?']),
+      el('div', { 'class': 'choices' }, CHOICES.map(function (choice) { return choiceLabel(pair, choice); }))]);
+
+    var note = el('textarea', { id: 'note', rows: '3', maxlength: NOTE_MAX, dir: 'auto' }, []);
+    note.value = state.drafts[pair.pair_id] !== undefined ? state.drafts[pair.pair_id] : ((state.judgments[pair.pair_id] || {}).note || '');
+    note.addEventListener('input', function () {
+      state.drafts[pair.pair_id] = note.value;
+      savePrefs();
+      var current = state.judgments[pair.pair_id];
+      if (current) schedule(function () { record(pair, current.verdict); });
+    });
+    note.addEventListener('blur', flush);
+
+    var skip = el('button', { type: 'button', 'class': 'linklike', 'on:click': function () {
+      flush(); record(pair, 'skip');
+      if (state.index + 1 < pairs.length) go(state.index + 1); else { state.view = 'export'; render(); }
+    } }, ['Skip this pair']);
+    var last = state.index === pairs.length - 1;
+    var nav = el('div', { 'class': 'nav' }, [
+      el('button', { type: 'button', 'class': 'btn', disabled: state.index === 0, 'on:click': function () { go(state.index - 1); } }, ['Previous']),
+      skip,
+      el('span', { 'class': 'spacer' }, []),
+      el('button', { type: 'button', 'class': 'btn primary', 'on:click': function () { if (last) { flush(); state.view = 'export'; render(); } else go(state.index + 1); } }, [last ? 'Review and export' : 'Next'])]);
+
+    var parts = [bar];
+    if (state.resumed) { parts.push(el('p', { 'class': 'notice' }, ['Welcome back. This is where you left off.'])); state.resumed = false; }
+    if (store.isPersistent && !store.isPersistent()) parts.push(el('p', { 'class': 'notice' }, ['This browser is not keeping answers between visits. Use "Review and export" before you close the page.']));
+    parts.push(claim, results, verdict,
+      el('div', {}, [el('label', { 'class': 'note-label', 'for': 'note' }, ['Note ', el('span', {}, ['(optional)'])]), note, refs.saved]),
+      nav);
+    return el('div', {}, parts);
+  }
+
+  function exportDocument() {
+    var items = [];
+    pairs.forEach(function (pair) {
+      var item = state.judgments[pair.pair_id];
+      if (!item) return;
+      items.push({ pair_id: item.pair_id, verdict: item.verdict, note: String(item.note || '').slice(0, NOTE_MAX), at: item.at });
+    });
+    var out = { schema: 1 };
+    if (evalId) out.eval_id = evalId;
+    out.judgments = items;
+    return out;
+  }
+
+  function download(json) {
+    try {
+      var blob = new Blob([json], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var link = el('a', { href: url, download: 'judgments' + (evalId ? '-' + evalId : '') + '.json' }, []);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      announce('The judgments file was downloaded.');
+    } catch (error) { announce('The download did not work here. Copy the text below instead.'); }
+  }
+
+  function exportView() {
+    refs = {};
+    var c = counts();
+    var json = JSON.stringify(exportDocument(), null, 2);
+    refs.heading = el('h2', { tabindex: '-1', id: 'pair-heading' }, ['Review and export']);
+    var grid = el('ul', { 'class': 'grid', 'aria-label': 'Jump to a pair' }, pairs.map(function (pair, index) {
+      var item = state.judgments[pair.pair_id];
+      var kind = !item ? 'open' : (item.verdict === 'skip' ? 'skipped' : 'done');
+      var label = 'Pair ' + (index + 1) + ', ' + (kind === 'done' ? 'answered' : (kind === 'skipped' ? 'skipped' : 'not answered yet'));
+      return el('li', {}, [el('button', { type: 'button', 'class': kind === 'open' ? '' : kind, 'aria-label': label, 'on:click': function () { go(index); } }, [String(index + 1)])]);
+    }));
+    var area = el('textarea', { id: 'export-json', readonly: true, rows: '8', 'aria-label': 'Judgments as JSON', dir: 'ltr' }, []);
+    area.value = json;
+    var status = el('p', { 'class': 'saved' }, []);
+    var buttons = [];
+    if (store.canDownload) buttons.push(el('button', { type: 'button', 'class': 'btn primary', 'on:click': function () { download(json); } }, ['Download judgments']));
+    buttons.push(el('button', { type: 'button', 'class': 'btn', 'on:click': function () {
+      var done = function () { status.textContent = 'Copied.'; };
+      var fail = function () { if (area.select) area.select(); status.textContent = 'Select the text and copy it by hand.'; };
+      try { navigator.clipboard.writeText(json).then(done, fail); } catch (error) { fail(); }
+    } }, ['Copy judgments']));
+    var intro = store.kind === 'shared'
+      ? 'Your answers are saved with this page. Tell Claude you have finished and it will read them from here.'
+      : 'Download the file, then tell Claude where it is saved (or move it into the evaluation folder) and ask it to import your judgments.';
+    var summary = c.judged + ' answered, ' + c.skipped + ' skipped, ' + c.open + ' not answered yet.';
+    var parts = [
+      el('div', { 'class': 'bar' }, [refs.heading, el('button', { type: 'button', 'class': 'linklike', 'on:click': function () { go(state.index); } }, ['Back to the pairs'])]),
+      el('p', { 'aria-live': 'polite' }, [summary + (c.open ? ' You can still go back and answer them, or export what you have.' : '')]),
+      grid,
+      el('div', { 'class': 'panel' }, [el('p', {}, [intro]), el('div', { 'class': 'nav' }, buttons), status, area])];
+    return el('div', {}, parts);
+  }
+
+  function emptyView() {
+    return el('p', { 'class': 'notice' }, [allPairs.length ? 'Every pair was identical, so there is nothing to judge.' : 'No pairs were loaded into this page.']);
+  }
+
+  function render() {
+    if (!pairs.length) { app.replaceChildren(emptyView()); return; }
+    app.replaceChildren(state.view === 'export' ? exportView() : pairView());
+    if (refs.heading && refs.heading.focus) refs.heading.focus();
+    if (refs.heading && refs.heading.scrollIntoView) refs.heading.scrollIntoView({ block: 'start' });
+  }
+
+  // ---------- start ----------
+  function start(saved) {
+    saved.forEach(function (item) {
+      if (item && pairById(item.pair_id) && (VERDICTS.indexOf(item.verdict) >= 0 || item.verdict === 'skip')) state.judgments[item.pair_id] = item;
+    });
+    var prefs = loadPrefs();
+    if (prefs.drafts && typeof prefs.drafts === 'object') state.drafts = prefs.drafts;
+    var at = -1;
+    for (var i = 0; i < pairs.length; i += 1) if (pairs[i].pair_id === prefs.position) at = i;
+    if (at < 0) { at = 0; for (var j = 0; j < pairs.length; j += 1) { if (!state.judgments[pairs[j].pair_id]) { at = j; break; } } }
+    state.index = at;
+    state.resumed = Object.keys(state.judgments).length > 0 || at > 0;
+    render();
+  }
+
+  window.addEventListener('pagehide', flush);
+  document.addEventListener('visibilitychange', flush);
+  store.load().then(start, function () { start([]); });
+})();
+</script>
+</body>
+</html>

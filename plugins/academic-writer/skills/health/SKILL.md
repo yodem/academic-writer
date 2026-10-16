@@ -115,9 +115,11 @@ Report:
 - If a route has an `error`: show the message, then one plain fix line (for example: "Not signed in — type
   `! trove login`, which opens your browser.")
 - When both routes are on, a failing second route is only a warning: the answering route still works, and the second one runs quietly in the background.
+- **The PageIndex helper**, from the same status JSON: where the command comes from (`pageindex_source`: `setting` or `library.json` = the author's own command, `installed` = the built-in helper, `default` = `pilib` on the path), for the built-in helper its level (`installed.tier`: `core` = the basic helper, books with a table of contents; `structure` = the full helper), the Python it uses (`installed.python`) and whether it matches the version this plugin pins (`installed.matches_pinned`), and `pilib.index_trove` (can this command prepare new books). Print each `warnings` entry in plain words. A pin mismatch or `index_trove: false` is a warning, not a failure: offer to update it (`/academic-writer:update-tools`, which asks first); never install from here. When PageIndex is not set up at all and the route is Trove only, say nothing.
+- With a server command, say that its own Gemini key is used there; the plugin never sends yours.
 
 **If the Trove command is not installed** and Trove is a route: "Trove isn't installed. Run `/academic-writer:setup` — it can
-install it after asking." **If PageIndex is a route and its command is not found**: "The PageIndex command isn't set up. Run `/academic-writer:setup`, or switch to Trove with `/academic-writer:update-tools`."
+install it after asking." **If PageIndex is a route and its command is not found**: "The PageIndex command isn't set up. Run `/academic-writer:setup` to install the built-in helper or connect your own, or switch to Trove with `/academic-writer:update-tools`."
 
 ---
 
