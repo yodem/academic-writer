@@ -35,7 +35,7 @@ def test_chrome_running_plans_watch_in_order(tmp_path):
     out, plans = run_dry(tmp_path, True, queue=True)
     assert out.returncode == 0, out.stderr
     keys = ["courses.py daily", "claude -p --chrome", "lesson-notes --pending", "toc_audit.py --all",
-            "chores digest", "bookmarks --all", "courses-sync-nanoclaw.sh"]
+            "chores digest", "courses-sync-nanoclaw.sh"]
     idx = [next(i for i, p in enumerate(plans) if k in p) for k in keys]
     assert idx == sorted(idx) and len(plans) == len(keys)
     watch = plans[1]
@@ -44,6 +44,7 @@ def test_chrome_running_plans_watch_in_order(tmp_path):
     for tool in ("mcp__claude-in-chrome__*", "Bash(rclone:*)", "Bash(pdftoppm:*)", "Bash(screencapture:*)", "Bash(trove ms show:*)"):
         assert tool in watch
     assert not any("chores add" in p for p in plans)
+    assert not any("bookmarks" in p for p in plans)  # the Chrome bookmarks step is gone (it crashes Chrome; a dashboard replaces it)
 
 
 def test_chrome_missing_adds_manual_chore_and_skips_watch(tmp_path):
@@ -96,10 +97,9 @@ def run_live_with_failing_bookmarks(tmp_path):
 
 
 @pytest.mark.skipif(not Path("/usr/bin/python3").exists(), reason="script hardcodes /usr/bin/python3")
-def test_failing_bookmarks_step_is_logged_and_not_fatal(tmp_path):
-    out, log = run_live_with_failing_bookmarks(tmp_path)
+def test_bookmarks_step_is_never_run(tmp_path):
+    out, log = run_live_with_failing_bookmarks(tmp_path)  # the stub courses.py would exit 5 on `bookmarks`
     assert out.returncode == 0, out.stderr + log
-    assert "-- bookmarks exit=5" in log
-    assert "bookmarks failed (not fatal)" in log
+    assert "bookmarks" not in log
     assert "-- nanoclaw-sync exit=0" in log
-    assert log.index("-- digest") < log.index("-- bookmarks") < log.index("-- nanoclaw-sync")
+    assert log.index("-- digest") < log.index("-- nanoclaw-sync")
