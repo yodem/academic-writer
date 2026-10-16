@@ -20,6 +20,10 @@ export const RETRIEVAL_DIR = join('.academic-helper', 'retrieval');
 
 export type LookupOp = 'list' | 'toc' | 'read' | 'get';
 
+/** The only basis a token figure in the ledger has: characters divided by a ratio, never a tokenizer count. */
+export type TokensBasis = 'estimate';
+export const TOKENS_BASIS: TokensBasis = 'estimate';
+
 export type RouteCall = {
   route: RouteName;
   ok: boolean;
@@ -30,6 +34,9 @@ export type RouteCall = {
   text_sha: string | null;
   error: string | null;
   error_code: string | null;
+  /** Estimated tokens of the text this call returned (see estimateTokens); absent on failed calls and on rows written before 0.17.0. */
+  est_tokens?: number;
+  tokens_basis?: TokensBasis;
 };
 
 export type Agreement = { rate: number | null; compared: number; agreed: number; pages: Array<{ page: number; jaccard: number; agree: boolean }> };
@@ -69,6 +76,8 @@ export type ShadowRow = {
   error_code: string | null;
   timed_out: boolean;
   agree: Agreement | null;
+  est_tokens?: number;
+  tokens_basis?: TokensBasis;
 };
 
 export type SupportsReason = 'covered' | 'not_covered' | 'no_quote' | 'shadow_missing' | 'shadow_pending';
@@ -113,6 +122,22 @@ export function nowIso(): string { return new Date().toISOString(); }
 
 /** 16 hex characters of the SHA-256 of `text`: enough to tell two page texts apart, nothing to read back. */
 export function textSha(text: string): string { return createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 16); }
+
+/**
+ * Estimated tokens of `text`: Hebrew letters count 1 token per hebrewCharsPerToken characters, everything else
+ * 1 per otherCharsPerToken (both in thresholds.json library.tokens). An ESTIMATE for comparing routes: Claude's
+ * tokenizer is not available offline, so this is never a billing figure. Exact counts come from the locating
+ * agents' own usage rows (step library.eval.locate).
+ */
+export function estimateTokens(text: string): number {
+  let hebrew = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if ((code >= 0x0590 && code <= 0x05ff) || (code >= 0xfb1d && code <= 0xfb4f)) hebrew += 1;
+  }
+  const tokens = hebrew / limits.tokens.hebrewCharsPerToken + (text.length - hebrew) / limits.tokens.otherCharsPerToken;
+  return Math.ceil(tokens);
+}
 
 /** One line, no newlines, credentials hidden, short enough for a ledger row. */
 export function clipError(message: string): string {

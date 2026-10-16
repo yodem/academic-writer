@@ -1,30 +1,34 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import retrievalSchema from '../../schemas/retrieval-row.schema.json' with { type: 'json' };
 import { checkSchema, type JsonSchema } from '../src/library/jsonschema.ts';
 import type { LookupRow, RetrievalRow, ShadowRow, SupportsReason, VerdictRow } from '../src/library/ledger.ts';
-import { buildReport, formatReport, percentile, reportFor } from '../src/library/report.ts';
+import { buildReport, countPages, formatReport, parseLocateRun, percentile, readUsageRows, reportFor } from '../src/library/report.ts';
 import { runLibraryCli } from '../src/library/cli.ts';
+import type { LedgerRow } from '../src/ledger.ts';
 import { setPathArguments } from '../src/paths.ts';
-import type { RouteName } from '../src/library/types.ts';
+import { LibraryError, type RouteName } from '../src/library/types.ts';
 
 const TS = '2026-10-15T10:00:00.000Z';
 
-function lookup(id: string, over: { run?: string | null; route?: RouteName; latency?: number; ok?: boolean; status?: string; op?: LookupRow['op']; mode?: LookupRow['mode'] } = {}): LookupRow {
+function lookup(id: string, over: { run?: string | null; route?: RouteName; latency?: number; ok?: boolean; status?: string; op?: LookupRow['op']; mode?: LookupRow['mode']; est?: number; pages?: string | null } = {}): LookupRow {
   const route = over.route ?? 'trove';
   const ok = over.ok ?? true;
   return {
     row_type: 'lookup', schema: 1, ts: TS, lookup_id: id, run_id: over.run === undefined ? 'R1' : over.run, claim_id: null, op: over.op ?? 'read', source_id: 'T-A', mode: over.mode ?? 'both', route_primary: route,
     book_by_route: { trove: null, pageindex: null }, request: { printed: null, trove_pages: '2' },
-    primary: { route, ok, route_pages: ok ? '2' : null, latency_ms: over.latency ?? 10, bytes: 10, chars: 10, text_sha: ok ? '0123456789abcdef' : null, error: ok ? null : 'boom', error_code: ok ? null : 'exit' },
+    primary: {
+      route, ok, route_pages: ok ? (over.pages === undefined ? '2' : over.pages) : null, latency_ms: over.latency ?? 10, bytes: 10, chars: 10, text_sha: ok ? '0123456789abcdef' : null, error: ok ? null : 'boom', error_code: ok ? null : 'exit',
+      ...(over.est === undefined ? {} : { est_tokens: over.est, tokens_basis: 'estimate' as const }),
+    },
     shadow_status: over.status ?? 'pending',
   };
 }
 
-function shadow(id: string, over: { route?: RouteName; ok?: boolean; latency?: number; timedOut?: boolean; code?: string | null; agreed?: number; compared?: number | null } = {}): ShadowRow {
+function shadow(id: string, over: { route?: RouteName; ok?: boolean; latency?: number; timedOut?: boolean; code?: string | null; agreed?: number; compared?: number | null; est?: number } = {}): ShadowRow {
   const ok = over.ok ?? true;
   const compared = over.compared === undefined ? 2 : over.compared;
   const agreed = over.agreed ?? compared ?? 0;
@@ -32,6 +36,7 @@ function shadow(id: string, over: { route?: RouteName; ok?: boolean; latency?: n
     row_type: 'shadow', schema: 1, ts: TS, lookup_id: id, run_id: 'R1', route: over.route ?? 'pageindex', ok, book: null, route_pages: ok ? '2' : null, latency_ms: over.latency ?? 100, bytes: 0, chars: 0, text_sha: null,
     error: ok ? null : 'x', error_code: ok ? null : (over.code ?? 'exit'), timed_out: over.timedOut ?? false,
     agree: ok && compared !== null ? { rate: compared === 0 ? null : agreed / compared, compared, agreed, pages: [] } : null,
+    ...(over.est === undefined ? {} : { est_tokens: over.est, tokens_basis: 'estimate' as const }),
   };
 }
 
@@ -188,4 +193,175 @@ test('the report reads the ledger file, skips unreadable lines, and the command 
     assert.equal(await runLibraryCli(['report', '--json'], { out: (text) => { out += text; }, err: () => undefined }), 0);
     assert.equal((JSON.parse(out) as { rows: { lookup: number } }).rows.lookup, 0);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+// ---------------------------------------------------------------- tokens, agents, indexing
+
+function usage(runId: string, over: Partial<LedgerRow> = {}): LedgerRow {
+  return { run_id: runId, step: 'library.eval.locate', provider: 'claude-code', model: 'test-model', input_tokens: 1000, output_tokens: 100, cost_usd: 0.1, latency_ms: 40000, exit: 'OK', same_family: false, ...over };
+}
+
+// Trove answered five lookups (three carry an estimate, one is an old row without one, one failed) and PageIndex one.
+const MEASURED: RetrievalRow[] = [
+  lookup('M1', { run: 'EV1-trove-c01', est: 100, pages: '2-3' }),
+  lookup('M2', { run: 'EV1-trove-c01', est: 200, pages: '4' }),
+  lookup('M3', { run: 'EV1-trove-c02', op: 'toc', est: 50, pages: null, latency: 90 }),
+  lookup('M4', { run: 'EV2-trove-c01' }),
+  lookup('M5', { run: 'EV2-trove-c01', ok: false }),
+  lookup('M6', { run: 'EV1-pageindex-c01', route: 'pageindex', est: 400, pages: '1-4' }), shadow('M6', { route: 'trove', est: 123 }),
+];
+const USAGE: LedgerRow[] = [
+  usage('EV1-trove-c01'),
+  usage('EV1-trove-c02', { input_tokens: 3000, output_tokens: 300, cost_usd: 0.3, latency_ms: 60000 }),
+  usage('EV1-pageindex-c01', { provider: 'codex', input_tokens: 2000, output_tokens: 200, cost_usd: null, latency_ms: 20000, exit: 'ERROR' }),
+  usage('EV2-trove-c01', { input_tokens: 500, output_tokens: 50, cost_usd: 0.05, latency_ms: 10000 }),
+  usage('index-1', { step: 'library.index', provider: 'gemini', model: 'gemini-test', input_tokens: 8000, output_tokens: 800, cost_usd: 0.02, latency_ms: 30000 }),
+  usage('index-2', { step: 'library.index', provider: 'gemini', model: 'gemini-test', input_tokens: 2000, output_tokens: 200, cost_usd: 0.01, latency_ms: 10000 }),
+  usage('R1', { step: 'ocr', provider: 'gemini' }),
+];
+
+test('old rows with no token estimate still validate and render, with no token section', () => {
+  for (const row of ROWS) assert.deepEqual(checkSchema(retrievalSchema as JsonSchema, row), []);
+  const report = buildReport(ROWS, 0);
+  const trove = report.tokens.routes.trove;
+  assert.deepEqual([trove.lookups_measured, trove.total, trove.per_lookup, trove.per_page_avg, trove.shadow.runs_measured], [0, 0, { p50: null, p90: null }, null, 0]);
+  assert.deepEqual([report.agents.runs, report.indexing.runs, report.eval], [0, 0, null]);
+  const text = formatReport(report);
+  assert.doesNotMatch(text, /Returned text|Locating agents|Indexing/);
+  assert.match(text, /Agent tokens and cost are recorded only for library-eval runs/);
+  assert.doesNotMatch(text, /shadow/i);
+});
+
+test('the schema takes est_tokens and tokens_basis on a lookup call and a shadow row, and nothing else', () => {
+  assert.deepEqual(checkSchema(retrievalSchema as JsonSchema, MEASURED[0]), []);
+  assert.deepEqual(checkSchema(retrievalSchema as JsonSchema, MEASURED[6]), []);
+  const first = MEASURED[0] as LookupRow;
+  for (const bad of [{ est_tokens: -1 }, { est_tokens: 1.5 }, { est_tokens: '3' }, { tokens_basis: 'exact' }]) {
+    assert.notDeepEqual(checkSchema(retrievalSchema as JsonSchema, { ...first, primary: { ...first.primary, ...bad } }), [], JSON.stringify(bad));
+  }
+});
+
+test('report: returned-text estimates per route, per lookup and per page; old rows and failures are left out', () => {
+  const report = buildReport(MEASURED, 0);
+  const trove = report.tokens.routes.trove;
+  assert.equal(report.tokens.basis, 'estimate');
+  // M1 100 (2 pages), M2 200 (1 page), M3 50 (a table of contents); the old row M4 and the failed M5 carry no estimate.
+  assert.deepEqual([trove.lookups_measured, trove.total, trove.per_lookup], [3, 350, { p50: 100, p90: 200 }]);
+  assert.deepEqual([trove.pages_measured, trove.per_page_avg], [3, 100]);
+  assert.deepEqual([report.tokens.routes.pageindex.total, report.tokens.routes.pageindex.per_page_avg, report.tokens.routes.pageindex.pages_measured], [400, 100, 4]);
+  assert.equal(report.tokens.routes.pageindex.shadow.runs_measured, 0);
+  // The quiet second lookup of M6 ran on Trove.
+  assert.deepEqual(report.tokens.routes.trove.shadow, { runs_measured: 1, total: 123, per_run: { p50: 123, p90: 123 } });
+});
+
+test('report: latency and returned text split by kind of lookup', () => {
+  const trove = buildReport(MEASURED, 0).routes.trove;
+  assert.deepEqual(Object.keys(trove.by_op), ['toc', 'read']);
+  assert.deepEqual(trove.by_op.toc, { lookups: 1, latency_ms: { p50: 90, p90: 90 }, est_tokens: 50 });
+  assert.deepEqual([trove.by_op.read?.lookups, trove.by_op.read?.est_tokens], [4, 300]);
+  const text = formatReport(buildReport(MEASURED, 0));
+  assert.match(text, /By kind: tables of contents 1 \(half within 90 ms\); page reads 4 \(half within 10 ms\)/);
+});
+
+test('report: locating agents per route from the usage rows, joined to their lookups on the run id', () => {
+  const report = buildReport(MEASURED, 0, null, { usage: USAGE });
+  assert.equal(report.agents.runs, 4);
+  const trove = report.agents.routes.trove;
+  assert.deepEqual([trove.runs, trove.failed, trove.retried], [3, 0, 0]);
+  assert.deepEqual(trove.wall_ms, { p50: 40000, p90: 60000 });
+  assert.deepEqual([trove.input_tokens, trove.output_tokens], [{ total: 4500, median: 1000 }, { total: 450, median: 100 }]);
+  assert.deepEqual(trove.cost_usd, { total: 0.45, median: 0.1, known_runs: 3 });
+  // c01 made 2 lookups (100 + 200), c02 one (50), EV2-c01 two (an old row and a failed one: nothing estimated).
+  assert.deepEqual(trove.lookups_per_run, { median: 2, total: 5 });
+  assert.deepEqual(trove.returned_est_tokens_per_run, { median: 50, total: 350 });
+  const pageindex = report.agents.routes.pageindex;
+  assert.deepEqual([pageindex.runs, pageindex.failed, pageindex.cost_usd], [1, 1, { total: null, median: null, known_runs: 0 }]);
+  assert.deepEqual(pageindex.lookups_per_run, { median: 1, total: 1 });
+});
+
+test('report: a retried agent run is counted and flagged, and a run id that names no route is set aside', () => {
+  const report = buildReport([], 0, null, { usage: [usage('EV1-trove-c01'), usage('EV1-trove-c01', { exit: 'ERROR' }), usage('loose-run')] });
+  assert.deepEqual([report.agents.routes.trove.runs, report.agents.routes.trove.failed, report.agents.routes.trove.retried, report.agents.unattributed, report.agents.runs], [2, 1, 1, 1, 3]);
+  assert.match(formatReport(report), /1 locating-agent runs have a run id that names no route/);
+});
+
+test('report: indexing runs sum tokens and cost from the usage rows', () => {
+  const report = buildReport([], 0, null, { usage: USAGE });
+  assert.deepEqual(report.indexing, { step: 'library.index', runs: 2, failed: 0, input_tokens: 10000, output_tokens: 1000, cost_usd: { total: 0.03, known_runs: 2 }, wall_ms: { p50: 10000, p90: 30000 }, models: ['gemini-test'] });
+});
+
+test('report: --eval keeps the lookups and agent runs whose run id starts with the id; --run stays exact', () => {
+  const report = buildReport(MEASURED, 0, null, { eval: 'EV1', usage: USAGE });
+  assert.equal(report.eval, 'EV1');
+  assert.deepEqual([report.rows.lookup, report.routes.trove.lookups, report.routes.pageindex.lookups], [4, 3, 1]);
+  assert.deepEqual([report.agents.routes.trove.runs, report.agents.routes.trove.input_tokens.total, report.agents.routes.pageindex.runs, report.indexing.runs], [2, 4000, 1, 0]);
+  assert.deepEqual(report.agents.routes.trove.cost_usd, { total: 0.4, median: 0.1, known_runs: 2 });
+  assert.deepEqual([report.agents.routes.trove.lookups_per_run.median, report.agents.routes.trove.returned_est_tokens_per_run.total], [1, 350]);
+  assert.match(formatReport(report), /^Library report for evaluation EV1\n/u);
+  // The id is a prefix up to the dash: EV1 does not pick up EV10.
+  assert.equal(buildReport([lookup('X', { run: 'EV10-trove-c01' })], 0, null, { eval: 'EV1' }).rows.lookup, 0);
+  assert.match(buildReport([], 0, null, { eval: 'EV9' }).notes[0] ?? '', /No lookups are recorded for evaluation EV9/);
+  const exact = buildReport(MEASURED, 0, 'EV1-trove-c01', { usage: USAGE });
+  assert.deepEqual([exact.rows.lookup, exact.agents.runs, exact.indexing.runs], [2, 1, 0]);
+  assert.deepEqual([exact.run, exact.eval], ['EV1-trove-c01', null]);
+});
+
+test('report text: estimates are labelled as estimates; agent and indexing figures come from the tools; no engine words', () => {
+  const text = formatReport(buildReport(MEASURED, 0, null, { usage: USAGE }));
+  assert.match(text, /Returned text \(token figures are estimates: about 2 Hebrew or 4 other characters per token, so Claude's own counts will differ\)/);
+  assert.match(text, /Trove: 5 lookups answered \(3 carry an estimate; older rows do not\), about 350 tokens in all; half return 100 or fewer, nine in ten 200 or fewer; about 100 per page; second lookups 1, about 123 tokens in all/);
+  assert.match(text, /PageIndex: 1 lookups answered, about 400 tokens in all/);
+  assert.match(text, /Locating agents \(library-eval runs; the agent tokens and cost are what the agent's own tool reported\)/);
+  assert.match(text, /Trove: 3 runs \(0 failed\); half finish within 40\.0 s, nine in ten within 60\.0 s; per run, median 1,000 tokens in and 100 out; cost \$0\.450 in all \(median \$0\.100; reported for 3 of 3 runs\); median 2 lookups per run returning about 50 tokens \(estimate\)/);
+  assert.match(text, /PageIndex: 1 runs \(1 failed\);.*cost not reported/);
+  assert.match(text, /Indexing \(page summaries for PageIndex, from the usage ledger\)\n  2 runs \(0 failed\), 10,000 tokens in and 1,000 out, cost \$0\.030 \(reported for 2 of 2 runs\); half finish within 10\.0 s; model gemini-test/);
+  assert.doesNotMatch(text, /shadow/i);
+  assert.doesNotMatch(text, /Agent tokens and cost are recorded only/);
+});
+
+test('page lists count their pages and agent run ids split into eval, route and claim', () => {
+  assert.deepEqual(['2', '2-4,7', '1-5000', '', 'all', '4-2'].map(countPages), [1, 4, 5000, 0, 0, 0]);
+  assert.equal(countPages(null), 0);
+  assert.deepEqual(parseLocateRun('ev-20261020-a-pageindex-c01'), { eval: 'ev-20261020-a', route: 'pageindex', claim: 'c01' });
+  assert.deepEqual(parseLocateRun('E-trove-c-1'), { eval: 'E', route: 'trove', claim: 'c-1' });
+  assert.equal(parseLocateRun('index-3'), null);
+});
+
+test('usage rows are read from real run folders only, checked against the schema, and the report command shows the new fields', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'aw-report-usage-'));
+  const outside = mkdtempSync(join(tmpdir(), 'aw-report-outside-'));
+  try {
+    const home = join(root, '.academic-helper');
+    mkdirSync(join(home, 'runs', 'EV1-trove-c01'), { recursive: true });
+    mkdirSync(join(home, 'runs', 'index-1'));
+    mkdirSync(join(home, 'runs', 'linked-file'));
+    writeFileSync(join(home, 'retrieval.jsonl'), `${MEASURED.map((row) => JSON.stringify(row)).join('\n')}\n`, 'utf8');
+    const rows = [usage('EV1-trove-c01'), usage('R1', { step: 'ocr' })].map((row) => JSON.stringify(row)).join('\n');
+    writeFileSync(join(home, 'runs', 'EV1-trove-c01', 'usage.jsonl'), `${rows}\n{not json\n${JSON.stringify({ run_id: 'x', step: 'library.index' })}\n`, 'utf8');
+    writeFileSync(join(home, 'runs', 'index-1', 'usage.jsonl'), `${JSON.stringify(USAGE[4])}\n`, 'utf8');
+    // A usage file that is a link, and a run folder that is a link, are never followed.
+    writeFileSync(join(outside, 'usage.jsonl'), `${JSON.stringify(usage('EV1-trove-c99'))}\n`, 'utf8');
+    symlinkSync(join(outside, 'usage.jsonl'), join(home, 'runs', 'linked-file', 'usage.jsonl'));
+    symlinkSync(outside, join(home, 'runs', 'linked-dir'));
+    const read = await readUsageRows(root);
+    assert.deepEqual(read.rows.map((row) => row.run_id).sort(), ['EV1-trove-c01', 'index-1']);
+    assert.equal(read.invalid, 2, 'a line that is not JSON and a row that breaks the schema are counted, not returned');
+    const report = await reportFor(root, null);
+    assert.deepEqual([report.agents.routes.trove.runs, report.indexing.runs, report.data_quality.usage_invalid], [1, 1, 2]);
+    assert.match(report.notes.join(' '), /2 unreadable lines in the usage ledgers were skipped/);
+    const scoped = await reportFor(root, null, { eval: 'EV1' });
+    assert.deepEqual([scoped.eval, scoped.agents.routes.trove.runs, scoped.indexing.runs, scoped.rows.lookup], ['EV1', 1, 0, 4]);
+    await assert.rejects(reportFor(root, 'R1', { eval: 'EV1' }), (error: unknown) => error instanceof LibraryError && error.code === 'usage');
+    await assert.rejects(reportFor(root, null, { eval: 'EV 1; rm' }), (error: unknown) => error instanceof LibraryError && error.code === 'usage');
+    setPathArguments(['--project-dir', root]);
+    let out = '';
+    assert.equal(await runLibraryCli(['report', '--json'], { out: (text) => { out += text; }, err: () => undefined }), 0);
+    const json = JSON.parse(out) as { tokens: { basis: string }; agents: { runs: number }; indexing: { runs: number }; eval: null };
+    assert.deepEqual([json.tokens.basis, json.agents.runs, json.indexing.runs, json.eval], ['estimate', 1, 1, null]);
+    // A project with no runs folder at all is an empty usage ledger, not an error.
+    const bare = join(root, 'bare');
+    mkdirSync(join(bare, '.academic-helper'), { recursive: true });
+    assert.deepEqual(await readUsageRows(bare), { rows: [], invalid: 0 });
+    assert.deepEqual(await readUsageRows(join(root, 'missing')), { rows: [], invalid: 0 });
+  } finally { rmSync(root, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true }); }
 });

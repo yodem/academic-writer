@@ -18,6 +18,8 @@
     "count": { "type": "integer", "minimum": 0 },
     "sha": { "type": ["string", "null"], "pattern": "^[0-9a-f]{16}$" },
     "error": { "type": ["string", "null"], "maxLength": 400 },
+    "estTokens": { "description": "Estimated tokens of the text the call returned: characters divided by thresholds.json library.tokens ratios. Optional (rows written before 0.17.0 have none); never a tokenizer count.", "type": "integer", "minimum": 0 },
+    "tokensBasis": { "description": "How est_tokens was made. Only an estimate is ever written.", "enum": ["estimate"] },
     "routeCall": {
       "type": "object",
       "additionalProperties": false,
@@ -31,7 +33,9 @@
         "chars": { "$ref": "#/definitions/count" },
         "text_sha": { "$ref": "#/definitions/sha" },
         "error": { "$ref": "#/definitions/error" },
-        "error_code": { "type": ["string", "null"], "maxLength": 40 }
+        "error_code": { "type": ["string", "null"], "maxLength": 40 },
+        "est_tokens": { "$ref": "#/definitions/estTokens" },
+        "tokens_basis": { "$ref": "#/definitions/tokensBasis" }
       }
     },
     "agreement": {
@@ -119,6 +123,8 @@
         "error": { "$ref": "#/definitions/error" },
         "error_code": { "type": ["string", "null"], "maxLength": 40 },
         "timed_out": { "type": "boolean" },
+        "est_tokens": { "$ref": "#/definitions/estTokens" },
+        "tokens_basis": { "$ref": "#/definitions/tokensBasis" },
         "agree": {
           "description": "Page by page word overlap with the answering route's text (read lookups only; null when it could not be compared).",
           "oneOf": [{ "type": "null" }, { "$ref": "#/definitions/agreement" }]

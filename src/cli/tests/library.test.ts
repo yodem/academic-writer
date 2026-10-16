@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import libraryConfigSchema from '../../schemas/library-config.schema.json' with { type: 'json' };
 import thresholds from '../../thresholds.json' with { type: 'json' };
-import { Library } from '../src/library/adapter.ts';
+import { Library, forcedRouteFrom } from '../src/library/adapter.ts';
+import { estimateTokens, readRows, type LookupRow } from '../src/library/ledger.ts';
 import { libraryConfigSchema as zodSchema, loadLibraryConfig } from '../src/library/config.ts';
 import { runCommand, splitCommand } from '../src/library/exec.ts';
 import { formatPageRanges, parseBanners, parsePageSpec, parseSourcePageMap, printedToTrove, relabelPages, troveToRoutePages } from '../src/library/pages.ts';
@@ -87,7 +88,7 @@ function fixture(config?: unknown, extra: Record<string, string> = {}): Fixture 
   mkdirSync(bin);
   const log = join(root, 'calls.log');
   const env: NodeJS.ProcessEnv = { ...process.env, AW_TROVE_COMMAND: writeFake(bin, 'trove', TROVE_FAKE), AW_PAGEINDEX_COMMAND: writeFake(bin, 'pilib', PILIB_FAKE), FAKE_LOG: log, ...extra };
-  for (const key of ['FAKE_TROVE_FAIL', 'FAKE_TROVE_HANG', 'FAKE_PILIB_FAIL', 'FAKE_PILIB_HANG', 'FAKE_NO_JSON', 'FAKE_NO_META', 'FAKE_DROP', 'FAKE_CWD_LOG']) if (!(key in extra)) delete env[key];
+  for (const key of ['FAKE_TROVE_FAIL', 'FAKE_TROVE_HANG', 'FAKE_PILIB_FAIL', 'FAKE_PILIB_HANG', 'FAKE_NO_JSON', 'FAKE_NO_META', 'FAKE_DROP', 'FAKE_CWD_LOG', 'AW_LIBRARY_ROUTE']) if (!(key in extra)) delete env[key];
   if (config !== undefined) writeFileSync(join(project, '.academic-helper', 'library.json'), JSON.stringify(config), 'utf8');
   return { root, project, env, log, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
@@ -542,4 +543,98 @@ test('the project dir is the working directory of the trove and pilib children',
       for (const dir of seen) assert.equal(realpathSync(dir), realpathSync(target.project), route);
     }
   } finally { fx.cleanup(); pageindex.cleanup(); }
+});
+
+// ---------------------------------------------------------------- forced route (AW_LIBRARY_ROUTE)
+
+test('AW_LIBRARY_ROUTE forces one route and switches the second lookup off, whatever library.json says', async () => {
+  const fx = fixture({ route: 'both', shadow: { enabled: true } });
+  try {
+    const toPageindex = new Library(fx.project, { ...fx.env, AW_LIBRARY_ROUTE: 'pageindex' }, { shadow: 'inline' });
+    assert.deepEqual([toPageindex.forced, toPageindex.config.route, toPageindex.config.primary, toPageindex.config.secondary, toPageindex.config.shadowEnabled], ['pageindex', 'pageindex', 'pageindex', null, false]);
+    const a = await toPageindex.read({ source: 'T-A', pages: '2' });
+    assert.deepEqual([a.route, a.mode, a.shadow_status, a.pages[0]?.text], ['pageindex', 'pageindex', 'none', 'pi lib-a p2']);
+    assert.ok(calls(fx).every((line) => line.startsWith('pilib ')), 'only the forced route ran');
+    const toTrove = new Library(fx.project, { ...fx.env, AW_LIBRARY_ROUTE: 'trove' }, { shadow: 'inline' });
+    const b = await toTrove.read({ source: 'T-A', pages: '2' });
+    assert.deepEqual([b.route, b.mode, b.shadow_status, b.pages[0]?.text], ['trove', 'trove', 'none', 'trove text p2']);
+    const lookups = (await readRows(fx.project)).rows.filter((row): row is LookupRow => row.row_type === 'lookup');
+    assert.deepEqual(lookups.map((row) => [row.route_primary, row.mode, row.shadow_status]), [['pageindex', 'pageindex', 'none'], ['trove', 'trove', 'none']]);
+    assert.deepEqual((await readRows(fx.project)).rows.filter((row) => row.row_type === 'shadow'), []);
+  } finally { fx.cleanup(); }
+});
+
+test('AW_LIBRARY_ROUTE overrides a library.json that names the other route, and the file stays valid without one', async () => {
+  const toTrove = fixture({ route: 'pageindex' });
+  const noFile = fixture();
+  try {
+    const trove = await new Library(toTrove.project, { ...toTrove.env, AW_LIBRARY_ROUTE: 'trove' }).read({ source: 'T-A', pages: '3' });
+    assert.deepEqual([trove.route, trove.pages[0]?.text], ['trove', 'trove text p3']);
+    const pageindex = await new Library(noFile.project, { ...noFile.env, AW_LIBRARY_ROUTE: 'pageindex' }).read({ source: 'T-A', pages: '3' });
+    assert.deepEqual([pageindex.route, pageindex.pages[0]?.text], ['pageindex', 'pi lib-a p3']);
+    assert.equal(loadLibraryConfig(noFile.project, {}).route, 'trove', 'the config loader itself is untouched by the override');
+  } finally { toTrove.cleanup(); noFile.cleanup(); }
+});
+
+test('AW_LIBRARY_ROUTE: empty means no override; anything but trove or pageindex is a config error', () => {
+  const fx = fixture({ route: 'both' });
+  try {
+    for (const value of [undefined, '', '  ']) {
+      const library = new Library(fx.project, { ...fx.env, ...(value === undefined ? {} : { AW_LIBRARY_ROUTE: value }) });
+      assert.deepEqual([library.forced, library.config.route, library.config.shadowEnabled], [null, 'both', true]);
+    }
+    assert.equal(forcedRouteFrom({ AW_LIBRARY_ROUTE: ' pageindex ' }), 'pageindex');
+    for (const bad of ['both', 'Trove', 'candlekeep', 'trove,pageindex']) {
+      assert.throws(() => new Library(fx.project, { ...fx.env, AW_LIBRARY_ROUTE: bad }), (error: unknown) => error instanceof LibraryError && error.code === 'config' && /AW_LIBRARY_ROUTE must be trove or pageindex/.test(error.message), bad);
+    }
+  } finally { fx.cleanup(); }
+});
+
+test('status shows forced, and the aw library command honours AW_LIBRARY_ROUTE', async () => {
+  const fx = fixture({ route: 'both' });
+  try {
+    const plain = await new Library(fx.project, fx.env).status(false);
+    assert.equal(plain.forced, null);
+    const forced = await new Library(fx.project, { ...fx.env, AW_LIBRARY_ROUTE: 'pageindex' }).status(false);
+    assert.deepEqual([forced.forced, forced.route, forced.primary, forced.secondary, (forced.shadow as { enabled: boolean }).enabled, forced.configured], ['pageindex', 'pageindex', 'pageindex', null, false, true]);
+    const viaCli = await cli({ ...fx, env: { ...fx.env, AW_LIBRARY_ROUTE: 'pageindex' } }, 'read', '--source', 'T-A', '--pages', '2');
+    assert.equal(viaCli.code, 0, viaCli.err);
+    assert.deepEqual([JSON.parse(viaCli.out).route, JSON.parse(viaCli.out).shadow_status], ['pageindex', 'none']);
+    const bad = await cli({ ...fx, env: { ...fx.env, AW_LIBRARY_ROUTE: 'nope' } }, 'status');
+    assert.equal(bad.code, 3);
+    assert.match(bad.err, /AW_LIBRARY_ROUTE must be trove or pageindex/);
+  } finally { fx.cleanup(); }
+});
+
+// ---------------------------------------------------------------- token estimates in the ledger
+
+test('estimateTokens: characters over the ratios in thresholds.json, Hebrew counted apart, always an estimate', () => {
+  const { hebrewCharsPerToken, otherCharsPerToken } = thresholds.library.tokens;
+  assert.deepEqual([estimateTokens(''), estimateTokens('abcd'), estimateTokens('abcde')], [0, Math.ceil(4 / otherCharsPerToken), Math.ceil(5 / otherCharsPerToken)]);
+  assert.equal(estimateTokens('שלום'), Math.ceil(4 / hebrewCharsPerToken));
+  assert.equal(estimateTokens('שָׁלוֹם'), Math.ceil(7 / hebrewCharsPerToken), 'niqqud and cantillation are in the Hebrew block');
+  assert.equal(estimateTokens('שלום abcd'), Math.ceil(4 / hebrewCharsPerToken + 5 / otherCharsPerToken));
+  assert.equal(estimateTokens('שׁabcd'), Math.ceil(1 / hebrewCharsPerToken + 4 / otherCharsPerToken), 'Hebrew presentation forms count too');
+  assert.ok(hebrewCharsPerToken < otherCharsPerToken, 'Hebrew packs fewer characters into a token');
+});
+
+test('lookup rows carry est_tokens and tokens_basis for text that came back, and none for a failed call', async () => {
+  const fx = fixture({ route: 'trove' });
+  const failing = fixture({ route: 'trove' }, { FAKE_TROVE_FAIL: '1' });
+  try {
+    const library = new Library(fx.project, fx.env);
+    const read = await library.read({ source: 'T-A', pages: '2-3' });
+    await library.toc('T-A');
+    await library.list();
+    const lookups = (await readRows(fx.project)).rows.filter((row): row is LookupRow => row.row_type === 'lookup');
+    assert.deepEqual(lookups.map((row) => row.op), ['read', 'toc', 'list']);
+    const readRow = lookups[0] as LookupRow;
+    assert.equal(readRow.primary.est_tokens, estimateTokens(read.pages.map((page) => page.text).join('\n')));
+    assert.equal(readRow.primary.tokens_basis, 'estimate');
+    assert.ok(lookups.every((row) => typeof row.primary.est_tokens === 'number' && row.primary.est_tokens > 0 && row.primary.tokens_basis === 'estimate'));
+    assert.ok(!readFileSync(join(fx.project, '.academic-helper', 'retrieval.jsonl'), 'utf8').includes('trove text'), 'still no page text in the ledger');
+    await assert.rejects(new Library(failing.project, failing.env).read({ source: 'T-A', pages: '2' }));
+    const failed = (await readRows(failing.project)).rows[0] as LookupRow;
+    assert.deepEqual([failed.primary.ok, failed.primary.est_tokens, failed.primary.tokens_basis], [false, undefined, undefined]);
+  } finally { fx.cleanup(); failing.cleanup(); }
 });

@@ -201,6 +201,41 @@ class TestRetrievalRowSchema(unittest.TestCase):
         ):
             self.assertTrue(list(check.iter_errors(row)), row)
 
+    def test_token_estimate_fields_are_optional_so_old_rows_stay_valid(self):
+        schema = load(ROW_SCHEMA)
+        for name, holder in (("lookup", schema["definitions"]["routeCall"]), ("shadow", schema["definitions"]["shadow"])):
+            self.assertNotIn("est_tokens", holder["required"], name)
+            self.assertNotIn("tokens_basis", holder["required"], name)
+            self.assertIn("est_tokens", holder["properties"], name)
+            self.assertIn("tokens_basis", holder["properties"], name)
+        self.assertEqual(schema["definitions"]["tokensBasis"]["enum"], ["estimate"])
+        self.assertEqual(schema["definitions"]["estTokens"]["minimum"], 0)
+        self.assertEqual(schema["definitions"]["lookup"]["properties"]["schema"]["const"], 1)
+
+    def test_rows_with_and_without_token_estimates(self):
+        check = row_validator()
+        if check is None:
+            self.skipTest("jsonschema not installed")
+        estimated = {**CALL, "est_tokens": 120, "tokens_basis": "estimate"}
+        for row in (
+            LOOKUP,
+            {**LOOKUP, "primary": estimated},
+            {**LOOKUP, "primary": {**CALL, "est_tokens": 0}},
+            {**SHADOW, "est_tokens": 7, "tokens_basis": "estimate"},
+            SHADOW,
+        ):
+            self.assertEqual(list(check.iter_errors(row)), [], row)
+        for row in (
+            {**LOOKUP, "primary": {**CALL, "est_tokens": -1}},
+            {**LOOKUP, "primary": {**CALL, "est_tokens": 1.5}},
+            {**LOOKUP, "primary": {**CALL, "est_tokens": "12"}},
+            {**LOOKUP, "primary": {**CALL, "tokens_basis": "exact"}},
+            {**LOOKUP, "est_tokens": 5},
+            {**SHADOW, "tokens_basis": "counted"},
+            {**VERDICT, "est_tokens": 5},
+        ):
+            self.assertTrue(list(check.iter_errors(row)), row)
+
     def test_rows_carry_metadata_only(self):
         text = open(ROW_SCHEMA, encoding="utf-8").read()
         for forbidden in ('"text"', '"quote"', '"content"'):
@@ -230,6 +265,39 @@ class TestRetrievalThresholds(unittest.TestCase):
             source = open(os.path.join(LIBRARY_DIR, name), encoding="utf-8").read()
             self.assertIn("thresholds.json", source, name)
             self.assertNotRegex(source, r"jaccardMin\s*=\s*[0-9]|tokenCoverageMin\s*=\s*[0-9]", name)
+
+
+class TestTokenEstimateAndForcedRoute(unittest.TestCase):
+    def test_ratios_are_in_thresholds_and_hebrew_packs_tighter(self):
+        block = load(THRESHOLDS)["library"]["tokens"]
+        self.assertGreater(block["hebrewCharsPerToken"], 0)
+        self.assertGreater(block["otherCharsPerToken"], block["hebrewCharsPerToken"])
+        source = open(os.path.join(LIBRARY_DIR, "ledger.ts"), encoding="utf-8").read()
+        self.assertIn("limits.tokens.hebrewCharsPerToken", source)
+        self.assertIn("limits.tokens.otherCharsPerToken", source)
+        self.assertNotRegex(source, r"CharsPerToken\s*=\s*[0-9]")
+
+    def test_the_estimate_is_labelled_an_estimate_everywhere_it_is_written_or_shown(self):
+        for name in ("ledger.ts", "report.ts"):
+            source = open(os.path.join(LIBRARY_DIR, name), encoding="utf-8").read()
+            self.assertIn("estimate", source, name)
+        report = open(os.path.join(LIBRARY_DIR, "report.ts"), encoding="utf-8").read()
+        self.assertIn("token figures are estimates", report)
+        self.assertNotRegex(report, r"openrouter|@google/genai|anthropic|gemini", "the report calls no model")
+
+    def test_forced_route_is_read_in_the_adapter_only(self):
+        adapter = open(os.path.join(LIBRARY_DIR, "adapter.ts"), encoding="utf-8").read()
+        self.assertEqual(adapter.count("'AW_LIBRARY_ROUTE'"), 1)
+        self.assertIn("forced: this.forced", adapter)
+        config = open(os.path.join(LIBRARY_DIR, "config.ts"), encoding="utf-8").read()
+        self.assertNotIn("AW_LIBRARY_ROUTE", config)
+
+    def test_report_reads_the_usage_ledger_steps_by_name(self):
+        report = open(os.path.join(LIBRARY_DIR, "report.ts"), encoding="utf-8").read()
+        self.assertIn("'library.eval.locate'", report)
+        self.assertIn("'library.index'", report)
+        self.assertIn("ledger-row.schema.json", report)
+        self.assertTrue(os.path.isfile(os.path.join(REPO, "src", "schemas", "ledger-row.schema.json")))
 
 
 class TestShadowModules(unittest.TestCase):
