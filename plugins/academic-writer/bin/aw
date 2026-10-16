@@ -22856,8 +22856,8 @@ function projectDirOr() {
 }
 
 // src/main.ts
-import { readFileSync as readFileSync17 } from "node:fs";
-import { join as join26 } from "node:path";
+import { readFileSync as readFileSync18 } from "node:fs";
+import { join as join27 } from "node:path";
 
 // src/routing.ts
 init_thresholds();
@@ -49958,10 +49958,10 @@ async function runBackfill(indexer, request) {
 }
 
 // src/library/eval/cli.ts
-import { existsSync as existsSync18 } from "node:fs";
+import { existsSync as existsSync19 } from "node:fs";
 import { readFile as readFile7, rm as rm6 } from "node:fs/promises";
 import { randomBytes as randomBytes6 } from "node:crypto";
-import { isAbsolute as isAbsolute4, join as join23, relative as relative3, resolve as resolve12 } from "node:path";
+import { isAbsolute as isAbsolute4, join as join24, relative as relative3, resolve as resolve12 } from "node:path";
 
 // src/library/eval/limits.ts
 init_thresholds();
@@ -50544,6 +50544,9 @@ async function lookupErrors(errorLog) {
   }
   return out.slice(0, 5);
 }
+function invalidWarning(invalid, total) {
+  return invalid === 0 ? null : `${invalid} of ${total} runs are INVALID: the agent ran a command outside its allowed list (a pipe, a redirect or another shell form), so those answers are thrown away and their claims are left out of the pairs`;
+}
 function buildPrompt(plan2, claim, wrapper) {
   const shelf = plan2.shelf.map((book) => `- ${book.id}: ${book.title}`).join("\n");
   return `You are a research assistant. A scholar's article makes the claim below, and you must find
@@ -50555,9 +50558,12 @@ ${shelf}
 Claim from the article:
 "${claim.text}"
 
-You may only use these shell commands:
-${wrapper} toc --source <book id>   # table of contents: section titles with page ranges and short hints
-${wrapper} read --source <book id> --pages <a>-<b> --text   # read pages a to b
+You may only use these two shell commands, in exactly these forms:
+${wrapper} toc --source <book id>
+${wrapper} read --source <book id> --pages <a>-<b> --text
+(toc prints the table of contents: section titles with page ranges and short hints; read prints pages a to b. A single page is --pages <a>, a short list is --pages <a>,<b>.)
+
+Run each command exactly as given, as one plain command, without pipes, redirects, \`;\`, \`&&\`, \`||\`, subshells, \`$(...)\` or backticks, and without head, grep, cut, sed or any other filter after it. A command with any of these is refused, and a refused command invalidates your whole answer: it is thrown away. You never need to filter: a read is already limited to the pages you ask for (at most ${evalLimits.maxPagesPerRead} pages per read), so read the output as it comes.
 
 Rules:
 - Start from the table of contents.
@@ -50630,10 +50636,32 @@ function commandProblem(call, wrapper) {
   if (subcommand2 === "read") return values.has("--source") && values.has("--pages") ? null : "read needs --source and --pages";
   return "subcommand is not allowed";
 }
+function invalidReason(commands, wrapper) {
+  for (const call of commands) {
+    const problem = commandProblem(call, wrapper);
+    if (problem === null) continue;
+    if (problem === "shell metacharacter") return "a pipe, redirect or other shell character was used (commands must be run exactly as given)";
+    if (problem === "not the library command") return "a command that is not one of the two allowed library commands";
+    return `a command that is not allowed (${problem})`;
+  }
+  return "a command outside the allowed list";
+}
+var STORED_WRAPPER = "/awlib";
+function invalidClaims(runs) {
+  const byClaim = /* @__PURE__ */ new Map();
+  for (const run of runs) {
+    if (run.violations.length === 0) continue;
+    const entry = byClaim.get(run.claim_id) ?? { runs: 0, commands: [] };
+    entry.runs += 1;
+    for (const command3 of run.violations) if (!entry.commands.includes(command3)) entry.commands.push(command3);
+    byClaim.set(run.claim_id, entry);
+  }
+  return [...byClaim.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([claim_id, entry]) => ({ claim_id, runs: entry.runs, reason: invalidReason(entry.commands.map((command3) => command3.replaceAll("<wrapper>", STORED_WRAPPER)), STORED_WRAPPER), commands: entry.commands.slice(0, 5) }));
+}
 function commandViolations(calls, wrapper) {
   return calls.filter((call) => commandProblem(call, wrapper) !== null).map((call) => call.replaceAll(wrapper, "<wrapper>").slice(0, 120));
 }
-async function returnedFor(project, runId2) {
+async function returnedFor(project, runId2, window2) {
   let text4;
   try {
     text4 = await readFile6(join19(project, ".academic-helper", "retrieval.jsonl"), "utf8");
@@ -50649,6 +50677,8 @@ async function returnedFor(project, runId2) {
     try {
       const row = JSON.parse(line);
       if (row.row_type !== "lookup" || row.run_id !== runId2) continue;
+      const at = typeof row.ts === "string" ? Date.parse(row.ts) : Number.NaN;
+      if (!(at >= window2.fromMs && at <= window2.toMs)) continue;
       rows += 1;
       chars += typeof row.primary?.chars === "number" ? row.primary.chars : 0;
       if (typeof row.primary?.est_tokens === "number") {
@@ -50691,7 +50721,7 @@ function codexArgs(model, cwd) {
 function engineCommand(engine, env) {
   return [(engine === "claude" ? env.AW_EVAL_CLAUDE_COMMAND : env.AW_EVAL_CODEX_COMMAND)?.trim() || engine];
 }
-var PROMPT_VERSION = "locate-v2";
+var PROMPT_VERSION = "locate-v3";
 function planSha(plan2) {
   return sha256(canonicalJson(plan2));
 }
@@ -50736,6 +50766,7 @@ async function locateOnce(options, claim, route, group) {
     const [file, ...prefix] = engineCommand(options.engine, options.env);
     let exit;
     let tracker;
+    const fromMs = Date.now();
     const attempt = { tag };
     group.attempts.add(attempt);
     try {
@@ -50760,7 +50791,7 @@ async function locateOnce(options, claim, route, group) {
     const parsed = parseAgent(options.engine, exit.stdout);
     const answer = parseAnswer(parsed.text, evalLimits.maxAnswerPages);
     const budget = deriveBudget(parsed.calls, wrapper);
-    const returned = await returnedFor(options.project, runId2);
+    const returned = await returnedFor(options.project, runId2, { fromMs, toMs: Date.now() });
     const violations = commandViolations(parsed.calls, wrapper).slice(0, 5);
     let error = null;
     if (exit.spawnError === "missing") error = `the ${options.engine} command was not found`;
@@ -50819,6 +50850,11 @@ async function locateOnce(options, claim, route, group) {
     await rm5(dir, { recursive: true, force: true });
   }
 }
+function sumReturned(a, b) {
+  if (a.returned_chars === null && b.returned_chars === null) return { chars: null, est: null };
+  const missing = (x2) => x2.returned_chars !== null && x2.returned_est_tokens === null;
+  return { chars: (a.returned_chars ?? 0) + (b.returned_chars ?? 0), est: missing(a) || missing(b) ? null : (a.returned_est_tokens ?? 0) + (b.returned_est_tokens ?? 0) };
+}
 async function locate(options, claim, route, group) {
   let total = null;
   let violations = [];
@@ -50833,6 +50869,9 @@ async function locate(options, claim, route, group) {
       input_tokens: total.input_tokens + run.input_tokens,
       output_tokens: total.output_tokens + run.output_tokens,
       cost_usd: total.cost_usd === null && run.cost_usd === null ? null : (total.cost_usd ?? 0) + (run.cost_usd ?? 0),
+      // Each attempt measured its own window; the run's figure is the total over its attempts.
+      returned_chars: sumReturned(total, run).chars,
+      returned_est_tokens: sumReturned(total, run).est,
       agent_ms: total.agent_ms === null && run.agent_ms === null ? null : (total.agent_ms ?? 0) + (run.agent_ms ?? 0)
     };
     total.violations = violations;
@@ -50852,16 +50891,19 @@ async function runAll(options) {
   const jobs = [];
   let skipped = 0;
   let invalid = 0;
+  const invalidSeen = [];
   for (const claim of options.plan.claims) {
     for (const route of options.routes) {
       const existing = await readJson(runFile(options.paths, claim.id, route));
       const current = existing !== null && validate("run", existing).length === 0 && existing.fingerprint === expectedFingerprint(options, claim, route);
-      if (current && existing.violations.length > 0) invalid += 1;
-      else if (current && existing.status === "ok") skipped += 1;
+      if (current && existing.violations.length > 0) {
+        invalid += 1;
+        invalidSeen.push(existing);
+      } else if (current && existing.status === "ok") skipped += 1;
       else jobs.push({ claim, route });
     }
   }
-  const summary = { planned: options.plan.claims.length * options.routes.length, done: 0, skipped, failed: 0, invalid, cost_usd: 0 };
+  const summary = { planned: options.plan.claims.length * options.routes.length, done: 0, skipped, failed: 0, invalid, cost_usd: 0, invalid_runs: [] };
   const group = new ChildGroup();
   const stop = () => group.killAll();
   let fatal = null;
@@ -50886,8 +50928,10 @@ async function runAll(options) {
         const run = await locate(options, job.claim, job.route, group);
         await writeJson(runFile(options.paths, job.claim.id, job.route), run);
         summary.cost_usd += run.cost_usd ?? 0;
-        if (run.violations.length > 0) summary.invalid += 1;
-        else if (run.status === "ok") summary.done += 1;
+        if (run.violations.length > 0) {
+          summary.invalid += 1;
+          invalidSeen.push(run);
+        } else if (run.status === "ok") summary.done += 1;
         else summary.failed += 1;
         options.progress(`located ${summary.done + summary.failed + summary.invalid + skipped} of ${summary.planned}`);
       } catch (error) {
@@ -50908,6 +50952,7 @@ async function runAll(options) {
   if (interrupted) await new Promise(() => void 0);
   if (fatal !== null) throw fatal;
   summary.cost_usd = Math.round(summary.cost_usd * 1e4) / 1e4;
+  summary.invalid_runs = invalidClaims(invalidSeen);
   return summary;
 }
 
@@ -51048,12 +51093,255 @@ async function buildPairs(options) {
 }
 
 // src/library/eval/plan.ts
-import { existsSync as existsSync16, readFileSync as readFileSync16 } from "node:fs";
-import { isAbsolute as isAbsolute3, join as join21, relative as relative2, resolve as resolve11 } from "node:path";
+import { existsSync as existsSync17, readFileSync as readFileSync17 } from "node:fs";
+import { isAbsolute as isAbsolute3, join as join22, relative as relative2, resolve as resolve11 } from "node:path";
 
 // src/library/eval/claims.ts
-import { existsSync as existsSync15, readFileSync as readFileSync15, readdirSync as readdirSync5 } from "node:fs";
+import { existsSync as existsSync16, readFileSync as readFileSync16, readdirSync as readdirSync5 } from "node:fs";
+import { join as join21 } from "node:path";
+
+// src/library/eval/notes.ts
+import { existsSync as existsSync15, readFileSync as readFileSync15 } from "node:fs";
 import { join as join20 } from "node:path";
+var SPECIAL = { "\xF8": "o", "\u0111": "d", "\u0142": "l", "\xDF": "ss", "\xE6": "ae", "\u0153": "oe", "\u0131": "i", "\xF0": "d", "\xFE": "th" };
+var FINAL = { "\u05DA": "\u05DB", "\u05DD": "\u05DE", "\u05DF": "\u05E0", "\u05E3": "\u05E4", "\u05E5": "\u05E6" };
+function fold(text4) {
+  let out = text4.normalize("NFKD").toLowerCase().replace(new RegExp("\\p{M}", "gu"), "");
+  out = out.replace(/[׳״'’‘`"“”„]/gu, "");
+  out = out.replace(/[øđłßæœıðþ]/gu, (char) => SPECIAL[char] ?? char);
+  out = out.replace(/[ךםןףץ]/gu, (char) => FINAL[char] ?? char);
+  return out.replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+var HEBREW = /^[א-ת]+$/u;
+var PREFIX_LETTERS = /* @__PURE__ */ new Set(["\u05D5", "\u05D4", "\u05D1", "\u05DB", "\u05DC", "\u05DE", "\u05E9"]);
+function tokensOf(text4) {
+  return fold(text4).split(" ").filter(Boolean);
+}
+function sameWord(noteWord, wanted) {
+  if (noteWord === wanted) return true;
+  if (!HEBREW.test(noteWord) || !HEBREW.test(wanted) || wanted.length < 3) return false;
+  const extra = noteWord.length - wanted.length;
+  return extra >= 1 && extra <= 2 && noteWord.endsWith(wanted) && [...noteWord.slice(0, extra)].every((letter) => PREFIX_LETTERS.has(letter));
+}
+function hasWord(tokens2, wanted) {
+  return tokens2.some((token) => sameWord(token, wanted));
+}
+function hasSequence(tokens2, wanted) {
+  if (wanted.length === 0) return false;
+  for (let at = 0; at + wanted.length <= tokens2.length; at += 1) {
+    if (wanted.every((word, index) => sameWord(tokens2[at + index], word))) return true;
+  }
+  return false;
+}
+var STOPWORDS = /* @__PURE__ */ new Set([
+  "the",
+  "and",
+  "for",
+  "from",
+  "with",
+  "into",
+  "its",
+  "their",
+  "that",
+  "this",
+  "les",
+  "des",
+  "der",
+  "die",
+  "das",
+  "und",
+  "von",
+  "van",
+  "del",
+  "della",
+  "\u05E9\u05DC",
+  "\u05D0\u05EA",
+  "\u05E2\u05DC",
+  "\u05E2\u05DD",
+  "\u05D0\u05DC",
+  "\u05DE\u05DF",
+  "\u05D0\u05D5",
+  "\u05D2\u05DD",
+  "\u05DB\u05D9",
+  "\u05D4\u05D5\u05D0",
+  "\u05D4\u05D9\u05D0",
+  "\u05D6\u05D4",
+  "\u05D6\u05D0\u05EA",
+  "\u05D1\u05D9\u05DF",
+  "\u05DC\u05D0",
+  "\u05D0\u05E9\u05E8"
+]);
+function textOf(value) {
+  return typeof value === "string" ? value : typeof value === "number" ? String(value) : "";
+}
+function surnamesOf(author) {
+  const out = [];
+  const add = (surname) => {
+    const words = tokensOf(surname);
+    if (words.length > 0) out.push(words);
+  };
+  if (Array.isArray(author)) {
+    for (const entry of author) out.push(...surnamesOf(entry));
+    return out;
+  }
+  if (typeof author === "object" && author !== null) {
+    const record = author;
+    const family = textOf(record.family ?? record.surname ?? record.last ?? record.lastName);
+    if (family) add(family);
+    else out.push(...surnamesOf(textOf(record.name ?? record.literal)));
+    return out;
+  }
+  const text4 = textOf(author).trim();
+  if (!text4) return out;
+  for (const piece of text4.split(/\s+(?:and|&|ו)\s+|\s*;\s*/iu)) {
+    const trimmed = piece.trim();
+    if (!trimmed) continue;
+    if (trimmed.includes(",")) add(trimmed.slice(0, trimmed.indexOf(",")));
+    else {
+      const words = trimmed.split(/\s+/u);
+      add(words[words.length - 1]);
+    }
+  }
+  return out;
+}
+function distinctive(title) {
+  return [...new Set(tokensOf(title).filter((word) => word.length >= 3 && !STOPWORDS.has(word)))];
+}
+function listOf(raw, key) {
+  const list = Array.isArray(raw) ? raw : raw?.[key];
+  return Array.isArray(list) ? list.filter((entry) => typeof entry === "object" && entry !== null) : [];
+}
+function readQuiet(file) {
+  if (!existsSync15(file)) return void 0;
+  try {
+    return JSON.parse(readFileSync15(file, "utf8"));
+  } catch {
+    return void 0;
+  }
+}
+function loadSourceCards(project) {
+  const dir = join20(project, ".academic-helper");
+  const cards = /* @__PURE__ */ new Map();
+  const add = (entry, idKeys, titleKeys) => {
+    const id = textOf(idKeys.map((key) => entry[key]).find((value) => textOf(value) !== ""));
+    if (!id || !PLAIN_ID.test(id) || cards.has(id)) return;
+    const titles = titleKeys.map((key) => textOf(entry[key])).filter(Boolean);
+    const year = /\b(1[0-9]{3}|20[0-9]{2})\b/u.exec(textOf(entry.year ?? entry.date ?? entry.issued))?.[1] ?? null;
+    cards.set(id, {
+      id,
+      title: titles[0] ?? id,
+      year,
+      surnames: surnamesOf(entry.author ?? entry.authors ?? entry.creators),
+      titleWords: [...new Set(titles.flatMap(distinctive))]
+    });
+  };
+  for (const entry of listOf(readQuiet(join20(dir, "sources.json")), "sources")) add(entry, ["sourceId", "id"], ["workTitle", "title", "shortTitle"]);
+  for (const entry of listOf(readQuiet(join20(dir, "evidence.json")), "sources")) add(entry, ["id", "sourceId"], ["title", "workTitle", "shortTitle"]);
+  return [...cards.values()];
+}
+var IBID = /* @__PURE__ */ new Set(["ibid", "ibidem", "idem", "\u05E9\u05DD", "\u05E9\u05DE"]);
+var LEAD_IN = /* @__PURE__ */ new Set(["see", "also", "cf", "compare", "and", "\u05E8\u05D0\u05D5", "\u05D5\u05E8\u05D0\u05D5", "\u05E8\u05D0\u05D4", "\u05D4\u05E9\u05D5\u05D5", "\u05D4\u05E9\u05D5\u05D4", "\u05D5\u05DB\u05DF"]);
+function isIbid(segment) {
+  const tokens2 = tokensOf(segment);
+  let at = 0;
+  while (at < tokens2.length && LEAD_IN.has(tokens2[at])) at += 1;
+  const first = tokens2[at];
+  return first !== void 0 && IBID.has(first) && !new RegExp("\\p{L}{3,}", "u").test(tokens2.slice(at + 1).filter((word) => !["p", "pp", "\u05E2\u05DE", "\u05E2\u05DE\u05D5\u05D3", "\u05E2\u05DE\u05D5\u05D3\u05D9\u05DD", "page", "pages"].includes(word)).join(" ").replace(/\d+/gu, ""));
+}
+var YEAR_LIKE = (value) => value >= 1e3 && value <= 2100;
+function pageRange(first, last) {
+  const pages = [];
+  for (let page = first; page <= Math.max(first, last) && pages.length < evalLimits.maxAnswerPages; page += 1) pages.push(page);
+  return pages;
+}
+var NAMED_PAGE = /(?<![\p{L}\p{N}])(?:pp?\.|pages?|עמ[׳'’]?|עמוד(?:ים)?)\s*(\d{1,5})(?:\s*[-–—]\s*(\d{1,5}))?/iu;
+var TRAILING_PAGE = /[,:\s](\d{1,5})(?:\s*[-–—]\s*(\d{1,5}))?\s*[.)\]]*\s*$/u;
+function pagesCited(segment, year) {
+  const named = NAMED_PAGE.exec(segment);
+  if (named) return pageRange(Number(named[1]), named[2] ? Number(named[2]) : Number(named[1]));
+  const trailing = TRAILING_PAGE.exec(segment.trim());
+  if (!trailing) return [];
+  const first = Number(trailing[1]);
+  const last = trailing[2] ? Number(trailing[2]) : first;
+  if (YEAR_LIKE(first) && !trailing[2]) return [];
+  if (year !== null && String(first) === year) return [];
+  return pageRange(first, last);
+}
+function segmentsOf(note) {
+  return note.split(/\s*[;؛]\s*/u).map((piece) => piece.trim()).filter(Boolean);
+}
+function matchSegment(cards, segment) {
+  if (isIbid(segment)) return { kind: "ibid", printed: pagesCited(segment, null) };
+  const tokens2 = tokensOf(segment);
+  const byAuthor = [];
+  const eligible = [];
+  for (const card of cards) {
+    const authorsHit = card.surnames.filter((surname) => hasSequence(tokens2, surname)).length;
+    if (authorsHit === 0) continue;
+    byAuthor.push(card);
+    const titleHits = card.titleWords.filter((word) => hasWord(tokens2, word)).length;
+    const yearHit = card.year !== null && tokens2.includes(card.year);
+    if (titleHits === 0 && !yearHit) continue;
+    eligible.push({
+      card,
+      titleHits,
+      yearHit,
+      score: titleHits / Math.max(1, card.titleWords.length) + (yearHit ? 0.5 : 0) + authorsHit / card.surnames.length * 0.25
+    });
+  }
+  if (eligible.length === 0) {
+    return { kind: "unmatched", reason: byAuthor.length === 0 ? "no source in sources.json has an author surname that appears in the note" : `the author matches ${byAuthor.map((card) => card.id).join(", ")} but no title word or year of it appears in the note` };
+  }
+  eligible.sort((a, b) => b.score - a.score);
+  const [best, second] = eligible;
+  if (second && second.score >= best.score - 1e-9) {
+    const tied = eligible.filter((entry) => entry.score >= best.score - 1e-9).map((entry) => entry.card.id);
+    return { kind: "unmatched", reason: `the note matches several sources equally (${tied.join(", ")}); name more of the title` };
+  }
+  return { kind: "source", card: best.card, printed: pagesCited(segment, best.card.year) };
+}
+var NoteResolver = class {
+  constructor(cards) {
+    this.cards = cards;
+  }
+  previous = null;
+  seen = /* @__PURE__ */ new Map();
+  /** Record a note that was resolved some other way (by its source id), so a following "Ibid." can repeat it. */
+  noteResolvedByKey(key, source) {
+    this.seen.set(key, { sources: source ? [source] : [], unmatched: [], partial: false });
+    this.previous = { sources: source ? [source] : [], reason: source ? null : "the previous note names no known source" };
+  }
+  resolve(key, text4) {
+    const known = this.seen.get(key);
+    if (known) return known;
+    const result = { sources: [], unmatched: [], partial: false };
+    const trimmed = text4.trim();
+    if (!trimmed) result.unmatched.push({ text: "", reason: "the note has no text to match" });
+    for (const segment of segmentsOf(trimmed)) {
+      const match = matchSegment(this.cards, segment);
+      if (match.kind === "source") result.sources.push({ sourceId: match.card.id, title: match.card.title, printed: match.printed });
+      else if (match.kind === "unmatched") result.unmatched.push({ text: segment, reason: match.reason });
+      else if (this.previous === null) result.unmatched.push({ text: segment, reason: "Ibid. with no earlier note to repeat" });
+      else if (this.previous.reason !== null) result.unmatched.push({ text: segment, reason: `Ibid. repeats the previous note, but ${this.previous.reason}` });
+      else if (this.previous.sources.length !== 1) result.unmatched.push({ text: segment, reason: "Ibid. repeats a previous note that cites several sources, so it does not say which" });
+      else result.sources.push({ ...this.previous.sources[0], printed: match.printed });
+    }
+    if (result.sources.length > 0 && result.unmatched.length > 0) {
+      const matched = [...new Set(result.sources.map((source) => source.sourceId))].join(", ");
+      result.partial = true;
+      result.sources = [];
+      result.unmatched = result.unmatched.map((item) => ({ text: item.text, reason: `partial match: another citation of this note matched ${matched}, so the whole note is left unresolved; ${item.reason}` }));
+    }
+    this.seen.set(key, result);
+    this.previous = {
+      sources: result.sources,
+      reason: result.sources.length === 0 ? `the previous note is unmatched (${result.unmatched[0]?.reason ?? "no text"})` : null
+    };
+    return result;
+  }
+};
+
+// src/library/eval/claims.ts
 var DEFINITION = /^\[\^([^\]]+)\]:\s*(.*)$/u;
 var MARKER = /\[\^([^\]]+)\]/gu;
 var ABBREVIATIONS = /* @__PURE__ */ new Set(["e.g", "i.e", "cf", "ca", "vol", "no", "ed", "eds", "pp", "p", "vs", "etc", "fig", "ch", "esp", "trans", "et al", "al"]);
@@ -51129,37 +51417,37 @@ function wordCount(text4) {
   return text4.split(/\s+/u).filter((word) => /[\p{L}\p{N}]/u.test(word)).length;
 }
 function readJsonQuiet(file) {
-  if (!existsSync15(file)) return void 0;
+  if (!existsSync16(file)) return void 0;
   try {
-    return JSON.parse(readFileSync15(file, "utf8"));
+    return JSON.parse(readFileSync16(file, "utf8"));
   } catch {
     return void 0;
   }
 }
-function listOf(raw, key) {
+function listOf2(raw, key) {
   const list = Array.isArray(raw) ? raw : raw?.[key];
   return Array.isArray(list) ? list.filter((entry) => typeof entry === "object" && entry !== null) : [];
 }
 function loadRegistry(project) {
   const registry = { loaded: false, sources: /* @__PURE__ */ new Map(), passages: /* @__PURE__ */ new Map() };
-  const dir = join20(project, ".academic-helper");
-  const sources = readJsonQuiet(join20(dir, "sources.json"));
-  const evidence = readJsonQuiet(join20(dir, "evidence.json"));
-  for (const entry of listOf(sources, "sources")) {
+  const dir = join21(project, ".academic-helper");
+  const sources = readJsonQuiet(join21(dir, "sources.json"));
+  const evidence = readJsonQuiet(join21(dir, "evidence.json"));
+  for (const entry of listOf2(sources, "sources")) {
     const id = String(entry.sourceId ?? entry.id ?? "");
     if (id) {
       registry.sources.set(id, String(entry.workTitle ?? entry.title ?? id));
       registry.loaded = true;
     }
   }
-  for (const entry of listOf(evidence, "sources")) {
+  for (const entry of listOf2(evidence, "sources")) {
     const id = String(entry.id ?? entry.sourceId ?? "");
     if (id && !registry.sources.has(id)) {
       registry.sources.set(id, String(entry.title ?? entry.workTitle ?? id));
       registry.loaded = true;
     }
   }
-  for (const entry of listOf(evidence, "passages")) {
+  for (const entry of listOf2(evidence, "passages")) {
     if (typeof entry.id === "string" && typeof entry.sourceId === "string") {
       registry.passages.set(entry.id, { sourceId: entry.sourceId, locator: typeof entry.locator === "string" ? entry.locator : "" });
       registry.loaded = true;
@@ -51183,6 +51471,56 @@ function fromLocator(locator) {
   if (trove) return { trove: [Number(trove[1])], printed: original ? [Number(original[1])] : [] };
   return { trove: [], printed: pagesNamedIn(locator) };
 }
+function resolveNoteSource(project, source) {
+  let trove = [];
+  if (source.printed.length > 0) {
+    const map = findSource(project, source.sourceId)?.pageMap;
+    if (map) {
+      try {
+        trove = printedToTrove(source.printed, map, project);
+      } catch {
+        trove = [];
+      }
+    }
+  }
+  return { sourceId: source.sourceId, title: source.title, printed: source.printed, trove };
+}
+var KeyResolver = class {
+  constructor(project, registry, definitions, unit, unmatched) {
+    this.project = project;
+    this.registry = registry;
+    this.definitions = definitions;
+    this.unit = unit;
+    this.unmatched = unmatched;
+    this.cards = loadSourceCards(project);
+    this.resolver = new NoteResolver(this.cards);
+  }
+  resolver;
+  cards;
+  byKey = /* @__PURE__ */ new Map();
+  partialKeys = /* @__PURE__ */ new Set();
+  /** True when only some citations of the note matched a source: the note is unresolved, and a sentence carrying it is not used. */
+  isPartial(key) {
+    return this.partialKeys.has(key);
+  }
+  resolve(key) {
+    const cached = this.byKey.get(key);
+    if (cached) return cached;
+    const byId = resolveKey(this.project, this.registry, key, this.definitions);
+    let out = [];
+    if (byId) {
+      this.resolver.noteResolvedByKey(key, { sourceId: byId.sourceId, title: byId.title, printed: byId.printed });
+      out = [byId];
+    } else if (this.cards.length > 0) {
+      const result = this.resolver.resolve(key, this.definitions.get(key) ?? "");
+      if (result.partial) this.partialKeys.add(key);
+      out = result.sources.map((source) => resolveNoteSource(this.project, source));
+      for (const item of result.unmatched) this.unmatched?.push({ unit: this.unit, note: key, text: item.text.slice(0, 200), reason: item.reason });
+    }
+    this.byKey.set(key, out);
+    return out;
+  }
+};
 function resolveKey(project, registry, key, definitions) {
   const passage = registry.passages.get(key);
   const sourceId = passage ? passage.sourceId : key;
@@ -51210,9 +51548,9 @@ function resolveKey(project, registry, key, definitions) {
 }
 function draftFiles(path2) {
   const unitOf = (file) => (file.split("/").pop() ?? file).replace(/\.md$/iu, "");
-  if (!existsSync15(path2)) return [];
+  if (!existsSync16(path2)) return [];
   if (!readdirSafe(path2)) return [{ file: path2, unit: unitOf(path2) }];
-  return (readdirSafe(path2) ?? []).filter((name) => name.toLowerCase().endsWith(".md")).sort().map((name) => ({ file: join20(path2, name), unit: unitOf(name) }));
+  return (readdirSafe(path2) ?? []).filter((name) => name.toLowerCase().endsWith(".md")).sort().map((name) => ({ file: join21(path2, name), unit: unitOf(name) }));
 }
 function readdirSafe(path2) {
   try {
@@ -51227,28 +51565,33 @@ function emptySkips() {
   return { too_short: 0, no_source: 0, multi_source: 0, unresolved: 0, over_cap: 0 };
 }
 function articleFiles(project, article) {
-  const drafts = join21(project, ".academic-helper", "drafts");
+  const drafts = join22(project, ".academic-helper", "drafts");
   if (!article) return { files: draftFiles(drafts), runFilter: null, label: null };
   const asPath = isAbsolute3(article) ? article : resolve11(project, article);
-  if (existsSync16(asPath)) return { files: draftFiles(asPath), runFilter: null, label: relative2(project, asPath) || "." };
+  if (existsSync17(asPath)) return { files: draftFiles(asPath), runFilter: null, label: relative2(project, asPath) || "." };
   if (EVAL_ID.test(article)) return { files: draftFiles(drafts), runFilter: article, label: `run ${article}` };
   throw new LibraryError("usage", `ERROR library eval plan: --article ${article} is neither a file or folder nor a run id`);
 }
-function candidatesFromDrafts(project, files, skips) {
+function candidatesFromDrafts(project, files, skips, unmatched) {
   const registry = loadRegistry(project);
   const out = [];
   const seen = /* @__PURE__ */ new Set();
   let order = 0;
   for (const { file, unit } of files) {
-    const draft = parseDraft(readFileSync16(file, "utf8"), unit);
-    for (const sentence of draft.sentences) {
+    const draft = parseDraft(readFileSync17(file, "utf8"), unit);
+    const keysOf = new KeyResolver(project, registry, draft.definitions, unit, unmatched);
+    const resolved = draft.sentences.map((sentence) => ({
+      sentence,
+      keys: sentence.keys.flatMap((key) => keysOf.resolve(key)),
+      partial: sentence.keys.some((key) => keysOf.isPartial(key))
+    }));
+    for (const { sentence, keys, partial } of resolved) {
       order += 1;
       if (wordCount(sentence.text) < evalLimits.minClaimWords) {
         skips.too_short += 1;
         continue;
       }
-      const keys = sentence.keys.map((key) => resolveKey(project, registry, key, draft.definitions)).filter((key) => key !== null);
-      if (keys.length === 0) {
+      if (partial || keys.length === 0) {
         skips.no_source += 1;
         continue;
       }
@@ -51272,7 +51615,7 @@ function candidatesFromFile(project, file, skips) {
   const path2 = isAbsolute3(file) ? file : resolve11(project, file);
   let raw;
   try {
-    raw = JSON.parse(readFileSync16(path2, "utf8"));
+    raw = JSON.parse(readFileSync17(path2, "utf8"));
   } catch {
     throw new LibraryError("usage", `ERROR library eval plan: --claims ${file} is not a readable JSON file`);
   }
@@ -51339,7 +51682,7 @@ async function buildPlan(options) {
   }
   const skipped = emptySkips();
   const article = articleFiles(options.project, options.article);
-  let candidates2 = options.claimsFile ? candidatesFromFile(options.project, options.claimsFile, skipped) : candidatesFromDrafts(options.project, article.files, skipped);
+  let candidates2 = options.claimsFile ? candidatesFromFile(options.project, options.claimsFile, skipped) : candidatesFromDrafts(options.project, article.files, skipped, options.unmatched);
   if (options.resolve) {
     const sets = await Promise.all(options.routes.map((route) => resolvableIds(options.aw, route, options.evalId)));
     const before = candidates2.length;
@@ -51384,15 +51727,15 @@ async function buildPlan(options) {
 }
 
 // src/library/eval/reset.ts
-import { existsSync as existsSync17 } from "node:fs";
+import { existsSync as existsSync18 } from "node:fs";
 import { mkdir as mkdir7, rename as rename4 } from "node:fs/promises";
-import { basename as basename9, join as join22 } from "node:path";
+import { basename as basename9, join as join23 } from "node:path";
 async function archiveGeneration(paths, now) {
-  const parts = [paths.pairs, paths.sealedDir, paths.judgments, paths.runsDir, paths.reportJson, paths.reportMd, paths.judgeHtml].filter((part) => existsSync17(part));
+  const parts = [paths.pairs, paths.sealedDir, paths.judgments, paths.runsDir, paths.reportJson, paths.reportMd, paths.judgeHtml].filter((part) => existsSync18(part));
   if (parts.length === 0) return null;
-  const target = join22(paths.archiveDir, now.toISOString().replace(/[:.]/gu, "-"));
+  const target = join23(paths.archiveDir, now.toISOString().replace(/[:.]/gu, "-"));
   await mkdir7(target, { recursive: true });
-  for (const part of parts) await rename4(part, join22(target, basename9(part)));
+  for (const part of parts) await rename4(part, join23(target, basename9(part)));
   return target;
 }
 
@@ -51721,7 +52064,7 @@ function newEvalId(project, now) {
   const stamp = now.toISOString().slice(0, 10).replaceAll("-", "");
   for (const letter of "abcdefghijklmnopqrstuvwxyz") {
     const id = `ev-${stamp}-${letter}`;
-    if (!existsSync18(join23(project, EVAL_ROOT, id))) return id;
+    if (!existsSync19(join24(project, EVAL_ROOT, id))) return id;
   }
   throw new LibraryError("usage", "ERROR library eval plan: 26 evaluations already exist today; pass --eval <id>");
 }
@@ -51744,11 +52087,13 @@ async function runEvalCli(argv, io) {
     if (subcommand2 === "plan") {
       const evalId2 = text3(flags, "--eval") ?? newEvalId(project, now);
       const paths2 = evalPaths(project, evalId2);
-      if (existsSync18(paths2.pairs) || existsSync18(paths2.judgments)) throw new LibraryError("usage", "ERROR library eval plan: this evaluation already has pairs; start a new one with another --eval id");
-      if (existsSync18(paths2.plan) && !flags.has("--force")) throw new LibraryError("usage", `ERROR library eval plan: ${evalId2} already has a plan (--force replaces it)`);
+      if (existsSync19(paths2.pairs) || existsSync19(paths2.judgments)) throw new LibraryError("usage", "ERROR library eval plan: this evaluation already has pairs; start a new one with another --eval id");
+      if (existsSync19(paths2.plan) && !flags.has("--force")) throw new LibraryError("usage", `ERROR library eval plan: ${evalId2} already has a plan (--force replaces it)`);
       const routes = routesFrom(flags);
       const aw = makeAwRunner(project, awCommandFor(io, env), env);
+      const unmatched = [];
       const plan3 = await buildPlan({
+        unmatched,
         project,
         evalId: evalId2,
         article: text3(flags, "--article"),
@@ -51760,10 +52105,21 @@ async function runEvalCli(argv, io) {
         aw,
         now
       });
-      if (plan3.claims.length === 0) throw new LibraryError("usage", `ERROR library eval plan: no usable claims found (skipped: ${JSON.stringify(plan3.skipped)}); check that the draft has footnotes and the sources answer on both libraries`);
+      if (plan3.claims.length === 0) throw new LibraryError("usage", `ERROR library eval plan: no usable claims found (skipped: ${JSON.stringify(plan3.skipped)}${unmatched.length > 0 ? `; ${unmatched.length} footnote${unmatched.length === 1 ? "" : "s"} matched no source, first: ${unmatched[0]?.reason}` : ""}); check that the draft has footnotes and the sources answer on both libraries`);
       if (flags.has("--force")) await rm6(paths2.runsDir, { recursive: true, force: true });
       await writeJson(paths2.plan, plan3);
-      print({ eval_id: evalId2, claims: plan3.claims.length, runs: plan3.estimate.runs, estimated_usd: plan3.estimate.usd, skipped: plan3.skipped, plan: paths2.plan });
+      const unmatchedFile = join24(paths2.root, "unmatched-notes.json");
+      if (unmatched.length > 0) await writeJson(unmatchedFile, { eval_id: evalId2, unmatched });
+      else await rm6(unmatchedFile, { force: true });
+      print({
+        eval_id: evalId2,
+        claims: plan3.claims.length,
+        runs: plan3.estimate.runs,
+        estimated_usd: plan3.estimate.usd,
+        skipped: plan3.skipped,
+        ...unmatched.length > 0 ? { unmatched_notes: { count: unmatched.length, first: unmatched.slice(0, 5), file: unmatchedFile } } : {},
+        plan: paths2.plan
+      });
       return 0;
     }
     const evalId = evalIdFrom(flags);
@@ -51789,7 +52145,14 @@ async function runEvalCli(argv, io) {
         progress: (line) => io.err(`${line}
 `)
       });
-      print({ eval_id: evalId, ...summary, ...archived ? { archived } : {} });
+      const warning = invalidWarning(summary.invalid, summary.planned);
+      if (warning) {
+        io.err(`WARNING library eval run: ${warning}
+`);
+        for (const entry of summary.invalid_runs) io.err(`  claim ${entry.claim_id}: ${entry.reason}: ${entry.commands.join(" ; ")}
+`);
+      }
+      print({ eval_id: evalId, ...warning ? { warning } : {}, ...summary, ...archived ? { archived } : {} });
       return 0;
     }
     if (subcommand2 === "pairs") {
@@ -51801,8 +52164,8 @@ async function runEvalCli(argv, io) {
     }
     if (subcommand2 === "page") {
       const pairs2 = await readValid("pairs", paths.pairs, "pairs");
-      const template = text3(flags, "--template") ?? (env.CLAUDE_PLUGIN_ROOT ? join23(env.CLAUDE_PLUGIN_ROOT, "skills", "library-eval", "references", "judge-page.html") : null);
-      if (!template || !existsSync18(template)) throw new LibraryError("config", "ERROR library eval page: no judging page template found; pass --template <file>");
+      const template = text3(flags, "--template") ?? (env.CLAUDE_PLUGIN_ROOT ? join24(env.CLAUDE_PLUGIN_ROOT, "skills", "library-eval", "references", "judge-page.html") : null);
+      if (!template || !existsSync19(template)) throw new LibraryError("config", "ERROR library eval page: no judging page template found; pass --template <file>");
       const html = await readFile7(template, "utf8");
       const slot = /(<script\b[^>]*\bid=["']pairs["'][^>]*>)([\s\S]*?)(<\/script>)/iu;
       if (!slot.test(html)) throw new LibraryError("config", 'ERROR library eval page: the template has no <script type="application/json" id="pairs"> slot');
@@ -51840,25 +52203,31 @@ async function runEvalCli(argv, io) {
     const typed = plan2;
     let finished2 = 0;
     let failed = 0;
+    const invalidRuns = [];
     for (const claim of typed.claims) {
       for (const route of typed.routes) {
         const run = await readJson(runFile(paths, claim.id, route));
         if (run && validate("run", run).length === 0) {
+          if (run.violations.length > 0) invalidRuns.push(run);
           if (run.status === "ok") finished2 += 1;
           else failed += 1;
         }
       }
     }
+    const invalidClaimList = invalidClaims(invalidRuns);
+    const invalidNote = invalidWarning(invalidRuns.length, typed.claims.length * typed.routes.length);
     const pairs = await readJson(paths.pairs);
     const judgments = await readJson(paths.judgments);
     const judgedIds = new Set((judgments?.entries ?? []).map((entry) => entry.pair_id));
     const built = pairs?.pairs.length ?? 0;
-    const unblinded = existsSync18(paths.reportJson);
+    const unblinded = existsSync19(paths.reportJson);
     const stage = unblinded ? "unblinded" : judgments && judgedIds.size >= built && built > 0 ? "judged" : pairs ? "paired" : finished2 + failed >= typed.claims.length * typed.routes.length ? "located" : "planned";
     print({
       eval_id: evalId,
+      ...invalidNote ? { warning: invalidNote } : {},
       stage,
       claims: typed.claims.length,
+      invalid: { runs: invalidRuns.length, claims: invalidClaimList },
       runs: { expected: typed.claims.length * typed.routes.length, finished: finished2, failed },
       pairs: { built, identical: pairs?.pairs.filter((pair) => pair.auto_same).length ?? 0 },
       judged: { done: judgedIds.size, of: built },
@@ -51874,7 +52243,7 @@ async function runEvalCli(argv, io) {
 
 // src/library/report.ts
 import { lstat as lstat3, readFile as readFile8, readdir as readdir2 } from "node:fs/promises";
-import { join as join24 } from "node:path";
+import { join as join25 } from "node:path";
 init_thresholds();
 var limits7 = thresholds_default.library;
 var LOCATE_STEP = "library.eval.locate";
@@ -52100,9 +52469,9 @@ async function readUsageRows(project) {
   for (const name of names) {
     let text4;
     try {
-      const folder = join24(dir, name);
+      const folder = join25(dir, name);
       if (!(await lstat3(folder)).isDirectory()) continue;
-      const file = join24(folder, "usage.jsonl");
+      const file = join25(folder, "usage.jsonl");
       const info = await lstat3(file);
       if (!info.isFile() || info.size > limits7.maxBufferBytes) continue;
       text4 = await readFile8(file, "utf8");
@@ -52210,7 +52579,7 @@ function formatReport(report) {
 // src/library/verdict.ts
 init_thresholds();
 import { randomBytes as randomBytes7 } from "node:crypto";
-import { join as join25 } from "node:path";
+import { join as join26 } from "node:path";
 var limits8 = thresholds_default.library;
 function sleep3(ms2) {
   return new Promise((resolveSleep) => {
@@ -52268,7 +52637,7 @@ function newKey() {
   return { verdict_at: nowNs(), pid: process.pid, nonce: randomBytes7(8).toString("hex") };
 }
 var pendingName = (lookupId, paragraph, nonce) => `pending-${lookupId}-${textSha(paragraph ?? "").slice(0, 8)}-${nonce}.json`;
-var pendingFile = (project, lookupId, paragraph, nonce) => join25(spoolDir(project), pendingName(lookupId, paragraph, nonce));
+var pendingFile = (project, lookupId, paragraph, nonce) => join26(spoolDir(project), pendingName(lookupId, paragraph, nonce));
 async function earlierVerdicts(project, lookup, paragraph) {
   return (await rowsForLookup(project, lookup)).filter((row) => row.row_type === "verdict" && row.paragraph_id === paragraph);
 }
@@ -52638,8 +53007,8 @@ var [command2, subcommand, runId] = args;
 if (command2 === "ledger" && subcommand === "show" && runId) {
   try {
     dataDir();
-    const file = join26(projectDir(), ".academic-helper", "runs", runId, "usage.jsonl");
-    const rows = readFileSync17(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    const file = join27(projectDir(), ".academic-helper", "runs", runId, "usage.jsonl");
+    const rows = readFileSync18(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
     const totals = /* @__PURE__ */ new Map();
     for (const row of rows) {
       const total = totals.get(row.step) ?? { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
@@ -52694,7 +53063,7 @@ Live model verification requires GOOGLE_API_KEY.
     projectDir();
     const fileArg = args[args.indexOf(subcommand === "classify" ? "--items" : "--plan") + 1];
     if (!fileArg) throw new Error("ERROR revise: --items/--plan path required");
-    const input = JSON.parse(readFileSync17(fileArg, "utf8"));
+    const input = JSON.parse(readFileSync18(fileArg, "utf8"));
     if (subcommand === "classify") {
       if (!Array.isArray(input)) throw new Error("ERROR revise.classify: items must be an array");
       process.stdout.write(`${JSON.stringify(await classify(input, args[args.indexOf("--run") + 1] ?? "revise"))}
@@ -52766,7 +53135,7 @@ Live model verification requires GOOGLE_API_KEY.
     const runId2 = value("--run");
     const outlinePath = value("--outline");
     if (!runId2 || !outlinePath) throw new Error("ERROR draft: --outline and --run are required");
-    const result = await draftAll(JSON.parse(readFileSync17(outlinePath, "utf8")), { runId: runId2, unit: value("--unit"), feedbackFile: value("--feedback-file") });
+    const result = await draftAll(JSON.parse(readFileSync18(outlinePath, "utf8")), { runId: runId2, unit: value("--unit"), feedbackFile: value("--feedback-file") });
     process.stdout.write(`${JSON.stringify({ drafted: result.drafted, failures: result.failures })}
 `);
     if (result.failures.length) process.exitCode = 2;
@@ -52797,7 +53166,7 @@ Live model verification requires GOOGLE_API_KEY.
     const runId2 = value("--run");
     const textFile = value("--text-file");
     const language = value("--lang");
-    const instruction = value("--instruction") ?? (value("--instruction-file") ? readFileSync17(value("--instruction-file"), "utf8") : void 0);
+    const instruction = value("--instruction") ?? (value("--instruction-file") ? readFileSync18(value("--instruction-file"), "utf8") : void 0);
     if (!runId2 || !textFile || !instruction || language !== "he" && language !== "en") throw new Error("ERROR edit: --text-file, --instruction or --instruction-file, --lang he|en, and --run are required");
     process.stdout.write(`${JSON.stringify(await editText({ runId: runId2, textFile, instruction, language, out: value("--out") }))}
 `);

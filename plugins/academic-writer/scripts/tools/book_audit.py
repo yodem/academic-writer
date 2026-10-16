@@ -11,19 +11,23 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
 
-DEFAULT_REGISTRY = Path.home() / ".academic-writer" / "courses" / "תשפ״ז"
 SKIP_FILES = {"term.json", "links.json"}
 NO_LEMIDA = "למדה: אין"
 
 
+_COURSES = str(Path(__file__).resolve().parents[1] / "src" / "scripts" / "courses")
+
+
 def registry_dir() -> Path:
-    env = os.environ.get("ACADEMIC_COURSES_DIR")
-    return Path(env) if env else DEFAULT_REGISTRY
+    """Term directory, resolved exactly as courses.py does (root + ACADEMIC_TERM / sole term)."""
+    if _COURSES not in sys.path:
+        sys.path.append(_COURSES)
+    import courses
+    return courses.registry_dir()
 
 
 def load_courses(reg: Path | None = None) -> list[dict]:

@@ -13,6 +13,7 @@ The CLI prints failures as `ERROR <step>: ...`. Exit status `3` means a required
 missing; status `4` means the configured CAP_REACHED budget was reached. Inspect the run's ledger
 with `aw ledger show <run>` (use the run ID shown by the command that failed).
 
+- **Key set in `/plugin` but never reaches the session (or the built-in PageIndex helper is "not found")**: update the plugin and start a new session. Claude Code 2.1.300 and later refuses a start-up hook that interpolates a plugin setting into its command; from 0.17.0 the hook reads the settings from the environment instead. A debug log line `references ${user_config.*} in a shell-form command` means an older plugin version is still installed.
 - **Missing key / precondition**: confirm `GOOGLE_API_KEY` is available to the session, then start
   a fresh session. The plugin option is named `google_api_key`; a shell export is also supported.
   The start-up hook only exports the plugin option in a project that has

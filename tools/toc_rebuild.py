@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools.toc_audit import (audit_book, audit_toc, fetch_toc, has_hint,  # noqa: E402
-                             load_registry, load_toc_json, registry_dir)
+                             load_registry, load_toc_json, registered_source_titles, registry_dir)
 
 HINT_MAX = 160
 LOAD_MAX = 240
@@ -183,6 +183,8 @@ def build_plan(page_count: int, existing: list[dict], get_page, hints: dict | No
         if ov.get("level"):
             level = int(ov["level"])
         level = max(1, min(level, prev_level + 1))
+        # entries that belong under the readings index wherever they sit (a source appended after the lessons)
+        grp = "readings" if kind in ("guide", "source") or (kind == "other" and state == "readings") else None
         if p == 1 or kind in ("changelog",):
             state = None
         elif kind in ("lessons_index", "lesson"):
@@ -191,31 +193,36 @@ def build_plan(page_count: int, existing: list[dict], get_page, hints: dict | No
             state = "readings"
         if hint:
             counts[src] += 1
-            toc.append({"title": f"{title} - {hint}", "page": p, "level": level, "kind": kind})
+            toc.append({"title": f"{title} - {hint}", "page": p, "level": level, "kind": kind, "grp": grp})
         else:
             counts["needs_hint"] += 1
-            toc.append({"title": title, "page": p, "level": level, "kind": kind})
+            toc.append({"title": title, "page": p, "level": level, "kind": kind, "grp": grp})
             needs.append({"page": p, "title": title, "first_800_chars": text[:800]})
         prev_level = level
     return {"toc": tree_order(toc), "needs_hint": needs, "counts": counts}
 
 
 def tree_order(toc: list[dict]) -> list[dict]:
-    """Group lesson pages under the lessons index wherever they sit in the book.
+    """Group lesson pages under the lessons index and sources (with their section pages) under the readings index.
 
-    lesson-notes appends lesson pages at the end, so strict page order would nest
-    them under the last section. Every other entry keeps page order.
+    lesson-notes and add-source append pages at the end, so strict page order would nest them under
+    whichever section came last. Every other entry keeps page order.
     """
     lessons = [e for e in toc if e.get("kind") == "lesson"]
-    has_index = any(e.get("kind") == "lessons_index" for e in toc)
+    has_lessons_index = any(e.get("kind") == "lessons_index" for e in toc)
+    has_readings_index = any(e.get("kind") == "readings_index" for e in toc)
+    readings = [e for e in toc if e.get("grp") == "readings" and e.get("kind") != "readings_index"] if has_readings_index else []
+    moved = {id(e) for e in readings}
     out = []
     for e in toc:
-        if has_index and e.get("kind") == "lesson":
+        if (has_lessons_index and e.get("kind") == "lesson") or id(e) in moved:
             continue
         out.append(e)
         if e.get("kind") == "lessons_index":
             out.extend({**l, "level": e["level"] + 1} for l in lessons)
-    return [{k: v for k, v in e.items() if k != "kind"} for e in out]
+        if e.get("kind") == "readings_index":
+            out.extend({**r, "level": r["level"] + e["level"] - 1} for r in readings)
+    return [{k: v for k, v in e.items() if k not in ("kind", "grp")} for e in out]
 
 
 def trove_get_page(book_id: str, page: int) -> str:
@@ -234,14 +241,15 @@ def book_version(book_id: str) -> int:
     return int(json.loads(r.stdout)["currentVersion"])
 
 
-def gate(plan_toc: list[dict], page_count: int) -> dict:
+def gate(plan_toc: list[dict], page_count: int, sources: list[str] | None = None) -> dict:
     """audit_toc on the planned ToC; callers must refuse to apply unless ok."""
-    return audit_toc(plan_toc, page_count)
+    return audit_toc(plan_toc, page_count, sources=sources)
 
 
 def apply_plan(book_id: str, plan_toc: list[dict], page_count: int, planned_version: int,
-               before_entries: int, run=subprocess.run, version_fn=book_version) -> tuple[int, str]:
-    audit = gate(plan_toc, page_count)
+               before_entries: int, run=subprocess.run, version_fn=book_version,
+               sources: list[str] | None = None) -> tuple[int, str]:
+    audit = gate(plan_toc, page_count, sources)
     if not audit["ok"]:
         return 1, "refused: planned ToC fails audit " + json.dumps(
             {k: v for k, v in audit.items() if k != "ok" and v}, ensure_ascii=False)[:600]
@@ -289,7 +297,7 @@ def process_course(c: dict, work: Path, hints: dict, apply: bool, out=print) -> 
         f"supplied={c_['supplied']} merged={c_['merged']} needs-hint={c_['needs_hint']} "
         f"(entries before={len(existing)} after={len(plan['toc'])})")
     if apply:
-        code, msg = apply_plan(bid, plan["toc"], n, version, len(existing))
+        code, msg = apply_plan(bid, plan["toc"], n, version, len(existing), sources=registered_source_titles(c))
         out(f"{slug}: {msg}")
         return code
     return 3 if plan["needs_hint"] else 0

@@ -70,17 +70,24 @@ def test_cli_toc_json(tmp_path, capsys):
 
 
 def test_registry_skips(tmp_path, monkeypatch):
+    tmp_path = tmp_path / "t1"
+    tmp_path.mkdir()
     (tmp_path / "term.json").write_text('{"slug": "t"}')
     (tmp_path / "links.json").write_text('{"slug": "l"}')
     (tmp_path / "noslug.json").write_text('{"a": 1}')
     (tmp_path / "c.json").write_text('{"slug": "c", "book_id": "b"}')
-    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(tmp_path))
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(tmp_path.parent))
+    monkeypatch.delenv("ACADEMIC_TERM", raising=False)
     assert [c["slug"] for c in ta.load_registry()] == ["c"]
 
 
 def test_all_uses_fetch(tmp_path, monkeypatch):
+    tmp_path = tmp_path / "t1"
+    tmp_path.mkdir()
+    (tmp_path / "term.json").write_text('{"slug": "t"}')
     (tmp_path / "c.json").write_text('{"slug": "c", "book_id": "b1"}')
-    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(tmp_path))
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(tmp_path.parent))
+    monkeypatch.delenv("ACADEMIC_TERM", raising=False)
     monkeypatch.setattr(ta, "fetch_toc", lambda b: (GOOD, 4, b))
     assert ta.main(["--all"]) == 0
     monkeypatch.setattr(ta, "fetch_toc", lambda b: (GOOD, 6, b))
@@ -97,3 +104,128 @@ def test_tree_order_rejects_sibling_going_back():
     toc = [{"title": "C - h", "page": 1, "level": 1}, {"title": "R - h", "page": 3, "level": 1},
            {"title": "X - h", "page": 2, "level": 1}]
     assert ta.audit_toc(toc, 3)["out_of_order"]
+
+
+REF_BLOCK = [e("A - a", 1), e("B - b", 2), e("מקורות ראשוניים - רשימה", 2), e("X - x", 2, 2),
+             e("Y - y", 2, 2), e("C - c", 3)]
+
+
+def test_cross_reference_block_repeats_pass():
+    assert ta.audit_toc(REF_BLOCK, 3)["ok"]
+
+
+def test_repeats_outside_block_still_fail():
+    r = ta.audit_toc([e("A - a", 1), e("B - b", 2), e("X - x", 2, 2), e("C - c", 3)], 3)
+    assert r["duplicate"] == [2] and not r["ok"]
+    r = ta.audit_toc([e("A - a", 1), e("B - b", 2), e("Z - z", 2), e("C - c", 3)], 3)
+    assert r["duplicate"] == [2] and not r["ok"]
+    r = ta.audit_toc([e("A - a", 1), e("C - c", 3), e("B - b", 2, 2)], 3)  # child before its parent's page
+    assert r["out_of_order"] and not r["ok"]
+
+
+def test_cross_reference_block_still_needs_hint_and_level():
+    bad_hint = [e("A - a", 1), e("B - b", 2), e("מקורות ראשוניים", 2), e("C - c", 3)]
+    assert len(ta.audit_toc(bad_hint, 3)["no_hint"]) == 1
+    bad_level = [e("A - a", 1), e("B - b", 2), e("מקורות ראשוניים - r", 2), e("X - x", 3, 3), e("C - c", 3)]
+    assert ta.audit_toc(bad_level, 3)["level_gap"]
+
+
+def test_block_page_alone_is_still_missing():
+    r = ta.audit_toc([e("A - a", 1), e("מקורות ראשוניים - r", 2), e("C - c", 3)], 3)
+    assert r["missing"] == [2] and not r["ok"]
+
+
+def test_cross_reference_index_is_not_exempt():
+    r = ta.audit_toc([e("A - a", 1), e("B - b", 2), e("מקורות נזכרים - idx", 2), e("C - c", 3)], 3)
+    assert r["duplicate"] == [2] and not r["ok"]
+
+
+def test_missing_from_reports_dropped_and_passes_extension():
+    before = [e("A - a", 1), e("Dan א - x", 2, 2), e("Dan ב - y", 3, 2)]
+    after = [e("A - a", 1), e("Dan א - x", 2, 2)]
+    assert ta.missing_from(before, after) == [{"title": "Dan ב - y", "level": 2}]
+    assert ta.missing_from(before, before + [e("New - n", 4)]) == []
+
+
+def test_keep_from_fails_when_title_dropped(tmp_path, monkeypatch, capsys):
+    snap = tmp_path / "snap.json"
+    snap.write_text(json.dumps({"items": [{"id": "b", "pageCount": 4, "toc": GOOD}]}))
+    monkeypatch.setattr(ta, "fetch_toc", lambda b: (GOOD, 4, b))
+    assert ta.main(["--book", "b", "--keep-from", str(snap)]) == 0
+    monkeypatch.setattr(ta, "fetch_toc", lambda b: ([e("A - a", 1), e("C - c", 3, 2), e("D - d", 4)], 4, b))
+    assert ta.main(["--book", "b", "--keep-from", str(snap)]) == 1
+    assert "dropped since the snapshot: 'B - b' (level 2)" in capsys.readouterr().out
+
+
+def test_keep_from_needs_course_or_book(tmp_path):
+    import pytest
+    snap = tmp_path / "snap.json"
+    snap.write_text(json.dumps({"items": [{"id": "b", "pageCount": 4, "toc": GOOD}]}))
+    with pytest.raises(SystemExit):
+        ta.main(["--toc-json", str(snap), "--keep-from", str(snap)])
+
+
+def _term_root(tmp_path, term="t1", extra=()):
+    root = tmp_path / "courses"
+    for name in (term, *extra):
+        (root / name).mkdir(parents=True)
+        (root / name / "term.json").write_text('{"slug": "%s"}' % name)
+        (root / name / f"{name}-c.json").write_text('{"slug": "%s-c", "book_id": "b"}' % name)
+    return root
+
+
+def test_registry_root_with_term_env(tmp_path, monkeypatch):
+    """Finding 4: ACADEMIC_COURSES_DIR is the root; ACADEMIC_TERM picks the term (as courses.py does)."""
+    root = _term_root(tmp_path, "t1", extra=("t2",))
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(root))
+    monkeypatch.setenv("ACADEMIC_TERM", "t2")
+    assert ta.registry_dir() == root / "t2"
+    assert [c["slug"] for c in ta.load_registry()] == ["t2-c"]
+
+
+def test_registry_root_single_term_and_ambiguous(tmp_path, monkeypatch):
+    root = _term_root(tmp_path, "t1")
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(root))
+    monkeypatch.delenv("ACADEMIC_TERM", raising=False)
+    assert [c["slug"] for c in ta.load_registry()] == ["t1-c"]
+    root2 = _term_root(tmp_path / "x", "a", extra=("b",))
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(root2))
+    import pytest
+    with pytest.raises(ValueError):
+        ta.registry_dir()
+
+
+def test_all_tools_resolve_identically(tmp_path, monkeypatch):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
+    import book_audit
+    from tools import toc_rebuild as tr
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src" / "scripts" / "courses"))
+    import courses
+    root = _term_root(tmp_path, "t1", extra=("t2",))
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(root))
+    monkeypatch.setenv("ACADEMIC_TERM", "t1")
+    want = courses.registry_dir()
+    assert ta.registry_dir() == book_audit.registry_dir() == tr.registry_dir() == want == root / "t1"
+
+
+def test_assignments_block_shared_page_passes():
+    toc = [e("A - a", 1), e("B - b", 2), e("מטלות - רשימה", 2), e("T1 - t", 2, 2), e("T2 - t", 2, 2), e("C - c", 3)]
+    r = ta.audit_toc(toc, 3)
+    assert not r["duplicate"] and not r["out_of_order"] and r["ok"]
+
+
+def test_same_shape_under_other_title_still_fails():
+    toc = [e("A - a", 1), e("B - b", 2), e("רשימות - רשימה", 2), e("T1 - t", 2, 2), e("T2 - t", 2, 2), e("C - c", 3)]
+    r = ta.audit_toc(toc, 3)
+    assert r["duplicate"] == [2] and not r["ok"]
+
+
+def test_assignments_block_still_needs_hint():
+    toc = [e("A - a", 1), e("B - b", 2), e("מטלות - רשימה", 2), e("T1", 2, 2), e("C - c", 3)]
+    r = ta.audit_toc(toc, 3)
+    assert len(r["no_hint"]) == 1 and not r["ok"]
+
+
+def test_assignments_block_pages_count_as_covered():
+    r = ta.audit_toc([e("A - a", 1), e("מטלות - רשימה", 1), e("T1 - t", 2, 2), e("T2 - t", 2, 2)], 2)
+    assert r["missing"] == [] and r["ok"]

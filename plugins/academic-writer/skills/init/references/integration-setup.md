@@ -45,25 +45,23 @@ AskUserQuestion(questions=[{
 
 ### Detect (changes nothing, never prints the command itself)
 
-Read what the project already says and how the command resolves, the same order `aw library` uses
-(`AW_PAGEINDEX_COMMAND`, then `pageindex.command` in `.academic-helper/library.json`, then the built-in helper if it is installed, then `pilib`):
+Ask the plugin itself; it resolves the command in its own order (`AW_PAGEINDEX_COMMAND`, then `pageindex.command` in `.academic-helper/library.json`, then the built-in helper if it is installed, then `pilib`), including a helper installed a moment ago in this session. Save its answer, then read it:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" library status > /tmp/aw-library-status.json
+```
 
 ```bash
 python3 - <<'PY'
-import json, os, shlex, shutil
+import json, shutil
 try:
-    cfg = json.load(open('.academic-helper/library.json', encoding='utf-8'))
+    st = json.load(open('/tmp/aw-library-status.json', encoding='utf-8'))
 except Exception:
-    cfg = {}
-env_cmd = os.environ.get('AW_PAGEINDEX_COMMAND', '').strip()
-file_cmd = (cfg.get('pageindex') or {}).get('command')
-cmd = env_cmd or file_cmd or 'pilib'
-words = cmd if isinstance(cmd, list) else shlex.split(cmd)
-home = os.environ.get('AW_PAGEINDEX_HOME') or os.path.join('${CLAUDE_PLUGIN_DATA}', 'pageindex')
-builtin = os.path.exists(os.path.join(home, 'installed.json'))
-found = bool(env_cmd or file_cmd or builtin or (words and shutil.which(words[0])))
+    st = {}
+built_in = bool((st.get('installed') or {}).get('installed'))
+found = st.get('pageindex_source') in ('setting', 'library.json') or built_in or bool(shutil.which('pilib'))
 print('PAGEINDEX_CONFIGURED' if found else 'PAGEINDEX_NOT_CONFIGURED')
-print('CURRENT_ROUTE=' + str(cfg.get('route', 'none')) + ' CURRENT_PRIMARY=' + str(cfg.get('primary', 'trove')))
+print('CURRENT_ROUTE=' + (str(st.get('route', 'none')) if st.get('configured') else 'none') + ' CURRENT_PRIMARY=' + str(st.get('primary') or 'trove'))
 PY
 ```
 

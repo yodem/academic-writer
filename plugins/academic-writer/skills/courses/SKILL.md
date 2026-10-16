@@ -49,7 +49,7 @@ Run `courses.py validate` (add `--json` when machine-readable output is useful).
 
 Use `courses.py lemida-sync --dry-run` to preview API changes when a Lemida token is available in the OS keychain; otherwise use the user's browser session to inspect their LMS (Moodle). Download PDFs and DOCX files; list Zoom, forum, and videostream entries by name. Never bulk-download LTI/Perusall readings: capture pages on demand about a week before the lesson. Keep copyrighted readings only in the user's own Drive and Trove, in the relevant course's book.
 
-For scanned readings, OCR with Claude vision first: render with `pdftoppm -r 150`, then inspect the PNG pages. Escalate to Gemini's best OCR (the bundled `/academic-writer:ocr`) when Claude flags pages as unreadable or low-confidence, or the text is degraded, and record which engine produced the text in the job. For Google Docs, export native DOCX and convert with `pandoc`. When extracting Hebrew from two-column pages, join columns right to left and preserve reading order. Flag unclear text instead of silently reconstructing it.
+For scanned readings, OCR with Claude vision first: render with `pdftoppm -r 150`, then inspect the PNG pages. Never send a page to Gemini on your own: mark pages Claude flags as unreadable or low-confidence "OCR, not image-verified" and, if Gemini's OCR (the bundled `/academic-writer:ocr`) might read a page better, ask with `AskUserQuestion` whether this page may be sent to Gemini, saying its text goes to Google. Record which engine produced the text in the job. For Google Docs, export native DOCX and convert with `pandoc`. When extracting Hebrew from two-column pages, join columns right to left and preserve reading order. Flag unclear text instead of silently reconstructing it.
 
 ## Table of contents rule
 
@@ -65,7 +65,7 @@ ToC rule: one entry per page, "Title - hint", nested in tree order (siblings by 
 Every source (a Lemida file, an email attachment, a recording) follows one contract. Each reaches Drive, NotebookLM and Trove, and `check-source` proves it.
 
 1. **Register.** `courses.py add-source <file> --course <slug> [--title T] [--origin lemida|email|recording|other] [--origin-ref R]`. It dedupes by sha256, copies the file to the course Drive folder, adds it to the course notebook (exit 4 when the notebook is at its source limit), and writes a Trove job under `queue/sources/`. A rerun resumes from the missing step. Recordings and transcripts are sources too: `add-source` copies them to Drive, adds them to NotebookLM through `ingest`, and records them (`kind: media`) with their lesson; their Trove home is the lesson page (`--transcript --date D [--time HHMM]` for a text transcript), and `check-source` verifies Drive, NotebookLM and the lesson.
-2. **Extract the text** (read the job file for `kind` and `pages`). docx: `pandoc`. Born-digital PDF: `pdftotext` per page, keeping the printed page numbers. Scanned PDF (no text layer): `pdftoppm -r 150` and Claude vision first; escalate to the bundled Gemini OCR (`/academic-writer:ocr`) for pages Claude flags unreadable or low-confidence or when the text is degraded, and record the engine used. pptx: slide text from the pptx XML. Hebrew RTL two-column pages: join right column, then left. Flag unclear text instead of reconstructing it.
+2. **Extract the text** (read the job file for `kind` and `pages`). docx: `pandoc`. Born-digital PDF: `pdftotext` per page, keeping the printed page numbers. Scanned PDF (no text layer): `pdftoppm -r 150` and Claude vision first; never send a page to Gemini on your own: mark pages Claude flags unreadable or low-confidence "OCR, not image-verified" and, if the bundled Gemini OCR (`/academic-writer:ocr`) might help, ask with `AskUserQuestion` whether this page may be sent to Gemini, saying its text goes to Google; record the engine used. pptx: slide text from the pptx XML. Hebrew RTL two-column pages: join right column, then left. Flag unclear text instead of reconstructing it.
 3. **Place it in Trove.**
    - **40 pages or fewer:** pages go in the course book under a level-1 `חומרי קריאה` entry page (create it if missing). One level-2 entry per source, titled `Title - hint`. Level-3 hinted entries for its sections, one per page. The source's first page opens with `> Load this page when:` and a short reading guide: the thesis or claims, the structure, and how to cite by printed page.
    - **More than 40 pages:** its own Trove book through `/academic-writer:ingest-book` (nested hinted ToC, page-1 reading guide), plus a hinted level-2 pointer page in the course book, titled with the source title.
@@ -76,6 +76,16 @@ Every source (a Lemida file, an email attachment, a recording) follows one contr
 
 Copyrighted readings stay in the user's own Drive, NotebookLM and Trove.
 
+Note on placement: `add-source` writes its source under the level-1 `חומרי קריאה` entry (`READINGS` in `trove_source.py`), so a course's appendix section is that entry, and the references index is the only new page.
+
+## Course references and bookmark folders
+
+Two jobs that build on the registry. Full procedure in `references/library-refs.md`.
+
+- **References (`refs.py`).** Finds the works a course cites (footnotes, lesson text, transcripts), looks each one up in the BIU library, records a status per ref in `refs/<slug>.json`, and renders the `מקורות נזכרים` index page. `refs.py status` exits 0 only when no ref is pending. Before any OCR, check Anna's Archive for the same edition (never for Kotar items). Hebrew OCR is Tesseract, then gated Gemini correction, never Gemini alone. Kotar pages come from `/academic-writer:kotar-fetch`; the ref stays `kotar` until it reports. Downloads that need the signed-in browser are steps the runbook describes.
+- **Book lock.** One writer per Trove course book: `~/.academic-writer/bin/book-lock.sh acquire <slug> <session> "<what>"` before the first write (exit 1 means held; do other work), held through writes, ToC repair and `toc_audit`. A lock older than 3 hours goes to the user; never break it. Details and the ToC repair per book are in the runbook (A0, A9).
+- **Bookmark folders (`courses.py bookmarks`).** Rebuilds `Bookmarks bar › BIU <term> › <course>` in Chrome through AppleScript. It replaces the folder's items, so re-running it is safe. Chrome must be open. The nightly script runs it after the digest and logs a failure without stopping. Trove items are not built yet (no confirmed Trove URL form), so each folder currently holds the NotebookLM, Lemida and current-task items only.
+
 ## Nightly Lemida watcher (Chrome)
 
 Moodle's REST API answers every call with a Radware Bot Manager captcha page, so the nightly watch drives the user's already signed-in Chrome with `claude-in-chrome`. Never ask for or store the user's password. Full procedure: `references/lemida-watch.md`. In outline, per course with a `lemida_course_id`:
@@ -84,8 +94,8 @@ Moodle's REST API answers every call with a Radware Bot Manager captcha page, so
 2. Always read the `לוח הודעות` (announcements) forum and report new posts.
 3. Download `pdf`, `docx`, `pptx` and link items from their `pluginfile.php` URL, never `/mod/resource/view.php`. Zoom recordings: try to download; otherwise use Zoom's transcript and reduce it to the lecturer's main ideas.
 4. Perusall items: OCR the pdf twin in the same section; with no twin, add a `perusall-capture` chore.
-5. Assignments: read the time left and the task, name the core texts, confirm each exists in the course sources, and add an `assignment` chore (`kotar-source` when a text must be fetched from Kotar and cannot be found). Forums the user must post in get a `forum-post` chore.
-6. Route every downloaded item through `courses.py add-source`, run `check-source`, advance seen state with `watch-diff --apply --ok <ids>` only after routing succeeded, and end with `courses.py chores digest`.
+5. Assignments: read the time left and the task, name the core texts, confirm each exists in the course sources, and add an `assignment` chore (for a text on Kotar, run `/academic-writer:kotar-fetch` for the cited pages; add a `kotar-source` chore only if that fails). Forums the user must post in get a `forum-post` chore.
+6. Route every downloaded item through `courses.py add-source`, run `check-source`, advance seen state with `watch-diff --apply --ok <kind:id> ...` (`module:`, `assign:`, `discussion:`, `section:`) only after routing succeeded, and end with `courses.py chores digest`.
 
 ## Daily scan
 

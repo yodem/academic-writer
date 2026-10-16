@@ -76,6 +76,16 @@ Every source (a Lemida file, an email attachment, a recording) follows one contr
 
 Copyrighted readings stay in the user's own Drive, NotebookLM and Trove.
 
+Note on placement: `add-source` writes its source under the level-1 `חומרי קריאה` entry (`READINGS` in `trove_source.py`), so a course's appendix section is that entry, and the references index is the only new page.
+
+## Course references and bookmark folders
+
+Two jobs that build on the registry. Full procedure in `references/library-refs.md`.
+
+- **References (`refs.py`).** Finds the works a course cites (footnotes, lesson text, transcripts), looks each one up in the BIU library, records a status per ref in `refs/<slug>.json`, and renders the `מקורות נזכרים` index page. `refs.py status` exits 0 only when no ref is pending. Before any OCR, check Anna's Archive for the same edition (never for Kotar items). Hebrew OCR is Tesseract, then gated Gemini correction, never Gemini alone. Kotar pages come from `/academic-writer:kotar-fetch`; the ref stays `kotar` until it reports. Downloads that need the signed-in browser are steps the runbook describes.
+- **Book lock.** One writer per Trove course book: `~/.academic-writer/bin/book-lock.sh acquire <slug> <session> "<what>"` before the first write (exit 1 means held; do other work), held through writes, ToC repair and `toc_audit`. A lock older than 3 hours goes to the user; never break it. Details and the ToC repair per book are in the runbook (A0, A9).
+- **Bookmark folders (`courses.py bookmarks`).** Rebuilds `Bookmarks bar › BIU <term> › <course>` in Chrome through AppleScript. It replaces the folder's items, so re-running it is safe. Chrome must be open. The nightly script runs it after the digest and logs a failure without stopping. Trove items are not built yet (no confirmed Trove URL form), so each folder currently holds the NotebookLM, Lemida and current-task items only.
+
 ## Nightly Lemida watcher (Chrome)
 
 Moodle's REST API answers every call with a Radware Bot Manager captcha page, so the nightly watch drives the user's already signed-in Chrome with `claude-in-chrome`. Never ask for or store the user's password. Full procedure: `references/lemida-watch.md`. In outline, per course with a `lemida_course_id`:
@@ -84,8 +94,8 @@ Moodle's REST API answers every call with a Radware Bot Manager captcha page, so
 2. Always read the `לוח הודעות` (announcements) forum and report new posts.
 3. Download `pdf`, `docx`, `pptx` and link items from their `pluginfile.php` URL, never `/mod/resource/view.php`. Zoom recordings: try to download; otherwise use Zoom's transcript and reduce it to the lecturer's main ideas.
 4. Perusall items: OCR the pdf twin in the same section; with no twin, add a `perusall-capture` chore.
-5. Assignments: read the time left and the task, name the core texts, confirm each exists in the course sources, and add an `assignment` chore (`kotar-source` when a text must be fetched from Kotar and cannot be found). Forums the user must post in get a `forum-post` chore.
-6. Route every downloaded item through `courses.py add-source`, run `check-source`, advance seen state with `watch-diff --apply --ok <ids>` only after routing succeeded, and end with `courses.py chores digest`.
+5. Assignments: read the time left and the task, name the core texts, confirm each exists in the course sources, and add an `assignment` chore (for a text on Kotar, run `/academic-writer:kotar-fetch` for the cited pages; add a `kotar-source` chore only if that fails). Forums the user must post in get a `forum-post` chore.
+6. Route every downloaded item through `courses.py add-source`, run `check-source`, advance seen state with `watch-diff --apply --ok <kind:id> ...` (`module:`, `assign:`, `discussion:`, `section:`) only after routing succeeded, and end with `courses.py chores digest`.
 
 ## Daily scan
 

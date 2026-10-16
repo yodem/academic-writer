@@ -50,12 +50,12 @@ trove items toc <ITEM_ID> --no-session
 trove items read <ITEM_ID>:<first-new-page> --no-session
 ```
 
-Check all five, and report any failure plainly:
+Check all five, and report any failure plainly. Checks 3 and 5 (the appended pages and the merged table of contents) apply in every case:
 
 1. **Page count** is N plus the number of pages you added.
 2. **Old entries** are all still in the table of contents, with their hints and levels.
 3. **New entries** are present, each pointing at its real new page.
-4. **Old pages** 1 and 2 read back byte-equal to the text saved in step 1.
+4. **Existing pages** read back as intended: every old page you did not mean to change (page 2 as saved in step 1, and page 1 when step 3 did not update it) is byte-equal to the text saved in step 1. When step 3 did rewrite page 1, compare page 1 with the **approved replacement** (`/tmp/reading-guide.md`) instead, never with the old text.
 5. **Printed-page markers** are on the new pages and match the source's sequence.
 
 ## 5. Index it for PageIndex (only if the author uses it)

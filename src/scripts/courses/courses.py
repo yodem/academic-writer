@@ -69,9 +69,18 @@ class Registry:
             self.courses[course["slug"]] = course
 
 
+def courses_root() -> Path:
+    """Root that holds one directory per term (ACADEMIC_COURSES_DIR, default ~/.academic-writer/courses)."""
+    return Path(os.environ.get("ACADEMIC_COURSES_DIR", "~/.academic-writer/courses")).expanduser()
+
+
+def registry_dir(term: str | None = None) -> Path:
+    """The term directory every course tool reads: the root plus --term / ACADEMIC_TERM / the sole term."""
+    return _term_dir(courses_root(), term)
+
+
 def registry_from_args(args: argparse.Namespace) -> Registry:
-    root = Path(os.environ.get("ACADEMIC_COURSES_DIR", "~/.academic-writer/courses")).expanduser()
-    return Registry(_term_dir(root, args.term))
+    return Registry(registry_dir(args.term))
 
 
 WEEKDAYS = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
@@ -706,7 +715,7 @@ def check_lesson(registry: Registry, slug: str, date: str, runner: Callable[...,
 MEDIA_EXTENSIONS = {".m4a", ".mp3", ".wav", ".mp4", ".mov", ".mkv", ".webm"}
 READINGS_ENTRY = "חומרי קריאה"
 TITLE_PREFIX_RE = re.compile(r"^(?:\d+|email-\d{4}-\d{2}-\d{2})\s*-\s*")
-ORIGINS = ("lemida", "email", "recording", "other")
+ORIGINS = ("lemida", "email", "recording", "library", "other")
 
 
 def _default_title(path: Path) -> str:
@@ -1170,6 +1179,11 @@ def main(argv: list[str] | None = None) -> int:
     cdone = chores_sub.add_parser("done", parents=[reg_parent], help="mark a chore done")
     cdone.add_argument("id")
     chores_sub.add_parser("digest", parents=[reg_parent], help="write REG/digest/chores.md and chores.json")
+    bookmarks_p = sub.add_parser("bookmarks", help="rebuild each course's Chrome bookmark folder (AppleScript; Chrome must be open)")
+    bookmarks_p.add_argument("slug", nargs="?", help="one course slug (or use --all)")
+    bookmarks_p.add_argument("--all", action="store_true", help="every course in the registry")
+    bookmarks_p.add_argument("--print-script", action="store_true", help="print the AppleScript and exit without touching Chrome")
+    bookmarks_p.add_argument("--check", action="store_true", help="read-only: exit 1 when applying would change Chrome")
     args = parser.parse_args(argv)
     try:
         if args.command == "import-docx":
@@ -1215,6 +1229,9 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"digest: {chores.write_digest(registry)}")
             return 0
+        if args.command == "bookmarks":
+            import bookmarks
+            return bookmarks.run(registry, slug=args.slug, all_courses=args.all, print_script=args.print_script, check_only=args.check)
         if args.command == "find-lesson-page":
             found = find_lesson_page(registry, args.slug, args.lesson_key)
             if found is None:

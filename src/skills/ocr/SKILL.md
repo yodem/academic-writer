@@ -10,6 +10,8 @@ metadata: {author: "Yotam Fromm", version: "0.2.0", summary: "Turn a scan or pho
 
 OCR (optical character recognition) reads the text out of a scanned or photographed page. Transcribe a PDF, an image, or a folder of them. OCR copies the source text exactly: it never corrects, modernises or paraphrases it, because the text may later be quoted as evidence.
 
+**Step 0 — Anna's Archive first, for a published work.** Before any OCR, search Anna's Archive for the work: use the `annas-archive-ebooks` skill when it is installed, otherwise search by title, author and ISBN. For a chapter or article, look for the whole book or journal issue. If a copy of the **same edition** exists (same publisher, year and printed pagination), use its text layer or EPUB text, keep the printed page numbers exactly, and skip OCR. Run Gemini OCR (`aw ocr`) only when there is no matching copy or the copy has no usable text. Record the outcome for each item: `annas: found-used`, `annas: found-wrong-edition` or `annas: not-found`.
+
 **Who reads the pages is the author's choice.** Ask once with `AskUserQuestion`, in plain words, and say where the pages go (skip the question when the author already named an engine):
 
 | Choice | Who reads the pages | Good for |
@@ -20,6 +22,8 @@ OCR (optical character recognition) reads the text out of a scanned or photograp
 | **On this computer (Tesseract)** | nothing leaves the computer; free | clean print, private material; weaker on scans and vowel marks |
 
 The commands and rules for Claude, Codex and Tesseract are in `${CLAUDE_PLUGIN_ROOT}/skills/ocr/references/engines.md`; read it when the author picks one of them. For course readings Claude goes first. Whatever engine the author chose, never move a page to another engine on your own: mark unclear pages "OCR, not image-verified" and, if Gemini might read a page better, ask with `AskUserQuestion` whether that page may be sent to Gemini (its text goes to Google). Record which engine produced the text. The steps below are for the plugin's own reader.
+
+For library and Kotar readings (in copyright) the author has already chosen Gemini OCR for the course, so use `aw ocr` directly when step 0 finds no usable copy; for any other reading follow the engine choice above, and never move pages to another engine without asking.
 
 1. If the author gave no path, ask for the file or folder.
 2. Choose the language: `he`, `en` or `mixed`. Take it from `.academic-helper/profile.md`, or ask when the source language is unclear.
