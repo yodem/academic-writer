@@ -216,3 +216,22 @@ def test_reopen_chore(tmp_path):
     chores.mark_done(reg, c["id"])
     assert chores.reopen(reg, c["id"][:6])["status"] == "open"
     assert chores.reopen(reg, c["id"])["status"] == "open"
+
+
+def test_explicit_date_that_conflicts_blocks_the_only_open_fallback(tmp_path):
+    d, specs, ids = _dup_reg(tmp_path, [("assignment", "1", "קריאה", "2026-10-18T08:00:00+03:00")],
+                             [{"key": "t1", "title": "מטלה (הגשה 30.11.2026, 08:00)", "primary": []}])
+    report = tasks.migrate(d, specs)
+    assert report["merged"] == [] and [x["spec_task"] for x in report["possible_duplicates"]] == ["s-t1"]
+
+
+def test_explicit_date_may_fold_into_an_undated_only_open_chore(tmp_path):
+    d, specs, ids = _dup_reg(tmp_path, [("forum-post", "1", "פורום", None)],
+                             [{"key": "פורום 1", "title": "פורום (עד 25.10.2026)", "primary": []}])
+    assert tasks.migrate(d, specs)["merged"][0]["into"] == ids[0]
+
+
+def test_explicit_date_matching_two_chores_is_not_folded(tmp_path):
+    d, specs, ids = _dup_reg(tmp_path, [("assignment", "1", "א", "2026-10-18T08:00:00+03:00"), ("assignment", "2", "ב", "2026-10-18T09:00:00+03:00")],
+                             [{"key": "t1", "title": "מטלה (הגשה 18.10.2026)", "primary": []}])
+    assert tasks.migrate(d, specs)["merged"] == []
