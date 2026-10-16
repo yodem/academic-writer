@@ -1,7 +1,7 @@
 """Chores store for the course pipeline: things Yotam (not a script) must do.
 
 `REG/chores.json` is the store. `REG/digest/` holds only the read-only digest that NanoClaw mounts
-(`chores.md` in Hebrew, `chores.json`); nothing else may live there. No ids or tokens reach the digest.
+(`chores.md` in Hebrew, `chores.json`, and `wispr-unmatched.json`: the Wispr meetings no course claimed, as id/time/reason only); nothing else may live there. No ids or tokens reach the digest.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ KIND_HE = {
     "manual": "משימה",
 }
 FIELDS = ("title", "text", "core_texts", "time_left_text", "due_text", "due_at")
-DIGEST_FILES = ("chores.md", "chores.json")
+DIGEST_FILES = ("chores.md", "chores.json", "wispr-unmatched.json")
 _TOKEN_RE = re.compile(r"((?:wstoken|token|key|sesskey)=)[^&\s]+", re.I)
 
 

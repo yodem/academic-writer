@@ -34,11 +34,12 @@ def test_syntax():
 def test_chrome_running_plans_watch_in_order(tmp_path):
     out, plans = run_dry(tmp_path, True, queue=True)
     assert out.returncode == 0, out.stderr
-    keys = ["courses.py daily", "claude -p --chrome", "lesson-notes --pending", "toc_audit.py --all",
+    keys = ["courses.py daily", "claude -p --chrome", "courses.py wispr-scan", "lesson-notes --pending", "toc_audit.py --all",
             "chores digest", "courses-sync-nanoclaw.sh"]
     idx = [next(i for i, p in enumerate(plans) if k in p) for k in keys]
     assert idx == sorted(idx) and len(plans) == len(keys)
     watch = plans[1]
+    assert "courses.py wispr-scan" in plans[2]
     assert "/academic-writer:courses watch-lemida --all'" in watch
     assert "--model sonnet" in watch and "--plugin-dir" in watch
     for tool in ("mcp__claude-in-chrome__*", "Bash(rclone:*)", "Bash(pdftoppm:*)", "Bash(screencapture:*)", "Bash(trove ms show:*)"):
