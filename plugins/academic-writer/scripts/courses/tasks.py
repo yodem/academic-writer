@@ -303,7 +303,7 @@ def _spec_kind(key: str, title: str) -> str | None:
 
 
 def _fold_target(tasks: list[dict[str, Any]], key: str, title: str) -> tuple[dict[str, Any], str] | None:
-    """The one chore-backed task a spec task duplicates: same kind, and the due date named in the spec title, else the only open one."""
+    """The one chore-backed task a spec task duplicates: same kind, and the due date named in the spec title; with no date in the title, the only open one."""
     kind = _spec_kind(key, title)
     if kind is None:
         return None
@@ -314,6 +314,8 @@ def _fold_target(tasks: list[dict[str, Any]], key: str, title: str) -> tuple[dic
         dated = [t for t in pool if str(t.get("due_at") or "")[:10] == f"{year:04d}-{month:02d}-{day:02d}"]
         if len(dated) == 1:
             return dated[0], "due date"
+        # an explicit date never falls back onto a chore that has a different due date; an undated chore cannot contradict it
+        pool = [t for t in pool if not t.get("due_at")] if not dated else []
     open_ones = [t for t in pool if t.get("status") == "open"]
     return (open_ones[0], "only open chore of its kind") if len(open_ones) == 1 else None
 
