@@ -54,7 +54,7 @@ def _build_plugin_root(tmp):
     return root
 
 
-def _run_session_env(value, extra_env=None):
+def _run_session_env(value, extra_env=None, var="AW_PAGEINDEX_COMMAND"):
     """Run the real SessionStart session-env command from src/hooks/hooks.json as a shell would, then source the env file it wrote."""
     cmd = _session_env_command()
     # Claude Code substitutes the two key placeholders itself; leave them empty here.
@@ -66,13 +66,13 @@ def _run_session_env(value, extra_env=None):
         (project / ".academic-helper/profile.md").write_text("profile")
         env_file = pathlib.Path(tmp) / "claude.env"
         env_file.write_text("")
-        env = {k: v for k, v in os.environ.items() if "PAGEINDEX" not in k}
+        env = {k: v for k, v in os.environ.items() if "PAGEINDEX" not in k and k != "CLAUDE_PLUGIN_DATA"}
         env.update({"CLAUDE_PLUGIN_ROOT": str(plugin_root), "CLAUDE_PROJECT_DIR": str(project), "CLAUDE_ENV_FILE": str(env_file)})
         env.update(extra_env if extra_env is not None else {"CLAUDE_PLUGIN_OPTION_PAGEINDEX_COMMAND": value})
         p = subprocess.run(["sh", "-c", cmd], input="{}", capture_output=True, text=True, env=env, cwd=project, timeout=30)
         assert p.returncode == 0, p.stderr[-400:]
         out = subprocess.run(
-            ["sh", "-c", f'. "{env_file}"; printf %s "$AW_PAGEINDEX_COMMAND"'], capture_output=True, text=True, env={"PATH": os.environ["PATH"]}
+            ["sh", "-c", f'. "{env_file}"; printf %s "${var}"'], capture_output=True, text=True, env={"PATH": os.environ["PATH"]}
         )
         return out.stdout
 
@@ -91,3 +91,19 @@ def test_pageindex_command_with_quote_space_dollar_and_semicolon_arrives_intact(
 def test_pageindex_command_legacy_env_name_still_works_and_unset_exports_nothing():
     assert _run_session_env("", {"USER_CONFIG_PAGEINDEX_COMMAND": "pilib"}) == "pilib"
     assert _run_session_env("", {}) == ""
+
+
+def test_pageindex_home_is_exported_only_once_the_built_in_helper_is_installed():
+    """The Bash tool gets no CLAUDE_PLUGIN_DATA, so the hook tells `aw library` where the installed helper lives. Run through the real
+    hook command; a path with a quote and a space must arrive intact."""
+    with tempfile.TemporaryDirectory() as tmp:
+        data = pathlib.Path(tmp) / "plugin data it's"
+        (data / "pageindex").mkdir(parents=True)
+        home = str(data / "pageindex")
+        assert _run_session_env("", {"CLAUDE_PLUGIN_DATA": str(data)}, var="AW_PAGEINDEX_HOME") == ""
+        (data / "pageindex" / "installed.json").write_text("{}")
+        assert _run_session_env("", {"CLAUDE_PLUGIN_DATA": str(data)}, var="AW_PAGEINDEX_HOME") == home
+        # a command the researcher supplied is still exported as before, next to the folder
+        both = {"CLAUDE_PLUGIN_DATA": str(data), "CLAUDE_PLUGIN_OPTION_PAGEINDEX_COMMAND": "my-wrapper --x"}
+        assert _run_session_env("", both, var="AW_PAGEINDEX_COMMAND") == "my-wrapper --x"
+        assert _run_session_env("", both, var="AW_PAGEINDEX_HOME") == home

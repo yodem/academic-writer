@@ -97,9 +97,10 @@ class TestLibraryModules(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(LIBRARY_DIR, name)), name)
 
     def test_strict_typescript_no_any(self):
-        for name in sorted(os.listdir(LIBRARY_DIR)):
-            source = open(os.path.join(LIBRARY_DIR, name), encoding="utf-8").read()
-            self.assertNotRegex(source, r":\s*any\b|\bas any\b|<any>|any\[\]", name)
+        for folder, _, names in sorted(os.walk(LIBRARY_DIR)):  # the eval/ folder too: listdir alone hands open() a directory
+            for name in sorted(names):
+                source = open(os.path.join(folder, name), encoding="utf-8").read()
+                self.assertNotRegex(source, r":\s*any\b|\bas any\b|<any>|any\[\]", os.path.join(folder, name))
 
     def test_commands_run_without_a_shell(self):
         source = open(os.path.join(LIBRARY_DIR, "exec.ts"), encoding="utf-8").read()

@@ -324,14 +324,21 @@
       "concurrency": 16,
       "askAboveCalls": 400,
       "timeoutMs": 1800000,
-      "_comment": "aw library index (PageIndex tree build): summaryModel is the LiteLLM model for page summaries, maxCalls the hard cap on model calls per run, concurrency the parallel calls, askAboveCalls the estimated call count above which the skill asks the researcher before starting (with a cost estimate), timeoutMs bounds one whole indexing run (30 minutes)."
+      "verifyPages": 2,
+      "minSummaryShare": 0.8,
+      "probeTimeoutMs": 30000,
+      "_comment": "aw library index (PageIndex tree build): summaryModel is the LiteLLM model for page summaries, maxCalls the hard cap on model calls per run, concurrency the parallel calls, askAboveCalls the estimated call count above which the skill asks the researcher before starting (with a cost estimate) and the call cap a run without --yes gets, timeoutMs bounds one whole indexing run (30 minutes). verifyPages is how many pages the read-back compares with Trove, minSummaryShare the share of nodes that must carry a summary when summaries were asked for, probeTimeoutMs bounds the up-front check that the command can index at all."
     },
     "install": {
       "pageindexCommit": "af92d9658a6a9c0ae31171b43198db28951af2f4",
       "minPython": "3.10",
       "minPythonCore": "3.9",
       "pipTimeoutMs": 900000,
-      "_comment": "aw library install: pageindexCommit is the pinned PageIndex commit (its tarball sha256 lives in PINNED.json), minPython the least Python for the structure tier, minPythonCore the least for the core tier (index from the table of contents), pipTimeoutMs bounds one pip install (15 minutes)."
+      "venvTimeoutMs": 180000,
+      "healthTimeoutMs": 90000,
+      "probeTimeoutMs": 15000,
+      "approxSizeMb": { "core": 100, "structure": 500 },
+      "_comment": "aw library install: pageindexCommit is the pinned PageIndex commit (its tarball sha256 lives in PINNED.json), minPython the least Python for the structure tier, minPythonCore the least for the core tier (index from the table of contents), pipTimeoutMs bounds one pip install (15 minutes), venvTimeoutMs the creation of the private Python folder, healthTimeoutMs the check after the install, probeTimeoutMs asking one Python what version it is. approxSizeMb is the rough disk size quoted to the researcher before an install (an estimate, not a measurement)."
     },
     "eval": {
       "maxClaims": 30,

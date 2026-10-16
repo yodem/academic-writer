@@ -94,3 +94,60 @@ test('CLAUDE_PLUGIN_OPTION_PAGEINDEX_COMMAND wins over the older USER_CONFIG_ na
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('the built-in PageIndex helper folder is exported as AW_PAGEINDEX_HOME only once installed.json exists, quoted', () => {
+  const root = mkdtempSync(join(tmpdir(), 'aw-session-env-'));
+  try {
+    mkdirSync(join(root, '.academic-helper'));
+    writeFileSync(join(root, '.academic-helper', 'profile.md'), 'profile');
+    const data = join(root, "data it's");
+    mkdirSync(join(data, 'pageindex'), { recursive: true });
+    const envFile = join(root, 'claude.env');
+    writeFileSync(envFile, '');
+    sessionEnv(root, envFile, { pluginData: data });
+    assert.equal(readFileSync(envFile, 'utf8'), '', 'not installed: nothing is exported');
+    writeFileSync(join(data, 'pageindex', 'installed.json'), '{}');
+    sessionEnv(root, envFile, { pluginData: data });
+    assert.equal(readFileSync(envFile, 'utf8'), `export AW_PAGEINDEX_HOME='${join(data, 'pageindex').replace(/'/g, "'\\''")}'\n`);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('the helper folder is also exported next to a user-supplied PageIndex command (aw decides which wins), and never in an unprofiled project', () => {
+  const root = mkdtempSync(join(tmpdir(), 'aw-session-env-'));
+  const bare = mkdtempSync(join(tmpdir(), 'aw-session-env-'));
+  try {
+    mkdirSync(join(root, '.academic-helper'));
+    writeFileSync(join(root, '.academic-helper', 'profile.md'), 'profile');
+    mkdirSync(join(root, 'data', 'pageindex'), { recursive: true });
+    writeFileSync(join(root, 'data', 'pageindex', 'installed.json'), '{}');
+    const envFile = join(root, 'claude.env');
+    writeFileSync(envFile, '');
+    sessionEnv(root, envFile, { pageindexCommand: 'my-wrapper', pluginData: join(root, 'data') });
+    assert.equal(readFileSync(envFile, 'utf8'), `export AW_PAGEINDEX_COMMAND='my-wrapper'\nexport AW_PAGEINDEX_HOME='${join(root, 'data', 'pageindex')}'\n`);
+    mkdirSync(join(bare, 'data', 'pageindex'), { recursive: true });
+    writeFileSync(join(bare, 'data', 'pageindex', 'installed.json'), '{}');
+    const bareEnv = join(bare, 'claude.env');
+    writeFileSync(bareEnv, '');
+    sessionEnv(bare, bareEnv, { pluginData: join(bare, 'data') });
+    assert.equal(readFileSync(bareEnv, 'utf8'), '');
+  } finally { rmSync(root, { recursive: true, force: true }); rmSync(bare, { recursive: true, force: true }); }
+});
+
+test('an omitted pluginData value is read from CLAUDE_PLUGIN_DATA', () => {
+  const root = mkdtempSync(join(tmpdir(), 'aw-session-env-'));
+  const before = process.env['CLAUDE_PLUGIN_DATA'];
+  try {
+    mkdirSync(join(root, '.academic-helper'));
+    writeFileSync(join(root, '.academic-helper', 'profile.md'), 'profile');
+    mkdirSync(join(root, 'data', 'pageindex'), { recursive: true });
+    writeFileSync(join(root, 'data', 'pageindex', 'installed.json'), '{}');
+    const envFile = join(root, 'claude.env');
+    writeFileSync(envFile, '');
+    process.env['CLAUDE_PLUGIN_DATA'] = join(root, 'data');
+    sessionEnv(root, envFile, { pageindexCommand: '' });
+    assert.equal(readFileSync(envFile, 'utf8'), `export AW_PAGEINDEX_HOME='${join(root, 'data', 'pageindex')}'\n`);
+  } finally {
+    if (before === undefined) delete process.env['CLAUDE_PLUGIN_DATA']; else process.env['CLAUDE_PLUGIN_DATA'] = before;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
