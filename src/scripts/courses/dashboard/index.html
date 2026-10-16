@@ -376,6 +376,8 @@ const auto = s => `<bdi dir="auto">${esc(s)}</bdi>`;
 const KEY = 'aw.dashboard.v1';
 let S = {sort:'due', moved:{}, lastCourse:null, inked:{}};
 try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(S, JSON.parse(raw)); } catch(e) {}
+/* saved moves are keyed course/task; an older unscoped key could name another course's task, so it is dropped */
+S.moved = Object.fromEntries(Object.entries(S.moved || {}).filter(([k]) => k.includes('/')));
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} };
 try { const t = localStorage.getItem(KEY + '.theme'); if (t) document.documentElement.dataset.theme = t; } catch(e) {}
 
@@ -391,7 +393,10 @@ if (/[?&]key=/.test(location.search)) history.replaceState(null, '', location.pa
 let ST = null, CM = {}, TM = {}, WEEK = null, CUR_WEEK = null;
 const SEL = new Set();                 /* checked fetch boxes, kept across live re-renders */
 const course = slug => CM[slug];
-const task = id => TM[id];
+/* a task id is unique only inside its course (spec ids such as s-t2 repeat), so every lookup, action,
+   element id and saved move is keyed by course and id together */
+const tkey = t => t.course + '/' + t.id;
+const task = key => TM[key];
 
 async function api(path, body){
   const opt = body === undefined ? {credentials:'same-origin'} :
@@ -411,7 +416,7 @@ async function load(force){
   stale('');
   const same = ST && ST.version === data.version && !force;
   ST = data; CM = {}; TM = {};
-  ST.courses.forEach(c => { CM[c.slug] = c; c.tasks.forEach(t => TM[t.id] = t); });
+  ST.courses.forEach(c => { CM[c.slug] = c; c.tasks.forEach(t => TM[tkey(t)] = t); });
   if (!CUR_WEEK) CUR_WEEK = ST.agenda.start;
   if (!WEEK) WEEK = ST.agenda.start;
   if (same) return;
@@ -425,7 +430,7 @@ const isoOf = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}
 const addDays = (s, n) => { const d = D(s); d.setDate(d.getDate()+n); return isoOf(d); };
 const dm = s => { const d = D(s); return `${d.getDate()}.${d.getMonth()+1}`; };
 const dayDiff = (a, c) => Math.round((D(c) - D(a)) / 864e5);
-const effDate = t => (t.reading && S.moved[t.id]) || t.due_date;
+const effDate = t => (t.reading && S.moved[tkey(t)]) || t.due_date;
 function rel(d){
   const n = dayDiff(ST.today, d);
   if (n === 0) return 'היום'; if (n === 1) return 'מחר'; if (n === 2) return 'בעוד יומיים';
@@ -531,7 +536,7 @@ const doneWord = t => t.reading ? 'נקרא' : 'נשלח';
 const verbDone = t => t.reading ? 'קראתי' : 'הגשתי';
 function titleHTML(t){
   const title = esc(t.title);
-  if (t.status === 'submitted') return `<span class="strike" data-mark="${esc(t.id)}">${title}</span><span class="sent">${doneWord(t)}</span>`;
+  if (t.status === 'submitted') return `<span class="strike" data-mark="${esc(tkey(t))}">${title}</span><span class="sent">${doneWord(t)}</span>`;
   if (t.state === 'missing') return (t.title.length <= 44 ? `<span class="circ">${title}</span>` : title) + '<span class="sr"> · חסר מקור</span>';
   if (t.reading) return `<span class="hl">${title}</span><span class="sr"> · לקרוא</span>`;
   if (t.state === 'ready') return `${title}${TICK}<span class="sr"> · כל המקורות מוכנים</span>`;
@@ -592,7 +597,7 @@ function renderOverview(){
   if (ST.empty){ v.innerHTML = `<div class="ov-head"><h1 class="date">שולחן הלימודים</h1></div>${emptyHTML()}`; return; }
   const d = D(ST.today);
   const rows = sortedRows().map(r => {
-    const c = course(r.course), t = task(r.task);
+    const c = course(r.course), t = task(r.course + '/' + r.task);
     return `<li class="toc-row">
       <a class="entry" href="#course/${encodeURIComponent(c.slug)}" id="e-${esc(c.slug)}-${esc(t.id)}" data-nav>
         <span class="cname">${esc(c.name)}</span>
@@ -650,11 +655,12 @@ function weekDays(){
   /* server days, with readings this viewer moved (localStorage only) re-placed inside the shown week */
   const days = ST.agenda.days.map(d => ({...d, items: d.items.slice()}));
   const inWeek = new Set(days.map(d => d.date));
-  days.forEach(d => { d.items = d.items.filter(i => !(i.type === 'task' && task(i.task) && task(i.task).reading && S.moved[i.task] && S.moved[i.task] !== d.date && inWeek.has(S.moved[i.task]))); });
-  Object.entries(S.moved).forEach(([id, date]) => {
-    const t = task(id); if (!t || !t.reading || !inWeek.has(date)) return;
+  const ik = i => i.course + '/' + i.task;
+  days.forEach(d => { d.items = d.items.filter(i => !(i.type === 'task' && task(ik(i)) && task(ik(i)).reading && S.moved[ik(i)] && S.moved[ik(i)] !== d.date && inWeek.has(S.moved[ik(i)]))); });
+  Object.entries(S.moved).forEach(([key, date]) => {
+    const t = task(key); if (!t || !t.reading || !inWeek.has(date)) return;
     const day = days.find(d => d.date === date);
-    if (!day.items.some(i => i.task === id)) day.items.push({type:'task', course:t.course, task:id, time:t.due_time && t.due_time !== '00:00' ? t.due_time : '', sort:'00'});
+    if (!day.items.some(i => i.type === 'task' && ik(i) === key)) day.items.push({type:'task', course:t.course, task:t.id, time:t.due_time && t.due_time !== '00:00' ? t.due_time : '', sort:'00'});
   });
   days.forEach(d => d.items.sort((a, c) => (a.sort || '').localeCompare(c.sort || '')));
   return days;
@@ -662,13 +668,13 @@ function weekDays(){
 function itemHTML(i){
   const c = course(i.course);
   if (i.type === 'task'){
-    const t = task(i.task);
+    const t = task(i.course + '/' + i.task);
     const tm = i.time ? b(i.time) : 'במהלך היום';
     const g = t.status === 'submitted' ? '' : (t.state === 'missing' ? glossHTML(t, 'span') : '');
     const mv = t.reading && t.status !== 'submitted';
-    return `<li class="${mv ? 'movable' : ''}" ${mv ? `draggable="true" data-task="${esc(t.id)}"` : ''}>
+    return `<li class="${mv ? 'movable' : ''}" ${mv ? `draggable="true" data-task="${esc(tkey(t))}"` : ''}>
       <span class="tm">${tm}</span><span class="kind">${t.kind_word}</span>
-      <span><a class="what" href="#course/${encodeURIComponent(c.slug)}" id="a-${esc(t.id)}" data-nav ${mv ? 'title="אפשר לגרור ליום אחר"' : ''}>${esc(c.name)} · ${titleHTML(t)}</a></span>${g}</li>`;
+      <span><a class="what" href="#course/${encodeURIComponent(c.slug)}" id="a-${esc(tkey(t))}" data-nav ${mv ? 'title="אפשר לגרור ליום אחר"' : ''}>${esc(c.name)} · ${titleHTML(t)}</a></span>${g}</li>`;
   }
   return `<li><span class="tm">${b(i.time)}</span><span class="kind">שיעור</span><span><a class="what" href="#course/${encodeURIComponent(c.slug)}" data-nav>${esc(c.name)}${c.mode === 'zoom' ? ' · בזום' : ''}</a></span></li>`;
 }
@@ -701,7 +707,7 @@ function renderAgenda(){
     flush();
     return `<div class="page">${html}</div>`;
   };
-  const movable = days.some(d => d.items.some(i => i.type === 'task' && task(i.task).reading));
+  const movable = days.some(d => d.items.some(i => i.type === 'task' && task(i.course + '/' + i.task).reading));
   v.innerHTML = `
     <div class="ag-head"><h1>${lead}${range}</h1>
       <div class="weeknav"><button id="wkPrev">שבוע קודם</button><button id="wkNext">שבוע הבא</button></div></div>
@@ -715,7 +721,7 @@ function renderAgenda(){
 async function goWeek(n){ WEEK = addDays(WEEK || CUR_WEEK, 7*n); await load(true); }
 function moveTask(id, date, how){
   const t = task(id); if (!t || effDate(t) === date) return;
-  if (date === t.due_date) delete S.moved[id]; else S.moved[id] = date;
+  if (date === t.due_date) delete S.moved[id]; else S.moved[id] = date;   /* id is the course/task key */
   save(); renderAgenda(); inkify($('#v-agenda'));
   toast(`${esc(t.title)} עבר ליום ${DN[D(date).getDay()]}, ${dm(date)} (רק בדפדפן הזה).`);
   if (how === 'key') { const el = $(`#a-${CSS.escape(id)}`); el && el.focus(); }
@@ -772,8 +778,8 @@ function renderCourse(slug){
       <h2>${titleHTML(t)}</h2>
       <p class="when">${when}</p>${desc}${core}
       <div class="acts">${done
-        ? `<button class="btn" id="undo-${esc(t.id)}" data-undo="${esc(t.id)}">לבטל את הסימון</button><span class="label">${TICK.replace('class="tick"', `class="tick" data-mark="${esc(t.id)}"`)} סימנת ש${t.reading ? 'קראת' : 'הגשת'}. ${t.reading ? 'הקריאה' : 'המטלה'} ירדה מהסקירה.</span>`
-        : `<button class="btn" id="done-${esc(t.id)}" data-done="${esc(t.id)}">${verbDone(t)}</button>${lem}`}</div>
+        ? `<button class="btn" id="undo-${esc(tkey(t))}" data-undo="${esc(tkey(t))}">לבטל את הסימון</button><span class="label">${TICK.replace('class="tick"', `class="tick" data-mark="${esc(tkey(t))}"`)} סימנת ש${t.reading ? 'קראת' : 'הגשת'}. ${t.reading ? 'הקריאה' : 'המטלה'} ירדה מהסקירה.</span>`
+        : `<button class="btn" id="done-${esc(tkey(t))}" data-done="${esc(tkey(t))}">${verbDone(t)}</button>${lem}`}</div>
     </article>`;
   };
   const bibHead = `<div class="bib-head label" aria-hidden="true"><span></span><span>לסמן מקור חסר כדי ש־Claude יביא אותו</span>
@@ -852,7 +858,7 @@ async function queueFetch(slug, boxes){
 /* ================= submit + undo (written to the registry through tasks.py) ================= */
 async function markDone(id){
   const t = task(id); if (!t || t.status === 'submitted') return;
-  try { await api('/api/task/submit', {course:t.course, task:id}); }
+  try { await api('/api/task/submit', {course:t.course, task:t.id}); }
   catch(e) { if (e.message !== 'forbidden') toast('הסימון לא נשמר: ' + esc(e.message)); return; }
   await load(true);
   const el = $('#v-' + route().view);
@@ -863,7 +869,7 @@ async function markDone(id){
 }
 async function undoDone(id){
   const t = task(id); if (!t) return;
-  try { await api('/api/task/unsubmit', {course:t.course, task:id}); }
+  try { await api('/api/task/unsubmit', {course:t.course, task:t.id}); }
   catch(e) { if (e.message !== 'forbidden') toast('הביטול לא נשמר: ' + esc(e.message)); return; }
   await load(true);
   toast('הסימון בוטל.');
@@ -934,8 +940,8 @@ function commands(){
   out.push({label:'סקירה', hint:'g o', run:() => location.hash = '#overview'});
   out.push({label:'יומן', hint:'g a', run:() => location.hash = '#agenda'});
   ST.courses.forEach(c => c.tasks.forEach(t => {
-    if (t.status === 'submitted'){ if (t.recently_submitted) out.push({label:`לבטל את הסימון: ${esc(t.title)}`, hint:esc(c.name), run:() => undoDone(t.id)}); }
-    else out.push({label:`${verbDone(t)}: ${esc(t.title)}`, hint:esc(c.name), run:() => markDone(t.id)});
+    if (t.status === 'submitted'){ if (t.recently_submitted) out.push({label:`לבטל את הסימון: ${esc(t.title)}`, hint:esc(c.name), run:() => undoDone(tkey(t))}); }
+    else out.push({label:`${verbDone(t)}: ${esc(t.title)}`, hint:esc(c.name), run:() => markDone(tkey(t))});
   }));
   ST.courses.forEach(c => {
     const all = c.tasks.filter(t => t.status !== 'submitted').flatMap(t => t.items.map(i => [i, t.id])).concat(c.more.map(i => [i, '']));
@@ -995,7 +1001,7 @@ document.addEventListener('keydown', e => {
     if (D(nd).getDay() === 6) nd = addDays(nd, e.key === 'ArrowDown' ? 1 : -1);
     const start = ST.agenda.start, end = addDays(start, 6);
     if (nd < start || nd > end) { toast('אפשר להזיז קריאה רק בתוך השבוע שמוצג.'); return; }
-    moveTask(tk.id, nd, 'key'); return;
+    moveTask(tkey(tk), nd, 'key'); return;
   }
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (gWait){

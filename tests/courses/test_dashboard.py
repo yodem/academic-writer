@@ -326,3 +326,75 @@ def test_two_terms_without_a_choice_say_so(tmp_path, monkeypatch):
     assert dashboard.resolve_directory() is None and dashboard.missing_reason() == "ambiguous-term"
     assert dashboard.missing_reason("T1") == "no-registry"
     assert dashboard.build_state(None, now=NOW, reason="ambiguous-term")["reason"] == "ambiguous-term"
+
+
+# --- review fixes: per-course task ids, time-driven updates -----------------------------------------
+
+def _spec_task(d, slug, title):
+    data = json.loads((d / f"{slug}.json").read_text())
+    data["tasks"] = [{"id": "s-t2", "title": title, "due_at": "2026-10-28T10:00:00+02:00", "chore_ids": [],
+                      "status": "open", "submitted_at": None, "kind": "spec", "spec_key": "t2"}]
+    _w(d / f"{slug}.json", data)
+
+
+def test_same_task_id_in_two_courses_submits_only_the_named_course(server):
+    srv, d, *_ = server
+    _spec_task(d, "gamma", "Gamma t2")
+    _spec_task(d, "delta", "Delta t2")
+    state = json.loads(req(srv, "GET", "/api/state", origin=None)[2])
+    assert {(r["course"], r["task"]) for r in state["overview"]["rows"]} >= {("delta", "s-t2")}
+    status, _, _ = req(srv, "POST", "/api/task/submit", {"course": "gamma", "task": "s-t2"})
+    assert status == 200
+    assert json.loads((d / "gamma.json").read_text())["tasks"][0]["status"] == "submitted"
+    assert json.loads((d / "delta.json").read_text())["tasks"][0]["status"] == "open"
+
+
+def test_page_keys_tasks_by_course_and_id():
+    page = (Path(dashboard.ASSETS) / "index.html").read_text(encoding="utf-8")
+    assert "TM[t.id]" not in page and "TM[tkey(t)]" in page
+    assert "S.moved[t.id]" not in page and "S.moved[tkey(t)]" in page
+    assert "{course:t.course, task:t.id}" in page
+
+
+def test_next_boundary_is_midnight_or_the_nearest_due(tmp_path):
+    d, a, *_ = make_reg(tmp_path)
+    state = dashboard.build_state(d, now=NOW)
+    # alpha is due 18.10 08:00, so its 72-hour "soon" mark started already; the next change is midnight
+    assert dashboard.next_boundary(state, NOW) == datetime(2026, 10, 17, 0, 0, tzinfo=TZ)
+    late = datetime(2026, 10, 18, 7, 30, tzinfo=TZ)
+    assert dashboard.next_boundary(dashboard.build_state(d, now=late), late) == datetime(2026, 10, 18, 8, 0, tzinfo=TZ)
+    # beta is due 25.10 23:59 +02:00 (after the DST switch); 72 hours earlier is 23.10 00:59 local (+03:00)
+    early = datetime(2026, 10, 23, 0, 30, tzinfo=TZ)
+    assert dashboard.next_boundary(dashboard.build_state(d, now=early), early) == datetime(2026, 10, 23, 0, 59, tzinfo=TZ)
+
+
+def test_sse_emits_when_the_clock_crosses_a_boundary(tmp_path):
+    d, *_ = make_reg(tmp_path)
+    clock = [datetime(2026, 10, 16, 23, 59, 30, tzinfo=TZ)]
+    srv = dashboard.DashboardServer(lambda: d, port=0, key="c" * 32, interval=0.1, now=lambda: clock[0]).start()
+    try:
+        sock = socket.create_connection(("127.0.0.1", srv.port), timeout=5)
+        sock.sendall((f"GET /api/events HTTP/1.1\r\nHost: 127.0.0.1:{srv.port}\r\n"
+                      f"Cookie: {srv.COOKIE}={srv.key}\r\n\r\n").encode())
+        buf = b""
+        deadline = time.time() + 5
+        while b"event: hello" not in buf and time.time() < deadline:
+            buf += sock.recv(4096)
+        time.sleep(0.4)
+        sock.settimeout(0.5)
+        quiet = b""
+        try:
+            quiet = sock.recv(4096)
+        except socket.timeout:
+            pass
+        assert b"state-changed" not in quiet  # no file changed and no boundary passed
+        clock[0] = datetime(2026, 10, 17, 0, 0, 5, tzinfo=TZ)  # local midnight passed
+        sock.settimeout(5)
+        buf = b""
+        deadline = time.time() + 5
+        while b"state-changed" not in buf and time.time() < deadline:
+            buf += sock.recv(4096)
+        sock.close()
+        assert b"event: state-changed" in buf
+    finally:
+        srv.close()

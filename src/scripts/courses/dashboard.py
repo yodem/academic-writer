@@ -525,6 +525,26 @@ def agenda(term: Dict[str, Any], course_list: List[Dict[str, Any]], start: date,
     return frame
 
 
+def next_boundary(state: Dict[str, Any], now: datetime) -> Optional[datetime]:
+    """The next instant the state changes with no file changing: local midnight (today, relative dates), a due time
+    passing (overdue), a due time coming within SOON_HOURS (the red date), or a submit ageing out of the undo window."""
+    if state.get("timezone"):
+        tz = ZoneInfo(state["timezone"])
+    else:
+        tz = now.tzinfo or timezone.utc
+    local = now.astimezone(tz)
+    candidates = [datetime.combine(local.date() + timedelta(days=1), datetime.min.time()).replace(tzinfo=tz)]
+    for c in state.get("courses", []):
+        for t in c.get("tasks", []):
+            if t.get("status") != "submitted" and t.get("due_at"):
+                due = datetime.fromisoformat(t["due_at"])
+                candidates += [due, due - timedelta(hours=SOON_HOURS)]
+            if t.get("recently_submitted") and t.get("submitted_at"):
+                candidates.append(datetime.fromisoformat(t["submitted_at"]) + timedelta(hours=RECENT_SUBMIT_HOURS))
+    future = [c for c in candidates if c > now]
+    return min(future).astimezone(tz) if future else None
+
+
 # --- writes --------------------------------------------------------------------------------------
 
 class RequestError(Exception):
@@ -630,15 +650,29 @@ class DashboardServer:
             self._threads.append(thread)
         return self
 
+    def _clock(self) -> datetime:
+        return self.now() if self.now else datetime.now(timezone.utc)
+
     def _watch(self) -> None:
+        """Push `state-changed` when a registry file changes, and when the clock crosses a time boundary
+        (local midnight, a due time, the 72-hour mark, the undo window) even though no file changed."""
         root = courses.courses_root()
         last = None
+        boundary: Optional[datetime] = None
         while not self._closed:
             sig = _signature(self.resolve(), root)
-            if last is not None and sig != last:
+            now = self._clock()
+            changed = last is not None and sig != last
+            crossed = boundary is not None and now >= boundary
+            if changed or crossed:
                 with self._cond:
                     self.version += 1
                     self._cond.notify_all()
+            if changed or crossed or last is None:
+                try:
+                    boundary = next_boundary(self.state(), now)
+                except Exception:  # a malformed registry must not stop the watcher; retry at the next change
+                    boundary = None
             last = sig
             with self._cond:
                 self._cond.wait(timeout=self.interval)
