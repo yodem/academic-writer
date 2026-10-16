@@ -211,7 +211,8 @@ export async function indexBook(indexer: Indexer, request: IndexRequest): Promis
   if (!SUMMARY_MODES.includes(request.summaries)) throw new LibraryError('usage', 'ERROR library index: --summaries must be gemini, hints or none');
   if (request.model !== undefined && !/^[A-Za-z0-9._/:-]{1,80}$/u.test(request.model)) throw new LibraryError('usage', 'ERROR library index: --model must be a plain model name');
   await ensureCanIndex(indexer);
-  const env = pageindexEnv(indexer, request.summaries);
+  // The Gemini key goes only to the real indexing call: not the start-up probe, the read-back or a dry run.
+  const env = pageindexEnv(indexer, request.dryRun ? 'none' : request.summaries);
   // Fail before any call when the built-in helper has no key to give: the helper would fail the same way, after reading Trove.
   if (request.summaries === 'gemini' && indexer.source === 'installed' && !request.dryRun && geminiKeyFrom(indexer.env) === null) {
     return { ok: false, code: 'missing_key', message: plainFailure('missing_key', ''), needs_yes: false, result: { trove_id: request.troveId }, read_back: null, ledger_recorded: false };
@@ -318,7 +319,7 @@ export async function verifyBook(indexer: Indexer, request: IndexRequest, result
   let troveCompared = false;
   if (checks.pages && wanted.length > 0) {
     try {
-      const trove = new TroveBackend({ command: indexer.config.troveCommand, env: childEnv(indexer.env), timeoutMs: limits.timeoutMs.primary, cwd: indexer.project });
+      const trove = new TroveBackend({ command: indexer.config.troveCommand, env: childEnv(indexer.env, { kind: 'trove' }), timeoutMs: limits.timeoutMs.primary, cwd: indexer.project });
       const theirs = await trove.read(request.troveId, wanted);
       troveCompared = true;
       const byPage = new Map(theirs.pages.map((entry) => [entry.page, squash(entry.text)]));

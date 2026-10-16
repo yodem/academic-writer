@@ -3,6 +3,7 @@ import { PLAIN_ID, TroveBackend } from './backends.ts';
 import { ensureCanIndex, indexBook, pilibJson, plainFailure, type Indexer, type IndexRequest, type SummaryMode } from './index-cmd.ts';
 import { runCommand } from './exec.ts';
 import { childEnv } from './install.ts';
+import { clipError } from './ledger.ts';
 import { errorMessage, LibraryError } from './types.ts';
 
 const limits = thresholds.library;
@@ -37,7 +38,7 @@ type PlanLine = {
 const whole = (value: unknown): number | null => (typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null);
 
 async function listTrove(indexer: Indexer, selector: BackfillSelector): Promise<Array<{ id: string; title: string; pages: number | null }>> {
-  const env = childEnv(indexer.env);
+  const env = childEnv(indexer.env, { kind: 'trove' });
   const timeoutMs = limits.timeoutMs.readAll;
   if (selector.kind === 'ids') return selector.ids.map((id) => ({ id, title: '', pages: null }));
   if (selector.kind === 'shelf') return (await new TroveBackend({ command: indexer.config.troveCommand, env, timeoutMs, cwd: indexer.project }).list()).map((book) => ({ id: book.id, title: book.title, pages: book.pageCount }));
@@ -53,15 +54,21 @@ async function listTrove(indexer: Indexer, selector: BackfillSelector): Promise<
 
 /** The books a backfill would touch, with the outline Trove holds for each (read-only on Trove). */
 async function candidates(indexer: Indexer, request: BackfillRequest): Promise<{ list: Candidate[]; unreadable: Array<{ id: string; error: string }> }> {
-  const base = await listTrove(indexer, request.selector);
-  const trove = new TroveBackend({ command: indexer.config.troveCommand, env: childEnv(indexer.env), timeoutMs: limits.timeoutMs.primary, cwd: indexer.project });
+  let base: Awaited<ReturnType<typeof listTrove>>;
+  try { base = await listTrove(indexer, request.selector); }
+  catch (error) {
+    // The backend's stderr can echo a credential: redact it here, before it can be printed.
+    throw new LibraryError(error instanceof LibraryError && error.code !== 'exit' ? error.code : 'exit', `ERROR library backfill: the list of books could not be read from Trove (${clipError(errorMessage(error).replace(/^ERROR library: /u, ''))}). Nothing was indexed.`);
+  }
+  const trove = new TroveBackend({ command: indexer.config.troveCommand, env: childEnv(indexer.env, { kind: 'trove' }), timeoutMs: limits.timeoutMs.primary, cwd: indexer.project });
   const list: Candidate[] = [];
   const unreadable: Array<{ id: string; error: string }> = [];
   for (const book of base) {
     try {
       const toc = await trove.toc(book.id);
       list.push({ id: book.id, title: book.title || toc.title || book.id, pages: book.pages, tocEntries: toc.toc.length, hinted: toc.toc.filter((entry) => entry.title.includes(' - ')).length });
-    } catch (error) { unreadable.push({ id: book.id, error: errorMessage(error).replace(/^ERROR library: /u, '') }); }
+    } catch (error) { // A backend's stderr can echo a credential: the same redaction as the ledger, one short line.
+      unreadable.push({ id: book.id, error: clipError(errorMessage(error).replace(/^ERROR library: /u, '')) }); }
   }
   return { list, unreadable };
 }
@@ -118,7 +125,8 @@ export async function runBackfill(indexer: Indexer, request: BackfillRequest): P
   if (askRequired && !request.yes) {
     return { output: { ok: false, code: 'needs_confirmation', error: `This backfill would send book text to Google (Gemini) for about ${estimated} summaries${fallbackBooks > 0 ? ` plus ${fallbackBooks} book${fallbackBooks === 1 ? '' : 's'} without a hinted table of contents, whose cost cannot be counted ahead` : ''}. Show the plan to the researcher, ask, then run it again with --yes.`, ...summary }, exit: 2 };
   }
-  const results: Array<Record<string, unknown>> = [];
+  // A book whose table of contents could not be read from Trove was not indexed: it is a failure of this run.
+  const results: Array<Record<string, unknown>> = unreadable.map((entry) => ({ id: entry.id, title: '', status: 'failed', code: 'trove_failed', error: plainFailure('trove_failed', entry.error) }));
   let calls = 0;
   let promptTokens = 0;
   let completionTokens = 0;

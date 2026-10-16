@@ -284,6 +284,8 @@ class World:
             **PARENT_SECRETS,
             FAKE_LOG=str(self.trove_log),
             FAKE_LITELLM_LOG=str(self.litellm_log),
+            # commands get an allow-list of the environment; the fakes' own log paths are named here, as a researcher would for a wrapper
+            AW_LIBRARY_PASS_ENV="FAKE_LOG,FAKE_LITELLM_LOG",
         )
         if installed:
             self.install_helper(golden)

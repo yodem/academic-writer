@@ -155,6 +155,33 @@ def test_index_trove_writes_the_hinted_tree_and_gemini_summaries(env, capsys):
     assert all(("summary" in n) != bool(n.get("nodes")) for n in nodes)         # leaves carry summary
 
 
+def test_the_trove_child_never_sees_a_model_key(env, capsys, monkeypatch):
+    """pilib holds the Gemini key for LiteLLM, but the `trove` command it starts is a different program: no model key reaches it."""
+    envlog = env.tmp / "trove-env.log"
+    monkeypatch.setenv("FAKE_TROVE_ENV_LOG", str(envlog))
+    for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS", "AZURE_OPENAI_KEY", "SOME_SERVICE_API_KEY"):
+        monkeypatch.setenv(name, "secret-value-that-must-not-travel")
+    monkeypatch.setenv("TROVE_API_KEY", "trove-own-credential")  # Trove's own variables stay: it is how that program logs in
+    monkeypatch.setenv("PATH_EXTRA_FOR_TEST", "kept")
+    code, out, err = index(capsys)
+    assert code == 0, err
+    seen = [set(json.loads(line)) for line in envlog.read_text().splitlines()]
+    assert len(seen) >= 2, "the table of contents and the pages were both read"
+    for names in seen:
+        assert not names & {"GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY",
+                            "GOOGLE_APPLICATION_CREDENTIALS", "AZURE_OPENAI_KEY", "SOME_SERVICE_API_KEY"}, names
+        assert {"PATH", "TROVE_API_KEY", "PATH_EXTRA_FOR_TEST"} <= names
+    assert env.stub.models, "the model call itself still had the key (the stub saw a call)"
+
+
+def test_trove_env_filter_keeps_other_variables_and_trove_credentials():
+    from pilib.trove_source import trove_env
+    kept = trove_env({"PATH": "/bin", "HOME": "/h", "TROVE_TOKEN": "t", "CK_API_KEY": "c", "CANDLEKEEP_API_KEY": "k", "LANG": "C"})
+    assert kept == {"PATH": "/bin", "HOME": "/h", "TROVE_TOKEN": "t", "CK_API_KEY": "c", "CANDLEKEEP_API_KEY": "k", "LANG": "C"}
+    gone = trove_env({"PATH": "/bin", "GEMINI_API_KEY": "g", "google_api_key": "g", "GITHUB_TOKEN": "x", "MY_API_KEY": "y", "ANTHROPIC_AUTH_TOKEN": "z", "AWS_SECRET_ACCESS_KEY": "s", "HF_TOKEN": "h"})
+    assert gone == {"PATH": "/bin"}
+
+
 def test_parent_summaries_are_built_from_the_child_summaries(env, capsys):
     index(capsys)
     leaf = [p for p in env.stub.prompts if "Section pages" in p]

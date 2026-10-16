@@ -6,14 +6,35 @@ are Trove page numbers (1..N), which is the canonical page space of the whole pl
 from __future__ import annotations
 
 import json
+import os
+import re
 import subprocess
 
 from .errors import IndexFailure, scrub
 
+# pilib holds a model key (for LiteLLM); the `trove` command it starts is another program and must not see it.
+_SECRET_NAME = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL)", re.IGNORECASE)
+_MODEL_PREFIX = ("GEMINI_", "GOOGLE_", "OPENAI_", "ANTHROPIC_", "OPENROUTER_")
+_TROVE_OWN = ("TROVE_", "CANDLEKEEP_", "CK_")  # how Trove itself logs in
+
+
+def trove_env(env=None) -> dict:
+    """The environment for a `trove` child: everything except model keys and other secrets (Trove's own variables stay)."""
+    out = {}
+    for name, value in (os.environ if env is None else env).items():
+        upper = name.upper()
+        if upper.startswith(_TROVE_OWN):
+            out[name] = value
+        elif upper.startswith(_MODEL_PREFIX) or _SECRET_NAME.search(name):
+            continue
+        else:
+            out[name] = value
+    return out
+
 
 def trove(*args: str) -> str:
     try:
-        out = subprocess.run(["trove", *args, "--no-session"], capture_output=True, text=True, encoding="utf-8")
+        out = subprocess.run(["trove", *args, "--no-session"], capture_output=True, text=True, encoding="utf-8", env=trove_env())
     except FileNotFoundError:
         raise IndexFailure("trove_failed", "the trove command was not found on this machine")
     if out.returncode != 0:

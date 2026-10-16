@@ -130,6 +130,7 @@ function bench(config?: unknown, extraEnv: Record<string, string> = {}): Bench {
   set('AW_TROVE_COMMAND', write('trove', FAKE_TROVE));
   set('AW_PAGEINDEX_COMMAND', write('pilib', FAKE_PILIB));
   set('FAKE_LOG', log);
+  set('AW_LIBRARY_PASS_ENV', 'FAKE_LIST_JSON,FAKE_LOG,FAKE_PILIB_FAIL,FAKE_PI_EXTRA,FAKE_PI_TROVE_ID,FAKE_SLOW_READ_MS');
   set('AW_LIBRARY_SHADOW', 'inline');
   for (const [key, value] of Object.entries(extraEnv)) set(key, value);
   if (config !== undefined) writeFileSync(join(project, '.academic-helper', 'library.json'), JSON.stringify(config), 'utf8');
