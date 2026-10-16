@@ -31,7 +31,7 @@ If the output says there is no registry yet, the page shows an empty state; sugg
 
 - **Overview, agenda, course page.** Read-only views of `term.json`, the course files, `links.json`, `refs/`, the chores store, `digest/wispr-unmatched.json` (time only) and the nightly log.
 - **"I submitted" / "I read"** marks the task submitted through `tasks.py` (the same as `courses.py task submit`) and closes its chores; the 5-second undo calls `courses.py task unsubmit`.
-- **"Fetch selected"** only writes a job to `REG/queue/fetch/<timestamp>-<course>.json` with the ref keys (and the task, when there is one). The page never fetches anything. Claude runs the jobs: for each job, `refs.py fetch --course <course> --ref <key> [--task <task>]` per ref, in order, then move the job file to `REG/queue/fetch/done/`. The page tells the student that Claude will do it on the next run, never that it is done.
+- **"Fetch selected"** only writes a job to `REG/queue/fetch/<timestamp>-<course>.json` with the ref keys (and the task, when there is one). The page never fetches anything. The nightly run drains the queue with `refs.py fetch-queue` (the fetch chain per ref, results written into the job, finished jobs moved to `REG/queue/fetch/done/`; anything that needs the signed-in browser becomes a chore). The page tells the student that Claude will do it in the nightly run, never that it is done.
 - **Dragging a reading** to another day in the agenda is stored in that browser only; the registry is not changed.
 
 Never edit registry files to make the page look different; fix the data through the courses commands.

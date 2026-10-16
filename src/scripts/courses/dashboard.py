@@ -483,7 +483,7 @@ def lede(course_list: List[Dict[str, Any]], now: datetime) -> List[Dict[str, str
             n = first["missing_count"]
             parts += [{"t": head + ", וחסר לה "}, {"t": "מקור אחד" if n == 1 else f"{n} מקורות", "mark": "circ"}, {"t": "."}]
         elif state == "waiting":
-            parts.append({"t": head + ", ו־Claude יביא את מה שחסר לה בריצה הבאה."})
+            parts.append({"t": head + ", ו־Claude יביא את מה שחסר לה בריצה הלילית."})
         elif state == "ready":
             parts.append({"t": head + ", וכל המקורות שלה כבר אצלך."})
         else:

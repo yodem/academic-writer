@@ -7,6 +7,7 @@
 #   b. Chrome check                no "Google Chrome" process -> a manual chore, step c skipped
 #   c. claude -p --chrome          /academic-writer:courses watch-lemida --all   (COURSES_ONLY="cohen kane" restricts)
 #   c2. courses.py wispr-scan      Wispr Flow lecture recordings -> queue jobs (failure is counted; no Wispr database = no-op)
+#   c3. refs.py fetch-queue        dashboard fetch requests (queue/fetch/*.json): fetch chain per ref, jobs move to queue/fetch/done/ (failure is counted)
 #   d. queued lesson jobs          /academic-writer:lesson-notes --pending
 #   e. tools/toc_audit.py --all    failure -> a manual chore (the job is not failed by it)
 #   f. courses.py chores digest
@@ -17,6 +18,7 @@ export PATH="${PATH:+$PATH:}$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/u
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 REPO="${ACADEMIC_WRITER_REPO:-$HOME/dev/academic-writer}"
 COURSES="$REPO/src/scripts/courses/courses.py"
+REFS="$REPO/src/scripts/courses/refs.py"
 TERM_DIR="${COURSES_TERM_DIR:-$HOME/.academic-writer/courses/תשפ״ז}"
 SYNC="$HOME/.academic-writer/bin/courses-sync-nanoclaw.sh"
 PY=/usr/bin/python3
@@ -82,6 +84,11 @@ run_job() {
   # c2. Wispr Flow lecture recordings: match to course slots, write queue jobs (before the lesson-notes step reads the queue)
   if ! dry_plan "$PY $COURSES wispr-scan"; then
     step wispr-scan "$PY" "$COURSES" wispr-scan || FAILED=1
+  fi
+
+  # c3. dashboard fetch requests (queue/fetch/*.json); nonzero = a job errored and waits for tomorrow or gave up
+  if ! dry_plan "$PY $REFS --registry $TERM_DIR fetch-queue"; then
+    step fetch-queue "$PY" "$REFS" --registry "$TERM_DIR" fetch-queue || FAILED=1
   fi
 
   # d. queued lesson jobs

@@ -163,3 +163,81 @@ def test_explicit_file_that_does_not_exist_is_an_error(tmp_path):
     d = reg_with(tmp_path, {"key": "k", "citation": "c", "status": "online"})
     with pytest.raises(refs.RefsError):
         refs.fetch_ref(d, "nevua", "k", env={}, file=tmp_path / "nope.pdf")
+
+
+# --- fetch-queue ----------------------------------------------------------------------------------
+
+def put_job(d, name, course="nevua", refs=("k",), **extra):
+    folder = d / "queue" / "fetch"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / name).write_text(json.dumps({"course": course, "refs": list(refs), **extra}), encoding="utf-8")
+
+
+def drain(d, lookup, **kw):
+    return refs.drain_fetch_queue(d, env={}, lookup=lookup, annas=lambda c: pytest.fail("annas must not run"), **kw)
+
+
+def test_fetch_queue_moves_job_to_done_with_results(tmp_path):
+    d = reg_with(tmp_path, {"key": "k", "citation": "Smith Book 1999", "status": "pending"})
+    put_job(d, "20261016T010000-nevua.json")
+    report = drain(d, lambda c: [hit("print-only", call="1.2")])
+    assert report["jobs"][0]["status"] == "done"
+    assert not (d / "queue" / "fetch" / "20261016T010000-nevua.json").exists()
+    done = json.loads((d / "queue" / "fetch" / "done" / "20261016T010000-nevua.json").read_text())
+    assert done["status"] == "done" and done["results"]["k"]["state"] == "ok" and done["results"]["k"]["outcome"] == "print-only"
+    assert stored(d)["status"] == "print-only" and stored(d)["annas"] == "not-checked"
+    assert drain(d, lambda c: pytest.fail("no jobs left"))["jobs"] == []  # idempotent
+
+
+def test_fetch_queue_dry_run_changes_nothing(tmp_path):
+    d = reg_with(tmp_path, {"key": "k", "citation": "Smith Book 1999", "status": "pending"})
+    put_job(d, "a-nevua.json")
+    before = (d / "refs" / "nevua.json").read_text()
+    report = drain(d, lambda c: [hit("print-only")], dry_run=True)
+    assert report["jobs"][0]["status"] == "done"
+    assert (d / "queue" / "fetch" / "a-nevua.json").exists() and not (d / "queue" / "fetch" / "done").exists()
+    assert (d / "refs" / "nevua.json").read_text() == before
+
+
+def test_fetch_queue_oldest_first_and_kotar_becomes_chore(tmp_path):
+    d = reg_with(tmp_path, {"key": "k", "citation": "Smith Book 1999", "status": "pending"})
+    put_job(d, "2-nevua.json")
+    put_job(d, "1-nevua.json")
+    order = []
+    report = drain(d, lambda c: order.append(c) or [hit("kotar")])
+    assert [j["job"] for j in report["jobs"]] == ["1-nevua.json", "2-nevua.json"]
+    assert len(order) == 1  # second job: the ref is no longer pending, so no second Primo lookup
+    assert stored(d)["status"] == "kotar"
+
+
+def test_fetch_queue_all_errored_retries_then_fails_after_three(tmp_path):
+    d = reg_with(tmp_path, {"key": "k", "citation": "Smith Book 1999", "status": "pending"})
+    put_job(d, "a-nevua.json")
+
+    def down(c):
+        raise OSError("primo down")
+    path = d / "queue" / "fetch" / "a-nevua.json"
+    for attempt in (1, 2):
+        assert drain(d, down)["jobs"][0]["status"] == "retry"
+        assert json.loads(path.read_text())["attempts"] == attempt
+    assert drain(d, down)["jobs"][0]["status"] == "failed"
+    assert not path.exists()
+    done = json.loads((d / "queue" / "fetch" / "done" / "a-nevua.json").read_text())
+    assert done["status"] == "failed" and done["attempts"] == 3 and done["results"]["k"]["state"] == "error"
+
+
+def test_fetch_queue_partial_failure_finishes_job_and_unknown_ref_is_an_error(tmp_path):
+    d = reg_with(tmp_path, {"key": "k", "citation": "Smith Book 1999", "status": "pending"})
+    put_job(d, "a-nevua.json", refs=("k", "missing"))
+    report = drain(d, lambda c: [hit("print-only")])
+    assert report["jobs"][0]["status"] == "done"
+    results = report["jobs"][0]["results"]
+    assert results["k"]["state"] == "ok" and results["missing"]["state"] == "error"
+
+
+def test_fetch_queue_cli_exit_code(tmp_path, capsys):
+    d = reg_with(tmp_path, {"key": "k", "citation": "x", "status": "print-only"})
+    assert refs.main(["--registry", str(d), "fetch-queue", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["jobs"] == []
+    put_job(d, "a-nevua.json", course="nope")
+    assert refs.main(["--registry", str(d), "fetch-queue"]) == 1
