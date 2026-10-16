@@ -191,7 +191,7 @@ Chores are deduplicated on course, kind and `ref` (`refs:<slug>:<key>`), so a re
 
 ### A10. Sources per task and the fetch chain
 
-**Task linkage (additive).** `<slug>.json` carries `tasks: [{id, title, due_at, chore_ids[], status open|submitted, submitted_at, kind, spec_key?}]`. The canonical task `id` is the id of the chore it came from (`assignment`, `forum-post`, `perusall-capture`); a task that exists only in `tools/specs/<slug>.json` gets `s-<spec key>`. Commands accept the id, a unique prefix, or the spec key. A ref or a `sources[]` entry may carry `tasks: [<task id>, ...]`; nothing else changes.
+**Task linkage (additive).** `<slug>.json` carries `tasks: [{id, title, due_at, chore_ids[], status open|submitted, submitted_at, kind, spec_key?}]`. The canonical task `id` is the id of the chore it came from (`assignment`, `forum-post`; `perusall-capture` chores are readings, not hand-ins); a task that exists only in `tools/specs/<slug>.json` gets `s-<spec key>`. Commands accept the id, a unique prefix, or the spec key. A ref or a `sources[]` entry may carry `tasks: [<task id>, ...]`; nothing else changes.
 
 | Command (`refs.py` or `courses.py`) | What it does |
 |---|---|
