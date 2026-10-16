@@ -32,6 +32,9 @@ logs/
 !src/guide/**
 !plugins/academic-writer/guide/
 !plugins/academic-writer/guide/**
+# The blind-evaluation judging page template IS shipped too
+!src/skills/library-eval/references/judge-page.html
+!plugins/academic-writer/skills/library-eval/references/judge-page.html
 
 # The product site (GitHub Pages) is shipped too
 !site/
