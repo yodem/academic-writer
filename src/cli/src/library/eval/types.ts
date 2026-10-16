@@ -70,6 +70,8 @@ export type Run = {
   fingerprint: string;
   /** Commands the agent ran outside its allowed list (clipped); a run with any is invalid and left out of the pairs. */
   violations: string[];
+  /** What the library really answered when a lookup of this run failed (the agent only saw "lookup failed"). */
+  lookup_errors: string[];
 };
 
 export type PairOption = { book: string | null; book_title: string | null; pages: Array<{ page: number; text: string }> };

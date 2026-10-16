@@ -7,6 +7,8 @@ import { appendUsage, canonicalJson, readJson, runFile, sha256, validate, writeJ
 import { ChildGroup, RUN_TAG_ENV, TreeTracker, parseAgent, parseAnswer, reapTagged, runAgent, type Parsed } from './agent.ts';
 import { evalLimits } from './limits.ts';
 import { LibraryError } from '../types.ts';
+import { redact } from '../redact.ts';
+import { FILTER_SOURCE } from './filter-source.ts';
 import type { Claim, Engine, Plan, Route, Run } from './types.ts';
 
 export type RunnerOptions = {
@@ -39,7 +41,7 @@ export function runIdFor(evalId: string, route: Route, claimId: string): string 
  * (AW_LIBRARY_ROUTE forces it and turns the shadow off) and stamps every call with the run and claim ids, so the
  * retrieval ledger can be joined to this run. Agents see the same two commands whichever route stands behind them.
  */
-export function wrapperScript(options: { awCommand: string[]; project: string; route: Route; runId: string; claimId: string; env: NodeJS.ProcessEnv }): string {
+export function wrapperScript(options: { awCommand: string[]; project: string; route: Route; runId: string; claimId: string; env: NodeJS.ProcessEnv; work: string; filter: string; errorLog: string }): string {
   const exported = Object.entries(options.env)
     .filter(([key, value]) => value !== undefined && (key === 'PATH' || (key.startsWith('AW_') && key !== 'AW_LIBRARY_ROUTE')))
     .map(([key, value]) => `${key}=${quote(String(value))}; export ${key}`);
@@ -47,9 +49,37 @@ export function wrapperScript(options: { awCommand: string[]; project: string; r
     '#!/bin/sh',
     ...exported,
     `AW_LIBRARY_ROUTE=${quote(options.route)}; export AW_LIBRARY_ROUTE`,
-    `exec ${options.awCommand.map(quote).join(' ')} --project-dir ${quote(options.project)} library "$@" --run ${quote(options.runId)} --claim ${quote(options.claimId)}`,
+    `out=${quote(options.work)}/out.$$; err=${quote(options.work)}/err.$$`,
+    `${options.awCommand.map(quote).join(' ')} --project-dir ${quote(options.project)} library "$@" --run ${quote(options.runId)} --claim ${quote(options.claimId)} >"$out" 2>"$err"`,
+    'code=$?',
+    // The agent sees the output with everything that names the library removed (see filter-source.ts).
+    `exec ${quote(process.execPath)} ${quote(options.filter)} "$code" "$out" "$err" ${quote(options.errorLog)}`,
     '',
   ].join('\n');
+}
+
+/** Write the wrapper and its output filter into `bin`; returns the wrapper path and the error log the filter fills. */
+export async function writeWrapper(bin: string, options: { awCommand: string[]; project: string; route: Route; runId: string; claimId: string; env: NodeJS.ProcessEnv }): Promise<{ wrapper: string; errorLog: string }> {
+  const wrapper = join(bin, 'awlib');
+  const filter = join(bin, 'filter.cjs');
+  const errorLog = join(bin, 'lookup-errors.log');
+  await writeFile(filter, FILTER_SOURCE, { mode: 0o600 });
+  await writeFile(wrapper, wrapperScript({ ...options, work: bin, filter, errorLog }), { mode: 0o700 });
+  return { wrapper, errorLog };
+}
+
+/** What the library really said when a lookup failed (the agent only saw "lookup failed"), redacted and clipped. */
+async function lookupErrors(errorLog: string): Promise<string[]> {
+  let text: string;
+  try { text = await readFile(errorLog, 'utf8'); } catch { return []; }
+  const out: string[] = [];
+  for (const line of text.split('\n')) {
+    try {
+      const row = JSON.parse(line) as { code?: number; stderr?: string };
+      out.push(`exit ${row.code ?? '?'}: ${redact(String(row.stderr ?? '')).replace(/\s+/gu, ' ').trim().slice(0, 300)}`);
+    } catch { /* blank or torn */ }
+  }
+  return out.slice(0, 5);
 }
 
 export function buildPrompt(plan: Plan, claim: Claim, wrapper: string): string {
@@ -219,8 +249,7 @@ async function locateOnce(options: RunnerOptions, claim: Claim, route: Route, gr
     const bin = join(dir, 'bin');
     await mkdir(cwd);
     await mkdir(bin);
-    const wrapper = join(bin, 'awlib');
-    await writeFile(wrapper, wrapperScript({ awCommand: options.awCommand, project: options.project, route, runId, claimId: claim.id, env: options.env }), { mode: 0o700 });
+    const { wrapper, errorLog } = await writeWrapper(bin, { awCommand: options.awCommand, project: options.project, route, runId, claimId: claim.id, env: options.env });
     const prompt = buildPrompt(options.plan, claim, wrapper);
     const requested = modelRequested(options);
     const model = options.engine === 'claude' ? requested : options.model;
@@ -267,7 +296,7 @@ async function locateOnce(options: RunnerOptions, claim: Claim, route: Route, gr
       input_tokens: parsed.inputTokens, output_tokens: parsed.outputTokens, cost_usd: usd, returned_chars: returned.chars, returned_est_tokens: returned.est,
       agent_version: parsed.version, error,
       plan_sha256: planSha(options.plan), claim_sha256: claimSha(claim), prompt_version: PROMPT_VERSION, model_requested: requested,
-      fingerprint: expectedFingerprint(options, claim, route), violations,
+      fingerprint: expectedFingerprint(options, claim, route), violations, lookup_errors: await lookupErrors(errorLog),
     };
     return { run, missing: exit.spawnError === 'missing' };
   } finally {

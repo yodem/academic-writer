@@ -209,7 +209,7 @@ async function scenario(pages: Array<Record<Route, number[] | null>>, over: { au
         answer: answer ? { book: 'T-A', pages: answer, reason: 'the trove tree node says so' } : null, tool_calls: [], n_reads: 1, n_toc: 1, pages_per_read: [2], over_budget: false, permission_denials: 0,
         wall_ms: route === 'trove' ? 4000 : 6000, agent_ms: 1000, turns: 3, input_tokens: route === 'trove' ? 1000 : 2000, output_tokens: 100, cost_usd: route === 'trove' ? 0.05 : 0.07,
         returned_chars: 500, returned_est_tokens: route === 'trove' ? 200 : 300, agent_version: '1.0.0', error: answer ? null : 'no answer',
-        plan_sha256: planSha(plan), claim_sha256: claimSha(claim), prompt_version: 'locate-v2', model_requested: 'm', violations: [],
+        plan_sha256: planSha(plan), claim_sha256: claimSha(claim), prompt_version: 'locate-v2', model_requested: 'm', violations: [], lookup_errors: [],
         fingerprint: fingerprintOf({ plan_sha256: planSha(plan), claim_sha256: claimSha(claim), claim_id: claim.id, route, engine: 'claude', model_requested: 'm', prompt_version: 'locate-v2' }),
       };
       await writeJson(join(paths.runsDir, `${claim.id}-${route}.json`), run);

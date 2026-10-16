@@ -36,7 +36,8 @@
     "prompt_version",
     "model_requested",
     "fingerprint",
-    "violations"
+    "violations",
+    "lookup_errors"
   ],
   "properties": {
     "schema": {
@@ -217,6 +218,12 @@
       "pattern": "^[0-9a-f]{64}$"
     },
     "violations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "lookup_errors": {
       "type": "array",
       "items": {
         "type": "string"

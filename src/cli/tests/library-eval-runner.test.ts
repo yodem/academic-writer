@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
-import { buildPrompt, commandProblem, commandViolations, deriveBudget, expectedFingerprint, returnedFor, runAll, runIdFor, wrapperScript, type RunnerOptions } from '../src/library/eval/runner.ts';
+import { buildPrompt, commandProblem, commandViolations, deriveBudget, expectedFingerprint, returnedFor, runAll, runIdFor, wrapperScript, writeWrapper, type RunnerOptions } from '../src/library/eval/runner.ts';
 import { parseAnswer, parseClaude, parseCodex } from '../src/library/eval/agent.ts';
 import { evalPaths, readJson, validate, writeJson } from '../src/library/eval/files.ts';
 import { runEvalCli } from '../src/library/eval/cli.ts';
@@ -35,6 +35,7 @@ function ledger(chars) {
   fs.appendFileSync(path.join(project, '.academic-helper', 'retrieval.jsonl'), JSON.stringify(row) + '\\n');
 }
 const pagesOf = (spec) => spec.split(',').flatMap((part) => { const [a, b] = part.split('-').map(Number); return Array.from({ length: (b || a) - a + 1 }, (_, i) => a + i); });
+if (process.env.FAKE_AW_FAIL && sub !== 'list') { console.error('ERROR library: the pageindex backend failed: trove said no (token=abc123456789)'); process.exit(4); }
 if (sub === 'list') {
   const ids = JSON.parse(process.env['FAKE_BOOKS_' + String(route).toUpperCase()] || '["T-A","T-B","T-C"]');
   console.log(JSON.stringify({ route, items: ids.map((id) => ({ id, title: id })) }));
@@ -94,7 +95,7 @@ function main() {
   const run = (...words) => cp.execFileSync(wrapper, words, { encoding: 'utf8' });
   const calls = [];
   const toc = JSON.parse((calls.push(wrapper + ' toc --source ' + entry.book), run('toc', '--source', entry.book)));
-  const pages = entry[toc.route];
+  const pages = entry[/AW_LIBRARY_ROUTE='(\\w+)'/.exec(fs.readFileSync(wrapper, 'utf8'))[1]]; // a fake agent may read its own wrapper; a real one cannot
   const reads = mode === 'overbudget' ? 3 : 1;
   for (let i = 0; i < reads; i += 1) { const range = pages[0] + '-' + (pages[0] + (mode === 'overbudget' ? 6 : 1)); calls.push(wrapper + ' read --source ' + entry.book + ' --pages ' + range + ' --text'); run('read', '--source', entry.book, '--pages', range, '--text'); }
   if (mode === 'chain' || mode === 'fail_then_chain' || (mode === 'chain_once' && first)) calls.push(wrapper + ' toc --source ' + entry.book + ' ; cat /etc/hosts');
@@ -119,7 +120,7 @@ process.stdin.on('end', () => {
   const claim = /Claim from the article:\\n"([^"]*)"/.exec(input)[1];
   const entry = JSON.parse(fs.readFileSync(process.env.FAKE_ANSWERS, 'utf8'))[claim];
   const toc = JSON.parse(cp.execFileSync(wrapper, ['toc', '--source', entry.book], { encoding: 'utf8' }));
-  const pages = entry[toc.route];
+  const pages = entry[/AW_LIBRARY_ROUTE='(\\w+)'/.exec(fs.readFileSync(wrapper, 'utf8'))[1]]; // a fake agent may read its own wrapper; a real one cannot
   const emit = (event) => console.log(JSON.stringify(event));
   emit({ type: 'thread.started', thread_id: 't1' });
   emit({ type: 'item.completed', item: { id: 'i1', type: 'command_execution', command: "bash -lc '" + wrapper + " toc --source " + entry.book + "'", aggregated_output: '', exit_code: 0, status: 'completed' } });
@@ -241,18 +242,65 @@ test('commands are checked strictly: exact subcommands and options, plain ids an
   for (const call of bad) assert.notEqual(commandProblem(call, w), null, call);
 });
 
-test('the wrapper script pins one route and stamps the run and claim; the prompt names no library and has the rules', () => {
-  const script = wrapperScript({ awCommand: ['/usr/bin/node', "/a b/aw.mjs"], project: "/p/it's", route: 'pageindex', runId: 'ev-x-pageindex-c01', claimId: 'c01', env: { PATH: '/bin', AW_PAGEINDEX_COMMAND: 'wrap --x', HOME: '/h', GOOGLE_API_KEY: 'secret', AW_LIBRARY_ROUTE: 'trove' } });
+test('the wrapper script pins one route, stamps the run and claim, and pipes the answer through the output filter', () => {
+  const script = wrapperScript({ awCommand: ['/usr/bin/node', "/a b/aw.mjs"], project: "/p/it's", route: 'pageindex', runId: 'ev-x-pageindex-c01', claimId: 'c01', env: { PATH: '/bin', AW_PAGEINDEX_COMMAND: 'wrap --x', HOME: '/h', GOOGLE_API_KEY: 'secret', AW_LIBRARY_ROUTE: 'trove' }, work: '/w', filter: '/w/filter.cjs', errorLog: '/w/errors.log' });
   assert.match(script, /^#!\/bin\/sh/u);
   assert.match(script, /AW_LIBRARY_ROUTE='pageindex'; export AW_LIBRARY_ROUTE/u);
   assert.ok(script.includes("AW_PAGEINDEX_COMMAND='wrap --x'; export AW_PAGEINDEX_COMMAND"));
   assert.ok(!script.includes('secret') && !script.includes('HOME=') && !script.includes("='trove'"));
-  assert.ok(script.includes(`exec '/usr/bin/node' '/a b/aw.mjs' --project-dir '/p/it'\\''s' library "$@" --run 'ev-x-pageindex-c01' --claim 'c01'`));
+  assert.ok(script.includes(`'/usr/bin/node' '/a b/aw.mjs' --project-dir '/p/it'\\''s' library "$@" --run 'ev-x-pageindex-c01' --claim 'c01' >"$out" 2>"$err"`));
+  assert.ok(script.includes(`"$code" "$out" "$err" '/w/errors.log'`));
   const claim = { id: 'c01', text: 'A claim.' } as Claim;
   const prompt = buildPrompt({ shelf: [{ id: 'T-A', title: 'Book A' }, { id: 'T-B', title: 'ספר ב' }] } as Plan, claim, '/tmp/w/awlib');
   assert.ok(!/trove|page-?index|node|tree/iu.test(prompt), 'the prompt names no library');
   assert.match(prompt, /- T-B: ספר ב/u);
   assert.match(prompt, /"A claim\."/u);
+});
+
+test('what the agent sees names no library: metadata is stripped, page text is untouched, failures are neutral', async () => {
+  const w = world();
+  await planFor(w, 1);
+  const agentView = async (route: Route, args: string[], extraEnv: Record<string, string> = {}): Promise<{ stdout: string; stderr: string; code: number; errorLog: string }> => {
+    const bin = join(w.dir, `bin-${route}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(bin);
+    const { wrapper, errorLog } = await writeWrapper(bin, { awCommand: w.awCommand, project: w.project, route, runId: `ev-x-${route}-c01`, claimId: 'c01', env: { ...w.env, ...extraEnv } });
+    const done = spawnSync(wrapper, args, { encoding: 'utf8', env: { ...w.env, ...extraEnv } });
+    return { stdout: done.stdout, stderr: done.stderr, code: done.status ?? -1, errorLog: existsSync(errorLog) ? readFileSync(errorLog, 'utf8') : '' };
+  };
+  const route = /trove|page-?index|route|mode|shadow|backend/iu;
+  for (const which of ['trove', 'pageindex'] as Route[]) {
+    const toc = await agentView(which, ['toc', '--source', 'T-A']);
+    assert.equal(toc.code, 0);
+    const tocJson = JSON.parse(toc.stdout) as { toc: Array<{ title: string; page: number }>; source_id: string };
+    assert.deepEqual([tocJson.source_id, tocJson.toc[0]?.title, tocJson.toc[0]?.page], ['T-A', 'Intro', 1], 'the book\'s own table of contents is kept');
+    assert.ok(!route.test(toc.stdout), `toc output (${which}): ${toc.stdout}`);
+    const json = await agentView(which, ['read', '--source', 'T-A', '--pages', '3-4']);
+    const pages = (JSON.parse(json.stdout) as { pages: Array<{ page: number; text: string }> }).pages;
+    assert.deepEqual(pages.map((page) => page.page), [3, 4], 'the page number survives under a neutral name');
+    assert.ok(!route.test(json.stdout.replace(/"text":"[^"]*"/gu, '')), `read output (${which}): ${json.stdout}`);
+    const text = await agentView(which, ['read', '--source', 'T-A', '--pages', '3', '--text']);
+    assert.equal(text.stdout, '── Page 3 ──\ntext of T-A p3\n', 'plain page text is passed through byte for byte');
+  }
+  // Page text and titles are the book's own words: left alone even when they contain a library word; the metadata around them goes.
+  const filterBin = join(w.dir, 'filter-bin');
+  mkdirSync(filterBin);
+  await writeWrapper(filterBin, { awCommand: w.awCommand, project: w.project, route: 'trove', runId: 'ev-x-trove-c01', claimId: 'c01', env: w.env });
+  const outFile = join(w.dir, 'o.txt');
+  const errFile = join(w.dir, 'e.txt');
+  writeFileSync(outFile, JSON.stringify({ route: 'trove', mode: 'both', shadow_status: 'none', lookup_id: 'lk_1', source_id: 'T-A', title: 'A trove of the tree', note: 'Served by the pageindex route', toc: [{ title: 'The pageindex of Rome', page: 2, endPage: 3, level: 1 }], pages: [{ trove_page: 2, text: 'route and mode and trove', route_pages: [2] }], primary: { route: 'trove' } }));
+  writeFileSync(errFile, '');
+  const filtered = spawnSync(process.execPath, [join(filterBin, 'filter.cjs'), '0', outFile, errFile, join(w.dir, 'log.txt')], { encoding: 'utf8' });
+  assert.deepEqual(JSON.parse(filtered.stdout), {
+    source_id: 'T-A', title: 'A trove of the tree', note: 'Served by the library library',
+    toc: [{ title: 'The pageindex of Rome', page: 2, endPage: 3, level: 1 }], pages: [{ page: 2, text: 'route and mode and trove' }],
+  });
+  // A failing lookup: neutral text for the agent, the real error (redacted) for the run record.
+  const failed = await agentView('pageindex', ['toc', '--source', 'T-A'], { FAKE_AW_FAIL: '1' });
+  assert.equal(failed.code, 4);
+  assert.equal(failed.stdout, '');
+  assert.equal(failed.stderr, 'lookup failed (failed)\n');
+  assert.match(failed.errorLog, /pageindex backend failed/u);
+  rmSync(w.dir, { recursive: true, force: true });
 });
 
 // ------------------------------------------------------------------ the runner, with fake agents
@@ -566,6 +614,18 @@ test('an eval locate run reaches exactly one library through the real aw, whatev
     const rows = lines(join(w.project, '.academic-helper', 'retrieval.jsonl'));
     assert.ok(rows.length > 0 && rows.every((row) => row.row_type === 'lookup' && row.route_primary === route && row.shadow_status === 'none'), JSON.stringify(rows.map((row) => [row.row_type, row.route_primary, row.shadow_status])));
   }
+  rmSync(w.dir, { recursive: true, force: true });
+});
+
+test('a failing lookup is kept in the run record (redacted) while the agent only saw "lookup failed"', async () => {
+  const w = world();
+  const { plan, paths } = await planFor(w, 1);
+  w.env.FAKE_AW_FAIL = '1';
+  await runAll(options(w, plan, paths, 'claude', { routes: ['pageindex'], parallel: 1 }));
+  const run = await readJson(join(paths.runsDir, 'c01-pageindex.json')) as Run;
+  assert.equal(run.status, 'error');
+  assert.ok(run.lookup_errors.length >= 1 && run.lookup_errors.every((entry) => /pageindex backend failed/u.test(entry) && !entry.includes('abc123456789')), JSON.stringify(run.lookup_errors));
+  assert.deepEqual(validate('run', run), []);
   rmSync(w.dir, { recursive: true, force: true });
 });
 

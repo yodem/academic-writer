@@ -74,7 +74,7 @@ RUN = {
     "started_at": TS, "answer": {"book": "T-A", "pages": [3, 5], "reason": "r"}, "tool_calls": ["<wrapper> toc --source T-A"], "n_reads": 1, "n_toc": 1,
     "pages_per_read": [2], "over_budget": False, "permission_denials": 0, "wall_ms": 4000, "agent_ms": 3000, "turns": 3, "input_tokens": 500,
     "output_tokens": 20, "cost_usd": 0.05, "returned_chars": 900, "returned_est_tokens": 250, "agent_version": "2.1.0", "error": None,
-    "plan_sha256": SHA, "claim_sha256": SHA, "prompt_version": "locate-v2", "model_requested": "m", "fingerprint": SHA, "violations": [],
+    "plan_sha256": SHA, "claim_sha256": SHA, "prompt_version": "locate-v2", "model_requested": "m", "fingerprint": SHA, "violations": [], "lookup_errors": [],
 }
 OPTION = {"book": "T-A", "book_title": "ספר א", "pages": [{"page": 3, "text": "Text. טקסט."}]}
 PAIRS = {
