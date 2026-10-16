@@ -18,7 +18,7 @@ export const EVAL_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,39}$/u;
 
 export type EvalPaths = {
   root: string; plan: string; runsDir: string; pairs: string; sealedDir: string; mapping: string;
-  judgments: string; reportJson: string; reportMd: string; judgeHtml: string;
+  judgments: string; reportJson: string; reportMd: string; judgeHtml: string; archiveDir: string;
 };
 
 /**
@@ -37,7 +37,7 @@ export function guardEvalDirs(project: string, evalId: string): void {
   try { helperReal = realpathSync(helper); } catch { return refuse('.academic-helper cannot be resolved'); }
   if (helperReal !== real && !helperReal.startsWith(`${real}${sep}`)) refuse('.academic-helper points outside the project');
   const evalRoot = join(helperReal, 'library-eval', evalId);
-  for (const dir of [join(helperReal, 'library-eval'), evalRoot, join(evalRoot, 'runs'), join(evalRoot, 'sealed')]) {
+  for (const dir of [join(helperReal, 'library-eval'), evalRoot, join(evalRoot, 'runs'), join(evalRoot, 'sealed'), join(evalRoot, 'archive')]) {
     let info;
     try { info = lstatSync(dir); } catch { continue; }
     if (info.isSymbolicLink()) refuse(`${dir.slice(helperReal.length + 1)} is a symbolic link`);
@@ -52,8 +52,13 @@ export function evalPaths(project: string, evalId: string): EvalPaths {
   return {
     root, plan: join(root, 'plan.json'), runsDir: join(root, 'runs'), pairs: join(root, 'pairs.json'),
     sealedDir: join(root, 'sealed'), mapping: join(root, 'sealed', 'mapping.json'), judgments: join(root, 'judgments.json'),
-    reportJson: join(root, 'report.json'), reportMd: join(root, 'report.md'), judgeHtml: join(root, 'judge.html'),
+    reportJson: join(root, 'report.json'), reportMd: join(root, 'report.md'), judgeHtml: join(root, 'judge.html'), archiveDir: join(root, 'archive'),
   };
+}
+
+/** sha256 of a file's bytes, or null when it is missing. */
+export async function fileSha(file: string): Promise<string | null> {
+  try { return sha256(await readFile(file)); } catch { return null; }
 }
 
 export function runFile(paths: EvalPaths, claimId: string, route: string): string { return join(paths.runsDir, `${claimId}-${route}.json`); }
@@ -81,9 +86,17 @@ export function canonicalJson(value: unknown): string {
 
 /** Write a JSON file whole: a new temp file next to it, then a rename. `mode` is for files that must stay private. */
 export async function writeJson(file: string, value: unknown, mode = 0o644): Promise<void> {
+  await writeText(file, `${JSON.stringify(value, null, 2)}\n`, mode);
+}
+
+/** Write a text file whole (temp file, then rename). A target that is a symbolic link is refused, never followed. */
+export async function writeText(file: string, text: string, mode = 0o644): Promise<void> {
   await mkdir(dirname(file), { recursive: true });
+  try {
+    if ((await lstat(file)).isSymbolicLink()) throw new LibraryError('config', `ERROR library eval: ${file} is a symbolic link; refusing to write it`);
+  } catch (error) { if (error instanceof LibraryError) throw error; }
   const temp = `${file}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`;
-  await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', mode });
+  await writeFile(temp, text, { encoding: 'utf8', mode });
   await chmod(temp, mode);
   await rename(temp, file);
 }

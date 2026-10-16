@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { readdirSync } from 'node:fs';
 import { buildPrompt, commandProblem, commandViolations, deriveBudget, expectedFingerprint, returnedFor, runAll, runIdFor, wrapperScript, type RunnerOptions } from '../src/library/eval/runner.ts';
 import { parseAnswer, parseClaude, parseCodex } from '../src/library/eval/agent.ts';
 import { evalPaths, readJson, validate, writeJson } from '../src/library/eval/files.ts';
@@ -76,10 +77,17 @@ function main() {
   if (mode === 'hang') {
     const child = cp.spawn('sleep', ['300'], { stdio: 'ignore' });
     fs.appendFileSync(process.env.FAKE_PID_FILE, child.pid + '\\n');
+    if (process.env.FAKE_HANG_DETACH) {
+      const helper = cp.spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' });
+      helper.unref();
+      fs.appendFileSync(process.env.FAKE_PID_FILE, helper.pid + '\\n');
+    }
     setInterval(() => {}, 1000);
     return;
   }
-  if (mode === 'fail_once' && !fs.existsSync(process.env.FAKE_COUNTER)) { fs.writeFileSync(process.env.FAKE_COUNTER, '1'); process.stderr.write('boom'); process.exit(1); }
+  let first = false;
+  if (process.env.FAKE_COUNTER) { try { fs.closeSync(fs.openSync(process.env.FAKE_COUNTER, 'wx')); first = true; } catch { first = false; } }
+  if ((mode === 'fail_once' || mode === 'fail_then_chain') && first) { process.stderr.write('boom'); process.exit(1); }
   const claim = /Claim from the article:\\n"([^"]*)"/.exec(input)[1];
   const answers = JSON.parse(fs.readFileSync(process.env.FAKE_ANSWERS, 'utf8'));
   const entry = answers[claim];
@@ -89,7 +97,7 @@ function main() {
   const pages = entry[toc.route];
   const reads = mode === 'overbudget' ? 3 : 1;
   for (let i = 0; i < reads; i += 1) { const range = pages[0] + '-' + (pages[0] + (mode === 'overbudget' ? 6 : 1)); calls.push(wrapper + ' read --source ' + entry.book + ' --pages ' + range + ' --text'); run('read', '--source', entry.book, '--pages', range, '--text'); }
-  if (mode === 'chain') calls.push(wrapper + ' toc --source ' + entry.book + ' ; cat /etc/hosts');
+  if (mode === 'chain' || mode === 'fail_then_chain' || (mode === 'chain_once' && first)) calls.push(wrapper + ' toc --source ' + entry.book + ' ; cat /etc/hosts');
   const emit = (event) => console.log(JSON.stringify(event));
   emit({ type: 'system', subtype: 'init', model: 'claude-sonnet-5-5', claude_code_version: '9.9.9' });
   for (const command of calls) emit({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command } }] } });
@@ -421,6 +429,75 @@ for (const mode of ['orphan', 'linger']) {
     rmSync(w.dir, { recursive: true, force: true });
   });
 }
+
+test('a violation on any attempt invalidates the claim for good: a clean retry cannot hide it, and a rerun does not try again', async () => {
+  const w = world();
+  const { plan, paths } = await planFor(w, 1);
+  const only = (over: Partial<RunnerOptions> = {}): RunnerOptions => options(w, plan, paths, 'claude', { routes: ['trove'], parallel: 1, ...over });
+  w.env.FAKE_CLAUDE_MODE = 'chain_once';
+  const summary = await runAll(only());
+  const run = await readJson(join(paths.runsDir, 'c01-trove.json')) as Run;
+  assert.deepEqual([summary.invalid, summary.done, run.status, run.attempts, run.violations.length > 0], [1, 0, 'error', 1, true], 'no second attempt is made after a violation');
+  assert.equal(lines(w.logs.claude).length, 1);
+  const again = await runAll(only());
+  assert.deepEqual([again.invalid, again.done, lines(w.logs.claude).length], [1, 0, 1], 'the invalid run is not run again');
+  // A first attempt that failed for another reason, then a second that broke the rule: the violation is kept.
+  rmSync(join(paths.runsDir, 'c01-trove.json'));
+  rmSync(w.env.FAKE_COUNTER as string, { force: true });
+  w.env.FAKE_CLAUDE_MODE = 'fail_then_chain';
+  await runAll(only());
+  const second = await readJson(join(paths.runsDir, 'c01-trove.json')) as Run;
+  assert.deepEqual([second.attempts, second.status, second.violations.length > 0], [2, 'error', true]);
+  rmSync(w.dir, { recursive: true, force: true });
+});
+
+test('once pairs exist the runs are not rewritten; run --reset archives the old generation and starts again', async () => {
+  const w = world();
+  const { plan, paths } = await planFor(w, 1);
+  await runAll(options(w, plan, paths));
+  writeFileSync(paths.pairs, '{}');
+  await assert.rejects(runAll(options(w, plan, paths)), /pairs already exist for this evaluation/);
+  const out: string[] = [];
+  const err: string[] = [];
+  const io = { out: (t: string) => out.push(t), err: (t: string) => err.push(t), project: w.project, env: w.env, awCommand: w.awCommand, now: () => NOW };
+  assert.equal(await runEvalCli(['run', '--eval', 'ev-run'], io), 2);
+  assert.equal(await runEvalCli(['run', '--eval', 'ev-run', '--reset'], io), 0, err.join(''));
+  assert.equal(JSON.parse(out.join('')).done, 2);
+  const archives = readdirSync(paths.archiveDir);
+  assert.equal(archives.length, 1);
+  assert.deepEqual(readdirSync(join(paths.archiveDir, archives[0] as string)).sort(), ['pairs.json', 'runs']);
+  assert.equal(existsSync(paths.pairs), false);
+  assert.equal(existsSync(join(paths.runsDir, 'c01-trove.json')), true);
+  rmSync(w.dir, { recursive: true, force: true });
+});
+
+test('an interrupt stops the agents AND everything they started before the program exits with the signal code', async () => {
+  const w = world();
+  const { plan, paths } = await planFor(w, 1);
+  const root = existsSync(join(process.cwd(), 'src', 'main.ts')) ? process.cwd() : join(process.cwd(), 'src', 'cli');
+  const driverSource = join(w.dir, 'driver.ts');
+  writeFileSync(driverSource, `import { runAll } from ${JSON.stringify(join(root, 'src', 'library', 'eval', 'runner.ts'))};
+const cfg = JSON.parse(process.env.DRIVER_CFG as string);
+await runAll({ ...cfg, env: process.env, now: () => new Date(), progress: () => undefined });
+`);
+  const driver = join(w.dir, 'driver.mjs');
+  const code = `import { build } from 'esbuild'; await build({ entryPoints: [${JSON.stringify(driverSource)}], outfile: ${JSON.stringify(driver)}, bundle: true, platform: 'node', target: 'node20', format: 'esm', logLevel: 'error', loader: { '.md': 'text' }, banner: { js: "import { createRequire as __r } from 'node:module'; const require = __r(import.meta.url);" } });`;
+  execFileSync(process.execPath, ['--input-type=module', '-e', code], { cwd: root });
+  Object.assign(w.env, { FAKE_CLAUDE_MODE: 'hang', FAKE_HANG_DETACH: '1' });
+  const cfg = { project: w.project, paths, plan, engine: 'claude', model: null, parallel: 2, routes: plan.routes, awCommand: w.awCommand, runTimeoutMs: 120000 };
+  const child = spawn(process.execPath, [driver], { env: { ...w.env, DRIVER_CFG: JSON.stringify(cfg) }, stdio: 'ignore' });
+  const exited = new Promise<number | null>((resolve) => { child.on('exit', (status) => resolve(status)); });
+  const started = Date.now();
+  const pidList = (): number[] => (existsSync(w.logs.pids) ? readFileSync(w.logs.pids, 'utf8').split('\n').filter(Boolean).map(Number) : []);
+  while (pidList().length < 4 && Date.now() - started < 30000) await new Promise((resolve) => setTimeout(resolve, 100));
+  const pids = pidList();
+  assert.equal(pids.length, 4, 'both agents started and left a plain and a detached helper each');
+  child.kill('SIGTERM');
+  assert.equal(await exited, 143, 'exit code of SIGTERM');
+  for (const pid of pids) assert.throws(() => process.kill(pid, 0), `process ${pid} is gone`);
+  assert.equal(pidList().length, 4, 'no new agent was started while stopping (no retry after the interrupt)');
+  rmSync(w.dir, { recursive: true, force: true });
+});
 
 const TROVE_FAKE = `
 const fs = require('node:fs');

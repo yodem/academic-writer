@@ -89,7 +89,7 @@ JUDGMENTS = {
     "entries": [{"pair_id": "p01", "verdict": "A", "note": "עדיף", "source": "judge", "judged_at": TS, "imported_at": TS},
                 {"pair_id": "p02", "verdict": "same", "note": "", "source": "auto", "judged_at": None, "imported_at": TS}],
 }
-MAPPING = {"schema": 1, "eval_id": "ev-20261016-a", "seed": "s", "nonce": SHA, "pairs": [{"pair_id": "p01", "claim_id": "c01", "A": "trove", "B": "pageindex"}]}
+MAPPING = {"schema": 1, "eval_id": "ev-20261016-a", "seed": "s", "nonce": SHA, "plan_sha256": SHA, "runs": [{"claim_id": "c01", "route": "trove", "sha256": SHA}], "pairs": [{"pair_id": "p01", "claim_id": "c01", "A": "trove", "B": "pageindex"}]}
 FIXTURES = {"plan": PLAN, "run": RUN, "pairs": PAIRS, "judgments": JUDGMENTS, "mapping": MAPPING}
 
 
@@ -137,7 +137,7 @@ class TestSchemas(unittest.TestCase):
             "pairs": [lambda d: d["pairs"][0].update(route="trove"), lambda d: d.update(mapping_sha256="short"), lambda d: d["pairs"][0]["options"]["A"].update(latency_ms=3),
                       lambda d: d["pairs"][0]["options"].update(C=OPTION), lambda d: d["pairs"][0].update(pair_id="pair-1")],
             "judgments": [lambda d: d["entries"][0].update(verdict="best"), lambda d: d["entries"][0].update(note="x" * 2001), lambda d: d["entries"][0].update(source="robot")],
-            "mapping": [lambda d: d["pairs"][0].update(A="gemini"), lambda d: d.update(nonce="1234")],
+            "mapping": [lambda d: d["pairs"][0].update(A="gemini"), lambda d: d.update(nonce="1234"), lambda d: d["runs"][0].update(sha256="x"), lambda d: d.pop("plan_sha256")],
         }
         for name, edits in bad.items():
             check = validator(name)

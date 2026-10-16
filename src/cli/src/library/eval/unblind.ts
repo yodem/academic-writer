@@ -1,9 +1,9 @@
-import { writeFile } from 'node:fs/promises';
 import { stripFragment } from '../registry.ts';
 import { LibraryError } from '../types.ts';
-import { readJson, readValid, runFile, validate, writeJson, type EvalPaths } from './files.ts';
+import { fileSha, readJson, readValid, runFile, validate, writeJson, writeText, type EvalPaths } from './files.ts';
 import { checkCommitment, effective } from './judgments.ts';
 import { evalLimits } from './limits.ts';
+import { planSha } from './runner.ts';
 import { median, signTestP, sum, wilson95 } from './stats.ts';
 import type { Claim, Judgments, Plan, Route, Run } from './types.ts';
 
@@ -94,6 +94,13 @@ export async function unblind(options: { paths: EvalPaths; force: boolean; now: 
   const { paths } = options;
   const plan = await readValid<Plan>('plan', paths.plan, 'plan');
   const { pairs, mapping, pairsSha } = await checkCommitment(paths);
+  // One generation: the plan and the run files are the ones the pairs were built from (mapping.runs is part of the commitment).
+  if (planSha(plan) !== mapping.plan_sha256) throw new LibraryError('parse', 'ERROR library eval unblind: the plan changed after the pairs were built; refusing to unblind');
+  for (const entry of mapping.runs) {
+    if ((await fileSha(runFile(paths, entry.claim_id, entry.route))) !== entry.sha256) {
+      throw new LibraryError('parse', 'ERROR library eval unblind: the locate runs changed after the pairs were built (they were run again?); refusing to mix answers and costs of two generations');
+    }
+  }
   const raw = await readJson(paths.judgments);
   if (raw === null && !options.force) throw new LibraryError('usage', 'ERROR library eval unblind: refused: no judgments are imported yet. Judge the pairs and run `aw library eval import` first (--force overrides, and shows the key before anyone has judged)');
   if (raw !== null && validate('judgments', raw).length > 0) throw new LibraryError('parse', 'ERROR library eval unblind: judgments.json is not valid');
@@ -172,7 +179,7 @@ export async function unblind(options: { paths: EvalPaths; force: boolean; now: 
   };
   report.statement = statementFor(report);
   await writeJson(paths.reportJson, report);
-  await writeFile(paths.reportMd, renderMarkdown(report), 'utf8');
+  await writeText(paths.reportMd, renderMarkdown(report));
   return report;
 }
 

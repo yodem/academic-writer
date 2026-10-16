@@ -2,8 +2,8 @@ import { existsSync } from 'node:fs';
 import { formatPageRanges } from '../pages.ts';
 import { LibraryError } from '../types.ts';
 import type { AwRunner } from './aw.ts';
-import { readJson, runFile, validate, writeJson, type EvalPaths } from './files.ts';
-import { claimSha, fingerprintOf, planSha } from './runner.ts';
+import { fileSha, readJson, runFile, validate, writeJson, type EvalPaths } from './files.ts';
+import { PROMPT_VERSION, claimSha, fingerprintOf, planSha } from './runner.ts';
 import { mappingCommitment, newMapping, seededRandom, slotOrders, writeSealed } from './seal.ts';
 import type { Mapping, Pair, PairOption, Pairs, Plan, Route, Run } from './types.ts';
 
@@ -54,6 +54,8 @@ async function fetchTexts(options: PairsOptions, needed: Map<string, Set<number>
     let output: string;
     try { output = await options.aw({ args: ['read', '--source', book, '--pages', spec], route: 'trove', run: `chk-${options.evalId}` }); }
     catch (error) {
+      // The library has none of the requested pages: every page of this book shows the placeholder (no text is recorded).
+      if (/has none of the requested pages/u.test(error instanceof Error ? error.message : String(error))) continue;
       throw new LibraryError('exit', `ERROR library eval pairs: could not read pages ${spec} of ${book} for the judging page (${error instanceof Error ? error.message : String(error)})`);
     }
     let parsed: { pages?: Array<{ trove_page?: unknown; text?: unknown }> };
@@ -82,12 +84,16 @@ function sameOption(a: PairOption, b: PairOption): boolean {
   return a.book === b.book && a.pages.length === b.pages.length && a.pages.every((page, index) => page.page === b.pages[index]?.page);
 }
 
-/** Whether a run file belongs to this plan and claim and has not been edited: its own fields reproduce its fingerprint. */
-function runIsCurrent(plan: Plan, claim: Plan['claims'][number], run: Run): boolean {
-  return run.plan_sha256 === planSha(plan) && run.claim_sha256 === claimSha(claim) && run.fingerprint === fingerprintOf({
-    plan_sha256: run.plan_sha256, claim_sha256: run.claim_sha256, claim_id: run.claim_id, route: run.route, engine: run.engine,
-    model_requested: run.model_requested, prompt_version: run.prompt_version,
-  });
+/**
+ * Whether a run file belongs to this plan, this claim and this route (the file slot it was read from), was made with the
+ * current prompt, and has not been edited: its own fields reproduce its fingerprint.
+ */
+function runIsCurrent(plan: Plan, claim: Plan['claims'][number], route: Route, run: Run): boolean {
+  return run.eval_id === plan.eval_id && run.claim_id === claim.id && run.route === route && run.prompt_version === PROMPT_VERSION
+    && run.plan_sha256 === planSha(plan) && run.claim_sha256 === claimSha(claim) && run.fingerprint === fingerprintOf({
+      plan_sha256: run.plan_sha256, claim_sha256: run.claim_sha256, claim_id: run.claim_id, route: run.route, engine: run.engine,
+      model_requested: run.model_requested, prompt_version: run.prompt_version,
+    });
 }
 
 /**
@@ -108,7 +114,7 @@ export async function buildPairs(options: PairsOptions): Promise<{ pairs: Pairs;
   for (const claim of plan.claims) {
     for (const route of routes) {
       const value = await readJson(runFile(paths, claim.id, route));
-      if (value === null || validate('run', value).length > 0 || !runIsCurrent(plan, claim, value as Run)) missing.push(claim.id);
+      if (value === null || validate('run', value).length > 0 || !runIsCurrent(plan, claim, route, value as Run)) missing.push(claim.id);
       else runs.set(`${claim.id}:${route}`, value as Run);
     }
   }
@@ -146,7 +152,11 @@ export async function buildPairs(options: PairsOptions): Promise<{ pairs: Pairs;
     });
     mapped.push({ pair_id: pairId, claim_id: claim.id, A: firstInA ? routes[0] : routes[1], B: firstInA ? routes[1] : routes[0] });
   }
-  const mapping = newMapping(plan.eval_id, options.seed, mapped);
+  const snapshot: Mapping['runs'] = [];
+  for (const claim of claims) {
+    for (const route of routes) snapshot.push({ claim_id: claim.id, route, sha256: await fileSha(runFile(paths, claim.id, route)) as string });
+  }
+  const mapping = newMapping(plan.eval_id, options.seed, planSha(plan), snapshot, mapped);
   const document: Pairs = { schema: 1, eval_id: plan.eval_id, created_at: options.now.toISOString(), mapping_sha256: mappingCommitment(mapping), pairs };
   const problems = validate('pairs', document);
   if (problems.length > 0) throw new LibraryError('parse', `ERROR library eval pairs: the pairs do not match their schema (${problems[0]})`);

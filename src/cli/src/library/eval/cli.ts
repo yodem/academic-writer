@@ -1,20 +1,21 @@
 import { existsSync } from 'node:fs';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { projectDirOr } from '../../paths.ts';
 import { LibraryError, errorMessage } from '../types.ts';
 import { awCommandFor, makeAwRunner } from './aw.ts';
-import { EVAL_ROOT, evalPaths, readJson, readValid, requireProject, runFile, validate, writeJson } from './files.ts';
+import { EVAL_ROOT, evalPaths, readJson, writeText, readValid, requireProject, runFile, validate, writeJson } from './files.ts';
 import { importJudgments } from './judgments.ts';
 import { evalLimits } from './limits.ts';
 import { buildPairs, routeLeak } from './pairs.ts';
 import { buildPlan } from './plan.ts';
+import { archiveGeneration } from './reset.ts';
 import { runAll } from './runner.ts';
 import { renderMarkdown, unblind } from './unblind.ts';
 import type { Engine, EvalIo, Pairs, Plan, Route, Run } from './types.ts';
 
-const BOOLEAN_FLAGS = new Set(['--json', '--stdin', '--force', '--partial', '--no-resolve']);
+const BOOLEAN_FLAGS = new Set(['--json', '--stdin', '--force', '--partial', '--no-resolve', '--reset']);
 const VALUE_FLAGS = new Set(['--eval', '--article', '--n', '--seed', '--claims', '--routes', '--engine', '--parallel', '--model', '--file', '--out', '--template', '--timeout-s']);
 const SUBCOMMANDS = ['plan', 'run', 'pairs', 'page', 'import', 'unblind', 'status'];
 
@@ -129,20 +130,22 @@ export async function runEvalCli(argv: string[], io: EvalIo): Promise<number> {
     if (subcommand === 'run') {
       const plan = await readValid<Plan>('plan', paths.plan, 'plan');
       const timeoutS = text(flags, '--timeout-s');
+      const archived = flags.has('--reset') ? await archiveGeneration(paths, now) : null;
+      if (archived) io.err(`NOTE library eval run: the old pairs, judgments and runs were moved to ${archived}\n`);
       const summary = await runAll({
         project, paths, plan, engine: engineFrom(flags), model: text(flags, '--model') ?? null,
         parallel: wholeNumber(flags, '--parallel', evalLimits.parallel, 8), routes: plan.routes, awCommand: awCommandFor(io, env), env,
         runTimeoutMs: io.runTimeoutMs ?? (timeoutS ? wholeNumber(flags, '--timeout-s', 1, 7200) * 1000 : evalLimits.runTimeoutMs), now: io.now ?? ((): Date => new Date()),
         progress: (line) => io.err(`${line}\n`),
       });
-      print({ eval_id: evalId, ...summary });
+      print({ eval_id: evalId, ...summary, ...(archived ? { archived } : {}) });
       return 0;
     }
 
     if (subcommand === 'pairs') {
       const plan = await readValid<Plan>('plan', paths.plan, 'plan');
       const aw = makeAwRunner(project, awCommandFor(io, env), env);
-      const { summary } = await buildPairs({ evalId, paths, plan, seed: text(flags, '--seed') ?? randomBytes(8).toString('hex'), aw, now, force: flags.has('--force') });
+      const { summary } = await buildPairs({ evalId, paths, plan, seed: text(flags, '--seed') ?? randomBytes(32).toString('hex'), aw, now, force: flags.has('--force') });
       print(summary);
       return 0;
     }
@@ -158,8 +161,10 @@ export async function runEvalCli(argv: string[], io: EvalIo): Promise<number> {
       const leak = routeLeak(pairs);
       if (leak) throw new LibraryError('config', `ERROR library eval page: pairs.json shows a library name at ${leak}`);
       const payload = JSON.stringify(pairs).replaceAll('<', '\\u003c').replaceAll('\u2028', '\\u2028').replaceAll('\u2029', '\\u2029');
-      const out = text(flags, '--out') ?? paths.judgeHtml;
-      await writeFile(out, html.replace(slot, (_whole, open: string, _body: string, close: string) => `${open}${payload}${close}`), 'utf8');
+      const out = text(flags, '--out') ? resolve(paths.root, text(flags, '--out') as string) : paths.judgeHtml;
+      const inside = relative(paths.root, out);
+      if (inside === '' || inside.startsWith('..') || isAbsolute(inside)) throw new LibraryError('usage', 'ERROR library eval page: --out must be a file inside the evaluation folder');
+      await writeText(out, html.replace(slot, (_whole, open: string, _body: string, close: string) => `${open}${payload}${close}`));
       print({ eval_id: evalId, out, pairs: pairs.pairs.length });
       return 0;
     }

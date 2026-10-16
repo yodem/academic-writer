@@ -7,12 +7,25 @@ import type { Engine } from './types.ts';
 /** Agent processes started by one eval run, so an interrupt or a fatal error can stop them all (each is its own process group). */
 export class ChildGroup {
   private readonly children = new Set<ChildProcess>();
+  /** Locate attempts in flight, with what is needed to find everything they started. */
+  readonly attempts = new Set<{ tag: string; tracker?: TreeTracker }>();
+  /** Set once the group is being stopped: nothing new may start. */
+  stopping = false;
   add(child: ChildProcess): void { this.children.add(child); }
   remove(child: ChildProcess): void { this.children.delete(child); }
   get size(): number { return this.children.size; }
   killAll(): void {
     for (const child of this.children) killGroup(child);
     this.children.clear();
+  }
+  /** Stop every agent AND everything its attempts started (tagged or followed), waiting for the bounded rescan to finish. */
+  async reapAll(): Promise<void> {
+    this.stopping = true;
+    this.killAll();
+    for (const attempt of [...this.attempts]) {
+      await attempt.tracker?.stop();
+      await reapTagged(attempt.tag, attempt.tracker);
+    }
   }
 }
 

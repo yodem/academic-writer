@@ -88,6 +88,9 @@ export type Mapping = {
   eval_id: string;
   seed: string;
   nonce: string;
+  /** The plan the pairs were built from, and the exact run files they show: one generation of the evaluation. */
+  plan_sha256: string;
+  runs: Array<{ claim_id: string; route: Route; sha256: string }>;
   pairs: Array<{ pair_id: string; claim_id: string; A: Route; B: Route }>;
 };
 

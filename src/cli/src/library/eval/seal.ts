@@ -35,22 +35,26 @@ export function shuffle<T>(items: readonly T[], random: () => number): T[] {
 }
 
 /**
- * Which route sits in slot A, for `n` pairs: half the pairs put the first route in A and half the second (one more
- * for the first when n is odd), then the order is shuffled from the seed. Balanced, so neither route owns slot A.
+ * Which route sits in slot A, for `n` pairs: half the pairs put the first route in A and half the second, then the
+ * order is shuffled from the seed. With an odd count the extra pair goes to either route, decided by the seed too, so
+ * the side of any single pair (a lone pair included) says nothing about the route. The seed must be random and stay
+ * in the sealed mapping.
  */
 export function slotOrders(n: number, random: () => number): boolean[] {
-  const flags = Array.from({ length: n }, (_, index) => index < Math.ceil(n / 2));
+  const extra = n % 2 === 1 && random() < 0.5 ? 1 : 0;
+  const flags = Array.from({ length: n }, (_, index) => index < Math.floor(n / 2) + extra);
   return shuffle(flags, random);
 }
 
 /** The sha256 that pairs.json commits to: the mapping's pairs, its nonce and the eval id, key-sorted. */
 export function mappingCommitment(mapping: Mapping): string {
   const pairs = [...mapping.pairs].sort((a, b) => (a.pair_id < b.pair_id ? -1 : 1));
-  return sha256(canonicalJson({ eval_id: mapping.eval_id, nonce: mapping.nonce, pairs }));
+  const runs = [...mapping.runs].sort((a, b) => (`${a.claim_id}:${a.route}` < `${b.claim_id}:${b.route}` ? -1 : 1));
+  return sha256(canonicalJson({ eval_id: mapping.eval_id, nonce: mapping.nonce, plan_sha256: mapping.plan_sha256, pairs, runs }));
 }
 
-export function newMapping(evalId: string, seed: string, entries: Array<{ pair_id: string; claim_id: string; A: Route; B: Route }>): Mapping {
-  return { schema: 1, eval_id: evalId, seed, nonce: newNonce(), pairs: entries };
+export function newMapping(evalId: string, seed: string, planSha: string, runs: Mapping['runs'], entries: Array<{ pair_id: string; claim_id: string; A: Route; B: Route }>): Mapping {
+  return { schema: 1, eval_id: evalId, seed, nonce: newNonce(), plan_sha256: planSha, runs, pairs: entries };
 }
 
 /** Write the mapping where the judge never looks: its folder is 0700 and the file 0600. */

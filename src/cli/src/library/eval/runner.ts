@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { existsSync } from 'node:fs';
+import { constants as osConstants, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendUsage, canonicalJson, readJson, runFile, sha256, validate, writeJson, type EvalPaths } from './files.ts';
 import { ChildGroup, RUN_TAG_ENV, TreeTracker, parseAgent, parseAnswer, reapTagged, runAgent, type Parsed } from './agent.ts';
@@ -25,7 +26,7 @@ export type RunnerOptions = {
   progress: (line: string) => void;
 };
 
-export type RunSummary = { planned: number; done: number; skipped: number; failed: number; cost_usd: number };
+export type RunSummary = { planned: number; done: number; skipped: number; failed: number; invalid: number; cost_usd: number };
 
 const MAX_ATTEMPTS = 2;
 
@@ -207,6 +208,7 @@ export function expectedFingerprint(options: Pick<RunnerOptions, 'engine' | 'mod
 }
 
 async function locateOnce(options: RunnerOptions, claim: Claim, route: Route, group: ChildGroup): Promise<{ run: Omit<Run, 'attempts'>; missing: boolean }> {
+  if (group.stopping) throw new LibraryError('exit', 'ERROR library eval run: interrupted');
   const runId = runIdFor(options.plan.eval_id, route, claim.id);
   const tag = `${runId}.${randomBytes(6).toString('hex')}`;
   const base = await realpath(tmpdir());
@@ -227,15 +229,18 @@ async function locateOnce(options: RunnerOptions, claim: Claim, route: Route, gr
     const [file, ...prefix] = engineCommand(options.engine, options.env) as [string, ...string[]];
     let exit;
     let tracker: TreeTracker | undefined;
+    const attempt: { tag: string; tracker?: TreeTracker } = { tag };
+    group.attempts.add(attempt);
     try {
       exit = await runAgent([file, ...prefix], options.engine === 'claude' ? claudeArgs(model as string, wrapper) : codexArgs(model, cwd), {
         input: prompt, cwd, env, timeoutMs: options.runTimeoutMs, maxBuffer: evalLimits.maxBufferBytes, group,
-        tracker: (pid) => { tracker = new TreeTracker(pid); tracker.start(); },
+        tracker: (pid) => { tracker = new TreeTracker(pid); attempt.tracker = tracker; tracker.start(); },
       });
     } finally {
       // The agent's group is gone; the library commands `aw` started run in groups of their own: found by the tag, or by the tree followed while the agent ran.
       await tracker?.stop();
       await reapTagged(tag, tracker);
+      group.attempts.delete(attempt);
     }
     const parsed: Parsed = parseAgent(options.engine, exit.stdout);
     const answer = parseAnswer(parsed.text, evalLimits.maxAnswerPages);
@@ -273,14 +278,23 @@ async function locateOnce(options: RunnerOptions, claim: Claim, route: Route, gr
 /** One claim on one route: up to two attempts, and the totals of time, tokens and cost over both. */
 export async function locate(options: RunnerOptions, claim: Claim, route: Route, group: ChildGroup): Promise<Run> {
   let total: Run | null = null;
+  let violations: string[] = [];
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     const { run, missing } = await locateOnce(options, claim, route, group);
     if (missing) throw new LibraryError('config', `ERROR library eval run: the ${options.engine} command was not found. The evaluation needs ${options.engine === 'claude' ? 'Claude Code' : 'Codex'} installed on this computer (it cannot run in Cowork).`);
+    // A command outside the allowed list on ANY attempt invalidates the run for good: a clean retry never hides it.
+    violations = [...new Set([...violations, ...run.violations])].slice(0, 10);
     total = total === null ? { ...run, attempts: 1 } : {
       ...run, attempts: attempt, wall_ms: total.wall_ms + run.wall_ms, input_tokens: total.input_tokens + run.input_tokens, output_tokens: total.output_tokens + run.output_tokens,
       cost_usd: total.cost_usd === null && run.cost_usd === null ? null : (total.cost_usd ?? 0) + (run.cost_usd ?? 0),
       agent_ms: total.agent_ms === null && run.agent_ms === null ? null : (total.agent_ms ?? 0) + (run.agent_ms ?? 0),
     };
+    total.violations = violations;
+    if (violations.length > 0) {
+      total.status = 'error';
+      total.error = 'the agent ran a command that is not on its allowed list';
+      break;
+    }
     if (run.status === 'ok') break;
   }
   return total as Run;
@@ -292,26 +306,39 @@ export async function locate(options: RunnerOptions, claim: Claim, route: Route,
  * agent's process group before the error leaves.
  */
 export async function runAll(options: RunnerOptions): Promise<RunSummary> {
+  // Runs, pairs and judgments are one generation: once pairs exist, runs are never overwritten (a new eval id, or `run --reset`, starts again).
+  if (existsSync(options.paths.pairs)) {
+    throw new LibraryError('usage', 'ERROR library eval run: pairs already exist for this evaluation, so its runs cannot change. Start a new evaluation with another --eval id, or run again with --reset (the old pairs, judgments and runs are archived first).');
+  }
   const jobs: Array<{ claim: Claim; route: Route }> = [];
   let skipped = 0;
+  let invalid = 0;
   for (const claim of options.plan.claims) {
     for (const route of options.routes) {
       const existing = await readJson(runFile(options.paths, claim.id, route));
       // Reused only when it finished AND is bound to this very plan, claim text, route, engine, model and prompt.
-      const good = existing !== null && validate('run', existing).length === 0 && (existing as Run).status === 'ok'
-        && (existing as Run).fingerprint === expectedFingerprint(options, claim, route);
-      if (good) skipped += 1;
+      const current = existing !== null && validate('run', existing).length === 0 && (existing as Run).fingerprint === expectedFingerprint(options, claim, route);
+      // A run that ran a forbidden command stays invalid: it is not tried again.
+      if (current && (existing as Run).violations.length > 0) invalid += 1;
+      else if (current && (existing as Run).status === 'ok') skipped += 1;
       else jobs.push({ claim, route });
     }
   }
-  const summary: RunSummary = { planned: options.plan.claims.length * options.routes.length, done: 0, skipped, failed: 0, cost_usd: 0 };
+  const summary: RunSummary = { planned: options.plan.claims.length * options.routes.length, done: 0, skipped, failed: 0, invalid, cost_usd: 0 };
   const group = new ChildGroup();
   const stop = (): void => group.killAll();
-  const onSignal = (signal: NodeJS.Signals): void => { stop(); process.kill(process.pid, signal); };
+  let fatal: unknown = null;
+  let interrupted = false;
+  // An interrupt stops the agents, waits for the bounded cleanup of everything they started, then exits with the signal's code.
+  const onSignal = (signal: NodeJS.Signals): void => {
+    if (interrupted) return;
+    interrupted = true;
+    fatal = new LibraryError('exit', `ERROR library eval run: interrupted by ${signal}`);
+    void group.reapAll().finally(() => process.exit(128 + (osConstants.signals[signal] ?? 15)));
+  };
   process.once('SIGINT', onSignal);
   process.once('SIGTERM', onSignal);
   process.once('exit', stop);
-  let fatal: unknown = null;
   let next = 0;
   const worker = async (): Promise<void> => {
     for (;;) {
@@ -323,9 +350,11 @@ export async function runAll(options: RunnerOptions): Promise<RunSummary> {
         const run = await locate(options, job.claim, job.route, group);
         await writeJson(runFile(options.paths, job.claim.id, job.route), run);
         summary.cost_usd += run.cost_usd ?? 0;
-        if (run.status === 'ok') summary.done += 1; else summary.failed += 1;
-        options.progress(`located ${summary.done + summary.failed + skipped} of ${summary.planned}`);
-      } catch (error) { fatal = error; group.killAll(); return; }
+        if (run.violations.length > 0) summary.invalid += 1;
+        else if (run.status === 'ok') summary.done += 1;
+        else summary.failed += 1;
+        options.progress(`located ${summary.done + summary.failed + summary.invalid + skipped} of ${summary.planned}`);
+      } catch (error) { if (fatal === null) fatal = error; group.killAll(); return; }
     }
   };
   try {
@@ -336,6 +365,8 @@ export async function runAll(options: RunnerOptions): Promise<RunSummary> {
     process.removeListener('exit', stop);
     group.killAll();
   }
+  // The interrupt handler is cleaning up and will end the program with the signal's code: nothing may return or throw first.
+  if (interrupted) await new Promise<never>(() => undefined);
   if (fatal !== null) throw fatal;
   summary.cost_usd = Math.round(summary.cost_usd * 10000) / 10000;
   return summary;

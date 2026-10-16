@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import thresholds from '../../thresholds.json' with { type: 'json' };
 import type { AwCall } from '../src/library/eval/aw.ts';
@@ -285,6 +286,93 @@ test('pairs: a missing locate run is refused', async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
+test('the A/B side of every pair is independent of the library, for one pair and for an odd count', () => {
+  for (const n of [1, 2, 3, 5]) {
+    const seeds = 800;
+    const firstInA = Array.from({ length: n }, () => 0);
+    for (let index = 0; index < seeds; index += 1) {
+      const orders = slotOrders(n, seededRandom(`secret-${n}-${index}-${randomBytes(8).toString('hex')}`));
+      assert.equal(orders.length, n);
+      assert.ok([Math.floor(n / 2), Math.ceil(n / 2)].includes(orders.filter(Boolean).length), 'balanced to within one pair');
+      orders.forEach((flag, position) => { if (flag) firstInA[position] = (firstInA[position] as number) + 1; });
+    }
+    firstInA.forEach((count, position) => assert.ok(Math.abs(count / seeds - 0.5) < 0.08, `n=${n} pair ${position + 1}: the first library sat in A ${count} of ${seeds} times`));
+  }
+});
+
+test('the seed and the nonce stay in the sealed file: neither is in pairs.json', async () => {
+  const { dir, plan, paths } = await scenario(SPLIT);
+  const { mapping } = await buildPairs({ evalId: 'ev-test', paths, plan, seed: 'a-secret-seed-123', aw: readAw, now: NOW, force: false });
+  const shown = readFileSync(paths.pairs, 'utf8');
+  assert.ok(!shown.includes('a-secret-seed-123') && !shown.includes(mapping.nonce));
+  assert.ok(readFileSync(paths.mapping, 'utf8').includes('a-secret-seed-123'));
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('pairs: a run copied into the other library slot, or made with an old prompt, is refused', async () => {
+  const { dir, plan, paths } = await scenario(SPLIT.slice(0, 2));
+  const trove = await readJson(join(paths.runsDir, 'c01-trove.json')) as Run;
+  await writeJson(join(paths.runsDir, 'c01-pageindex.json'), trove);
+  await assert.rejects(buildPairs({ evalId: 'ev-test', paths, plan, seed: 'x', aw: readAw, now: NOW, force: false }), /no finished locate run for this plan/);
+  await writeJson(join(paths.runsDir, 'c01-pageindex.json'), { ...trove, route: 'pageindex', fingerprint: fingerprintOf({ plan_sha256: trove.plan_sha256, claim_sha256: trove.claim_sha256, claim_id: 'c01', route: 'pageindex', engine: 'claude', model_requested: 'm', prompt_version: 'locate-v1' }), prompt_version: 'locate-v1' });
+  await assert.rejects(buildPairs({ evalId: 'ev-test', paths, plan, seed: 'x', aw: readAw, now: NOW, force: false }), /no finished locate run for this plan/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('pairs: when the library has none of the pages of a book, the placeholder is shown on both sides and pairing goes on', async () => {
+  const { dir, plan, paths } = await scenario([{ trove: [3], pageindex: [3] }]);
+  const none = async (): Promise<string> => { throw new Error('ERROR library: aw exited with code 4: ERROR library read: trove has none of the requested pages of T-A (missing 3)'); };
+  const { pairs } = await buildPairs({ evalId: 'ev-test', paths, plan, seed: 's', aw: none, now: NOW, force: false });
+  assert.deepEqual([pairs.pairs[0]?.options.A.pages, pairs.pairs[0]?.options.B.pages], [[{ page: 3, text: TEXT_UNAVAILABLE }], [{ page: 3, text: TEXT_UNAVAILABLE }]]);
+  assert.equal(pairs.pairs[0]?.auto_same, false);
+  const boom = async (): Promise<string> => { throw new Error('ERROR library: aw exited with code 4: the library is unreachable'); };
+  await assert.rejects(buildPairs({ evalId: 'ev-test', paths, plan, seed: 's', aw: boom, now: NOW, force: true }), /could not read pages/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('unblind refuses runs, plan or pairs that are not the generation the judgments were made on', async () => {
+  const { dir, plan, paths } = await scenario(SPLIT.slice(0, 3));
+  const { pairs } = await buildPairs({ evalId: 'ev-test', paths, plan, seed: 's', aw: readAw, now: NOW, force: false });
+  await importJudgments({ paths, evalId: 'ev-test', raw: pairs.pairs.map((pair) => ({ pair_id: pair.pair_id, verdict: 'A' })), partial: false, now: NOW });
+  await unblind({ paths, force: false, now: NOW });
+  // The same claim run again by another model: the run file changes, the pairs and judgments stay.
+  const run = await readJson(join(paths.runsDir, 'c02-pageindex.json')) as Run;
+  await writeJson(join(paths.runsDir, 'c02-pageindex.json'), { ...run, cost_usd: 9.99, model: 'another' });
+  await assert.rejects(unblind({ paths, force: true, now: NOW }), /locate runs changed after the pairs were built/);
+  await writeJson(join(paths.runsDir, 'c02-pageindex.json'), run);
+  await unblind({ paths, force: false, now: NOW });
+  await writeJson(paths.plan, { ...plan, seed: 'edited' });
+  await assert.rejects(unblind({ paths, force: true, now: NOW }), /plan changed after the pairs were built/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('judge.html and report.md are written like the other eval files: links are refused and --out stays inside the evaluation', async () => {
+  const outside = mkdtempSync(join(tmpdir(), 'aw-eval-outside-'));
+  const victim = join(outside, 'victim.txt');
+  writeFileSync(victim, 'keep me');
+  const { dir, plan, paths } = await scenario(SPLIT.slice(0, 3));
+  const { pairs } = await buildPairs({ evalId: 'ev-test', paths, plan, seed: 's', aw: readAw, now: NOW, force: false });
+  const template = join(dir, 'template.html');
+  writeFileSync(template, '<!doctype html><script type="application/json" id="pairs">{}</script>');
+  const err: string[] = [];
+  const io = { out: () => undefined, err: (t: string) => err.push(t), project: dir, now: () => NOW };
+  symlinkSync(victim, paths.judgeHtml);
+  assert.equal(await runEvalCli(['page', '--eval', 'ev-test', '--template', template], io), 3, err.join(''));
+  assert.equal(readFileSync(victim, 'utf8'), 'keep me');
+  rmSync(paths.judgeHtml);
+  assert.equal(await runEvalCli(['page', '--eval', 'ev-test', '--template', template, '--out', '../escape.html'], io), 2);
+  assert.equal(await runEvalCli(['page', '--eval', 'ev-test', '--template', template, '--out', join(outside, 'abs.html')], io), 2);
+  assert.equal(existsSync(join(paths.root, '..', 'escape.html')) || existsSync(join(outside, 'abs.html')), false);
+  assert.equal(await runEvalCli(['page', '--eval', 'ev-test', '--template', template, '--out', 'copy.html'], io), 0, err.join(''));
+  assert.ok(existsSync(join(paths.root, 'copy.html')));
+  await importJudgments({ paths, evalId: 'ev-test', raw: pairs.pairs.map((pair) => ({ pair_id: pair.pair_id, verdict: 'A' })), partial: false, now: NOW });
+  symlinkSync(victim, paths.reportMd);
+  await assert.rejects(unblind({ paths, force: false, now: NOW }), /symbolic link/);
+  assert.equal(readFileSync(victim, 'utf8'), 'keep me');
+  rmSync(dir, { recursive: true, force: true });
+  rmSync(outside, { recursive: true, force: true });
+});
+
 test('pairs: a page whose text cannot be read is never dropped; it shows a placeholder and blocks the automatic "same"', async () => {
   const { dir, plan, paths } = await scenario([{ trove: [3], pageindex: [3] }, { trove: [3, 4], pageindex: [3, 4] }]);
   // Page 4 cannot be read; page 3 can.
@@ -517,7 +605,7 @@ test('the command line: usage errors, status shows progress without library name
   writeFileSync(reader, `const a=process.argv.slice(2);const s=a[a.indexOf('--pages')+1];const pages=[];for(const part of s.split(',')){const [x,y]=part.split('-').map(Number);for(let p=x;p<=(y||x);p++)pages.push({trove_page:p,text:'Page '+p});}console.log(JSON.stringify({pages}));`);
   const readerIo = { ...io, awCommand: [process.execPath, reader] };
   out.length = 0;
-  assert.equal(await runEvalCli(['pairs', '--eval', 'ev-test', '--seed', 'cli'], readerIo), 0, err.join(''));
+  assert.equal(await runEvalCli(['pairs', '--eval', 'ev-test', '--seed', 'cli-secret-seed-7'], readerIo), 0, err.join(''));
   const summary = JSON.parse(out.join(''));
   assert.deepEqual(Object.keys(summary).sort(), ['auto_same', 'eval_id', 'excluded', 'mapping_sha256', 'pairs']);
   assert.equal(await runEvalCli(['pairs', '--eval', 'ev-test'], readerIo), 2, 'a second pairing needs --force');
@@ -528,6 +616,8 @@ test('the command line: usage errors, status shows progress without library name
   assert.equal(await runEvalCli(['page', '--eval', 'ev-test', '--template', template], readerIo), 0, err.join(''));
   const html = readFileSync(paths.judgeHtml, 'utf8');
   assert.match(html, /"pair_id":"p01"/u);
+  const sealed = await readJson(paths.mapping) as Mapping;
+  assert.ok(!html.includes(sealed.seed) && !html.includes(sealed.nonce) && sealed.seed === 'cli-secret-seed-7', 'the seed and nonce are not on the judging page');
   assert.ok(!html.includes('"mapping"') && !/trove|pageindex/iu.test(html.replace(/<script type="application\/json" id="pairs">[\s\S]*?<\/script>/u, '')));
   writeFileSync(template, '<!doctype html><p>Compare Trove and PageIndex</p><script type="application/json" id="pairs">{}</script>');
   assert.equal(await runEvalCli(['page', '--eval', 'ev-test', '--template', template], readerIo), 3);
