@@ -128,10 +128,12 @@ def cmd_index_pdf(a):
 def cmd_export_trove(a):
     from .index import index_pdf
     from .trove_export import export
-    pdf = lib.book_dir(a.book_id) / "source.pdf"
-    info, texts = export(a.trove_id, pdf)
-    meta = index_pdf(pdf, a.book_id, info["title"], a.author or "",
-                     origin={"trove": info}, require_outline=True, page_text=texts)
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="pilib-") as tmp:
+        pdf = Path(tmp) / "source.pdf"
+        info, texts = export(a.trove_id, pdf)
+        meta = index_pdf(pdf, a.book_id, info["title"], a.author or "",
+                         origin={"trove": info}, require_outline=True, page_text=texts)
     print(json.dumps({"export": info, "index": meta}, ensure_ascii=False))
 
 
@@ -204,8 +206,8 @@ def cmd_read(a):
 
 
 def cmd_meta(a):
-    d = lib.book_dir(a.book_id)
-    meta = lib.read_json(d / "meta.json")
+    d = lib.data_dir(a.book_id)
+    meta = lib.read_json(d / "meta.json") if d else None
     if meta is None:
         raise SystemExit(f"book not indexed: {a.book_id}")
     side = lib.read_json(d / "pagemap.json")
@@ -223,7 +225,7 @@ def cmd_meta(a):
 def cmd_verify(a):
     problems, ok_books = [], 0
     for book_id in sorted(lib.catalog()["books"]):
-        d = lib.book_dir(book_id)
+        d = lib.data_dir(book_id)
         tree, pages, meta = (lib.read_json(d / f) for f in ("tree.json", "pages.json", "meta.json"))
         if not (tree and pages and meta):
             problems.append(f"{book_id}: missing tree/pages/meta")

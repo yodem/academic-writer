@@ -29,18 +29,35 @@ def strip_llm_fields(nodes) -> None:
             node.pop(key, None)
 
 
-def index_pdf(pdf: Path, book_id: str, title: str, author: str = "", origin: dict | None = None,
+def published(build, book_id: str, *args, **kwargs) -> dict:
+    """Run `build(version, ...)` in a fresh version folder and publish it; a failure removes the folder."""
+    version = lib.new_version(book_id)
+    try:
+        meta = build(version, *args, **kwargs)
+        lib.publish_version(book_id, version)
+    except BaseException:
+        shutil.rmtree(version, ignore_errors=True)
+        raise
+    return meta
+
+
+def index_pdf(pdf: Path, book_id: str, *args, **kwargs) -> dict:
+    return published(_index_pdf, book_id, pdf, book_id, *args, **kwargs)
+
+
+def index_pdf_full(pdf: Path, book_id: str, *args, **kwargs) -> dict:
+    return published(_index_pdf_full, book_id, pdf, book_id, *args, **kwargs)
+
+
+def _index_pdf(version: Path, pdf: Path, book_id: str, title: str, author: str = "", origin: dict | None = None,
               require_outline: bool = False, page_text: list[str] | None = None) -> dict:
     """page_text: when the PDF was rendered from another source (a Trove export), store that source's
     page text instead of re-extracting it, so both arms read identical text. Re-extracting a rendered
     Hebrew PDF with PyPDF2 reverses it (the renderer draws logical-order text left to right)."""
     from pageindex.flash.api import page_index_flash
 
-    dest = lib.book_dir(book_id)
-    dest.mkdir(parents=True, exist_ok=True)
-    src = dest / "source.pdf"
-    if pdf.resolve() != src.resolve():
-        shutil.copyfile(pdf, src)
+    src = version / "source.pdf"
+    shutil.copyfile(pdf, src)
 
     t0 = time.monotonic()
     result = page_index_flash(str(src), summary=False, optimize=False, use_embedded_toc=True)
@@ -66,10 +83,9 @@ def index_pdf(pdf: Path, book_id: str, title: str, author: str = "", origin: dic
             "page_text_source": "origin" if page_text is not None else "pypdf2",
             "seconds_tree": round(t_tree, 2), "seconds_total": round(t_total, 2),
             "indexed_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-    lib.write_json(dest / "tree.json", tree)
-    lib.write_json(dest / "pages.json", pages)
-    lib.write_json(dest / "meta.json", meta)
-    lib.rebuild_catalog()
+    lib.write_json(version / "tree.json", tree)
+    lib.write_json(version / "pages.json", pages)
+    lib.write_json(version / "meta.json", meta)
     return meta
 
 
@@ -77,7 +93,7 @@ DEFAULT_FULL_MODEL = index_settings()["summaryModel"]
 MAX_LLM_CALLS = index_settings()["maxCalls"]
 
 
-def index_pdf_full(pdf: Path, book_id: str, title: str, author: str = "", model: str = DEFAULT_FULL_MODEL,
+def _index_pdf_full(version: Path, pdf: Path, book_id: str, title: str, author: str = "", model: str = DEFAULT_FULL_MODEL,
                    summary_concurrency: int = 16, reasoning_effort: str = "low",
                    max_calls: int = MAX_LLM_CALLS) -> dict:
     """PageIndex flash on the ORIGINAL pdf with its full pipeline: layout tree (embedded outline when
@@ -88,11 +104,8 @@ def index_pdf_full(pdf: Path, book_id: str, title: str, author: str = "", model:
     settings = {"mode": "flash", "summary": True, "summary_model": model, "optimize": "full",
                 "optimize_model": model, "use_embedded_toc": True, "summary_concurrency": summary_concurrency,
                 "summary_reasoning_effort": reasoning_effort}
-    dest = lib.book_dir(book_id)
-    dest.mkdir(parents=True, exist_ok=True)
-    src = dest / "source.pdf"
-    if pdf.resolve() != src.resolve():
-        shutil.copyfile(pdf, src)
+    src = version / "source.pdf"
+    shutil.copyfile(pdf, src)
 
     t0 = time.monotonic()
     meter = LLMMeter(max_calls)
@@ -123,8 +136,7 @@ def index_pdf_full(pdf: Path, book_id: str, title: str, author: str = "", model:
             "n_pages": len(pages), "node_count": len(nodes), "nodes_with_summary": n_sum,
             "toc_source": toc_source, "page_text_source": "pypdf2", "seconds": round(seconds, 1),
             "indexed_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-    lib.write_json(dest / "tree.json", tree)
-    lib.write_json(dest / "pages.json", pages)
-    lib.write_json(dest / "meta.json", meta)
-    lib.rebuild_catalog()
+    lib.write_json(version / "tree.json", tree)
+    lib.write_json(version / "pages.json", pages)
+    lib.write_json(version / "meta.json", meta)
     return meta

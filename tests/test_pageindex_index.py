@@ -49,7 +49,7 @@ def index(capsys, *extra, book=HINTED):
 
 
 def tree_nodes(book_id=HINTED):
-    return list(lib.iter_nodes(lib.read_json(lib.book_dir(book_id) / "tree.json")["structure"]))
+    return list(lib.iter_nodes(lib.read_json(lib.data_dir(book_id) / "tree.json")["structure"]))
 
 
 # ----------------------------------------------------------------------------- the tree
@@ -160,7 +160,7 @@ def test_parent_summaries_are_built_from_the_child_summaries(env, capsys):
     leaf = [p for p in env.stub.prompts if "Section pages" in p]
     parent = [p for p in env.stub.prompts if "Parts:" in p]
     assert len(leaf) == 5 and len(parent) == 2
-    tree = lib.read_json(lib.book_dir(HINTED) / "tree.json")["structure"]
+    tree = lib.read_json(lib.data_dir(HINTED) / "tree.json")["structure"]
     part_one = tree[1]
     part_one_prompt = [p for p in parent if "Part one" in p][0]
     for child in part_one["nodes"]:
@@ -174,7 +174,7 @@ def test_hebrew_text_reaches_the_model_and_the_library_unescaped(env, capsys):
     index(capsys)
     hebrew = [p for p in env.stub.prompts if "הלכה למשה מסיני: כְּלָל" in p]
     assert len(hebrew) == 1                                                      # niqqud intact in the prompt
-    raw = (lib.book_dir(HINTED) / "tree.json").read_text(encoding="utf-8")
+    raw = (lib.data_dir(HINTED) / "tree.json").read_text(encoding="utf-8")
     assert "הלכה למשה מסיני והמסורת שבעל פה" in raw and "\\u05" not in raw      # stored as characters
     code, out, _ = run_main(["read", HINTED, "4", "--json"], capsys)
     assert json.loads(out)["pages"][0]["content"] == fixture_pages(HINTED)[3]
@@ -195,7 +195,7 @@ def test_read_back_equals_trove(env, capsys):
     assert code == 0 and f"ok {HINTED}: 9 pages, {NODES} nodes, toc_source=trove-toc" in out
     code, out, _ = run_main(["catalog"], capsys)
     assert json.loads(out)[HINTED]["node_count"] == NODES
-    meta_file = lib.read_json(lib.book_dir(HINTED) / "meta.json")
+    meta_file = lib.read_json(lib.data_dir(HINTED) / "meta.json")
     assert meta_file["indexer"]["mode"] == "native-toc" and meta_file["indexer"]["llm_calls"] == NODES
     assert meta_file["page_text_source"] == "origin" and meta_file["toc_source"] == "trove-toc"
 
@@ -282,7 +282,7 @@ def test_call_cap_aborts_without_a_half_written_book_and_keeps_the_paid_summarie
     assert code == 1 and out["ok"] is False and out["code"] == "call_cap" and FAILURE_KEYS <= set(out)
     assert out["calls"] == 3 and out["call_cap"] == 3 and "cap" in out["error"]
     assert "ERROR library index:" in err
-    assert not (lib.book_dir(HINTED) / "tree.json").exists() and HINTED not in lib.catalog()["books"]
+    assert lib.data_dir(HINTED) is None and HINTED not in lib.catalog()["books"]
     cache = lib.read_json(lib.book_dir(HINTED) / "summaries.json")["entries"]
     assert len(cache) == 3
     code, out, _ = index(capsys)
@@ -291,10 +291,10 @@ def test_call_cap_aborts_without_a_half_written_book_and_keeps_the_paid_summarie
 
 def test_a_failed_reindex_leaves_the_old_book_readable(env, capsys):
     index(capsys, "--summaries", "none")
-    before = (lib.book_dir(HINTED) / "tree.json").read_bytes()
+    before = (lib.data_dir(HINTED) / "tree.json").read_bytes()
     code, out, _ = index(capsys, "--max-calls", "1")
     assert code == 1 and out["code"] == "call_cap"
-    assert (lib.book_dir(HINTED) / "tree.json").read_bytes() == before
+    assert (lib.data_dir(HINTED) / "tree.json").read_bytes() == before
     code, _, _ = run_main(["read", HINTED, "1", "--json"], capsys)
     assert code == 0
 
@@ -305,7 +305,7 @@ def test_a_model_that_never_answers_stops_early_and_never_prints_the_key(env, ca
     code, out, err = index(capsys)
     assert code == 1 and out["code"] == "model_failed" and out["failures"] >= summarize.EARLY_ABORT_FAILURES
     assert "AIza" not in json.dumps(out) and "AIza" not in err
-    assert not (lib.book_dir(HINTED) / "tree.json").exists()
+    assert lib.data_dir(HINTED) is None
     assert len(env.stub.prompts) < NODES * summarize.ATTEMPTS + 1  # it stopped before trying every node
 
 
@@ -441,7 +441,7 @@ def test_no_hinted_toc_uses_page_index_structure_detection(env, capsys, monkeypa
     assert all("text" not in n for n in nodes)
     code, out, _ = run_main(["read", "flat-demo", "all", "--json"], capsys)
     assert [p["content"] for p in json.loads(out)["pages"]] == [t.rstrip() for t in fixture_pages("flat-demo")]  # Trove text, not the PDF's
-    meta = lib.read_json(lib.book_dir("flat-demo") / "meta.json")
+    meta = lib.read_json(lib.data_dir("flat-demo") / "meta.json")
     assert meta["toc_source"] == "flash-detected" and meta["indexer"]["mode"] == "flash-structure"
     assert meta["indexer"]["pageindex_commit"].startswith("af92d96") and meta["indexer"]["llm_calls"] == 2
     assert meta["origin"]["trove"]["trove_id"] == "flat-demo" and meta["origin"]["trove"]["hinted_entries"] == 0
@@ -495,9 +495,9 @@ def test_index_md_is_the_same_tree_offline(env, capsys):
     assert out["n_pages"] == 9 and out["nodes"] == NODES and out["calls"] == 0
     nodes = tree_nodes("md-book")
     assert [(n["start_index"], n["end_index"]) for n in nodes] == [(1, 1), (2, 5), (2, 3), (4, 5), (6, 7), (6, 7), (8, 9)]
-    pages = lib.read_json(lib.book_dir("md-book") / "pages.json")
+    pages = lib.read_json(lib.data_dir("md-book") / "pages.json")
     assert pages[3].startswith("# עמוד מקורי 3") and "### Footnotes" in pages[4]
-    assert lib.read_json(lib.book_dir("md-book") / "meta.json")["origin"]["md"]["pages"] == 9
+    assert lib.read_json(lib.data_dir("md-book") / "meta.json")["origin"]["md"]["pages"] == 9
     assert not [c for c in env.log.parent.glob("trove-calls.log")]  # no Trove call at all
 
 
@@ -552,14 +552,28 @@ def test_contract_lists_every_field_and_code():
 # ----------------------------------------------------------------------------- review fixes: publish, catalog, ids, intro
 
 def snapshot(book_id):
+    """Every file under the book folder, by relative path."""
     d = lib.book_dir(book_id)
-    return {f.name: f.read_bytes() for f in sorted(d.iterdir())}
+    return {str(f.relative_to(d)): f.read_bytes() for f in sorted(d.rglob("*")) if f.is_file()}
+
+
+def version_names(book_id):
+    return sorted(d.name for d in (lib.book_dir(book_id) / "v").iterdir())
+
+
+def test_a_book_is_a_current_pointer_and_a_complete_version(env, capsys):
+    index(capsys, "--summaries", "none")
+    container = lib.book_dir(HINTED)
+    name = (container / "CURRENT").read_text().strip()
+    assert (container / "v" / name).is_dir() and version_names(HINTED) == [name]
+    assert sorted(f.name for f in (container / "v" / name).iterdir()) == ["meta.json", "pages.json", "tree.json"]
+    assert not [f for f in container.iterdir() if f.name.startswith(".CURRENT")]
+    assert lib.data_dir(HINTED) == container / "v" / name
 
 
 def test_a_failed_write_leaves_the_previous_book_exactly_as_it_was(env, capsys, monkeypatch):
     index(capsys, "--summaries", "none")
     before = snapshot(HINTED)
-    catalog_before = lib.catalog()
     path = env.data / "books" / HINTED / "read.json"
     doc = json.loads(path.read_text(encoding="utf-8"))
     doc["items"][0]["pages"][0]["content"] = "a changed first page"
@@ -574,80 +588,138 @@ def test_a_failed_write_leaves_the_previous_book_exactly_as_it_was(env, capsys, 
     code, out, err = index(capsys, "--summaries", "none")
     assert code == 1 and out["ok"] is False
     monkeypatch.setattr(lib, "write_json", real)
-    assert snapshot(HINTED) == before                       # not one file of the new generation is visible
-    assert lib.catalog() == catalog_before
-    staging = env.library / ".staging"
-    assert not staging.exists() or list(staging.iterdir()) == []             # nothing left staged
+    assert snapshot(HINTED) == before                       # no file of the new generation is left, none changed
     code, out, _ = run_main(["read", HINTED, "1", "--json"], capsys)
     assert "a changed first page" not in out
 
 
-def test_a_failed_swap_puts_the_old_book_back(env, capsys, monkeypatch):
+def test_a_crash_before_the_pointer_moves_changes_nothing_a_reader_sees(env, capsys, monkeypatch):
     index(capsys, "--summaries", "none")
-    before = snapshot(HINTED)
-    real, calls = os.rename, []
+    old_tree = (lib.data_dir(HINTED) / "tree.json").read_bytes()
+    old_name = lib.current_name(HINTED)
+    # a run that finished writing its version and died before publishing: simulated by calling the steps by hand
+    version = lib.new_version(HINTED)
+    lib.write_json(version / "pages.json", ["x"])
+    lib.write_json(version / "tree.json", {"book_id": HINTED, "title": "unpublished", "n_pages": 1, "structure": []})
+    lib.write_json(version / "meta.json", {"book_id": HINTED, "title": "unpublished"})
+    assert lib.current_name(HINTED) == old_name and (lib.data_dir(HINTED) / "tree.json").read_bytes() == old_tree
+    assert lib.catalog()["books"][HINTED]["title"] != "unpublished"
+    code, out, _ = run_main(["read", HINTED, "all", "--json"], capsys)
+    assert len(json.loads(out)["pages"]) == 9
+    # the pointer write itself failing is also harmless, and leaves no temporary file
+    real = lib.os.replace
 
-    def flaky(src, dst):
-        calls.append(dst)
-        if len(calls) == 2:  # the second rename moves the new book in
-            raise OSError("rename failed")
+    def failing(src, dst):
+        if Path(dst).name == "CURRENT":
+            raise OSError("no space")
         return real(src, dst)
-    monkeypatch.setattr(lib.os, "rename", flaky)
+    monkeypatch.setattr(lib.os, "replace", failing)
     code, out, _ = index(capsys, "--summaries", "none")
-    monkeypatch.setattr(lib.os, "rename", real)
-    assert code == 1 and snapshot(HINTED) == before
+    monkeypatch.setattr(lib.os, "replace", real)
+    assert code == 1 and lib.current_name(HINTED) == old_name
+    assert not [f for f in lib.book_dir(HINTED).iterdir() if f.name.startswith(".CURRENT")]
+    assert (lib.data_dir(HINTED) / "tree.json").read_bytes() == old_tree
+    assert version.name in version_names(HINTED)            # the unreferenced version stays until it is old
 
 
-def test_reindex_removes_a_stale_page_map(env, capsys):
+def test_publishing_prunes_old_versions_but_keeps_the_previous_one(env, capsys, monkeypatch):
+    monkeypatch.setattr(lib, "PRUNE_GRACE_SECONDS", 0)
+    seen = []
+    for _ in range(4):
+        index(capsys, "--summaries", "none")
+        seen.append(lib.current_name(HINTED))
+    assert version_names(HINTED) == sorted(seen[-2:])       # the current one and one previous
+
+
+def test_a_fresh_unfinished_version_is_not_pruned_but_a_stale_one_is(env, capsys, monkeypatch):
+    monkeypatch.setattr(lib, "PRUNE_GRACE_SECONDS", 0)
     index(capsys, "--summaries", "none")
-    lib.write_json(lib.book_dir(HINTED) / "pagemap.json", {"trove_id": HINTED, "pdf_to_trove": [1, 1, 2]})
-    code, out, _ = run_main(["meta", HINTED], capsys)
-    assert json.loads(out)["pagemap"] == [1, 1, 2]
+    running = lib.new_version(HINTED)                        # another run, still writing
+    (running / "pages.json").write_text("[]")
     index(capsys, "--summaries", "none")
-    assert not (lib.book_dir(HINTED) / "pagemap.json").exists()
-    code, out, _ = run_main(["meta", HINTED], capsys)
-    assert json.loads(out)["pagemap"] is None
+    assert running.name in version_names(HINTED)
+    monkeypatch.setattr(lib, "STALE_SECONDS", 0)
+    index(capsys, "--summaries", "none")
+    assert running.name not in version_names(HINTED)
 
 
-def test_the_summary_cache_survives_the_swap(env, capsys):
+def test_a_legacy_flat_book_is_read_and_then_replaced_by_a_version(env, capsys):
+    flat = lib.book_dir(HINTED)
+    lib.write_json(flat / "pages.json", ["old one", "old two"])
+    lib.write_json(flat / "tree.json", {"book_id": HINTED, "title": "Old", "author": "", "n_pages": 2, "toc_source": "bookmarks",
+                                        "structure": [{"node_id": "0000", "title": "All", "start_index": 1, "end_index": 2}]})
+    lib.write_json(flat / "meta.json", {"book_id": HINTED, "title": "Old", "origin": {}, "indexer": {"llm_calls": 0}, "n_pages": 2})
+    lib.write_json(flat / "pagemap.json", {"trove_id": HINTED, "pdf_to_trove": [1, 1, 2]})
+    code, out, _ = run_main(["read", HINTED, "2", "--json"], capsys)
+    assert json.loads(out)["pages"][0]["content"] == "old two"
+    assert json.loads(run_main(["meta", HINTED], capsys)[1])["pagemap"] == [1, 1, 2]
+    assert lib.catalog()["books"][HINTED]["title"] == "Old"
+    assert run_main(["list"], capsys)[1] == f"{HINTED}\t2 pp\tbookmarks\tOld\n"
+    index(capsys, "--summaries", "none")                     # re-index: versioned, flat files and the page map gone
+    assert (flat / "CURRENT").is_file() and not (flat / "tree.json").exists() and not (flat / "pagemap.json").exists()
+    assert json.loads(run_main(["meta", HINTED], capsys)[1])["pagemap"] is None
+    assert len(json.loads(run_main(["read", HINTED, "all", "--json"], capsys)[1])["pages"]) == 9
+    assert lib.catalog()["books"][HINTED]["title"] == "A Demo Book of Law"
+
+
+def test_the_summary_cache_survives_a_new_version(env, capsys):
     index(capsys)
     assert len(lib.read_json(lib.book_dir(HINTED) / "summaries.json")["entries"]) == NODES
     code, out, _ = index(capsys)
     assert out["calls"] == 0
 
 
-def test_the_catalog_is_derived_so_it_never_loses_a_book(env, capsys):
+def test_the_catalog_is_always_scanned(env, capsys):
     index(capsys, "--summaries", "none")
     index(capsys, "--summaries", "none", "--book-id", "second")
-    stale = {"books": {HINTED: lib.catalog()["books"][HINTED]}}          # a writer that raced and lost "second"
-    lib.write_json(env.library / "catalog.json", stale)
     assert set(lib.catalog()["books"]) == {HINTED, "second"}
-    (env.library / "catalog.json").unlink()                              # missing file: readers scan
+    assert not (env.library / "catalog.json").exists()       # nothing to go stale
+    (env.library / "catalog.json").write_text('{"books": {"ghost": {}}}')   # a leftover file is never read
     assert set(lib.catalog()["books"]) == {HINTED, "second"}
     code, out, _ = run_main(["list"], capsys)
     assert out.count("\n") == 2
-    import time
-    time.sleep(0.02)
-    meta = lib.read_json(lib.book_dir("second") / "meta.json")
-    meta["title"] = "Renamed"
-    lib.write_json(lib.book_dir("second") / "meta.json", meta)           # a re-index after the cache was written
-    assert lib.catalog()["books"]["second"]["title"] == "Renamed"
+    code, out, _ = index(capsys, "--summaries", "none", "--book-id", "second", "--title", "Renamed")
+    assert lib.catalog()["books"]["second"]["title"] == "Renamed"   # the latest meta, at once
 
 
-def test_concurrent_indexers_all_appear_in_the_catalog(env, tmp_path):
-    pages_md, toc = md_inputs(env.tmp)
+def spawn_index(env, pages_md, toc, book_id, title):
     child_env = {**os.environ, "PYTHONPATH": str(PKG), "AW_LIBRARY": str(env.library)}
-    for round_ in range(2):
-        procs = [subprocess.Popen([sys.executable, "-m", "pilib", "index-md", "--pages", str(pages_md), "--toc", str(toc),
-                                   "--book-id", f"par-{round_}-{i}", "--title", f"P{i}", "--summaries", "none"],
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=child_env) for i in range(6)]
-        for proc in procs:
-            proc.communicate()
-            assert proc.returncode == 0
-    proc = subprocess.run([sys.executable, "-m", "pilib", "catalog"], capture_output=True, text=True, env=child_env)
-    assert sorted(json.loads(proc.stdout)) == sorted(f"par-{r}-{i}" for r in range(2) for i in range(6))
-    cached = json.loads((env.library / "catalog.json").read_text())
-    assert len(cached["books"]) <= 12
+    return subprocess.Popen([sys.executable, "-m", "pilib", "index-md", "--pages", str(pages_md), "--toc", str(toc),
+                             "--book-id", book_id, "--title", title, "--summaries", "none"],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=child_env)
+
+
+def test_concurrent_indexers_and_readers_always_see_whole_books(env):
+    pages_md, toc = md_inputs(env.tmp)
+    procs = {f"par-{i}": spawn_index(env, pages_md, toc, f"par-{i}", f"P{i}") for i in range(6)}
+    finished = set()
+    while len(finished) < len(procs):
+        for book_id, proc in procs.items():
+            if proc.poll() is not None:
+                finished.add(book_id)
+        snapshot_ = lib.catalog()["books"]                   # a reader, interleaved with the writers
+        assert finished <= set(snapshot_), "a finished indexer's book is missing from the catalog"
+        for book_id, entry in snapshot_.items():
+            assert entry["title"] == "P" + book_id.split("-")[1] and entry["n_pages"] == 9 and entry["node_count"] == NODES
+            assert len(lib.load_pages(book_id)) == 9 and len(lib.load_tree(book_id)["structure"]) == 4
+    assert all(proc.wait() == 0 for proc in procs.values())
+    assert sorted(lib.catalog()["books"]) == sorted(procs)
+
+
+def test_concurrent_indexers_of_the_same_book_leave_one_whole_book(env):
+    pages_md, toc = md_inputs(env.tmp)
+    for _ in range(3):
+        procs = [spawn_index(env, pages_md, toc, "same", f"Title {i}") for i in range(5)]
+        while any(p.poll() is None for p in procs):
+            folder = lib.data_dir("same")                    # readers meanwhile: one version, whole
+            if folder is not None:
+                tree, meta = lib.read_json(folder / "tree.json"), lib.read_json(folder / "meta.json")
+                assert tree["title"] == meta["title"] and len(lib.read_json(folder / "pages.json")) == 9
+        assert all(p.wait() == 0 for p in procs)
+    final = lib.data_dir("same")
+    assert lib.read_json(final / "tree.json")["title"] == lib.read_json(final / "meta.json")["title"]
+    assert lib.catalog()["books"]["same"]["title"] == lib.read_json(final / "meta.json")["title"]
+    assert (lib.book_dir("same") / "CURRENT").read_text().strip() in version_names("same")
 
 
 @pytest.mark.parametrize("bad", ["..", "a/b", ".hidden", "a..b", "", "x y", "../x", "a\\b"])
@@ -674,6 +746,44 @@ def test_a_book_directory_cannot_leave_the_library(env, capsys):
         lib.book_dir("fine")
     code, out, _ = index(capsys, "--summaries", "none")
     assert code == 1 and out["code"] == "bad_input" and list(outside.iterdir()) == []
+
+
+def test_versions_and_the_pointer_obey_the_same_containment_rules(env, capsys):
+    index(capsys, "--summaries", "none")
+    container = lib.book_dir(HINTED)
+    outside = env.tmp / "elsewhere"
+    outside.mkdir()
+    for name in ("tree.json", "pages.json", "meta.json"):
+        (outside / name).write_text("[]" if name == "pages.json" else "{}")
+    current = (container / "CURRENT").read_text()
+    (container / "CURRENT").write_text("../../../elsewhere\n")                  # a pointer that names a path
+    with pytest.raises(ValueError):
+        lib.data_dir(HINTED)
+    assert HINTED not in lib.catalog()["books"]
+    (container / "CURRENT").unlink()
+    (container / "CURRENT").symlink_to(outside / "tree.json")                   # a symlinked pointer
+    with pytest.raises(ValueError):
+        lib.data_dir(HINTED)
+    code, out, _ = index(capsys, "--summaries", "none")
+    assert code == 1 and out["code"] == "bad_input" and (outside / "tree.json").read_text() == "{}"
+    (container / "CURRENT").unlink()
+    (container / "CURRENT").write_text(current)
+    name = current.strip()
+    real_version = container / "v" / name
+    moved = container / "v-real"
+    (container / "v").rename(moved)
+    (container / "v").symlink_to(moved)                                         # a symlinked versions folder
+    with pytest.raises(ValueError):
+        lib.data_dir(HINTED)
+    code, out, _ = index(capsys, "--summaries", "none")
+    assert code == 1 and out["code"] == "bad_input"
+    (container / "v").unlink()
+    moved.rename(container / "v")
+    link = container / "v" / "99999999999999999999-deadbeef"
+    link.symlink_to(outside)                                                     # a version folder that is a link
+    (container / "CURRENT").write_text(link.name + "\n")
+    with pytest.raises(ValueError):
+        lib.data_dir(HINTED)
 
 
 def test_text_before_a_parents_first_child_reaches_its_summary(env, capsys):

@@ -227,9 +227,9 @@ def build_result(*, command: str, book_id: str, title: str, origin: dict, struct
 def write_book(*, result: dict, structure: list, pages: list, author: str, origin: dict, toc_source: str,
                usage: dict, mode: str, model: str, stats: dict, extra_indexer: dict, page_text_source: str,
                doc_name: str) -> None:
-    """Build the whole book in a staging folder under the library root, then swap it in as one unit
-    (lib.publish_book). A failure at any point leaves the previous book exactly as it was; files of the previous
-    generation that this one does not write (a page map) are gone with it. The summary cache is carried over."""
+    """Write the book as a new complete version folder, then publish it by an atomic rename of the CURRENT pointer
+    (lib.publish_version). A failure at any point leaves the previous book exactly as it was; nothing of the
+    previous generation (a page map) is carried into the new version. The summary cache lives beside the versions."""
     book_id, title = result["book_id"], result["title"]
     nodes = list(sm.walk(structure))
     tree = {"book_id": book_id, "doc_name": doc_name, "title": title, "author": author, "n_pages": len(pages),
@@ -241,17 +241,15 @@ def write_book(*, result: dict, structure: list, pages: list, author: str, origi
             "n_pages": len(pages), "node_count": len(nodes), "nodes_with_summary": result["nodes_with_summary"],
             "toc_source": toc_source, "page_text_source": page_text_source, "seconds": result["seconds"],
             "indexed_at": result["indexed_at"], "top": [n["title"][:160] for n in tree["structure"][:60]]}
-    staging = lib.new_staging(book_id)
+    version = lib.new_version(book_id)
     try:
-        lib.write_json(staging / "pages.json", pages)
-        lib.write_json(staging / "tree.json", tree)
-        cache = lib.book_dir(book_id) / "summaries.json"
-        if cache.is_file():
-            shutil.copyfile(cache, staging / "summaries.json")
-        lib.write_json(staging / "meta.json", meta)  # last: a folder without meta.json is not a listed book
-        lib.publish_book(staging, book_id)
-    finally:
-        lib.drop_staging(staging)
+        lib.write_json(version / "pages.json", pages)
+        lib.write_json(version / "tree.json", tree)
+        lib.write_json(version / "meta.json", meta)  # last: a version folder without meta.json is unfinished
+        lib.publish_version(book_id, version)
+    except BaseException:
+        shutil.rmtree(version, ignore_errors=True)
+        raise
 
 
 def check_book_id(book_id: str) -> None:

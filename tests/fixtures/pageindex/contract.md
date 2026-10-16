@@ -26,7 +26,7 @@ pilib health [--require core|structure]
 - **stdout is exactly one JSON object on one line**, success or failure. Anything a library prints is sent to stderr.
 - Exit code `0` on success, `1` on any failure (usage errors from argument parsing exit `2` with no JSON).
 - On failure stderr also carries one plain line: `ERROR library index: <message>`.
-- A book is built in a staging folder and swapped in as one unit, so a reader sees the old book or the new one, never a mixture; a re-index drops files of the old generation that the new one does not write (a page map). Nothing is written to the library when a run fails; a book that was indexed before stays exactly as it was.
+- A book is written as a complete new version folder and published by one atomic rename of `books/<id>/CURRENT`, so a reader sees the old book or the new one, never a mixture, and concurrent indexers of the same book each leave a whole book (the last pointer rename wins). Nothing a reader can see changes when a run fails; a book that was indexed before stays exactly as it was.
   Summaries already paid for are kept in `books/<id>/summaries.json` and reused by the next run.
 - The key never appears in stdout, stderr, or the JSON.
 
@@ -67,10 +67,22 @@ pilib health [--require core|structure]
 | `indexed_at` | string or null | UTC time written to `meta.json` (null on a dry run) |
 | `warnings` | array of strings | plain-language notes: entries ignored, page gaps, a low render check |
 
-Files written (`$AW_LIBRARY/books/<book_id>/`): `pages.json` (Trove text, page i at index i-1), `tree.json`, `meta.json`
-(`origin.trove` = `trove_id`, `title`, `trove_pages`, `toc_entries`, `hinted_entries`, `toc_sha`, `pages_sha`; `indexer`
-with the `llm_*` usage), `summaries.json` (the summary cache). `catalog.json` is a cache derived from the books' `meta.json` files; readers rescan when it is missing or out of date.
-`pilib meta` reports `pagemap: null`: library pages are Trove pages.
+On disk (`$AW_LIBRARY`):
+
+```
+books/<book_id>/CURRENT                 one line: the name of the current version folder
+books/<book_id>/v/<version>/pages.json  Trove text, page i at index i-1
+books/<book_id>/v/<version>/tree.json
+books/<book_id>/v/<version>/meta.json   written last; origin.trove = trove_id, title, trove_pages, toc_entries,
+                                        hinted_entries, toc_sha, pages_sha; indexer carries the llm_* usage
+books/<book_id>/summaries.json          the summary cache, beside the versions
+```
+
+A version folder is never changed after it is published; the current one and the newest complete one before it are
+kept, older and abandoned ones are removed once they are old. A book from before versions has `tree.json`, `pages.json`
+and `meta.json` flat in `books/<book_id>/`; it is read from there until it is indexed again (its flat files, and any
+`pagemap.json`, are then removed). There is no catalog file: `catalog` and `list` scan the books on every call.
+`pilib meta` reports `pagemap: null` for a versioned book: library pages are Trove pages.
 
 ## Failure object
 
