@@ -55,7 +55,7 @@ function candidatesFromDrafts(project: string, files: Array<{ file: string; unit
     // Every note is resolved in document order first, short sentences included: "Ibid." repeats the note right before
     // it, whether or not that note sits in a sentence long enough to be a claim.
     const resolved = draft.sentences.map((sentence) => ({
-      sentence, keys: sentence.keys.flatMap((key) => keysOf.resolve(key)), partial: sentence.keys.some((key) => keysOf.isPartial(key)),
+      sentence, keys: sentence.keys.flatMap((key) => keysOf.resolve(key)), partial: sentence.keys.some((key) => keysOf.isUnresolved(key)),
     }));
     for (const { sentence, keys, partial } of resolved) {
       order += 1;

@@ -141,3 +141,25 @@ def test_unknown_ref_and_cli(tmp_path, monkeypatch, capsys):
         refs.fetch_ref(d, "nevua", "zzz", env={})
     assert refs.main(["--registry", str(d), "fetch", "--course", "nevua", "--ref", "k", "--dry-run"]) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "not-found"
+
+
+def test_supplied_file_beats_a_missing_recorded_path(tmp_path):
+    new = tmp_path / "new.pdf"
+    new.write_bytes(b"%PDF")
+    d = reg_with(tmp_path, {"key": "k", "citation": "c", "status": "downloaded", "download_path": str(tmp_path / "gone.pdf")})
+    out = refs.fetch_ref(d, "nevua", "k", env={}, file=new)
+    ref = stored(d)
+    assert ref["download_path"] == str(new) and steps(out)["download"] == "downloaded" and steps(out)["ocr"] == "queued"
+
+
+def test_missing_recorded_path_without_replacement_is_not_success(tmp_path, monkeypatch):
+    monkeypatch.setattr(refs.Path, "home", classmethod(lambda cls: tmp_path / "home"))
+    d = reg_with(tmp_path, {"key": "k", "citation": "c", "status": "downloaded", "download_path": str(tmp_path / "gone.pdf")})
+    out = refs.fetch_ref(d, "nevua", "k", env={})
+    assert steps(out)["download"] == "missing-file" and "ocr" not in steps(out) and "ocr_next" not in stored(d)
+
+
+def test_explicit_file_that_does_not_exist_is_an_error(tmp_path):
+    d = reg_with(tmp_path, {"key": "k", "citation": "c", "status": "online"})
+    with pytest.raises(refs.RefsError):
+        refs.fetch_ref(d, "nevua", "k", env={}, file=tmp_path / "nope.pdf")

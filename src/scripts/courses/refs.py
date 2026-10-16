@@ -515,19 +515,32 @@ def fetch_ref(reg: Path, slug: str, key: str, *, task: str | None = None, dry_ru
     status = ref.get("status")
     if status in ("online", "downloaded"):
         found = None
-        if status == "downloaded" and ref.get("download_path"):
-            found = Path(ref["download_path"]).expanduser()
-        for candidate in ([file] if file else []) + [reg / "sources" / slug / f"{key}.pdf", Path.home() / "Downloads" / f"{key}.pdf"]:
-            if found is None and candidate and Path(candidate).expanduser().is_file():
-                found = Path(candidate).expanduser()
-        if found is None and status == "online":
+        if file is not None:  # an explicitly supplied file always wins and must exist
+            found = Path(file).expanduser()
+            if not found.is_file():
+                raise RefsError(f"--file {file} is not a file")
+        recorded = Path(ref["download_path"]).expanduser() if ref.get("download_path") else None
+        if found is None and recorded is not None and recorded.is_file():
+            found = recorded
+        if found is None:
+            for candidate in (reg / "sources" / slug / f"{key}.pdf", Path.home() / "Downloads" / f"{key}.pdf"):
+                if candidate.is_file():
+                    found = candidate
+                    break
+        if found is None and recorded is not None:
+            step("download", "missing-file", f"recorded path not found: {recorded}")
+            status = None  # nothing downloaded: no success, no OCR queued
+        if status is None:
+            pass
+        elif found is None and status == "online":
             step("download", "needs-browser-download", ref.get("target_url", "no target_url"))
         else:
             ref["status"] = "downloaded"
             if found is not None:
                 ref["download_path"] = str(found)
             step("download", "downloaded", str(found) if found else "path not recorded")
-            if not ref.get("ocr") and not ref.get("ocr_next"):
+            moved = found is not None and recorded is not None and found != recorded  # the queued OCR pointed at the old path
+            if not ref.get("ocr") and (not ref.get("ocr_next") or moved):
                 ref["ocr_next"] = {"state": "queued", "policy": list(OCR_POLICY),
                                    "note": "Gemini text first; Tesseract only as hidden check; empty Gemini => page blocked"}
                 step("ocr", "queued", " > ".join(OCR_POLICY))
