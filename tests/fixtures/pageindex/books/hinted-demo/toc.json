@@ -1,0 +1,46 @@
+{
+ "items": [
+  {
+   "id": "hinted-demo",
+   "title": "A Demo Book of Law",
+   "author": "Test Author",
+   "toc": [
+    {
+     "title": "Reading guide - How to read and cite this demo book.",
+     "page": 1,
+     "level": 1
+    },
+    {
+     "title": "Part one - The sources of law.",
+     "page": 2,
+     "level": 1
+    },
+    {
+     "title": "Chapter 1 - The written Torah and its plain sense.",
+     "page": 2,
+     "level": 2
+    },
+    {
+     "title": "Chapter 2 - הלכה למשה מסיני והמסורת שבעל פה.",
+     "page": 4,
+     "level": 2
+    },
+    {
+     "title": "Part two - Practice in court.",
+     "page": 6,
+     "level": 1
+    },
+    {
+     "title": "Chapter 3 - The court of three and its witnesses.",
+     "page": 6,
+     "level": 2
+    },
+    {
+     "title": "Appendix - Glossary of terms.",
+     "page": 8,
+     "level": 1
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,46 @@
+{
+ "items": [
+  {
+   "id": "hinted-demo",
+   "title": "A Demo Book of Law",
+   "pages": [
+    {
+     "pageNum": 1,
+     "content": "# Reading Guide\n\nHow to read and cite this demo book. Page numbers are printed pages."
+    },
+    {
+     "pageNum": 2,
+     "content": "# Original Page 1\n**[Original print page: 1]**\nPart one opens with the sources of law: the written Torah and the oral tradition."
+    },
+    {
+     "pageNum": 3,
+     "content": "# Original Page 2\n**[Original print page: 2]**\nThe written Torah is read verse by verse; Rashi explains the plain sense of Exodus 21:24, an eye for an eye, as monetary compensation."
+    },
+    {
+     "pageNum": 4,
+     "content": "# עמוד מקורי 3\n**[Original print page: 3]**\nהלכה למשה מסיני: כְּלָל הוּא בְּיַד חֲכָמִים שֶׁהַתּוֹרָה שֶׁבְּעַל פֶּה נִמְסְרָה בְּסִינַי. עיינו בבבלי בבא קמא פד ע״א."
+    },
+    {
+     "pageNum": 5,
+     "content": "# עמוד מקורי 4\n**[Original print page: 4]**\nהרמב״ם בהקדמה למשנה תורה מונה את שרשרת המסורת מרבי עד אבא ורב.\n### Footnotes\n**1.** ראו גם מבוא לפירוש המשנה."
+    },
+    {
+     "pageNum": 6,
+     "content": "# Original Page 5\n**[Original print page: 5]**\nPart two turns to practice: how a court of three judges decides a case of damages."
+    },
+    {
+     "pageNum": 7,
+     "content": "# Original Page 6\n**[Original print page: 6]**\nThe court (beit din) hears two witnesses; testimony of a single witness is not enough in a case of property."
+    },
+    {
+     "pageNum": 8,
+     "content": "# Original Page 7\n**[Original print page: 7]**\nGlossary: beit din, a rabbinic court; halakha, Jewish law; mesorah, the chain of tradition."
+    },
+    {
+     "pageNum": 9,
+     "content": "# Original Page 8\n**[Original print page: 8]**\nIndex of names: Rashi, Rambam, Rav."
+    }
+   ]
+  }
+ ]
+}
