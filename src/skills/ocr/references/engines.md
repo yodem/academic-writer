@@ -5,7 +5,7 @@ Used by `/academic-writer:ocr`, `/academic-writer:ingest` and `/academic-writer:
 - Copy the text exactly. Never correct, modernise, paraphrase or summarise it.
 - Check the orientation of the first page before anything else; rotate a **copy**, never the source.
 - One page per call. Check each page's length against how dense the page looks: a dense page that comes back two or three lines long is truncated; read it again and tell the author if it stays short.
-- Tell the author which pages are unclear, short or failed. Mark an unclear word in square brackets instead of guessing it.
+- Tell the author which pages are unclear, short or failed. Never switch engine on your own: a page goes to a different engine (above all to Gemini, which sends the text to Google) only after the author says yes to that question. Mark an unclear word in square brackets instead of guessing it.
 - Never overwrite the source file. Write results under the project's `ocr-output/` folder.
 - Say which engine produced the text (`OCR engine: <name>`), wherever the text is stored next.
 
@@ -39,7 +39,7 @@ pdftoppm -r 150 -png -f <page> -l <page> <source.pdf> ocr-output/pages/page
 
    The pictures are named `page-<N>.png`, with leading zeros in a long document (`page-007.png`); list the folder to see the exact names.
 2. Read the picture with the Read tool, one page at a time, and write what is printed on it into `ocr-output/<name>.md`, one `# Page N` heading per page. Footnotes stay under the page they belong to. For two-column Hebrew pages, read the right column first.
-3. Report every page you could not read with confidence. For a course reading, escalate those pages to Gemini.
+3. Report every page you could not read with confidence, and mark it "OCR, not image-verified". **Never send a page to Gemini (or to any other engine) on your own, even for a course reading:** the author chose Claude, and Gemini would send the page text to Google. If another engine might read a page better, ask with `AskUserQuestion` whether this page may be sent to Gemini, saying plainly that its text goes to Google; only on a yes, run `aw ocr` for that page alone. The same rule applies to every switch of engine (Claude, Codex, Tesseract, Gemini): ask first.
 
 ## Codex reading page images
 

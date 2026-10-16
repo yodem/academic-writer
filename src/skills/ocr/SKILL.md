@@ -19,7 +19,7 @@ OCR (optical character recognition) reads the text out of a scanned or photograp
 | **Codex** | OpenAI, if the `codex` program is installed | sparing Claude or Gemini quota |
 | **On this computer (Tesseract)** | nothing leaves the computer; free | clean print, private material; weaker on scans and vowel marks |
 
-The commands and rules for Claude, Codex and Tesseract are in `${CLAUDE_PLUGIN_ROOT}/skills/ocr/references/engines.md`; read it when the author picks one of them. For course readings Claude goes first and Gemini is the escalation for pages Claude flags as unreadable or low-confidence. Record which engine produced the text. The steps below are for the plugin's own reader.
+The commands and rules for Claude, Codex and Tesseract are in `${CLAUDE_PLUGIN_ROOT}/skills/ocr/references/engines.md`; read it when the author picks one of them. For course readings Claude goes first. Whatever engine the author chose, never move a page to another engine on your own: mark unclear pages "OCR, not image-verified" and, if Gemini might read a page better, ask with `AskUserQuestion` whether that page may be sent to Gemini (its text goes to Google). Record which engine produced the text. The steps below are for the plugin's own reader.
 
 1. If the author gave no path, ask for the file or folder.
 2. Choose the language: `he`, `en` or `mixed`. Take it from `.academic-helper/profile.md`, or ask when the source language is unclear.

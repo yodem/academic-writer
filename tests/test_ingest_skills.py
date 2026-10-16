@@ -350,3 +350,11 @@ def test_ocr_skill_may_ask_the_engine_question():
     assert "AskUserQuestion" in fm["allowed-tools"]
     assert "Use when" in fm["description"]
     assert fm["metadata"].get("summary")
+
+
+def test_existing_item_read_back_compares_page_one_with_the_intended_text():
+    text = _read(REFS / "existing-item.md")
+    assert "approved replacement" in text and "/tmp/reading-guide.md" in text
+    assert "never with the old text" in text
+    assert "Old pages** 1 and 2 read back byte-equal" not in text
+    assert "Checks 3 and 5" in text  # appended pages and merged table of contents checked in every case
