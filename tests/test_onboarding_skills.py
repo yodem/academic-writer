@@ -229,11 +229,16 @@ def test_setup_points_to_the_pageindex_setting_and_troubleshooting_covers_it():
 def test_library_route_detection_honours_an_existing_library_json_and_never_overwrites_it():
     section = REFERENCE.read_text(encoding="utf-8").split("## Library route")[1]
     detect = section.split("### Detect")[1].split("### Ask")[0]
-    # same resolution order as loadLibraryConfig: env, then library.json pageindex.command, then pilib
+    # the plugin resolves the command itself (env, library.json, built-in helper, pilib): no path probing in a quoted heredoc
     assert "AW_PAGEINDEX_COMMAND" in detect and ".academic-helper/library.json" in detect
-    assert "'pageindex'" in detect and "'command'" in detect and "'pilib'" in detect
-    assert detect.index("env_cmd or file_cmd or 'pilib'") > 0
+    assert '"${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" library status' in detect
+    assert "pageindex_source" in detect and "'installed'" in detect and "'pilib'" in detect
     assert "CURRENT_ROUTE" in detect
+    heredocs = re.findall(r"<<'PY'\n(.*?)\nPY", detect, re.S)
+    assert heredocs and all("CLAUDE_PLUGIN_DATA" not in body and "${" not in body for body in heredocs)
+    # the flags used exist in the CLI
+    cli = (ROOT / "src" / "cli" / "src" / "library" / "cli.ts").read_text(encoding="utf-8")
+    assert "subcommand === 'status'" in cli and "pageindex_source" in cli
     ask = section.split("### Ask")[1].split("### Write")[0]
     assert "never overwritten without asking" in ask
     assert "(current)" in ask and "write nothing" in ask
@@ -250,25 +255,30 @@ def test_library_route_detection_honours_an_existing_library_json_and_never_over
     assert "only when there is no `library.json` yet" in ask
 
 
-def test_detection_snippet_runs_and_follows_the_config_precedence(tmp_path):
+def test_detection_snippet_reads_the_status_json_the_cli_prints(tmp_path):
     import subprocess
     section = REFERENCE.read_text(encoding="utf-8").split("## Library route")[1]
     code = re.search(r"python3 - <<'PY'\n(.*?)\nPY", section, re.S).group(1)
+    status_path = "/tmp/aw-library-status.json"
+    assert status_path in section and status_path in code
 
-    def detect(cfg, env):
-        proj = tmp_path / str(abs(hash((json.dumps(cfg), json.dumps(env)))))
-        (proj / ".academic-helper").mkdir(parents=True)
-        if cfg is not None:
-            (proj / ".academic-helper" / "library.json").write_text(json.dumps(cfg))
-        base = {"PATH": "/usr/bin:/bin"}
-        out = subprocess.run(["python3", "-c", code], cwd=proj, env={**base, **env}, capture_output=True, text=True, check=True)
+    def detect(status):
+        sample = tmp_path / f"status-{abs(hash(json.dumps(status)))}.json"
+        sample.write_text(json.dumps(status))
+        out = subprocess.run(["python3", "-c", code.replace(status_path, str(sample))],
+                             env={"PATH": "/usr/bin:/bin"}, capture_output=True, text=True, check=True)
         return out.stdout.splitlines()
 
-    assert detect(None, {}) == ["PAGEINDEX_NOT_CONFIGURED", "CURRENT_ROUTE=none CURRENT_PRIMARY=trove"]
-    assert detect({"route": "both", "primary": "pageindex", "pageindex": {"command": "/path/to/wrapper"}}, {}) == [
+    assert detect({"route": "trove", "primary": "trove", "configured": False, "pageindex_source": "default", "installed": {"installed": False}}) == [
+        "PAGEINDEX_NOT_CONFIGURED", "CURRENT_ROUTE=none CURRENT_PRIMARY=trove"]
+    assert detect({"route": "both", "primary": "pageindex", "configured": True, "pageindex_source": "library.json"}) == [
         "PAGEINDEX_CONFIGURED", "CURRENT_ROUTE=both CURRENT_PRIMARY=pageindex"]
-    assert detect(None, {"AW_PAGEINDEX_COMMAND": "pilib"})[0] == "PAGEINDEX_CONFIGURED"
-    assert detect({"route": "trove"}, {})[0] == "PAGEINDEX_NOT_CONFIGURED"
+    assert detect({"route": "trove", "primary": "trove", "configured": False, "pageindex_source": "setting"})[0] == "PAGEINDEX_CONFIGURED"
+    # a helper installed in this very session counts, with no environment variable involved
+    assert detect({"route": "trove", "primary": "trove", "configured": True, "pageindex_source": "installed", "installed": {"installed": True, "tier": "core"}}) == [
+        "PAGEINDEX_CONFIGURED", "CURRENT_ROUTE=trove CURRENT_PRIMARY=trove"]
+    assert detect({"route": "trove", "configured": True, "pageindex_source": "default", "installed": {"installed": True}})[0] == "PAGEINDEX_CONFIGURED"
+    assert detect({"route": "trove", "configured": True})[0] == "PAGEINDEX_NOT_CONFIGURED"
 
 
 # --- Built-in PageIndex helper (Trove stays the default), library-eval ---------------------------
@@ -311,7 +321,7 @@ def test_the_skills_that_offer_pageindex_point_at_the_one_reference():
     assert "Never install anything for this step" in _text("init")
     assert "Never install anything for this step" in _text("update-tools")
     integration = REFERENCE.read_text(encoding="utf-8")
-    assert "AW_PAGEINDEX_HOME" in integration and "installed.json" in integration
+    assert "built-in helper" in integration and "installed" in integration and "AW_PAGEINDEX_HOME" not in integration
     assert "pageindex_command" in json.dumps(json.loads((ROOT / "manifests" / "academic-writer.json").read_text(encoding="utf-8")))
 
 
@@ -377,3 +387,15 @@ def test_library_eval_runs_the_steps_in_order_and_keeps_the_blinding():
     assert "--partial" in text
     # claims and Anthropic/OpenAI data flow are stated; no key is ever requested
     assert "OpenAI" in text and "GOOGLE_API_KEY" not in text
+
+
+def test_no_skill_moves_pages_to_another_ocr_engine_without_asking():
+    engines = (SKILLS / "ocr" / "references" / "engines.md").read_text(encoding="utf-8")
+    for path in (SKILLS / "ocr" / "SKILL.md", SKILLS / "ingest-book" / "SKILL.md", SKILLS / "ocr" / "references" / "engines.md"):
+        body = path.read_text(encoding="utf-8")
+        assert not re.search(r"escalat\w* (?:those |these |the )?pages? to Gemini", body, re.I), path
+        assert "Gemini is the escalation" not in body and "with Gemini for pages" not in body, path
+        assert "Gemini" in body and "AskUserQuestion" in body and "text goes to Google" in body, path
+    assert "Never send a page to Gemini" in engines and "on your own" in engines
+    assert "OCR, not image-verified" in engines
+    assert "The same rule applies to every switch of engine" in engines
