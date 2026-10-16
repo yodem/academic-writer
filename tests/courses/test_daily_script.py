@@ -35,7 +35,7 @@ def test_chrome_running_plans_watch_in_order(tmp_path):
     out, plans = run_dry(tmp_path, True, queue=True)
     assert out.returncode == 0, out.stderr
     keys = ["courses.py daily", "claude -p --chrome", "lesson-notes --pending", "toc_audit.py --all",
-            "chores digest", "courses-sync-nanoclaw.sh"]
+            "chores digest", "bookmarks --all", "courses-sync-nanoclaw.sh"]
     idx = [next(i for i, p in enumerate(plans) if k in p) for k in keys]
     assert idx == sorted(idx) and len(plans) == len(keys)
     watch = plans[1]
@@ -65,3 +65,41 @@ def test_courses_only_is_appended_to_the_prompt(tmp_path):
 def test_dry_run_writes_no_log(tmp_path, chrome):
     run_dry(tmp_path, chrome)
     assert not list((tmp_path / "home").rglob("daily-*.log"))
+
+
+def run_live_with_failing_bookmarks(tmp_path):
+    """Run the script for real (no COURSES_DRY) against a stub repo whose courses.py fails only `bookmarks`."""
+    home = tmp_path / "home"
+    term = home / ".academic-writer" / "courses" / "term"
+    (term / "queue").mkdir(parents=True)
+    repo = tmp_path / "repo"
+    courses = repo / "src" / "scripts" / "courses" / "courses.py"
+    courses.parent.mkdir(parents=True)
+    courses.write_text("import sys\nsys.exit(5 if 'bookmarks' in sys.argv else 0)\n")
+    (repo / "tools").mkdir()
+    (repo / "tools" / "toc_audit.py").write_text("import sys\nsys.exit(0)\n")
+    sync = home / ".academic-writer" / "bin" / "courses-sync-nanoclaw.sh"
+    sync.parent.mkdir(parents=True)
+    sync.write_text("#!/bin/sh\nexit 0\n")
+    sync.chmod(0o755)
+    stubs = tmp_path / "stubs"
+    stubs.mkdir()
+    pgrep = stubs / "pgrep"
+    pgrep.write_text("#!/bin/sh\nexit 1\n")  # Chrome not running: no claude call, a chore is added instead
+    pgrep.chmod(0o755)
+    env = {**os.environ, "HOME": str(home), "COURSES_TERM_DIR": str(term), "ACADEMIC_WRITER_REPO": str(repo),
+           "PATH": f"{stubs}:{os.environ['PATH']}"}
+    env.pop("COURSES_DRY", None)
+    out = subprocess.run(["bash", str(SCRIPT)], env=env, capture_output=True, text=True, timeout=60)
+    log = next((term / "logs").glob("daily-*.log"), None)
+    return out, log.read_text() if log else ""
+
+
+@pytest.mark.skipif(not Path("/usr/bin/python3").exists(), reason="script hardcodes /usr/bin/python3")
+def test_failing_bookmarks_step_is_logged_and_not_fatal(tmp_path):
+    out, log = run_live_with_failing_bookmarks(tmp_path)
+    assert out.returncode == 0, out.stderr + log
+    assert "-- bookmarks exit=5" in log
+    assert "bookmarks failed (not fatal)" in log
+    assert "-- nanoclaw-sync exit=0" in log
+    assert log.index("-- digest") < log.index("-- bookmarks") < log.index("-- nanoclaw-sync")
