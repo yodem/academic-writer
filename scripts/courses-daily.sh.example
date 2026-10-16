@@ -6,6 +6,7 @@
 #   a. courses.py daily            Voice Memos (exit 5 = Lemida REST blocked by the captcha: expected, not a failure)
 #   b. Chrome check                no "Google Chrome" process -> a manual chore, step c skipped
 #   c. claude -p --chrome          /academic-writer:courses watch-lemida --all   (COURSES_ONLY="cohen kane" restricts)
+#   c2. courses.py wispr-scan      Wispr Flow lecture recordings -> queue jobs (failure is counted; no Wispr database = no-op)
 #   d. queued lesson jobs          /academic-writer:lesson-notes --pending
 #   e. tools/toc_audit.py --all    failure -> a manual chore (the job is not failed by it)
 #   f. courses.py chores digest
@@ -77,6 +78,11 @@ run_job() {
       step chrome-chore add_manual_chore "open-chrome-$DAY" "Open Chrome logged in to Lemida so tonight's scan can run" \
         "Chrome was not running at the nightly job on $DAY, so the Lemida scan was skipped." || FAILED=1
     fi
+  fi
+
+  # c2. Wispr Flow lecture recordings: match to course slots, write queue jobs (before the lesson-notes step reads the queue)
+  if ! dry_plan "$PY $COURSES wispr-scan"; then
+    step wispr-scan "$PY" "$COURSES" wispr-scan || FAILED=1
   fi
 
   # d. queued lesson jobs
