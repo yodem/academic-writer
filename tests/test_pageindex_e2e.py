@@ -13,7 +13,8 @@ Covered: routes trove | pageindex | both against the installed command and again
 index --trove-id` for a new item and for an existing item (re-index, with read-back); backfill of two books; the
 report (estimated tokens, latency, cost, auditor PASS rate, page agreement, shadow supports); a full blind evaluation
 round (plan, run, pairs, page, import of a scripted judgments file, unblind with exact win rates, and no route name in
-anything the judge sees); and no process left behind by any test.
+anything the judge sees); which keys each command receives (every invocation dumps its own environment to a file, and
+the test reads those files); and no process left behind by any test (looked for before the teardown kills anything).
 
 Waiting is done with handshakes (a file appears, a ledger row appears), never with a clock that races a timeout.
 """
@@ -44,6 +45,18 @@ PINNED = json.loads((ROOT / "src/scripts/pageindex/PINNED.json").read_text(encod
 
 PLUGIN_KEY = "test-plugin-key-aaaa1111"   # the key the plugin holds (GOOGLE_API_KEY): only the built-in helper may get it
 SERVER_KEY = "test-server-key-bbbb2222"   # the key a wrapper's own computer holds
+# Other secrets the researcher's shell holds. None of them may reach a command the plugin starts (the built-in helper gets the
+# plugin's key as GEMINI_API_KEY while it writes summaries, and nothing else). GEMINI_API_KEY here differs from the plugin's
+# key, so a command that received it would show up even where the plugin's own key was replaced.
+PARENT_GEMINI_KEY = "test-parent-gemini-cccc3333"
+ANTHROPIC_KEY = "test-anthropic-key-dddd4444"
+JEV_KEY = "test-jev-key-eeee5555"
+OPENAI_KEY = "test-openai-key-ffff6666"
+GITHUB_TOKEN = "test-github-token-gggg7777"
+AWS_SECRET = "test-aws-secret-hhhh8888"
+PARENT_SECRETS = {"GOOGLE_API_KEY": PLUGIN_KEY, "GEMINI_API_KEY": PARENT_GEMINI_KEY, "ANTHROPIC_API_KEY": ANTHROPIC_KEY, "JEV_API_KEY": JEV_KEY,
+                  "OPENAI_API_KEY": OPENAI_KEY, "GITHUB_TOKEN": GITHUB_TOKEN, "AWS_SECRET_ACCESS_KEY": AWS_SECRET}
+ALL_KEYS = (PLUGIN_KEY, SERVER_KEY, PARENT_GEMINI_KEY, ANTHROPIC_KEY, JEV_KEY, OPENAI_KEY, GITHUB_TOKEN, AWS_SECRET)
 SHADOW_TIMEOUT_MS = 120_000               # far above any scheduling delay: no test races it
 ROUTE_WORDS = re.compile(r"trove|page-?index", re.IGNORECASE)
 
@@ -164,13 +177,18 @@ def completion_cost(completion_response=None):
 '''
 
 # What the plugin's private Python is: the real interpreter with the stub litellm in front.
+# Every invocation first writes its own full environment (and its arguments) to a file of its own, so a test can read what the
+# command really received. The dump folder is baked into the script, not passed in the environment, so it works whatever the
+# program under test hands down.
 VENV_PYTHON = '''#!/bin/sh
+{ printf 'ARGS: %s\\n' "$(echo "$*" | tr '\\n' ' ')"; env; } > "$(mktemp '@@DUMPS@@/helper.XXXXXX')"
 PYTHONPATH='@@STUBS@@'"${PYTHONPATH:+:$PYTHONPATH}"; export PYTHONPATH
 exec '@@PYTHON@@' "$@"
 '''
 
 # A command the researcher supplies: it runs pilib for a library of its own, with its own key and its own `trove`.
 WRAPPER = '''#!/bin/sh
+{ printf 'ARGS: %s\\n' "$(echo "$*" | tr '\\n' ' ')"; env; } > "$(mktemp '@@DUMPS@@/wrapper.XXXXXX')"
 GEMINI_API_KEY='@@SERVER_KEY@@'; export GEMINI_API_KEY
 AW_LIBRARY='@@LIBRARY@@'; export AW_LIBRARY
 PATH='@@BIN@@':"$PATH"; export PATH
@@ -247,6 +265,9 @@ class World:
         self.library = self.home / "library"
         self.trove_log = root / "trove.log"
         self.litellm_log = root / "litellm.log"
+        self.dumps = root / "env-dumps"               # one file per invocation of the helper or of the wrapper
+        self.dumps.mkdir()
+        self.seen: dict[int, str] = {}                # every process of this test seen by leftovers(), by pid
         self.stub_python = (self.stubs / "bin")
         (self.helper / "profile.md").write_text("# profile\n", encoding="utf-8")
         self.trove = self._script(self.bin / "trove", fill(FAKE_TROVE, PYTHON=sys.executable, DATA=str(self.trove_data)))
@@ -259,7 +280,8 @@ class World:
             PATH=f"{self.bin}{os.pathsep}{os.environ.get('PATH', '')}",
             AW_TROVE_COMMAND=str(self.trove),
             AW_LIBRARY_SHADOW_TIMEOUT_MS=str(SHADOW_TIMEOUT_MS),
-            GOOGLE_API_KEY=PLUGIN_KEY,
+            AW_E2E_TAG=str(root),                          # the marker every process of this test carries in its environment
+            **PARENT_SECRETS,
             FAKE_LOG=str(self.trove_log),
             FAKE_LITELLM_LOG=str(self.litellm_log),
         )
@@ -282,7 +304,7 @@ class World:
         stub litellm in front of it) and, optionally, a library copied from a prebuilt one. The pilib source is the plugin's own."""
         core = PINNED["tiers"]["core"]
         (self.home / "venv" / "bin").mkdir(parents=True, exist_ok=True)
-        self._script(self.home / "venv" / "bin" / "python", fill(VENV_PYTHON, STUBS=str(self.stubs), PYTHON=sys.executable))
+        self._script(self.home / "venv" / "bin" / "python", fill(VENV_PYTHON, STUBS=str(self.stubs), PYTHON=sys.executable, DUMPS=str(self.dumps)))
         (self.home / "installed.json").write_text(json.dumps({
             "schema": 1, "tier": "core", "python": sys.version.split()[0], "pageindex_commit": None,
             "requirements_sha256": core["requirements_sha256"], "pilib_version": PINNED["pilib_version"],
@@ -299,7 +321,7 @@ class World:
         library.mkdir(parents=True, exist_ok=True)
         return self._script(self.bin / "pageindex-wrapper", fill(
             WRAPPER, SERVER_KEY=SERVER_KEY, LIBRARY=str(library), BIN=str(self.bin), STUBS=str(self.stubs),
-            SOURCE=str(self.plugin / "scripts" / "pageindex"), PYTHON=sys.executable))
+            SOURCE=str(self.plugin / "scripts" / "pageindex"), PYTHON=sys.executable, DUMPS=str(self.dumps)))
 
     def set_library_json(self, config: dict) -> None:
         (self.helper / "library.json").write_text(json.dumps(config), encoding="utf-8")
@@ -322,10 +344,18 @@ class World:
         return [json.loads(line) for line in file.read_text(encoding="utf-8").splitlines() if line.strip()] if file.exists() else []
 
     def usage_rows(self) -> list[dict]:
+        """Every usage row of the project. The order is NOT meaningful (run folders are named by a one-second timestamp plus a
+        random suffix, and a row carries no time): pick rows by `run_id` with `usage_of`, or compare them as a whole."""
         rows = []
         for file in sorted((self.helper / "runs").glob("*/usage.jsonl")) if (self.helper / "runs").exists() else []:
             rows += [json.loads(line) for line in file.read_text(encoding="utf-8").splitlines() if line.strip()]
         return rows
+
+    def usage_of(self, run_id: str, step: str = "library.index") -> dict:
+        """The one usage row of a run, found by the run id the program printed for it."""
+        rows = [r for r in self.usage_rows() if r["run_id"] == run_id and r["step"] == step]
+        assert len(rows) == 1, (run_id, step, rows)
+        return rows[0]
 
     def trove_calls(self) -> list[str]:
         return self.trove_log.read_text(encoding="utf-8").splitlines() if self.trove_log.exists() else []
@@ -353,14 +383,19 @@ class World:
     # ---- processes: every one of ours has this test's unique folder in its command line ----
 
     def leftovers(self) -> list[tuple[int, str]]:
-        out = subprocess.run(["ps", "-axww", "-o", "pid=,command="], capture_output=True, text=True)
+        """The processes of this test that are alive now, and every one of them is remembered in `self.seen`. A process is ours if
+        its command line or (ps prints it after the command) its environment names this test's folder: the helper's Python is
+        an exec of the real interpreter whose command line does not, but it carries AW_E2E_TAG like everything aw starts."""
+        out = subprocess.run(["ps", "axwwE" if sys.platform == "darwin" else "axwwe", "-o", "pid=,command="], capture_output=True, text=True)
         if out.returncode != 0 or not re.search(rf"^\s*{os.getpid()}\s", out.stdout, flags=re.M):
             raise RuntimeError(f"ps could not list processes (exit {out.returncode}): {out.stderr[-200:]}")
+        mine_pattern = re.compile(re.escape(str(self.root)) + r"(?!\w)")
         mine = []
         for line in out.stdout.splitlines():
             pid_text, _, command = line.strip().partition(" ")
-            if pid_text.isdigit() and str(self.root) in command and int(pid_text) != os.getpid():
-                mine.append((int(pid_text), command.strip()))
+            if pid_text.isdigit() and mine_pattern.search(command) and int(pid_text) != os.getpid():
+                mine.append((int(pid_text), command.strip()[:300]))
+                self.seen[int(pid_text)] = command.strip()[:300]
         return mine
 
     def kill_leftovers(self, deadline_s: float = 20.0) -> list[tuple[int, str]]:
@@ -412,7 +447,8 @@ def golden_library(aw_bundle, tmp_path_factory) -> pathlib.Path:
     world = World(tmp_path_factory.mktemp("golden") / "w", aw_bundle)
     done = world.aw_json("library", "backfill", "--ids", "alpha,beta,gamma", "--yes")
     assert done["ok"] and done["indexed"] == 3, done
-    assert world.kill_leftovers() == []
+    survivors = world.leftovers()
+    assert world.kill_leftovers() == [] and survivors == [], f"the backfill left processes running: {survivors}"
     return world.library
 
 
@@ -427,8 +463,12 @@ def make_world(tmp_path, aw_bundle, golden_library):
         return world
 
     yield make
+    # First look BEFORE anything is killed: a program that leaves a process behind must fail its test even though the cleanup
+    # below would stop it. Then clean up in every case (a leak must not outlive the test), and look again.
+    survivors = {world.root.name: world.leftovers() for world in made}
     remaining = {world.root.name: world.kill_leftovers() for world in made}
-    assert all(not left for left in remaining.values()), remaining
+    assert all(not left for left in survivors.values()), f"processes still running when the test ended (killed by the teardown): {survivors}"
+    assert all(not left for left in remaining.values()), f"processes the teardown could not stop: {remaining}"
 
 
 def only(rows: list[dict], row_type: str) -> list[dict]:
@@ -437,7 +477,7 @@ def only(rows: list[dict], row_type: str) -> list[dict]:
 
 def assert_no_secret_anywhere(world: World, *outputs: str) -> None:
     text = "\n".join(outputs) + "\n" + world.all_text() + "\n" + "\n".join(world.trove_calls())
-    for secret in (PLUGIN_KEY, SERVER_KEY):
+    for secret in ALL_KEYS:
         assert secret not in text, "a key leaked into an output, a ledger or a file"
 
 
@@ -593,10 +633,11 @@ def test_index_new_item_writes_the_trove_outline_with_summaries_and_passes_read_
     assert meta["origin"]["trove"]["trove_pages"] == 8 and meta["origin"]["trove"]["toc_entries"] == 7
 
     # The usage ledger got one row for the run, with tokens, cost and time; Trove was only ever read.
-    usage = [r for r in world.usage_rows() if r["step"] == "library.index"]
-    assert len(usage) == 1 and usage[0]["exit"] == "OK" and usage[0]["provider"] == "gemini"
-    assert (usage[0]["input_tokens"], usage[0]["output_tokens"]) == (840, 210) and usage[0]["cost_usd"] == pytest.approx(0.014)
-    assert usage[0]["latency_ms"] >= 0
+    usage = world.usage_of(done["ledger"]["run_id"])
+    assert len([r for r in world.usage_rows() if r["step"] == "library.index"]) == 1
+    assert usage["exit"] == "OK" and usage["provider"] == "gemini"
+    assert (usage["input_tokens"], usage["output_tokens"]) == (840, 210) and usage["cost_usd"] == pytest.approx(0.014)
+    assert usage["latency_ms"] >= 0
     assert world.trove_calls() and all(c.split()[1] in ("items", "shelf") and c.split()[2] in ("list", "toc", "read", "current") for c in world.trove_calls())
 
     # The key reached the stub only through the helper's own environment, never an argument, an output or a file.
@@ -630,8 +671,10 @@ def test_reindex_existing_item_after_trove_changed_reuses_summaries_and_reads_ba
     last = world.aw_json("library", "read", "--source", "alpha", "--pages", "9", env={"AW_LIBRARY_ROUTE": "pageindex"})
     assert last["pages"][0]["text"].endswith("later rulings, with an example and a short objection.")
     # Two index runs, two usage rows; the second paid for one call only.
-    usage = [r for r in world.usage_rows() if r["step"] == "library.index"]
-    assert [(r["input_tokens"], r["output_tokens"]) for r in usage] == [(840, 210), (120, 30)]
+    # Each row is found by the run id its own command printed, so the order of the run folders (a one-second clock) cannot matter.
+    assert first["ledger"]["run_id"] != again["ledger"]["run_id"]
+    assert len([r for r in world.usage_rows() if r["step"] == "library.index"]) == 2
+    assert [(world.usage_of(r)["input_tokens"], world.usage_of(r)["output_tokens"]) for r in (first["ledger"]["run_id"], again["ledger"]["run_id"])] == [(840, 210), (120, 30)]
     assert len(world.litellm_calls()) == 8
 
 
@@ -644,6 +687,120 @@ def test_index_through_a_wrapper_keeps_the_plugin_key_out_and_uses_the_wrappers_
     calls = world.litellm_calls()
     assert len(calls) == 4 and {c["key"] for c in calls} == {"server"} and not any(c["key_in_argv"] for c in calls)
     assert_no_secret_anywhere(world, json.dumps(done))
+
+
+INDEX_COMMAND = re.compile(r"\bindex-(trove|md|pdf)\b")
+
+
+def dump_names(world: World, who: str) -> set[str]:
+    return {file.name for file in world.dumps.glob(f"{who}.*")}
+
+
+def read_dumps(world: World, who: str, exclude: set[str] = frozenset()) -> list[tuple[str, dict[str, str], str]]:
+    """What each invocation of `who` ('helper' or 'wrapper') received: its arguments, its environment and the raw text.
+    The files are named at random, so `exclude` (names seen before) is how a later batch is told apart, not an order."""
+    out = []
+    for file in sorted(world.dumps.glob(f"{who}.*")):
+        if file.name in exclude:
+            continue
+        text = file.read_text(encoding="utf-8")
+        first, _, rest = text.partition("\n")
+        assert first.startswith("ARGS: "), (file.name, text[:200])
+        env = dict(line.split("=", 1) for line in rest.splitlines() if "=" in line)
+        out.append((first[len("ARGS: "):], env, text))
+    return out
+
+
+def keys_held(env: dict[str, str], text: str, allow_plugin_gemini: bool = False) -> list[str]:
+    """What a dump holds that it must not: every secret NAME present in the environment and every sentinel VALUE anywhere in the
+    dump (the argument line, every entry). With `allow_plugin_gemini`, exactly one entry is exempt: the line
+    `GEMINI_API_KEY=<the plugin's key>`. The same value under any other name, or in the arguments, is still flagged."""
+    exempt = f"GEMINI_API_KEY={PLUGIN_KEY}" if allow_plugin_gemini else None
+    remaining, skipped = [], False
+    for line in text.splitlines():
+        if exempt is not None and line == exempt and not skipped:
+            skipped = True
+            continue
+        remaining.append(line)
+    rest = "\n".join(remaining)
+    held = [n for n in PARENT_SECRETS if n in env and not (skipped and n == "GEMINI_API_KEY")]
+    return held + [f"value of {k[:16]}" for k in ALL_KEYS if k in rest]
+
+
+def test_keys_held_flags_the_plugin_key_under_any_other_name_or_in_the_arguments():
+    exempt = f"ARGS: -m pilib index-trove x\nPATH=/bin\nGEMINI_API_KEY={PLUGIN_KEY}\n"
+    parse = lambda text: dict(line.split("=", 1) for line in text.splitlines()[1:] if "=" in line)  # noqa: E731
+    assert keys_held(parse(exempt), exempt, allow_plugin_gemini=True) == []
+    assert keys_held(parse(exempt), exempt) != []                                    # not exempt without the permission
+    extra = exempt + f"EXTRA_TOKEN={PLUGIN_KEY}\n"
+    assert keys_held(parse(extra), extra, allow_plugin_gemini=True) == [f"value of {PLUGIN_KEY[:16]}"]
+    twice = exempt + f"GEMINI_API_KEY={PLUGIN_KEY}\n"                               # only one entry is exempt
+    assert keys_held(parse(twice), twice, allow_plugin_gemini=True) != []
+    in_args = exempt.replace("index-trove x", f"index-trove --key {PLUGIN_KEY}")
+    assert keys_held(parse(in_args), in_args, allow_plugin_gemini=True) != []
+    other = exempt.replace(PLUGIN_KEY, PARENT_GEMINI_KEY)                            # a different Gemini key is not the plugin's
+    assert keys_held(parse(other), other, allow_plugin_gemini=True) != []
+    named = exempt + "OPENAI_API_KEY=x\n"
+    assert keys_held(parse(named), named, allow_plugin_gemini=True) == ["OPENAI_API_KEY"]
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_no_key_reaches_a_pageindex_command_except_the_helper_while_it_writes_summaries(kind, make_world, wrapper_world):
+    """Reads the environment each invocation really received (it dumps it to its own file), for EVERY invocation: lookups of
+    both routes, the quiet second lookup, and indexing. Nothing may hold a key, except that the plugin's own helper gets the
+    Gemini key, as GEMINI_API_KEY, while it indexes. Depends on adapter.ts removing keys from the environment of a lookup."""
+    world = make_world(library_json={"route": "both"}) if kind == "installed" else wrapper_world("both")
+    who = "helper" if kind == "installed" else "wrapper"
+    # The shell really holds every secret (else nothing below could fail).
+    assert {name: world.env.get(name) for name in PARENT_SECRETS} == PARENT_SECRETS
+
+    # Lookups: the first route answers, then the quiet second lookup runs on the other library; and a PageIndex-only lookup.
+    world.aw_json("library", "list", "--run", "k1")
+    world.aw_json("library", "toc", "--source", "alpha", "--run", "k1")
+    read = world.aw_json("library", "read", "--source", "alpha", "--pages", "2-3", "--run", "k1")
+    only_pageindex = world.aw_json("library", "read", "--source", "beta", "--pages", "2", env={"AW_LIBRARY_ROUTE": "pageindex"})
+    assert read["pages"] and only_pageindex["pages"]
+    for lookup in only(world.rows(), "lookup"):
+        if lookup["mode"] == "both":
+            world.wait_for(f"the shadow of {lookup['op']}", lambda i=lookup["lookup_id"]: world.shadow_row(i))
+    world.wait_for("no leftover processes", lambda: not world.leftovers(), timeout=30)
+    lookup_files = dump_names(world, who)
+    lookups = read_dumps(world, who)
+    assert not any(INDEX_COMMAND.search(args) and "--help" not in args for args, _, _ in lookups)
+    assert len(lookups) >= 4, f"a dump for every lookup that reached PageIndex (3 quiet ones and 1 primary), got {[a for a, _, _ in lookups]}"
+
+    # Indexing a new Trove item, through the same command.
+    world.set_book("delta", book_json("beta"))
+    done = world.aw_json("library", "index", "--trove-id", "delta")
+    assert done["ok"] is True and done["pageindex_source"] == ("installed" if kind == "installed" else "library.json")
+    indexing = read_dumps(world, who, exclude=lookup_files)     # what `aw library index` started: its probes and the indexing run itself
+    everything = lookups + indexing
+    real_indexing = [d for d in indexing if INDEX_COMMAND.search(d[0]) and "--help" not in d[0]]
+    assert real_indexing, f"the indexing invocation dumped its environment: {[a for a, _, _ in indexing]}"
+
+    # Every dump is a real environment (not an empty file), and the checks below read the whole text of each.
+    for args, env, text in everything:
+        assert env.get("AW_E2E_TAG") == str(world.root) and "PATH" in env, (args, list(env)[:5])
+    secret_names = list(PARENT_SECRETS)
+    # Everything is collected first and judged at the end, so one failure does not hide another.
+    problems = []
+    for args, env, text in lookups:
+        held = keys_held(env, text)
+        if held:
+            problems.append(f"lookup {args[-50:]!r} received {held}")
+    for args, env, text in indexing:
+        # Only the summary-writing call of the built-in helper (a real `index-*` run) may hold the plugin's key, as GEMINI_API_KEY.
+        # Probes (`--help`) and the read-back lookups made while indexing get no key at all.
+        writes_summaries = kind == "installed" and INDEX_COMMAND.search(args) is not None and "--help" not in args
+        kind_of_call = ("summary-writing indexing" if writes_summaries else "indexing probe" if "--help" in args
+                        else "indexing (supplied command)" if INDEX_COMMAND.search(args) else "read-back")
+        held = keys_held(env, text, allow_plugin_gemini=writes_summaries)
+        if writes_summaries and env.get("GEMINI_API_KEY") != PLUGIN_KEY:
+            held.append("no plugin key (the summary-writing call must get the plugin's key as GEMINI_API_KEY)")
+        if held:
+            problems.append(f"{kind_of_call} {args[-50:]!r} received {held}")
+    assert_no_secret_anywhere(world, json.dumps(done), json.dumps(read))
+    assert not problems, "keys reached commands (adapter.ts and install.ts childEnv must strip them; only the built-in helper while indexing gets GEMINI_API_KEY): " + "; ".join(problems)
 
 
 def test_a_book_without_a_hinted_outline_is_refused_in_plain_words_when_the_structure_helper_is_missing(make_world):
@@ -958,7 +1115,7 @@ def test_full_blind_evaluation_round_with_a_fake_agent_ends_in_exact_win_rates(m
         assert row["lookups_per_run"]["total"] == 20 and row["returned_est_tokens_per_run"]["total"] > 0
     world.assert_rows_valid()
     assert_no_secret_anywhere(world, text, json.dumps(report))
-    assert world.kill_leftovers() == []
+    assert world.leftovers() == []
 
 
 def test_an_agent_that_leaves_a_blocking_child_behind_is_cleaned_up_by_the_run(make_world):

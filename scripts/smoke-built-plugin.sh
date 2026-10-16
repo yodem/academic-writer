@@ -7,6 +7,8 @@
 #   bash scripts/smoke-built-plugin.sh --live   # + live proofread recall eval (needs GOOGLE_API_KEY; ~$0.01)
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; P="$ROOT/plugins/academic-writer"; AW="$P/bin/aw"
+# Importing the shipped Python must not write __pycache__ under plugins/ (outside the temp folder and its cleanup).
+export PYTHONDONTWRITEBYTECODE=1
 fail=0; ok(){ echo "ok   $1"; }; bad(){ echo "FAIL $1"; fail=1; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT; mkdir -p "$T/data" "$T/proj/.academic-helper"; echo "# profile" > "$T/proj/.academic-helper/profile.md"
 
@@ -38,6 +40,33 @@ o="$("$AW" --data-dir "$T/data" --project-dir "$T/proj" library eval status --ev
 if [[ -d "$P/scripts/pageindex/pilib" ]]; then
   PYTHONPATH="$P/scripts/pageindex" AW_LIBRARY="$T/pilib-library" python3 -m pilib --help >/dev/null 2>"$T/e" && ok "built pilib --help" || bad "pilib --help: $(tail -1 "$T/e")"
   PYTHONPATH="$P/scripts/pageindex" AW_LIBRARY="$T/pilib-library" python3 -m pilib index-trove --help >/dev/null 2>"$T/e" && ok "built pilib index-trove --help (the probe aw library index runs)" || bad "pilib index-trove --help: $(tail -1 "$T/e")"
+  # --help never imports pilib.native (it loads lazily), so a shipped artifact missing a module would pass the lines above.
+  # Import EVERY module the shipped pilib folder holds, from that folder only, then index a two-page book offline (hints, no
+  # model, no network) and read a page back: this fails when a module or a file the helper needs did not ship.
+  PYTHONPATH="$P/scripts/pageindex" AW_LIBRARY="$T/pilib-library" python3 - "$P/scripts/pageindex" >"$T/e" 2>&1 <<'PY' && ok "built pilib imports every shipped module (native, library, index, ...)" || bad "built pilib import: $(tail -1 "$T/e")"
+import importlib, pkgutil, sys
+import pilib, pilib.native, pilib.library
+shipped = sys.argv[1]
+if not pilib.__file__.startswith(shipped):
+    sys.exit("pilib came from %s, not the shipped folder" % pilib.__file__)
+names = [m.name for m in pkgutil.iter_modules(pilib.__path__)]
+if not {"native", "library", "index", "summarize", "config", "meter"} <= set(names):
+    sys.exit("shipped pilib is missing modules: have %s" % names)
+for name in names:
+    importlib.import_module("pilib." + name)
+PY
+  printf '# Page 1\n\nIntro text.\n\n# Page 2\n\nSecond page text.\n' > "$T/rt.md"
+  printf '[{"title":"Intro","page":1,"level":1},{"title":"Second","page":2,"level":1}]' > "$T/rt-toc.json"
+  if PYTHONPATH="$P/scripts/pageindex" AW_LIBRARY="$T/pilib-library" python3 -m pilib index-md --pages "$T/rt.md" --toc "$T/rt-toc.json" --book-id smoke --title Smoke --summaries hints >"$T/idx.json" 2>"$T/e" \
+     && PYTHONPATH="$P/scripts/pageindex" AW_LIBRARY="$T/pilib-library" python3 -m pilib read smoke 2 --json >"$T/rd.json" 2>>"$T/e" \
+     && python3 - "$T/idx.json" "$T/rd.json" <<'PY'
+import json, sys
+idx = json.load(open(sys.argv[1])); rd = json.load(open(sys.argv[2]))
+ok = idx.get("ok") is True and idx.get("n_pages") == 2 and idx.get("nodes") == 2 and idx.get("calls") == 0
+ok = ok and rd.get("book_id") == "smoke" and [p.get("page") for p in rd.get("pages", [])] == [2] and "Second page text." in rd["pages"][0]["content"]
+sys.exit(0 if ok else 1)
+PY
+  then ok "built pilib index-md + read --json round trip (offline, temp library)"; else bad "built pilib round trip: $(tail -1 "$T/e") $(head -c 200 "$T/idx.json" 2>/dev/null)"; fi
   [[ -f "$P/scripts/pageindex/PINNED.json" ]] && ok "built PINNED.json ships" || bad "scripts/pageindex/PINNED.json missing from the built plugin"
 else bad "scripts/pageindex/pilib missing from the built plugin"; fi
 printf 'פסקה ראשונה.\n\nפסקה שנייה.\n' > "$T/a.md"
