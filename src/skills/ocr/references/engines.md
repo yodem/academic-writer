@@ -39,7 +39,7 @@ pdftoppm -r 150 -png -f <page> -l <page> <source.pdf> ocr-output/pages/page
 
    The pictures are named `page-<N>.png`, with leading zeros in a long document (`page-007.png`); list the folder to see the exact names.
 2. Read the picture with the Read tool, one page at a time, and write what is printed on it into `ocr-output/<name>.md`, one `# Page N` heading per page. Footnotes stay under the page they belong to. For two-column Hebrew pages, read the right column first.
-3. Report every page you could not read with confidence, and mark it "OCR, not image-verified". **Never send a page to Gemini (or to any other engine) on your own, even for a course reading:** the author chose Claude, and Gemini would send the page text to Google. If another engine might read a page better, ask with `AskUserQuestion` whether this page may be sent to Gemini, saying plainly that its text goes to Google; only on a yes, run `aw ocr` for that page alone. The same rule applies to every switch of engine (Claude, Codex, Tesseract, Gemini): ask first.
+3. (Course library/Kotar readings use Gemini, not this engine; a Gemini "blocked" page is never transcribed here.) Report every page you could not read with confidence, and mark it "OCR, not image-verified". **Never send a page to Gemini (or to any other engine) on your own, even for a course reading:** the author chose Claude, and Gemini would send the page text to Google. If another engine might read a page better, ask with `AskUserQuestion` whether this page may be sent to Gemini, saying plainly that its text goes to Google; only on a yes, run `aw ocr` for that page alone. The same rule applies to every switch of engine (Claude, Codex, Tesseract, Gemini): ask first.
 
 ## Codex reading page images
 
