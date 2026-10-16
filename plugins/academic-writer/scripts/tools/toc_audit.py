@@ -12,18 +12,21 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
 
-DEFAULT_REG = Path.home() / ".academic-writer" / "courses" / "תשפ״ז"
 SKIP_FILES = {"term.json", "links.json"}
+
+_COURSES = str(Path(__file__).resolve().parents[1] / "src" / "scripts" / "courses")
 
 
 def registry_dir() -> Path:
-    env = os.environ.get("ACADEMIC_COURSES_DIR")
-    return Path(env) if env else DEFAULT_REG
+    """Term directory, resolved exactly as courses.py does (root + ACADEMIC_TERM / sole term)."""
+    if _COURSES not in sys.path:
+        sys.path.append(_COURSES)
+    import courses
+    return courses.registry_dir()
 
 
 def load_registry(reg: Path | None = None) -> list[dict]:
@@ -51,8 +54,68 @@ def has_hint(title: str, course_name: str | None = None) -> bool:
     return bool(sep) and bool(hint.strip()) and bool(head.strip())
 
 
-def audit_toc(toc: list[dict], page_count: int, course_name: str | None = None) -> dict:
-    """Return {missing, duplicate, no_hint, out_of_order, level_gap, ok}.
+READINGS_ENTRY = "חומרי קריאה"
+
+
+def _norm(value: object) -> str:
+    return " ".join(str(value).replace("״", '"').replace("׳", "'").split())
+
+
+def _label(title: object) -> str:
+    return _norm(str(title).split(" - ", 1)[0])
+
+
+def _is_source(entry_title: object, source_title: str) -> bool:
+    t, want = _norm(entry_title), _norm(source_title)
+    return t == want or t.startswith(want + " - ")
+
+
+def registered_source_titles(course: dict) -> list[dict]:
+    """The course's finished non-media sources as {"title", "page"}; page is the registered Trove page when the
+    source lives in this course book, None for a pointer to its own book."""
+    out = []
+    for s in course.get("sources", []):
+        trove = s.get("trove")
+        if not (s.get("title") and s.get("kind") != "media" and s.get("status") == "done"
+                and isinstance(trove, dict) and trove.get("book_id")):
+            continue
+        same = str(trove["book_id"]) == str(course.get("book_id"))
+        out.append({"title": str(s["title"]), "page": trove.get("page") if same else None})
+    return out
+
+
+def source_parent_problems(toc: list[dict], sources: list) -> list[dict]:
+    """Same rule as courses.py check-source: a source stored in this book (page given) is the level-2 entry
+    at its registered page, titled with the source title, under the level-1 readings index; a pointer
+    (page None) is a level-2 entry with that title. Plain strings mean title-only (pointer)."""
+    parent = next((i for i, e in enumerate(toc) if e.get("level", 1) == 1 and _label(e.get("title", "")) == READINGS_ENTRY), None)
+    children: list[dict] = []
+    if parent is not None:
+        for e in toc[parent + 1:]:
+            if e.get("level", 1) <= 1:
+                break
+            if e.get("level") == 2:
+                children.append(e)
+    out = []
+    for src in sources:
+        title, page = (src, None) if isinstance(src, str) else (src["title"], src.get("page"))
+        if parent is None:
+            out.append({"title": title, "page": page, "reason": f"no level-1 entry {READINGS_ENTRY!r}"})
+            continue
+        ok = any(_is_source(e.get("title", ""), title) and (page is None or e.get("page") == page) for e in children)
+        if not ok:
+            at = next((e for e in toc if _is_source(e.get("title", ""), title) and (page is None or e.get("page") == page)), None)
+            out.append({"title": title, "page": page if page is not None else (at.get("page") if at else None),
+                        "reason": f"not a level-2 entry under {READINGS_ENTRY!r}" if at else "no ToC entry"
+                        + (f" at page {page}" if page is not None else "")})
+    return out
+
+
+def audit_toc(toc: list[dict], page_count: int, course_name: str | None = None, sources: list | None = None) -> dict:
+    """Return {missing, duplicate, no_hint, out_of_order, level_gap, source_parent, ok}.
+
+    sources: titles of registered sources; each must be a level-2 entry under the readings index
+    (source_parent lists the ones that are not), matching courses.py check-source.
 
     missing: pages with no entry starting there; duplicate: pages with >1 entry;
     no_hint: titles lacking " - hint"; out_of_order: (index, prev_page, page)
@@ -86,9 +149,10 @@ def audit_toc(toc: list[dict], page_count: int, course_name: str | None = None) 
             level_gap.append({"index": i, "page": e.get("page"), "level": lvl, "prev_level": prev})
         prev = lvl
     result = {"missing": missing, "duplicate": duplicate, "no_hint": no_hint,
-              "out_of_order": out_of_order, "level_gap": level_gap}
+              "out_of_order": out_of_order, "level_gap": level_gap,
+              "source_parent": source_parent_problems(toc, sources) if sources else []}
     result["ok"] = not any(result[k] for k in
-                           ("missing", "duplicate", "no_hint", "out_of_order", "level_gap"))
+                           ("missing", "duplicate", "no_hint", "out_of_order", "level_gap", "source_parent"))
     return result
 
 
@@ -112,8 +176,9 @@ def fetch_toc(book_id: str) -> tuple[list[dict], int, str]:
     return parse_toc_payload(json.loads(r.stdout), book_id)
 
 
-def audit_book(label: str, toc: list[dict], page_count: int, book_id: str = "", course_name: str | None = None) -> dict:
-    res = audit_toc(toc, page_count, course_name)
+def audit_book(label: str, toc: list[dict], page_count: int, book_id: str = "", course_name: str | None = None,
+               sources: list | None = None) -> dict:
+    res = audit_toc(toc, page_count, course_name, sources)
     res.update(label=label, book_id=book_id, pages=page_count, entries=len(toc))
     return res
 
@@ -141,6 +206,8 @@ def format_report(results: list[dict]) -> str:
             lines.append(f"{r['label']}: no hint at entry {v['index']} (p.{v['page']}): {v['title']!r}")
         for v in r["out_of_order"]:
             lines.append(f"{r['label']}: out of order at entry {v['index']}: p.{v['prev_page']} -> p.{v['page']}")
+        for v in r.get("source_parent", []):
+            lines.append(f"{r['label']}: source {v['title']!r} {v['reason']}")
         for v in r["level_gap"]:
             lines.append(f"{r['label']}: level gap at entry {v['index']} (p.{v['page']}): {v['prev_level']} -> {v['level']}")
     return "\n".join(lines)
@@ -170,7 +237,7 @@ def run(args) -> tuple[list[dict], int]:
                 continue
             try:
                 toc, n, _ = fetch_toc(bid)
-                results.append(audit_book(c["slug"], toc, n, bid, c.get("name")))
+                results.append(audit_book(c["slug"], toc, n, bid, c.get("name"), registered_source_titles(c)))
             except Exception as exc:  # noqa: BLE001 - report per book, keep going
                 results.append({"label": c["slug"], "book_id": bid, "pages": 0, "entries": 0, "missing": [],
                                 "duplicate": [], "no_hint": [], "out_of_order": [], "level_gap": [],
