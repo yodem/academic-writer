@@ -12,7 +12,7 @@ import thresholds from '../../thresholds.json' with { type: 'json' };
 import { Library } from '../src/library/adapter.ts';
 import { runLibraryCli } from '../src/library/cli.ts';
 import { checkSchema, type JsonSchema } from '../src/library/jsonschema.ts';
-import { appendRow, clipError, compareVerdictKeys, readRows, spoolDir, writeSpool, type LookupRow, type RetrievalRow, type ShadowRow, type VerdictRow } from '../src/library/ledger.ts';
+import { appendRow, clipError, compareVerdictKeys, estimateTokens, readRows, spoolDir, writeSpool, type LookupRow, type RetrievalRow, type ShadowRow, type VerdictRow } from '../src/library/ledger.ts';
 import { acquireSlot, claimSlot, releaseSlot, workerEntry } from '../src/library/shadow.ts';
 import { settlePending, recordVerdict, computeSupports } from '../src/library/verdict.ts';
 import { buildReport } from '../src/library/report.ts';
@@ -76,7 +76,7 @@ function writeFake(dir: string, name: string, body: string): string {
   return file;
 }
 
-const FAKE_KEYS = ['FAKE_TROVE_FAIL_MSG', 'FAKE_TROVE_HANG_SHELF', 'AW_LIBRARY_WORKER_ENTRY', 'FAKE_TROVE_FAIL', 'FAKE_TROVE_HANG', 'FAKE_PILIB_FAIL', 'FAKE_PILIB_HANG', 'FAKE_PI_TEXT', 'AW_LIBRARY_SHADOW', 'AW_LIBRARY_SHADOW_TIMEOUT_MS', 'AW_LIBRARY_TIMEOUT_MS'];
+const FAKE_KEYS = ['FAKE_TROVE_FAIL_MSG', 'FAKE_TROVE_HANG_SHELF', 'AW_LIBRARY_WORKER_ENTRY', 'FAKE_TROVE_FAIL', 'FAKE_TROVE_HANG', 'FAKE_PILIB_FAIL', 'FAKE_PILIB_HANG', 'FAKE_PI_TEXT', 'AW_LIBRARY_SHADOW', 'AW_LIBRARY_SHADOW_TIMEOUT_MS', 'AW_LIBRARY_TIMEOUT_MS', 'AW_LIBRARY_ROUTE'];
 
 function fixture(config?: unknown, extra: Record<string, string> = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'aw-shadow-'));
@@ -217,6 +217,41 @@ test('both with an inline shadow: a lookup row, then a shadow row joined on look
     assertAllRowsValid(fx);
     const names = readdirSync(spoolDir(fx.project));
     assert.deepEqual(names, [`${output.lookup_id}.shadow.json`], 'the shadow text is kept for verdicts; the primary spool is cleaned up');
+  } finally { fx.cleanup(); }
+});
+
+test('the quiet second lookup records the same token estimate as the answer when the text is the same', async () => {
+  const fx = fixture({ route: 'both' });
+  try {
+    const output = await new Library(fx.project, fx.env, { shadow: 'inline' }).read({ source: 'T-A', pages: '2-3' });
+    const rows = await rowsOf(fx);
+    const lookup = ofType(rows, 'lookup')[0] as LookupRow;
+    const shadow = ofType(rows, 'shadow')[0] as ShadowRow;
+    const expected = estimateTokens(output.pages.map((page) => page.text).join('\n'));
+    assert.deepEqual([lookup.primary.est_tokens, shadow.est_tokens, shadow.tokens_basis, lookup.primary.tokens_basis], [expected, expected, 'estimate', 'estimate']);
+    assertAllRowsValid(fx);
+    // A failed second lookup has no text, so no estimate.
+  } finally { fx.cleanup(); }
+  const broken = fixture({ route: 'both' }, { FAKE_PILIB_FAIL: '1' });
+  try {
+    await new Library(broken.project, broken.env, { shadow: 'inline' }).read({ source: 'T-A', pages: '2' });
+    const shadow = ofType(await rowsOf(broken), 'shadow')[0] as ShadowRow;
+    assert.deepEqual([shadow.ok, shadow.est_tokens, shadow.tokens_basis], [false, undefined, undefined]);
+    assertAllRowsValid(broken);
+  } finally { broken.cleanup(); }
+});
+
+test('a forced route writes one lookup row and never a second lookup, even with both in library.json', async () => {
+  const fx = fixture({ route: 'both' }, { AW_LIBRARY_ROUTE: 'pageindex' });
+  try {
+    const output = await new Library(fx.project, fx.env, { shadow: 'inline' }).read({ source: 'T-A', pages: '2', run: 'EV1-pageindex-c01', claim: 'c01' });
+    assert.equal(output.shadow_status, 'none');
+    const rows = await rowsOf(fx);
+    assert.deepEqual(rows.map((row) => row.row_type), ['lookup']);
+    const lookup = rows[0] as LookupRow;
+    assert.deepEqual([lookup.run_id, lookup.mode, lookup.route_primary, lookup.shadow_status, lookup.primary.tokens_basis], ['EV1-pageindex-c01', 'pageindex', 'pageindex', 'none', 'estimate']);
+    assert.ok(!readFileSync(fx.log, 'utf8').includes('trove '), 'Trove is never called');
+    assertAllRowsValid(fx);
   } finally { fx.cleanup(); }
 });
 

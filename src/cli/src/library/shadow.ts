@@ -6,7 +6,7 @@ import { z } from 'zod';
 import thresholds from '../../../thresholds.json' with { type: 'json' };
 import { CommandScope } from './exec.ts';
 import {
-  appendRow, clipError, containedDir, hasProjectFolder, nowIso, readSpool, removeSpool, spoolFile, spoolValue, sweepSpool, writeSpool,
+  TOKENS_BASIS, appendRow, clipError, containedDir, hasProjectFolder, nowIso, readSpool, removeSpool, spoolFile, spoolValue, sweepSpool, writeSpool,
   type Agreement, type ShadowRow, type SpooledPages,
 } from './ledger.ts';
 import { jaccard } from './textmatch.ts';
@@ -52,6 +52,8 @@ export type RouteResult = {
   bytes: number;
   chars: number;
   text_sha: string | null;
+  /** Estimated tokens of the returned text (see estimateTokens in ledger.ts). */
+  est_tokens?: number;
   pages?: Array<{ page: number; text: string }>;
 };
 
@@ -330,6 +332,7 @@ export async function runShadowWorker(spec: ShadowSpec, runner: ShadowRunner, se
       error_code: result ? null : (timedOut ? 'timeout' : code),
       timed_out: timedOut,
       agree,
+      ...(result?.est_tokens !== undefined ? { est_tokens: result.est_tokens, tokens_basis: TOKENS_BASIS } : {}),
     };
     await appendRow(spec.project, row);
   } catch {
