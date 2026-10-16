@@ -52,11 +52,15 @@ function candidatesFromDrafts(project: string, files: Array<{ file: string; unit
   for (const { file, unit } of files) {
     const draft = parseDraft(readFileSync(file, 'utf8'), unit);
     const keysOf = new KeyResolver(project, registry, draft.definitions, unit, unmatched);
-    for (const sentence of draft.sentences) {
+    // Every note is resolved in document order first, short sentences included: "Ibid." repeats the note right before
+    // it, whether or not that note sits in a sentence long enough to be a claim.
+    const resolved = draft.sentences.map((sentence) => ({
+      sentence, keys: sentence.keys.flatMap((key) => keysOf.resolve(key)), partial: sentence.keys.some((key) => keysOf.isPartial(key)),
+    }));
+    for (const { sentence, keys, partial } of resolved) {
       order += 1;
       if (wordCount(sentence.text) < evalLimits.minClaimWords) { skips.too_short += 1; continue; }
-      const keys = sentence.keys.flatMap((key) => keysOf.resolve(key));
-      if (keys.length === 0) { skips.no_source += 1; continue; }
+      if (partial || keys.length === 0) { skips.no_source += 1; continue; }
       const sources = new Set(keys.map((key) => key.sourceId));
       if (sources.size > 1) { skips.multi_source += 1; continue; }
       const first = keys[0] as NonNullable<(typeof keys)[number]>;

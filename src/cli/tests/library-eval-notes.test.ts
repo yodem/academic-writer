@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -135,4 +135,56 @@ test('eval plan prints the unmatched notes, saves them beside the plan, and keep
     const paths = evalPaths(dir, 'ev-notes');
     assert.ok(await readJson(paths.plan) as Plan);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+async function planOf(article: string): Promise<{ claims: Array<{ text: string; source_id: string; cited_printed_page: number | null }>; unmatched: UnmatchedNote[]; noSource: number }> {
+  const dir = projectWithFixture();
+  try {
+    writeFileSync(join(dir, '.academic-helper', 'drafts', 'article.md'), article);
+    const unmatched: UnmatchedNote[] = [];
+    const plan = await buildPlan({ project: dir, evalId: 'ev-chain', n: 30, seed: 's', routes: ['trove', 'pageindex'], resolve: false, aw: noAw, now: NOW, unmatched });
+    return { claims: plan.claims, unmatched, noSource: plan.skipped.no_source };
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}
+
+for (const [label, ibid, second] of [['Ibid.', 'Ibid., 9.', 'Alstola, Judeans in Babylonia, 27.'], ['שם', 'שם, עמ׳ 9.', 'Alstola, Judeans in Babylonia, 27.']] as const) {
+  test(`${label} repeats the nearest earlier note even when that note sits in a sentence too short to be a claim`, async () => {
+    const { claims } = await planOf([
+      'The first long claim in this article rests on one source.[^1] Short one here.[^2] The third long claim repeats the note just before.[^3]',
+      '',
+      '[^1]: Pedersén, South Palace Archives, 14.',
+      `[^2]: ${second}`,
+      `[^3]: ${ibid}`,
+      '',
+    ].join('\n'));
+    const third = claims.find((claim) => claim.text.startsWith('The third long claim'));
+    assert.equal(third?.source_id, 'cm-alstola-judeans', 'the previous note is the short sentence\'s, not the first claim\'s');
+    assert.equal(third?.cited_printed_page, 9);
+    assert.equal(claims.find((claim) => claim.text.startsWith('The first long claim'))?.source_id, 'cm-pedersen-south-palace');
+    assert.equal(claims.find((claim) => claim.text.startsWith('Short one')), undefined, 'the short sentence itself is still not a claim');
+  });
+}
+
+test('a note with several citations of which only some match is unresolved, and so is an Ibid. after it', async () => {
+  const { claims, unmatched, noSource } = await planOf([
+    'This claim cites one known source and one unknown one.[^1] The following claim repeats that whole note.[^2] A later claim cites a known source alone.[^3]',
+    '',
+    '[^1]: Pedersén, South Palace Archives, 14; Unknown, Other Book, 3.',
+    '[^2]: Ibid., 15.',
+    '[^3]: Alstola, Judeans in Babylonia, 27.',
+    '',
+  ].join('\n'));
+  assert.deepEqual(claims.map((claim) => claim.source_id), ['cm-alstola-judeans'], 'neither the partial note nor the Ibid. after it is a claim');
+  assert.equal(noSource, 2);
+  assert.deepEqual(unmatched.map((item) => item.note), ['1', '2']);
+  assert.match(unmatched[0]?.reason ?? '', /partial/u);
+  assert.match(unmatched[1]?.reason ?? '', /previous note is unmatched \(partial/u);
+});
+
+test('the resolver marks a partly matched note as partial with no sources, and an Ibid. after it stays unmatched', () => {
+  const resolver = new NoteResolver(loadSourceCards(projectWithFixture()));
+  const partial = resolver.resolve('1', 'Pedersén, South Palace Archives, 14; Unknown, Other Book, 3.');
+  assert.deepEqual([partial.partial, partial.sources.length, partial.unmatched.length], [true, 0, 1]);
+  assert.match(resolver.resolve('2', 'Ibid., 4').unmatched[0]?.reason ?? '', /previous note is unmatched/u);
+  assert.equal(resolver.resolve('3', 'Pedersén, South Palace Archives, 14.').partial, false);
 });

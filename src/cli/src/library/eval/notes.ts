@@ -207,12 +207,18 @@ export function matchSegment(cards: SourceCard[], segment: string): SegmentMatch
 
 export type NoteSource = { sourceId: string; title: string; printed: number[] };
 export type UnmatchedNote = { unit: string; note: string; text: string; reason: string };
-export type NoteResolution = { sources: NoteSource[]; unmatched: Array<{ text: string; reason: string }> };
+export type NoteResolution = {
+  sources: NoteSource[];
+  unmatched: Array<{ text: string; reason: string }>;
+  /** Some citations of the note matched a source and others did not: the note counts as unresolved (`sources` is empty). */
+  partial: boolean;
+};
 
 /**
  * Resolves the notes of one draft file in the order they first appear. "Ibid." and "שם" repeat the previous note's single
  * source (and take their own page); with no earlier note, an unmatched earlier note or an earlier note of several sources
- * they stay unmatched.
+ * they stay unmatched. A note with several citations of which only some match is unresolved as a whole, and so is an
+ * "Ibid." after it: the matched part alone would be a guess about what the note cites.
  */
 export class NoteResolver {
   private previous: { sources: NoteSource[]; reason: string | null } | null = null;
@@ -222,14 +228,14 @@ export class NoteResolver {
 
   /** Record a note that was resolved some other way (by its source id), so a following "Ibid." can repeat it. */
   noteResolvedByKey(key: string, source: NoteSource | null): void {
-    this.seen.set(key, { sources: source ? [source] : [], unmatched: [] });
+    this.seen.set(key, { sources: source ? [source] : [], unmatched: [], partial: false });
     this.previous = { sources: source ? [source] : [], reason: source ? null : 'the previous note names no known source' };
   }
 
   resolve(key: string, text: string): NoteResolution {
     const known = this.seen.get(key);
     if (known) return known;
-    const result: NoteResolution = { sources: [], unmatched: [] };
+    const result: NoteResolution = { sources: [], unmatched: [], partial: false };
     const trimmed = text.trim();
     if (!trimmed) result.unmatched.push({ text: '', reason: 'the note has no text to match' });
     for (const segment of segmentsOf(trimmed)) {
@@ -240,6 +246,12 @@ export class NoteResolver {
       else if (this.previous.reason !== null) result.unmatched.push({ text: segment, reason: `Ibid. repeats the previous note, but ${this.previous.reason}` });
       else if (this.previous.sources.length !== 1) result.unmatched.push({ text: segment, reason: 'Ibid. repeats a previous note that cites several sources, so it does not say which' });
       else result.sources.push({ ...(this.previous.sources[0] as NoteSource), printed: match.printed });
+    }
+    if (result.sources.length > 0 && result.unmatched.length > 0) {
+      const matched = [...new Set(result.sources.map((source) => source.sourceId))].join(', ');
+      result.partial = true;
+      result.sources = [];
+      result.unmatched = result.unmatched.map((item) => ({ text: item.text, reason: `partial match: another citation of this note matched ${matched}, so the whole note is left unresolved; ${item.reason}` }));
     }
     this.seen.set(key, result);
     this.previous = {
