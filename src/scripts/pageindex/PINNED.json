@@ -22,15 +22,17 @@
   "structure": {
    "purpose": "core plus PageIndex structure detection, for a book with no hinted table of contents",
    "requirements": "requirements-structure.txt",
-   "requirements_sha256": "ce8ee382673b35ce89da064ce0d495f09f5aca61f37b595b4db405587334d16f",
+   "requirements_sha256": "63b2ae04ef1c78ce0dd144de87a27a4278c4607d78d2c45115d6312dafd3469e",
    "requires_python": ">=3.10",
    "locked_with_python": "3.10",
    "litellm": "1.105.1",
    "includes_core": true,
-   "extra_unpinned": [
-    "weasyprint"
-   ],
-   "extra_note": "WeasyPrint (renders Trove text to a PDF for structure detection) is not in the lock; it also needs the pango system library."
+   "weasyprint": "70.0",
+   "system_libraries": {
+    "weasyprint": "pango",
+    "macos": "brew install pango",
+    "debian_ubuntu": "sudo apt install libpango-1.0-0 libpangoft2-1.0-0"
+   }
   }
  }
 }

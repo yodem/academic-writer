@@ -12,7 +12,7 @@ virtual environment in the plugin's data folder, at the exact versions and file 
 | LiteLLM | the model client for node summaries (both tiers) | MIT | `requirements-core.txt`, `requirements-structure.txt` |
 | PyPDF2 | reading text back from the rendered PDF (structure tier) | BSD-3-Clause | `requirements-structure.txt` |
 | pypdfium2 | PDF parsing inside PageIndex (structure tier) | Apache-2.0 or BSD-3-Clause | `requirements-structure.txt` |
-| WeasyPrint | rendering Trove text to a PDF for structure detection (structure tier) | BSD-3-Clause | not pinned; installed separately |
+| WeasyPrint | rendering Trove text to a PDF for structure detection (structure tier) | BSD-3-Clause | `requirements-structure.txt` (70.0) |
 
 The other packages in the requirements files are transitive dependencies of the projects above and keep their own licenses.
 
@@ -22,3 +22,9 @@ If a file of PageIndex is ever copied into this repository, it must keep its MIT
 
 To write node summaries, the text of a book is sent to Google (Gemini) through LiteLLM, with the researcher's own
 Gemini key. `--summaries hints` and `--summaries none` send nothing anywhere.
+
+## System library for the structure tier
+
+WeasyPrint needs the pango library on the computer (pip cannot install it). macOS: `brew install pango`.
+Debian or Ubuntu: `sudo apt install libpango-1.0-0 libpangoft2-1.0-0`. `pilib health` reports `weasyprint: false`
+when it cannot load, and the structure tier is then reported as unavailable.

@@ -234,6 +234,8 @@ def test_pinned_json_matches_the_files_and_thresholds():
         info = PINNED["tiers"][tier]
         assert info["requirements_sha256"] == sha256(PKG / info["requirements"]), f"{tier} requirements changed without PINNED.json"
         assert re.search(rf"^litellm=={re.escape(info['litellm'])} ", (PKG / info["requirements"]).read_text(), re.M)
+    assert re.search(rf"^weasyprint=={re.escape(PINNED['tiers']['structure']['weasyprint'])} ", (PKG / "requirements-structure.txt").read_text(), re.M)
+    assert PINNED["tiers"]["structure"]["system_libraries"]["macos"] == "brew install pango"
     assert PINNED["tiers"]["core"]["requires_python"] == ">=" + THRESHOLDS["install"]["minPythonCore"]
     assert PINNED["tiers"]["structure"]["requires_python"] == ">=" + THRESHOLDS["install"]["minPython"]
     # litellm 1.105 needs Python 3.10, so the 3.9 tier is older than the structure tier
