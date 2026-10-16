@@ -248,7 +248,7 @@ def write_book(*, result: dict, structure: list, pages: list, author: str, origi
         lib.write_json(version / "meta.json", meta)  # last: a version folder without meta.json is unfinished
         lib.publish_version(book_id, version)
     except BaseException:
-        shutil.rmtree(version, ignore_errors=True)
+        lib.discard_unpublished(book_id, version)  # only if the pointer never moved to it
         raise
 
 

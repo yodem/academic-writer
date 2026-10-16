@@ -622,25 +622,87 @@ def test_a_crash_before_the_pointer_moves_changes_nothing_a_reader_sees(env, cap
     assert version.name in version_names(HINTED)            # the unreferenced version stays until it is old
 
 
-def test_publishing_prunes_old_versions_but_keeps_the_previous_one(env, capsys, monkeypatch):
-    monkeypatch.setattr(lib, "PRUNE_GRACE_SECONDS", 0)
+def test_pruning_waits_an_hour_from_completion_and_never_touches_current_or_the_previous(env, capsys, monkeypatch):
+    import time
+    now = [time.time()]
+    monkeypatch.setattr(lib, "clock", lambda: now[0])
     seen = []
     for _ in range(4):
         index(capsys, "--summaries", "none")
         seen.append(lib.current_name(HINTED))
-    assert version_names(HINTED) == sorted(seen[-2:])       # the current one and one previous
+    assert version_names(HINTED) == sorted(seen)            # nothing is an hour old: nothing is removed
+    now[0] += lib.PRUNE_GRACE_SECONDS - 60
+    lib.prune_versions(HINTED)
+    assert version_names(HINTED) == sorted(seen)            # still inside the hour (measured from meta.indexed_at)
+    now[0] += 3600
+    lib.prune_versions(HINTED)
+    assert version_names(HINTED) == sorted(seen[-2:])       # the current one and the newest complete one before it
+    now[0] += 10 * 365 * 86400
+    lib.prune_versions(HINTED)
+    assert version_names(HINTED) == sorted(seen[-2:])       # however old, those two stay
 
 
-def test_a_fresh_unfinished_version_is_not_pruned_but_a_stale_one_is(env, capsys, monkeypatch):
-    monkeypatch.setattr(lib, "PRUNE_GRACE_SECONDS", 0)
+def test_the_grace_is_measured_from_the_completion_time_in_meta_not_from_the_folder(env, capsys, monkeypatch):
+    import time
     index(capsys, "--summaries", "none")
-    running = lib.new_version(HINTED)                        # another run, still writing
+    index(capsys, "--summaries", "none")
+    index(capsys, "--summaries", "none")
+    oldest, middle, current = version_names(HINTED)
+    stale = lib.book_dir(HINTED) / "v" / oldest
+    os.utime(stale, (0, 0))                                  # an ancient folder time must not make it prunable
+    os.utime(stale / "meta.json", (0, 0))
+    lib.prune_versions(HINTED)
+    assert oldest in version_names(HINTED)
+    meta = lib.read_json(stale / "meta.json")
+    meta["indexed_at"] = "2001-01-01T00:00:00+00:00"        # but a completion time long ago does
+    lib.write_json(stale / "meta.json", meta)
+    lib.prune_versions(HINTED)
+    assert oldest not in version_names(HINTED) and {middle, current} <= set(version_names(HINTED))
+
+
+def test_an_unfinished_version_is_pruned_only_an_hour_after_it_started(env, capsys, monkeypatch):
+    import time
+    index(capsys, "--summaries", "none")
+    running = lib.new_version(HINTED)                        # another run, still writing: no meta.json yet
     (running / "pages.json").write_text("[]")
     index(capsys, "--summaries", "none")
     assert running.name in version_names(HINTED)
-    monkeypatch.setattr(lib, "STALE_SECONDS", 0)
-    index(capsys, "--summaries", "none")
+    monkeypatch.setattr(lib, "clock", lambda: time.time() + lib.PRUNE_GRACE_SECONDS + 60)
+    lib.prune_versions(HINTED)
     assert running.name not in version_names(HINTED)
+
+
+def test_a_failure_after_the_pointer_moved_never_deletes_the_published_version(env, capsys, monkeypatch):
+    index(capsys, "--summaries", "none")
+    old = lib.current_name(HINTED)
+
+    def broken(book_id):
+        raise RuntimeError("cleanup failed")
+    monkeypatch.setattr(lib, "prune_versions", broken)
+    code, out, err = index(capsys, "--summaries", "none")   # tidy-up errors are reported, not fatal
+    assert code == 0 and out["ok"] is True
+    new = lib.current_name(HINTED)
+    assert new != old and (lib.data_dir(HINTED) / "meta.json").is_file() and lib.data_dir(HINTED).name == new
+    assert "cleanup failed" in err
+
+    def interrupted(book_id):
+        raise KeyboardInterrupt
+    monkeypatch.setattr(lib, "prune_versions", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        run_main(["index-trove", HINTED, "--concurrency", "1", "--summaries", "none"], capsys)
+    newest = lib.current_name(HINTED)
+    assert newest not in (old, new)                          # the pointer had moved before the interrupt
+    assert len(json.loads(run_main(["read", HINTED, "all", "--json"], capsys)[1])["pages"]) == 9
+    assert lib.data_dir(HINTED).name == newest and (lib.data_dir(HINTED) / "tree.json").is_file()
+
+
+def test_a_failure_before_the_pointer_moves_removes_only_the_unpublished_version(env, capsys, monkeypatch):
+    index(capsys, "--summaries", "none")
+    before = version_names(HINTED)
+    monkeypatch.setattr(lib, "publish_version", lambda book_id, version: (_ for _ in ()).throw(KeyboardInterrupt()))
+    with pytest.raises(KeyboardInterrupt):
+        run_main(["index-trove", HINTED, "--concurrency", "1", "--summaries", "none"], capsys)
+    assert version_names(HINTED) == before and lib.data_dir(HINTED) is not None
 
 
 def test_a_legacy_flat_book_is_read_and_then_replaced_by_a_version(env, capsys):

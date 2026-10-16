@@ -36,7 +36,7 @@ def published(build, book_id: str, *args, **kwargs) -> dict:
         meta = build(version, *args, **kwargs)
         lib.publish_version(book_id, version)
     except BaseException:
-        shutil.rmtree(version, ignore_errors=True)
+        lib.discard_unpublished(book_id, version)  # only if the pointer never moved to it
         raise
     return meta
 

@@ -19,9 +19,11 @@ import json
 import os
 import re
 import shutil
+import sys
 import tempfile
 import time
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 
@@ -74,8 +76,11 @@ def read_json(path: Path, default=None):
 # ---------------------------------------------------------------- versions: one pointer, complete books
 
 VERSION_RE = re.compile(r"[A-Za-z0-9_-]+")
-PRUNE_GRACE_SECONDS = 120   # a superseded complete version is kept at least this long (a slow publisher may still point at it)
-STALE_SECONDS = 3600        # an unreferenced or unfinished version (a crashed run) is removed after this long
+# A version that is neither CURRENT nor the newest complete one before it is only removed once this long after it was
+# completed (the indexed_at in its meta.json; for an unfinished one, after the time in its name, when it was started).
+# A run that is still going, or a slow publisher that has not moved the pointer yet, therefore never loses its folder.
+PRUNE_GRACE_SECONDS = 3600
+clock = time.time           # seconds since the epoch; tests replace it
 LEGACY_FILES = ("tree.json", "pages.json", "meta.json", "pagemap.json", "source.pdf")
 
 
@@ -149,6 +154,8 @@ def publish_version(book_id: str, version: Path) -> None:
         except OSError:
             pass
         raise
+    # The pointer has moved: from here on the version is published and must never be deleted. Tidying up is best
+    # effort; a failure is reported on stderr and the run goes on.
     try:
         for name in LEGACY_FILES:  # the flat files of a book from before versions are superseded
             try:
@@ -156,13 +163,36 @@ def publish_version(book_id: str, version: Path) -> None:
             except FileNotFoundError:
                 pass
         prune_versions(book_id)
-    except OSError:
+    except Exception as error:
+        print(f"note: tidying the old versions of {book_id} failed: {type(error).__name__}: {error}", file=sys.stderr)
+
+
+def discard_unpublished(book_id: str, version: Path) -> None:
+    """Remove a version this run created, unless CURRENT already points at it (the failure came after publishing)."""
+    try:
+        if current_name(book_id) == version.name:
+            return
+    except Exception:
+        return  # cannot tell what the pointer says: keep the folder
+    shutil.rmtree(version, ignore_errors=True)
+
+
+def completed_at(version: Path) -> float:
+    """When a version was completed (meta.json's indexed_at), else when it was started (the time in its name)."""
+    try:
+        meta = json.loads((version / "meta.json").read_text(encoding="utf-8"))
+        return datetime.fromisoformat(meta["indexed_at"]).timestamp()
+    except Exception:
         pass
+    try:
+        return int(version.name.split("-")[0]) / 1e9
+    except ValueError:
+        return clock()
 
 
 def prune_versions(book_id: str) -> None:
-    """Keep the current version and the newest complete one before it. A newer, unreferenced or unfinished version may
-    belong to a run that is still going, so those (and a just-superseded one) are only removed once they are old."""
+    """Keep the current version and the newest complete one before it, always. Any other version goes once
+    PRUNE_GRACE_SECONDS have passed since it was completed (or started, when it never finished)."""
     current = current_name(book_id)
     versions = book_dir(book_id) / "v"
     if current is None or not versions.is_dir():
@@ -170,12 +200,9 @@ def prune_versions(book_id: str) -> None:
     entries = sorted(d for d in versions.iterdir() if d.is_dir() and not d.is_symlink() and VERSION_RE.fullmatch(d.name))
     older = [d for d in entries if d.name < current and (d / "meta.json").is_file()]
     keep = {current, older[-1].name if older else None}
-    now = time.time()
+    now = clock()
     for d in entries:
-        if d.name in keep:
-            continue
-        superseded = d.name < current and (d / "meta.json").is_file()
-        if now - d.stat().st_mtime >= (PRUNE_GRACE_SECONDS if superseded else STALE_SECONDS):
+        if d.name not in keep and now - completed_at(d) >= PRUNE_GRACE_SECONDS:
             shutil.rmtree(d, ignore_errors=True)
 
 
