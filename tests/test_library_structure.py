@@ -207,6 +207,9 @@ class TestRetrievalRowSchema(unittest.TestCase):
             self.assertNotIn("est_tokens", holder["required"], name)
             self.assertNotIn("tokens_basis", holder["required"], name)
             self.assertIn("est_tokens", holder["properties"], name)
+            if name == "lookup":
+                self.assertNotIn("pages_returned", holder["required"])
+                self.assertEqual(holder["properties"]["pages_returned"]["minimum"], 0)
             self.assertIn("tokens_basis", holder["properties"], name)
         self.assertEqual(schema["definitions"]["tokensBasis"]["enum"], ["estimate"])
         self.assertEqual(schema["definitions"]["estTokens"]["minimum"], 0)

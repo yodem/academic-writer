@@ -241,6 +241,8 @@ export class Library implements ShadowRunner {
     ok: boolean; routePages: string | null; latencyMs: number; bytes: number; chars: number; sha: string | null; error: unknown; shadowStatus: string;
     /** Estimated tokens of the returned text; only for a call that returned text. */
     estTokens?: number;
+    /** Distinct canonical pages a page read returned. */
+    pagesReturned?: number;
   }): Promise<void> {
     const route = this.config.primary;
     const row: LookupRow = {
@@ -267,6 +269,7 @@ export class Library implements ShadowRunner {
         error: p.ok ? null : clipError(errorMessage(p.error)),
         error_code: p.ok ? null : (p.error instanceof LibraryError ? p.error.code : 'error'),
         ...(p.ok && p.estTokens !== undefined ? { est_tokens: p.estTokens, tokens_basis: TOKENS_BASIS } : {}),
+        ...(p.ok && p.pagesReturned !== undefined ? { pages_returned: p.pagesReturned } : {}),
       },
       shadow_status: p.shadowStatus,
     };
@@ -375,7 +378,7 @@ export class Library implements ShadowRunner {
       await this.writeLookup({
         lookupId, op, source, ids, request: ledgerRequest, book: got.book, ok: true,
         routePages: formatPageRanges(canonical.flatMap((page) => page.routePages)) || null,
-        latencyMs, bytes: Buffer.byteLength(text, 'utf8'), chars, sha: textSha(text), error: null, shadowStatus: handle.status, estTokens: estimateTokens(text),
+        latencyMs, bytes: Buffer.byteLength(text, 'utf8'), chars, sha: textSha(text), error: null, shadowStatus: handle.status, estTokens: estimateTokens(text), pagesReturned: new Set(canonical.map((page) => page.page)).size,
       });
       const output: ReadOutput = {
         lookup_id: lookupId,

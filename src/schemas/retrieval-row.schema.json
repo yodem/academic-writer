@@ -19,6 +19,7 @@
     "sha": { "type": ["string", "null"], "pattern": "^[0-9a-f]{16}$" },
     "error": { "type": ["string", "null"], "maxLength": 400 },
     "estTokens": { "description": "Estimated tokens of the text the call returned: characters divided by thresholds.json library.tokens ratios. Optional (rows written before 0.17.0 have none); never a tokenizer count.", "type": "integer", "minimum": 0 },
+    "pagesReturned": { "description": "How many distinct (Trove-numbered) pages the call returned; the divisor of a per-page figure. Optional (rows written before 0.17.0 have none); page reads only.", "type": "integer", "minimum": 0 },
     "tokensBasis": { "description": "How est_tokens was made. Only an estimate is ever written.", "enum": ["estimate"] },
     "routeCall": {
       "type": "object",
@@ -35,7 +36,8 @@
         "error": { "$ref": "#/definitions/error" },
         "error_code": { "type": ["string", "null"], "maxLength": 40 },
         "est_tokens": { "$ref": "#/definitions/estTokens" },
-        "tokens_basis": { "$ref": "#/definitions/tokensBasis" }
+        "tokens_basis": { "$ref": "#/definitions/tokensBasis" },
+        "pages_returned": { "$ref": "#/definitions/pagesReturned" }
       }
     },
     "agreement": {

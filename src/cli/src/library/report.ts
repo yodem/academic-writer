@@ -102,7 +102,7 @@ export type IndexingReport = {
 
 export type Report = {
   run: string | null;
-  /** The library-eval id the report is limited to (run ids starting `<id>-`), or null. */
+  /** The library-eval id the report is limited to (run ids `<id>-<route>-c<NN>`), or null. */
   eval: string | null;
   rows: { lookup: number; shadow: number; verdict: number; invalid: number };
   modes: Record<string, number>;
@@ -152,24 +152,13 @@ const median = (values: number[]): number | null => percentile(values, 50);
 const sumCost = (values: number[]): number | null => (values.length === 0 ? null : Math.round(sum(values) * 1e6) / 1e6);
 const OPS: LookupOp[] = ['list', 'toc', 'read', 'get'];
 
-/** How many pages a ledger page list names ("2-4,7" is 4); 0 when it is empty or not a list. */
-export function countPages(spec: string | null): number {
-  if (!spec) return 0;
-  let total = 0;
-  for (const part of spec.split(',')) {
-    const match = part.trim().match(/^(\d+)(?:-(\d+))?$/u);
-    if (!match) return 0;
-    const low = Number(match[1]);
-    const high = Number(match[2] ?? match[1]);
-    if (high < low) return 0;
-    total += high - low + 1;
-  }
-  return total;
-}
-
-/** `<eval>-<route>-<claim>`: the run id of a locating agent. The route is the first `-trove-` or `-pageindex-` in it. */
+/**
+ * The run id of a locating agent is exactly `<evalId>-<route>-c<NN>` (route trove or pageindex, claim c01, c02, ...),
+ * read from the RIGHT, so an eval id may itself contain the words trove or pageindex. Anything that does not fit is
+ * not a locating-agent id: it is reported as unattributed, never guessed at.
+ */
 export function parseLocateRun(runId: string): { eval: string; route: RouteName; claim: string } | null {
-  const match = runId.match(/^(.+?)-(trove|pageindex)-(.+)$/u);
+  const match = runId.match(/^(.+)-(trove|pageindex)-(c\d+)$/u);
   return match ? { eval: match[1] as string, route: match[2] as RouteName, claim: match[3] as string } : null;
 }
 const emptyConfusion = (): Confusion => ({ supports: 0, not_supports: 0, unknown: 0 });
@@ -178,10 +167,10 @@ const ROUTES: RouteName[] = ['trove', 'pageindex'];
 /** Build the report from ledger rows. `run` keeps only that run's lookups, their shadow rows and their verdicts. */
 export function buildReport(rows: RetrievalRow[], invalid: number, run: string | null = null, input: ReportInput = {}): Report {
   const evalId = input.eval ?? null;
-  const evalPrefix = evalId === null ? null : `${evalId}-`;
-  const inScope = (runId: string | null): boolean => (run === null || runId === run) && (evalPrefix === null || (runId !== null && runId.startsWith(evalPrefix)));
+  // --eval keeps the runs whose parsed eval id is exactly that id (not a prefix: "study" is not "study-trove-pilot").
+  const inScope = (runId: string | null): boolean => (run === null || runId === run) && (evalId === null || (runId !== null && parseLocateRun(runId)?.eval === evalId));
   let lookups = rows.filter((row): row is LookupRow => row.row_type === 'lookup');
-  if (run !== null || evalPrefix !== null) lookups = lookups.filter((row) => inScope(row.run_id));
+  if (run !== null || evalId !== null) lookups = lookups.filter((row) => inScope(row.run_id));
   const ids = new Set(lookups.map((row) => row.lookup_id));
   // One shadow row per lookup; a verdict is the row with the highest ordering key for each (lookup, citation).
   const shadows = new Map<string, ShadowRow>();
@@ -301,8 +290,10 @@ function tokenReport(lookups: LookupRow[], shadows: ShadowRow[]): TokensReport {
     const measured = lookups.filter((row) => row.route_primary === name && row.primary.ok && row.primary.est_tokens !== undefined);
     const estimates = measured.map((row) => row.primary.est_tokens as number);
     // Pages returned: only page reads that name their pages count towards the per-page average.
-    const paged = measured.filter((row) => (row.op === 'read' || row.op === 'get') && countPages(row.primary.route_pages) > 0);
-    const pages = sum(paged.map((row) => countPages(row.primary.route_pages)));
+    // Per page: divide by the distinct pages the call returned (pages_returned), never by the route pages it names:
+    // several route pages can merge into one returned page. Rows without that count give no per-page figure.
+    const paged = measured.filter((row) => (row.op === 'read' || row.op === 'get') && (row.primary.pages_returned ?? 0) > 0);
+    const pages = sum(paged.map((row) => row.primary.pages_returned as number));
     const quiet = shadows.filter((row) => row.route === name && row.ok && row.est_tokens !== undefined).map((row) => row.est_tokens as number);
     routes[name] = {
       lookups_measured: measured.length,
@@ -400,7 +391,7 @@ export async function readUsageRows(project: string): Promise<{ rows: LedgerRow[
 }
 
 /**
- * Report options: `eval` limits the report to one library-eval (lookups and agent runs whose run id starts `<eval>-`);
+ * Report options: `eval` limits the report to one library-eval (lookups and agent runs whose run id parses as `<eval>-<route>-c<NN>` with exactly that eval id);
  * it cannot be combined with an exact `run`.
  */
 export type ReportOptions = { eval?: string | null };

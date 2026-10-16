@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import retrievalSchema from '../../schemas/retrieval-row.schema.json' with { type: 'json' };
 import { checkSchema, type JsonSchema } from '../src/library/jsonschema.ts';
 import type { LookupRow, RetrievalRow, ShadowRow, SupportsReason, VerdictRow } from '../src/library/ledger.ts';
-import { buildReport, countPages, formatReport, parseLocateRun, percentile, readUsageRows, reportFor } from '../src/library/report.ts';
+import { buildReport, formatReport, parseLocateRun, percentile, readUsageRows, reportFor } from '../src/library/report.ts';
 import { runLibraryCli } from '../src/library/cli.ts';
 import type { LedgerRow } from '../src/ledger.ts';
 import { setPathArguments } from '../src/paths.ts';
@@ -14,7 +14,7 @@ import { LibraryError, type RouteName } from '../src/library/types.ts';
 
 const TS = '2026-10-15T10:00:00.000Z';
 
-function lookup(id: string, over: { run?: string | null; route?: RouteName; latency?: number; ok?: boolean; status?: string; op?: LookupRow['op']; mode?: LookupRow['mode']; est?: number; pages?: string | null } = {}): LookupRow {
+function lookup(id: string, over: { run?: string | null; route?: RouteName; latency?: number; ok?: boolean; status?: string; op?: LookupRow['op']; mode?: LookupRow['mode']; est?: number; pages?: string | null; returned?: number } = {}): LookupRow {
   const route = over.route ?? 'trove';
   const ok = over.ok ?? true;
   return {
@@ -23,6 +23,7 @@ function lookup(id: string, over: { run?: string | null; route?: RouteName; late
     primary: {
       route, ok, route_pages: ok ? (over.pages === undefined ? '2' : over.pages) : null, latency_ms: over.latency ?? 10, bytes: 10, chars: 10, text_sha: ok ? '0123456789abcdef' : null, error: ok ? null : 'boom', error_code: ok ? null : 'exit',
       ...(over.est === undefined ? {} : { est_tokens: over.est, tokens_basis: 'estimate' as const }),
+      ...(over.returned === undefined ? {} : { pages_returned: over.returned }),
     },
     shadow_status: over.status ?? 'pending',
   };
@@ -203,12 +204,12 @@ function usage(runId: string, over: Partial<LedgerRow> = {}): LedgerRow {
 
 // Trove answered five lookups (three carry an estimate, one is an old row without one, one failed) and PageIndex one.
 const MEASURED: RetrievalRow[] = [
-  lookup('M1', { run: 'EV1-trove-c01', est: 100, pages: '2-3' }),
-  lookup('M2', { run: 'EV1-trove-c01', est: 200, pages: '4' }),
+  lookup('M1', { run: 'EV1-trove-c01', est: 100, pages: '2-3', returned: 2 }),
+  lookup('M2', { run: 'EV1-trove-c01', est: 200, pages: '4', returned: 1 }),
   lookup('M3', { run: 'EV1-trove-c02', op: 'toc', est: 50, pages: null, latency: 90 }),
   lookup('M4', { run: 'EV2-trove-c01' }),
   lookup('M5', { run: 'EV2-trove-c01', ok: false }),
-  lookup('M6', { run: 'EV1-pageindex-c01', route: 'pageindex', est: 400, pages: '1-4' }), shadow('M6', { route: 'trove', est: 123 }),
+  lookup('M6', { run: 'EV1-pageindex-c01', route: 'pageindex', est: 400, pages: '1-4', returned: 4 }), shadow('M6', { route: 'trove', est: 123 }),
 ];
 const USAGE: LedgerRow[] = [
   usage('EV1-trove-c01'),
@@ -236,7 +237,8 @@ test('the schema takes est_tokens and tokens_basis on a lookup call and a shadow
   assert.deepEqual(checkSchema(retrievalSchema as JsonSchema, MEASURED[0]), []);
   assert.deepEqual(checkSchema(retrievalSchema as JsonSchema, MEASURED[6]), []);
   const first = MEASURED[0] as LookupRow;
-  for (const bad of [{ est_tokens: -1 }, { est_tokens: 1.5 }, { est_tokens: '3' }, { tokens_basis: 'exact' }]) {
+  assert.deepEqual(checkSchema(retrievalSchema as JsonSchema, { ...(MEASURED[0] as LookupRow), primary: { ...(MEASURED[0] as LookupRow).primary, pages_returned: 0 } }), []);
+  for (const bad of [{ est_tokens: -1 }, { est_tokens: 1.5 }, { est_tokens: '3' }, { tokens_basis: 'exact' }, { pages_returned: -1 }, { pages_returned: 1.5 }]) {
     assert.notDeepEqual(checkSchema(retrievalSchema as JsonSchema, { ...first, primary: { ...first.primary, ...bad } }), [], JSON.stringify(bad));
   }
 });
@@ -319,12 +321,57 @@ test('report text: estimates are labelled as estimates; agent and indexing figur
   assert.doesNotMatch(text, /Agent tokens and cost are recorded only/);
 });
 
-test('page lists count their pages and agent run ids split into eval, route and claim', () => {
-  assert.deepEqual(['2', '2-4,7', '1-5000', '', 'all', '4-2'].map(countPages), [1, 4, 5000, 0, 0, 0]);
-  assert.equal(countPages(null), 0);
+test('agent run ids split into eval, route and claim', () => {
   assert.deepEqual(parseLocateRun('ev-20261020-a-pageindex-c01'), { eval: 'ev-20261020-a', route: 'pageindex', claim: 'c01' });
-  assert.deepEqual(parseLocateRun('E-trove-c-1'), { eval: 'E', route: 'trove', claim: 'c-1' });
   assert.equal(parseLocateRun('index-3'), null);
+});
+
+test('locate run ids are <eval>-<route>-c<NN>, parsed from the right: an eval id may contain route words', () => {
+  assert.deepEqual(parseLocateRun('study-trove-pilot-pageindex-c01'), { eval: 'study-trove-pilot', route: 'pageindex', claim: 'c01' });
+  assert.deepEqual(parseLocateRun('pageindex-pilot-trove-c12'), { eval: 'pageindex-pilot', route: 'trove', claim: 'c12' });
+  assert.deepEqual(parseLocateRun('a-trove-pageindex-trove-c007'), { eval: 'a-trove-pageindex', route: 'trove', claim: 'c007' });
+  // Anything else is not guessed at.
+  for (const bad of ['EV1-trove-x1', 'EV1-trove-c', 'EV1-trove-c01-extra', 'EV1-trove-c-1', 'trove-c01', '-trove-c01', 'EV1-Trove-c01', 'EV1-both-c01', 'EV1_trove_c01', 'EV1-trove-C01', '']) {
+    assert.equal(parseLocateRun(bad), null, bad);
+  }
+});
+
+test('report: an eval id with route words in it is attributed to its own route and eval, and malformed ids are unattributed', () => {
+  const rows: LedgerRow[] = [
+    usage('study-trove-pilot-pageindex-c01', { input_tokens: 10 }),
+    usage('study-trove-pilot-trove-c01', { input_tokens: 20 }),
+    usage('study-trove-c01', { input_tokens: 40 }),
+    usage('study-trove-x1', { input_tokens: 80 }),
+    usage('study-trove-c01-extra', { input_tokens: 160 }),
+  ];
+  const report = buildReport([], 0, null, { usage: rows });
+  assert.deepEqual([report.agents.routes.pageindex.runs, report.agents.routes.pageindex.input_tokens.total], [1, 10]);
+  assert.deepEqual([report.agents.routes.trove.runs, report.agents.routes.trove.input_tokens.total], [2, 60]);
+  assert.deepEqual([report.agents.unattributed, report.agents.runs], [2, 5]);
+  // --eval means the parsed eval id, never a prefix: "study" owns only study-trove-c01, not the "study-trove-pilot" runs.
+  const study = buildReport([], 0, null, { eval: 'study', usage: rows });
+  assert.deepEqual([study.agents.runs, study.agents.routes.trove.input_tokens.total, study.agents.routes.pageindex.runs], [1, 40, 0]);
+  assert.equal(buildReport([], 0, null, { eval: 'study-trove', usage: rows }).agents.runs, 0);
+  const pilot = buildReport([], 0, null, { eval: 'study-trove-pilot', usage: rows });
+  assert.deepEqual([pilot.agents.runs, pilot.agents.routes.pageindex.runs, pilot.agents.routes.trove.runs, pilot.agents.unattributed], [2, 1, 1, 0]);
+  const lookups = [lookup('A', { run: 'study-trove-pilot-pageindex-c01', route: 'pageindex' }), lookup('B', { run: 'study-trove-c01' }), lookup('C', { run: 'study-trove-pilot' })];
+  assert.equal(buildReport(lookups, 0, null, { eval: 'study-trove-pilot' }).rows.lookup, 1);
+});
+
+test('report: the per-page average divides by the pages actually returned, not by the pages named in route_pages', () => {
+  // Six PDF pages merged into two Trove pages: 200 tokens over 2 returned pages is 100 a page, not 33.
+  const merged = buildReport([
+    lookup('P1', { est: 200, pages: '1-6', returned: 2 }),
+    lookup('P2', { est: 100, pages: '9', returned: 1 }),
+    lookup('P3', { est: 5000, pages: '1-5' }),
+    lookup('P4', { est: 70, pages: null, op: 'toc' }),
+  ], 0);
+  const trove = merged.tokens.routes.trove;
+  assert.deepEqual([trove.pages_measured, trove.per_page_avg, trove.lookups_measured, trove.total], [3, 100, 4, 5370]);
+  assert.match(formatReport(merged), /about 100 per page/);
+  const old = buildReport([lookup('P5', { est: 300, pages: '1-3' })], 0).tokens.routes.trove;
+  assert.deepEqual([old.pages_measured, old.per_page_avg], [0, null], 'rows without a returned-page count give no per-page figure');
+  assert.doesNotMatch(formatReport(buildReport([lookup('P5', { est: 300, pages: '1-3' })], 0)), /per page/);
 });
 
 test('usage rows are read from real run folders only, checked against the schema, and the report command shows the new fields', async () => {

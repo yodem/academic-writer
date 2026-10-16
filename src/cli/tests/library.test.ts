@@ -631,10 +631,23 @@ test('lookup rows carry est_tokens and tokens_basis for text that came back, and
     const readRow = lookups[0] as LookupRow;
     assert.equal(readRow.primary.est_tokens, estimateTokens(read.pages.map((page) => page.text).join('\n')));
     assert.equal(readRow.primary.tokens_basis, 'estimate');
+    assert.equal(readRow.primary.pages_returned, 2);
+    assert.deepEqual(lookups.slice(1).map((row) => row.primary.pages_returned), [undefined, undefined], 'a table of contents and a book list name no pages');
     assert.ok(lookups.every((row) => typeof row.primary.est_tokens === 'number' && row.primary.est_tokens > 0 && row.primary.tokens_basis === 'estimate'));
     assert.ok(!readFileSync(join(fx.project, '.academic-helper', 'retrieval.jsonl'), 'utf8').includes('trove text'), 'still no page text in the ledger');
     await assert.rejects(new Library(failing.project, failing.env).read({ source: 'T-A', pages: '2' }));
     const failed = (await readRows(failing.project)).rows[0] as LookupRow;
     assert.deepEqual([failed.primary.ok, failed.primary.est_tokens, failed.primary.tokens_basis], [false, undefined, undefined]);
   } finally { fx.cleanup(); failing.cleanup(); }
+});
+
+test('pages_returned counts the Trove pages that came back, not the route pages behind them', async () => {
+  const fx = fixture({ route: 'pageindex' });
+  try {
+    // lib-b has six PDF pages for Trove pages 1,1,2,3,3,3: asking for Trove pages 1-3 reads route pages 1-6.
+    const output = await new Library(fx.project, fx.env).read({ source: 'T-B', pages: '1-3' });
+    assert.equal(output.pages.length, 3);
+    const row = (await readRows(fx.project)).rows[0] as LookupRow;
+    assert.deepEqual([row.primary.route_pages, row.primary.pages_returned], ['1-6', 3]);
+  } finally { fx.cleanup(); }
 });

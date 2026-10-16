@@ -37,6 +37,8 @@ export type RouteCall = {
   /** Estimated tokens of the text this call returned (see estimateTokens); absent on failed calls and on rows written before 0.17.0. */
   est_tokens?: number;
   tokens_basis?: TokensBasis;
+  /** Distinct Trove-numbered pages a page read returned (not the route pages behind them); absent on other calls and on older rows. */
+  pages_returned?: number;
 };
 
 export type Agreement = { rate: number | null; compared: number; agreed: number; pages: Array<{ page: number; jaccard: number; agree: boolean }> };
