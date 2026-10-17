@@ -180,7 +180,10 @@ def scan(registry: courses.Registry, *, since: str | None = None, dry_run: bool 
     if not db.is_file():
         report["note"] = f"Wispr Flow database not found: {db}"
         return report
-    floor = datetime.fromisoformat(since).replace(tzinfo=tz).astimezone(timezone.utc) if since else None
+    floor = None
+    if since:  # a naive value is local to the term; an explicit offset is kept
+        parsed = datetime.fromisoformat(since)
+        floor = (parsed if parsed.tzinfo else parsed.replace(tzinfo=tz)).astimezone(timezone.utc)
     meetings = list_meetings(db)  # fails closed (IngestError) before anything is written
     seen = _seen_ids(registry, term)
     new_seen: list[str] = []

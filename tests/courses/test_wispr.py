@@ -254,24 +254,37 @@ def _no_copies(monkeypatch):
     return copies
 
 
-def _spy_reads(monkeypatch, wdir, log):
-    """Log every column the scan reads from Meetings, with the parameters of the statement that read it."""
+def _spy_reads(monkeypatch, log):
+    """Log every statement the scan runs on Meetings: the columns it reads (sqlite authorizer), its bound
+    parameters and every row it returns; and every match decision, in order."""
     real_connect = sqlite3.connect
+
+    class Rows:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def fetchall(self):
+            return list(self.rows)
+
+        def fetchone(self):
+            return self.rows[0] if self.rows else None
 
     class Spy(sqlite3.Connection):
         def __init__(self, *a, **k):
             super().__init__(*a, **k)
-            self.params = ()
+            self.columns = []
             self.set_authorizer(self._auth)
 
         def _auth(self, action, arg1, arg2, dbname, source):
             if action == sqlite3.SQLITE_READ and arg1 == "Meetings":
-                log.append(("read", arg2, self.params))
+                self.columns.append(arg2)
             return sqlite3.SQLITE_OK
 
         def execute(self, sql, params=()):
-            self.params = tuple(params)
-            return super().execute(sql, params)
+            self.columns = []
+            rows = super().execute(sql, params).fetchall()
+            log.append(("stmt", tuple(self.columns), tuple(params), rows))
+            return Rows(rows)
 
     def connect(*a, **k):
         k["factory"] = Spy
@@ -287,34 +300,64 @@ def _spy_reads(monkeypatch, wdir, log):
     monkeypatch.setattr(wispr, "match_course", match)
 
 
-@pytest.mark.parametrize("dry_run", [False, True])
-def test_private_columns_read_only_for_matched_meetings_after_matching(tmp_path, monkeypatch, dry_run):
-    twin = {"slug": "twin", "slots": [{"day": "Tue", "start": "16:00", "end": "18:00", "semester": "A"}]}
-    reg, wdir = build(tmp_path, extra_courses=[twin])  # TIKVA becomes ambiguous; the four work meetings match nothing
-    ids_by_start = {m["start"]: m["id"] for m in wispr.list_meetings(wdir / "flow.sqlite")}
-    log = []
-    _spy_reads(monkeypatch, wdir, log)
-    _no_copies(monkeypatch)
-    report = wispr.scan(reg, dry_run=dry_run, add_source=fake_add_source([]))
-    monkeypatch.undo()
-    assert {m["id"] for m in report["matched"]} == {HAVAYA} and not report["errors"]
-    assert {u["id"] for u in report["unmatched"]} == {TIKVA} | {i for i, _, _ in WORK}
+def _check_reads(log, ids_by_start, unmatched_values):
+    """Private columns only in statements bound to already-matched ids, returning at most one row per id,
+    and no unmatched meeting's private value among the rows any statement returned. Returns the ids touched."""
     matched_so_far: set[str] = set()
-    private_reads = []
+    touched: set[str] = set()
     for event in log:
         if event[0] == "match":
             if event[2]:
                 matched_so_far.add(ids_by_start[event[1]])
             continue
-        _, column, params = event
-        if column in ALLOWED:
+        _, columns, params, rows = event
+        private = set(columns) - ALLOWED
+        if not private:
             continue
-        private_reads.append((column, params))
-        assert params and set(params) <= matched_so_far, f"{column} read for {params} before or without a match"
-    touched = {i for _, p in private_reads for i in p}
-    assert not touched & ({TIKVA} | {i for i, _, _ in WORK})
+        assert params and set(params) <= matched_so_far, f"{private} read for {params} before or without a match"
+        assert len(rows) <= len(set(params)), f"{private}: {len(rows)} rows returned for {len(set(params))} matched ids"
+        touched |= set(params)
+    values = [v for e in log if e[0] == "stmt" for row in e[3] for v in row if isinstance(v, str)]
+    leaked = [v for v in values if "PRIVATE" in v or v in unmatched_values]
+    assert not leaked, f"unmatched meetings' private values were read: {leaked}"
+    return touched
+
+
+def _ambiguous_tikva(tmp_path):
+    twin = {"slug": "twin", "slots": [{"day": "Tue", "start": "16:00", "end": "18:00", "semester": "A"}]}
+    reg, wdir = build(tmp_path, extra_courses=[twin])  # TIKVA becomes ambiguous; the four work meetings match nothing
+    return reg, wdir, {m["start"]: m["id"] for m in wispr.list_meetings(wdir / "flow.sqlite")}
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_private_columns_read_only_for_matched_meetings_after_matching(tmp_path, monkeypatch, dry_run):
+    reg, wdir, ids_by_start = _ambiguous_tikva(tmp_path)
+    log = []
+    _spy_reads(monkeypatch, log)
+    _no_copies(monkeypatch)
+    report = wispr.scan(reg, dry_run=dry_run, add_source=fake_add_source([]))
+    monkeypatch.undo()
+    assert {m["id"] for m in report["matched"]} == {HAVAYA} and not report["errors"]
+    assert {u["id"] for u in report["unmatched"]} == {TIKVA} | {i for i, _, _ in WORK}
+    touched = _check_reads(log, ids_by_start, {"sum tikva", "t1"})
     assert touched == (set() if dry_run else {HAVAYA})  # the spy works: the matched import did read its summary
     assert "PRIVATE" not in json.dumps(report)
+
+
+def test_read_check_catches_a_broadened_private_query(tmp_path, monkeypatch):
+    """The checker is not fooled by a matched id bound to a predicate that does not restrict the rows."""
+    reg, wdir, ids_by_start = _ambiguous_tikva(tmp_path)
+
+    def broad(db, ids):
+        rows = wispr._query(db, "select id, summary from Meetings where ? is not null", (ids[0],))
+        return {i: "" for i in ids} | {str(r[0]): r[1] for r in rows if str(r[0]) in ids}
+    log = []
+    _spy_reads(monkeypatch, log)
+    monkeypatch.setattr(wispr, "read_summaries", broad)
+    wispr.scan(reg, add_source=fake_add_source([]))
+    monkeypatch.undo()
+    with pytest.raises(AssertionError):
+        _check_reads(log, ids_by_start, {"sum tikva", "t1"})
 
 
 def test_readonly_open_failure_imports_nothing_and_copies_nothing(tmp_path, monkeypatch, capsys):
@@ -472,3 +515,12 @@ def test_semester_endpoints_and_yearly_gap(tmp_path):
     for local, slug in cases.items():
         start = datetime.fromisoformat(local).replace(tzinfo=tz)
         assert wispr.match_course(reg, start, start + timedelta(minutes=90))[0] == slug, local
+
+
+def test_since_keeps_an_explicit_offset_and_reads_a_naive_value_as_local(tmp_path):
+    reg, _ = build(tmp_path)
+    # HAVAYA starts 09:01:31Z (12:01 local); TIKVA 13:04Z on 10-13
+    assert {m["id"] for m in wispr.scan(reg, since="2026-10-16T09:30:00+00:00", dry_run=True)["matched"]} == set()
+    assert {m["id"] for m in wispr.scan(reg, since="2026-10-16T09:00:00+00:00", dry_run=True)["matched"]} == {HAVAYA}
+    assert {m["id"] for m in wispr.scan(reg, since="2026-10-16T12:30", dry_run=True)["matched"]} == set()
+    assert {m["id"] for m in wispr.scan(reg, since="2026-10-16", dry_run=True)["matched"]} == {HAVAYA}
