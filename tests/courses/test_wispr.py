@@ -310,8 +310,8 @@ def test_private_columns_read_only_for_matched_meetings_after_matching(tmp_path,
         if column in ALLOWED:
             continue
         private_reads.append((column, params))
-        assert len(params) == 1 and params[0] in matched_so_far, f"{column} read for {params} before or without a match"
-    touched = {p[0] for _, p in private_reads}
+        assert params and set(params) <= matched_so_far, f"{column} read for {params} before or without a match"
+    touched = {i for _, p in private_reads for i in p}
     assert not touched & ({TIKVA} | {i for i, _, _ in WORK})
     assert touched == (set() if dry_run else {HAVAYA})  # the spy works: the matched import did read its summary
     assert "PRIVATE" not in json.dumps(report)
@@ -341,6 +341,29 @@ def test_readonly_open_failure_imports_nothing_and_copies_nothing(tmp_path, monk
     assert all("mode=ro" in a for a in attempts)
     assert (reg.directory / "term.json").read_bytes() == term_before
     assert not (reg.directory / "digest").exists() and not (reg.directory / "wispr").exists()
+
+
+def test_database_lost_after_matching_fails_closed_before_any_write(tmp_path, monkeypatch):
+    reg, wdir = build(tmp_path)
+    term_before = (reg.directory / "term.json").read_bytes()
+    real_connect = sqlite3.connect
+    opened = []
+
+    def connect(target, *a, **k):
+        if str(target).endswith("mode=ro"):
+            opened.append(target)
+            if len(opened) > 1:  # the metadata query worked; every later open fails
+                raise sqlite3.OperationalError("unable to open database file")
+        return real_connect(target, *a, **k)
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+    calls = []
+    with pytest.raises(courses.IngestError, match="nothing was imported"):
+        wispr.scan(reg, add_source=fake_add_source(calls))
+    assert calls == [] and len(opened) > 2
+    assert (reg.directory / "term.json").read_bytes() == term_before
+    assert not (reg.directory / "digest").exists() and not (reg.directory / "wispr").exists() and not (reg.directory / "lessons").exists()
+    assert "alternates" not in json.loads((reg.directory / "tikva.json").read_text())["lessons"][0]
 
 
 def test_transient_open_failure_is_retried(tmp_path, monkeypatch):
@@ -384,7 +407,7 @@ def test_failed_first_same_day_import_does_not_shelve_the_second(tmp_path):
 def test_record_alternate_requires_an_existing_lesson(tmp_path):
     reg, wdir = build(tmp_path)
     with pytest.raises(courses.IngestError, match="no lesson"):
-        wispr._record_alternate(reg, "havaya", {"lesson_key": "2026-10-16-1201"}, HAVAYA, wdir / "meetings" / HAVAYA, wdir / "flow.sqlite")
+        wispr._record_alternate(reg, "havaya", {"lesson_key": "2026-10-16-1201"}, HAVAYA, wdir / "meetings" / HAVAYA, "sum havaya")
     assert not (reg.directory / "lessons" / "havaya").exists()
     assert json.loads((reg.directory / "havaya.json").read_text())["lessons"] == []
 
@@ -395,7 +418,7 @@ def _pending_havaya(reg, wdir, owner=None):
     day, hm = "2026-10-16", "1201"
     staged = wispr._staged_path(reg, "havaya", HAVAYA, day, hm)
     staged.parent.mkdir(parents=True, exist_ok=True)
-    staged.write_text(wispr._compose(wdir / "meetings" / HAVAYA, wdir / "flow.sqlite", HAVAYA), encoding="utf-8")
+    staged.write_text(wispr._compose(wdir / "meetings" / HAVAYA, "sum havaya"), encoding="utf-8")
     lesson = {"date": day, "lesson_key": f"{day}-{hm}", "status": "pending_transcript", "audio_sha256": courses._file_sha256(staged)}
     if owner:
         lesson["wispr_meeting_id"] = owner

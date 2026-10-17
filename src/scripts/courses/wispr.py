@@ -136,10 +136,14 @@ def render_transcript(meeting_dir: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
-def read_summary(db: Path, meeting_id: str) -> str:
-    """The Wispr summary of one MATCHED meeting (never called for an unmatched or ambiguous one)."""
-    rows = _query(db, "select summary from Meetings where id = ?", (meeting_id,))
-    return (rows[0][0] or "").strip() if rows else ""
+def read_summaries(db: Path, meeting_ids: list[str]) -> dict[str, str]:
+    """The Wispr summaries of MATCHED meetings only (never called with an unmatched or ambiguous id)."""
+    if not meeting_ids:
+        return {}
+    marks = ",".join("?" * len(meeting_ids))
+    rows = _query(db, f"select id, summary from Meetings where id in ({marks})", tuple(meeting_ids))
+    found = {str(mid): (summary or "").strip() for mid, summary in rows}
+    return {mid: found.get(mid, "") for mid in meeting_ids}
 
 
 def _seen_ids(registry: courses.Registry, term: dict[str, Any]) -> set[str]:
@@ -181,6 +185,7 @@ def scan(registry: courses.Registry, *, since: str | None = None, dry_run: bool 
     seen = _seen_ids(registry, term)
     new_seen: list[str] = []
     planned: dict[tuple[str, str], str] = {}  # dry run only: (course, day) -> key of an import it would make
+    matched: list[tuple[dict[str, Any], str]] = []
     for meeting in meetings:
         if floor and meeting["start"] < floor:
             continue
@@ -191,6 +196,11 @@ def scan(registry: courses.Registry, *, since: str | None = None, dry_run: bool 
         if not slug:
             report["unmatched"].append({**_stamp(meeting, tz), "reason": reason})
             continue
+        matched.append((meeting, slug))
+    # every database read of a real run happens here, after matching and before anything is written:
+    # if the database becomes unreadable, the scan fails closed with nothing imported
+    summaries = {} if dry_run else read_summaries(db, [m["id"] for m, _ in matched])
+    for meeting, slug in matched:
         local = meeting["start"].astimezone(tz)
         day, hm = local.date().isoformat(), local.strftime("%H%M")
         entry = {**_stamp(meeting, tz), "slug": slug, "date": day}
@@ -210,13 +220,13 @@ def scan(registry: courses.Registry, *, since: str | None = None, dry_run: bool 
                 entry["action"] = "alternate"
                 entry["lesson_key"] = existing.get("lesson_key", existing.get("key"))
                 if not dry_run:
-                    _record_alternate(registry, slug, existing, meeting["id"], mdir, db)
+                    _record_alternate(registry, slug, existing, meeting["id"], mdir, summaries[meeting["id"]])
             else:
                 entry["action"] = "resume" if resume else "import"
                 if dry_run:
                     planned[(slug, day)] = f"{day}-{hm}"
                 else:  # a real import is visible to later meetings through the re-read course file, once it exists
-                    entry.update(_import(registry, slug, meeting["id"], day, hm, mdir, db, runner, add_source))
+                    entry.update(_import(registry, slug, meeting["id"], day, hm, mdir, summaries[meeting["id"]], runner, add_source))
             if not dry_run:
                 new_seen.append(meeting["id"])
             report["matched"].append(entry)
@@ -233,9 +243,8 @@ def scan(registry: courses.Registry, *, since: str | None = None, dry_run: bool 
     return report
 
 
-def _compose(mdir: Path, db: Path, meeting_id: str) -> str:
+def _compose(mdir: Path, summary: str) -> str:
     text = render_transcript(mdir)
-    summary = read_summary(db, meeting_id)
     if summary:
         text += f"\n---\nWispr summary (automatic, unverified; the transcript above is the source):\n\n{summary}\n"
     return text
@@ -265,12 +274,12 @@ def _refuse_unowned(registry, slug, meeting_id, day, hm, same_day) -> None:
                                       f"but its owner is {owner}; not resumed")
 
 
-def _import(registry, slug, meeting_id, day, hm, mdir, db, runner, add_source) -> dict[str, Any]:
+def _import(registry, slug, meeting_id, day, hm, mdir, summary, runner, add_source) -> dict[str, Any]:
     staging = registry.directory / "wispr" / slug
     staging.mkdir(parents=True, exist_ok=True)
     path = _staged_path(registry, slug, meeting_id, day, hm)
     if not path.is_file():  # a resumed import must hand over the same bytes, or it would look like a new recording
-        courses._atomic_write(path, _compose(mdir, db, meeting_id))
+        courses._atomic_write(path, _compose(mdir, summary))
     kwargs = {"runner": runner} if runner else {}
     # the pipeline stores the owner on the lesson record in the same write that creates it, so an import
     # that fails later leaves a lesson only this meeting may resume, and refuses a lesson another one owns
@@ -290,7 +299,7 @@ def _import(registry, slug, meeting_id, day, hm, mdir, db, runner, add_source) -
     return {"lesson_key": lesson_key, "result_status": result.get("status")}
 
 
-def _record_alternate(registry, slug, existing, meeting_id, mdir, db) -> None:
+def _record_alternate(registry, slug, existing, meeting_id, mdir, summary) -> None:
     """Keep the Wispr transcript beside an existing lesson. No Trove page is touched or replaced.
 
     Fails (and writes nothing) unless the lesson exists in the course file.
@@ -301,7 +310,7 @@ def _record_alternate(registry, slug, existing, meeting_id, mdir, db) -> None:
         if lesson is None:
             raise courses.IngestError(f"{slug}: no lesson {key} to attach meeting {meeting_id} to")
         path = registry.directory / "lessons" / slug / str(key) / f"wispr-{meeting_id[:8]}.txt"
-        courses._atomic_write(path, _compose(mdir, db, meeting_id))
+        courses._atomic_write(path, _compose(mdir, summary))
         alts = lesson.setdefault("alternates", [])
         if not any(a.get("meeting_id") == meeting_id for a in alts):
             alts.append({"source": "wispr", "meeting_id": meeting_id, "path": str(path)})
