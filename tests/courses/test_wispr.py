@@ -1,4 +1,5 @@
 import json
+import re
 import shutil
 import sqlite3
 import sys
@@ -283,7 +284,7 @@ def _spy_reads(monkeypatch, log):
         def execute(self, sql, params=()):
             self.columns = []
             rows = super().execute(sql, params).fetchall()
-            log.append(("stmt", tuple(self.columns), tuple(params), rows))
+            log.append(("stmt", tuple(self.columns), tuple(params), rows, sql))
             return Rows(rows)
 
     def connect(*a, **k):
@@ -310,10 +311,13 @@ def _check_reads(log, ids_by_start, unmatched_values):
             if event[2]:
                 matched_so_far.add(ids_by_start[event[1]])
             continue
-        _, columns, params, rows = event
+        _, columns, params, rows, sql = event
         private = set(columns) - ALLOWED
         if not private:
             continue
+        # the one private statement: restricted to bound ids, and every returned row is one of them
+        assert re.fullmatch(r"select id, summary from Meetings where id in \(\?(,\?)*\)", sql), f"unexpected private query: {sql}"
+        assert {str(r[0]) for r in rows} <= set(params), f"{private}: rows outside the bound ids"
         assert params and set(params) <= matched_so_far, f"{private} read for {params} before or without a match"
         assert len(rows) <= len(set(params)), f"{private}: {len(rows)} rows returned for {len(set(params))} matched ids"
         touched |= set(params)
