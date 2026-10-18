@@ -19,6 +19,7 @@ import os
 import shutil
 import signal
 import sys
+import time
 import tempfile
 import threading
 import types
@@ -84,7 +85,7 @@ def _home(tmp: Path, role: str, name: str) -> Path:
     home = tmp / "home"
     meta = home / ".academic-helper"
     meta.mkdir(parents=True)
-    (meta / "home.md").write_text(f"---\nname: {name}\nrole: {role}\ninstitution: בר-אילן\ndegree: MA\n---\n",
+    (meta / "home.md").write_text(f"---\nname: {name}\nrole: {role}\ninstitution: בר-אילן\ndegree: MA\ntargetLanguage: Hebrew\n---\n",
                                   encoding="utf-8")
     (meta / "workspaces.json").write_text("[]", encoding="utf-8")
     return home
@@ -191,8 +192,16 @@ def main() -> int:
             built = build_lecturer(tmp, now)
         else:
             built = build_empty(tmp, now)
-        srv = dashboard.DashboardServer(lambda: built.directory, port=args.port, key=args.key, interval=0.2,
-                                        now=lambda: now, home=lambda: built.home, setup=built.setup).start()
+        # A port from the previous run can sit in TIME-WAIT for about a minute, and the dashboard does not reuse
+        # addresses (on purpose: it moves to a free port instead). The suite needs fixed ports, so wait it out.
+        deadline = time.monotonic() + 75
+        while True:
+            srv = dashboard.DashboardServer(lambda: built.directory, port=args.port, key=args.key, interval=0.2,
+                                            now=lambda: now, home=lambda: built.home, setup=built.setup).start()
+            if not args.port or srv.port == args.port or time.monotonic() > deadline:
+                break
+            srv.close()
+            time.sleep(1)
         if args.port and srv.port != args.port:  # DashboardServer quietly takes a free port when the asked one is busy
             print(f"error: port {args.port} is busy (another e2e run?); set AW_E2E_PORT_BASE", file=sys.stderr, flush=True)
             srv.close()

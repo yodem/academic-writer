@@ -19,7 +19,7 @@ export default defineConfig({
     command: `python3 tests/e2e/dashboard/serve_fixture.py --fixture ${fixture} --port ${port} --key ${KEY} --now ${NOW} --workdir ${JSON.stringify(workdir(name))}`,
     url: `http://127.0.0.1:${port}/?key=${KEY}`,
     reuseExistingServer: false,
-    timeout: 30_000,
+    timeout: 90_000, // a fixture server may wait out TIME-WAIT from the previous run (serve_fixture.py)
   })),
   projects: [
     { name: "chromium", use: { browserName: "chromium" } },
