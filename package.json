@@ -13,7 +13,8 @@
     "version:show": "python3 scripts/version-sync.py --show",
     "version:check": "python3 scripts/version-sync.py --check",
     "version:fix": "python3 scripts/version-sync.py --fix",
-    "hooks:install": "git config core.hooksPath .githooks && echo 'core.hooksPath -> .githooks'"
+    "hooks:install": "git config core.hooksPath .githooks && echo 'core.hooksPath -> .githooks'",
+    "test:e2e": "playwright test"
   },
   "repository": {
     "type": "git",
@@ -29,5 +30,8 @@
   "license": "MIT",
   "engines": {
     "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
   }
 }
