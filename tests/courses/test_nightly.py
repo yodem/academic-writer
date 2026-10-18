@@ -225,3 +225,12 @@ def test_setup_checks_still_sees_the_plist(env):
     (agents / "com.example.academic-nightly.plist").write_bytes((env["agents"] / "com.example.academic-nightly.plist").read_bytes())
     check = mod._nightly({"HOME": str(env["home"])}, "darwin", None)
     assert check["ok"] is True
+
+
+def test_run_now_passes_plist_environment(env, capfd, monkeypatch):
+    env["script"].write_text('#!/bin/bash\necho "home=${ACADEMIC_HOME:-}"\n')
+    call(env, "set", "--time", "03:30", "--script", str(env["script"]))
+    capfd.readouterr()
+    monkeypatch.delenv("ACADEMIC_HOME")
+    assert call(env, "run-now") == 0
+    assert "home=%s" % (env["home"] / "Academic") in capfd.readouterr().out

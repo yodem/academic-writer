@@ -41,7 +41,7 @@ def _default_script() -> Path:
 def _read_plist(path: Path) -> Optional[Dict[str, Any]]:
     try:
         data = plistlib.loads(path.read_bytes())
-    except (OSError, plistlib.InvalidFileException, ValueError, Exception):
+    except Exception:  # unreadable or not a plist
         return None
     return data if isinstance(data, dict) else None
 
@@ -262,6 +262,9 @@ def _run_now(args: argparse.Namespace) -> int:
         print(problem, file=sys.stderr)
         return 2
     env = dict(os.environ)
+    for key, value in ((data or {}).get("EnvironmentVariables") or {}).items():
+        if isinstance(key, str) and isinstance(value, str):
+            env.setdefault(key, value)  # what launchd would pass; the caller's environment wins
     if args.dry:
         env["COURSES_DRY"] = "1"
     sys.stdout.flush()
