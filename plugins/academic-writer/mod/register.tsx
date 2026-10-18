@@ -11,7 +11,8 @@ import { activeRunMaxAgeMinutes, pickActiveRun, type RunFile } from './active.ts
 import { type PaneView, parseEvents, viewOf } from './model.ts'
 
 const PANE_ID = 'aw-activity'
-const COMMAND = 'watch'
+// Not 'watch': that name belongs to the plugin's /academic-writer:watch skill, and the engine refuses a second owner.
+const COMMAND = 'activity'
 const TICK_MS = 2000
 
 type Timer = { cancel: () => void }
@@ -71,7 +72,8 @@ export const register: Register = (on, options) => {
   timer = undefined
 
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: COMMAND, description: 'Show the live Academic Writer activity pane' })
+    // a refused name must not take the pane down with it
+    await $.command.register({ name: COMMAND, description: 'Show the live Academic Writer activity pane' }).catch(() => undefined)
     if (paneEnabled && (await $.fs.exists(`${e.cwd}/.academic-helper/profile.md`).catch(() => false))) {
       // unasked: the engine places it only in a wide terminal (144+ columns)
       void $.ui.open({ id: PANE_ID, title: 'Academic Writer' })
