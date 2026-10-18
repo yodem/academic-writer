@@ -70,8 +70,30 @@ class Registry:
 
 
 def courses_root() -> Path:
-    """Root that holds one directory per term (ACADEMIC_COURSES_DIR, default ~/.academic-writer/courses)."""
-    return Path(os.environ.get("ACADEMIC_COURSES_DIR", "~/.academic-writer/courses")).expanduser()
+    """Root that holds one directory per term.
+
+    Order: ACADEMIC_COURSES_DIR; <home>/.academic-helper/terms when it exists; the legacy
+    ~/.academic-writer/courses when it exists (a pre-migration user keeps working); then the home terms
+    folder even if missing (a new home); then the legacy path.
+    """
+    override = os.environ.get("ACADEMIC_COURSES_DIR")
+    if override:
+        return Path(override).expanduser()
+    legacy = Path("~/.academic-writer/courses").expanduser()
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    try:
+        import home as home_mod
+        acad = home_mod.home_dir()
+    except Exception:
+        acad = None
+    finally:
+        sys.path.pop(0)
+    if acad is None:
+        return legacy
+    terms = acad / ".academic-helper" / "terms"
+    if terms.is_dir():
+        return terms
+    return legacy if legacy.exists() else terms
 
 
 def registry_dir(term: str | None = None) -> Path:
