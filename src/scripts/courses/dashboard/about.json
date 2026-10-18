@@ -1,5 +1,5 @@
 {
-  "version": "0.18.0",
+  "version": "0.18.1",
   "features": [
     {
       "id": "onboarding",
@@ -630,6 +630,13 @@
         {
           "id": "daily-scan",
           "name": "Voice Memos scan and pending lesson queue",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "nightly-schedule",
+          "name": "Optional nightly run: courses.py nightly status|set --time HH:MM|off|run-now [--dry] (launchd plist on macOS, cron line elsewhere)",
           "status": "ok",
           "tested": "unit",
           "subfeatures": []

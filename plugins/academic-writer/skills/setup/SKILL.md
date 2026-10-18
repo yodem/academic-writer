@@ -181,8 +181,9 @@ leaves both stuck on "not set up".
 
 If the researcher already has courses in the older registry under `~/.academic-writer/courses`
 (the legacy location), tell them in one sentence that a one-time migration can move them, and
-run it as a preview first: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home_migrate.py" --home "CHOSEN_FOLDER"`.
-It deletes nothing; only on a yes in `AskUserQuestion` add `--apply`.
+run it as a preview first: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home_migrate.py" --home "CHOSEN_FOLDER" --data-dir "${CLAUDE_PLUGIN_DATA}"`.
+It deletes nothing; only on a yes in `AskUserQuestion` add `--apply`. After updating the plugin, restart
+Claude Code: a running session keeps the old skills until then.
 
 **Save the folder profile now**, before anything else: write `.academic-helper/profile.md` with
 `workspace: project` and nothing else yet (format: `${CLAUDE_PLUGIN_ROOT}/skills/init/references/profile-schema.md`),

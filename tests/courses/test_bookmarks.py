@@ -138,11 +138,18 @@ def test_apply_runs_one_osascript_and_reports(tmp_path, capsys):
     assert "1 folder(s) written" in capsys.readouterr().out
 
 
+def test_trove_url_is_the_verified_form():
+    assert bookmarks.trove_url("abc123", 7) == "https://heytrove.ai/library/abc123?page=7"
+    assert bookmarks.trove_url("abc123") == "https://heytrove.ai/library/abc123?page=1"
+    assert bookmarks.trove_url("abc123", None) == "https://heytrove.ai/library/abc123?page=1"
+
+
 def test_trove_items_need_a_known_form(tmp_path, monkeypatch):
     reg = make_registry(tmp_path)
     reg.courses["kane"]["sources"] = [{"title": "ספר הקנה", "trove": {"book_id": "tb-1", "page": 7}}]
     chores.add_chore(reg, course="kane", kind="assignment", ref="5", title="task", core_texts=["ספר הקנה", "unmapped"],
                      due_at="2026-10-18T08:00:00+03:00")
+    monkeypatch.setattr(bookmarks, "TROVE_URL_FORM", None)
     assert "Trove" not in _titles(bookmarks.plan(reg, "kane"))
     monkeypatch.setattr(bookmarks, "TROVE_URL_FORM", "https://trove.test/{book_id}/{page}")
     items = bookmarks.plan(reg, "kane")["items"]

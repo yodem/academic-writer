@@ -27,6 +27,8 @@ A local page for the course registry that `/academic-writer:courses` maintains. 
 
 If the output says there is no registry yet, the page shows an empty state; suggest `/academic-writer:courses` to set up the term.
 
+The nightly run is optional; `courses.py nightly status` shows whether it is scheduled and when it last ran (see `/academic-writer:courses`).
+
 ## What the page does, and what it leaves to Claude
 
 - **Overview, agenda, course page.** Read-only views of `term.json`, the course files, `links.json`, `refs/`, the chores store, `digest/wispr-unmatched.json` (time only) and the nightly log.

@@ -200,3 +200,5 @@ Replace `TOOL_CONFIG` with the actual tools as a Python dict literal (Python spe
 > PageIndex: [not set up / built-in helper installed (basic or full) / your own server].
 >
 > If you enabled Trove and haven't added sources yet, run `/academic-writer:init` to add them."
+
+After updating the plugin, restart Claude Code: a running session keeps the old skills until then.

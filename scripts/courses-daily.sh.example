@@ -12,6 +12,7 @@
 #   e. tools/toc_audit.py --all    failure -> a manual chore (the job is not failed by it)
 #   f. courses.py chores digest
 #   g. courses-sync-nanoclaw.sh    failure is logged, not fatal
+# Schedule it with `courses.py nightly set --time HH:MM` (`off` = run on demand, `run-now [--dry]` = run once now).
 # Exit status is nonzero only when a step failed.
 # COURSES_DRY=1 prints each planned command to stdout instead of running it (no log file).
 export PATH="${PATH:+$PATH:}$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"

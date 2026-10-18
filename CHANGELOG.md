@@ -4,6 +4,18 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.18.1] — 2026-10-18
+
+### Added
+- **Choose when the nightly run happens, or turn it off.** `courses.py nightly set --time HH:MM` schedules it (on macOS it updates your existing LaunchAgent in place, with a backup); `nightly off` keeps it on demand only; `nightly run-now` runs it now; `nightly status` shows the time and the last run. Elsewhere `set` prints a cron line.
+- **Trove links on the dashboard.** Each course page links to its Trove book next to NotebookLM (`https://heytrove.ai/library/<book>?page=<n>`); the per-course Chrome bookmark folders include Trove pages too.
+- The site says up front that this is a Claude Code plugin and lists the recent changes, generated from this changelog.
+
+### Fixed
+- **The home-folder migration finishes the move.** `home_migrate.py --data-dir` records the home folder (before, `home.py show` reported none); it rewrites old registry paths inside the copied course files, lesson notes and notes files, in the helper scripts beside the nightly script (sync, lock) and in the LaunchAgent's log paths (text and binary plists), with a backup of each file; a path after a shell default (`${VAR:-$HOME/...}`) is matched too. Logs and finished queue records are left as they were. Running it again changes nothing.
+- Setup and health say to restart Claude Code after updating the plugin: a running session keeps the old skills until then.
+- Follow-up: course files still store absolute paths, so a later move needs the migration again.
+
 ## [0.18.0] — 2026-10-18
 
 ### Added

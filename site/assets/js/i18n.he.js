@@ -76,7 +76,12 @@ window.AW_I18N_HE = {
   theme_system: "ערכת צבעים: לפי המערכת. לחיצה להחלפה",
   theme_light: "ערכת צבעים: בהירה. לחיצה להחלפה",
   theme_dark: "ערכת צבעים: כהה. לחיצה להחלפה",
-  doc_title: "Academic Writer — מאמרים אקדמיים עם הערות שוליים, בעזרת Claude",
+  doc_title: "Academic Writer — תוסף ל-Claude Code למאמרים אקדמיים מצוטטים",
+  hero_kicker: "תוסף ל-Claude Code",
+  nav_news: "מה חדש",
+  news_h: "מה חדש",
+  news_sub: "הגרסאות האחרונות של התוסף ל-Claude Code.",
+  news_all: "יומן השינויים המלא",
 
   /* chrome */
   skip: "דילוג לתוכן",
@@ -276,7 +281,7 @@ window.AW_I18N_HE = {
   r2a_cw3: "<b>Add marketplace</b> ומזינים:",
   r2a_cw4: "בוחרים את <b>academic-writer</b> ולוחצים על <b>Install</b>.",
   /* round 3: design */
-  r3c_hero_sub: "ל-Cowork ול-Claude Code: מרעיון גולמי למאמר מצוטט ב-Word, בעברית או באנגלית.",
+  r3c_hero_sub: "ב-Claude Code (עובד גם ב-Cowork): מרעיון גולמי למאמר מצוטט ב-Word, בעברית או באנגלית.",
   r3c_alt_voice: "תחריט של חוקר ותיק ומחייך שכותב בכתב יד לצד ערימת מאמרים קודמים שלו.",
   r3c_alt_revise: "תחריט של שתי חוקרות צוחקות מעל טיוטה מודפסת מלאה בהערות.",
   r3c_alt_library: "תחריט של דוקטורנטית שמושכת מהמדף בספרייה ספר עם סימנייה.",

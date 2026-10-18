@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Feature inventory for the academic-writer plugin. A checklist for future audits: each top-level feature lists its subfeatures, the source of truth, runtime status, and known issues. status: ok | partial | broken | missing. Regenerate/extend this file whenever features are added or removed.",
   "generatedAt": "2026-10-01T00:00:00Z",
-  "pluginVersion": "0.18.0",
+  "pluginVersion": "0.18.1",
   "features": [
     {
       "id": "onboarding",
@@ -660,6 +660,7 @@
         "src/skills/courses/SKILL.md",
         "src/scripts/courses/courses.py",
         "src/scripts/courses/lemida.py",
+        "src/scripts/courses/nightly.py",
         "tests/courses/"
       ],
       "status": "ok",
@@ -687,6 +688,13 @@
           "name": "Voice Memos scan and pending lesson queue",
           "status": "ok",
           "tested": "unit"
+        },
+        {
+          "id": "nightly-schedule",
+          "name": "Optional nightly run: courses.py nightly status|set --time HH:MM|off|run-now [--dry] (launchd plist on macOS, cron line elsewhere)",
+          "status": "ok",
+          "tested": "unit",
+          "notes": "Unit tests use a fake launchctl; loading the plist into a real launchd is checked by hand on the Mac."
         }
       ],
       "tested": "unit",
