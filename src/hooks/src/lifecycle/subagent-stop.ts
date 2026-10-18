@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { HookInput, HookResult } from '../types.js';
 import { recordActivity, type ActivityFields } from '../lib/activity.js';
+import { pluginOption } from './session-env.js';
 
 // Fields confirmed on Claude Code 2.1.302 (spike, 2026-10-18): SubagentStop carries agent_id, agent_type,
 // agent_transcript_path, last_assistant_message, stop_hook_active, cwd, session_id, transcript_path.
@@ -97,8 +98,9 @@ export function subagentStop(input: SubagentStopInput): HookResult {
   }
   wrote = recordActivity(projectDir, 'subagent_stop', { ...(agent ? { agent } : {}) }, options) || wrote;
 
-  // Without the mod pane there is no live view, so say where the run stands in one line.
-  if (wrote && !process.env['CLAUDE_CODE_ENABLE_FUNCTION_HOOKS']) {
+  // Without the mod pane (no function hooks, or the author turned the pane off) there is no live view, so say where the run stands in one line.
+  const paneOff = !process.env['CLAUDE_CODE_ENABLE_FUNCTION_HOOKS'] || pluginOption('activity_pane')?.trim().toLowerCase() === 'false';
+  if (wrote && paneOff) {
     const line = statusFallback(projectDir);
     if (line) return { continue: true, systemMessage: line };
   }

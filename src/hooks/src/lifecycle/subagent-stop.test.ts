@@ -109,3 +109,23 @@ test('a torn last line does not hide the active run', () => {
     assert.ok(readFileSync(file, 'utf8').includes('subagent_start'));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test('the one-line status is shown when the author turned the pane off, and not while the pane is on', () => {
+  const { root } = project();
+  const plugin = mkdtempSync(join(tmpdir(), 'aw-plugin-root-'));
+  const names = ['CLAUDE_PLUGIN_ROOT', 'CLAUDE_PLUGIN_OPTION_ACTIVITY_PANE'] as const;
+  const before = names.map((n) => process.env[n]);
+  try {
+    mkdirSync(join(plugin, 'bin'));
+    writeFileSync(join(plugin, 'bin', 'aw'), '#!/bin/sh\necho "write: step 3/6"\n', { mode: 0o755 });
+    process.env['CLAUDE_PLUGIN_ROOT'] = plugin;
+    process.env['CLAUDE_PLUGIN_OPTION_ACTIVITY_PANE'] = 'true';
+    assert.equal(subagentStop(input(root, { agent_type: 'Explore' })).systemMessage, undefined);
+    process.env['CLAUDE_PLUGIN_OPTION_ACTIVITY_PANE'] = 'false';
+    assert.equal(subagentStop(input(root, { agent_type: 'Explore' })).systemMessage, 'write: step 3/6');
+  } finally {
+    names.forEach((n, i) => { const v = before[i]; if (v === undefined) delete process.env[n]; else process.env[n] = v; });
+    rmSync(root, { recursive: true, force: true });
+    rmSync(plugin, { recursive: true, force: true });
+  }
+});
