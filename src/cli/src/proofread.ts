@@ -9,6 +9,7 @@ import { decide } from './decide.ts';
 import { routeFor } from './routing.ts';
 import { Budget, budgetFor } from './ledger.ts';
 import { pluginRoot } from './pi.ts';
+import { emit, startRunOnce } from './activity.ts';
 import findPrompt from './prompts/proofread-find.md';
 import verifyPrompt from './prompts/proofread-verify.md';
 import memoPrompt from './prompts/proofread-memo.md';
@@ -98,6 +99,10 @@ export async function runProofread(options: RunProofreadOptions): Promise<Proofr
   const numbered = Array.isArray(options.chunks) ? numberedChunks(options.chunks) : [];
   const chunks = numbered.length ? numbered : content ? JSON.parse(await command('python3', [join(root, 'scripts/chunk-article.py'), '--input', article, '--numbered'])) as Chunk[] : Array.from({ length: typeof options.chunks === 'number' ? options.chunks : 0 }, (_, index) => ({ id: `chunk-${index}`, index, startLine: index + 1, endLine: index + 1, text: `L${index + 1}\tx` }));
   const budget = new Budget(options.runId, budgetFor('proofread'));
+  const act = project || undefined;
+  startRunOnce(options.runId, 'proofread', act);
+  const stepStart = (step: string): void => emit(options.runId, 'proofread', 'step_start', { step }, act);
+  const stepEnd = (step: string): void => emit(options.runId, 'proofread', 'step_end', { step }, act);
   let deterministic: Change[] = [];
   if (article) {
     const stylesPath = join(options.dataDir ?? process.env.CLAUDE_PLUGIN_DATA ?? '', 'voice', 'style-words.json');
@@ -118,7 +123,9 @@ export async function runProofread(options: RunProofreadOptions): Promise<Proofr
   const voiceRules = options.voiceRules ?? (existsSync(voicePath) ? readFileSync(voicePath, 'utf8') : '');
   const stageOptions = { ...options, voiceRules };
   const hspell = deterministic.filter((change) => change.class === 'typo' && change.after === null);
+  stepStart('find');
   const found = options.only === 'editorial' ? [] : await mapLimit(chunks, routeFor('proofread.find').concurrency, (chunk) => find(chunk, stageOptions, budget, hspell.filter((item) => item.line >= chunk.startLine && item.line <= chunk.endLine)));
+  stepEnd('find');
   let candidates = found.flat().filter((change) => {
     if (options.only === 'mechanical') return ['typo','punctuation','typography','names_terms','style_words'].includes(change.class);
     if (options.only === 'language') return !['typo','punctuation','typography','names_terms','style_words'].includes(change.class);
@@ -141,6 +148,7 @@ export async function runProofread(options: RunProofreadOptions): Promise<Proofr
     return winner ? { ...candidate, status: 'superseded-by-must-catch', applied: false, skipReason: 'superseded-by-must-catch' } : candidate;
   });
   const verifiable = candidates.filter((change) => change.status !== 'triaged-out' && change.status !== 'superseded-by-must-catch' && (change.meaningRisk === 'low' || (change.meaningRisk === 'medium' && change.class === 'wrong_word')));
+  stepStart('verify');
   const byChunk = chunks.map((chunk) => ({ chunk, changes: verifiable.filter((change) => change.line >= chunk.startLine && change.line <= chunk.endLine) }));
   const verified = await mapLimit(byChunk.filter((group) => group.changes.length > 0), routeFor('proofread.verify').concurrency, async ({ chunk, changes }) => {
     let verdictPromise: Promise<Map<string, Verdict['verdict']>> | undefined;
@@ -160,14 +168,18 @@ export async function runProofread(options: RunProofreadOptions): Promise<Proofr
       return { ...change, status: decided.answer === 'refute' ? 'refuted' : 'verified' };
     }));
   });
+  stepEnd('verify');
   const statusMap = new Map(verified.flat().map((change) => [change.id, change]));
   const all: Change[] = [...deterministic.map((change) => ({ ...change, status: change.status ?? (change.after === null ? 'flag' : 'must-catch'), applied: change.after !== null })), ...candidates.map((change) => statusMap.get(change.id) ?? { ...change, status: 'unverified' })];
   const editorialChecksPath = join(root, 'skills', 'proofread', 'references', 'editorial-checks.md');
   const editorialChecks = article && existsSync(editorialChecksPath) ? readFileSync(editorialChecksPath, 'utf8') : '';
   const venuePath = options.venue && project ? join(project, '.academic-helper', 'venues', `${options.venue}.md`) : '';
   const venueProfile = venuePath && existsSync(venuePath) ? readFileSync(venuePath, 'utf8') : '';
+  stepStart('memo');
   // The editorial memo is its own pass: --only mechanical|language skips it (it was always billed).
   const memo = options.only && options.only !== 'editorial' ? '' : stubs.memo ? await stubs.memo() : (await callGemini({ step: 'proofread.memo', system: prompt('proofread-memo.md'), parts: [`Global editorial checks (always apply):\n${editorialChecks}\n\nOptional additive venue profile${options.venue ? ` (${options.venue})` : ''}:\n${venueProfile || 'None available.'}\n\nArticle:\n${content}`], runId: options.runId, budget })).text;
+  stepEnd('memo');
+  stepStart('apply');
   let proofed = content;
   const changesPath = join(outDir, 'changes.json'); const proofedPath = join(outDir, 'proofed.md'); const reportPath = join(outDir, 'report.md'); const memoPath = join(outDir, 'memo.md');
   const contract = all.map(contractChange);
@@ -210,5 +222,7 @@ export async function runProofread(options: RunProofreadOptions): Promise<Proofr
   } else writeFileSync(proofedPath, proofed);
   writeFileSync(memoPath, memo);
   writeFileSync(reportPath, `# Proofread report\n\n${memo}\n\n${all.length} changes found; ${all.filter((change) => change.status === 'refuted').length} refuted and retained.\n`);
+  stepEnd('apply');
+  emit(options.runId, 'proofread', 'run_end', { exit: 'OK' }, act);
   return { changes: all, memo, proofed, report: reportPath };
 }
