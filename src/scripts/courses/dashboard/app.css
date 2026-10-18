@@ -253,3 +253,48 @@ dialog::backdrop{background:var(--m-ink);opacity:.35}
   .section>h2{font:var(--m-h3-weight) var(--m-h3-size)/var(--m-h3-leading) var(--m-h3-font)}
   .toast{bottom:72px}
 }
+
+/* ===== views/timeline.js ===== */
+.tl-sum{color:var(--m-ink-2);font:var(--m-ui-weight) var(--m-body-size)/1.5 var(--m-ui-font)}
+.tl-sum strong{color:var(--m-indigo);font-weight:600}
+.tl-sum .sep{margin-inline:var(--m-s2);color:var(--m-rule)}
+.tl-filters{display:flex;flex-wrap:wrap;gap:var(--m-s2) var(--m-s3);align-items:center;padding-block:var(--m-s3);border-block:1px solid var(--m-rule)}
+.tl-chip{display:inline-flex;align-items:center;gap:var(--m-s2);min-height:44px;padding:0 var(--m-s3);font:var(--m-ui-weight) var(--m-ui-size)/1.2 var(--m-ui-font);border:1px solid var(--m-rule);border-radius:var(--m-r-sm);background:var(--m-sheet);text-align:start}
+.tl-chip[aria-pressed="false"]{color:var(--m-ink-2);background:none;border-style:dashed}
+.tl-chip[aria-pressed="false"] .sq{background:none;outline:1px solid var(--c,var(--m-ink));outline-offset:-1px}
+.tl-only{display:inline-flex;align-items:center;gap:var(--m-s2);min-height:44px;margin-inline-start:auto;font:var(--m-ui-weight) var(--m-ui-size)/1.2 var(--m-ui-font);cursor:pointer}
+.tl-only input{width:20px;height:20px;accent-color:var(--m-indigo)}
+.tl-grid{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:var(--m-s6);margin-top:var(--m-s5);align-items:start}
+.tl-main{display:grid;gap:var(--m-s5);min-width:0}
+.tl-week{background:var(--m-sheet);border:1px solid var(--m-rule);padding:var(--m-s4) var(--m-s5);min-width:0}
+.tl-week.current{border:1.5px solid var(--m-ink)}
+.tl-week>header{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--m-s2) var(--m-s4);margin-bottom:var(--m-s3)}
+.tl-week h3{font:var(--m-h3-weight) var(--m-h3-size)/var(--m-h3-leading) var(--m-h3-font)}
+.tl-week h3 .when{font:var(--m-ui-weight) var(--m-body-size)/1.4 var(--m-ui-font);color:var(--m-ink-2)}
+.tl-week>header .label{margin-inline-start:auto}
+.tl-cur{font:var(--m-label-weight) var(--m-label-size)/1 var(--m-label-font);background:var(--m-ink);color:var(--m-sheet);padding:var(--m-s1) var(--m-s2);border-radius:var(--m-r-sm)}
+.tl-table{min-width:560px}
+.tl-row.done td{color:var(--m-ink-2)}
+.tl-row.done .tl-what{text-decoration:line-through;text-decoration-color:var(--m-ink-2)}
+.tl-row.exam td{background:var(--m-paper-2);font-weight:600}
+.tl-row.exam td:first-child{box-shadow:inset 3px 0 0 var(--m-rejected)}
+.tl-what:hover{color:var(--m-indigo);text-decoration:underline;text-underline-offset:4px}
+.tl-today td{padding:0;border-bottom:2px solid var(--m-rejected)}
+.tl-now{display:inline-block;padding:var(--m-s1) var(--m-s3);background:var(--m-rejected);color:var(--m-sheet);font:var(--m-label-weight) var(--m-label-size)/var(--m-label-leading) var(--m-label-font)}
+.tl-gap{padding-block:var(--m-s2);color:var(--m-ink-2);font:var(--m-lede-weight) var(--m-ui-size)/1.45 var(--m-lede-font);border-top:1px dashed var(--m-rule)}
+.tl-past{display:grid;gap:var(--m-s5)}
+.tl-past>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;color:var(--m-indigo);font:var(--m-ui-weight) var(--m-body-size)/1.4 var(--m-ui-font);text-decoration:underline;text-underline-offset:4px}
+.tl-margin{border-inline-start:1px solid var(--m-rule);padding-inline-start:var(--m-s5);display:grid;gap:var(--m-s4)}
+.tl-margin h2{font:var(--m-h3-weight) var(--m-h3-size)/var(--m-h3-leading) var(--m-h3-font);padding-bottom:var(--m-s2);border-bottom:1.5px solid var(--m-ink)}
+.tl-margin h3{font:var(--m-label-weight) var(--m-label-size)/var(--m-label-leading) var(--m-label-font);color:var(--m-ink-2);margin-bottom:var(--m-s1)}
+.tl-margin p{font:var(--m-ui-weight) var(--m-ui-size)/1.5 var(--m-ui-font)}
+.tl-margin .sub{display:block;color:var(--m-ink-2)}
+@media (max-width:1024px){
+  .tl-grid{grid-template-columns:minmax(0,1fr)}
+  .tl-margin{border-inline-start:0;padding-inline-start:0;border-top:1.5px solid var(--m-ink);padding-top:var(--m-s4)}
+}
+@media (max-width:640px){
+  .tl-week{padding:var(--m-s3) var(--m-s4)}
+  .tl-only{margin-inline-start:0}
+}
+/* ===== end views/timeline.js ===== */
