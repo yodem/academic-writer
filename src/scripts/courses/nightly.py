@@ -29,6 +29,7 @@ SCRIPT_NAME = "courses-daily.sh"
 EXAMPLE = "scripts/courses-daily.sh.example"
 TIME_RE = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 DISABLED = ".disabled"
+NOT_LOADED = 113  # launchctl print: "Could not find service"; any other failure leaves the state unknown
 
 
 def _agents_dir(args: argparse.Namespace) -> Path:
@@ -245,7 +246,7 @@ def _off(args: argparse.Namespace) -> int:
     label = _label_of(path, data or {})
     if not args.no_load:
         service = "%s/%s" % (_domain(), label)
-        if _launchctl(args, "bootout", service) != 0 and _launchctl(args, "print", service) == 0:
+        if _launchctl(args, "bootout", service) != 0 and _launchctl(args, "print", service) != NOT_LOADED:
             print("error: launchctl could not unload %s, so the schedule is still active; nothing was changed. "
                   "Try again, or run: launchctl bootout %s" % (label, service), file=sys.stderr)
             return 1
