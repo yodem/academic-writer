@@ -17,7 +17,7 @@ Built versus planned, as of this runbook:
 | `refs.py` subcommands `extract`, `lookup`, `status`, `chores`, `index` | Built (`src/scripts/courses/refs.py`) |
 | `add-source --origin library` | Built (`ORIGINS` in `courses.py`) |
 | `courses.py bookmarks` with `--print-script`, `--check`, apply | Built (`src/scripts/courses/bookmarks.py`) |
-| Bookmark items for Trove (book and reading pages) | Not built: `TROVE_URL_FORM` is `None`, so those items are left out (B2) |
+| Bookmark items for Trove (book and reading pages) | Built (B2); URL form verified 2026-10-18 |
 | Nightly `bookmarks` step after the digest | Built in `scripts/courses-daily.sh.example` |
 | Kotar image download by token | Recipe in A6, proven by hand; not scripted |
 
@@ -252,12 +252,12 @@ This is the built behaviour in `bookmarks.py` (`plan`). Items are added in this 
 | # | Item | URL | State |
 |---|---|---|---|
 | 1 | NotebookLM | `https://notebooklm.google.com/notebook/<notebook_id>` | Built, when `notebook_id` is set |
-| 2 | Trove book | from `trove_url(book_id)` | Not built: `TROVE_URL_FORM` is `None`, so no URL is produced |
+| 2 | Trove book | `https://heytrove.ai/library/<book_id>?page=1` (from `trove_url(book_id)`) | Built, when the course has a Trove `book_id` |
 | 3 | Lemida | `<term lemida.base_url>/course/view.php?id=<lemida_course_id>` | Built, when both are set |
 | 4 | Current task | `<base_url>/mod/view.php?id=<ref>` | Built, when the task's `ref` is numeric. The task is the course's open chore with the earliest `due_at`; undated chores come after the dated ones |
-| 5 | That task's readings | one item per `core_texts` entry that matches a source title and has a Trove `book_id` and `page` | Not built yet: it needs the Trove URL form. Until then, no reading items are added |
+| 5 | That task's readings | one item per `core_texts` entry that matches a source title and has a Trove `book_id` and `page` | Built: URL `https://heytrove.ai/library/<book_id>?page=<page>` |
 
-So today a course gets up to three items (1, 3 and 4), not the five the spec asks for. To finish items 2 and 5, confirm a Trove URL form that the repo's other skills already use, set `TROVE_URL_FORM` to a template with `{book_id}` and `{page}` placeholders, and add a test. Do not guess the form.
+The Trove URL form `https://heytrove.ai/library/{book_id}?page={page}` was verified in a signed-in browser on 2026-10-18; `trove_url(book_id)` uses page 1 when no page is given.
 
 ### B3. Commands and exit codes
 

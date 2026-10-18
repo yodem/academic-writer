@@ -29,6 +29,7 @@ researcher on a local machine; the plugin should never assume team workflows.
 | `src/hooks/hooks.json` | Hook registry — what events fire which handlers, and the `modules` entry for the activity mod |
 | `src/brand/DESIGN.md` | "The Margin" brand file: the only source of colours, fonts, sizes and radii; generates `margin.css` and the site tokens (source only, not shipped) |
 | `src/mod/` | Claude Code mod (TSX) that draws the live activity pane; its logic is unit tested, the pane itself is checked by hand |
+| `src/scripts/courses/nightly.py` | `courses.py nightly status\|set --time HH:MM\|off\|run-now [--dry]`: the optional nightly launchd plist (cron line off macOS) and an on-demand run |
 | `src/scripts/home.py`, `home_migrate.py` | The home folder, `workspaces.json`, profile merge (`home.md` then workspace overrides) and the previewed, backed-up migration of the old registry |
 | `src/scripts/activity.py`, `src/schemas/activity-event.schema.json` | Reader and schema for `runs/<id>/activity.jsonl`, written by `aw` and the SubagentStop hook (no model call) |
 | `src/scripts/setup_checks.py` | One source for health, setup and the dashboard's Setup page (`--json`) |

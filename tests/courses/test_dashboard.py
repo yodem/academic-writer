@@ -77,7 +77,8 @@ def test_next_task_states_and_groups(tmp_path):
     assert alpha_task["soon"] and alpha_task["lemida_url"] == "https://lms.example/mod/view.php?id=111"
     assert [i["key"] for i in c["alpha"]["more"]] == ["a-more"]
     assert c["eps"]["notices"][0]["title"] == "Open the library link by hand"
-    assert c["alpha"]["links"]["trove_url"] is None and c["alpha"]["links"]["trove_book_id"] == "book-alpha"
+    assert c["alpha"]["links"]["trove_url"] == "https://heytrove.ai/library/book-alpha?page=1"
+    assert c["alpha"]["links"]["trove_book_id"] == "book-alpha"
 
 
 def test_unlinked_task_is_never_ready(tmp_path):

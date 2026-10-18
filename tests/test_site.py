@@ -5,6 +5,8 @@ names is a real skill, every local asset it references exists, and the Pages wor
 the site with the bundled guide at /guide/.
 """
 import re
+import subprocess
+import sys
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -96,3 +98,38 @@ def test_dashboard_section_follows_courses_and_is_linked():
     assert 'href="#dashboard"' in html
     for img in ("dashboard-overview-light", "dashboard-overview-dark", "activity-pane"):
         assert (SITE / "assets" / "img" / (img + ".webp")).exists()
+
+
+def _changelog_versions() -> list[str]:
+    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    return re.findall(r"^## \[(\d+\.\d+\.\d+)\]", text, re.M)
+
+
+def test_hero_says_claude_code_plugin():
+    html = INDEX.read_text(encoding="utf-8")
+    hero = html[html.index('id="top"'):html.index("<!-- FILM -->")]
+    assert "Claude Code plugin" in hero
+    assert "Claude Code plugin" in html[html.index("<title>"):html.index("</title>")]
+    he = HE.read_text(encoding="utf-8")
+    assert re.search(r'hero_kicker:\s*"[^"]*Claude Code', he)
+    assert re.search(r'r3c_hero_sub:\s*"ב-Claude Code', he)
+
+
+def test_news_block_exists_and_is_current():
+    html = INDEX.read_text(encoding="utf-8")
+    assert "<!-- news:start -->" in html and "<!-- news:end -->" in html
+    assert 'id="news"' in html and 'data-i18n="news_h"' in html
+    assert {"news_h", "news_sub", "news_all", "nav_news"} <= _he_keys()
+    r = subprocess.run([sys.executable, str(ROOT / "scripts" / "gen-site-news.py"), "--check"],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+
+
+def test_news_lists_newest_released_version_first():
+    html = INDEX.read_text(encoding="utf-8")
+    block = html[html.index("<!-- news:start -->"):html.index("<!-- news:end -->")]
+    shown = re.findall(r'class="news__ver">v(\d+\.\d+\.\d+)<', block)
+    released = _changelog_versions()
+    assert shown and shown[0] == released[0]
+    assert shown == released[:3]
+    assert "Unreleased" not in block

@@ -21,9 +21,9 @@ NOT_RUNNING = "not running"
 ABSENT = "ABSENT"
 US = "\x1f"  # field separator in the read-back text (titles and URLs never contain it)
 RS = "\x1e"  # record separator in the read-back text
-# No Trove URL form is recorded in this repo yet. Until one is confirmed, Trove items are left out
-# rather than guessed. Set this to a template with {book_id} and {page} placeholders to enable them.
-TROVE_URL_FORM: str | None = None
+# Verified 2026-10-18 in a signed-in browser: this form opens the book at that page.
+# Template with {book_id} and {page} placeholders; set to None to leave Trove items out.
+TROVE_URL_FORM: str | None = "https://heytrove.ai/library/{book_id}?page={page}"
 
 
 class BookmarkError(Exception):
@@ -33,7 +33,7 @@ class BookmarkError(Exception):
 def trove_url(book_id: str, page: int | None = None) -> str | None:
     if not TROVE_URL_FORM:
         return None
-    return TROVE_URL_FORM.format(book_id=book_id, page=page)
+    return TROVE_URL_FORM.format(book_id=book_id, page=1 if page is None else page)
 
 
 def current_task(registry: courses.Registry, slug: str) -> dict[str, Any] | None:

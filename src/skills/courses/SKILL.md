@@ -12,7 +12,7 @@ Set up and maintain one Drive folder, NotebookLM notebook, and Trove book for ea
 
 ## Registry and configuration
 
-The registry root is `$ACADEMIC_COURSES_DIR`; otherwise it lives under the researcher's home folder (`home.py show` prints it). Registries from before the home folder existed (the legacy `~/.academic-writer/courses/<term>/`) keep working until the researcher runs the migration: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home_migrate.py" --home <home>` previews first, backs up, deletes nothing, and only `--apply` changes anything (ask first). `courses.py` reads `term.json` and one `<slug>.json` per course. Resolve the script as `${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py`. The registry is user data and must not be committed to a project.
+The registry root is `$ACADEMIC_COURSES_DIR`; otherwise it lives under the researcher's home folder (`home.py show` prints it). Registries from before the home folder existed (the legacy `~/.academic-writer/courses/<term>/`) keep working until the researcher runs the migration: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home_migrate.py" --home <home> --data-dir "${CLAUDE_PLUGIN_DATA}" [--daily-script <path>]` previews first and changes nothing. Show the preview, and add `--apply` only after the researcher says yes. Apply records the home pointer, copies the registry, and rewrites the legacy paths inside the registry, the helper scripts (nightly, sync, lock) and the launchd plists, keeping a backup of each; it deletes nothing. It prints the `launchctl` lines that reload a changed plist; `--reload-launchd` runs them. `courses.py` reads `term.json` and one `<slug>.json` per course. Resolve the script as `${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py`. The registry is user data and must not be committed to a project.
 
 Document and preserve these `term.json` fields:
 
@@ -120,7 +120,16 @@ To configure a Lemida token, the user obtains a mobile-app token while signed in
 security add-generic-password -s academic-writer-lemida -a <user> -w
 ```
 
-For launchd scheduling, create a user-owned plist with a placeholder label, run `courses.py daily`, then invoke `claude -p "/academic-writer:lesson-notes --pending"`. Keep logs under the registry's `logs/` directory; show the plist and schedule before loading it.
+### Nightly schedule
+
+The nightly run is optional and the time is the researcher's choice. Resolve `courses.py` as above and ask which time they want, or whether they want no schedule:
+
+- `courses.py nightly status [--json]` shows whether it is scheduled, the time, the plist, the script and the last run.
+- `courses.py nightly set --time HH:MM` writes (or updates, keeping a backup) the launchd plist and loads it. On a system without launchd it prints a cron line instead. It needs the daily script (start from `scripts/courses-daily.sh.example`); say what the time is before running it.
+- `courses.py nightly off` unloads the schedule and renames the plist to `.plist.disabled`; the nightly then runs only on demand.
+- `courses.py nightly run-now [--dry]` runs the nightly script once in the foreground; `--dry` only prints the planned commands.
+
+Logs go under the registry's `logs/` directory.
 
 ## Operational safeguards
 
