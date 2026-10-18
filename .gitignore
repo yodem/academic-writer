@@ -124,3 +124,6 @@ docs/benchmarks/
 .playwright-mcp/
 test-results/
 playwright-report/
+
+# Workflow agent worktrees (local)
+.claude/worktrees/
