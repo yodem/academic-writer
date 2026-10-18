@@ -179,8 +179,6 @@ def test_apply_fixes_the_whole_mac_layout(mac):
 
     # no legacy spelling is left in any live file
     for path in mac.live_files():
-        if path == mac.lock:
-            continue  # product defect, tracked by test_lock_script_default_after_colon_dash_is_rewritten
         text = path.read_text(encoding="utf-8", errors="replace")
         for form in legacy_forms(mac):
             assert form not in text, "%s still holds %s" % (path, form)
@@ -233,8 +231,6 @@ def test_apply_fixes_the_whole_mac_layout(mac):
     assert loaded["slugs"] == sorted(SLUGS)
 
 
-@pytest.mark.xfail(strict=True, reason="product defect: the prefix regex lookbehind rejects '-', so a '${VAR:-$HOME/.academic-writer/courses/...}' "
-                   "default (book-lock.sh DIR) is never matched; the lock script keeps the legacy path")
 def test_lock_script_default_after_colon_dash_is_rewritten(mac):
     mac.migrate(apply=True)
     text = mac.lock.read_text(encoding="utf-8")

@@ -101,8 +101,8 @@ def _legacy_prefixes(legacy_raw) -> list:
 
 def _prefix_regex(prefixes: list) -> "re.Pattern":
     alt = "|".join(re.escape(p) for p in prefixes)
-    # whole path component only: `<prefix>-other` / `<prefix>.json` / `x<prefix>` are left alone
-    return re.compile(r"(?<![\w.\-/])(?:%s)(?:\.migrated-[0-9A-Za-z_-]+)?(?![%s])" % (alt, _NAME_CHARS))
+    # whole path component only: `<prefix>-other` / `<prefix>.json` / `x<prefix>` are left alone; `:-<prefix>` (a shell default) matches
+    return re.compile(r"(?<![\w./])(?:%s)(?:\.migrated-[0-9A-Za-z_-]+)?(?![%s])" % (alt, _NAME_CHARS))
 
 
 def _json_inner(text: str) -> str:
