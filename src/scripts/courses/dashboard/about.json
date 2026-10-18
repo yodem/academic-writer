@@ -346,7 +346,7 @@
       "description_he": "רשימות דפוסים שמרחיקות כתיבה מכנית בעברית ובאנגלית.",
       "command": null,
       "status": "ok",
-      "tested": "not tested yet",
+      "tested": "unit",
       "subfeatures": [
         {
           "id": "he-patterns",
@@ -504,7 +504,7 @@
       "description_he": "פרופיל לכתב עת שנבנה מקריאה לשליחת מאמרים או ממכתב דחייה.",
       "command": null,
       "status": "ok",
-      "tested": "not tested yet",
+      "tested": "unit",
       "subfeatures": [
         {
           "id": "venue-create",
@@ -666,13 +666,13 @@
       "description_he": "לוח מקומי עם השבוע, הקורסים והמטלות.",
       "command": "/academic-writer:dashboard",
       "status": "ok",
-      "tested": "unit",
+      "tested": "e2e",
       "subfeatures": [
         {
           "id": "dashboard-state",
           "name": "/api/state joins the registry; next task, ready/missing/waiting state, lede and semester-aware agenda computed deterministically",
           "status": "ok",
-          "tested": "unit",
+          "tested": "e2e",
           "subfeatures": []
         },
         {
@@ -686,12 +686,19 @@
           "id": "dashboard-submit",
           "name": "I submitted / undo through tasks.py task submit and task unsubmit",
           "status": "ok",
-          "tested": "unit",
+          "tested": "e2e",
           "subfeatures": []
         },
         {
           "id": "dashboard-fetch-queue",
           "name": "Fetch selected writes queue/fetch jobs for refs.py fetch",
+          "status": "ok",
+          "tested": "e2e",
+          "subfeatures": []
+        },
+        {
+          "id": "dashboard-exams",
+          "name": "מבחנים",
           "status": "ok",
           "tested": "unit",
           "subfeatures": []
@@ -821,8 +828,8 @@
       "name_he": "תיקיית בית ותיקיות עבודה",
       "description_he": "תיקייה אחת שמחזיקה את הפרופיל והסמסטר, ותיקיות עבודה שיורשות ממנה.",
       "command": null,
-      "status": "partial",
-      "tested": "unit",
+      "status": "ok",
+      "tested": "e2e",
       "subfeatures": []
     },
     {
@@ -830,8 +837,8 @@
       "name_he": "מראה אחיד",
       "description_he": "קובץ עיצוב אחד שהאתר והלוח טוענים ממנו, עם בדיקה אוטומטית.",
       "command": null,
-      "status": "partial",
-      "tested": "unit",
+      "status": "ok",
+      "tested": "e2e",
       "subfeatures": []
     },
     {
@@ -839,8 +846,8 @@
       "name_he": "פעילות הסוכנים",
       "description_he": "רישום קבוע של כל שלב בכתיבה, ללא מודל, להצגה בלוח ובחלון.",
       "command": null,
-      "status": "partial",
-      "tested": "unit",
+      "status": "ok",
+      "tested": "e2e",
       "subfeatures": []
     },
     {
@@ -858,13 +865,13 @@
       "description_he": "בדיקה אחת, ללא התקנה, שמשרתת את הבדיקה, ההגדרה ולוח ההגדרה.",
       "command": null,
       "status": "ok",
-      "tested": "unit",
+      "tested": "e2e",
       "subfeatures": [
         {
           "id": "setup-checks-rows",
           "name": "Ten read-only check rows (home, profile, Python, add-ons, hspell, Trove, Gemini key, NotebookLM, PageIndex, nightly job)",
           "status": "ok",
-          "tested": "unit",
+          "tested": "e2e",
           "subfeatures": []
         },
         {
