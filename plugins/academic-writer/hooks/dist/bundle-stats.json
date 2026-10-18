@@ -1,15 +1,15 @@
 {
-  "generatedAt": "2026-10-18T08:29:18.125Z",
+  "generatedAt": "2026-10-18T10:47:47.099Z",
   "buildTimeMs": 18,
   "bundles": {
     "lifecycle": {
-      "size": 15496,
-      "sizeKB": "15.13"
+      "size": 16503,
+      "sizeKB": "16.12"
     },
     "hooks": {
-      "size": 5934,
-      "sizeKB": "5.79"
+      "size": 6080,
+      "sizeKB": "5.94"
     }
   },
-  "totalSize": 15496
+  "totalSize": 16503
 }

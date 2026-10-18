@@ -41675,6 +41675,7 @@ async function runDecideCli(args2) {
 // src/activity.ts
 import { appendFileSync as appendFileSync3, existsSync as existsSync2, mkdirSync as mkdirSync3, readdirSync, readFileSync as readFileSync3, statSync as statSync2 } from "node:fs";
 import { join as join4 } from "node:path";
+init_thresholds();
 var FLOW_STEPS = {
   write: ["outline", "draft", "audit", "redraft", "synthesize", "word"],
   proofread: ["find", "verify", "memo", "apply"],
@@ -41741,7 +41742,16 @@ function readEvents(file) {
   }
   return events;
 }
-function statusLine(events, runId2) {
+async function endRunOnError(runId2, flow, fn, project) {
+  try {
+    return await fn();
+  } catch (error) {
+    startRunOnce(runId2, flow, project);
+    emit(runId2, flow, "run_end", { exit: "ERROR", reason: "command failed" }, project);
+    throw error;
+  }
+}
+function statusLine(events, runId2, stalled = false) {
   const start = events.find((e2) => e2.kind === "run_start") ?? events[0];
   if (!start) return `Run ${runId2}: no activity yet.`;
   const flow = start.flow;
@@ -41753,7 +41763,7 @@ function statusLine(events, runId2) {
   const index = Math.max(1, steps.indexOf(current) + 1);
   const label = current || steps[0] || "";
   if (ended) return `${flow} run ${runId2}: ${ended.exit && ended.exit !== "OK" ? `stopped (${ended.exit})` : "done"}, step ${current ? index : total}/${total} ${label}`.trimEnd();
-  return `${flow} run ${runId2}: step ${index}/${total} ${label} (running)`.trimEnd();
+  return `${flow} run ${runId2}: step ${index}/${total} ${label} (${stalled ? "stalled" : "running"})`.trimEnd();
 }
 function latestRunId(project) {
   const root = runsRoot(project);
@@ -41767,12 +41777,14 @@ function latestRunId(project) {
   }
   return best?.id;
 }
-function activityShow(options, project) {
+function activityShow(options, projectArg) {
+  const project = projectArg ?? projectDirOr();
   const runId2 = options.run ?? (options.latest ? latestRunId(project) : void 0);
   if (!runId2) return "No agent activity yet.";
   const file = activityFile(runId2, project);
   if (!file || !existsSync2(file)) return `Run ${runId2}: no activity yet.`;
-  return statusLine(readEvents(file), runId2);
+  const limitMs = thresholds_default.activity.activeRunMaxAgeMinutes * 6e4;
+  return statusLine(readEvents(file), runId2, Date.now() - statSync2(file).mtimeMs > limitMs);
 }
 
 // src/prompts/proofread-find.md
@@ -41889,6 +41901,10 @@ ${chunk.text}`], responseSchema: findSchema, runId: options.runId, budget })).js
   return kept;
 }
 async function runProofread(options) {
+  const project = options.projectDir ?? process.env.CLAUDE_PROJECT_DIR ?? "";
+  return endRunOnError(options.runId, "proofread", () => proofreadRun(options), project || void 0);
+}
+async function proofreadRun(options) {
   const root = options.article ? pluginRoot() : "";
   const outDir = resolve4(options.out ?? ".");
   mkdirSync4(outDir, { recursive: true });
@@ -48301,6 +48317,9 @@ function append(file, row) {
 `, "utf8");
 }
 async function classify(items, runId2) {
+  return endRunOnError(runId2, "revise", () => classifyItems(items, runId2));
+}
+async function classifyItems(items, runId2) {
   startRunOnce(runId2, "revise");
   emit(runId2, "revise", "step_start", { step: "read" });
   const schema3 = { type: "OBJECT", properties: { items: { type: "ARRAY", items: { type: "OBJECT", properties: { id: { type: "STRING" }, category: { type: "STRING", enum: ["text_edit", "argument", "voice_signal", "plugin_defect"] }, proposal: { type: "OBJECT" } }, required: ["id", "category", "proposal"] } } }, required: ["items"] };
@@ -48326,6 +48345,9 @@ function applyTextEdit(item) {
   writeFileSync4(target, body.replace(before, after), "utf8");
 }
 async function applyPlan(plan2) {
+  return endRunOnError(plan2.runId, "revise", () => applyItems(plan2));
+}
+async function applyItems(plan2) {
   if (!dataOverride2) dataDir();
   const applied = [];
   const deferred = [];
@@ -48649,7 +48671,17 @@ async function voiceCheckFallback(paragraph, styleWords) {
   const score = Math.max(0, cfg.maxScore - bannedHits * 2 - fillerHits);
   return score >= cfg.passThreshold ? "pass" : "fail";
 }
+var GATE_REASON = {
+  "citation-not-in-sources": "unknown-source",
+  "quote-not-in-evidence": "quote-not-in-evidence",
+  "style-banned": "banned-word",
+  "style-capped": "word-used-too-often",
+  "word-bounds": "length-out-of-range"
+};
 async function draftAll(outline, options) {
+  return endRunOnError(options.runId, options.flow ?? "write", () => draftUnits(outline, options));
+}
+async function draftUnits(outline, options) {
   const allUnits = flatten(outline);
   if (allUnits.length === 0) throw new AwError("ERROR", "write.draft", "outline has no units");
   const bodyUnits = allUnits.filter((unit) => roleOf(unit) === "body");
@@ -48679,7 +48711,7 @@ async function draftAll(outline, options) {
   const audit = [];
   const flow = options.flow ?? "write";
   const redrafting = options.unit !== void 0 && options.feedbackFile !== void 0;
-  const stepName = redrafting ? "redraft" : "draft";
+  const stepName = flow !== "write" ? "edit" : redrafting ? "redraft" : "draft";
   startRunOnce(options.runId, flow);
   emit(options.runId, flow, "step_start", { step: stepName });
   for (const unit of targetUnits) {
@@ -48719,7 +48751,7 @@ async function draftAll(outline, options) {
     }
     const failure = runGates(unit, text4, paragraphs2, { sourceKeys, evidenceQuotes, styleWords: voice.styleWords, quoteCheckText: modelQuotesText });
     if (failure) failures.push({ unit: unit.id, gate: failure.gate, detail: failure.detail });
-    emit(options.runId, flow, "gate", { step: stepName, unit: unit.id, gate: failure ? failure.gate : "draft-gates", ok: !failure, ...failure ? { reason: failure.detail.slice(0, 300) } : {} });
+    emit(options.runId, flow, "gate", { step: stepName, unit: unit.id, gate: failure ? failure.gate : "draft-gates", ok: !failure, ...failure ? { reason: GATE_REASON[failure.gate] ?? "gate-failed" } : {} });
   }
   emit(options.runId, flow, "step_end", { step: stepName });
   return { drafted, failures, audit };
@@ -48805,6 +48837,9 @@ function draftsDir() {
   return join16(projectDir(), ".academic-helper", "drafts");
 }
 async function synthesizeAll(options) {
+  return endRunOnError(options.runId, "write", () => synthesizeUnits(options));
+}
+async function synthesizeUnits(options) {
   const dir = draftsDir();
   if (!existsSync10(dir)) throw new AwError("ERROR", "write.synthesize", "no drafts directory \u2014 run aw draft first");
   const files = readdirSync4(dir).filter((f3) => f3.endsWith(".md")).sort();
@@ -48856,6 +48891,9 @@ import { readFileSync as readFileSync13, writeFileSync as writeFileSync7 } from 
 init_thresholds();
 var schema = { type: "object", required: ["revised_text"], properties: { revised_text: { type: "string" } } };
 async function editText(options) {
+  return endRunOnError(options.runId, options.section ? "edit-section" : "edit", () => editRun(options));
+}
+async function editRun(options) {
   const flow = options.section ? "edit-section" : "edit";
   emit(options.runId, flow, "run_start");
   emit(options.runId, flow, "step_start", { step: "edit" });
@@ -49045,7 +49083,7 @@ function generateDocx(args2) {
   try {
     return buildDocx(args2, project);
   } catch (error) {
-    emit(args2.runId, "write", "run_end", { exit: "ERROR", reason: (error instanceof Error ? error.message : "ERROR docx").slice(0, 300) }, project);
+    emit(args2.runId, "write", "run_end", { exit: "ERROR", reason: "command failed" }, project);
     throw error;
   }
 }
@@ -53531,8 +53569,7 @@ Live model verification requires GOOGLE_API_KEY.
     process.exitCode = 2;
   } else {
     try {
-      projectDir();
-      process.stdout.write(`${activityShow({ run, latest: !run })}
+      process.stdout.write(`${activityShow({ run, latest: !run }, projectDirOr())}
 `);
     } catch (error) {
       process.stderr.write(`${error instanceof Error ? error.message : "ERROR activity: unknown failure"}

@@ -114,6 +114,73 @@ def _atomic_write(path: Path, text: str) -> None:
         raise
 
 
+IDENTITY_FLAGS = (("name", "name"), ("role", "role"), ("institution", "institution"), ("degree", "degree"),
+                  ("field", "fieldOfStudy"), ("citation_style", "citationStyle"),
+                  ("target_language", "targetLanguage"))
+
+
+def _split_groups(front: str) -> list:
+    """Frontmatter lines as (key | None, [lines]); a list key owns its `  - item` lines."""
+    lines = front.split("\n")
+    groups: list = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if _KV_RE.match(line):
+            groups.append((line.split(":")[0], [line]))
+            i += 1
+        elif _LIST_KEY_RE.match(line):
+            block = [line]
+            i += 1
+            while i < len(lines) and lines[i].startswith("  - "):
+                block.append(lines[i])
+                i += 1
+            groups.append((line.split(":")[0], block))
+        else:
+            groups.append((None, [line]))
+            i += 1
+    return groups
+
+
+def write_home_profile(home: Path, updates: Mapping[str, str]) -> Path:
+    """Create or update `<home>/.academic-helper/home.md`: upsert the given scalar frontmatter keys, keep every
+    other key, list and JSON section as it was. Atomic. `role` must be one of ROLES (teaching is a workspace type)."""
+    clean: dict = {}
+    for key, value in updates.items():
+        if value is None:
+            continue
+        value = str(value).strip()
+        if not value:
+            continue
+        if "\n" in value or "\r" in value or not re.match(r"^[\w-]+$", key):
+            raise ValueError("%s must be a single line" % key)
+        clean[key] = value
+    if "role" in clean and clean["role"] not in ROLES:
+        raise ValueError("role must be one of %s (a course you teach is a workspace type, not a role)"
+                         % ", ".join(ROLES))
+    path = Path(home).expanduser() / DIR_NAME / HOME_FILE
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        text = ""
+    m = _FM_RE.match(text)
+    front, rest = (m.group(1), text[m.end():]) if m else ("", "\n" + text if text.strip() else "\n")
+    groups = _split_groups(front) if front.strip() else []
+    pending = dict(clean)
+    out: list = []
+    for key, block in groups:
+        if key in pending:
+            out.append("%s: %s" % (key, pending.pop(key)))
+        elif key is None and not block[0].strip():
+            continue
+        else:
+            out.extend(block)
+    for key, value in pending.items():
+        out.append("%s: %s" % (key, value))
+    _atomic_write(path, "---\n" + "\n".join(out) + "\n---" + (rest if rest.startswith("\n") else "\n" + rest))
+    return path
+
+
 def set_home(path: Path, plugin_data: Path) -> None:
     """Write the pointer atomically; create `<path>/.academic-helper/` only."""
     path = Path(path).expanduser()
@@ -167,6 +234,24 @@ def _workspaces_path(home: Path) -> Path:
     return Path(home) / DIR_NAME / WORKSPACES_FILE
 
 
+class RegistryError(Exception):
+    """workspaces.json exists but cannot be read as a list; it is left untouched."""
+
+
+def _load_rows_strict(home: Path) -> list:
+    path = _workspaces_path(home)
+    if not path.exists():
+        return []
+    try:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        rows = None
+    if not isinstance(rows, list):
+        raise RegistryError("The workspace list (%s) is damaged, so I changed nothing. "
+                            "Fix or move that file, then try again." % path)
+    return rows
+
+
 def _load_rows(home: Path) -> list:
     try:
         rows = json.loads(_workspaces_path(home).read_text(encoding="utf-8"))
@@ -181,7 +266,7 @@ def register_workspace(home: Path, path: Path, type: str, course: Optional[str] 
     if type not in WORKSPACE_TYPES:
         raise ValueError("type must be one of %s" % ", ".join(WORKSPACE_TYPES))
     resolved = str(Path(path).expanduser().resolve())
-    rows = _load_rows(home)
+    rows = _load_rows_strict(home)
     for row in rows:
         if isinstance(row, dict) and row.get("path") == resolved:
             row.update({"type": type, "course": course, "term": term})
@@ -207,6 +292,10 @@ def _main(argv: Optional[list] = None) -> int:
     sub.add_parser("show")
     p_set = sub.add_parser("set")
     p_set.add_argument("--path", required=True)
+    p_prof = sub.add_parser("profile")
+    for parser in (p_set, p_prof):
+        for flag, _key in IDENTITY_FLAGS:
+            parser.add_argument("--" + flag.replace("_", "-"), dest=flag)
     p_reg = sub.add_parser("register")
     p_reg.add_argument("--path", required=True)
     p_reg.add_argument("--type", required=True, choices=WORKSPACE_TYPES)
@@ -224,14 +313,35 @@ def _main(argv: Optional[list] = None) -> int:
         if not data:
             print(json.dumps({"error": "CLAUDE_PLUGIN_DATA is not set"}))
             return 2
+        updates = {key: getattr(args, flag) for flag, key in IDENTITY_FLAGS if getattr(args, flag)}
+        if "role" in updates and updates["role"] not in ROLES:  # check before anything is written
+            print(json.dumps({"error": "role must be one of %s" % ", ".join(ROLES)}))
+            return 2
         set_home(Path(args.path), Path(data))
         out = {"home": str(Path(args.path).expanduser())}
+        if updates:
+            out["home_md"] = str(write_home_profile(Path(args.path), updates))
+    elif args.cmd == "profile":
+        h = home_dir()
+        updates = {key: getattr(args, flag) for flag, key in IDENTITY_FLAGS if getattr(args, flag)}
+        if h is None:
+            print(json.dumps({"error": "no home folder is set"}))
+            return 2
+        try:
+            out = {"home": str(h), "home_md": str(write_home_profile(h, updates))}
+        except ValueError as exc:
+            print(json.dumps({"error": str(exc)}, ensure_ascii=False))
+            return 2
     else:
         h = home_dir()
         if h is None:
             print(json.dumps({"error": "no home folder is set"}))
             return 2
-        out = register_workspace(h, Path(args.path), args.type, args.course, args.term)
+        try:
+            out = register_workspace(h, Path(args.path), args.type, args.course, args.term)
+        except RegistryError as exc:
+            print(json.dumps({"error": str(exc)}, ensure_ascii=False))
+            return 2
     print(json.dumps(out, ensure_ascii=False))
     return 0
 
