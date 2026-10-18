@@ -1,0 +1,18 @@
+{
+  "frontmatter": {
+    "name": "Dana Levi",
+    "role": "student",
+    "citationStyle": "chicago",
+    "fieldOfStudy": "Jewish Philosophy",
+    "targetLanguage": "he",
+    "degree": null,
+    "abstractLanguages": ["he", "en"],
+    "analyzedArticles": [],
+    "institution": "Bar-Ilan: Humanities"
+  },
+  "sections": {
+    "tools": {"zotero": {"enabled": true, "path": "/x"}},
+    "stylefingerprint": {"sentenceLevel": {"avg": 21}},
+    "sources": [{"id": "s1", "title": "First"}]
+  }
+}
