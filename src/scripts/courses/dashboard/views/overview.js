@@ -167,7 +167,7 @@ function writingColumn(st, to){
   let body;
   if (run){
     const p = runProgress(run);
-    body = `<ul>${line(`<a class="what" href="${to}" data-nav>${auto(baseName(run.workspace) || flowWord(run.flow))}<span class="sub">${esc(flowWord(run.flow))} · ${esc(p.current ? stepWord(run.flow, p.current.id) : 'בתהליך')}</span></a>`, `שלב ${b(p.index)}/${b(p.total)}`)}</ul>${stepBar(run)}`;
+    body = `<ul>${line(`<a class="what" href="${to}" data-nav>${auto(baseName(run.workspace) || flowWord(run.flow))}<span class="sub">${esc(flowWord(run.flow))} · ${esc(p.current ? stepWord(run.flow, p.current.id) : 'בתהליך')}</span></a>`, `שלב ${b(p.index + "/" + p.total)}`)}</ul>${stepBar(run)}`;
   } else {
     const last = w.history[0];
     body = none('אין כתיבה בעיצומה.') + (last ? `<ul>${line(`<a class="what" href="${to}" data-nav>${auto(baseName(last.workspace) || flowWord(last.flow))}<span class="sub">${esc(flowWord(last.flow))} · הריצה האחרונה</span></a>`, status(last.status))}</ul>` : '');

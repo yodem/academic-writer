@@ -33,7 +33,8 @@ const LEGACY = {agenda:'timeline'};
 const BRAND = 'שולחן הלימודים';
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const b = s => `<bdi>${esc(s)}</bdi>`;
-const auto = s => `<bdi dir="auto">${esc(s)}</bdi>`;
+/* a course code such as BIBL-204 stays one unbroken run, so a wrapped Hebrew title cannot split it */
+const auto = s => `<bdi dir="auto">${esc(s).replace(/[A-Za-z]{2,}-\d+/g, m => `<bdi>${m}</bdi>`)}</bdi>`;
 const $ = (s, r=document) => r.querySelector(s), $$ = (s, r=document) => [...r.querySelectorAll(s)];
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 

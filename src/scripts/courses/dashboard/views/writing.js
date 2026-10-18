@@ -9,7 +9,7 @@ const {esc, b, auto, status, stepBar, runProgress, flowWord, stepWord, shortWhen
 const many = (n, one, plural) => n === 1 ? one : plural.replace('#', n);
 const VERDICT = {PASS: ['ok', 'עבר'], FAIL: ['missing', 'נכשל'], PARTIAL: ['waiting', 'עבר חלקית']};
 const STEP_STATE = {done: ['done', 'הושלם'], current: ['running', 'עכשיו'], todo: ['todo', 'בתור'], unknown: ['unknown', 'לא ידוע']};
-const WS_TYPE = {project: 'פרויקט', course: 'קורס'};
+const WS_TYPE = {project: 'פרויקט', course: 'קורס', teaching: 'הוראה'};
 
 const verdict = v => VERDICT[v] ? status(VERDICT[v][0], VERDICT[v][1]) : status('unknown');
 const name = run => auto(baseName(run.workspace) || flowWord(run.flow));

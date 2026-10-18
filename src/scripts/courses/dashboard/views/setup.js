@@ -16,9 +16,9 @@ function mark(c){
 }
 function detail(c){
   const bits = [];
-  if (c.ok === true && c.found) bits.push(`נמצא: ${b(c.found)}`);
-  if (c.required) bits.push(`נדרש: ${b(c.required)}`);
-  if (c.ok !== true && c.found) bits.push(`נמצא: ${b(c.found)}`);
+  if (c.ok === true && c.found) bits.push(`נמצא: ${auto(c.found)}`);
+  if (c.required) bits.push(`נדרש: ${auto(c.required)}`);
+  if (c.ok !== true && c.found) bits.push(`נמצא: ${auto(c.found)}`);
   if (c.ok !== true && c.reason_he) bits.push(esc(c.reason_he));
   return bits.length ? `<p class="meta">${bits.join(' · ')}</p>` : '';
 }

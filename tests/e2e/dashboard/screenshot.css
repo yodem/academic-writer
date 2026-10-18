@@ -1,0 +1,2 @@
+/* injected by toHaveScreenshot: the fixed paper-grain layer is not captured past the first screen height */
+body::before{display:none!important}

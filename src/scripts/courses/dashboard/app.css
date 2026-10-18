@@ -224,6 +224,11 @@ dialog::backdrop{background:var(--m-ink);opacity:.35}
   .col:nth-child(n+3){border-top:1px solid var(--m-rule)}
   .cols.three .col:nth-child(3){grid-column:1 / -1;border-inline-start:0;padding-inline-start:0}
 }
+@media (max-width:900px){
+  /* the top bar must fit between 641 and 900 px: the scan line and the search label give way first */
+  .scan,.tool .txt{display:none}
+  .top-in{gap:var(--m-s4)}
+}
 @media (max-width:640px){
   .contain,.top-in,#view{padding-inline:var(--m-s4)}
   .stale{margin-inline:var(--m-s4)}
