@@ -142,9 +142,8 @@ def _split_groups(front: str) -> list:
     return groups
 
 
-def write_home_profile(home: Path, updates: Mapping[str, str]) -> Path:
-    """Create or update `<home>/.academic-helper/home.md`: upsert the given scalar frontmatter keys, keep every
-    other key, list and JSON section as it was. Atomic. `role` must be one of ROLES (teaching is a workspace type)."""
+def clean_identity(updates: Mapping[str, str]) -> dict:
+    """The non-empty identity values, stripped. Raises ValueError for a multi-line value, an odd key or an unknown role."""
     clean: dict = {}
     for key, value in updates.items():
         if value is None:
@@ -158,6 +157,13 @@ def write_home_profile(home: Path, updates: Mapping[str, str]) -> Path:
     if "role" in clean and clean["role"] not in ROLES:
         raise ValueError("role must be one of %s (a course you teach is a workspace type, not a role)"
                          % ", ".join(ROLES))
+    return clean
+
+
+def write_home_profile(home: Path, updates: Mapping[str, str]) -> Path:
+    """Create or update `<home>/.academic-helper/home.md`: upsert the given scalar frontmatter keys, keep every
+    other key, list and JSON section as it was. Atomic. `role` must be one of ROLES (teaching is a workspace type)."""
+    clean = clean_identity(updates)
     path = Path(home).expanduser() / DIR_NAME / HOME_FILE
     try:
         text = path.read_text(encoding="utf-8")
@@ -288,6 +294,8 @@ def list_workspaces(home: Path) -> list:
 
 def _main(argv: Optional[list] = None) -> int:
     ap = argparse.ArgumentParser(description="Home folder pointer and workspace registry")
+    # Skills run this through the Bash tool, which gets no CLAUDE_PLUGIN_DATA; they pass it here instead.
+    ap.add_argument("--data-dir", help="the plugin data folder (defaults to CLAUDE_PLUGIN_DATA)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("show")
     p_set = sub.add_parser("set")
@@ -302,6 +310,8 @@ def _main(argv: Optional[list] = None) -> int:
     p_reg.add_argument("--course")
     p_reg.add_argument("--term")
     args = ap.parse_args(argv)
+    if args.data_dir:
+        os.environ["CLAUDE_PLUGIN_DATA"] = args.data_dir
 
     if args.cmd == "show":
         h = home_dir()
@@ -314,8 +324,10 @@ def _main(argv: Optional[list] = None) -> int:
             print(json.dumps({"error": "CLAUDE_PLUGIN_DATA is not set"}))
             return 2
         updates = {key: getattr(args, flag) for flag, key in IDENTITY_FLAGS if getattr(args, flag)}
-        if "role" in updates and updates["role"] not in ROLES:  # check before anything is written
-            print(json.dumps({"error": "role must be one of %s" % ", ".join(ROLES)}))
+        try:
+            clean_identity(updates)  # check before anything is written
+        except ValueError as exc:
+            print(json.dumps({"error": str(exc)}, ensure_ascii=False))
             return 2
         set_home(Path(args.path), Path(data))
         out = {"home": str(Path(args.path).expanduser())}

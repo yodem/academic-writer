@@ -31,7 +31,7 @@ Run the checks once; sections 1, 3, 4 and 5 read their rows from this output (th
 dashboard's Setup page shows). The script only reads: it installs and writes nothing, and never prints the Gemini key.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup_checks.py" --json
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup_checks.py" --data-dir "${CLAUDE_PLUGIN_DATA}" --json
 ```
 
 Each row is `{id, label_he, ok, optional, found, required, reason_he, fix}`; `ok: null` means "not applicable here".

@@ -50,7 +50,7 @@ def test_no_skill_names_legacy_registry_except_migration():
 
 
 def test_setup_writes_home_md_with_role_and_identity():
-    assert re.search(r'home\.py"? set --path "[^"]+"[^\n]*--role', SETUP)
+    assert re.search(r'home\.py"?(?: --data-dir "[^"]+")? set --path "[^"]+"[^\n]*--role', SETUP)
     for flag in ("--name", "--field", "--target-language", "--citation-style"):
         assert flag in SETUP
 

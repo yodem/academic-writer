@@ -236,7 +236,11 @@ def run_checks(env: Mapping[str, str], which: Callable[[str], Optional[str]] = s
 
 
 def main(argv: List[str]) -> int:
-    checks = run_checks(os.environ)
+    env = dict(os.environ)
+    # Skills run this through the Bash tool, which gets no CLAUDE_PLUGIN_DATA; they pass --data-dir instead.
+    if "--data-dir" in argv and argv.index("--data-dir") + 1 < len(argv):
+        env["CLAUDE_PLUGIN_DATA"] = argv[argv.index("--data-dir") + 1]
+    checks = run_checks(env)
     if "--json" in argv:
         print(json.dumps(checks, ensure_ascii=False, indent=2))
         return 0

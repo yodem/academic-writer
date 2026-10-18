@@ -152,7 +152,7 @@ course registry and the list of your workspaces (every project or course folder 
 see whether one is already chosen:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" show
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" show
 ```
 
 If it names a home that exists, say so in one sentence and keep it. Otherwise choose one:
@@ -172,7 +172,7 @@ Then save the pointer and your answers in one call. `home.py set` writes the poi
 only fills in the answers you pass. Pass every answer you collected in Step 2 (`--name` only if you asked for it):
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" set --path "CHOSEN_FOLDER" --role "ROLE" --field "FIELD_OF_STUDY" --target-language "TARGET_LANGUAGE" --citation-style "CITATION_STYLE"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" set --path "CHOSEN_FOLDER" --role "ROLE" --field "FIELD_OF_STUDY" --target-language "TARGET_LANGUAGE" --citation-style "CITATION_STYLE"
 ```
 
 Other flags: `--name`, `--institution`, `--degree`. A non-zero exit prints a plain `error`; read it to the
@@ -197,7 +197,7 @@ only passes the Gemini key on in a project that has this file, so it must exist 
 Run the one checks script (it changes nothing and never prints a key):
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup_checks.py" --json
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup_checks.py" --data-dir "${CLAUDE_PLUGIN_DATA}" --json
 ```
 
 Each row has an `id`, `ok`, `optional` and a plain-language reason. Keep the result: Steps 4 and 8

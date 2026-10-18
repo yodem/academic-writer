@@ -15,7 +15,7 @@ A local page for the course registry that `/academic-writer:courses` maintains. 
 1. Start the server in the background (the Bash tool's `run_in_background`), so this session stays free:
 
    ```bash
-   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" dashboard --no-open
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" --data-dir "${CLAUDE_PLUGIN_DATA}" dashboard --no-open
    ```
 
    Pass `--term <name>` when the registry holds more than one term, and `--port N` to try another port first (default 8787; a busy port falls back to a free one).

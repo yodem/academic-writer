@@ -3,7 +3,7 @@
 > Loaded on demand by `init` Phase 0.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" show
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" show
 ```
 
 - **No home chosen:** this folder is a plain project. Do not ask any course question; suggest
@@ -27,9 +27,9 @@ On "A course", list the term's courses (the `name` in each `<slug>.json` of the 
 and let the researcher pick one. Register the answer with `home.py register`, so the dashboard and the hooks know this folder:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" register --path "$PWD" --type course --course COURSE_SLUG --term TERM
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" register --path "$PWD" --type project
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" register --path "$PWD" --type teaching --term TERM
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" register --path "$PWD" --type course --course COURSE_SLUG --term TERM
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" register --path "$PWD" --type project
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" register --path "$PWD" --type teaching --term TERM
 ```
 
 Run only the line that matches (`course`, `project`, or `teaching` for a course the researcher
@@ -42,7 +42,7 @@ If `home.py show` named a home that exists and its `home.md` is missing or has n
 and every other folder see them:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" profile --name "NAME" --field "FIELD" --target-language "LANGUAGE" --citation-style "STYLE"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" profile --name "NAME" --field "FIELD" --target-language "LANGUAGE" --citation-style "STYLE"
 ```
 
 If `home.md` has no `role`, ask once (Student, Lecturer or Researcher; plain words, no jargon) and add
