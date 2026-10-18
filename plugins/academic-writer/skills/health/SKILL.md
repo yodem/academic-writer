@@ -185,5 +185,7 @@ If there are issues, list one plain fix line per issue, in the same words as the
 > 1. [Issue] → [what to do, in one sentence]
 > 2. [Issue] → [what to do, in one sentence]
 
+After updating the plugin, restart Claude Code: a running session keeps the old skills until then.
+
 If everything passed, say so and suggest `/academic-writer:write` (or `/academic-writer:intro` for
 the guide).
