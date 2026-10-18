@@ -92,3 +92,22 @@ test('loadProfile reports the missing home path', () => {
     if (prev === undefined) delete process.env['ACADEMIC_HOME']; else process.env['ACADEMIC_HOME'] = prev;
   }
 });
+
+test('homeDir expands a leading ~ in ACADEMIC_HOME and in the pointer path', () => {
+  const data = tmp();
+  writeFileSync(join(data, 'home.json'), JSON.stringify({ path: '~/Academic' }));
+  assert.equal(homeDir({ ACADEMIC_HOME: '~/Docs/A', HOME: '/h' }), join('/h', 'Docs/A'));
+  assert.equal(homeDir({ ACADEMIC_HOME: '~', HOME: '/h' }), '/h');
+  assert.equal(homeDir({ CLAUDE_PLUGIN_DATA: data, HOME: '/h' }), join('/h', 'Academic'));
+  // only a leading ~ (alone or before a slash) is expanded
+  assert.equal(homeDir({ ACADEMIC_HOME: '/x/~/y', HOME: '/h' }), '/x/~/y');
+  assert.equal(homeDir({ ACADEMIC_HOME: '~other/y', HOME: '/h' }), '~other/y');
+});
+
+test('resolveProfile reads home.md through a ~ ACADEMIC_HOME', () => {
+  const fakeHome = tmp();
+  md(join(fakeHome, 'Academic', '.academic-helper', 'home.md'), 'name: Tilde');
+  const r = resolveProfile(tmp(), { ACADEMIC_HOME: '~/Academic', HOME: fakeHome });
+  assert.equal(r.values['name'], 'Tilde');
+  assert.equal(r.homeMissing, false);
+});

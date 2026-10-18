@@ -161,3 +161,21 @@ def test_apply_never_overwrites_a_different_destination_file(tmp_path):
         raise AssertionError("expected MigrateError")
     assert (terms / "alpha.json").read_text(encoding="utf-8") == "{\"slug\": \"different\"}"
     assert s["legacy"].exists()
+
+
+def test_home_md_takes_only_identity_equal_across_all_workspaces(tmp_path):
+    s = setup(tmp_path)
+    # ws-a has fieldOfStudy and citationStyle chicago; ws-b lacks fieldOfStudy and uses apa
+    s["ws_b"].joinpath(".academic-helper", "profile.md").write_text(
+        PROFILE_B.replace("fieldOfStudy: Jewish Philosophy\n", ""), encoding="utf-8")
+    pre = {w.name: home.resolve_profile(w, {}) for w in s["workspaces"]}
+    run(s, apply=True)
+    home_values = home.read_frontmatter((s["home"] / ".academic-helper" / "home.md").read_text(encoding="utf-8"))
+    assert "fieldOfStudy" not in home_values and "citationStyle" not in home_values
+    assert home_values["name"] == "Dana Levi" and home_values["role"] == "student"
+    env = {"ACADEMIC_HOME": str(s["home"])}
+    for w in s["workspaces"]:
+        got = {k: v for k, v in home.resolve_profile(w, env).values.items() if k != "workspace"}
+        assert got == pre[w.name].values  # no workspace gained or lost a value
+    assert "fieldOfStudy" not in home.resolve_profile(s["ws_b"], env).values
+    assert "citationStyle: chicago" in s["ws_a"].joinpath(".academic-helper", "profile.md").read_text(encoding="utf-8")

@@ -123,12 +123,15 @@ def _shrink_text(text: str, home_values: dict, home_sections: dict, ws_type: str
     return "---\n" + "\n".join(kept) + "\n---" + rest
 
 
-def _home_md_text(first_profile_text: str) -> str:
-    m = _FM_RE.match(first_profile_text)
+def _home_md_text(profile_texts: list) -> str:
+    """Identity keys whose value is equal in EVERY profile; a key that differs or is missing in any of them stays
+    in each workspace profile, so no workspace inherits a value it never had."""
+    parsed = [homelib.read_frontmatter(t) for t in profile_texts]
+    m = _FM_RE.match(profile_texts[0]) if profile_texts else None
     lines: list = []
     if m:
         for key, block in _split_groups(m.group(1)):
-            if key in IDENTITY_KEYS:
+            if key in IDENTITY_KEYS and all(key in v and v[key] == parsed[0][key] for v in parsed):
                 lines.extend(block)
     return "---\n" + "\n".join(lines) + "\n---\n"
 
@@ -153,14 +156,13 @@ def _plan(home: Path, legacy: Path, daily: Optional[Path], workspaces: list, sta
         steps.append({"kind": "write-home", "from": None, "to": str(home_md), "status": "done"})
     else:
         home_values, home_sections = {}, {}
-        for ws, path, text in profiles:
-            candidate = _home_md_text(text)
+        if profiles:
+            candidate = _home_md_text([text for _ws, _path, text in profiles])
             values = homelib.read_frontmatter(candidate)
             if values:
-                home_values, home_sections = values, {}
-                steps.append({"kind": "write-home", "from": str(path), "to": str(home_md), "status": "todo",
-                              "diff": _diff("", candidate, "home.md"), "_text": candidate})
-                break
+                home_values = values
+                steps.append({"kind": "write-home", "from": str(profiles[0][1]), "to": str(home_md),
+                              "status": "todo", "diff": _diff("", candidate, "home.md"), "_text": candidate})
 
     # copy-registry
     terms = helper / "terms"
