@@ -145,7 +145,8 @@ const STATUS = {
   rejected: {g:'✗', w:'נדחה',          cls:'bad'},
   drafted:  {g:'◐', w:'נכתב',          cls:'wait'},
   redrafted:{g:'⟳', w:'נכתב מחדש',     cls:'night'},
-  todo:     {g:'○', w:'בתור',          cls:'wait'}
+  todo:     {g:'○', w:'בתור',          cls:'wait'},
+  skipped:  {g:'↷', w:'דולג',          cls:'wait'}
 };
 function status(key, word){
   const s = STATUS[key] || STATUS.unknown;
@@ -168,14 +169,14 @@ function runProgress(run){
   const steps = run.steps || [];
   const cur = steps.findIndex(s => s.state === 'current');
   const done = steps.filter(s => s.state === 'done').length;
-  return {total: steps.length, done, index: cur >= 0 ? cur + 1 : Math.min(done + 1, steps.length), current: cur >= 0 ? steps[cur] : null};
+  return {total: steps.length, done, index: cur >= 0 ? cur + 1 : Math.min(done + steps.filter(s => s.state === 'skipped').length + 1, steps.length), current: cur >= 0 ? steps[cur] : null};
 }
-/* one bar of equal segments: done = filled, current = hatched, todo = empty, unknown = dashed */
+/* one bar of equal segments: done = filled, current = hatched, todo = empty, skipped = struck through, unknown = dashed */
 function stepBar(run){
   const steps = run.steps || [];
   if (!steps.length) return '';
   const p = runProgress(run);
-  const cls = {done:'d', current:'n', todo:'', unknown:'u'};
+  const cls = {done:'d', current:'n', todo:'', skipped:'s', unknown:'u'};
   return `<div class="steps" role="img" aria-label="${p.done} מתוך ${p.total} שלבים הושלמו">` +
     steps.map(s => `<i class="${cls[s.state] || ''}" title="${esc(stepWord(run.flow, s.id))}"></i>`).join('') + '</div>';
 }
