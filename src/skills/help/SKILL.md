@@ -29,14 +29,17 @@ It works in Hebrew and in English.
 
 1. **Read the guide (optional, 5 minutes):** `/academic-writer:intro` opens a full guide in your
    web browser that explains each step.
-2. **Set up (about 10 minutes, once):** `/academic-writer:setup` walks you through getting a free
-   Gemini key (a kind of password that lets the plugin use Google's AI), checks the small tools it
-   needs, and asks before installing anything.
+2. **Set up (about 10 minutes, once):** open Claude Code in your research folder, then type
+   `/academic-writer:setup`. It asks a few short questions, checks the small tools it needs and asks
+   before installing anything, and walks you through getting a free Gemini key (a kind of password
+   that lets the plugin use Google's AI). After you store the key it asks you to quit Claude Code and
+   open it again in the same folder; your answers are saved.
 3. **Write:** `/academic-writer:write` starts your first article. Claude asks you one question at a
    time.
 
-Want the plugin to learn your personal writing style from your past articles first? Run
-`/academic-writer:init` after setup.
+Want the plugin to learn your personal writing style from your past articles first? Copy 5 to 10 of
+your published articles (PDF or Word) into the `past-articles` folder inside your research folder,
+then run `/academic-writer:init` after setup.
 
 ## All commands
 

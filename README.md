@@ -10,13 +10,13 @@ See it in action on the **[Academic Writer site](https://yodem.github.io/academi
 
 | What | Why | Cost |
 |---|---|---|
-| **Claude Code** | The program the plugin runs inside. Download it from [claude.com/claude-code](https://claude.com/claude-code). | Included in a Claude plan that has Claude Code |
+| **Claude Code** | The program the plugin runs inside. Install steps are below. | A Claude plan that includes Claude Code (Pro, Max, Team or Enterprise; the free plan does not) |
 | **A Gemini API key** | An API key is a long password that lets the plugin use Google's Gemini AI. Setup walks you through getting one from your own Google account. See [Your Gemini key](#your-gemini-key). | Free tier available |
 | **Microsoft Word** (or a compatible program) | To read the finished `.docx` and mark it up with comments and tracked changes. LibreOffice opens the file too, but Word handles comments and tracked changes best. | Your existing copy |
 
 Also useful:
 
-- **Python 3**, a free program the plugin uses to read PDFs and build Word files. Macs and most Linux computers already have it. Setup checks for it and asks before installing the small add-ons it needs.
+- **Python 3**, a free program the plugin uses to read PDFs and build Word files. Some Macs and most Linux computers already have it; if yours does not, setup shows you, click by click, how to install it from python.org. Setup also asks before installing the small add-ons it needs.
 - **5 to 10 of your published articles** (PDF or Word), so the plugin can learn how you write.
 - **Your source texts** as PDFs or Word files. The optional [Trove](https://heytrove.ai) library (an online bookshelf for your sources; [install Trove](https://heytrove.ai/install), [docs](https://docs.heytrove.ai/)) lets the plugin search and quote them page by page.
 
@@ -24,33 +24,52 @@ Also useful:
 
 ## Install
 
-You install once. Open Claude Code and type these two lines, pressing Enter after each:
+You install once. About 15 minutes if you have never used Claude Code. Each step says what you should see.
+
+**Step A. Get Claude Code and sign in** (skip if you already use it).
+
+1. You need a Claude plan that includes Claude Code (Pro, Max, Team or Enterprise). Subscribe or sign in at [claude.ai](https://claude.ai).
+2. Open the **Terminal** app (a window where you type commands instead of clicking). Mac: press Cmd+Space, type `Terminal`, press Enter. Windows: Start menu, type `PowerShell`, press Enter. Linux: Ctrl+Alt+T on most systems.
+3. Paste this line and press Enter (Windows PowerShell: `irm https://claude.ai/install.ps1 | iex`). It shows no progress for a minute; that is normal.
+
+   ```bash
+   curl -fsSL https://claude.ai/install.sh | bash
+   ```
+
+4. Make a folder for your research (for example `Academic` inside Documents). In Terminal type `cd ` (with a space), drag that folder into the window, press Enter, type `claude` and press Enter.
+5. The first time, your web browser opens so you can sign in. Sign in, then return to the Terminal window. You now see Claude Code's prompt box (where you type to Claude).
+
+If Terminal says `command not found: claude`, close it and open a new Terminal window, then try step 4 again. Prefer an app? Anthropic also offers a Claude desktop app with Claude Code; the website steps for it are at [yodem.github.io/academic-writer](https://yodem.github.io/academic-writer/#install).
+
+**Step B. Add the plugin.** In the prompt box, type these two lines, one at a time, pressing Enter after each:
 
 ```text
 /plugin marketplace add yodem/academic-writer
 /plugin install academic-writer@yodem
 ```
 
-The first line tells Claude Code where to find the plugin (a *marketplace* is a list of plugins; this one is called `yodem`). The second installs it. Then quit Claude Code and open it again so the new commands appear.
+The first line tells Claude Code where to find the plugin (a *marketplace* is a list of plugins; this one is called `yodem`). The second installs it. Each prints a confirmation. (A line starting with `/` is typed in Claude Code's prompt box, not in Terminal.)
 
-If you prefer a regular terminal window, the same two steps are:
+**Step C. Restart.** Type `/exit` and press Enter, then type `claude` again in the same folder, so the new commands appear.
+
+**Step D. Check it.** Type `/plugin`, open the **Installed** tab with the arrow keys, and look for **academic-writer**. If it is missing, repeat Step B. Then go to *First steps* below.
+
+If you prefer to add the plugin from Terminal instead of the prompt box, the same two steps are:
 
 ```bash
 claude plugin marketplace add yodem/academic-writer
 claude plugin install academic-writer@yodem
 ```
 
-**How to open a terminal:** on a Mac, press Cmd+Space, type `Terminal`, press Enter. On Windows, open the Start menu and type `Terminal` or `PowerShell`. On most Linux systems, press Ctrl+Alt+T. Then move to your research folder (type `cd `, drag the folder into the window, press Enter) and type `claude`. Everything the plugin creates for a project stays in that folder.
-
 ---
 
 ## First steps
 
-Run these inside Claude Code, started in your research folder.
+Run these inside Claude Code, started in your research folder (not your main home folder).
 
 1. **`/academic-writer:intro`** opens the full guide in your web browser.
-2. **`/academic-writer:setup`** is a short guided conversation, one question at a time, about ten minutes. It asks your field, article language and citation style; checks the tools the plugin needs and **asks your permission before installing anything**; walks you through getting and safely storing a free Gemini key, then tests it; and writes one short sample paragraph. After you store the key, setup asks you to restart Claude Code once and choose **Check my Gemini key**.
-3. **`/academic-writer:init`** (recommended) builds your full profile. Put 5 to 10 of your published articles in the `past-articles` folder that setup created first. Init reads them, shows you what it learned about your style so you can correct it, and helps you connect your source library.
+2. **`/academic-writer:setup`** is a short guided conversation, one question at a time, about ten minutes. It asks your field, article language and citation style; checks the tools the plugin needs and **asks your permission before installing anything**; walks you through getting and safely storing a free Gemini key, then tests it; and writes one short sample paragraph. After you store the key, setup asks you to quit Claude Code completely, open it again in the same folder, type `/academic-writer:setup` and choose **Check my Gemini key**; your answers are saved.
+3. **`/academic-writer:init`** (recommended) builds your full profile. First copy 5 to 10 of your published articles (PDF or Word) into the `past-articles` folder inside your research folder (setup created it). Init reads them, shows you what it learned about your style so you can correct it, and helps you connect your source library.
 4. **`/academic-writer:write`** starts your first article.
 
 Running setup or init again later is safe: they update your profile and never erase it.

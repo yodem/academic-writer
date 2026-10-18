@@ -177,13 +177,8 @@ that could not be installed is saved as disabled.
 Check first whether a `name` field is already present in an existing profile (Phase 0). If not,
 ask:
 
-```python
-AskUserQuestion(questions=[{
-  "question": "What is your full name (as you'd like it to appear on articles)?",
-  "header": "Step 1 of 5 — Your Name",
-  "options": []
-}])
-```
+A name is free text, and `AskUserQuestion` needs 2 to 4 options, so ask in plain chat and end your turn:
+"What is your full name, as you'd like it to appear on articles?" Take the next message as the answer.
 
 Derive `author_key` as a kebab-case slug of the name: lowercase, trim, replace runs of
 whitespace/punctuation with a single hyphen, strip leading/trailing hyphens. Example:
@@ -220,20 +215,25 @@ Store the final value as `author_key`. Store the full name as `name`.
 
 ### Step 2 of 5 — Field of Study
 
+`AskUserQuestion` needs 2 to 4 options and always adds an **Other** choice for typing. Offer broad examples, then ask for
+the specific field in plain chat if they pick one:
+
 ```python
 AskUserQuestion(questions=[{
-  "question": "What is your field of study and area of specialization?",
+  "question": "What is your field of study and area of specialization? Choose the closest, or choose Other and type your own.",
   "header": "Step 2 of 5 — Field of Study",
-  "options": []
+  "options": [
+    {"label": "Jewish studies", "description": "For example Talmud, Bible, Jewish history or thought."},
+    {"label": "History", "description": "For example medieval or early modern history."},
+    {"label": "Literature or language", "description": "For example Hebrew poetry, linguistics."},
+    {"label": "Philosophy or religion", "description": "For example philosophy, theology, religious studies."}
+  ],
+  "multiSelect": false
 }])
 ```
 
-Show examples below the question:
-> "The more specific, the better. Examples:
-> - *Early Modern Jewish Philosophy*
-> - *Talmudic Literature and Rabbinic Thought*
-> - *Medieval Hebrew Poetry*
-> - *Biblical Studies — Pentateuch*"
+The more specific, the better; when they pick a broad choice, ask for the specific area in plain chat (for example
+*Early Modern Jewish Philosophy*, *Talmudic Literature and Rabbinic Thought*, *Medieval Hebrew Poetry*).
 
 Record the free-text answer as `fieldOfStudy`.
 
