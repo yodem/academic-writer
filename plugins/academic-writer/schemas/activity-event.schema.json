@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Academic Writer agent activity event (one line of runs/<id>/activity.jsonl)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "ts", "run", "flow", "kind"],
+  "properties": {
+    "v": {"const": 1},
+    "ts": {"type": "string", "minLength": 20},
+    "run": {"type": "string", "minLength": 1},
+    "flow": {"enum": ["write", "edit", "edit-section", "proofread", "revise"]},
+    "kind": {"enum": ["run_start", "run_end", "step_start", "step_end", "unit_drafted", "audit_verdict", "redraft", "gate", "file_written", "subagent_start", "subagent_stop"]},
+    "step": {"type": "string", "minLength": 1},
+    "unit": {"type": "string", "minLength": 1},
+    "paragraph": {"type": "integer", "minimum": 0},
+    "verdict": {"enum": ["PASS", "FAIL", "PARTIAL", "unknown"]},
+    "reason": {"type": "string", "maxLength": 300},
+    "gate": {"type": "string", "minLength": 1},
+    "ok": {"type": "boolean"},
+    "path": {"type": "string", "minLength": 1},
+    "agent": {"type": "string", "minLength": 1},
+    "exit": {"enum": ["OK", "ERROR", "CAP_REACHED"]}
+  }
+}

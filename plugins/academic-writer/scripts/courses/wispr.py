@@ -81,6 +81,28 @@ def list_meetings(db: Path) -> list[dict[str, Any]]:
     return meetings
 
 
+def guess_course(registry: courses.Registry, start: datetime) -> str | None:
+    """The one course whose slot contains the meeting start (weekday, semester, time), else None.
+
+    A hint for an unmatched recording only (its overlap was too short, or two courses tied); it never imports."""
+    tz = ZoneInfo(registry.term.get("timezone", "Asia/Jerusalem"))
+    ustart = start.astimezone(timezone.utc)
+    lstart = ustart.astimezone(tz)
+    day = lstart.date()
+    hits: set[str] = set()
+    for slug, course in registry.courses.items():
+        for slot in course.get("slots", []):
+            if courses.WEEKDAYS.get(str(slot.get("day"))) != lstart.weekday():
+                continue
+            if not courses._in_semester(registry.term, str(slot.get("semester", "")), day):
+                continue
+            s = datetime.combine(day, datetime.strptime(slot["start"], "%H:%M").time(), tz).astimezone(timezone.utc)
+            e = datetime.combine(day, datetime.strptime(slot["end"], "%H:%M").time(), tz).astimezone(timezone.utc)
+            if s <= ustart < e:
+                hits.add(slug)
+    return next(iter(hits)) if len(hits) == 1 else None
+
+
 def match_course(registry: courses.Registry, start: datetime, end: datetime) -> tuple[str | None, str | None]:
     """Return (slug, None) for exactly one matching course, else (None, reason).
 
@@ -197,7 +219,8 @@ def scan(registry: courses.Registry, *, since: str | None = None, dry_run: bool 
             continue
         slug, reason = match_course(registry, meeting["start"], meeting["end"])
         if not slug:
-            report["unmatched"].append({**_stamp(meeting, tz), "reason": reason})
+            report["unmatched"].append({**_stamp(meeting, tz), "reason": reason,
+                                        "course_guess": guess_course(registry, meeting["start"])})
             continue
         matched.append((meeting, slug))
     # every database read of a real run happens here, after matching and before anything is written:

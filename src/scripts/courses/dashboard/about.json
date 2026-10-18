@@ -847,7 +847,7 @@
       "id": "activity-pane",
       "name_he": "חלון פעילות",
       "description_he": "חלון חי ב-Claude Code שמראה את שלבי הכתיבה.",
-      "command": null,
+      "command": "/academic-writer:watch",
       "status": "partial",
       "tested": "manual",
       "subfeatures": []

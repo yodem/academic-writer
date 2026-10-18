@@ -3,7 +3,7 @@ name: health
 description: "Check that Academic Writer is ready to use — your profile, the tools it needs (Python and its add-ons, Hebrew spelling, Trove, NotebookLM), the Gemini key and past articles — with a plain-language fix for anything missing. Use when something stops working, after install or an update, or before a long writing session."
 user-invocable: true
 allowed-tools: [Bash, Read]
-metadata: {author: "Yotam Fromm", version: "0.3.0"}
+metadata: {author: "Yotam Fromm", version: "0.4.0"}
 ---
 
 # Academic Writer — Health Check
@@ -27,15 +27,20 @@ If it is older than the version the author expects, tell them to run
 
 ## 1. Profile Check
 
+Run the deterministic checks once; sections 1, 3, 4 and 5 read their rows from this output (the same checks the
+dashboard's Setup page shows). The script only reads: it installs and writes nothing, and never prints the Gemini key.
+
 ```bash
-if [ -f .academic-helper/profile.md ]; then
-  cat .academic-helper/profile.md
-else
-  echo "MISSING"
-fi
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup_checks.py" --json
 ```
 
-If missing: report `FAIL` and suggest `/academic-writer:init`.
+Each row is `{id, label_he, ok, optional, found, required, reason_he, fix}`; `ok: null` means "not applicable here".
+Use the `home` and `profile` rows for this section: if `profile` is not ok, report `FAIL` and suggest
+`/academic-writer:init`; if `home` is not ok, suggest `/academic-writer:setup`. Then read the profile itself:
+
+```bash
+[ -f .academic-helper/profile.md ] && cat .academic-helper/profile.md
+```
 
 If found, validate:
 - Has `fieldOfStudy`? ✓/✗
@@ -65,25 +70,23 @@ Report:
 
 ## 3. Tools and Gemini key
 
-Run these together (they change nothing, and never print the key):
+Use the rows `python` (found version against the required 3.9), `python-addons`, `hspell`, `gemini-key` and
+`nightly-job` from the section 1 output. Show each row's `reason_he` and `fix` as the plain "To fix" line. Then run
+the plugin's own command check (it changes nothing):
 
 ```bash
-command -v python3 >/dev/null 2>&1 && python3 --version || echo "PYTHON_MISSING"
-command -v hspell >/dev/null 2>&1 && echo "HSPELL_OK" || echo "HSPELL_MISSING"
-[ -n "${GOOGLE_API_KEY:-}" ] && echo "KEY_PRESENT" || echo "NO_KEY"
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" models check >/dev/null 2>&1 && echo "AW_OK" || echo "AW_FAILED"
 ```
 
-Then run the Python add-ons check from `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/python-deps.md`.
-If the profile's `## Gemini` block has `enabled: true` and `KEY_PRESENT`, run the live key check
+If the profile's `## Gemini` block has `enabled: true` and the `gemini-key` row is ok, run the live key check
 from `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/gemini-key.md § Checking the key`.
 
 | Result | Report as | To fix (say exactly this, in the researcher's language) |
 |---|---|---|
-| `PYTHON_MISSING` | ✗ Python | "Python isn't installed. It's free; run `/academic-writer:setup` and I'll walk you through it." |
-| `MISSING:...` | ✗ Python add-ons | "Some Python add-ons are missing. Run `/academic-writer:setup` — it will ask before installing them." |
-| `HSPELL_MISSING` (Hebrew profile only) | ⚠ Hebrew spelling | "The Hebrew spelling checker isn't installed; proofreading still works. Run `/academic-writer:setup` to add it (not available on Windows)." |
-| `NO_KEY` with Gemini enabled | ✗ Gemini key | "Gemini is on but no key reached this session. Store it in `/plugin` → Installed → academic-writer → Configure → `google_api_key`, then restart Claude Code." |
+| `python` row not ok | ✗ Python | "Python isn't installed. It's free; run `/academic-writer:setup` and I'll walk you through it." |
+| `python-addons` row not ok | ✗ Python add-ons | "Some Python add-ons are missing. Run `/academic-writer:setup` — it will ask before installing them." |
+| `hspell` row not ok (Hebrew profile only) | ⚠ Hebrew spelling | "The Hebrew spelling checker isn't installed; proofreading still works. Run `/academic-writer:setup` to add it (not available on Windows)." |
+| `gemini-key` row not ok with Gemini enabled | ✗ Gemini key | "Gemini is on but no key reached this session. Store it in `/plugin` → Installed → academic-writer → Configure → `google_api_key`, then restart Claude Code." |
 | live check not `HTTP 200` | ✗ Gemini key | the matching line from the table in `gemini-key.md` |
 | `AW_FAILED` | ✗ Plugin command | "The plugin's own command didn't start. Update or reinstall the plugin (see version check above)." |
 
@@ -103,11 +106,7 @@ If enabled, check each route that the route setting uses:
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$PWD" library status --check
 ```
 
-The `check` part of the JSON has one entry per route (`trove`, `pageindex`) with `ok`, `latency_ms`, `count` and `error`. When Trove is one of the routes, also check the command:
-
-```bash
-command -v trove >/dev/null 2>&1 && echo "CLI: INSTALLED" || echo "CLI: NOT_FOUND"
-```
+The `check` part of the JSON has one entry per route (`trove`, `pageindex`) with `ok`, `latency_ms`, `count` and `error`. When Trove is one of the routes, also use the `trove` row from the section 1 output (command installed or not).
 
 Report:
 - Which route the project uses (Trove, PageIndex or both, and which one answers)
@@ -127,11 +126,7 @@ install it after asking." **If PageIndex is a route and its command is not found
 
 **Skip if `tools.notebooklm.enabled` is false.** Report as "Disabled (enable with `/academic-writer:update-tools`)".
 
-```bash
-command -v nlm >/dev/null 2>&1 && echo "CLI: INSTALLED" || echo "CLI: NOT_FOUND"
-```
-
-If installed:
+Use the `notebooklm` row from the section 1 output for "CLI installed?". If installed:
 ```bash
 nlm login --check 2>&1
 nlm notebook list 2>&1 | head -5
