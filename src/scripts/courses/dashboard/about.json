@@ -1,0 +1,903 @@
+{
+  "version": "0.17.1",
+  "features": [
+    {
+      "id": "onboarding",
+      "name_he": "התחלה והגדרה",
+      "description_he": "הגדרה ראשונה, פרופיל ובדיקת הכלים שהתוסף צריך.",
+      "command": "/academic-writer:init",
+      "status": "ok",
+      "tested": "manual",
+      "subfeatures": [
+        {
+          "id": "init-wizard",
+          "name": "Init wizard (Preflight, Integrations, Profile incl. author_key, Gemini Onboarding, Style Analysis, Sources) with --quick mode",
+          "status": "ok",
+          "tested": "manual",
+          "subfeatures": []
+        },
+        {
+          "id": "setup-quick",
+          "name": "setup skill — one-question-at-a-time first-run wizard (basics, dependency check, ask-before-install per tool, Gemini key walkthrough per OS with a live check after restart, sample paragraph)",
+          "status": "ok",
+          "tested": "manual",
+          "subfeatures": []
+        },
+        {
+          "id": "integration-detect",
+          "name": "Auto-detect Trove/NotebookLM/Gemini",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "computational-fingerprint",
+          "name": "extract-style-metrics.py computational metrics",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "hebrew-baseline-fetch",
+          "name": "Fetch Hebrew linguistic baseline from Trove",
+          "status": "ok",
+          "tested": "manual",
+          "subfeatures": []
+        },
+        {
+          "id": "source-indexing",
+          "name": "Index + enrich Trove library",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "voice",
+      "name_he": "הקול שלי",
+      "description_he": "מאגר אחד של סגנון הכתיבה שלך, משותף לכל הפרויקטים.",
+      "command": "/academic-writer:voice",
+      "status": "partial",
+      "tested": "manual",
+      "subfeatures": [
+        {
+          "id": "voice-migrate",
+          "name": "aw voice migrate: import AUTHOR_VOICE.md / fingerprint / exemplars into ${CLAUDE_PLUGIN_DATA}/voice",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "voice-exemplars",
+          "name": "aw voice exemplars: author picks thresholds.json voice.selection paragraphs from past-articles/",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "voice-moves",
+          "name": "aw voice moves: one Gemini call derives rules.md (writing moves)",
+          "status": "ok",
+          "tested": "manual",
+          "subfeatures": []
+        },
+        {
+          "id": "cross-project-share",
+          "name": "One voice store in the plugin data dir, shared by all projects and keyed by author_key",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "trove-sync",
+          "name": "voice-sync.sh pull/push (last-write-wins, CHANGELOG.jsonl merge)",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "legacy-migrate",
+          "name": "voice-migrate.sh legacy AUTHOR_VOICE migration",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "write-voice-gate",
+          "name": "write stops unless check-voice-populated.py passes on AUTHOR_VOICE.md",
+          "status": "partial",
+          "tested": "unit",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "research",
+      "name_he": "מחקר ואיסוף ראיות",
+      "description_he": "שאלת מחקר ואיסוף קטעים מאומתים מהמקורות.",
+      "command": "/academic-writer:research",
+      "status": "ok",
+      "tested": "manual",
+      "subfeatures": [
+        {
+          "id": "evidence-build",
+          "name": "aw evidence build: verbatim-checked passages → .academic-helper/evidence.json (replaces the deep-reader agent)",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "chapter-coverage",
+          "name": "Chapter-coverage completeness map",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "notebooklm-query",
+          "name": "NotebookLM thematic query (supplementary)",
+          "status": "ok",
+          "tested": "manual",
+          "subfeatures": []
+        },
+        {
+          "id": "ideate",
+          "name": "Frame a research question",
+          "status": "ok",
+          "tested": "manual",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "ingest",
+      "name_he": "הוספת מקורות",
+      "description_he": "העלאת מאמר או ספר שלם לספרייה עם מספרי עמודים מודפסים.",
+      "command": "/academic-writer:ingest",
+      "status": "ok",
+      "tested": "manual",
+      "subfeatures": [
+        {
+          "id": "ingest-article",
+          "name": "/academic-writer:ingest — single article or chapter with printed page numbers preserved, hinted contents, page-1 reading-and-citation guide (Chicago + Hebrew + profile style), aw ocr with orientation/truncation handling, mandatory read-back",
+          "status": "ok",
+          "tested": "manual",
+          "subfeatures": []
+        },
+        {
+          "id": "ingest-book",
+          "name": "/academic-writer:ingest-book — whole book/multi-volume/scanned PDF/EPUB as one book with nested navigable ToC metadata (hints on every entry), crosswalk from printed pages, mandatory read-back; repairs a flat ToC",
+          "status": "ok",
+          "tested": "manual",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "architecture",
+      "name_he": "טענה ומבנה",
+      "description_he": "אפשרויות לטענה מרכזית ומתווה למאמר.",
+      "command": null,
+      "status": "partial",
+      "tested": "not tested yet",
+      "subfeatures": [
+        {
+          "id": "thesis-options",
+          "name": "Mode A: 2-3 falsifiable thesis options",
+          "status": "ok",
+          "tested": "manual",
+          "subfeatures": []
+        },
+        {
+          "id": "outline",
+          "name": "Mode B: structured outline + word/paragraph sizing",
+          "status": "partial",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "evidence-ownership",
+          "name": "Writes evidence-ownership.json (dedup owner map)",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "chronological-ordering",
+          "name": "Surfaces chronological vs thematic ordering",
+          "status": "ok",
+          "tested": "not tested yet",
+          "subfeatures": []
+        },
+        {
+          "id": "argument-graph",
+          "name": "Explicit premise→support→thesis-link logical model",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "ownership-only-mode",
+          "name": "Mode C: ownership-only from user draft",
+          "status": "ok",
+          "tested": "manual",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "section-writing",
+      "name_he": "כתיבת המאמר",
+      "description_he": "כתיבה לפי סדר התלות, בדיקת ציטוטים לכל יחידה ותיקון חוזר.",
+      "command": "/academic-writer:write",
+      "status": "ok",
+      "tested": "unit",
+      "subfeatures": [
+        {
+          "id": "ordered-draft",
+          "name": "aw draft writes dependency-ordered units and intro/conclusion last with code gates",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "batched-audit",
+          "name": "One auditor call per writer unit returns indexed verdicts and taggedText",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "rewrite-gate",
+          "name": "Failed units redraft with auditor feedback up to rewriteCycles.max",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "diff-synthesis",
+          "name": "aw synthesize applies paragraph-level transition edits",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "docx-handoff",
+          "name": "generate-docx.py creates Word output; author comments and runs /academic-writer:revise",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "citation-audit",
+      "name_he": "בדיקת ציטוטים",
+      "description_he": "כל פסקה נבדקת מול רשימת המקורות; פסקה שנכשלה חוזרת לתיקון.",
+      "command": null,
+      "status": "ok",
+      "tested": "unit",
+      "subfeatures": [
+        {
+          "id": "per-paragraph-audit",
+          "name": "Auditor VERDICT PASS/FAIL/PARTIAL per paragraph",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "sources-json-verify",
+          "name": "Verify metadata against sources.json only",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "rewrite-cycles",
+          "name": "Max rewrite cycles then [NEEDS REVIEW]",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "synthesis",
+      "name_he": "חיבור וסקירה",
+      "description_he": "בדיקת רצף בין חלקים, מחקר של חזרות, תקציר וציון עצמי.",
+      "command": null,
+      "status": "partial",
+      "tested": "not tested yet",
+      "subfeatures": [
+        {
+          "id": "coherence",
+          "name": "Cross-section and unit-to-unit coherence/flow review",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "full-repetition",
+          "name": "Full-article repetition sweep",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "abstract",
+          "name": "Abstract (single or dual-language)",
+          "status": "ok",
+          "tested": "not tested yet",
+          "subfeatures": []
+        },
+        {
+          "id": "self-review-scorecard",
+          "name": "6-dimension self-review gate (40/60)",
+          "status": "ok",
+          "tested": "not tested yet",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "anti-ai-references",
+      "name_he": "סגנון טבעי",
+      "description_he": "רשימות דפוסים שמרחיקות כתיבה מכנית בעברית ובאנגלית.",
+      "command": null,
+      "status": "ok",
+      "tested": "not tested yet",
+      "subfeatures": [
+        {
+          "id": "he-patterns",
+          "name": "Hebrew pattern list A-K (openers, meta-summary, dramatic, citation format)",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "en-patterns",
+          "name": "English pattern list A-G",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "typography-tier1",
+          "name": "Typography auto-fix (referenced by both)",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "academic-terminology",
+          "name": "Positive discipline-standard terminology lexicon (EN+HE)",
+          "status": "ok",
+          "tested": "not tested yet",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "output",
+      "name_he": "פלט",
+      "description_he": "המאמר כקובץ Markdown או כ-Word עם הערות שוליים.",
+      "command": null,
+      "status": "ok",
+      "tested": "manual",
+      "subfeatures": [
+        {
+          "id": "markdown-out",
+          "name": "Markdown article output",
+          "status": "ok",
+          "tested": "manual",
+          "subfeatures": []
+        },
+        {
+          "id": "docx-out",
+          "name": "RTL-aware DOCX with native footnotes",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "citation-formats",
+          "name": "inline-parenthetical / chicago / mla / apa",
+          "status": "partial",
+          "tested": "manual",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "gemini-mcp-retirement",
+      "name_he": "עריכה וקריאת סריקות",
+      "description_he": "עריכה וזיהוי טקסט מסריקות דרך פקודות התוסף.",
+      "command": null,
+      "status": "ok",
+      "tested": "unit",
+      "subfeatures": []
+    },
+    {
+      "id": "editing",
+      "name_he": "עריכה והגהה",
+      "description_he": "עריכת מאמר או חלק ממנו, והגהה עם הערות ותיקונים.",
+      "command": "/academic-writer:edit-section",
+      "status": "ok",
+      "tested": "manual",
+      "subfeatures": [
+        {
+          "id": "edit-article",
+          "name": "Revise a drafted article",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "edit-section",
+          "name": "Revise one section",
+          "status": "ok",
+          "tested": "manual",
+          "subfeatures": []
+        },
+        {
+          "id": "proofread",
+          "name": "aw proofread find, verify, memo, and apply pipeline",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "proofread-editorial",
+          "name": "One editorial memo call included in the aw proofread pipeline",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "proofread-language",
+          "name": "Finder candidates receive batched meaning verification before eligible changes apply",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "proofread-mechanical",
+          "name": "Deterministic must-catch corrections run before model suggestions",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "proofread-tracked-docx",
+          "name": "build-tracked-docx.py — real w:ins/w:del/w:comment revisions on the original .docx",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "proofread-venue-profile",
+          "name": "Venue profile (.academic-helper/venues/<slug>.md) distilled from a CFP or rejection letter; hebrew-recall.md shipped as example/fixture venue",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "update-field",
+          "name": "Update a profile field",
+          "status": "ok",
+          "tested": "manual",
+          "subfeatures": []
+        },
+        {
+          "id": "update-tools",
+          "name": "Change integrations",
+          "status": "ok",
+          "tested": "manual",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "venues",
+      "name_he": "כתבי עת",
+      "description_he": "פרופיל לכתב עת שנבנה מקריאה לשליחת מאמרים או ממכתב דחייה.",
+      "command": null,
+      "status": "ok",
+      "tested": "not tested yet",
+      "subfeatures": [
+        {
+          "id": "venue-create",
+          "name": "First-use venue notes from a CFP, author guidelines, or rejection letter",
+          "status": "ok",
+          "tested": "manual",
+          "subfeatures": []
+        },
+        {
+          "id": "venue-default",
+          "name": "defaultVenue: in profile frontmatter",
+          "status": "ok",
+          "tested": "not tested yet",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "infra",
+      "name_he": "תשתית התוסף",
+      "description_he": "כללי הריצה, הספים והבדיקות שמחזיקים את התוסף יציב.",
+      "command": null,
+      "status": "ok",
+      "tested": "unit",
+      "subfeatures": [
+        {
+          "id": "lifecycle-hooks",
+          "name": "Profile-scoped lifecycle hooks (TS/esbuild)",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "thresholds",
+          "name": "thresholds.json single source of truth",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "build",
+          "name": "build-plugins + build-mcp + build:hooks",
+          "status": "ok",
+          "tested": "e2e",
+          "subfeatures": []
+        },
+        {
+          "id": "tests",
+          "name": "pytest structural + contract + voice tests",
+          "status": "partial",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "help-health",
+          "name": "help + health skills",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "docx-revise-loop",
+      "name_he": "סבב הערות ב-Word",
+      "description_he": "קריאת הערות ותיקונים ב-Word ועדכון הטיוטה.",
+      "command": "/academic-writer:revise",
+      "status": "ok",
+      "tested": "unit",
+      "subfeatures": [
+        {
+          "id": "docx-review-read",
+          "name": "Read Word comments and tracked changes",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "revise-classify-apply",
+          "name": "Classify and apply author-confirmed review items",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "aw-improve",
+          "name": "Cluster plugin defects and report Jev agreement",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "course-management",
+      "name_he": "ניהול קורסים",
+      "description_he": "סמסטר, משאבים לכל קורס וסריקה יומית.",
+      "command": "/academic-writer:courses",
+      "status": "ok",
+      "tested": "unit",
+      "subfeatures": [
+        {
+          "id": "term-setup",
+          "name": "Schedule import and per-course Drive, NotebookLM, and Trove resource registry",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "resource-validation",
+          "name": "Resource ID and expected-name validation",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "lemida-sync",
+          "name": "Moodle/Lemida course resource sync",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "daily-scan",
+          "name": "Voice Memos scan and pending lesson queue",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "lesson-transcription",
+      "name_he": "סיכומי שיעורים",
+      "description_he": "הקלטות ותמלולים הופכים לדפי שיעור מסודרים.",
+      "command": "/academic-writer:lesson-notes",
+      "status": "ok",
+      "tested": "unit",
+      "subfeatures": [
+        {
+          "id": "notebooklm-transcript",
+          "name": "Recording ingest and NotebookLM transcript queue",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "trove-lesson-pages",
+          "name": "Structured lesson pages with nested ToC and registry page tracking",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "course-dashboard",
+      "name_he": "לוח הקורסים",
+      "description_he": "לוח מקומי עם השבוע, הקורסים והמטלות.",
+      "command": "/academic-writer:dashboard",
+      "status": "ok",
+      "tested": "unit",
+      "subfeatures": [
+        {
+          "id": "dashboard-state",
+          "name": "/api/state joins the registry; next task, ready/missing/waiting state, lede and semester-aware agenda computed deterministically",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "dashboard-security",
+          "name": "127.0.0.1 only, per-run key and HttpOnly cookie, Host and Origin checks on writes",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "dashboard-submit",
+          "name": "I submitted / undo through tasks.py task submit and task unsubmit",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "dashboard-fetch-queue",
+          "name": "Fetch selected writes queue/fetch jobs for refs.py fetch",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "library-routes",
+      "name_he": "ספרייה ומקורות",
+      "description_he": "בחירת הספרייה שממנה נקראים המקורות ובדיקת הדיוק שלה.",
+      "command": null,
+      "status": "partial",
+      "tested": "manual",
+      "subfeatures": [
+        {
+          "id": "route-choice",
+          "name": "Per-project route (trove | pageindex | both, with a choice of which answers) asked in init and update-tools, stored in .academic-helper/library.json; no file means Trove only, as before",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "library-adapter",
+          "name": "aw library status|list|toc|read|get: one adapter over Trove and an optional PageIndex command (pageindex_command plugin setting), Trove page numbers as the canonical page space with printed-page mapping through sources.json pageMap",
+          "status": "ok",
+          "tested": "e2e",
+          "subfeatures": []
+        },
+        {
+          "id": "quiet-shadow",
+          "name": "With route=both the other library runs as a detached background lookup that never changes, delays or fails the answering result (tested with a failing and a hanging fake pilib)",
+          "status": "ok",
+          "tested": "e2e",
+          "subfeatures": []
+        },
+        {
+          "id": "retrieval-ledger",
+          "name": "Schema-validated .academic-helper/retrieval.jsonl: lookup, shadow and verdict rows (PASS/FAIL, corrected page, shadow-supports computed in code, no model call)",
+          "status": "ok",
+          "tested": "e2e",
+          "subfeatures": []
+        },
+        {
+          "id": "library-report",
+          "name": "aw library report: page agreement, latency, failures and timeouts, auditor pass rate and second-library support by route",
+          "status": "ok",
+          "tested": "e2e",
+          "subfeatures": []
+        },
+        {
+          "id": "command-resolution",
+          "name": "Which PageIndex command runs: AW_PAGEINDEX_COMMAND (the pageindex_command setting), then library.json, then the plugin-installed helper, then pilib on the path; AW_LIBRARY_ROUTE forces one route",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "builtin-install",
+          "name": "aw library install|uninstall: private Python folder in the plugin data folder, hashed pinned requirements, core tier (Python 3.9+) and structure tier (Python 3.10+, pango); the CLI refuses without --yes, the skill asks first",
+          "status": "partial",
+          "tested": "e2e",
+          "subfeatures": []
+        },
+        {
+          "id": "ingest-dual-write",
+          "name": "aw library index --trove-id: PageIndex tree from the hinted table of contents of a Trove item (same page numbers), Gemini summaries or free hints, summary reuse, read-back against Trove; ingest and ingest-book offer it after the Trove read-back, including adding a reading to an existing item",
+          "status": "partial",
+          "tested": "e2e",
+          "subfeatures": []
+        },
+        {
+          "id": "backfill",
+          "name": "aw library backfill: copy existing Trove books into PageIndex (--shelf-current, --ids, --all), repeatable, dry-run estimate first",
+          "status": "partial",
+          "tested": "e2e",
+          "subfeatures": []
+        },
+        {
+          "id": "ocr-engines",
+          "name": "OCR choice in the ocr skill: the plugin's Gemini OCR, Claude or Codex reading page images, or local Tesseract",
+          "status": "partial",
+          "tested": "manual",
+          "subfeatures": []
+        },
+        {
+          "id": "report-tokens",
+          "name": "aw library report: returned-text tokens (estimates, characters divided by a ratio), locating-agent tokens and cost from the usage ledger, indexing runs, latency, auditor pass rate, page agreement and shadow-supports; --eval filters one evaluation",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "library-eval",
+          "name": "/academic-writer:library-eval and aw library eval plan|run|pairs|page|import|unblind|status: claims from a draft, locating agents (claude or codex) per route, anonymised A/B pairs with a sealed key, a private judging page (local file), unblinded report with win rate, interval and sign test",
+          "status": "partial",
+          "tested": "e2e",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "kotar-fetch",
+      "name_he": "הורדה מכותר",
+      "description_he": "הורדת העמודים המצוטטים מספר בכותר כקובץ PDF אחד.",
+      "command": "/academic-writer:kotar-fetch",
+      "status": "ok",
+      "tested": "manual",
+      "subfeatures": [
+        {
+          "id": "kotar-tokens",
+          "name": "Page tokens from the signed-in viewer tab via one javascript_tool snippet (batches of 10, dashes as spaces)",
+          "status": "ok",
+          "tested": "manual",
+          "subfeatures": []
+        },
+        {
+          "id": "kotar-fetch-merge",
+          "name": "Cookie-less curl at nStep=9 with a 20 KB size check, merged to one PDF in printed-page order",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        }
+      ]
+    },
+    {
+      "id": "home-workspaces",
+      "name_he": "תיקיית בית ותיקיות עבודה",
+      "description_he": "תיקייה אחת שמחזיקה את הפרופיל והסמסטר, ותיקיות עבודה שיורשות ממנה.",
+      "command": null,
+      "status": "partial",
+      "tested": "not tested yet",
+      "subfeatures": []
+    },
+    {
+      "id": "brand",
+      "name_he": "מראה אחיד",
+      "description_he": "קובץ עיצוב אחד שהאתר והלוח טוענים ממנו, עם בדיקה אוטומטית.",
+      "command": null,
+      "status": "partial",
+      "tested": "not tested yet",
+      "subfeatures": []
+    },
+    {
+      "id": "agent-activity",
+      "name_he": "פעילות הסוכנים",
+      "description_he": "רישום קבוע של כל שלב בכתיבה, ללא מודל, להצגה בלוח ובחלון.",
+      "command": null,
+      "status": "partial",
+      "tested": "not tested yet",
+      "subfeatures": []
+    },
+    {
+      "id": "activity-pane",
+      "name_he": "חלון פעילות",
+      "description_he": "חלון חי ב-Claude Code שמראה את שלבי הכתיבה.",
+      "command": null,
+      "status": "partial",
+      "tested": "manual",
+      "subfeatures": []
+    },
+    {
+      "id": "setup-checks",
+      "name_he": "בדיקות הגדרה",
+      "description_he": "בדיקה אחת, ללא התקנה, שמשרתת את הבדיקה, ההגדרה ולוח ההגדרה.",
+      "command": null,
+      "status": "ok",
+      "tested": "unit",
+      "subfeatures": [
+        {
+          "id": "setup-checks-rows",
+          "name": "Ten read-only check rows (home, profile, Python, add-ons, hspell, Trove, Gemini key, NotebookLM, PageIndex, nightly job)",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
+          "id": "setup-checks-no-secrets",
+          "name": "Gemini key presence only; never printed, nothing written or installed",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        }
+      ]
+    }
+  ],
+  "onboarding": {
+    "student": [
+      "הריצו /academic-writer:setup ובחרו תיקיית בית: שם יישמרו הפרופיל והסמסטר שלכם.",
+      "הריצו /academic-writer:courses כדי להגדיר את הסמסטר ואת הקורסים.",
+      "פתחו את הלוח עם /academic-writer:dashboard וראו את השבוע שלפניכם.",
+      "הוסיפו מאמר או ספר לספרייה עם /academic-writer:ingest.",
+      "התחילו לכתוב עם /academic-writer:write; כל שלב ייראה בלשונית כתיבה."
+    ],
+    "lecturer": [
+      "הריצו /academic-writer:setup ובחרו תיקיית בית ותפקיד מרצה.",
+      "הריצו /academic-writer:init בתיקיית הפרויקט כדי לתת לו פרופיל.",
+      "הוסיפו מאמרים קודמים כדי שהתוסף ילמד את הסגנון שלכם.",
+      "כתבו מאמר חדש עם /academic-writer:write, או הגיהו קיים עם /academic-writer:proofread."
+    ],
+    "researcher": [
+      "הריצו /academic-writer:setup ובחרו תיקיית בית ותפקיד חוקר.",
+      "הריצו /academic-writer:init בתיקיית המחקר כדי לתת לה פרופיל.",
+      "הוסיפו מקורות לספרייה עם /academic-writer:ingest או /academic-writer:ingest-book.",
+      "נסחו שאלת מחקר עם /academic-writer:ideate וכתבו עם /academic-writer:write.",
+      "פתחו את הלוח עם /academic-writer:dashboard כדי לעקוב אחרי הכתיבה."
+    ]
+  },
+  "guide": "/academic-writer:intro"
+}
