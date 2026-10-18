@@ -12,7 +12,7 @@ Set up and maintain one Drive folder, NotebookLM notebook, and Trove book for ea
 
 ## Registry and configuration
 
-The registry root is `$ACADEMIC_COURSES_DIR`; otherwise use `~/.academic-writer/courses/<term>/`. `courses.py` reads `term.json` and one `<slug>.json` per course. Resolve the script as `${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py`. The registry is user data and must not be committed to a project.
+The registry root is `$ACADEMIC_COURSES_DIR`; otherwise it lives under the researcher's home folder (`home.py show` prints it). Registries from before the home folder existed (the legacy `~/.academic-writer/courses/<term>/`) keep working until the researcher runs the migration: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home_migrate.py" --home <home>` previews first, backs up, deletes nothing, and only `--apply` changes anything (ask first). `courses.py` reads `term.json` and one `<slug>.json` per course. Resolve the script as `${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py`. The registry is user data and must not be committed to a project.
 
 Document and preserve these `term.json` fields:
 
@@ -29,6 +29,8 @@ Document and preserve these `term.json` fields:
 Each course JSON has `slug`, `code`, `name`, `lecturer`, `slots` (`day`, `start`, `end`, `semester`), `drive_subject_folder`, `drive_folder_id`, `notebook_id`, `book_id`, `lemida_course_id`, `lemida_seen`, and `lessons`. `book_id` identifies the course's Trove book; course books have no manuscript, so they never appear in other sessions' manuscript lists. Lesson records include date, audio SHA-256, NotebookLM source ID, Trove page, and status. Keep unknown schedule details marked for review; do not infer a course, time, or ID.
 
 ## Set up a term from a schedule
+
+When the researcher asks, create the course folders inside the home folder (one folder per course, then register each with `home.py register --type course`). Never create them unasked, and never outside home.
 
 1. Inspect the schedule and run a dry parse:
 
