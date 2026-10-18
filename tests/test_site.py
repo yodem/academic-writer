@@ -87,3 +87,12 @@ def test_pages_publishes_site_and_guide():
     assert "cp -R site/. _site/" in wf
     assert "cp -R src/guide/. _site/guide/" in wf
     assert "path: _site" in wf
+
+
+def test_dashboard_section_follows_courses_and_is_linked():
+    html = INDEX.read_text(encoding="utf-8")
+    assert '<section class="sec dash" id="dashboard"' in html
+    assert html.index('id="courses"') < html.index('id="dashboard"') < html.index('id="film"')
+    assert 'href="#dashboard"' in html
+    for img in ("dashboard-overview-light", "dashboard-overview-dark", "activity-pane"):
+        assert (SITE / "assets" / "img" / (img + ".webp")).exists()
