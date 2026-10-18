@@ -129,7 +129,7 @@ def test_setup_sample_paragraph_is_not_printed_then_asked_in_one_turn():
 def test_setup_field_question_offers_options():
     block = SETUP.split("## Step 2", 1)[1].split("### 2b", 1)[0]
     first = block.split("```python", 1)[1].split("```", 1)[0]
-    assert "Field of study" in first
+    assert "field of study" in first.lower()
     assert len(re.findall(r'\{"label"', first)) >= 2
 
 
@@ -154,3 +154,13 @@ def test_what_you_can_do_now_names_researcher_next_steps():
     block = FINISH.split("## Step 8", 1)[1]
     for token in ("past-articles", "/academic-writer:init", "/academic-writer:write", "/academic-writer:research"):
         assert token in block
+
+
+def test_every_question_header_fits_the_12_character_limit():
+    """AskUserQuestion refuses a header longer than 12 characters."""
+    long = []
+    for p in (ROOT / "src" / "skills").rglob("*.md"):
+        for h in re.findall(r'"header":\s?"([^"]*)"', p.read_text(encoding="utf-8")):
+            if len(h) > 12:
+                long.append("%s: %s" % (p.relative_to(ROOT), h))
+    assert not long, long

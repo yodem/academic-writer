@@ -4,6 +4,16 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.18.3] — 2026-10-18
+
+### Changed
+- **Setup is step by step for researchers who are new to Claude Code.** The install guide (README, site, illustrated guide) now starts from getting Claude Code and signing in, and says what you should see after each step. Setup explains each tool in one sentence and gives numbered, Mac-first steps for anything you install yourself: Python, Homebrew, Hebrew spelling, Trove (sign-up and sign-in), NotebookLM, and the free Gemini key. It explains what typing a line that starts with `!` means, how to open Terminal, and how to restart Claude Code without losing your answers. It ends with concrete next steps for your role.
+
+### Fixed
+- The field-of-study question in setup and init had no choices to pick from; it now offers examples and a free answer.
+- The sample paragraph at the end of setup did not show before its question; it is now part of the question.
+- The Trove step said it installs with Homebrew; it uses Trove's own installer, and now says so.
+
 ## [0.18.2] — 2026-10-18
 
 ### Fixed

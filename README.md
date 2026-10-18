@@ -48,7 +48,7 @@ If Terminal says `command not found: claude`, close it and open a new Terminal w
 /plugin install academic-writer@yodem
 ```
 
-The first line tells Claude Code where to find the plugin (a *marketplace* is a list of plugins; this one is called `yodem`). The second installs it. Each prints a confirmation. (A line starting with `/` is typed in Claude Code's prompt box, not in Terminal.)
+The first line tells Claude Code where to find the plugin (a *marketplace* is a list of plugins; this one is called `yodem`). The second installs it. Each prints a short confirmation. If the first one says it cannot find the marketplace, check the line is typed exactly as above and try again; if it still fails, copy the message and paste it to Claude. (A line starting with `/` is typed in Claude Code's prompt box, not in Terminal.)
 
 **Step C. Restart.** Type `/exit` and press Enter, then type `claude` again in the same folder, so the new commands appear.
 

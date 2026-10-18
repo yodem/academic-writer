@@ -12,7 +12,7 @@ before they are asked about it (rule 3), so this step takes **two turns**.
 ```python
 AskUserQuestion(questions=[{
   "question": "Let's write one short sample paragraph so you can see it working. Give me a small topic (choose \"Other\" to type it, e.g. \"the printing press\"), or I'll pick one.",
-  "header": "Sample paragraph",
+  "header": "Sample",
   "options": [
     {"label": "Pick one for me", "description": "I'll choose a general topic in your field."},
     {"label": "I'll type a topic", "description": "Then choose Other and type it."}
@@ -27,7 +27,7 @@ about them with the paragraph **inside the question text** (the choice stays vis
 ```python
 AskUserQuestion(questions=[{
   "question": "Here is your sample paragraph:\n\n<THE 2-4 SENTENCES>\n\n(Real articles cite your sources and follow your own voice, which /academic-writer:init learns from your past articles.) Does the tone look like what you'd expect?",
-  "header": "Does this look right?",
+  "header": "Tone check",
   "options": [
     {"label": "Yes, looks good", "description": "Setup is complete."},
     {"label": "Not quite", "description": "Tell me what's off; I'll note it. It doesn't block anything."}

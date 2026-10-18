@@ -286,7 +286,7 @@ window.AW_I18N_HE = {
   ft3: "מדביקים את השורה הבאה ולוחצים Enter. במשך דקה לא מוצגת התקדמות, וזה תקין. (ב-Windows PowerShell: <code>irm https://claude.ai/install.ps1 | iex</code>.)",
   ft4: "יוצרים תיקייה למחקר (למשל <b>Academic</b> בתוך Documents). ב-Terminal מקלידים <code>cd </code> (עם רווח), גוררים את התיקייה לחלון, לוחצים <kbd>Enter</kbd>, מקלידים <code>claude</code> ולוחצים <kbd>Enter</kbd>.",
   ft5: "בפעם הראשונה נפתח הדפדפן כדי להתחבר. מתחברים וחוזרים לחלון Terminal.",
-  ft6: "בתיבה שבה כותבים ל-Claude מדביקים את שתי שורות ההתקנה שלמעלה, <b>אחת אחת</b>, ולוחצים Enter אחרי כל אחת. כל אחת מדפיסה אישור.",
+  ft6: "בתיבה שבה כותבים ל-Claude מדביקים את שתי שורות ההתקנה שלמעלה, <b>אחת אחת</b>, ולוחצים Enter אחרי כל אחת. כל אחת מדפיסה אישור קצר. אם הראשונה כותבת שהיא לא מוצאת את ה-marketplace, בודקים שהשורה הוקלדה בדיוק ומנסים שוב; אם זה עדיין נכשל, מעתיקים את ההודעה ל-Claude.",
   ft7: "מפעילים מחדש: מקלידים <code>/exit</code> ולוחצים Enter, ואז <code>claude</code> שוב באותה תיקייה.",
   ft8: "מקלידים <code>/academic-writer:setup</code> וממלאים אחרי השאלות. ההגדרה שואלת לפני כל התקנה ומסבירה כל צעד.",
   ft9: "אם משהו נכשל: <code>command not found: claude</code> אומר לסגור את Terminal ולפתוח חלון חדש. מקלידים <code>/plugin</code> ובודקים ש-<b>academic-writer</b> מופיע תחת <b>Installed</b>. אחרת <a href=\"https://github.com/yodem/academic-writer/issues\">מדווחים על תקלה</a> ומדביקים מה שמוצג במסך.",

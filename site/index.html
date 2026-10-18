@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" dir="ltr" data-version="v0.18.2">
+<html lang="en" dir="ltr" data-version="v0.18.3">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -546,6 +546,14 @@
 <!-- news:start -->
 <div class="news__grid">
   <article class="news__rel rv">
+    <h3 dir="ltr"><span class="news__ver">v0.18.3</span> <time class="news__date" datetime="2026-10-18">2026-10-18</time></h3>
+    <ul dir="ltr">
+      <li>The field-of-study question in setup and init had no choices to pick from; it now offers examples and a free…</li>
+      <li>The sample paragraph at the end of setup did not show before its question; it is now part of the question</li>
+      <li>The Trove step said it installs with Homebrew; it uses Trove's own installer, and now says so</li>
+    </ul>
+  </article>
+  <article class="news__rel rv">
     <h3 dir="ltr"><span class="news__ver">v0.18.2</span> <time class="news__date" datetime="2026-10-18">2026-10-18</time></h3>
     <ul dir="ltr">
       <li>The live activity pane opens again</li>
@@ -559,16 +567,6 @@
       <li>The site says up front that this is a Claude Code plugin and lists the recent changes, generated from this…</li>
       <li>The home-folder migration finishes the move</li>
       <li>Setup and health say to restart Claude Code after updating the plugin: a running session keeps the old skills…</li>
-    </ul>
-  </article>
-  <article class="news__rel rv">
-    <h3 dir="ltr"><span class="news__ver">v0.18.0</span> <time class="news__date" datetime="2026-10-18">2026-10-18</time></h3>
-    <ul dir="ltr">
-      <li>One home folder with typed workspaces</li>
-      <li>Agent activity record</li>
-      <li>"The Margin" brand file</li>
-      <li>Redesigned dashboard</li>
-      <li>Setup checks (setup_checks.py --json) used by health, setup, init and the dashboard; a dashboard and activity…</li>
     </ul>
   </article>
 </div>
@@ -615,7 +613,7 @@
         </li>
         <li data-i18n-html="ft4">Make a folder for your research (for example <b>Academic</b> inside Documents). In Terminal type <code>cd </code> (with a space), drag that folder into the window, press <kbd>Enter</kbd>, then type <code>claude</code> and press <kbd>Enter</kbd>.</li>
         <li data-i18n="ft5">The first time, your web browser opens so you can sign in. Sign in, then return to the Terminal window.</li>
-        <li data-i18n-html="ft6">At the box where you type to Claude, paste the two install lines above, <b>one at a time</b>, pressing Enter after each. Each one prints a confirmation.</li>
+        <li data-i18n-html="ft6">At the box where you type to Claude, paste the two install lines above, <b>one at a time</b>, pressing Enter after each. Each one prints a short confirmation. If the first says it cannot find the marketplace, check the line and try again; if it still fails, copy the message to Claude.</li>
         <li data-i18n-html="ft7">Restart: type <code>/exit</code> and press Enter, then type <code>claude</code> again in the same folder.</li>
         <li data-i18n-html="ft8">Type <code>/academic-writer:setup</code> and follow the questions. Setup asks before installing anything and explains each step.</li>
       </ol>

@@ -118,7 +118,7 @@ footer { margin-top: 48px; color: var(--muted); font-size: .9rem; border-top: 1p
 <header class="hero">
   <h1>Academic Writer: the full guide</h1>
   <p>A writing assistant for humanities researchers. It helps you write a scholarly article in your own voice, using only the sources you choose, and hands you a Word file.</p>
-  <span class="version">Version <!-- guide:version:start -->0.18.2<!-- guide:version:end --></span>
+  <span class="version">Version <!-- guide:version:start -->0.18.3<!-- guide:version:end --></span>
 </header>
 
 <nav class="toc" aria-label="Contents">
@@ -186,7 +186,7 @@ footer { margin-top: 48px; color: var(--muted); font-size: .9rem; border-top: 1p
 </ol>
 <p>If Terminal says <code>command not found: claude</code>, close it, open a new Terminal window and repeat step 4.</p>
 <h3>B. Add the plugin</h3>
-<p>In the prompt box, type these two lines one at a time, pressing <kbd>Enter</kbd> after each. Each prints a confirmation:</p>
+<p>In the prompt box, type these two lines one at a time, pressing <kbd>Enter</kbd> after each. Each prints a short confirmation. If the first one says it cannot find the marketplace, check the line is typed exactly and try again; if it still fails, copy the message to Claude:</p>
 <div class="cmd"><pre><code>/plugin marketplace add yodem/academic-writer</code></pre></div>
 <div class="cmd"><pre><code>/plugin install academic-writer@yodem</code></pre></div>
 <p>The first line tells Claude Code where to find the plugin (a <em>marketplace</em> is simply a list of plugins). The second installs it.</p>

@@ -71,7 +71,7 @@ analysis will be skipped until it is installed. If only add-ons are missing:
 ```python
 AskUserQuestion(questions=[{
   "question": "To read your past articles I need a few free Python add-ons (missing: MISSING_LIST). May I install them now?",
-  "header": "Python add-ons",
+  "header": "Python",
   "options": [
     {"label": "Install", "description": "One command, usually under a minute. Installs for your user account only."},
     {"label": "Skip for now", "description": "Style analysis from PDF/Word files will be skipped."}
@@ -100,7 +100,7 @@ cat .academic-helper/profile.md 2>/dev/null && echo "EXISTS" || echo "NOT_FOUND"
 ```python
 AskUserQuestion(questions=[{
   "question": "You already have an Academic Writer profile. What would you like to do?",
-  "header": "Existing profile detected",
+  "header": "Profile",
   "options": [
     {
       "label": "Update my profile",
@@ -142,7 +142,7 @@ If the researcher selects a tool that was not found, explain what it is for in o
 ```python
 AskUserQuestion(questions=[{
   "question": "TOOL_NAME isn't installed yet. May I install it now?",
-  "header": "Install TOOL_NAME?",
+  "header": "Install tool",
   "options": [
     {"label": "Install", "description": "I'll run one install command, then you sign in once in your browser."},
     {"label": "Skip", "description": "I'll leave it off; you can add it later by asking me to add or remove integrations."}
@@ -177,13 +177,8 @@ that could not be installed is saved as disabled.
 Check first whether a `name` field is already present in an existing profile (Phase 0). If not,
 ask:
 
-```python
-AskUserQuestion(questions=[{
-  "question": "What is your full name (as you'd like it to appear on articles)?",
-  "header": "Step 1 of 5 — Your Name",
-  "options": []
-}])
-```
+A name is free text, and `AskUserQuestion` needs 2 to 4 options, so ask in plain chat and end your turn:
+"What is your full name, as you'd like it to appear on articles?" Take the next message as the answer.
 
 Derive `author_key` as a kebab-case slug of the name: lowercase, trim, replace runs of
 whitespace/punctuation with a single hyphen, strip leading/trailing hyphens. Example:
@@ -205,7 +200,7 @@ should not change casually later:
 ```python
 AskUserQuestion(questions=[{
   "question": "Your author key will be `DERIVED_SLUG`. This stays stable across all your projects and links your voice profile to your name. Use it, or provide a custom slug?",
-  "header": "Confirm author key",
+  "header": "Author key",
   "options": [
     {"label": "Use `DERIVED_SLUG`", "description": "Recommended — derived automatically from your name."},
     {"label": "I'll provide a custom slug", "description": "You'll type a kebab-case slug of your choice."}
@@ -220,20 +215,25 @@ Store the final value as `author_key`. Store the full name as `name`.
 
 ### Step 2 of 5 — Field of Study
 
+`AskUserQuestion` needs 2 to 4 options and always adds an **Other** choice for typing. Offer broad examples, then ask for
+the specific field in plain chat if they pick one:
+
 ```python
 AskUserQuestion(questions=[{
-  "question": "What is your field of study and area of specialization?",
-  "header": "Step 2 of 5 — Field of Study",
-  "options": []
+  "question": "What is your field of study and area of specialization? Choose the closest, or choose Other and type your own.",
+  "header": "Field (2/5)",
+  "options": [
+    {"label": "Jewish studies", "description": "For example Talmud, Bible, Jewish history or thought."},
+    {"label": "History", "description": "For example medieval or early modern history."},
+    {"label": "Literature or language", "description": "For example Hebrew poetry, linguistics."},
+    {"label": "Philosophy or religion", "description": "For example philosophy, theology, religious studies."}
+  ],
+  "multiSelect": false
 }])
 ```
 
-Show examples below the question:
-> "The more specific, the better. Examples:
-> - *Early Modern Jewish Philosophy*
-> - *Talmudic Literature and Rabbinic Thought*
-> - *Medieval Hebrew Poetry*
-> - *Biblical Studies — Pentateuch*"
+The more specific, the better; when they pick a broad choice, ask for the specific area in plain chat (for example
+*Early Modern Jewish Philosophy*, *Talmudic Literature and Rabbinic Thought*, *Medieval Hebrew Poetry*).
 
 Record the free-text answer as `fieldOfStudy`.
 
@@ -244,7 +244,7 @@ Record the free-text answer as `fieldOfStudy`.
 ```python
 AskUserQuestion(questions=[{
   "question": "What language will you write your articles in?",
-  "header": "Step 3 of 5 — Article Language",
+  "header": "Lang (3/5)",
   "options": [
     {
       "label": "Hebrew",
@@ -275,7 +275,7 @@ Store as `targetLanguage`. If "Other", ask for the language name with a follow-u
 ```python
 AskUserQuestion(questions=[{
   "question": "Which citation style do you use in your academic work?",
-  "header": "Step 4 of 5 — Citation Style",
+  "header": "Cites (4/5)",
   "options": [
     {
       "label": "Inline Parenthetical (Recommended for Hebrew)",
@@ -311,7 +311,7 @@ Map selection: Inline → `inline-parenthetical`, Chicago → `chicago`, MLA →
 ```python
 AskUserQuestion(questions=[{
   "question": "Do your articles need abstracts? Some journals require dual-language abstracts.",
-  "header": "Abstract Languages",
+  "header": "Abstracts",
   "options": [
     {
       "label": "Primary language only",
@@ -387,7 +387,7 @@ wording: `references/gemini-onboarding.md`, which uses
 ```python
 AskUserQuestion(questions=[{
   "question": "Let's index your research library. Have you added sources to Trove yet?",
-  "header": "Research sources",
+  "header": "Sources",
   "options": [
     {
       "label": "Yes, index my sources now",
@@ -463,7 +463,7 @@ values gathered in Phases 1–3.5. Exact file format and field-by-field template
 ```python
 AskUserQuestion(questions=[{
   "question": "Setup is complete. What would you like to do next?",
-  "header": "You're all set!",
+  "header": "All set",
   "options": [
     {
       "label": "Write my first article",

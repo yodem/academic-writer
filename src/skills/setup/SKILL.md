@@ -113,7 +113,7 @@ answer. So offer broad examples; most people will choose Other and type their ex
 ```python
 AskUserQuestion(questions=[{
   "question": "Hi! I'll get Academic Writer ready for you. It takes about ten minutes. I'll ask one short question at a time, explain anything technical, and won't install anything without asking you first. (Use the arrow keys and Enter to choose; pick \"Other\" to type your own answer.) First: what is your field of study?",
-  "header": "Field of study",
+  "header": "Field",
   "options": [
     {"label": "Jewish studies", "description": "Talmud, Bible, Jewish history or thought."},
     {"label": "History", "description": "Medieval or early modern history."},
@@ -130,7 +130,7 @@ Hebrew Poetry") and wait for the reply. Store the specific answer as `fieldOfStu
 ```python
 AskUserQuestion(questions=[{
   "question": "Which language will you write your articles in?",
-  "header": "Article language",
+  "header": "Language",
   "options": [
     {"label": "Hebrew", "description": "Right-to-left; I'll also offer a Hebrew spelling checker."},
     {"label": "English", "description": "Left-to-right. For another language, choose Other and type its name."}
@@ -144,7 +144,7 @@ Store as `targetLanguage`.
 ```python
 AskUserQuestion(questions=[{
   "question": "Which citation style do you use? (A citation style is the format of your footnotes and references.)",
-  "header": "Citation style",
+  "header": "Citations",
   "options": [
     {"label": "Inline Parenthetical", "description": "(Author, Title, Page) in running text — common for Hebrew."},
     {"label": "Chicago / Turabian", "description": "Footnotes with a bibliography — common in English Humanities."},
@@ -267,7 +267,7 @@ Skip if the `python-addons` row is ok. Otherwise (the missing names are in its r
 ```python
 AskUserQuestion(questions=[{
   "question": "Academic Writer needs a few free Python add-ons to open Word and PDF files and build your finished document (missing: MISSING_LIST). May I install them now?",
-  "header": "Python add-ons",
+  "header": "Python",
   "options": [
     {"label": "Install", "description": "One command, usually under a minute. Installs for your user account only."},
     {"label": "Skip for now", "description": "Reading PDFs and building the .docx won't work until they're installed."}
@@ -301,7 +301,7 @@ Homebrew:
 ```python
 AskUserQuestion(questions=[{
   "question": "hspell is a free Hebrew spelling dictionary. The proofreader uses it to catch typos that are easy to miss. Install it?",
-  "header": "Hebrew spelling",
+  "header": "Hebrew spell",
   "options": [
     {"label": "Install", "description": "Uses Homebrew; takes about a minute."},
     {"label": "Skip", "description": "Proofreading still works, with one fewer safety net."}
@@ -323,7 +323,7 @@ Skip if found. Explain it in one sentence (reference), then:
 ```python
 AskUserQuestion(questions=[{
   "question": "Trove is an online library for your source PDFs, so I can search and quote them with exact pages. Set it up?",
-  "header": "Trove (optional)",
+  "header": "Trove",
   "options": [
     {"label": "Install", "description": "I download and run Trove's own installer (one command); then you create a Trove account or sign in once, in your browser."},
     {"label": "Skip", "description": "You can add it later by running setup again."}
@@ -353,7 +353,7 @@ Skip if found, or if `npm` is missing (say it's optional and can be added later;
 ```python
 AskUserQuestion(questions=[{
   "question": "NotebookLM is Google's tool for asking questions about a set of sources; I can use it as a second research assistant. Install its connector?",
-  "header": "NotebookLM (optional)",
+  "header": "NotebookLM",
   "options": [
     {"label": "Install", "description": "One command; you then sign in with Google once."},
     {"label": "Skip", "description": "Nothing else depends on it."}

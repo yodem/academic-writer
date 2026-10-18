@@ -108,7 +108,7 @@ installer and it is safe. Either click **Install** and wait several minutes (it 
 
 ## Homebrew (macOS only) — the researcher installs it
 
-Only needed if they want hspell or Trove and `BREW_MISSING`. Say: "Homebrew is a free,
+Only needed for hspell (Hebrew writers on a Mac) when `BREW_MISSING`; Trove and NotebookLM do not need it. Say: "Homebrew is a free,
 widely used installer for Mac tools. Installing it needs your Mac password, so you have to do this
 part yourself."
 
@@ -123,8 +123,9 @@ part yourself."
 7. Close Terminal (Cmd+Q), quit Claude Code completely and open it again in the same folder, then type
    `/academic-writer:setup`.
 
-If step 3 says `command not found: brew` after finishing, you skipped step 5. If anything else fails, copy the last
-lines of the Terminal window and paste them to me.
+If step 6 says `command not found: brew`, the **Next steps** lines from step 5 were not run: scroll up in Terminal to find
+them, paste each one and press Enter, then try step 6 again. If anything else fails, copy the last lines of the Terminal
+window and paste them to me.
 
 ## hspell — Claude installs it after asking (Hebrew writers only)
 
