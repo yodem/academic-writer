@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { subagentStop } from './subagent-stop.js';
 import { subagentStart } from './subagent-start.js';
 
-type Row = { kind: string; run: string; flow: string; verdict?: string; paragraph?: number; reason?: string; agent?: string };
+type Row = { unit?: string; kind: string; run: string; flow: string; verdict?: string; paragraph?: number; reason?: string; agent?: string };
 
 function project(options: { profile?: boolean; run?: 'active' | 'ended' | 'none' | 'old' } = {}): { root: string; file: string } {
   const root = mkdtempSync(join(tmpdir(), 'aw-subagent-stop-'));
@@ -39,7 +39,8 @@ test('auditor JSON yields one verdict per paragraph', () => {
     assert.equal(result.continue, true);
     const verdicts = rows(file).filter((row) => row.kind === 'audit_verdict');
     assert.deepEqual(verdicts.map((row) => [row.paragraph, row.verdict]), [[1, 'PASS'], [2, 'FAIL'], [3, 'PARTIAL']]);
-    assert.equal(verdicts[1]!.reason?.length, 300);
+    // The reason is derived from the verdict, never the auditor's own words.
+    assert.deepEqual(verdicts.map((row) => row.reason), [undefined, 'FAIL', 'PARTIAL']);
     assert.equal(rows(file).filter((row) => row.kind === 'subagent_stop').length, 1);
     assert.equal(rows(file)[1]!.run, 'r1');
     assert.equal(rows(file)[1]!.flow, 'write');
@@ -128,4 +129,56 @@ test('the one-line status is shown when the author turned the pane off, and not 
     rmSync(root, { recursive: true, force: true });
     rmSync(plugin, { recursive: true, force: true });
   }
+});
+
+const writeTranscript = (root: string, firstUser: unknown, reply: string): string => {
+  const transcript = join(root, 'agent.jsonl');
+  writeFileSync(transcript, `${JSON.stringify({ type: 'user', message: { role: 'user', content: firstUser } })}\n${JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: reply }] } })}\n`);
+  return transcript;
+};
+
+test('the unit id comes from the auditor input (unitId or sectionId) and rides on every verdict', () => {
+  for (const [prompt, expected] of [
+    ['runId: r1\nunitId: U2\nPARAGRAPH_INDEX: 0', 'U2'],
+    ['{"sectionId": "sec-3", "runId": "r1"}', 'sec-3'],
+    [[{ type: 'text', text: 'unitId: "intro"\nrunId: r1' }], 'intro'],
+  ] as const) {
+    const { root, file } = project();
+    try {
+      const reply = auditorReply([{ paragraphIndex: 0, verdict: 'PASS', feedback: 'ok' }, { paragraphIndex: 1, verdict: 'FAIL', feedback: '1. bad' }]);
+      subagentStop(input(root, { agent_type: 'auditor', agent_transcript_path: writeTranscript(root, prompt, reply) }));
+      assert.deepEqual(rows(file).filter((row) => row.kind === 'audit_verdict').map((row) => row.unit), [expected, expected]);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('no unit id in the auditor input leaves the unit absent', () => {
+  const { root, file } = project();
+  try {
+    const reply = auditorReply([{ paragraphIndex: 0, verdict: 'PASS', feedback: 'ok' }]);
+    subagentStop(input(root, { agent_type: 'auditor', last_assistant_message: reply, agent_transcript_path: writeTranscript(root, 'audit these paragraphs please', reply) }));
+    const verdict = rows(file).find((row) => row.kind === 'audit_verdict');
+    assert.ok(verdict && !('unit' in verdict));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('the reason holds the verdict and the count of numbered issues, never the feedback', () => {
+  const { root, file } = project();
+  try {
+    const feedback = '1. The Rambam passage is misquoted.\n2. Footnote 4 has the wrong page.\n3) Missing source.';
+    subagentStop(input(root, { agent_type: 'auditor', last_assistant_message: auditorReply([{ paragraphIndex: 0, verdict: 'FAIL', feedback }]) }));
+    const verdict = rows(file).find((row) => row.kind === 'audit_verdict');
+    assert.equal(verdict?.reason, 'FAIL, 3 issues');
+    assert.ok(!JSON.stringify(rows(file)).includes('Rambam'));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('an auditor stop closes the audit step', () => {
+  const { root, file } = project();
+  try {
+    subagentStop(input(root, { agent_type: 'auditor', last_assistant_message: auditorReply([{ paragraphIndex: 0, verdict: 'PASS', feedback: 'ok' }]) }));
+    const kinds = rows(file).map((row) => `${row.kind}:${(row as { step?: string }).step ?? ''}`);
+    assert.ok(kinds.includes('step_start:audit') && kinds.includes('step_end:audit'));
+    assert.ok(kinds.indexOf('step_end:audit') > kinds.indexOf('audit_verdict:audit'));
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

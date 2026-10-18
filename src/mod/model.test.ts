@@ -66,3 +66,50 @@ test('finished run has no current step', () => {
   assert.equal(view.agent, null);
   assert.equal(view.elapsedS, 300);
 });
+
+test('audit verdicts with a unit mark it passed or rejected; a later PASS does not hide a rejection', () => {
+  const text = [
+    row({ ts: '2026-10-18T10:00:00Z', kind: 'run_start' }),
+    row({ ts: '2026-10-18T10:00:01Z', kind: 'unit_drafted', unit: 'A' }),
+    row({ ts: '2026-10-18T10:00:02Z', kind: 'unit_drafted', unit: 'B' }),
+    row({ ts: '2026-10-18T10:00:03Z', kind: 'audit_verdict', unit: 'A', paragraph: 0, verdict: 'PASS' }),
+    row({ ts: '2026-10-18T10:00:04Z', kind: 'audit_verdict', unit: 'B', paragraph: 0, verdict: 'FAIL', reason: 'FAIL, 1 issues' }),
+    row({ ts: '2026-10-18T10:00:05Z', kind: 'audit_verdict', unit: 'B', paragraph: 1, verdict: 'PASS' }),
+    row({ ts: '2026-10-18T10:00:06Z', kind: 'audit_verdict', verdict: 'unknown' }),
+  ].join('\n');
+  const view = viewOf(parseEvents(text), NOW);
+  assert.deepEqual(view.units, [{ id: 'A', state: 'passed' }, { id: 'B', state: 'rejected' }]);
+});
+
+test('a redraft resets the audit result of its unit', () => {
+  const text = [
+    row({ ts: '2026-10-18T10:00:00Z', kind: 'run_start' }),
+    row({ ts: '2026-10-18T10:00:01Z', kind: 'unit_drafted', unit: 'B' }),
+    row({ ts: '2026-10-18T10:00:04Z', kind: 'audit_verdict', unit: 'B', verdict: 'FAIL' }),
+    row({ ts: '2026-10-18T10:00:05Z', kind: 'redraft', unit: 'B' }),
+    row({ ts: '2026-10-18T10:00:06Z', kind: 'unit_drafted', unit: 'B' }),
+    row({ ts: '2026-10-18T10:00:07Z', kind: 'audit_verdict', unit: 'B', verdict: 'PASS' }),
+  ].join('\n');
+  assert.deepEqual(viewOf(parseEvents(text), NOW).units, [{ id: 'B', state: 'passed' }]);
+});
+
+test('a finished run shows skipped for a step that did not happen, never todo; a failed run keeps todo', () => {
+  const steps = (exit: string) => viewOf(parseEvents([
+    row({ ts: '2026-10-18T10:00:00Z', kind: 'run_start' }),
+    row({ ts: '2026-10-18T10:00:01Z', kind: 'step_start', step: 'draft' }),
+    row({ ts: '2026-10-18T10:00:02Z', kind: 'step_end', step: 'draft' }),
+    row({ ts: '2026-10-18T10:00:03Z', kind: 'step_start', step: 'audit' }),
+    row({ ts: '2026-10-18T10:00:04Z', kind: 'step_end', step: 'audit' }),
+    row({ ts: '2026-10-18T10:00:05Z', kind: 'step_start', step: 'synthesize' }),
+    row({ ts: '2026-10-18T10:00:06Z', kind: 'step_end', step: 'synthesize' }),
+    row({ ts: '2026-10-18T10:00:07Z', kind: 'step_start', step: 'word' }),
+    row({ ts: '2026-10-18T10:00:08Z', kind: 'step_end', step: 'word' }),
+    row({ ts: '2026-10-18T10:00:09Z', kind: 'run_end', exit }),
+  ].join('\n')), NOW).steps.map((s) => s.state);
+  assert.deepEqual(steps('OK'), ['done', 'done', 'done', 'skipped', 'done', 'done']);
+  assert.deepEqual(steps('ERROR'), ['done', 'done', 'done', 'todo', 'done', 'done']);
+});
+
+test('edit flows list the single step aw edit emits', () => {
+  assert.deepEqual(viewOf(parseEvents(row({ ts: '2026-10-18T10:00:00Z', kind: 'run_start' }, 'edit')), NOW).steps.map((s) => s.id), ['edit']);
+});

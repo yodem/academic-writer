@@ -44,6 +44,34 @@ function lastAssistantText(transcriptPath: string | undefined): string | undefin
   return last;
 }
 
+/** The unit (or edited section) an auditor batch covers: `unitId` / `sectionId` in the first user message of its transcript. */
+export function auditedUnit(transcriptPath: string | undefined): string | undefined {
+  if (!transcriptPath || !existsSync(transcriptPath)) return undefined;
+  try {
+    for (const line of readFileSync(transcriptPath, 'utf-8').split('\n')) {
+      if (!line.trim()) continue;
+      let row: { type?: string; role?: string; message?: { role?: string; content?: unknown } };
+      try { row = JSON.parse(line) as typeof row; } catch { continue; }
+      if ((row.message?.role ?? row.role ?? row.type) !== 'user') continue;
+      const content = row.message?.content;
+      const text = typeof content === 'string' ? content
+        : Array.isArray(content) ? content.map((part) => (typeof part === 'object' && part !== null && typeof (part as { text?: unknown }).text === 'string' ? (part as { text: string }).text : '')).join('\n')
+          : '';
+      return /["'`]?\b(?:unitId|sectionId)\b["'`]?\s*[:=]\s*["'`]?([A-Za-z0-9][\w.-]*)/.exec(text)?.[1];
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+/** What the record keeps of the auditor's feedback: the verdict and how many numbered issues it lists, never its words. */
+function reasonOf(verdict: 'PASS' | 'FAIL' | 'PARTIAL' | 'unknown', feedback: unknown): string | undefined {
+  if (verdict === 'PASS') return undefined;
+  const issues = typeof feedback === 'string' ? (feedback.match(/^\s*\d+[.)]\s/gm) ?? []).length : 0;
+  return issues > 0 ? `${verdict}, ${issues} issues` : verdict;
+}
+
 function verdictOf(value: unknown): 'PASS' | 'FAIL' | 'PARTIAL' | 'unknown' {
   return value === 'PASS' || value === 'FAIL' || value === 'PARTIAL' ? value : 'unknown';
 }
@@ -60,11 +88,13 @@ export function auditVerdicts(text: string | undefined): ActivityFields[] {
     return parsed.results.map((entry): ActivityFields => {
       const row = (typeof entry === 'object' && entry !== null ? entry : {}) as { paragraphIndex?: unknown; paragraph?: unknown; verdict?: unknown; feedback?: unknown };
       const index = typeof row.paragraphIndex === 'number' ? row.paragraphIndex : row.paragraph;
+      const verdict = verdictOf(row.verdict);
+      const reason = reasonOf(verdict, row.feedback);
       return {
         step: 'audit',
         ...(typeof index === 'number' && Number.isInteger(index) && index >= 0 ? { paragraph: index } : {}),
-        verdict: verdictOf(row.verdict),
-        ...(typeof row.feedback === 'string' && row.feedback ? { reason: row.feedback.slice(0, 300) } : {}),
+        verdict,
+        ...(reason !== undefined ? { reason } : {}),
       };
     });
   } catch {
@@ -94,7 +124,10 @@ export function subagentStop(input: SubagentStopInput): HookResult {
   let wrote = false;
   if (AUDITOR_TYPES.has(agent)) {
     const text = input.last_assistant_message ?? lastAssistantText(input.agent_transcript_path);
-    for (const fields of auditVerdicts(text)) wrote = recordActivity(projectDir, 'audit_verdict', { ...fields, agent }, options) || wrote;
+    const unit = auditedUnit(input.agent_transcript_path);
+    wrote = recordActivity(projectDir, 'step_start', { step: 'audit', agent }, options) || wrote;
+    for (const fields of auditVerdicts(text)) wrote = recordActivity(projectDir, 'audit_verdict', { ...fields, ...(unit ? { unit } : {}), agent }, options) || wrote;
+    wrote = recordActivity(projectDir, 'step_end', { step: 'audit', agent }, options) || wrote;
   }
   wrote = recordActivity(projectDir, 'subagent_stop', { ...(agent ? { agent } : {}) }, options) || wrote;
 

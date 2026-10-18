@@ -87,7 +87,7 @@ export function generateDocx(args: { outlinePath: string; runId: string; out: st
   try {
     return buildDocx(args, project);
   } catch (error) {
-    emit(args.runId, 'write', 'run_end', { exit: 'ERROR', reason: (error instanceof Error ? error.message : 'ERROR docx').slice(0, 300) }, project);
+    emit(args.runId, 'write', 'run_end', { exit: 'ERROR', reason: 'command failed' }, project);
     throw error;
   }
 }

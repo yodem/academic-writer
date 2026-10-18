@@ -6,7 +6,7 @@ import { Budget } from './ledger.ts';
 import { dataDir, projectDir } from './paths.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
 import { appendVoicePair, writeVoiceStyleWords } from './voice.ts';
-import { emit, startRunOnce } from './activity.ts';
+import { emit, endRunOnError, startRunOnce } from './activity.ts';
 
 export type ReviseCategory = 'text_edit' | 'argument' | 'voice_signal' | 'plugin_defect';
 export type ReviseItem = { id: string; category: ReviseCategory; proposal: Record<string, unknown> };
@@ -20,6 +20,9 @@ function voiceDir(): string { return dataOverride ?? join(dataDir(), 'voice'); }
 function append(file: string, row: unknown): void { mkdirSync(dirname(file), { recursive: true }); appendFileSync(file, `${JSON.stringify(row)}\n`, 'utf8'); }
 
 export async function classify(items: unknown[], runId: string): Promise<{ items: ReviseItem[] }> {
+  return endRunOnError(runId, 'revise', () => classifyItems(items, runId));
+}
+async function classifyItems(items: unknown[], runId: string): Promise<{ items: ReviseItem[] }> {
   startRunOnce(runId, 'revise');
   emit(runId, 'revise', 'step_start', { step: 'read' });
   const schema = { type: 'OBJECT', properties: { items: { type: 'ARRAY', items: { type: 'OBJECT', properties: { id: { type: 'STRING' }, category: { type: 'STRING', enum: ['text_edit','argument','voice_signal','plugin_defect'] }, proposal: { type: 'OBJECT' } }, required: ['id','category','proposal'] } } }, required: ['items'] };
@@ -47,6 +50,9 @@ function applyTextEdit(item: ReviseItem): void {
 }
 
 export async function applyPlan(plan: RevisePlan): Promise<{ applied: string[]; deferred: string[] }> {
+  return endRunOnError(plan.runId, 'revise', () => applyItems(plan));
+}
+async function applyItems(plan: RevisePlan): Promise<{ applied: string[]; deferred: string[] }> {
   if (!dataOverride) dataDir();
   const applied: string[] = []; const deferred: string[] = [];
   const feedbackDir = join(dataOverride ?? dataDir(), 'feedback');

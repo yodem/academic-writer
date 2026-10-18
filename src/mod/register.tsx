@@ -17,7 +17,7 @@ const TICK_MS = 2000
 type Timer = { cancel: () => void }
 
 const STATE_GLYPH: Record<string, string> = {
-  done: '✓', current: '◐', todo: '·', drafted: '✎', passed: '✓', rejected: '✗', redrafted: '⟳',
+  done: '✓', current: '◐', todo: '·', skipped: '–', drafted: '✎', passed: '✓', rejected: '✗', redrafted: '⟳',
 }
 
 function clock(totalS: number): string {
@@ -106,7 +106,7 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column">
         <Text bold>{v.flow}  {clock(v.elapsedS)}</Text>
         {v.steps.map((s) => (
-          <Text dimColor={s.state === 'todo'}>{STATE_GLYPH[s.state]} {s.id}{s.state === 'current' ? ' ...' : ''}</Text>
+          <Text dimColor={s.state === 'todo' || s.state === 'skipped'}>{STATE_GLYPH[s.state]} {s.id}{s.state === 'current' ? ' ...' : ''}</Text>
         ))}
         {v.units.length > 0 && <Text dimColor>sections</Text>}
         {v.units.map((u) => (

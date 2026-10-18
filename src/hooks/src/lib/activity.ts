@@ -2,7 +2,7 @@ import { appendFileSync, existsSync, readdirSync, readFileSync, statSync } from 
 import { join } from 'node:path';
 
 /** Same shape as src/schemas/activity-event.schema.json; written by hooks as well as by `aw`. */
-export type ActivityKind = 'subagent_start' | 'subagent_stop' | 'audit_verdict';
+export type ActivityKind = 'subagent_start' | 'subagent_stop' | 'audit_verdict' | 'step_start' | 'step_end';
 export type ActivityFields = {
   step?: string; unit?: string; paragraph?: number; verdict?: 'PASS' | 'FAIL' | 'PARTIAL' | 'unknown'; reason?: string; agent?: string;
 };
