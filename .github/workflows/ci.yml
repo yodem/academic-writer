@@ -88,6 +88,12 @@ jobs:
       - name: Gate — no personal identifiers in shipped or published files
         run: bash scripts/check-no-private-refs.sh
 
+      - name: Gate — brand file, generated tokens and About data are current
+        run: |
+          python3 scripts/check-brand.py --surface all
+          python3 scripts/gen-brand-tokens.py --check
+          python3 scripts/gen-about.py --check
+
       - name: Gate — deterministic test suite
         run: python -m pytest tests/ -q
 
@@ -99,3 +105,49 @@ jobs:
 
       - name: Gate — strict TypeScript on the aw CLI
         run: npm run typecheck:cli
+
+  # The scripts run on Python 3.9 for researchers on older Macs: the courses scripts, the home folder
+  # and migration, the activity reader and the setup checks must not use newer syntax or stdlib.
+  py39:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install Python test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Gate — Python 3.9 suite (courses, home, activity reader, setup checks)
+        run: python -m pytest -q tests/courses tests/test_home.py tests/test_home_migrate.py tests/test_activity_reader.py tests/test_setup_checks.py
+
+  # Dashboard end to end, Chromium and Firefox, against the fixture servers in tests/e2e/dashboard.
+  e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies and browsers
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium firefox
+
+      - name: Gate — dashboard end-to-end suite
+        run: npm run test:e2e

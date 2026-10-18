@@ -4,6 +4,16 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+### Added
+- **One home folder with typed workspaces.** `home.md` holds the profile and semester once; a project, course or teaching folder keeps only what differs, and the two are merged on read (Python and the hooks agree). The course registry moves under the home folder; a user who has not migrated keeps working from the old `~/.academic-writer/courses` location. `home_migrate.py` previews first, backs up, never overwrites and deletes nothing, and can be run again safely. A workspace whose folder was moved shows as "not found" and stays in the list.
+- **Agent activity record.** `aw` and a SubagentStop hook append one line per step to `runs/<id>/activity.jsonl` (no model call); a torn last line is skipped. `aw activity show --latest` prints the current step in one line, and `/academic-writer:watch` plus an optional Claude Code pane show it live. New `thresholds.json` key `activity.activeRunMaxAgeMinutes`.
+- **"The Margin" brand file** (`src/brand/DESIGN.md`) with a generator for the dashboard and site tokens and a check that fails the build on any colour, font, size or radius that is not in the file.
+- **Redesigned dashboard** with seven pages (overview, timeline, courses, course, writing, setup, about), light and dark, Hebrew right to left, no horizontal page scroll at 360 px; exams and course colours; a Setup page driven by `setup_checks.py`; an About page generated from `features.json` (new `tested` field). A Playwright suite covers it in Chromium and Firefox.
+- Setup checks (`setup_checks.py --json`) used by health, setup, init and the dashboard; a dashboard and activity section on the site.
+
+### Fixed
+- The auditor context hook read only `subagent_type`; Claude Code sends `agent_type`, so the injection never fired. It reads both now.
+
 ## [0.17.1] — 2026-10-18
 
 ### Fixed

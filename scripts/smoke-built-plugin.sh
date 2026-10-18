@@ -92,6 +92,21 @@ sys.exit(0 if "w:footnoteReference" in d and "[^" not in d else 1)
 PY
 then ok "aw docx builds a real .docx (path with space, native footnote)"; else bad "aw docx: $(tail -2 "$T/e")"; fi
 
+# Home, setup checks and the dashboard assets, from the BUILT plugin only. The home folder is a temp one.
+export ACADEMIC_HOME="$T/home"; mkdir -p "$ACADEMIC_HOME"
+python3 "$P/scripts/home.py" show >"$T/e" 2>&1 && ok "built home.py show runs" || bad "home.py show: $(tail -1 "$T/e")"
+python3 "$P/scripts/setup_checks.py" --json >"$T/sc.json" 2>"$T/e" && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d else 1)' "$T/sc.json" \
+  && ok "built setup_checks.py --json prints JSON" || bad "setup_checks.py --json: $(tail -1 "$T/e")"
+for f in scripts/courses/dashboard/margin.css scripts/courses/dashboard/app.css scripts/courses/dashboard/views/core.js scripts/courses/dashboard/about.json mod/register.tsx scripts/activity.py schemas/activity-event.schema.json; do
+  [[ -f "$P/$f" ]] && ok "ships $f" || bad "$f missing from the built plugin"
+done
+[[ ! -e "$P/brand/DESIGN.md" ]] && ok "brand source is not shipped" || bad "brand/DESIGN.md shipped"
+echo '[]' > "$T/ws.json"; python3 "$P/scripts/activity.py" list --workspaces "$T/ws.json" >/dev/null 2>"$T/e" && ok "built activity.py list runs" || bad "activity.py: $(tail -1 "$T/e")"
+unset ACADEMIC_HOME
+if command -v claude >/dev/null 2>&1; then
+  claude plugin validate "$P" >"$T/e" 2>&1 && ok "claude plugin validate" || bad "claude plugin validate: $(tail -2 "$T/e")"
+else echo "skip claude plugin validate (claude not installed)"; fi
+
 if [[ "${1:-}" == "--live" ]]; then
   if [[ -z "${GOOGLE_API_KEY:-}" ]]; then bad "--live needs GOOGLE_API_KEY"; else
     F="$ROOT/evals/proofread-recall/fixture"; mkdir -p "$T/data/voice" "$T/out"; cp "$F/article.md" "$T/proj/article.md"

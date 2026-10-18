@@ -28,6 +28,9 @@ echo -e "${BLUE}[1/7] Validating environment...${NC}"
 [[ ! -d "$MANIFESTS_DIR" ]] && echo -e "${RED}Error: manifests/ not found${NC}" && exit 1
 command -v jq &>/dev/null || { echo -e "${RED}Error: jq required. Install with: brew install jq${NC}"; exit 1; }
 echo -e "${GREEN}  Environment OK${NC}"
+# Brand gate: a colour, size or font that is not in src/brand/DESIGN.md fails the build.
+python3 "$PROJECT_ROOT/scripts/check-brand.py" --surface all || { echo -e "${RED}Error: brand check failed${NC}"; exit 1; }
+echo -e "${GREEN}  Brand check OK${NC}"
 
 # Phase 2: Build hooks
 echo -e "${BLUE}[2/7] Building TypeScript hooks...${NC}"
@@ -69,6 +72,10 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
   # Regenerate the command lists in the HTML guide and the help skill from skill
   # frontmatter (and stamp the version), so they can never drift from the skills.
   python3 "$PROJECT_ROOT/scripts/gen-guide.py"
+  # Regenerate the dashboard and site brand tokens (margin.css) and the About data from their
+  # sources, before scripts/ is copied. src/brand/DESIGN.md itself is source only: not shipped.
+  python3 "$PROJECT_ROOT/scripts/gen-brand-tokens.py"
+  python3 "$PROJECT_ROOT/scripts/gen-about.py"
 
   # Copy skills
   if [[ -d "$SRC_DIR/skills" ]]; then
@@ -127,6 +134,11 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
       [[ -f "$PROJECT_ROOT/tools/$tool" ]] && cp "$PROJECT_ROOT/tools/$tool" "$PLUGIN_DIR/scripts/tools/"
     done
     : > "$PLUGIN_DIR/scripts/tools/__init__.py"
+  fi
+
+  # Ship the Claude Code mod (activity pane): hooks.json `modules` points at ../mod/register.tsx.
+  if [[ -d "$SRC_DIR/mod" ]]; then
+    cp -R "$SRC_DIR/mod" "$PLUGIN_DIR/"
   fi
 
   # Copy workflow scripts (Workflow-tool scriptPath targets)
@@ -211,6 +223,10 @@ for plugin_dir in "$PLUGINS_DIR"/*; do
   fi
   if [[ ! -f "$plugin_dir/guide/index.html" ]]; then
     echo -e "${RED}  $plugin_name: Missing guide/index.html${NC}"
+    errors=$((errors + 1))
+  fi
+  if [[ ! -f "$plugin_dir/mod/register.tsx" ]]; then
+    echo -e "${RED}  $plugin_name: Missing mod/register.tsx${NC}"
     errors=$((errors + 1))
   fi
   if [[ ! -x "$plugin_dir/bin/aw" ]]; then

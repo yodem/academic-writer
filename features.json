@@ -911,8 +911,8 @@
         "src/hooks/src/lib/home.ts"
       ],
       "status": "partial",
-      "notes": "Implemented by the home part of the dashboard plan; merged at integration. Tests land with it, so the value here is honest for this part only.",
-      "tested": "not tested yet",
+      "notes": "Covered by dedicated automated tests in tests/ and src/cli; the dashboard end-to-end suite exercises it through the pages.",
+      "tested": "unit",
       "name_he": "תיקיית בית ותיקיות עבודה",
       "description_he": "תיקייה אחת שמחזיקה את הפרופיל והסמסטר, ותיקיות עבודה שיורשות ממנה."
     },
@@ -925,8 +925,8 @@
         "scripts/check-brand.py"
       ],
       "status": "partial",
-      "notes": "Implemented by the brand part of the dashboard plan; merged at integration. Tests land with it, so the value here is honest for this part only.",
-      "tested": "not tested yet",
+      "notes": "Covered by dedicated automated tests in tests/ and src/cli; the dashboard end-to-end suite exercises it through the pages.",
+      "tested": "unit",
       "name_he": "מראה אחיד",
       "description_he": "קובץ עיצוב אחד שהאתר והלוח טוענים ממנו, עם בדיקה אוטומטית."
     },
@@ -939,8 +939,8 @@
         "src/schemas/activity-event.schema.json"
       ],
       "status": "partial",
-      "notes": "Implemented by the activity part of the dashboard plan; merged at integration. Tests land with it, so the value here is honest for this part only.",
-      "tested": "not tested yet",
+      "notes": "Covered by dedicated automated tests in tests/ and src/cli; the dashboard end-to-end suite exercises it through the pages.",
+      "tested": "unit",
       "name_he": "פעילות הסוכנים",
       "description_he": "רישום קבוע של כל שלב בכתיבה, ללא מודל, להצגה בלוח ובחלון."
     },

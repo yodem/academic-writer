@@ -39,8 +39,7 @@ def test_profile_schema_documents_home_and_workspace_fields():
 
 
 def test_no_skill_names_legacy_registry_except_migration():
-    owned = [SKILLS / "setup", SKILLS / "init", SKILLS / "courses" / "SKILL.md"]
-    paths = [q for o in owned for q in ([o] if o.is_file() else o.rglob("*.md"))]
+    paths = list(SKILLS.rglob("*.md"))
     for path in paths:
         text = path.read_text(encoding="utf-8")
         if "~/.academic-writer/courses" not in text:

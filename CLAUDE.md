@@ -16,6 +16,8 @@ researcher on a local machine; the plugin should never assume team workflows.
 - `python3 scripts/gen-guide.py` — regenerate the guide/help command lists (`--check` to verify)
 - `bash scripts/smoke-built-plugin.sh` — run the built plugin's shipped artifacts
 - `bash scripts/check-no-private-refs.sh` — privacy gate over tracked files
+- `python3 scripts/check-brand.py --surface all` — brand gate (colours, fonts, sizes, radii only from `src/brand/DESIGN.md`); `python3 scripts/gen-brand-tokens.py` regenerates `margin.css` and the site tokens (`--check` to verify); `python3 scripts/gen-about.py` regenerates the About data from `features.json` (`--check` to verify)
+- `npm run test:e2e` — dashboard end to end (Playwright, Chromium and Firefox; fixture servers from `tests/e2e/dashboard/`; `AW_E2E_PORT_BASE` shifts the port block; needs `npm ci` at the repo root and `npx playwright install chromium firefox`; a port stays busy about a minute after a run)
 
 ## Source layout
 
@@ -24,7 +26,12 @@ researcher on a local machine; the plugin should never assume team workflows.
 | `src/skills/<name>/SKILL.md` | Skill definition (markdown + YAML frontmatter) |
 | `src/agents/<name>.md` | Agent definition (markdown + YAML frontmatter) |
 | `src/hooks/src/lifecycle/*.ts` | TypeScript hook handlers, bundled by esbuild |
-| `src/hooks/hooks.json` | Hook registry — what events fire which handlers |
+| `src/hooks/hooks.json` | Hook registry — what events fire which handlers, and the `modules` entry for the activity mod |
+| `src/brand/DESIGN.md` | "The Margin" brand file: the only source of colours, fonts, sizes and radii; generates `margin.css` and the site tokens (source only, not shipped) |
+| `src/mod/` | Claude Code mod (TSX) that draws the live activity pane; its logic is unit tested, the pane itself is checked by hand |
+| `src/scripts/home.py`, `home_migrate.py` | The home folder, `workspaces.json`, profile merge (`home.md` then workspace overrides) and the previewed, backed-up migration of the old registry |
+| `src/scripts/activity.py`, `src/schemas/activity-event.schema.json` | Reader and schema for `runs/<id>/activity.jsonl`, written by `aw` and the SubagentStop hook (no model call) |
+| `src/scripts/setup_checks.py` | One source for health, setup and the dashboard's Setup page (`--json`) |
 | `src/thresholds.json` | Single source of truth for all numeric quality gates |
 | `src/cli/src/<command>.ts` | `aw` CLI command implementation |
 | `src/cli/src/library/` | `aw library` (Trove default, optional PageIndex route, retrieval ledger, report, install, index, backfill); `eval/` is the blind Trove-vs-PageIndex evaluation engine |
@@ -40,7 +47,7 @@ researcher on a local machine; the plugin should never assume team workflows.
 - **Thresholds**: edit `src/thresholds.json`, never inline numbers in skills or agents.
 - **Strict TypeScript**: hooks must compile under `tsc --noEmit`; never use `any` (use `unknown` and narrow).
 - **Markdown frontmatter**: skills use documented keys including `name`, `description`, `user-invocable`, `allowed-tools`, and `metadata`. Agents use documented keys including `name`, `description`, `tools`, `model`, and `omitClaudeMd: true`. Add `metadata: {author, version}` to skills.
-- **No global pollution**: write only inside `CLAUDE_PROJECT_DIR` and `${CLAUDE_PLUGIN_DATA}`; never write elsewhere under `$HOME`. The plugin must be safe to run in any project.
+- **No global pollution**: write only inside `CLAUDE_PROJECT_DIR` and `${CLAUDE_PLUGIN_DATA}`; never write elsewhere under `$HOME`. The one named exception is the home folder the researcher chooses (set through `home.py set`), which holds `home.md`, `workspaces.json` and the course registry. The plugin must be safe to run in any project.
 
 ## Plugin invocation
 

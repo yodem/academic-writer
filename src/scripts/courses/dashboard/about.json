@@ -822,7 +822,7 @@
       "description_he": "תיקייה אחת שמחזיקה את הפרופיל והסמסטר, ותיקיות עבודה שיורשות ממנה.",
       "command": null,
       "status": "partial",
-      "tested": "not tested yet",
+      "tested": "unit",
       "subfeatures": []
     },
     {
@@ -831,7 +831,7 @@
       "description_he": "קובץ עיצוב אחד שהאתר והלוח טוענים ממנו, עם בדיקה אוטומטית.",
       "command": null,
       "status": "partial",
-      "tested": "not tested yet",
+      "tested": "unit",
       "subfeatures": []
     },
     {
@@ -840,7 +840,7 @@
       "description_he": "רישום קבוע של כל שלב בכתיבה, ללא מודל, להצגה בלוח ובחלון.",
       "command": null,
       "status": "partial",
-      "tested": "not tested yet",
+      "tested": "unit",
       "subfeatures": []
     },
     {
