@@ -1,0 +1,11 @@
+{"v": 1, "ts": "2026-10-18T10:00:00.000Z", "run": "R", "flow": "write", "kind": "run_start"}
+{"v": 1, "ts": "2026-10-18T10:00:05.000Z", "run": "R", "flow": "write", "kind": "step_start", "step": "draft"}
+{"v": 1, "ts": "2026-10-18T10:01:00.000Z", "run": "R", "flow": "write", "kind": "unit_drafted", "step": "draft", "unit": "intro"}
+{"v": 1, "ts": "2026-10-18T10:01:01.000Z", "run": "R", "flow": "write", "kind": "gate", "step": "draft", "unit": "intro", "gate": "draft-gates", "ok": true}
+{"v": 1, "ts": "2026-10-18T10:02:00.000Z", "run": "R", "flow": "write", "kind": "unit_drafted", "step": "draft", "unit": "U1"}
+{"v": 1, "ts": "2026-10-18T10:02:01.000Z", "run": "R", "flow": "write", "kind": "gate", "step": "draft", "unit": "U1", "gate": "citation-not-in-sources", "ok": false, "reason": "unknown-source"}
+{"v": 1, "ts": "2026-10-18T10:02:02.000Z", "run": "R", "flow": "write", "kind": "step_end", "step": "draft"}
+{"v": 1, "ts": "2026-10-18T10:02:30.000Z", "run": "R", "flow": "write", "kind": "subagent_start", "agent": "academic-writer:auditor"}
+{"v": 1, "ts": "2026-10-18T10:03:10.000Z", "run": "R", "flow": "write", "kind": "audit_verdict", "step": "audit", "paragraph": 1, "verdict": "FAIL", "reason": "no footnote", "agent": "academic-writer:auditor"}
+{"v": 1, "ts": "2026-10-18T10:03:11.000Z", "run": "R", "flow": "write", "kind": "subagent_stop", "agent": "academic-writer:auditor"}
+{"v":1,"ts":"2026-10-18T10:03:20.000Z","run":"R","flow":"wri

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Bundles tests/*.test.ts (and the hook test that exercises the SessionStart key bridge) into
+// Bundles tests/*.test.ts (and the hook tests: the SessionStart key bridge, SubagentStop activity) into
 // dist-test/*.test.mjs so `node --test` runs them on any Node >= 20. Plain `node --test *.ts`
 // only works on Node versions with type stripping on by default, which this machine's nvm
 // Node 22.17 is not. Same pattern as the Gemini server's build-tests.mjs.
@@ -10,6 +10,7 @@ rmSync('./dist-test', { recursive: true, force: true });
 mkdirSync('./dist-test', { recursive: true });
 const entries = readdirSync('./tests').filter((f) => f.endsWith('.test.ts')).map((f) => `./tests/${f}`);
 entries.push('../hooks/src/lifecycle/session-env.test.ts');
+entries.push('../hooks/src/lifecycle/subagent-stop.test.ts');
 await build({
   entryPoints: entries, outdir: './dist-test', outExtension: { '.js': '.mjs' }, bundle: true,
   format: 'esm', platform: 'node', target: 'node20', sourcemap: 'inline',

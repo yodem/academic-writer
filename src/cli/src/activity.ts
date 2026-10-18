@@ -40,7 +40,9 @@ export function appendEvent(runId: string, ev: ActivityEvent, project?: string):
     if (!file) return;
     const event = ev.reason !== undefined && ev.reason.length > 300 ? { ...ev, reason: ev.reason.slice(0, 300) } : ev;
     mkdirSync(join(file, '..'), { recursive: true });
-    appendFileSync(file, `${JSON.stringify(event)}\n`, 'utf8');
+    // A run killed mid-write leaves a line without its newline; start on a fresh line so both stay readable.
+    const torn = existsSync(file) && (() => { const text = readFileSync(file, 'utf8'); return text.length > 0 && !text.endsWith('\n'); })();
+    appendFileSync(file, `${torn ? '\n' : ''}${JSON.stringify(event)}\n`, 'utf8');
   } catch (error) {
     process.stderr.write(`activity: could not record event (${error instanceof Error ? error.message : 'unknown error'})\n`);
   }
