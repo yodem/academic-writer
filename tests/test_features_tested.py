@@ -76,6 +76,22 @@ class TestedField(unittest.TestCase):
         self.assertEqual(by_id["course-dashboard"]["command"], "/academic-writer:dashboard")
         self.assertIsNone(by_id["citation-audit"]["command"])  # an agent, not a command
 
+    def test_descriptions_are_hebrew_and_authored(self):
+        about = json.loads(ABOUT.read_text(encoding="utf-8"))
+        authored = {n["id"]: n.get("description_he") for n in self.data["features"]}
+        for feat in about["features"]:
+            self.assertRegex(feat["description_he"], r"[\u0590-\u05FF]", feat["id"])
+            if authored[feat["id"]]:
+                self.assertEqual(feat["description_he"], authored[feat["id"]], feat["id"])
+
+    def test_command_only_from_the_primary_source(self):
+        about = json.loads(ABOUT.read_text(encoding="utf-8"))
+        by_id = {f["id"]: f for f in about["features"]}
+        self.assertIsNone(by_id["gemini-mcp-retirement"]["command"])
+        self.assertIsNone(by_id["synthesis"]["command"])
+        self.assertEqual(by_id["editing"]["command"], "/academic-writer:edit-section")
+        self.assertEqual(by_id["section-writing"]["command"], "/academic-writer:write")
+
 
 if __name__ == "__main__":
     unittest.main()

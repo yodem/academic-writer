@@ -251,8 +251,8 @@
       "id": "section-writing",
       "name": "Ordered CLI drafting and audit pipeline",
       "sources": [
-        "src/cli/src/draft.ts",
         "src/skills/write/SKILL.md",
+        "src/cli/src/draft.ts",
         "src/agents/auditor.md",
         "src/cli/src/synthesize.ts"
       ],

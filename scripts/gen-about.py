@@ -3,7 +3,7 @@
 
 Sources of truth:
   - features.json                      (features, subfeatures, status, `tested`, optional name_he/description_he)
-  - src/skills/*/SKILL.md frontmatter  (description, metadata.summary, user-invocable), joined by each feature's `sources`
+  - src/skills/*/SKILL.md frontmatter  (description, metadata.summary, user-invocable), joined by each feature's primary (first) source
   - manifests/academic-writer.json     (version)
 
 Target:
@@ -14,8 +14,8 @@ Usage:
   python3 scripts/gen-about.py --check    # exit 1 if the output would change
   python3 scripts/gen-about.py --root DIR # operate on another checkout (used by tests)
 
-Standard library only. No model call: a feature's text comes from its skill's summary, else from the
-`description_he` written next to it in features.json.
+Standard library only. No model call: a feature's text is the Hebrew `description_he` written in features.json; the primary
+skill's summary is only a fallback. The command comes only from a primary source that is a skill.
 """
 from __future__ import annotations
 
@@ -70,16 +70,15 @@ def _load_guide(root: Path):
 
 
 def skill_for(root: Path, guide, sources: List[str]) -> Optional[Tuple[str, Dict[str, Any]]]:
-    """First source that is a src/skills/<name>/SKILL.md file: (name, frontmatter)."""
-    for src in sources:
-        m = re.fullmatch(r"src/skills/([^/]+)/SKILL\.md", src)
-        if not m:
-            continue
-        path = root / src
-        if path.is_file():
-            fm = guide.parse_frontmatter(path.read_text(encoding="utf-8"))
-            return str(fm.get("name") or m.group(1)), fm
-    return None
+    """The feature's primary source (its first), when that is a src/skills/<name>/SKILL.md file."""
+    if not sources:
+        return None
+    m = re.fullmatch(r"src/skills/([^/]+)/SKILL\.md", sources[0])
+    path = root / sources[0]
+    if not m or not path.is_file():
+        return None
+    fm = guide.parse_frontmatter(path.read_text(encoding="utf-8"))
+    return str(fm.get("name") or m.group(1)), fm
 
 
 def build_sub(node: Dict[str, Any]) -> Dict[str, Any]:
@@ -91,14 +90,14 @@ def build_sub(node: Dict[str, Any]) -> Dict[str, Any]:
 def build_feature(root: Path, guide, node: Dict[str, Any]) -> Dict[str, Any]:
     skill = skill_for(root, guide, node.get("sources") or [])
     command = None
-    description = node.get("description_he") or node.get("name") or node["id"]
+    description = node.get("description_he")
     if skill:
         name, fm = skill
-        summary = guide.summary_for(fm)
-        if summary:
-            description = summary
+        if not description:
+            description = guide.summary_for(fm)
         if fm.get("user-invocable"):
             command = guide.PREFIX + name
+    description = description or node.get("name") or node["id"]
     subs = [build_sub(sub) for sub in node.get("subfeatures") or []]
     return {"id": node["id"], "name_he": node.get("name_he") or node.get("name") or node["id"],
             "description_he": description, "command": command, "status": node.get("status"),

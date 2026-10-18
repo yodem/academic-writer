@@ -4,7 +4,7 @@
     {
       "id": "onboarding",
       "name_he": "התחלה והגדרה",
-      "description_he": "Full onboarding for Academic Writer: builds your researcher profile, learns your writing style from past articles, connects your research library, and offers Gemini.",
+      "description_he": "הגדרה ראשונה, פרופיל ובדיקת הכלים שהתוסף צריך.",
       "command": "/academic-writer:init",
       "status": "ok",
       "tested": "manual",
@@ -56,7 +56,7 @@
     {
       "id": "voice",
       "name_he": "הקול שלי",
-      "description_he": "Build or update the author's voice profile: import older voice files, choose exemplar paragraphs from past papers, derive writing rules and sync them to Trove.",
+      "description_he": "מאגר אחד של סגנון הכתיבה שלך, משותף לכל הפרויקטים.",
       "command": "/academic-writer:voice",
       "status": "partial",
       "tested": "manual",
@@ -115,7 +115,7 @@
     {
       "id": "research",
       "name_he": "מחקר ואיסוף ראיות",
-      "description_he": "Investigate a topic or check a claim against the author's indexed sources, returning only passages whose quotations were verified word for word.",
+      "description_he": "שאלת מחקר ואיסוף קטעים מאומתים מהמקורות.",
       "command": "/academic-writer:research",
       "status": "ok",
       "tested": "manual",
@@ -153,7 +153,7 @@
     {
       "id": "ingest",
       "name_he": "הוספת מקורות",
-      "description_he": "Upload one article or chapter to the source library with printed page numbers, hinted contents and a citation guide.",
+      "description_he": "העלאת מאמר או ספר שלם לספרייה עם מספרי עמודים מודפסים.",
       "command": "/academic-writer:ingest",
       "status": "ok",
       "tested": "manual",
@@ -229,7 +229,7 @@
     {
       "id": "section-writing",
       "name_he": "כתיבת המאמר",
-      "description_he": "Write a new academic article with the author, step by step: topic, sources, verified evidence, the author's thesis, an approved outline, drafting, a citation audit and a Word file.",
+      "description_he": "כתיבה לפי סדר התלות, בדיקת ציטוטים לכל יחידה ותיקון חוזר.",
       "command": "/academic-writer:write",
       "status": "ok",
       "tested": "unit",
@@ -305,8 +305,8 @@
     {
       "id": "synthesis",
       "name_he": "חיבור וסקירה",
-      "description_he": "Score a completed article on six dimensions (structure, argument logic, citation completeness, source coverage, writing quality, academic conventions) and show a scorecard with concrete findings.",
-      "command": "/academic-writer:review",
+      "description_he": "בדיקת רצף בין חלקים, מחקר של חזרות, תקציר וציון עצמי.",
+      "command": null,
       "status": "partial",
       "tested": "not tested yet",
       "subfeatures": [
@@ -412,8 +412,8 @@
     {
       "id": "gemini-mcp-retirement",
       "name_he": "עריכה וקריאת סריקות",
-      "description_he": "Revise an article you already drafted: several passages at once, tone, structure, argument order or evidence.",
-      "command": "/academic-writer:edit",
+      "description_he": "עריכה וזיהוי טקסט מסריקות דרך פקודות התוסף.",
+      "command": null,
       "status": "ok",
       "tested": "unit",
       "subfeatures": []
@@ -421,7 +421,7 @@
     {
       "id": "editing",
       "name_he": "עריכה והגהה",
-      "description_he": "Quick revision of one section of an existing article: rewrite, expand, shorten, fix its citations or adjust its style.",
+      "description_he": "עריכת מאמר או חלק ממנו, והגהה עם הערות ותיקונים.",
       "command": "/academic-writer:edit-section",
       "status": "ok",
       "tested": "manual",
@@ -570,7 +570,7 @@
     {
       "id": "docx-revise-loop",
       "name_he": "סבב הערות ב-Word",
-      "description_he": "Read the Word comments and tracked changes the author left on a generated draft, group them, confirm each group, then update the article and the voice and feedback stores.",
+      "description_he": "קריאת הערות ותיקונים ב-Word ועדכון הטיוטה.",
       "command": "/academic-writer:revise",
       "status": "ok",
       "tested": "unit",
@@ -601,7 +601,7 @@
     {
       "id": "course-management",
       "name_he": "ניהול קורסים",
-      "description_he": "Use when setting up an academic term from a schedule, validating course resources, syncing your LMS (Moodle) materials, or running the daily course scan.",
+      "description_he": "סמסטר, משאבים לכל קורס וסריקה יומית.",
       "command": "/academic-writer:courses",
       "status": "ok",
       "tested": "unit",
@@ -639,7 +639,7 @@
     {
       "id": "lesson-transcription",
       "name_he": "סיכומי שיעורים",
-      "description_he": "Use when processing a course recording into a structured Hebrew lesson note, or when resuming queued NotebookLM lesson transcripts with --pending.",
+      "description_he": "הקלטות ותמלולים הופכים לדפי שיעור מסודרים.",
       "command": "/academic-writer:lesson-notes",
       "status": "ok",
       "tested": "unit",
@@ -663,7 +663,7 @@
     {
       "id": "course-dashboard",
       "name_he": "לוח הקורסים",
-      "description_he": "Open the local course dashboard: one page that shows, for every course in the term, what is due next, whether its readings are ready, and what is new, with a week agenda and a page per course.",
+      "description_he": "לוח מקומי עם השבוע, הקורסים והמטלות.",
       "command": "/academic-writer:dashboard",
       "status": "ok",
       "tested": "unit",
@@ -701,7 +701,7 @@
     {
       "id": "library-routes",
       "name_he": "ספרייה ומקורות",
-      "description_he": "Turn the optional integrations (Trove source library, NotebookLM) on or off after setup, change which library an article reads its books from (Trove, PageIndex or both), set up or update the built-in PageIndex helper, prepare existing Trove books for PageIndex, and record the change.",
+      "description_he": "בחירת הספרייה שממנה נקראים המקורות ובדיקת הדיוק שלה.",
       "command": null,
       "status": "partial",
       "tested": "manual",
@@ -795,7 +795,7 @@
     {
       "id": "kotar-fetch",
       "name_he": "הורדה מכותר",
-      "description_he": "Download the cited pages of a book on Kotar (CET, through the Bar-Ilan OpenAthens proxy) as one PDF in printed-page order, for the author's own study.",
+      "description_he": "הורדת העמודים המצוטטים מספר בכותר כקובץ PDF אחד.",
       "command": "/academic-writer:kotar-fetch",
       "status": "ok",
       "tested": "manual",
@@ -855,8 +855,8 @@
     {
       "id": "setup-checks",
       "name_he": "בדיקות הגדרה",
-      "description_he": "Check that Academic Writer is ready to use — your profile, the tools it needs (Python and its add-ons, Hebrew spelling, Trove, NotebookLM), the Gemini key and past articles — with a plain-language fix for anything missing.",
-      "command": "/academic-writer:health",
+      "description_he": "בדיקה אחת, ללא התקנה, שמשרתת את הבדיקה, ההגדרה ולוח ההגדרה.",
+      "command": null,
       "status": "ok",
       "tested": "unit",
       "subfeatures": [
