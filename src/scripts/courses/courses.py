@@ -70,8 +70,30 @@ class Registry:
 
 
 def courses_root() -> Path:
-    """Root that holds one directory per term (ACADEMIC_COURSES_DIR, default ~/.academic-writer/courses)."""
-    return Path(os.environ.get("ACADEMIC_COURSES_DIR", "~/.academic-writer/courses")).expanduser()
+    """Root that holds one directory per term.
+
+    Order: ACADEMIC_COURSES_DIR; <home>/.academic-helper/terms when it exists; the legacy
+    ~/.academic-writer/courses when it exists (a pre-migration user keeps working); then the home terms
+    folder even if missing (a new home); then the legacy path.
+    """
+    override = os.environ.get("ACADEMIC_COURSES_DIR")
+    if override:
+        return Path(override).expanduser()
+    legacy = Path("~/.academic-writer/courses").expanduser()
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    try:
+        import home as home_mod
+        acad = home_mod.home_dir()
+    except Exception:
+        acad = None
+    finally:
+        sys.path.pop(0)
+    if acad is None:
+        return legacy
+    terms = acad / ".academic-helper" / "terms"
+    if terms.is_dir():
+        return terms
+    return legacy if legacy.exists() else terms
 
 
 def registry_dir(term: str | None = None) -> Path:
@@ -1058,7 +1080,7 @@ def check_source(registry: Registry, slug: str, sha8: str | None = None, runner:
     return problems
 
 
-CHORE_KINDS = ("assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual")
+CHORE_KINDS = ("assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual", "exam")
 BLOCKED_MESSAGE = "lemida: blocked, use chrome watcher"
 _BLOCKED_RE = re.compile(r"radware|captcha|bot manager|text/html|<html|expecting value", re.I)
 
@@ -1111,6 +1133,7 @@ def watch_diff(registry: Registry, slug: str, pages: list[dict[str, Any]], *, ap
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--term", help="term directory name (defaults to ACADEMIC_TERM or the sole configured term)")
+    parser.add_argument("--data-dir", help="the plugin data folder, where the home pointer lives (defaults to CLAUDE_PLUGIN_DATA)")
     sub = parser.add_subparsers(dest="command", required=True)
     validate = sub.add_parser("validate", help="validate all configured live course resources")
     validate.add_argument("--json", action="store_true", help="emit mismatch list as JSON")
@@ -1185,6 +1208,8 @@ def main(argv: list[str] | None = None) -> int:
     cadd.add_argument("--time-left-text", default="")
     cadd.add_argument("--due-text", default="")
     cadd.add_argument("--due-at", help="ISO 8601 deadline")
+    cadd.add_argument("--room", default="", help="exam room")
+    cadd.add_argument("--material", default="", help="exam material")
     clist = chores_sub.add_parser("list", parents=[reg_parent], help="list chores as JSON")
     clist.add_argument("--status", choices=["open", "done"])
     clist.add_argument("--course")
@@ -1209,6 +1234,8 @@ def main(argv: list[str] | None = None) -> int:
     import dashboard
     dashboard.add_parser(sub)
     args = parser.parse_args(argv)
+    if args.data_dir:  # skills run this through the Bash tool, which gets no CLAUDE_PLUGIN_DATA
+        os.environ["CLAUDE_PLUGIN_DATA"] = args.data_dir
     if args.command == "dashboard":  # before the registry is read: a fresh install shows the empty state
         return dashboard.run(args)
     try:
@@ -1246,7 +1273,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.chores_command == "add":
                 chore = chores.add_chore(registry, course=args.course, kind=args.kind, ref=args.ref, title=args.title, text=args.text,
                                          core_texts=args.core_texts, time_left_text=args.time_left_text, due_text=args.due_text,
-                                         due_at=args.due_at)
+                                         due_at=args.due_at, room=args.room, material=args.material)
                 print(json.dumps(chore, ensure_ascii=False))
             elif args.chores_command == "list":
                 print(json.dumps(chores.list_chores(registry, status=args.status, course=args.course), ensure_ascii=False, indent=2))

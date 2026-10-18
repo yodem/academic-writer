@@ -50,7 +50,7 @@ def test_all_kinds_accepted(tmp_path):
     reg = make_registry(tmp_path)
     for kind in chores.KINDS:
         chores.add_chore(reg, course="kane", kind=kind, ref="r")
-    assert {c["kind"] for c in chores.load(reg)} == {"assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual"}
+    assert {c["kind"] for c in chores.load(reg)} == {"assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual", "exam"}
 
 
 def test_done_stays_done_on_rescan(tmp_path):
@@ -138,3 +138,27 @@ def test_legacy_stored_ref_matches_canonical(tmp_path):
     (reg.directory / "chores.json").write_text(json.dumps(legacy), encoding="utf-8")
     assert chores.add_chore(reg, course="kane", kind="manual", ref="42", title="t")["id"] == "abc"
     assert len(chores.load(reg)) == 1
+
+
+def test_exam_chore_derives_exam_task_with_room(tmp_path):
+    import tasks
+    reg = make_registry(tmp_path)
+    chore = chores.add_chore(reg, course="kane", kind="exam", ref="exam-1", title="בחינה סופית",
+                             due_at="2027-02-10T09:00:00+02:00", room="בניין 502, חדר 14", material="פרקים 1-6")
+    assert chore["room"] == "בניין 502, חדר 14" and chore["material"] == "פרקים 1-6"
+    derived = tasks.sync_tasks(reg.directory, "kane")
+    assert len(derived) == 1
+    assert derived[0]["kind"] == "exam" and derived[0]["due_at"] == "2027-02-10T09:00:00+02:00"
+    assert derived[0]["room"] == "בניין 502, חדר 14" and derived[0]["material"] == "פרקים 1-6"
+    plain = chores.add_chore(reg, course="cohen", kind="exam", ref="exam-2", due_at="2027-02-11T09:00:00+02:00")
+    assert "room" not in tasks.derive_tasks([], [plain])[0][0]
+    assert "בחינה" in chores.render_digest(reg, [chore])
+
+
+def test_cli_chores_add_exam_with_room_and_material(tmp_path):
+    reg = make_registry(tmp_path)
+    assert courses.main(["chores", "add", "--registry", str(reg.directory), "--course", "kane", "--kind", "exam",
+                         "--ref", "exam-cli", "--due-at", "2027-02-10T09:00:00+02:00",
+                         "--room", "Building 502, room 14", "--material", "chapters 1-6"]) == 0
+    [chore] = chores.load(reg)
+    assert chore["kind"] == "exam" and chore["room"] == "Building 502, room 14" and chore["material"] == "chapters 1-6"

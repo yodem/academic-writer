@@ -1,6 +1,6 @@
 {
   "name": "academic-writer",
-  "version": "0.17.1",
+  "version": "0.18.0",
   "description": "AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as .docx files.",
   "author": {
     "name": "Yotam Fromm",
@@ -38,6 +38,13 @@
       "title": "PageIndex library command (optional)",
       "description": "Only if you use a PageIndex library on your own server as a second place to read your books from. Type the command that starts it, for example: pilib. If a helper script reaches your server for you, type that script's full path, for example: /path/to/pilib-wrapper. Leave empty to use the built-in PageIndex helper if you installed it (setup offers it), or Trove only. A command typed here always wins over the built-in helper. Avoid quotation marks in this setting. Not a password: it holds no secret, so do not put a key or password here. Takes effect in a new Claude Code session.",
       "sensitive": false,
+      "required": false
+    },
+    "activity_pane": {
+      "type": "boolean",
+      "title": "Live activity pane",
+      "description": "Show a live pane in Claude Code that follows each article run step by step: which step is running, which sections are drafted, and what the checker rejected and why. It only reads the run's record and never changes anything. Needs a terminal at least 144 columns wide to open by itself; /academic-writer:watch opens it on request. Takes effect in a new Claude Code session.",
+      "default": true,
       "required": false
     }
   }

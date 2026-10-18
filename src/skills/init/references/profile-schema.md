@@ -234,3 +234,23 @@ Run via voice-miner agent. Dimensions span 8 categories (A–I):
 28. Conclusion conventions (opening pattern, elements, restatement?, implications?, closing pattern, typical length)
 29. Paragraph formula (topic sentence style, evidence presentation, analysis type, closing move, full sequence)
 30. Section transition patterns (bridging style, transitional paragraphs?, explicit signposting?)
+
+## Home folder and workspace fields
+
+The researcher's home folder holds `<home>/.academic-helper/home.md`: the same frontmatter keys as a
+profile (`name`, `author_key`, `fieldOfStudy`, `citationStyle`, `targetLanguage`, ...) as the defaults
+for every workspace. A workspace's own `.academic-helper/profile.md` overrides them key by key
+(and JSON section by JSON section). The resolver is `scripts/home.py`; the pointer to the home is
+set with `home.py set`.
+
+A profile written in a workspace may carry these extra frontmatter keys, added by `home.py register`
+or by `init`:
+
+| Key | Values | Meaning |
+|---|---|---|
+| `workspace` | `course`, `project`, `teaching` | What kind of folder this is. Absent means a plain project. |
+| `course` | course slug | Which course of the term (only when `workspace` is `course` or `teaching`). |
+| `term` | term key | The academic term the course belongs to. |
+
+The workspace list itself lives in `<home>/.academic-helper/workspaces.json`; a workspace whose
+folder is moved or deleted stays in the list and is shown as not found.

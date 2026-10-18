@@ -118,7 +118,7 @@ footer { margin-top: 48px; color: var(--muted); font-size: .9rem; border-top: 1p
 <header class="hero">
   <h1>Academic Writer: the full guide</h1>
   <p>A writing assistant for humanities researchers. It helps you write a scholarly article in your own voice, using only the sources you choose, and hands you a Word file.</p>
-  <span class="version">Version <!-- guide:version:start -->0.17.1<!-- guide:version:end --></span>
+  <span class="version">Version <!-- guide:version:start -->0.18.0<!-- guide:version:end --></span>
 </header>
 
 <nav class="toc" aria-label="Contents">
@@ -219,6 +219,12 @@ claude plugin install academic-writer@yodem</code></pre></div>
 <p>Setup and init also ask whether to add <strong>PageIndex</strong>, an optional second library for your books. The safe answer is "Not now": your books are then read from Trove, exactly as before. Section 11 explains the choice.</p>
 </section>
 
+<section id="now">
+<h2>What you can do now</h2>
+<p>At the end, setup shows a short list of the commands that are ready for you, based on whether you are a student, a researcher or a teacher. Only commands whose tools are in place are listed. To see the list again, run <code>/academic-writer:setup</code>; for the full tour, run <code>/academic-writer:intro</code>.</p>
+<p>Setup also asks you to choose one visible <strong>home folder</strong>. It keeps your details, your courses and the list of your project folders in one place you can open yourself.</p>
+</section>
+
 <section id="first-article">
 <h2>5. Your first article</h2>
 <p>Type <code>/academic-writer:write</code>. The first part is a conversation; the second part the plugin does on its own while you wait.</p>
@@ -267,6 +273,7 @@ claude plugin install academic-writer@yodem</code></pre></div>
 <tr><td><code>/academic-writer:dashboard</code></td><td>Open the local course dashboard: one page that shows, for every course in the term, what is due next, whether its readings are ready, and what is new, with a week agenda and a page per course.</td></tr>
 <tr><td><code>/academic-writer:kotar-fetch</code></td><td>Download the cited pages of a book on Kotar (CET, through the Bar-Ilan OpenAthens proxy) as one PDF in printed-page order, for the author&#x27;s own study.</td></tr>
 <tr><td><code>/academic-writer:lesson-notes</code></td><td>Use when processing a course recording into a structured Hebrew lesson note, or when resuming queued NotebookLM lesson transcripts with --pending.</td></tr>
+<tr><td><code>/academic-writer:watch</code></td><td>Show what Academic Writer is doing right now: the current step of the article run, how far it has got, and anything the checker rejected.</td></tr>
 </tbody>
 </table>
 <!-- guide:commands:end -->

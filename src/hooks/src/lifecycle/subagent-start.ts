@@ -1,8 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { HookInput, HookResult } from '../types.js';
+import { recordActivity } from '../lib/activity.js';
 
 interface SubagentStartInput extends HookInput {
+  agent_type?: string; // the field Claude Code sends (2.1.302)
+  agent_id?: string;
   subagent_type?: string;
   subagentType?: string;
 }
@@ -19,7 +22,10 @@ export function subagentStart(input: SubagentStartInput): HookResult {
     return { continue: true, suppressOutput: true };
   }
 
-  const subagentType = input.subagent_type ?? input.subagentType ?? '';
+  const subagentType = input.agent_type ?? input.subagent_type ?? input.subagentType ?? '';
+  // Activity record: every subagent, whatever its type. Nothing is written without an active run.
+  recordActivity(projectDir, 'subagent_start', { ...(subagentType ? { agent: subagentType } : {}) }, { pluginRoot: input.plugin_root });
+
   // Only inject for the auditor subagent — others have their own context.
   if (subagentType !== 'auditor' && subagentType !== 'academic-writer:auditor') {
     return { continue: true, suppressOutput: true };

@@ -118,3 +118,12 @@ docs/reviews/
 docs/plans/
 docs/benchmarks/
 .claude/settings.json
+
+# Process dirs and e2e output (local)
+.superpowers/
+.playwright-mcp/
+test-results/
+playwright-report/
+
+# Workflow agent worktrees (local)
+.claude/worktrees/

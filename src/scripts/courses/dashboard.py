@@ -15,6 +15,11 @@ and queue/fetch/*.json. `GET /api/state` joins them and computes, deterministica
   downloaded and in Trove; `unlinked` when no source is linked (never shown as ready); otherwise `pending`;
 - the one-sentence lede ("what needs you") and the week agenda (class slots, semester-aware, in the term time zone).
 
+Home-aware (read-only): the state also carries who the user is (`home.md` in the home folder), the role's nav, the
+setup checks (`setup_checks.run_checks`, at most once a minute), every registered workspace and its agent-activity
+runs (`activity.list_runs`), course colours, exams, a semester timeline and the week mode. A lecturer or researcher
+gets no term fields: their overview is built from writing runs, workspaces and recently added sources.
+
 Writes go only through existing functions: `POST /api/task/submit` and `/api/task/unsubmit` call tasks.py;
 `POST /api/fetch` writes a job to queue/fetch/<ts>-<course>.json for Claude or the nightly run to execute with
 `refs.py fetch` (the server never fetches anything). `GET /api/events` is a Server-Sent Events stream: a server
@@ -27,11 +32,13 @@ import errno
 import hashlib
 import hmac
 import http.server
+import importlib.util
 import json
 import os
 import re
 import secrets
 import socketserver
+import subprocess
 import sys
 import threading
 import time
@@ -39,7 +46,7 @@ import urllib.parse
 import webbrowser
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # python -I leaves the script dir off sys.path
@@ -47,6 +54,20 @@ import courses  # noqa: E402
 import tasks as tasks_mod  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
+
+
+def _load_script(name: str, filename: str):
+    """Load a sibling script of src/scripts by path, so its generic module name never lands on sys.path."""
+    spec = importlib.util.spec_from_file_location(name, HERE.parent / filename)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module  # dataclasses look their module up here
+    spec.loader.exec_module(module)
+    return module
+
+
+home_mod = _load_script("aw_home", "home.py")
+activity_mod = _load_script("aw_activity", "activity.py")
+setup_mod = _load_script("aw_setup_checks", "setup_checks.py")
 ASSETS = HERE / "dashboard"
 DEFAULT_PORT = 8787
 SOON_HOURS = 72
@@ -59,6 +80,17 @@ OCR_WAITING = ("queued", "flagged", "blocked")
 SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 IDENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 ASSET_RE = re.compile(r"^/img/([a-z0-9-]+\.webp)$")
+VIEW_RE = re.compile(r"^/views/([a-z-]+\.js)$")
+STATIC_FILES = {"/app.css": "text/css; charset=utf-8", "/margin.css": "text/css; charset=utf-8",
+                "/about.json": "application/json; charset=utf-8"}
+COURSE_COLORS = ("teal", "coral", "violet", "blue", "ochre", "rose", "olive", "slate")  # brand file order
+NON_TERM_ROLES = ("lecturer", "researcher")
+NAV_STUDENT = ["overview", "timeline", "courses", "writing", "about"]
+NAV_OTHER = ["overview", "writing", "about"]
+SETUP_CACHE_SECONDS = 60
+LIBRARY_DAYS = 7
+LIBRARY_DATE_KEYS = ("addedAt", "added_at", "added", "createdAt", "created_at", "created", "ingestedAt")
+MAX_TIMELINE_WEEKS = 80
 MAX_BODY = 64 * 1024
 DN = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"]
 SEM_HE = {"A": "סמסטר א׳", "B": "סמסטר ב׳", "yearly": "שנתי"}
@@ -221,7 +253,7 @@ def task_state(task: Dict[str, Any], items: List[Dict[str, Any]]) -> str:
 
 
 def kind_word(kind: Any) -> str:
-    return "קריאה" if kind in READING_KINDS else "הגשה"
+    return "קריאה" if kind in READING_KINDS else "בחינה" if kind == "exam" else "הגשה"
 
 
 # --- state ---------------------------------------------------------------------------------------
@@ -270,7 +302,8 @@ def _empty_state(reason: str, now: datetime) -> Dict[str, Any]:
     start = week_start(today)
     return {"empty": True, "reason": reason, "term": None, "timezone": None, "now": now.isoformat(), "today": today.isoformat(),
             "nightly": None, "courses": [], "overview": {"rows": [], "quiet": [], "later": [], "counts": {"submit": 0, "read": 0}},
-            "lede": [{"t": "עוד אין קורסים."}], "agenda": _agenda_frame(start), "wispr_unmatched": [], "warnings": []}
+            "lede": [{"t": "עוד אין קורסים."}], "agenda": _agenda_frame(start), "wispr_unmatched": [], "warnings": [],
+            "exams": [], "timeline": {"weeks": []}}
 
 
 def _agenda_frame(start: date) -> Dict[str, Any]:
@@ -301,13 +334,79 @@ def _https(url: Any) -> Optional[str]:
     return url if isinstance(url, str) and url.startswith("https://") else None
 
 
+def assign_colors(raw_courses: Dict[str, Dict[str, Any]], links: Any = None) -> Dict[str, str]:
+    """A brand course hue per course. An explicit `color` in the course file wins and is reserved; the others
+    take the eight hues in brand order over courses sorted by slug, skipping hues taken explicitly (`links` is
+    accepted for the caller's signature and unused). Past eight courses the hues repeat in order."""
+    out: Dict[str, str] = {}
+    for slug, course in raw_courses.items():
+        candidate = course.get("color")
+        if isinstance(candidate, str) and candidate in COURSE_COLORS:
+            out[slug] = candidate
+    free = [c for c in COURSE_COLORS if c not in out.values()] or list(COURSE_COLORS)
+    n = 0
+    for slug in sorted(raw_courses):
+        if slug not in out:
+            out[slug] = free[n % len(free)]
+            n += 1
+    return out
+
+
+def week_mode(now: datetime) -> str:
+    """`week-ahead` from Saturday 18:00 local through Sunday, otherwise `today` (weekday(): Saturday 5, Sunday 6)."""
+    return "week-ahead" if now.weekday() == 6 or (now.weekday() == 5 and now.hour >= 18) else "today"
+
+
+def exam_rows(course_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows = [{"course": c["slug"], "task": t["id"], "title": t["title"], "due_at": t["due_at"], "due_date": t["due_date"],
+             "due_time": t["due_time"], "room": t["room"], "material": t["material"], "soon": t["soon"],
+             "overdue": t["overdue"]}
+            for c in course_list for t in c["tasks"] if t["exam"] and t["status"] != "submitted"]
+    rows.sort(key=lambda r: (0, r["due_at"], r["task"]) if r["due_at"] else (1, "", r["task"]))
+    return rows
+
+
+def build_timeline(term: Dict[str, Any], course_list: List[Dict[str, Any]], today: date) -> Dict[str, Any]:
+    """Weeks (Sunday start) covering every semester plus any week that holds a dated task, each with its items."""
+    items: Dict[date, List[Dict[str, Any]]] = {}
+    for c in course_list:
+        for t in c["tasks"]:
+            if not t["due_date"]:
+                continue
+            day = date.fromisoformat(t["due_date"])
+            items.setdefault(week_start(day), []).append({
+                "date": t["due_date"], "time": t["due_time"] if t["due_time"] != "00:00" else "", "course": c["slug"],
+                "task": t["id"], "title": t["title"], "state": t["state"], "status": t["status"],
+                "kind": "exam" if t["exam"] else "reading" if t["reading"] else "submit"})
+    starts = set(items)
+    sems = term.get("semesters")
+    for label in (sems if isinstance(sems, dict) else {}):
+        rng = _semester_range(term, label)
+        if rng:
+            cursor = week_start(rng[0])
+            while cursor <= rng[1]:
+                starts.add(cursor)
+                cursor += timedelta(days=7)
+    weeks = []
+    for start in sorted(starts)[:MAX_TIMELINE_WEEKS]:
+        rows = sorted(items.get(start, []), key=lambda i: (i["date"], i["time"], i["task"]))
+        weeks.append({"start": start.isoformat(), "current": start == week_start(today), "items": rows})
+    return {"weeks": weeks}
+
+
 def build_state(directory: Optional[Path], now: Optional[datetime] = None, week: Optional[str] = None,
-                reason: str = "no-registry") -> Dict[str, Any]:
-    """Join the registry files into the page's one JSON. Pure read: nothing is written or locked."""
+                reason: str = "no-registry", ctx: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Join the registry files into the page's one JSON. Pure read: nothing is written or locked.
+
+    `ctx` (from `gather_context`) adds home, nav, setup, workspaces and writing; without it those carry
+    "not configured" values, which keeps the term-only callers working."""
     warnings: List[str] = []
-    if directory is None or not (directory / "term.json").is_file():
+    has_registry = directory is not None and (directory / "term.json").is_file()
+    if ctx and ctx.get("role") in NON_TERM_ROLES:  # a lecturer or researcher takes no courses: the registry is ignored
+        return _finish(_writer_state(now or datetime.now().astimezone(), ctx), ctx, has_registry)
+    if directory is None or not has_registry:
         state = _empty_state(reason if directory is None else "no-registry", (now or datetime.now().astimezone()))
-        return _finish(state)
+        return _finish(state, ctx, has_registry)
     term = _read_json(directory / "term.json", warnings) or {}
     try:
         tz = ZoneInfo(str(term.get("timezone") or "Asia/Jerusalem"))
@@ -326,9 +425,20 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
     if not raw_courses:
         state = _empty_state("no-courses", now)
         state.update({"term": term.get("term"), "timezone": str(tz), "nightly": _nightly(directory), "warnings": warnings})
-        return _finish(state)
+        return _finish(state, ctx, has_registry)
 
     links = _read_json(directory / "links.json", warnings) or {}
+    colors = assign_colors(raw_courses, links)
+    unmatched_raw = _read_json(directory / "digest" / "wispr-unmatched.json", warnings) or {}
+    meetings = unmatched_raw.get("meetings") if isinstance(unmatched_raw, dict) else unmatched_raw
+    unmatched = []
+    for m in meetings or []:
+        if isinstance(m, dict) and m.get("start"):
+            when = _parse_dt(m.get("start"), tz)
+            if when:
+                guess = m.get("course_guess")
+                unmatched.append({"id": str(m.get("id", "")), "start": when.isoformat(),
+                                  "course_guess": guess if isinstance(guess, str) and SLUG_RE.match(guess) else None})
     store = _read_json(directory / "chores.json", warnings)
     if store is None:  # a mirror that only has the digest: chores without ids (no task can be derived from them)
         store = [dict(c, id="") for c in (_read_json(directory / "digest" / "chores.json", warnings) or [])]
@@ -368,6 +478,8 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
             task_rows.append({
                 "id": tid, "course": slug, "title": task.get("title") or "", "kind": task.get("kind") or "",
                 "kind_word": kind_word(task.get("kind")), "reading": task.get("kind") in READING_KINDS,
+                "exam": task.get("kind") == "exam", "room": str(task.get("room") or ""),
+                "material": str(task.get("material") or ""),
                 "status": task.get("status") or "open", "due_at": due.isoformat() if due else None,
                 "due_date": due.date().isoformat() if due else None, "due_time": due.strftime("%H:%M") if due else None,
                 "due_utc": due.astimezone(timezone.utc).isoformat() if due else None,
@@ -416,10 +528,11 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
             trove_url = None
         out_courses.append({
             "slug": slug, "name": course.get("name") or slug, "lecturer": course.get("lecturer") or "",
+            "color": colors[slug], "unmatched_recordings": sum(1 for u in unmatched if u["course_guess"] == slug),
             "mode": course.get("mode"), "slots": [s for s in course.get("slots") or [] if isinstance(s, dict)],
             "season": course_season(term, course, today),
             "links": {"lemida": _https(lemida_course), "notebook": _https(notebook), "drive": _https(drive),
-                      "trove_book_id": book_id, "trove_url": _https(trove_url)},
+                      "trove_book_id": book_id, "trove_url": _https(trove_url), "wispr": _https(link.get("wispr_url"))},
             "tasks": sorted(task_rows, key=_due_sort), "next_task": open_tasks[0]["id"] if open_tasks else None,
             "state": open_tasks[0]["state"] if open_tasks else None, "open_count": len(open_tasks), "more": more,
             "lessons": lessons, "new_lesson": any(l["new"] for l in lessons), "notices": notices,
@@ -444,20 +557,13 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
     quiet = [c["slug"] for c in out_courses if c["slug"] not in busy and c["season"] != "later"]
     later = [c["slug"] for c in out_courses if c["slug"] not in busy and c["season"] == "later"]
     open_all = [t for c in out_courses for t in c["tasks"] if t["status"] != "submitted"]
-    counts = {"submit": sum(1 for t in open_all if not t["reading"]), "read": sum(1 for t in open_all if t["reading"])}
+    counts = {"submit": sum(1 for t in open_all if not t["reading"] and not t["exam"]),
+              "read": sum(1 for t in open_all if t["reading"])}
 
     try:
         start = week_start(date.fromisoformat(week)) if week else week_start(today)
     except ValueError:
         start = week_start(today)
-    unmatched_raw = _read_json(directory / "digest" / "wispr-unmatched.json", warnings) or {}
-    meetings = unmatched_raw.get("meetings") if isinstance(unmatched_raw, dict) else unmatched_raw
-    unmatched = []
-    for m in meetings or []:
-        if isinstance(m, dict) and m.get("start"):
-            when = _parse_dt(m.get("start"), tz)
-            if when:
-                unmatched.append({"id": str(m.get("id", "")), "start": when.isoformat()})
 
     state = {
         "empty": False, "reason": None, "term": term.get("term"), "timezone": str(tz), "now": now.isoformat(),
@@ -465,11 +571,145 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
         "overview": {"rows": rows, "quiet": quiet, "later": later, "counts": counts},
         "lede": lede(out_courses, now), "agenda": agenda(term, out_courses, start, today),
         "wispr_unmatched": unmatched, "queued_jobs": len(jobs), "warnings": warnings,
+        "exams": exam_rows(out_courses), "timeline": build_timeline(term, out_courses, today),
     }
-    return _finish(state)
+    return _finish(state, ctx, has_registry)
 
 
-def _finish(state: Dict[str, Any]) -> Dict[str, Any]:
+# --- home, roles, setup, writing -----------------------------------------------------------------
+
+def _clean_str(value: Any) -> Optional[str]:
+    return value if isinstance(value, str) and value else None
+
+
+def registry_rows(home: Optional[Path]) -> List[Dict[str, Any]]:
+    """The registered workspaces of `home`, each `{path, type, course, exists}` with plain strings only.
+    A row that is not an object, or whose path is not a non-empty string, is skipped; a type or course that is not
+    a string reads as None. Never raises on a malformed `workspaces.json`."""
+    if home is None:
+        return []
+    rows = []
+    for row in home_mod._load_rows(home):
+        path = row.get("path") if isinstance(row, dict) else None
+        if not isinstance(path, str) or not path or "\0" in path:
+            continue
+        try:
+            exists = Path(path).is_dir()
+        except (OSError, ValueError):
+            exists = False
+        rows.append({"path": path, "type": _clean_str(row.get("type")), "course": _clean_str(row.get("course")),
+                     "exists": exists})
+    return rows
+
+
+def _library_added(sources: Any, now: datetime) -> List[Tuple[str, str, str]]:
+    """(id, title, added iso) of `sources.json` entries added within LIBRARY_DAYS; undated entries never count."""
+    rows = sources.get("sources") if isinstance(sources, dict) else sources
+    found = []
+    for entry in rows if isinstance(rows, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        stamp = next((entry[k] for k in LIBRARY_DATE_KEYS if entry.get(k)), None)
+        when = _parse_dt(stamp, now.tzinfo or timezone.utc)
+        if when and timedelta(0) <= _utc(now) - _utc(when) <= timedelta(days=LIBRARY_DAYS):
+            ident = str(entry.get("sourceId") or entry.get("id") or "")
+            found.append((ident, str(entry.get("title") or entry.get("name") or ident), when.isoformat()))
+    return found
+
+
+def gather_context(home: Optional[Path], checks: Dict[str, Any], now: datetime) -> Dict[str, Any]:
+    """Everything the page needs beyond the term registry. Read-only; a missing or moved home is reported, never made."""
+    values: Dict[str, Any] = {}
+    rows: List[Dict[str, Any]] = []
+    missing = False
+    if home is not None:
+        try:
+            if home.is_dir():
+                values, _ = home_mod._read_md(home / home_mod.DIR_NAME / home_mod.HOME_FILE)
+                rows = registry_rows(home)
+            else:
+                missing = True
+        except OSError:
+            missing = True
+    role = values.get("role") if values.get("role") in home_mod.ROLES else None
+    runs = activity_mod.list_runs(rows, limit=200, now=now.timestamp())
+    per_ws: Dict[str, List[Dict[str, Any]]] = {}
+    for view in runs["active"] + runs["history"]:
+        per_ws.setdefault(str(view["workspace"]), []).append(view)
+    workspaces = []
+    for row in rows:
+        mine = per_ws.get(row["path"], [])  # newest first, as list_runs sorts
+        workspaces.append({"path": row["path"], "name": Path(row["path"]).name, "type": row.get("type"),
+                           "course": row.get("course"), "exists": bool(row.get("exists")), "runs": len(mine),
+                           "last_run": mine[0]["started"] if mine else None,
+                           "last_status": mine[0]["status"] if mine else None})
+    library: List[Dict[str, Any]] = []
+    if role in NON_TERM_ROLES:
+        for row in rows:
+            if not row.get("exists"):
+                continue
+            data = _read_json(Path(row["path"]) / home_mod.DIR_NAME / "sources.json", [])
+            for ident, title, added in _library_added(data, now):
+                library.append({"workspace": Path(row["path"]).name, "id": ident, "title": title, "added": added})
+        library.sort(key=lambda x: (x["added"], x["id"]), reverse=True)
+    return {
+        "home": {"name": _clean_str(values.get("name")), "role": role, "institution": _clean_str(values.get("institution")),
+                 "degree": _clean_str(values.get("degree")), "missing": missing, "configured": home is not None},
+        "role": role, "setup": checks, "workspaces": workspaces, "library": library,
+        "writing": {"active": runs["active"], "history": runs["history"]},
+    }
+
+
+def _no_context() -> Dict[str, Any]:
+    return {"home": {"name": None, "role": None, "institution": None, "degree": None, "missing": False, "configured": False},
+            "role": None, "setup": {"complete": None, "checks": []}, "workspaces": [], "library": [],
+            "writing": {"active": [], "history": []}}
+
+
+def setup_block(runner: Callable[[], List[Dict[str, Any]]]) -> Dict[str, Any]:
+    """`{complete, checks}`; complete means no required (non-optional) check failed. A crashing runner reads as incomplete."""
+    try:
+        checks = [c for c in runner() if isinstance(c, dict)]
+    except Exception as exc:
+        return {"complete": False, "checks": [], "error": str(exc)}
+    return {"complete": not any(c.get("ok") is False and not c.get("optional") for c in checks), "checks": checks}
+
+
+def _nav(ctx: Dict[str, Any], has_registry: bool) -> List[str]:
+    role = ctx.get("role")
+    nav = list(NAV_STUDENT if role == "student" or (role is None and has_registry) else NAV_OTHER)
+    if ctx["setup"].get("complete") is False:
+        nav.insert(0, "setup")
+    return nav
+
+
+def _writer_state(now: datetime, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """A lecturer's or researcher's state: no term fields; the overview comes from writing runs, projects and library."""
+    today = now.date()
+    active, history = ctx["writing"]["active"], ctx["writing"]["history"]
+    projects = sorted(ctx["workspaces"], key=lambda w: (w["last_run"] or "", w["path"]), reverse=True)
+    results = [{k: r.get(k) for k in ("run", "flow", "workspace", "course", "status", "docx", "last_verdict", "redrafted", "ended")}
+               for r in history[:5]]
+    week_ago = _utc(now) - timedelta(days=7)
+    recent = sum(1 for r in active + history if (_parse_dt(r.get("started"), timezone.utc) or week_ago) >= week_ago)
+    if active:
+        lede = [{"t": f"כתיבה בעיצומה ב{Path(str(active[0]['workspace'])).name}."}]
+    elif recent:
+        lede = [{"t": f"בשבוע האחרון היו {recent} ריצות כתיבה."}]
+    else:
+        lede = [{"t": "אין ריצות כתיבה בשבוע האחרון."}]
+    return {"empty": False, "reason": None, "term": None, "timezone": None, "now": now.isoformat(), "today": today.isoformat(),
+            "nightly": None, "courses": [], "exams": [], "timeline": {"weeks": []},
+            "overview": {"primary": active[0] if active else None, "projects": projects, "results": results,
+                         "library": ctx["library"]},
+            "lede": lede, "agenda": _agenda_frame(week_start(today)), "wispr_unmatched": [], "queued_jobs": 0, "warnings": []}
+
+
+def _finish(state: Dict[str, Any], ctx: Optional[Dict[str, Any]] = None, has_registry: bool = False) -> Dict[str, Any]:
+    ctx = ctx or _no_context()
+    state.update({"home": ctx["home"], "nav": _nav(ctx, has_registry), "setup": ctx["setup"],
+                  "writing": ctx["writing"], "workspaces": ctx["workspaces"],
+                  "week_mode": week_mode(datetime.fromisoformat(state["now"]))})
     body = json.dumps({k: v for k, v in state.items() if k != "now"}, sort_keys=True, ensure_ascii=False)
     state["version"] = hashlib.sha1(body.encode("utf-8")).hexdigest()[:12]
     return state
@@ -495,7 +735,7 @@ def lede(course_list: List[Dict[str, Any]], now: datetime) -> List[Dict[str, str
     """The 'what needs you' sentence as text segments; `mark: circ` segments get the red ink circle."""
     names = {c["slug"]: c["name"] for c in course_list}
     open_tasks = sorted((t for c in course_list for t in c["tasks"] if t["status"] != "submitted"), key=_due_sort)
-    subs = [t for t in open_tasks if not t["reading"]]
+    subs = [t for t in open_tasks if not t["reading"] and not t["exam"]]  # exams have their own column
     parts: List[Dict[str, str]] = []
     first = subs[0] if subs else None
     if first is None:
@@ -615,8 +855,37 @@ def queue_fetch(directory: Path, slug: str, ref_keys: List[str], task: Optional[
 
 # --- server --------------------------------------------------------------------------------------
 
-def _signature(directory: Optional[Path], root: Path) -> Tuple[Any, ...]:
+def _home_entries(home: Optional[Path]) -> List[Tuple[str, int, int]]:
+    """mtime/size of home.md, workspaces.json and every registered workspace's `runs/*/activity.jsonl`
+    (a stat per file; nothing is read), plus whether each workspace folder is there."""
     entries: List[Tuple[str, int, int]] = []
+    if home is None:
+        return entries
+    meta = home / home_mod.DIR_NAME
+    entries.append(("home/exists", int(home.is_dir()), 0))
+    for name in (home_mod.HOME_FILE, home_mod.WORKSPACES_FILE):
+        try:
+            st = (meta / name).stat()
+            entries.append((f"home/{name}", st.st_mtime_ns, st.st_size))
+        except OSError:
+            continue
+    try:
+        rows = registry_rows(home) if home.is_dir() else []
+    except OSError:
+        rows = []
+    for row in rows:
+        entries.append((f"ws/{row['path']}", int(bool(row.get("exists"))), 0))
+        try:
+            for file in sorted((Path(row["path"]) / home_mod.DIR_NAME / "runs").glob("*/activity.jsonl")):
+                st = file.stat()
+                entries.append((f"run/{file}", st.st_mtime_ns, st.st_size))
+        except OSError:
+            continue
+    return entries
+
+
+def _signature(directory: Optional[Path], root: Path, home: Optional[Path] = None) -> Tuple[Any, ...]:
+    entries: List[Tuple[str, int, int]] = _home_entries(home)
     folders = [root] if directory is None else [directory, directory / "refs", directory / "digest", directory / "queue" / "fetch", directory / "logs"]
     for folder in folders:
         try:
@@ -633,6 +902,52 @@ def _signature(directory: Optional[Path], root: Path) -> Tuple[Any, ...]:
     return tuple(sorted(entries))
 
 
+def opener_command(path: Path, platform: Optional[str] = None) -> List[str]:
+    """The argument list that opens `path` in its default app: `open` on macOS, `xdg-open` elsewhere."""
+    return ["open" if (platform or sys.platform) == "darwin" else "xdg-open", str(path)]
+
+
+def default_opener(argv: List[str]) -> None:
+    """Launch `argv` detached, no shell."""
+    subprocess.Popen(argv, shell=False, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+def resolve_run_docx(home: Optional[Path], run: Any, workspace: Any) -> Path:
+    """The Word file recorded by `run` of a registered `workspace`, checked for opening; raises RequestError.
+    The caller names the run and the workspace only: the path always comes from the run's own activity file."""
+    if not isinstance(run, str) or not IDENT_RE.match(run) or ".." in run or not isinstance(workspace, str) or not workspace:
+        raise RequestError(400, "bad run")
+    rows = registry_rows(home)
+    roots = []
+    for row in rows:
+        try:
+            roots.append((row["path"], Path(row["path"]).resolve()))
+        except (OSError, ValueError, RuntimeError):
+            continue
+    match = next((r for given, r in roots if given == workspace), None)
+    if match is None:
+        raise RequestError(404, "unknown workspace")
+    activity = match / home_mod.DIR_NAME / "runs" / run / "activity.jsonl"
+    if not activity.is_file():
+        raise RequestError(404, "unknown run")
+    recorded = activity_mod.read_run(activity, workspace=workspace)["docx"]
+    if not recorded or not recorded.lower().endswith(".docx"):
+        raise RequestError(404, "no Word file recorded")
+    try:
+        candidate = Path(recorded)
+        target = (candidate if candidate.is_absolute() else match / candidate).resolve()
+    except (OSError, ValueError, RuntimeError):
+        raise RequestError(400, "bad path")
+    if target.suffix.lower() != ".docx":
+        raise RequestError(400, "not a Word file")
+    if not any(target == root or root in target.parents for _, root in roots):
+        raise RequestError(400, "outside the workspaces")
+    if not target.is_file():
+        raise RequestError(404, "file not found")
+    return target
+
+
 class _HTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
     allow_reuse_address = False
@@ -643,10 +958,20 @@ class DashboardServer:
 
     def __init__(self, resolve: Callable[[], Optional[Path]], *, host: str = "127.0.0.1", port: int = DEFAULT_PORT,
                  key: Optional[str] = None, interval: float = 1.0, now: Optional[Callable[[], datetime]] = None,
-                 reason: Optional[Callable[[], str]] = None):
+                 reason: Optional[Callable[[], str]] = None,
+                 home: Optional[Callable[[], Optional[Path]]] = None,
+                 setup: Optional[Callable[[], List[Dict[str, Any]]]] = None,
+                 monotonic: Optional[Callable[[], float]] = None,
+                 opener: Optional[Callable[[List[str]], None]] = None):
         if host not in ("127.0.0.1", "localhost"):
             raise ValueError("the dashboard binds 127.0.0.1 only")
         self.resolve = resolve
+        self.home = home or home_mod.home_dir  # the home folder (None when none is chosen)
+        self.setup = setup or (lambda: setup_mod.run_checks(os.environ))
+        self.monotonic = monotonic or time.monotonic
+        self.opener = opener or default_opener  # injectable so tests never launch an app
+        self._setup_cache: Optional[Tuple[float, Dict[str, Any]]] = None
+        self._setup_lock = threading.Lock()
         self.host, self.requested_port = "127.0.0.1", port
         self.key = key or secrets.token_urlsafe(24)
         self.interval = interval
@@ -690,20 +1015,23 @@ class DashboardServer:
         last = None
         boundary: Optional[datetime] = None
         while not self._closed:
-            sig = _signature(self.resolve(), root)
-            now = self._clock()
-            changed = last is not None and sig != last
-            crossed = boundary is not None and now >= boundary
-            if changed or crossed:
-                with self._cond:
-                    self.version += 1
-                    self._cond.notify_all()
-            if changed or crossed or last is None:
-                try:
-                    boundary = next_boundary(self.state(), now)
-                except Exception:  # a malformed registry must not stop the watcher; retry at the next change
-                    boundary = None
-            last = sig
+            try:
+                sig = _signature(self.resolve(), root, self._home())
+                now = self._clock()
+                changed = last is not None and sig != last
+                crossed = boundary is not None and now >= boundary
+                if changed or crossed:
+                    with self._cond:
+                        self.version += 1
+                        self._cond.notify_all()
+                if changed or crossed or last is None:
+                    try:
+                        boundary = next_boundary(self.state(), now)
+                    except Exception:  # a malformed registry must not stop the watcher; retry at the next change
+                        boundary = None
+                last = sig
+            except Exception as exc:  # whatever one pass hits, the next pass runs: SSE must outlive any bad file
+                print(f"dashboard watcher: {type(exc).__name__}: {exc}", file=sys.stderr)
             with self._cond:
                 self._cond.wait(timeout=self.interval)
 
@@ -719,9 +1047,25 @@ class DashboardServer:
         for thread in self._threads:
             thread.join(timeout=2)
 
+    def _home(self) -> Optional[Path]:
+        try:
+            return self.home()
+        except Exception:
+            return None
+
+    def _setup_block(self) -> Dict[str, Any]:
+        """The setup checks, run at most once per SETUP_CACHE_SECONDS (they start processes)."""
+        with self._setup_lock:
+            stamp = self.monotonic()
+            if self._setup_cache is None or stamp - self._setup_cache[0] >= SETUP_CACHE_SECONDS:
+                self._setup_cache = (stamp, setup_block(self.setup))
+            return self._setup_cache[1]
+
     def state(self, week: Optional[str] = None) -> Dict[str, Any]:
         directory = self.resolve()
-        return build_state(directory, now=self.now() if self.now else None, week=week,
+        now = self.now() if self.now else None
+        ctx = gather_context(self._home(), self._setup_block(), now or datetime.now().astimezone())
+        return build_state(directory, now=now, week=week, ctx=ctx,
                            reason=self.reason() if directory is None else "no-registry")
 
     def _handler(self):
@@ -757,7 +1101,7 @@ class DashboardServer:
                 self.send_header("Referrer-Policy", "no-referrer")
                 self.send_header("X-Frame-Options", "DENY")
                 self.send_header("Content-Security-Policy",
-                                 "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; "
+                                 "default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; "
                                  "font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self'; base-uri 'none'; "
                                  "form-action 'none'; frame-ancestors 'none'")
                 for k, v in (extra or {}).items():
@@ -792,6 +1136,22 @@ class DashboardServer:
                         return
                     cookie = f"{board.COOKIE}={board.key}; HttpOnly; SameSite=Strict; Path=/"
                     self._headers(200, "text/html; charset=utf-8", {"Content-Length": str(len(body)), "Set-Cookie": cookie})
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                static = STATIC_FILES.get(parsed.path)
+                view = VIEW_RE.match(parsed.path)
+                if static or view:
+                    path = ASSETS / "views" / view.group(1) if view else ASSETS / parsed.path.lstrip("/")
+                    ctype = "text/javascript; charset=utf-8" if view else static
+                    try:
+                        body = path.read_bytes() if path.is_file() else None
+                    except OSError:
+                        body = None
+                    if body is None:
+                        self._json(404, {"error": "not found"})
+                        return
+                    self._headers(200, ctype, {"Content-Length": str(len(body))})
                     self.end_headers()
                     self.wfile.write(body)
                     return
@@ -884,6 +1244,13 @@ class DashboardServer:
                         if task is not None and (not isinstance(task, str) or not IDENT_RE.match(task)):
                             raise RequestError(400, "bad task")
                         result = queue_fetch(directory, slug, refs, task)
+                    elif path == "/api/open":
+                        target = resolve_run_docx(board._home(), body.get("run"), body.get("workspace"))
+                        try:
+                            board.opener(opener_command(target))
+                        except OSError:
+                            raise RequestError(500, "could not open the file")
+                        result = {"ok": True, "name": target.name}
                     else:
                         self._json(404, {"error": "not found"})
                         return

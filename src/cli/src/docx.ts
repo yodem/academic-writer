@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { allowedEnv } from './library/backends.ts';
+import { emit } from './activity.ts';
 
 type Unit = { id: string };
 type Section = { title?: string; units?: Unit[] };
@@ -81,6 +82,17 @@ export function assembleArticle(outline: Outline, project: string, runId: string
 
 export function generateDocx(args: { outlinePath: string; runId: string; out: string; title?: string; coverFile?: string; abstractFile?: string; formatFile?: string; projectDir: string; dataDir: string; pluginRoot: string }): Omit<ReturnType<typeof assembleArticle>, 'article'> {
   void args.dataDir;
+  const project = resolve(args.projectDir);
+  emit(args.runId, 'write', 'step_start', { step: 'word' }, project);
+  try {
+    return buildDocx(args, project);
+  } catch (error) {
+    emit(args.runId, 'write', 'run_end', { exit: 'ERROR', reason: 'command failed' }, project);
+    throw error;
+  }
+}
+
+function buildDocx(args: Parameters<typeof generateDocx>[0], project: string): Omit<ReturnType<typeof assembleArticle>, 'article'> {
   const outline = JSON.parse(readFileSync(args.outlinePath, 'utf8')) as Outline;
   const result = assembleArticle(outline, resolve(args.projectDir), args.runId, args);
   const runDir = join(args.projectDir, '.academic-helper', 'runs', args.runId);
@@ -91,6 +103,9 @@ export function generateDocx(args: { outlinePath: string; runId: string; out: st
   const child = spawnSync('python3', [script, '--input', jsonPath, '--output', args.out], { stdio: 'inherit', env: allowedEnv(process.env, 'script') });
   if (child.error) throw new Error(`ERROR docx: ${child.error.message}`);
   if (child.status !== 0) throw new Error(`ERROR docx: generate-docx.py exited ${child.status ?? 1}`);
+  emit(args.runId, 'write', 'file_written', { step: 'word', path: args.out }, project);
+  emit(args.runId, 'write', 'step_end', { step: 'word' }, project);
+  emit(args.runId, 'write', 'run_end', { exit: 'OK' }, project);
   return { sections: result.sections, paragraphs: result.paragraphs, footnotes: result.footnotes, words: result.words };
 }
 

@@ -67,6 +67,7 @@ This table is generated from the plugin itself, so it is always complete.
 | `/academic-writer:dashboard` | Open the local course dashboard: one page that shows, for every course in the term, what is due next, whether its readings are ready, and what is new, with a week agenda and a page per course. |
 | `/academic-writer:kotar-fetch` | Download the cited pages of a book on Kotar (CET, through the Bar-Ilan OpenAthens proxy) as one PDF in printed-page order, for the author's own study. |
 | `/academic-writer:lesson-notes` | Use when processing a course recording into a structured Hebrew lesson note, or when resuming queued NotebookLM lesson transcripts with --pending. |
+| `/academic-writer:watch` | Show what Academic Writer is doing right now: the current step of the article run, how far it has got, and anything the checker rejected. |
 <!-- help:commands:end -->
 
 ## The usual cycle

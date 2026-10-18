@@ -35,6 +35,13 @@ export interface HookResult {
 }
 
 export interface ProfileData {
+  name?: string;
+  role?: string;
+  workspace?: string;
+  course?: string;
+  term?: string;
+  /** Set when the home folder pointer names a folder that does not exist: the missing path. */
+  homeMissing?: string;
   fieldOfStudy: string;
   citationStyle: string;
   targetLanguage: string;

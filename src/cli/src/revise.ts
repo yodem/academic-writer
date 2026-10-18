@@ -6,6 +6,7 @@ import { Budget } from './ledger.ts';
 import { dataDir, projectDir } from './paths.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
 import { appendVoicePair, writeVoiceStyleWords } from './voice.ts';
+import { emit, endRunOnError, startRunOnce } from './activity.ts';
 
 export type ReviseCategory = 'text_edit' | 'argument' | 'voice_signal' | 'plugin_defect';
 export type ReviseItem = { id: string; category: ReviseCategory; proposal: Record<string, unknown> };
@@ -19,6 +20,11 @@ function voiceDir(): string { return dataOverride ?? join(dataDir(), 'voice'); }
 function append(file: string, row: unknown): void { mkdirSync(dirname(file), { recursive: true }); appendFileSync(file, `${JSON.stringify(row)}\n`, 'utf8'); }
 
 export async function classify(items: unknown[], runId: string): Promise<{ items: ReviseItem[] }> {
+  return endRunOnError(runId, 'revise', () => classifyItems(items, runId));
+}
+async function classifyItems(items: unknown[], runId: string): Promise<{ items: ReviseItem[] }> {
+  startRunOnce(runId, 'revise');
+  emit(runId, 'revise', 'step_start', { step: 'read' });
   const schema = { type: 'OBJECT', properties: { items: { type: 'ARRAY', items: { type: 'OBJECT', properties: { id: { type: 'STRING' }, category: { type: 'STRING', enum: ['text_edit','argument','voice_signal','plugin_defect'] }, proposal: { type: 'OBJECT' } }, required: ['id','category','proposal'] } } }, required: ['items'] };
   const fallback = async (): Promise<string> => {
     const caps = (thresholds.budget as Record<string, { maxTokens: number; maxUsd: number }>).revise;
@@ -28,6 +34,7 @@ export async function classify(items: unknown[], runId: string): Promise<{ items
   const result = await decide({ point: 'revise.classify', question: 'Classify each Word review item.', options: ['text_edit','argument','voice_signal','plugin_defect'], context: JSON.stringify(items), runId, fallback });
   const parsed: unknown = JSON.parse(result.answer);
   if (typeof parsed !== 'object' || parsed === null || !Array.isArray((parsed as {items?: unknown}).items)) throw new Error('ERROR revise.classify: missing verdict');
+  emit(runId, 'revise', 'step_end', { step: 'read' });
   return parsed as {items: ReviseItem[]};
 }
 
@@ -43,9 +50,14 @@ function applyTextEdit(item: ReviseItem): void {
 }
 
 export async function applyPlan(plan: RevisePlan): Promise<{ applied: string[]; deferred: string[] }> {
+  return endRunOnError(plan.runId, 'revise', () => applyItems(plan));
+}
+async function applyItems(plan: RevisePlan): Promise<{ applied: string[]; deferred: string[] }> {
   if (!dataOverride) dataDir();
   const applied: string[] = []; const deferred: string[] = [];
   const feedbackDir = join(dataOverride ?? dataDir(), 'feedback');
+  startRunOnce(plan.runId, 'revise');
+  emit(plan.runId, 'revise', 'step_start', { step: 'update-draft' });
   for (const item of plan.items) {
     append(join(dataOverride ?? dataDir(), 'labels', 'revise.classify.jsonl'), { point: 'revise.classify', itemId: item.id, label: item.category });
     if (typeof item.proposal.changeId === 'string' && (item.proposal.label === 'uphold' || item.proposal.label === 'refute')) {
@@ -68,5 +80,9 @@ export async function applyPlan(plan: RevisePlan): Promise<{ applied: string[]; 
       applied.push(item.id);
     }
   }
+  emit(plan.runId, 'revise', 'step_end', { step: 'update-draft' });
+  emit(plan.runId, 'revise', 'step_start', { step: 'update-stores' });
+  emit(plan.runId, 'revise', 'step_end', { step: 'update-stores' });
+  emit(plan.runId, 'revise', 'run_end', { exit: 'OK' });
   return { applied, deferred };
 }

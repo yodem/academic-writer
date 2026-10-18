@@ -1,0 +1,19 @@
+/* Uses only values from the brand file. */
+.card {
+  background: var(--m-sheet);
+  color: var(--m-ink);
+  border: 1.5px solid var(--m-ink);
+  border-radius: 0;
+  box-shadow: 6px 6px 0 var(--m-shadow);
+  font-family: "Frank Ruhl Libre", serif;
+  font-size: 20px;
+}
+.btn {
+  background: transparent;
+  color: currentColor;
+  border-radius: var(--m-r-sm);
+  font-family: var(--m-ui-font);
+  font-size: 14px;
+  padding: var(--m-s2) var(--m-s4);
+}
+.tag { border-radius: 4px; font-family: "IBM Plex Sans Hebrew", sans-serif; font-size: 13px; }

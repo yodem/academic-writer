@@ -36,6 +36,8 @@ export function sessionEnv(projectDir: string, envFile: string | undefined, valu
     const home = join(data.trim(), 'pageindex');
     if (existsSync(join(home, 'installed.json'))) lines.push(`export AW_PAGEINDEX_HOME='${shellQuote(home)}'`);
   }
+  // Not a secret: the author turned the live activity pane off, so the subagent-stop hook prints its one-line status instead.
+  if (pluginOption('activity_pane')?.trim().toLowerCase() === 'false') lines.push(`export AW_ACTIVITY_PANE='off'`);
   if (lines.length) appendFileSync(envFile, `${lines.join('\n')}\n`, 'utf8');
 }
 

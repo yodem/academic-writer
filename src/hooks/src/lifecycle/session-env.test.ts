@@ -172,3 +172,23 @@ test('an omitted pluginData value is read from CLAUDE_PLUGIN_DATA', () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('the activity pane turned off is exported as AW_ACTIVITY_PANE=off, and nothing is exported when it is on or unset', () => {
+  const root = mkdtempSync(join(tmpdir(), 'aw-session-env-'));
+  const name = 'CLAUDE_PLUGIN_OPTION_ACTIVITY_PANE';
+  const before = process.env[name];
+  try {
+    mkdirSync(join(root, '.academic-helper'));
+    writeFileSync(join(root, '.academic-helper', 'profile.md'), 'profile');
+    const envFile = join(root, 'claude.env');
+    for (const [value, expected] of [['false', "export AW_ACTIVITY_PANE='off'\n"], ['true', ''], [undefined, '']] as const) {
+      writeFileSync(envFile, '');
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+      sessionEnv(root, envFile, { googleApiKey: '', jevApiKey: '', pageindexCommand: '', pluginData: '' });
+      assert.equal(readFileSync(envFile, 'utf8'), expected, String(value));
+    }
+  } finally {
+    if (before === undefined) delete process.env[name]; else process.env[name] = before;
+    rmSync(root, { recursive: true, force: true });
+  }
+});

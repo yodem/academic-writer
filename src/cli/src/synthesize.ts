@@ -5,6 +5,7 @@ import thresholds from '../../thresholds.json' with { type: 'json' };
 import { decide } from './decide.ts';
 import { projectDir } from './paths.ts';
 import { AwError, Budget, budgetFor } from './ledger.ts';
+import { emit, endRunOnError } from './activity.ts';
 import SYNTHESIZE_PROMPT from './prompts/write-synthesize.md';
 
 export type Edit = { unitId: string; paragraphIndex: number; before: string; after: string; reason: string };
@@ -91,6 +92,10 @@ async function realGenerate(units: UnitParagraphs[], runId: string, budget: Budg
 function draftsDir(): string { return join(projectDir(), '.academic-helper', 'drafts'); }
 
 export async function synthesizeAll(options: SynthesizeOptions): Promise<SynthesizeResult> {
+  return endRunOnError(options.runId, 'write', () => synthesizeUnits(options));
+}
+
+async function synthesizeUnits(options: SynthesizeOptions): Promise<SynthesizeResult> {
   const dir = draftsDir();
   if (!existsSync(dir)) throw new AwError('ERROR', 'write.synthesize', 'no drafts directory — run aw draft first');
   const files = readdirSync(dir).filter((f) => f.endsWith('.md')).sort();
@@ -104,6 +109,7 @@ export async function synthesizeAll(options: SynthesizeOptions): Promise<Synthes
     .sort((a, b) => rank(a.id) - rank(b.id));
   const unitsWithParagraphs: UnitParagraphs[] = units.map((u) => ({ id: u.id, paragraphs: splitParagraphs(u.text) }));
 
+  emit(options.runId, 'write', 'step_start', { step: 'synthesize' });
   const budget = new Budget(options.runId, budgetFor('write'));
   const generate = stubs.gen ?? ((list: UnitParagraphs[]) => realGenerate(list, options.runId, budget, options.outline));
   const proposed = await generate(unitsWithParagraphs);
@@ -146,5 +152,6 @@ export async function synthesizeAll(options: SynthesizeOptions): Promise<Synthes
     writeFileSync(join(dir, `${unit.id}.md`), `${paragraphs.join('\n\n')}\n`, 'utf8');
   }
 
+  emit(options.runId, 'write', 'step_end', { step: 'synthesize' });
   return { edits: proposed, applied: appliedCount };
 }

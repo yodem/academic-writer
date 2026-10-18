@@ -1,7 +1,7 @@
 """Chores store for the course pipeline: things Yotam (not a script) must do.
 
 `REG/chores.json` is the store. `REG/digest/` holds only the read-only digest that NanoClaw mounts
-(`chores.md` in Hebrew, `chores.json`, and `wispr-unmatched.json`: the Wispr meetings no course claimed, as id/time/reason only); nothing else may live there. No ids or tokens reach the digest.
+(`chores.md` in Hebrew, `chores.json`, and `wispr-unmatched.json`: the Wispr meetings no course claimed, as id/time/reason and a course-slug guess only); nothing else may live there. No ids or tokens reach the digest.
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from typing import Any
 
 import courses
 
-KINDS = ("assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual")
+KINDS = ("assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual", "exam")
 STATUSES = ("open", "done")
 KIND_HE = {
     "assignment": "מטלה",
@@ -24,8 +24,9 @@ KIND_HE = {
     "kotar-source": "מקור בכותר",
     "missing-text": "טקסט חסר",
     "manual": "משימה",
+    "exam": "בחינה",
 }
-FIELDS = ("title", "text", "core_texts", "time_left_text", "due_text", "due_at")
+FIELDS = ("title", "text", "core_texts", "time_left_text", "due_text", "due_at", "room", "material")
 DIGEST_FILES = ("chores.md", "chores.json", "wispr-unmatched.json")
 _TOKEN_RE = re.compile(r"((?:wstoken|token|key|sesskey)=)[^&\s]+", re.I)
 
@@ -80,7 +81,7 @@ def load(registry: courses.Registry) -> list[dict[str, Any]]:
 
 def add_chore(registry: courses.Registry, *, course: str, kind: str, ref: str, title: str = "", text: str = "",
               core_texts: list[str] | None = None, time_left_text: str = "", due_text: str = "",
-              due_at: str | None = None) -> dict[str, Any]:
+              due_at: str | None = None, room: str = "", material: str = "") -> dict[str, Any]:
     """Create a chore, or update the existing one with the same (course, kind, canonical ref); never duplicates.
 
     An updated chore keeps its id, `created` and status (a done chore stays done). A sign-in chore is always
@@ -95,7 +96,7 @@ def add_chore(registry: courses.Registry, *, course: str, kind: str, ref: str, t
     if course != GENERAL and course not in registry.courses:
         raise ValueError(f"unknown course {course!r} (use {GENERAL!r} for a chore not tied to a course)")
     values = {"title": title, "text": text, "core_texts": list(core_texts or []), "time_left_text": time_left_text,
-              "due_text": due_text, "due_at": due_at}
+              "due_text": due_text, "due_at": due_at, "room": room, "material": material}
     handle = _lock(registry)
     try:
         chores = load(registry)
@@ -195,6 +196,10 @@ def render_digest(registry: courses.Registry, open_chores: list[dict[str, Any]])
             lines.append(f"  - מועד הגשה: {_clean(chore['due_text'])}")
         if chore.get("core_texts"):
             lines.append(f"  - טקסטי ליבה: {'; '.join(_clean(chore['core_texts']))}")
+        if chore.get("room"):
+            lines.append(f"  - חדר: {_clean(chore['room'])}")
+        if chore.get("material"):
+            lines.append(f"  - חומר לבחינה: {_clean(chore['material'])}")
         if chore.get("text"):
             lines.append(f"  - המטלה: {' '.join(str(_clean(chore['text'])).split())}")
     return "\n".join(lines) + "\n"

@@ -4,7 +4,7 @@ For the operator running the `courses` skill who needs to find the works a cours
 
 ## Prerequisites and scope
 
-- A registry: `ACADEMIC_COURSES_DIR` or `~/.academic-writer/courses/<term>/`, with `term.json` and one `<slug>.json` per course (see `SKILL.md`).
+- A registry: `ACADEMIC_COURSES_DIR`, or `<home>/terms/<term>/` under the home folder (`home.py show`; the legacy `~/.academic-writer/courses/<term>/` still works until migrated), with `term.json` and one `<slug>.json` per course (see `SKILL.md`).
 - `pandoc` on the PATH. `refs.py extract` shells out to it; `status`, `chores` and `index` do not need it.
 - The `trove` CLI, for book edits. Check `trove auth whoami --no-session` first.
 - A Chrome window signed in to the BIU library proxy, for the download steps only. Lookups need no login.

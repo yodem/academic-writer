@@ -5,6 +5,7 @@ import { decide } from './decide.ts';
 import { projectDir } from './paths.ts';
 import { AwError, Budget, budgetFor } from './ledger.ts';
 import { voiceBundle } from './voice.ts';
+import { emit, endRunOnError, startRunOnce, type ActivityFlow } from './activity.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
 import DRAFT_PROMPT from './prompts/write-draft.md';
 
@@ -32,7 +33,7 @@ export function __stubs(value: Stubs): void { stubs = value; }
 export type DraftFailure = { unit: string; gate: string; detail: string };
 export type AuditItem = { unit: string; paragraphIndex: number; required: true };
 export type DraftAllResult = { drafted: string[]; failures: DraftFailure[]; audit: AuditItem[] };
-export type DraftAllOptions = { runId: string; unit?: string; feedbackFile?: string };
+export type DraftAllOptions = { runId: string; unit?: string; feedbackFile?: string; flow?: ActivityFlow };
 
 const EMPTY_STYLE_WORDS: StyleWords = { banned: [], capped: [], filler: [] };
 
@@ -370,7 +371,20 @@ async function voiceCheckFallback(paragraph: string, styleWords: StyleWords): Pr
 // Main entry point
 // ---------------------------------------------------------------------------
 
+/** Fixed plain words for a failed gate in activity.jsonl: the record holds verdicts, never the text that failed. */
+const GATE_REASON: Record<string, string> = {
+  'citation-not-in-sources': 'unknown-source',
+  'quote-not-in-evidence': 'quote-not-in-evidence',
+  'style-banned': 'banned-word',
+  'style-capped': 'word-used-too-often',
+  'word-bounds': 'length-out-of-range',
+};
+
 export async function draftAll(outline: Outline, options: DraftAllOptions): Promise<DraftAllResult> {
+  return endRunOnError(options.runId, options.flow ?? 'write', () => draftUnits(outline, options));
+}
+
+async function draftUnits(outline: Outline, options: DraftAllOptions): Promise<DraftAllResult> {
   const allUnits = flatten(outline);
   if (allUnits.length === 0) throw new AwError('ERROR', 'write.draft', 'outline has no units');
 
@@ -407,6 +421,13 @@ export async function draftAll(outline: Outline, options: DraftAllOptions): Prom
   const failures: DraftFailure[] = [];
   const audit: AuditItem[] = [];
 
+  const flow = options.flow ?? 'write';
+  const redrafting = options.unit !== undefined && options.feedbackFile !== undefined;
+  // The edit flows have the one step `edit` (FLOW_STEPS in activity.ts); only a write run has draft and redraft.
+  const stepName = flow !== 'write' ? 'edit' : redrafting ? 'redraft' : 'draft';
+  startRunOnce(options.runId, flow);
+  emit(options.runId, flow, 'step_start', { step: stepName });
+
   for (const unit of targetUnits) {
     const role = roleOf(unit);
     const predecessors: Predecessor[] = role === 'body'
@@ -428,6 +449,8 @@ export async function draftAll(outline: Outline, options: DraftAllOptions): Prom
     draftedText.set(unit.id, text);
     writeDraft(unit.id, text);
     drafted.push(unit.id);
+    if (redrafting) emit(options.runId, flow, 'redraft', { step: stepName, unit: unit.id });
+    emit(options.runId, flow, 'unit_drafted', { step: stepName, unit: unit.id });
 
     const paragraphs = splitParagraphs(text);
     for (let index = 0; index < paragraphs.length; index += 1) {
@@ -457,7 +480,9 @@ export async function draftAll(outline: Outline, options: DraftAllOptions): Prom
 
     const failure = runGates(unit, text, paragraphs, { sourceKeys, evidenceQuotes, styleWords: voice.styleWords, quoteCheckText: modelQuotesText });
     if (failure) failures.push({ unit: unit.id, gate: failure.gate, detail: failure.detail });
+    emit(options.runId, flow, 'gate', { step: stepName, unit: unit.id, gate: failure ? failure.gate : 'draft-gates', ok: !failure, ...(failure ? { reason: GATE_REASON[failure.gate] ?? 'gate-failed' } : {}) });
   }
+  emit(options.runId, flow, 'step_end', { step: stepName });
 
   return { drafted, failures, audit };
 }

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" dir="ltr" data-version="v0.17.1">
+<html lang="en" dir="ltr" data-version="v0.18.0">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -41,6 +41,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preload" as="image" href="assets/img/hero-desk-lg.webp" imagesrcset="assets/img/hero-desk-800.webp 800w, assets/img/hero-desk-lg.webp 1376w" imagesizes="(min-width: 900px) 62vw, 260px" fetchpriority="high">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Hebrew:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Spectral:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<link rel="stylesheet" href="assets/css/margin-tokens.css">
 <link rel="stylesheet" href="assets/css/site.css">
 </head>
 <body>
@@ -52,6 +53,7 @@
     <nav class="nav" id="nav" aria-label="Main" data-i18n-attr="aria-label:nav_label">
       <a href="#how" data-i18n="nav_how">How it works</a>
       <a href="#voice" data-i18n="nav_features">Features</a>
+      <a href="#dashboard" data-i18n="nav_dashboard">Dashboard</a>
       <a href="#install" data-i18n="nav_install">Install</a>
       <a href="./guide/" data-i18n="nav_guide">Guide</a>
       <a href="https://github.com/yodem/academic-writer" data-i18n="nav_github">GitHub</a>
@@ -430,6 +432,34 @@
       </article>
     </div>
     <div class="cx-row crs__needs rv"><span data-i18n="r2a_crs_needs">Needs access to</span><span class="cx">Google Drive</span><span class="cx">NotebookLM</span><span class="cx">Trove</span><span class="cx">Moodle</span></div>
+  </div>
+</section>
+
+<!-- DASHBOARD AND ACTIVITY -->
+<section class="sec dash" id="dashboard" aria-labelledby="dash-h">
+  <div class="wrap">
+    <div class="sechead sechead--one">
+      <div class="sechead__text">
+        <span class="eyebrow" dir="ltr">/academic-writer:dashboard</span>
+        <h2 id="dash-h" class="rv" data-i18n="dash_h">A dashboard for the whole term.</h2>
+        <p class="lede rv" data-i18n="dash_p">One local page shows your courses, your writing runs and what is ready, with nothing leaving your computer.</p>
+      </div>
+    </div>
+    <div class="dash__grid">
+      <figure class="dash__fig rv">
+        <img class="dash__img dash__img--light" src="assets/img/dashboard-overview-light.webp" width="1440" height="900" loading="lazy" decoding="async" alt="The dashboard overview: the run in progress with its six stages, then projects, latest results and new library items." data-i18n-attr="alt:dash_alt_overview">
+        <img class="dash__img dash__img--dark" src="assets/img/dashboard-overview-dark.webp" width="1440" height="900" loading="lazy" decoding="async" alt="" aria-hidden="true">
+        <figcaption data-i18n="dash_cap_overview">The overview, in light and dark.</figcaption>
+      </figure>
+      <figure class="dash__fig rv">
+        <img class="dash__img" src="assets/img/activity-pane.webp" width="1210" height="700" loading="lazy" decoding="async" alt="A writing run in progress: six stages, the current one marked, and a failed source check named." data-i18n-attr="alt:dash_alt_activity">
+        <figcaption data-i18n="dash_cap_activity">Watch a run as it happens: the stage, the unit, and what failed.</figcaption>
+      </figure>
+    </div>
+    <ul class="trustl dash__trust rv">
+      <li data-i18n="dash_t1">The record lists steps and results, never the text of your article.</li>
+      <li data-i18n="dash_t2">The page opens only on your own computer.</li>
+    </ul>
   </div>
 </section>
 

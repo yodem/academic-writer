@@ -12,6 +12,9 @@ export function sessionDashboard(input: HookInput): HookResult {
   }
 
   const lines: string[] = [];
+  if (profile.homeMissing) {
+    lines.push(`Home folder not found: ${profile.homeMissing}. Using this folder's own settings only.`);
+  }
   lines.push('');
   lines.push('╔══════════════════════════════════════════════════╗');
   lines.push('║         ACADEMIC WRITER — SESSION START          ║');

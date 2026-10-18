@@ -127,16 +127,12 @@ def propose(citation: str, fetch: Fetch = fetch_url, query: str | None = None) -
 def registry_dir(registry: Path | None, term: str | None) -> Path:
     if registry is not None:
         return registry.expanduser()
-    root = Path(os.environ.get("ACADEMIC_COURSES_DIR", "~/.academic-writer/courses")).expanduser()
-    term = term or os.environ.get("ACADEMIC_TERM")
-    if term:
-        return root / term
-    dirs = sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
-    if len(dirs) == 1:
-        return dirs[0]
-    if (root / "term.json").is_file():
-        return root
-    raise RefsError(f"term is required: pass --term or set ACADEMIC_TERM (terms live under {root})")
+    sys.path.insert(0, str(Path(__file__).resolve().parent))  # python -I leaves the script dir off sys.path
+    import courses
+    try:
+        return courses.registry_dir(term)
+    except ValueError:
+        raise RefsError(f"term is required: pass --term or set ACADEMIC_TERM (terms live under {courses.courses_root()})")
 
 
 def refs_path(reg: Path, slug: str) -> Path:

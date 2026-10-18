@@ -1,5 +1,5 @@
 import { pluginRoot } from './pi.ts';
-import { setPathArguments, projectDir, dataDir } from './paths.ts';
+import { setPathArguments, projectDir, projectDirOr, dataDir } from './paths.ts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { stepIds } from './routing.ts';
@@ -15,6 +15,7 @@ import { editText } from './edit.ts';
 import { ocrDocument } from './ocr.ts';
 import { docxSummary, generateDocx } from './docx.ts';
 import { runLibraryCli } from './library/cli.ts';
+import { activityShow } from './activity.ts';
 
 const args = setPathArguments(process.argv.slice(2));
 const [command, subcommand, runId] = args;
@@ -109,8 +110,10 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
   try {
     const value = (name: string): string | undefined => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
     const runId = value('--run'); const outlinePath = value('--outline');
+    const flowArg = value('--flow') as Parameters<typeof draftAll>[1]['flow'];
+    if (flowArg !== undefined && !['write', 'edit', 'edit-section'].includes(flowArg)) throw new Error('ERROR draft: --flow must be write, edit or edit-section');
     if (!runId || !outlinePath) throw new Error('ERROR draft: --outline and --run are required');
-    const result = await draftAll(JSON.parse(readFileSync(outlinePath, 'utf8')) as Parameters<typeof draftAll>[0], { runId, unit: value('--unit'), feedbackFile: value('--feedback-file') });
+    const result = await draftAll(JSON.parse(readFileSync(outlinePath, 'utf8')) as Parameters<typeof draftAll>[0], { runId, unit: value('--unit'), feedbackFile: value('--feedback-file'), flow: flowArg });
     process.stdout.write(`${JSON.stringify({ drafted: result.drafted, failures: result.failures })}\n`);
     if (result.failures.length) process.exitCode = 2;
   } catch (error) { const message = error instanceof Error ? error.message : 'ERROR draft: unknown failure'; process.stderr.write(`${message}\n`); process.exitCode = 1; }
@@ -126,7 +129,7 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
     const runId = value('--run'); const textFile = value('--text-file'); const language = value('--lang');
     const instruction = value('--instruction') ?? (value('--instruction-file') ? readFileSync(value('--instruction-file') as string, 'utf8') : undefined);
     if (!runId || !textFile || !instruction || (language !== 'he' && language !== 'en')) throw new Error('ERROR edit: --text-file, --instruction or --instruction-file, --lang he|en, and --run are required');
-    process.stdout.write(`${JSON.stringify(await editText({ runId, textFile, instruction, language, out: value('--out') }))}\n`);
+    process.stdout.write(`${JSON.stringify(await editText({ runId, textFile, instruction, language, out: value('--out'), section: args.includes('--section') }))}\n`);
   } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : 'ERROR edit: unknown failure'}\n`); process.exitCode = 1; }
 } else if (command === 'ocr') {
   try {
@@ -143,6 +146,11 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
     const result = generateDocx({ outlinePath: outline, runId, out, title: value('--title'), coverFile: value('--cover-file'), abstractFile: value('--abstract-file'), formatFile: value('--format-file'), projectDir: projectDir(), dataDir: dataDir(), pluginRoot: pluginRoot() });
     process.stdout.write(`${docxSummary(result, out)}\n`);
   } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : 'ERROR docx: unknown failure'}\n`); process.exitCode = 1; }
+} else if (command === 'activity' && subcommand === 'show') {
+  const value = (name: string): string | undefined => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
+  const run = value('--run');
+  if (!run && !args.includes('--latest')) { process.stderr.write('ERROR activity: --run <id> or --latest is required\n'); process.exitCode = 2; }
+  else { try { process.stdout.write(`${activityShow({ run, latest: !run }, projectDirOr())}\n`); } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : 'ERROR activity: unknown failure'}\n`); process.exitCode = 2; } }
 } else if (command === 'library') {
   process.exitCode = await runLibraryCli(args.slice(1));
 } else {

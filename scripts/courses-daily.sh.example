@@ -19,7 +19,8 @@ export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 REPO="${ACADEMIC_WRITER_REPO:-$HOME/dev/academic-writer}"
 COURSES="$REPO/src/scripts/courses/courses.py"
 REFS="$REPO/src/scripts/courses/refs.py"
-TERM_DIR="${COURSES_TERM_DIR:-$HOME/.academic-writer/courses/תשפ״ז}"
+export ACADEMIC_HOME="${ACADEMIC_HOME:-$HOME/Academic}"
+TERM_DIR="${COURSES_TERM_DIR:-$ACADEMIC_HOME/.academic-helper/terms/תשפ״ז}"
 SYNC="$HOME/.academic-writer/bin/courses-sync-nanoclaw.sh"
 PY=/usr/bin/python3
 DAY=$(date +%Y-%m-%d)
