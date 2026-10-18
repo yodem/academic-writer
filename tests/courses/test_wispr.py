@@ -528,3 +528,30 @@ def test_since_keeps_an_explicit_offset_and_reads_a_naive_value_as_local(tmp_pat
     assert {m["id"] for m in wispr.scan(reg, since="2026-10-16T09:00:00+00:00", dry_run=True)["matched"]} == {HAVAYA}
     assert {m["id"] for m in wispr.scan(reg, since="2026-10-16T12:30", dry_run=True)["matched"]} == set()
     assert {m["id"] for m in wispr.scan(reg, since="2026-10-16", dry_run=True)["matched"]} == {HAVAYA}
+
+
+def _late_meeting(mid, local_start, local_end):
+    tz = ZoneInfo("Asia/Jerusalem")
+    s = datetime.fromisoformat(local_start).replace(tzinfo=tz).astimezone(timezone.utc)
+    e = datetime.fromisoformat(local_end).replace(tzinfo=tz).astimezone(timezone.utc)
+    return (mid, "PRIVATE TITLE", s.strftime("%Y-%m-%d %H:%M:%S.000 +00:00"), int(e.timestamp() * 1000), 1, 1, 0, 600000,
+            "PRIVATE SUMMARY", None)
+
+
+def test_unmatched_has_course_guess(tmp_path):
+    # starts inside the Tuesday 16:00-18:00 slot but overlaps it for only five minutes: unmatched, yet a guess
+    late = _late_meeting("late-tikva", "2026-10-13T17:55:00", "2026-10-13T18:40:00")
+    reg, _ = build(tmp_path, extra_meetings=[late])
+    report = wispr.scan(reg, dry_run=True)
+    entry = next(u for u in report["unmatched"] if u["id"] == "late-tikva")
+    assert entry["course_guess"] == "tikva"
+    assert "PRIVATE" not in json.dumps(report)
+
+
+def test_no_overlap_guess_is_null(tmp_path):
+    reg, _ = build(tmp_path)
+    report = wispr.scan(reg, dry_run=True)
+    assert report["unmatched"] and all(u["course_guess"] is None for u in report["unmatched"])
+    wispr.scan(reg, add_source=fake_add_source([]))
+    rows = json.loads((reg.directory / "digest" / wispr.UNMATCHED_FILE).read_text())["meetings"]
+    assert rows and all("course_guess" in r and r["course_guess"] is None for r in rows)

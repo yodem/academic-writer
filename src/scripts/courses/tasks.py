@@ -2,7 +2,8 @@
 
 Canonical task id
     A task is anything the student hands in or posts. `<slug>.json` carries `tasks: [...]`, each
-    {id, title, due_at, chore_ids[], status open|submitted, submitted_at, kind, spec_key?}.
+    {id, title, due_at, chore_ids[], status open|submitted, submitted_at, kind, spec_key?, room?, material?}
+    (`room` and `material` appear only on an `exam` task).
     `id` is the id of the chore the task was derived from (10 hex chars, chores.json) when there is one;
     a task that exists only in the Trove spec (`tools/specs/<slug>.json`) gets `s-<spec key>`.
     Commands accept the id, a unique id prefix, or the spec key.
@@ -25,7 +26,7 @@ from typing import Any
 import chores as chores_mod
 import courses
 
-TASK_KINDS = ("assignment", "forum-post")  # perusall-capture chores are readings to capture, not hand-ins
+TASK_KINDS = ("assignment", "forum-post", "exam")  # perusall-capture chores are readings to capture, not hand-ins
 DEFAULT_SPECS = Path("~/dev/jewish-studies/bar-ilan/courses-tashpaz/tools/specs")
 
 
@@ -95,9 +96,13 @@ def derive_tasks(existing: list[dict[str, Any]], chores: list[dict[str, Any]]) -
         if chore.get("kind") not in TASK_KINDS or chore["id"] in covered:
             continue
         done = chore.get("status") == "done"
-        tasks.append({"id": chore["id"], "title": chore.get("title") or chore.get("ref", ""), "due_at": chore.get("due_at"),
-                      "chore_ids": [chore["id"]], "status": "submitted" if done else "open",
-                      "submitted_at": chore.get("updated") if done else None, "kind": chore["kind"]})
+        task = {"id": chore["id"], "title": chore.get("title") or chore.get("ref", ""), "due_at": chore.get("due_at"),
+                "chore_ids": [chore["id"]], "status": "submitted" if done else "open",
+                "submitted_at": chore.get("updated") if done else None, "kind": chore["kind"]}
+        for optional in ("room", "material"):
+            if chore.get(optional):
+                task[optional] = chore[optional]
+        tasks.append(task)
         changed = True
     return tasks, changed
 
