@@ -4,6 +4,11 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.18.2] — 2026-10-18
+
+### Fixed
+- **The live activity pane opens again.** Its command was registered as `/watch`, a name the `/academic-writer:watch` skill already owns; Claude Code refused it and the refusal stopped the whole start-up step, so the pane never opened. The pane command is now `/activity`, and a refused name no longer stops the pane from opening.
+
 ## [0.18.1] — 2026-10-18
 
 ### Added

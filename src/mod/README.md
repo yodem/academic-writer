@@ -5,7 +5,7 @@ A live pane that follows the newest Academic Writer run. Loaded through `src/hoo
 
 - `model.ts`: pure parsing and view logic (`parseEvents`, `viewOf`); no Claude Code imports; tested by `model.test.ts`
   (bundled by `src/cli/build-tests.mjs`, run with `npm run test:cli`).
-- `register.tsx`: the hooks module. Pane id `aw-activity`; `/academic-writer:watch` opens it; it also opens unasked
+- `register.tsx`: the hooks module. Pane id `aw-activity`; `/activity` opens it (`/academic-writer:watch` prints the status line and says how to open the pane); it also opens unasked
   (engine places it only at 144+ columns) in a folder with `.academic-helper/profile.md` when `activity_pane` is true.
 - Reads `.academic-helper/runs/<id>/activity.jsonl` with `$.fs` only while a run is active (2 s clock tick); `turn.complete`
   and `agent.spawn` only trigger a re-read. Torn or unknown lines are skipped. It never writes and never calls a model.

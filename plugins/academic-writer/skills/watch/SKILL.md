@@ -18,7 +18,7 @@ Show the status of the newest run. This works in every Claude Code version and i
 
    If the output says there is no activity yet, say so in plain words and suggest `/academic-writer:write` to start an article.
 
-2. Tell them, in one sentence, that in a Claude Code version that supports plugin panes, this same command opens a live
+2. Tell them, in one sentence, that in a Claude Code version that supports plugin panes, `/activity` opens a live
    pane beside the conversation (it needs a terminal about 144 columns wide), and that the dashboard's Writing page
    shows the same record.
 
