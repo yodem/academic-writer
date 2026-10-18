@@ -135,7 +135,7 @@ def test_off_disables_and_set_revives(env, capsys):
     st = json.loads(capsys.readouterr().out)
     assert st["scheduled"] is False and st["label"] == LABEL
     assert call(env, "set", "--time", "06:45") == 0
-    assert plists(env) == [LABEL + ".plist"]
+    assert [n for n in plists(env) if ".bak-" not in n] == [LABEL + ".plist"]
     assert plistlib.loads((env["agents"] / (LABEL + ".plist")).read_bytes())["StartCalendarInterval"] == {"Hour": 6, "Minute": 45}
 
 
@@ -234,3 +234,43 @@ def test_run_now_passes_plist_environment(env, capfd, monkeypatch):
     monkeypatch.delenv("ACADEMIC_HOME")
     assert call(env, "run-now") == 0
     assert "home=%s" % (env["home"] / "Academic") in capfd.readouterr().out
+
+
+def test_unrelated_academic_plist_is_never_touched(env, capsys):
+    other = env["agents"] / "com.example.academic-calendar.plist"
+    other.write_bytes(plistlib.dumps({"Label": "com.example.academic-calendar", "ProgramArguments": ["/bin/bash", "/opt/cal.sh"]}))
+    assert call(env, "off") == 0
+    assert other.exists() and launchctl_calls(env) == []
+    capsys.readouterr()
+    assert call(env, "status", "--json") == 0
+    assert json.loads(capsys.readouterr().out)["plist"] is None
+
+
+def test_off_refuses_when_job_stays_loaded(env, monkeypatch):
+    call(env, "set", "--time", "03:30", "--script", str(env["script"]))
+    env["launchctl"].write_text('#!/bin/sh\necho "$@" >> "%s"\n[ "$1" = print ] && exit 0\nexit 5\n' % env["log"])
+    assert call(env, "off") == 1
+    assert (env["agents"] / (LABEL + ".plist")).exists()
+
+
+def test_off_succeeds_when_job_was_not_loaded(env):
+    call(env, "set", "--time", "03:30", "--script", str(env["script"]))
+    env["launchctl"].write_text('#!/bin/sh\necho "$@" >> "%s"\nexit 3\n' % env["log"])
+    assert call(env, "off") == 0
+    assert (env["agents"] / (LABEL + ".plist.disabled")).exists()
+
+
+def test_reviving_disabled_plist_keeps_a_backup(env):
+    call(env, "set", "--time", "03:30", "--script", str(env["script"]))
+    call(env, "off")
+    call(env, "set", "--time", "04:00")
+    assert any(n.startswith(LABEL + ".plist.disabled.bak-") for n in plists(env))
+    assert not any(n.endswith(".plist") and ".bak-" in n for n in plists(env))
+
+
+def test_cron_line_quotes_paths_with_spaces(env, capsys):
+    spaced = env["tmp"] / "my scripts" / "courses-daily.sh"
+    spaced.parent.mkdir()
+    spaced.write_text("#!/bin/bash\n")
+    assert call(env, "set", "--time", "03:30", "--script", str(spaced), platform="linux") == 0
+    assert "bash '%s'" % spaced in capsys.readouterr().out

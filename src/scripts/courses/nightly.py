@@ -16,6 +16,7 @@ import json
 import os
 import plistlib
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -68,7 +69,7 @@ def _time_of(data: Dict[str, Any]) -> Optional[str]:
 
 def find_plist(agents: Path, label: Optional[str]) -> Tuple[Optional[Path], Optional[Dict[str, Any]], bool]:
     """(path, data, disabled). Enabled plists win over a `.plist.disabled` one. Match by label, by a
-    ProgramArguments entry ending courses-daily.sh, or by `*academic*.plist`."""
+    ProgramArguments entry ending courses-daily.sh; never by file name alone, so an unrelated agent is never touched."""
     try:
         listing = sorted(p for p in agents.iterdir() if p.is_file()) if agents.is_dir() else []
     except OSError:
@@ -85,9 +86,6 @@ def find_plist(agents: Path, label: Optional[str]) -> Tuple[Optional[Path], Opti
             if data and ((label and data.get("Label") == label) or
                          any(isinstance(a, str) and a.endswith(SCRIPT_NAME) for a in data.get("ProgramArguments") or [])):
                 return p, data, disabled
-        for p, data in parsed:
-            if "academic" in p.name:
-                return p, data or {}, disabled
     return None, None, False
 
 
@@ -202,7 +200,7 @@ def _set(args: argparse.Namespace) -> int:
         return 2
     if not darwin:
         print("Not macOS: no schedule was written. Add this line to your crontab (crontab -e):")
-        print("%d %d * * * bash %s" % (minute, hour, script))
+        print("%d %d * * * bash %s" % (minute, hour, shlex.quote(str(script))))
         return 0
     agents = _agents_dir(args)
     label = args.label or (_label_of(path, data) if path else DEFAULT_LABEL)
@@ -218,7 +216,7 @@ def _set(args: argparse.Namespace) -> int:
     if env:
         new["EnvironmentVariables"] = env
     agents.mkdir(parents=True, exist_ok=True)
-    backup = _backup(path) if path and not disabled else None
+    backup = _backup(path) if path else None
     scratch = target.with_name(target.name + ".tmp")
     scratch.write_bytes(plistlib.dumps(new))
     os.replace(scratch, target)
@@ -246,7 +244,11 @@ def _off(args: argparse.Namespace) -> int:
         return 0
     label = _label_of(path, data or {})
     if not args.no_load:
-        _launchctl(args, "bootout", "%s/%s" % (_domain(), label))
+        service = "%s/%s" % (_domain(), label)
+        if _launchctl(args, "bootout", service) != 0 and _launchctl(args, "print", service) == 0:
+            print("error: launchctl could not unload %s, so the schedule is still active; nothing was changed. "
+                  "Try again, or run: launchctl bootout %s" % (label, service), file=sys.stderr)
+            return 1
     os.replace(path, path.with_name(path.name + DISABLED))
     print("Nightly schedule off (%s kept as %s). It now runs on demand: `nightly run-now`. `nightly set --time HH:MM` turns it back on."
           % (path.name, path.name + DISABLED))
