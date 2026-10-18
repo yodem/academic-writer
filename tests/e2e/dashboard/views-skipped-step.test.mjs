@@ -20,7 +20,7 @@ function loadWriting() {
     views: {}, esc, b: (s) => `<bdi>${esc(s)}</bdi>`, auto: (s) => `<bdi dir="auto">${esc(s)}</bdi>`,
     status: (k, w) => { const s = statusTable[k] || statusTable.unknown; return `<span class="st ${s.cls}"><span class="g">${s.g}</span> <span class="w">${esc(w || s.w)}</span></span>`; },
     stepBar: () => "", runProgress: () => ({ total: 3, done: 2, index: 3, current: null }), flowWord: (f) => f, stepWord: (f, id) => id,
-    shortWhen: () => "", localParts: () => ({}), baseName: (p) => p, dur: () => "", cost: () => "", tokens: () => "", toast() {},
+    D: (iso) => new Date(iso + "T12:00:00"), DN: Array(7).fill("יום"), MONTH: Array(12).fill("בחודש"), shortWhen: () => "", localParts: () => ({}), baseName: (p) => p, dur: () => "", cost: () => "", tokens: () => "", toast() {},
   };
   vm.runInNewContext(read("views/writing.js"), { window: { AW }, console });
   return AW.views.writing;
