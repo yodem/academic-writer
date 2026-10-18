@@ -265,11 +265,15 @@ def ingest_recording(
     birth_time: float | None = None,
     transcript_file: bool = False,
     lesson_time: str | None = None,
+    lesson_owner: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Upload audio to NotebookLM and persist a resumable lesson record.
 
     With ``transcript_file=True`` the file is a text transcript: it needs an explicit
     course and date, is uploaded as a text source, and is its own transcript.
+    ``lesson_owner`` (e.g. ``{"wispr_meeting_id": ...}``) is stored on the lesson record in the
+    same write that creates it; a stored lesson with the same bytes but another or no owner is
+    refused rather than resumed.
     """
     audio = Path(audio).expanduser()
     if not audio.is_file():
@@ -316,6 +320,9 @@ def ingest_recording(
     with _locked_course(registry.directory, slug) as locked:
         stored_course = locked.payload
         matching = next((x for x in stored_course.get("lessons", []) if x.get("audio_sha256") == digest), None)
+        if matching and lesson_owner and any(matching.get(k) != v for k, v in lesson_owner.items()):
+            held = {k: matching.get(k) for k in lesson_owner}
+            raise IngestError(f"lesson {matching.get('lesson_key')} has the same bytes but is owned by {held}; refusing to reuse it")
         if matching and matching.get("status", "done") in {"queued", "appended", "done"}:
             return {"status": "already ingested", "slug": slug, "date": matching.get("date", day), "lesson_key": matching.get("lesson_key"), "audio_sha256": digest}
         found = matching if matching and matching.get("status") == "pending_transcript" else None
@@ -390,7 +397,8 @@ def ingest_recording(
             stored_course = locked.payload
             lessons = list(stored_course.get("lessons", []))
             if not any(x.get("audio_sha256") == digest and x.get("status") == "pending_transcript" for x in lessons):
-                lessons.append({"date": day, "lesson_key": lesson_key, "audio_sha256": digest, "source_id": selected_source, "trove_page": None, "status": "pending_transcript"})
+                lessons.append({"date": day, "lesson_key": lesson_key, "audio_sha256": digest, "source_id": selected_source, "trove_page": None,
+                                "status": "pending_transcript", **(lesson_owner or {})})
                 stored_course["lessons"] = lessons
                 _atomic_json(locked.path, stored_course)
     if transcript_file:
@@ -780,13 +788,15 @@ def add_source(
     lesson_date: str | None = None,
     lesson_time: str | None = None,
     kind: str | None = None,
+    lesson_owner: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Copy a course file to Drive and NotebookLM and queue its Trove job (resumable).
 
     Recordings and transcripts are sources too: they are snapshotted, copied to Drive and
     recorded with ``kind="media"``, then handed to ``ingest_recording``; their Trove home
     is the lesson page. ``kind`` is "media" or "document"; None picks by extension. An explicit
-    "media" accepts any filename (ffmpeg probes the content, not the name).
+    "media" accepts any filename (ffmpeg probes the content, not the name). ``lesson_owner`` is
+    passed to ``ingest_recording`` for a recording or transcript.
     """
     if kind not in (None, "media", "document"):
         raise IngestError(f"invalid kind: {kind}")
@@ -800,17 +810,18 @@ def add_source(
     # one registration at a time per course: dedupe check through queue job are one critical section
     with _registration_lock(registry.directory, course_slug):
         return _add_source_locked(registry, file, course_slug, title=title, origin=origin, origin_ref=origin_ref, runner=runner,
-                                  transcript=transcript, lesson_date=lesson_date, lesson_time=lesson_time, kind=kind)
+                                  transcript=transcript, lesson_date=lesson_date, lesson_time=lesson_time, kind=kind,
+                                  lesson_owner=lesson_owner)
 
 
 def _add_source_locked(registry: Registry, file: Path, course_slug: str, *, title: str | None, origin: str, origin_ref: str | None,
                        runner: Callable[..., Any], transcript: bool, lesson_date: str | None, lesson_time: str | None,
-                       kind: str | None = None) -> dict[str, Any]:
+                       kind: str | None = None, lesson_owner: dict[str, str] | None = None) -> dict[str, Any]:
     if kind is None:
         kind = "media" if file.suffix.lower() in MEDIA_EXTENSIONS else "document"
     if transcript or kind == "media":
         return _add_media_source(registry, file, course_slug, title=title, origin=origin, origin_ref=origin_ref, runner=runner,
-                                 transcript=transcript, lesson_date=lesson_date, lesson_time=lesson_time)
+                                 transcript=transcript, lesson_date=lesson_date, lesson_time=lesson_time, lesson_owner=lesson_owner)
     sha = _file_sha256(file)
     sha8 = sha[:8]
     with _locked_course(registry.directory, course_slug) as locked:
@@ -865,7 +876,8 @@ def _add_source_locked(registry: Registry, file: Path, course_slug: str, *, titl
 
 
 def _add_media_source(registry: Registry, file: Path, course_slug: str, *, title: str | None, origin: str, origin_ref: str | None,
-                      runner: Callable[..., Any], transcript: bool, lesson_date: str | None, lesson_time: str | None) -> dict[str, Any]:
+                      runner: Callable[..., Any], transcript: bool, lesson_date: str | None, lesson_time: str | None,
+                      lesson_owner: dict[str, str] | None = None) -> dict[str, Any]:
     if transcript and not lesson_date:
         raise IngestError("--transcript requires --date")
     sha = _file_sha256(file)
@@ -897,7 +909,7 @@ def _add_media_source(registry: Registry, file: Path, course_slug: str, *, title
                        added_at=datetime.now(timezone.utc).isoformat())
     # ingest the immutable snapshot; date and time were fixed above from the caller or the original
     result = ingest_recording(registry, snapshot, course_slug=course_slug, lesson_date=lesson_date, lesson_time=lesson_time,
-                              runner=runner, transcript_file=transcript)
+                              runner=runner, transcript_file=transcript, **({"lesson_owner": lesson_owner} if lesson_owner else {}))
     lesson_key = result.get("lesson_key")
     source_id = result.get("source_id")
     if not (lesson_key and source_id):

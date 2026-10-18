@@ -230,6 +230,17 @@ def test_transcript_add_source_passes_through_and_needs_date(tmp_path, monkeypat
     assert calls[0][1]["transcript_file"] is True and reload(registry)["sources"][0]["kind"] == "media"
 
 
+def test_add_source_passes_the_lesson_owner_to_ingest(tmp_path, monkeypatch):
+    registry = make_registry(tmp_path)
+    calls = []
+    monkeypatch.setattr(courses, "ingest_recording", fake_ingest_factory(registry, calls))
+    text = tmp_path / "t.txt"
+    text.write_text("transcript", encoding="utf-8")
+    courses.add_source(registry, text, "sample", runner=Fake(), transcript=True, lesson_date="2026-10-12", lesson_time="1204",
+                       lesson_owner={"wispr_meeting_id": "m1"})
+    assert calls[0][1]["lesson_owner"] == {"wispr_meeting_id": "m1"}
+
+
 def test_media_add_source_resumes_without_second_drive_copy(tmp_path, monkeypatch):
     registry = make_registry(tmp_path)
     audio = tmp_path / "lesson.m4a"

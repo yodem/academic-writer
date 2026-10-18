@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "yodem",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "engine": ">=2.1.69",
   "description": "AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as .docx files.",
   "owner": {
@@ -15,7 +15,7 @@
     {
       "name": "academic-writer",
       "description": "AI-first academic writing assistant for Humanities researchers: drafts in your voice from your own sources, checks every citation, and delivers a .docx you can revise from Word comments.",
-      "version": "0.17.0",
+      "version": "0.17.1",
       "author": {
         "name": "Yotam Fromm"
       },

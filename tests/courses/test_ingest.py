@@ -331,3 +331,52 @@ def test_transcript_file_dedupes_on_rerun(tmp_path):
     before = len(calls)
     assert courses.ingest_recording(registry, txt, **kwargs)["status"] == "already ingested"
     assert len(calls) == before
+
+
+def _fail_transcript(runner):
+    def wrapped(command, **kwargs):
+        if command[1:3] == ["content", "source"]:
+            raise subprocess.CalledProcessError(1, command)
+        return runner(command, **kwargs)
+    return wrapped
+
+
+def test_lesson_owner_is_stored_with_the_new_lesson_before_a_later_failure(tmp_path):
+    registry = make_registry(tmp_path)
+    audio = tmp_path / "lesson.m4a"
+    audio.write_bytes(b"audio bytes")
+    runner, _ = runner_for(tmp_path)
+    try:
+        courses.ingest_recording(registry, audio, course_slug="sample", lesson_date="2026-10-12", runner=_fail_transcript(runner),
+                                 lesson_owner={"wispr_meeting_id": "m1"})
+    except courses.IngestError:
+        pass
+    else:
+        raise AssertionError("expected IngestError")
+    lesson = json.loads((registry.directory / "sample.json").read_text())["lessons"][0]
+    assert lesson["status"] == "pending_transcript" and lesson["wispr_meeting_id"] == "m1"
+    result = courses.ingest_recording(registry, audio, course_slug="sample", lesson_date="2026-10-12", runner=runner,
+                                      lesson_owner={"wispr_meeting_id": "m1"})
+    assert result["status"] == "ingested" and result["lesson_key"] == lesson["lesson_key"]
+
+
+def test_lesson_with_same_bytes_but_other_or_no_owner_is_refused(tmp_path):
+    registry = make_registry(tmp_path)
+    audio = tmp_path / "lesson.m4a"
+    audio.write_bytes(b"audio bytes")
+    runner, calls = runner_for(tmp_path)
+    try:
+        courses.ingest_recording(registry, audio, course_slug="sample", lesson_date="2026-10-12", runner=_fail_transcript(runner))
+    except courses.IngestError:
+        pass
+    for owner in ({"wispr_meeting_id": "m2"}, {"wispr_meeting_id": "m1"}):
+        before = len(calls)
+        try:
+            courses.ingest_recording(registry, audio, course_slug="sample", lesson_date="2026-10-12", runner=runner, lesson_owner=owner)
+        except courses.IngestError as exc:
+            assert "owned by" in str(exc)
+        else:
+            raise AssertionError("expected IngestError")
+        assert len(calls) == before
+    lessons = json.loads((registry.directory / "sample.json").read_text())["lessons"]
+    assert len(lessons) == 1 and lessons[0]["status"] == "pending_transcript" and "wispr_meeting_id" not in lessons[0]

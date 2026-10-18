@@ -1,7 +1,15 @@
 import json
+import re
+import shutil
 import sqlite3
 import sys
+import tempfile
+import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src" / "scripts" / "courses"))
 import courses
@@ -22,12 +30,15 @@ def build(tmp_path, extra_meetings=(), extra_courses=()):
     (wdir / "meetings").mkdir(parents=True)
     conn = sqlite3.connect(wdir / "flow.sqlite")
     conn.execute("create table Meetings (id text, title text, createdAt text, endedAt integer, finalized integer, "
-                 "transcriptReady integer, isDeleted integer, recordedMs integer, summary text, speakerMap text)")
+                 "transcriptReady integer, isDeleted integer, recordedMs integer, summary text, speakerMap text, "
+                 "notes text, participantNames text, transcript text)")
     rows = [(TIKVA, "t1", "2026-10-13 13:04:49.396 +00:00", 1791901560843, 1, 1, 0, 4871478, "sum tikva", None),
             (HAVAYA, "t2", "2026-10-16 09:01:31.485 +00:00", 1792145991886, 1, 1, 0, 4700560, "sum havaya", None)]
     rows += [(i, "PRIVATE TITLE", c, e, 1, 1, 0, 600000, "PRIVATE SUMMARY", None) for i, c, e in WORK]
     rows += list(extra_meetings)
-    conn.executemany("insert into Meetings values (?,?,?,?,?,?,?,?,?,?)", rows)
+    conn.executemany("insert into Meetings (id, title, createdAt, endedAt, finalized, transcriptReady, isDeleted, recordedMs, "
+                     "summary, speakerMap) values (?,?,?,?,?,?,?,?,?,?)", rows)
+    conn.execute("update Meetings set notes = 'PRIVATE NOTES', participantNames = 'PRIVATE PEOPLE', transcript = 'PRIVATE TEXT'")
     conn.commit()
     conn.close()
     for mid in (TIKVA, HAVAYA):  # only the matching meetings have a readable transcript; work meetings have none at all
@@ -61,7 +72,8 @@ def fake_add_source(calls):
         calls.append((Path(path), slug, kw))
         key = f"{kw['lesson_date']}-{kw['lesson_time']}"
         with courses._locked_course(registry.directory, slug) as locked:
-            locked.payload.setdefault("lessons", []).append({"date": kw["lesson_date"], "lesson_key": key, "status": "queued"})
+            locked.payload.setdefault("lessons", []).append({"date": kw["lesson_date"], "lesson_key": key, "status": "queued",
+                                                             **(kw.get("lesson_owner") or {})})
             courses._atomic_json(locked.path, locked.payload)
         return {"status": "ingested", "lesson_key": key}
     return add
@@ -201,7 +213,7 @@ def test_incomplete_import_is_resumed_not_shelved(tmp_path):
             key = f"{kw['lesson_date']}-{kw['lesson_time']}"
             if not any(x["lesson_key"] == key for x in locked.payload["lessons"]):
                 locked.payload["lessons"].append({"date": kw["lesson_date"], "lesson_key": key, "status": "pending_transcript",
-                                                  "audio_sha256": courses._file_sha256(Path(path))})
+                                                  "audio_sha256": courses._file_sha256(Path(path)), **(kw.get("lesson_owner") or {})})
                 courses._atomic_json(locked.path, locked.payload)
         if state["fail"]:
             raise courses.IngestError("transcript failed")
@@ -214,6 +226,8 @@ def test_incomplete_import_is_resumed_not_shelved(tmp_path):
 
     first = wispr.scan(reg, add_source=flaky)
     assert [e["id"] for e in first["errors"]] == [HAVAYA]
+    pending = json.loads((reg.directory / "havaya.json").read_text())["lessons"][0]
+    assert pending["status"] == "pending_transcript" and pending["wispr_meeting_id"] == HAVAYA  # owned before the failure
     seen = json.loads((reg.directory / "term.json").read_text())["state"]["wispr_seen"]
     assert HAVAYA not in seen
     state["fail"] = False
@@ -223,3 +237,294 @@ def test_incomplete_import_is_resumed_not_shelved(tmp_path):
     assert len(havaya["lessons"]) == 1 and havaya["lessons"][0]["status"] == "queued"
     assert havaya["lessons"][0]["wispr_meeting_id"] == HAVAYA and "alternates" not in havaya["lessons"][0]
     assert HAVAYA in json.loads((reg.directory / "term.json").read_text())["state"]["wispr_seen"]
+
+
+# ---- privacy: the live database is read in place, read-only, and private columns only for matched meetings
+
+ALLOWED = {"id", "createdAt", "endedAt", "recordedMs", "finalized", "transcriptReady", "isDeleted",
+           ""}  # "": a table access with no column, e.g. count(*)
+
+
+def _no_copies(monkeypatch):
+    copies = []
+    for mod, name in ((tempfile, "mkdtemp"), (tempfile, "mkstemp"), (shutil, "copyfile"), (shutil, "copy"), (shutil, "copy2"), (shutil, "copytree")):
+        def spy(*a, _n=name, **k):
+            copies.append((_n, a))
+            raise AssertionError(f"{_n} called")
+        monkeypatch.setattr(mod, name, spy)
+    return copies
+
+
+def _spy_reads(monkeypatch, log):
+    """Log every statement the scan runs on Meetings: the columns it reads (sqlite authorizer), its bound
+    parameters and every row it returns; and every match decision, in order."""
+    real_connect = sqlite3.connect
+
+    class Rows:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def fetchall(self):
+            return list(self.rows)
+
+        def fetchone(self):
+            return self.rows[0] if self.rows else None
+
+    class Spy(sqlite3.Connection):
+        def __init__(self, *a, **k):
+            super().__init__(*a, **k)
+            self.columns = []
+            self.set_authorizer(self._auth)
+
+        def _auth(self, action, arg1, arg2, dbname, source):
+            if action == sqlite3.SQLITE_READ and arg1 == "Meetings":
+                self.columns.append(arg2)
+            return sqlite3.SQLITE_OK
+
+        def execute(self, sql, params=()):
+            self.columns = []
+            rows = super().execute(sql, params).fetchall()
+            log.append(("stmt", tuple(self.columns), tuple(params), rows, sql))
+            return Rows(rows)
+
+    def connect(*a, **k):
+        k["factory"] = Spy
+        k["cached_statements"] = 0  # every statement is prepared, so the authorizer sees every read
+        return real_connect(*a, **k)
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    real_match = wispr.match_course
+
+    def match(registry, start, end):
+        result = real_match(registry, start, end)
+        log.append(("match", start, result[0]))
+        return result
+    monkeypatch.setattr(wispr, "match_course", match)
+
+
+def _check_reads(log, ids_by_start, unmatched_values):
+    """Private columns only in statements bound to already-matched ids, returning at most one row per id,
+    and no unmatched meeting's private value among the rows any statement returned. Returns the ids touched."""
+    matched_so_far: set[str] = set()
+    touched: set[str] = set()
+    for event in log:
+        if event[0] == "match":
+            if event[2]:
+                matched_so_far.add(ids_by_start[event[1]])
+            continue
+        _, columns, params, rows, sql = event
+        private = set(columns) - ALLOWED
+        if not private:
+            continue
+        # the one private statement: restricted to bound ids, and every returned row is one of them
+        assert re.fullmatch(r"select id, summary from Meetings where id in \(\?(,\?)*\)", sql), f"unexpected private query: {sql}"
+        assert {str(r[0]) for r in rows} <= set(params), f"{private}: rows outside the bound ids"
+        assert params and set(params) <= matched_so_far, f"{private} read for {params} before or without a match"
+        assert len(rows) <= len(set(params)), f"{private}: {len(rows)} rows returned for {len(set(params))} matched ids"
+        touched |= set(params)
+    values = [v for e in log if e[0] == "stmt" for row in e[3] for v in row if isinstance(v, str)]
+    leaked = [v for v in values if "PRIVATE" in v or v in unmatched_values]
+    assert not leaked, f"unmatched meetings' private values were read: {leaked}"
+    return touched
+
+
+def _ambiguous_tikva(tmp_path):
+    twin = {"slug": "twin", "slots": [{"day": "Tue", "start": "16:00", "end": "18:00", "semester": "A"}]}
+    reg, wdir = build(tmp_path, extra_courses=[twin])  # TIKVA becomes ambiguous; the four work meetings match nothing
+    return reg, wdir, {m["start"]: m["id"] for m in wispr.list_meetings(wdir / "flow.sqlite")}
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_private_columns_read_only_for_matched_meetings_after_matching(tmp_path, monkeypatch, dry_run):
+    reg, wdir, ids_by_start = _ambiguous_tikva(tmp_path)
+    log = []
+    _spy_reads(monkeypatch, log)
+    _no_copies(monkeypatch)
+    report = wispr.scan(reg, dry_run=dry_run, add_source=fake_add_source([]))
+    monkeypatch.undo()
+    assert {m["id"] for m in report["matched"]} == {HAVAYA} and not report["errors"]
+    assert {u["id"] for u in report["unmatched"]} == {TIKVA} | {i for i, _, _ in WORK}
+    touched = _check_reads(log, ids_by_start, {"sum tikva", "t1"})
+    assert touched == (set() if dry_run else {HAVAYA})  # the spy works: the matched import did read its summary
+    assert "PRIVATE" not in json.dumps(report)
+
+
+def test_read_check_catches_a_broadened_private_query(tmp_path, monkeypatch):
+    """The checker is not fooled by a matched id bound to a predicate that does not restrict the rows."""
+    reg, wdir, ids_by_start = _ambiguous_tikva(tmp_path)
+
+    def broad(db, ids):
+        rows = wispr._query(db, "select id, summary from Meetings where ? is not null", (ids[0],))
+        return {i: "" for i in ids} | {str(r[0]): r[1] for r in rows if str(r[0]) in ids}
+    log = []
+    _spy_reads(monkeypatch, log)
+    monkeypatch.setattr(wispr, "read_summaries", broad)
+    wispr.scan(reg, add_source=fake_add_source([]))
+    monkeypatch.undo()
+    with pytest.raises(AssertionError):
+        _check_reads(log, ids_by_start, {"sum tikva", "t1"})
+
+
+def test_readonly_open_failure_imports_nothing_and_copies_nothing(tmp_path, monkeypatch, capsys):
+    reg, wdir = build(tmp_path)
+    term_before = (reg.directory / "term.json").read_bytes()
+    real_connect = sqlite3.connect
+    attempts, sleeps, calls = [], [], []
+
+    def connect(target, *a, **k):
+        if str(wdir) in str(target) or str(wdir).replace(" ", "%20") in str(target):
+            attempts.append(str(target))
+            raise sqlite3.OperationalError("unable to open database file")
+        return real_connect(target, *a, **k)
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    monkeypatch.setattr(time, "sleep", sleeps.append)
+    copies = _no_copies(monkeypatch)
+    for dry_run in (False, True):
+        with pytest.raises(courses.IngestError, match="read-only"):
+            wispr.scan(reg, dry_run=dry_run, add_source=fake_add_source(calls))
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(reg.directory.parent))
+    assert courses.main(["--term", reg.directory.name, "wispr-scan", "--json"]) != 0
+    assert "read-only" in capsys.readouterr().err
+    assert calls == [] and copies == [] and len(attempts) >= 2 and sleeps  # retried, never copied
+    assert all("mode=ro" in a for a in attempts)
+    assert (reg.directory / "term.json").read_bytes() == term_before
+    assert not (reg.directory / "digest").exists() and not (reg.directory / "wispr").exists()
+
+
+def test_database_lost_after_matching_fails_closed_before_any_write(tmp_path, monkeypatch):
+    reg, wdir = build(tmp_path)
+    term_before = (reg.directory / "term.json").read_bytes()
+    real_connect = sqlite3.connect
+    opened = []
+
+    def connect(target, *a, **k):
+        if str(target).endswith("mode=ro"):
+            opened.append(target)
+            if len(opened) > 1:  # the metadata query worked; every later open fails
+                raise sqlite3.OperationalError("unable to open database file")
+        return real_connect(target, *a, **k)
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+    calls = []
+    with pytest.raises(courses.IngestError, match="nothing was imported"):
+        wispr.scan(reg, add_source=fake_add_source(calls))
+    assert calls == [] and len(opened) > 2
+    assert (reg.directory / "term.json").read_bytes() == term_before
+    assert not (reg.directory / "digest").exists() and not (reg.directory / "wispr").exists() and not (reg.directory / "lessons").exists()
+    assert "alternates" not in json.loads((reg.directory / "tikva.json").read_text())["lessons"][0]
+
+
+def test_transient_open_failure_is_retried(tmp_path, monkeypatch):
+    reg, wdir = build(tmp_path)
+    real_connect = sqlite3.connect
+    state = {"fail": 1}
+
+    def connect(target, *a, **k):
+        if state["fail"] and str(target).endswith("mode=ro"):
+            state["fail"] -= 1
+            raise sqlite3.OperationalError("database is locked")
+        return real_connect(target, *a, **k)
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+    report = wispr.scan(reg, dry_run=True)
+    assert len(report["matched"]) == 2 and len(report["unmatched"]) == 4
+
+
+# ---- an import that fails before creating a lesson leaves nothing for a later recording to attach to
+
+def test_failed_first_same_day_import_does_not_shelve_the_second(tmp_path):
+    reg, _ = _with_second(tmp_path)
+    calls = []
+    ok = fake_add_source(calls)
+
+    def add(registry, path, slug, **kw):
+        if HAVAYA[:8] in Path(path).name:
+            raise courses.IngestError("Drive copy failed")
+        return ok(registry, path, slug, **kw)
+    report = wispr.scan(reg, add_source=add)
+    assert [e["id"] for e in report["errors"]] == [HAVAYA]
+    second = next(m for m in report["matched"] if m["id"] == SECOND[0])
+    assert second["action"] == "import" and second["lesson_key"] == "2026-10-16-1325"
+    havaya = json.loads((reg.directory / "havaya.json").read_text())
+    assert [x["lesson_key"] for x in havaya["lessons"]] == ["2026-10-16-1325"] and "alternates" not in havaya["lessons"][0]
+    assert not (reg.directory / "lessons" / "havaya" / "2026-10-16-1201").exists()
+    seen = json.loads((reg.directory / "term.json").read_text())["state"]["wispr_seen"]
+    assert HAVAYA not in seen and SECOND[0] in seen
+
+
+def test_record_alternate_requires_an_existing_lesson(tmp_path):
+    reg, wdir = build(tmp_path)
+    with pytest.raises(courses.IngestError, match="no lesson"):
+        wispr._record_alternate(reg, "havaya", {"lesson_key": "2026-10-16-1201"}, HAVAYA, wdir / "meetings" / HAVAYA, "sum havaya")
+    assert not (reg.directory / "lessons" / "havaya").exists()
+    assert json.loads((reg.directory / "havaya.json").read_text())["lessons"] == []
+
+
+# ---- resume only a lesson this very meeting owns
+
+def _pending_havaya(reg, wdir, owner=None):
+    day, hm = "2026-10-16", "1201"
+    staged = wispr._staged_path(reg, "havaya", HAVAYA, day, hm)
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    staged.write_text(wispr._compose(wdir / "meetings" / HAVAYA, "sum havaya"), encoding="utf-8")
+    lesson = {"date": day, "lesson_key": f"{day}-{hm}", "status": "pending_transcript", "audio_sha256": courses._file_sha256(staged)}
+    if owner:
+        lesson["wispr_meeting_id"] = owner
+    path = reg.directory / "havaya.json"
+    course = json.loads(path.read_text())
+    course["lessons"] = [lesson]
+    path.write_text(json.dumps(course), encoding="utf-8")
+
+
+@pytest.mark.parametrize("owner", [None, "someone-else"])
+def test_pending_lesson_not_owned_by_the_meeting_is_never_resumed(tmp_path, owner):
+    reg, wdir = build(tmp_path)
+    _pending_havaya(reg, wdir, owner)  # same staged-file hash, but no (or another) owner
+    calls = []
+    report = wispr.scan(reg, add_source=fake_add_source(calls))
+    assert all(c[1] != "havaya" for c in calls)
+    assert not [m for m in report["matched"] if m["id"] == HAVAYA]
+    assert [e["id"] for e in report["errors"]] == [HAVAYA] and "owner" in report["errors"][0]["error"]
+    lesson = json.loads((reg.directory / "havaya.json").read_text())["lessons"][0]
+    assert lesson.get("wispr_meeting_id") == owner and "alternates" not in lesson
+    assert HAVAYA not in json.loads((reg.directory / "term.json").read_text())["state"]["wispr_seen"]
+
+
+# ---- matching
+
+def test_duration_and_overlap_use_utc_instants_across_dst_end(tmp_path):
+    night = {"slug": "night", "slots": [{"day": "Sun", "start": "01:30", "end": "03:00", "semester": "A"}]}
+    reg, _ = build(tmp_path, extra_courses=[night])
+    utc = timezone.utc
+    start = datetime(2026, 10, 24, 22, 50, tzinfo=utc)  # 2026-10-25 01:50+03:00
+    end = datetime(2026, 10, 24, 23, 40, tzinfo=utc)    # 2026-10-25 01:40+02:00, 50 minutes later
+    assert wispr.match_course(reg, start, end) == ("night", None)
+
+
+def test_semester_endpoints_and_yearly_gap(tmp_path):
+    reg, _ = build(tmp_path)
+    tz = ZoneInfo("Asia/Jerusalem")
+    cases = {
+        "2026-10-11T14:05": "kane",      # first day of semester A
+        "2026-10-04T14:05": None,        # the Sunday before it
+        "2027-01-26T16:05": "tikva",     # last Tuesday of A
+        "2027-01-29T12:05": "havaya",    # last day of A, yearly course
+        "2027-02-02T16:05": None,        # a Tuesday between semesters: neither tikva (A) nor levinas (B)
+        "2027-02-12T12:05": None,        # a Friday in the yearly course's gap
+        "2027-03-05T12:05": None,        # the Friday before B starts
+        "2027-03-09T16:05": "levinas",   # first Tuesday of B
+        "2027-03-12T12:05": "havaya",    # the yearly course resumes in B
+        "2027-06-25T12:05": "havaya",    # last day of B
+        "2027-07-02T12:05": None,        # after B
+    }
+    for local, slug in cases.items():
+        start = datetime.fromisoformat(local).replace(tzinfo=tz)
+        assert wispr.match_course(reg, start, start + timedelta(minutes=90))[0] == slug, local
+
+
+def test_since_keeps_an_explicit_offset_and_reads_a_naive_value_as_local(tmp_path):
+    reg, _ = build(tmp_path)
+    # HAVAYA starts 09:01:31Z (12:01 local); TIKVA 13:04Z on 10-13
+    assert {m["id"] for m in wispr.scan(reg, since="2026-10-16T09:30:00+00:00", dry_run=True)["matched"]} == set()
+    assert {m["id"] for m in wispr.scan(reg, since="2026-10-16T09:00:00+00:00", dry_run=True)["matched"]} == {HAVAYA}
+    assert {m["id"] for m in wispr.scan(reg, since="2026-10-16T12:30", dry_run=True)["matched"]} == set()
+    assert {m["id"] for m in wispr.scan(reg, since="2026-10-16", dry_run=True)["matched"]} == {HAVAYA}

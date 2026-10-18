@@ -4,6 +4,13 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.17.1] — 2026-10-18
+
+### Fixed
+- **Wispr Flow lecture import (`courses.py wispr-scan`) is now private by construction.** It opens Wispr's database read-only in place and never copies it; if the database cannot be opened it imports nothing and leaves nothing behind (the old fallback copied the whole database, work meetings included, to a temporary folder). For a recording that matches no course it reads only the id and times; a test watches every column the importer reads.
+- **No phantom or misattributed lessons.** A failed import no longer makes the next same-day recording an "alternate" of a lesson that does not exist, and a pending lesson is resumed only by the recording that owns it (recorded when the lesson is created), never by a matching file hash.
+- **Times across the daylight-saving change** are compared in UTC, so a lecture that spans the switch still matches its class slot. `--since` keeps an explicit time offset.
+
 ## [0.17.0] — 2026-10-16
 
 ### Added
