@@ -475,3 +475,20 @@ def test_cli_reload_flag_needs_apply(tmp_path):
            "--legacy", str(s["legacy"]), "--reload-launchd"]
     out = subprocess.run(cmd, capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"})
     assert out.returncode == 2
+
+
+def test_binary_plist_rewritten_in_binary_form(tmp_path):
+    s = setup(tmp_path)
+    h = seed_launchd(s)
+    data = plistlib.loads(h["plist"].read_bytes())
+    h["plist"].write_bytes(plistlib.dumps(data, fmt=plistlib.FMT_BINARY))
+    plan = run(s, apply=True, launch_agents_dir=h["agents"])
+    raw = h["plist"].read_bytes()
+    assert raw.startswith(b"bplist")
+    pl = plistlib.loads(raw)
+    terms = str(s["home"] / ".academic-helper" / "terms")
+    assert pl["StandardOutPath"] == terms + "/T1/logs/launchd.log"
+    assert (h["agents"] / ("com.example.courses-daily.plist.bak-" + STAMP)).is_file()
+    assert plan["reload"] and plan["reload"][0]["label"] == "com.example.courses-daily"
+    again = run(s, apply=True, launch_agents_dir=h["agents"])
+    assert [x["status"] for x in again["steps"] if x["kind"] == "launchd-plist"] == ["done"]

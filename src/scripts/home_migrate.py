@@ -127,6 +127,51 @@ def _subst(text: str, subs: list) -> tuple:
     return text, total
 
 
+def _subst_tree(obj, subs: list) -> tuple:
+    """Apply the substitutions to every string inside a parsed plist; returns (new_obj, count)."""
+    if isinstance(obj, str):
+        return _subst(obj, subs)
+    if isinstance(obj, dict):
+        total, out = 0, {}
+        for key, value in obj.items():
+            out[key], n = _subst_tree(value, subs)
+            total += n
+        return out, total
+    if isinstance(obj, list):
+        total, out = 0, []
+        for value in obj:
+            new, n = _subst_tree(value, subs)
+            out.append(new)
+            total += n
+        return out, total
+    return obj, 0
+
+
+def _plan_binary_plist(p: Path, raw: bytes, daily, subs: list, stamp: str, uid: int, steps: list,
+                       reload_lines: list, warnings: list) -> None:
+    """A binary plist is rewritten value by value and written back in binary form."""
+    try:
+        data = plistlib.loads(raw)
+    except Exception:
+        warnings.append("not a valid plist, skipped: %s" % p)
+        return
+    names_daily = daily is not None and any(s == str(daily) or s.endswith("/" + daily.name) for s in _strings(data))
+    new, n = _subst_tree(data, subs)
+    label = data.get("Label") if isinstance(data, dict) else None
+    if not n:
+        if names_daily:
+            steps.append({"kind": "launchd-plist", "from": str(p), "to": str(p), "status": "done", "label": label})
+        return
+    steps.append({"kind": "launchd-plist", "from": str(p), "to": str(p), "status": "todo", "label": label,
+                  "diff": "binary plist: %d path(s) rewritten" % n, "backup": str(p) + ".bak-" + stamp,
+                  "_bytes": plistlib.dumps(new, fmt=plistlib.FMT_BINARY)})
+    lines = _launchctl_lines(label, p, uid)
+    if lines:
+        reload_lines.append({"label": label, "plist": str(p), "commands": lines, "ran": False})
+    else:
+        warnings.append("%s has no Label; reload it by hand" % p)
+
+
 def _strings(obj):
     if isinstance(obj, str):
         yield obj
@@ -372,8 +417,16 @@ def _plan(home: Path, legacy: Path, daily: Optional[Path], workspaces: list, sta
         uid = os.getuid() if hasattr(os, "getuid") else 0
         for p in sorted(launch_dir.glob("*.plist")):
             try:
-                text = p.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
+                raw = p.read_bytes()
+            except OSError:
+                continue
+            if raw.startswith(b"bplist"):
+                _plan_binary_plist(p, raw, daily, subs, stamp, uid, steps, reload_lines, warnings)
+                continue
+            try:
+                text = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                warnings.append("not a readable plist, skipped: %s" % p)
                 continue
             names_daily = daily is not None and (str(daily) in text or "/" + daily.name in text)
             new, n = _subst(text, subs)
@@ -488,7 +541,12 @@ def _apply(steps: list, home: Path, legacy: Path, stamp: str, data_dir: Optional
         elif kind in ("daily-script", "helper-scripts", "launchd-plist", "shrink-profile"):
             path = Path(step["from"])
             _backup(path, stamp)
-            homelib._atomic_write(path, step["_text"])
+            if "_bytes" in step:
+                scratch = path.with_name(path.name + ".tmp-" + stamp)
+                scratch.write_bytes(step["_bytes"])
+                os.replace(str(scratch), str(path))
+            else:
+                homelib._atomic_write(path, step["_text"])
         elif kind == "register":
             ws, ws_type, course, term = step["_args"]
             helper.mkdir(parents=True, exist_ok=True)
