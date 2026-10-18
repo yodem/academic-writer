@@ -255,7 +255,7 @@ def test_off_refuses_when_job_stays_loaded(env, monkeypatch):
 
 def test_off_succeeds_when_job_was_not_loaded(env):
     call(env, "set", "--time", "03:30", "--script", str(env["script"]))
-    env["launchctl"].write_text('#!/bin/sh\necho "$@" >> "%s"\nexit 3\n' % env["log"])
+    env["launchctl"].write_text('#!/bin/sh\necho "$@" >> "%s"\n[ "$1" = print ] && exit 113\nexit 3\n' % env["log"])
     assert call(env, "off") == 0
     assert (env["agents"] / (LABEL + ".plist.disabled")).exists()
 
@@ -274,3 +274,10 @@ def test_cron_line_quotes_paths_with_spaces(env, capsys):
     spaced.write_text("#!/bin/bash\n")
     assert call(env, "set", "--time", "03:30", "--script", str(spaced), platform="linux") == 0
     assert "bash '%s'" % spaced in capsys.readouterr().out
+
+
+def test_off_refuses_when_launchd_state_is_unknown(env):
+    call(env, "set", "--time", "03:30", "--script", str(env["script"]))
+    env["launchctl"].write_text('#!/bin/sh\necho "$@" >> "%s"\nexit 3\n' % env["log"])
+    assert call(env, "off") == 1
+    assert (env["agents"] / (LABEL + ".plist")).exists()
