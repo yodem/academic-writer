@@ -333,27 +333,21 @@ def _https(url: Any) -> Optional[str]:
     return url if isinstance(url, str) and url.startswith("https://") else None
 
 
-def assign_colors(raw_courses: Dict[str, Dict[str, Any]], links: Any) -> Dict[str, str]:
-    """A brand course hue per course. An explicit `color` (course file, then links.json) wins and is reserved;
-    the others take a hue from a hash of the slug, probing to a free one in slug order (stable, no clashes
-    while hues remain)."""
-    links = links if isinstance(links, dict) else {}
+def assign_colors(raw_courses: Dict[str, Dict[str, Any]], links: Any = None) -> Dict[str, str]:
+    """A brand course hue per course. An explicit `color` in the course file wins and is reserved; the others
+    take the eight hues in brand order over courses sorted by slug, skipping hues taken explicitly (`links` is
+    accepted for the caller's signature and unused). Past eight courses the hues repeat in order."""
     out: Dict[str, str] = {}
     for slug, course in raw_courses.items():
-        link = links.get(slug) if isinstance(links.get(slug), dict) else {}
-        for candidate in (course.get("color"), link.get("color")):
-            if isinstance(candidate, str) and candidate in COURSE_COLORS:
-                out[slug] = candidate
-                break
-    taken = set(out.values())
+        candidate = course.get("color")
+        if isinstance(candidate, str) and candidate in COURSE_COLORS:
+            out[slug] = candidate
+    free = [c for c in COURSE_COLORS if c not in out.values()] or list(COURSE_COLORS)
+    n = 0
     for slug in sorted(raw_courses):
-        if slug in out:
-            continue
-        first = int(hashlib.sha1(slug.encode("utf-8")).hexdigest()[:8], 16) % len(COURSE_COLORS)
-        pick = next((COURSE_COLORS[(first + k) % len(COURSE_COLORS)] for k in range(len(COURSE_COLORS))
-                     if COURSE_COLORS[(first + k) % len(COURSE_COLORS)] not in taken), COURSE_COLORS[first])
-        out[slug] = pick
-        taken.add(pick)
+        if slug not in out:
+            out[slug] = free[n % len(free)]
+            n += 1
     return out
 
 

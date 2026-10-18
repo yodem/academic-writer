@@ -218,13 +218,21 @@ def test_colors_stable_and_explicit_wins(tmp_path):
     data = json.loads((d / "beta.json").read_text())
     data["color"] = "olive"
     _w(d / "beta.json", data)
-    _w(d / "links.json", {"gamma": {"color": "rose"}})
     now = {c["slug"]: c["color"] for c in dashboard.build_state(d, now=NOW)["courses"]}
-    assert now["beta"] == "olive" and now["gamma"] == "rose"
+    assert now["beta"] == "olive"
     assert len(set(now.values())) == len(now)
     data["color"] = "not-a-hue"
     _w(d / "beta.json", data)
     assert by_slug(dashboard.build_state(d, now=NOW))["beta"]["color"] in dashboard.COURSE_COLORS
+
+
+def test_assign_colors_exact_order():
+    cs = dashboard.COURSE_COLORS
+    raw = {"zeta": {}, "alpha": {}, "mid": {}}
+    assert dashboard.assign_colors(raw, {}) == {"alpha": cs[0], "mid": cs[1], "zeta": cs[2]}
+    raw = {"zeta": {}, "alpha": {}, "mid": {"color": cs[0]}, "bad": {"color": "nope"}}
+    got = dashboard.assign_colors(raw, {"alpha": {"color": cs[5]}})  # links.json colour is ignored
+    assert got == {"alpha": cs[1], "bad": cs[2], "mid": cs[0], "zeta": cs[3]}
 
 
 def test_exams_timeline_and_wispr(tmp_path):
