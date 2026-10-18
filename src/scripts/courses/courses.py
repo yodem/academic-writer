@@ -1233,11 +1233,15 @@ def main(argv: list[str] | None = None) -> int:
     bookmarks_p.add_argument("--check", action="store_true", help="read-only: exit 1 when applying would change Chrome")
     import dashboard
     dashboard.add_parser(sub)
+    import nightly
+    nightly.add_parser(sub)
     args = parser.parse_args(argv)
     if args.data_dir:  # skills run this through the Bash tool, which gets no CLAUDE_PLUGIN_DATA
         os.environ["CLAUDE_PLUGIN_DATA"] = args.data_dir
     if args.command == "dashboard":  # before the registry is read: a fresh install shows the empty state
         return dashboard.run(args)
+    if args.command == "nightly":  # no registry needed: it manages the schedule
+        return nightly.run(args)
     try:
         if args.command == "import-docx":
             stubs = parse_docx(args.docx)
