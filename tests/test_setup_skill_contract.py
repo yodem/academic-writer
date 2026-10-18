@@ -47,3 +47,43 @@ def test_no_skill_names_legacy_registry_except_migration():
         for line in text.splitlines():
             if "~/.academic-writer/courses" in line:
                 assert re.search(r"migrat|legacy|older", line, re.I), f"{path}: {line}"
+
+
+def test_setup_writes_home_md_with_role_and_identity():
+    assert re.search(r'home\.py"? set --path "[^"]+"[^\n]*--role', SETUP)
+    for flag in ("--name", "--field", "--target-language", "--citation-style"):
+        assert flag in SETUP
+
+
+def test_setup_role_vocabulary_is_the_canonical_set():
+    block = SETUP.split("### 2b", 1)[1].split("### 2c", 1)[0]
+    options = block.split("```python", 1)[1].split("```", 1)[0]
+    assert "teach" not in options.lower().replace("you teach courses", "")
+    assert "Lecturer" in block and "Student" in block and "Researcher" in block
+    assert "`student`, `lecturer` or `researcher`" in block
+    assert "Teacher" not in SETUP
+
+
+def test_setup_checks_python_before_the_first_home_py_call():
+    first_home = SETUP.index("scripts/home.py")
+    before = SETUP[:first_home]
+    assert "python3 --version" in before
+    assert "setup_checks.py" in before or "Python 3" in before
+    assert "Python is not installed" in before or "isn't installed" in before
+
+
+def test_profile_keeps_only_workspace_overrides():
+    block = SETUP.split("**Save the folder profile now**", 1)[1].split("---", 1)[0]
+    assert "home.md" in block and "override" in block.lower()
+
+
+def test_init_writes_home_md_when_the_home_has_none():
+    assert re.search(r"home\.py\"? profile ", INIT)
+
+
+def test_no_skill_text_offers_teaching_as_a_role():
+    for path in SKILLS.rglob("*.md"):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if re.search(r"not a role|never a role|is not$", line, re.I):
+                continue
+            assert not re.search(r"\brole\b[^\n]*\bteaching\b", line, re.I), f"{path}: {line}"

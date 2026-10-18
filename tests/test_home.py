@@ -86,3 +86,86 @@ def test_frontmatter_matches_ts_parser():
     expected = json.loads((FIXTURES / "sample-profile.expected.json").read_text(encoding="utf-8"))
     assert home.read_frontmatter(text) == expected["frontmatter"]
     assert home.read_sections(text) == expected["sections"]
+
+
+# --- home.md writer, corrupt registry ---------------------------------------------------------
+
+def test_write_home_profile_creates_and_upserts_without_dropping(tmp_path):
+    h = tmp_path / "home"
+    md = h / ".academic-helper" / "home.md"
+    home.write_home_profile(h, {"name": "Dana Levi", "role": "student"})
+    got = home.read_frontmatter(md.read_text(encoding="utf-8"))
+    assert got["name"] == "Dana Levi" and got["role"] == "student"
+    md.write_text(md.read_text(encoding="utf-8") + "\n## Tools\n\n```json\n{\"a\": 1}\n```\n", encoding="utf-8")
+    home.write_home_profile(h, {"role": "researcher", "institution": "HUJI"})
+    text = md.read_text(encoding="utf-8")
+    got = home.read_frontmatter(text)
+    assert got["name"] == "Dana Levi" and got["role"] == "researcher" and got["institution"] == "HUJI"
+    assert home.read_sections(text) == {"tools": {"a": 1}}
+    assert not [p for p in (h / ".academic-helper").iterdir() if p.name.endswith(".tmp")]
+
+
+def test_write_home_profile_keeps_list_keys(tmp_path):
+    h = tmp_path / "home"
+    md = h / ".academic-helper" / "home.md"
+    _md(md, "name: X\nabstractLanguages:\n  - he\n  - en")
+    home.write_home_profile(h, {"role": "lecturer"})
+    got = home.read_frontmatter(md.read_text(encoding="utf-8"))
+    assert got == {"name": "X", "abstractLanguages": ["he", "en"], "role": "lecturer"}
+
+
+def test_write_home_profile_rejects_bad_role(tmp_path):
+    import pytest
+    with pytest.raises(ValueError):
+        home.write_home_profile(tmp_path / "home", {"role": "teaching"})
+    assert not (tmp_path / "home" / ".academic-helper" / "home.md").exists()
+
+
+def test_cli_set_with_identity_writes_pointer_and_home_md(tmp_path, monkeypatch):
+    data, h = tmp_path / "data", tmp_path / "Academic"
+    data.mkdir()
+    monkeypatch.setenv("CLAUDE_PLUGIN_DATA", str(data))
+    monkeypatch.delenv("ACADEMIC_HOME", raising=False)
+    assert home._main(["set", "--path", str(h), "--name", "Dana", "--role", "student",
+                       "--field", "Philosophy", "--institution", "TAU", "--degree", "MA"]) == 0
+    got = home.read_frontmatter((h / ".academic-helper" / "home.md").read_text(encoding="utf-8"))
+    assert got["name"] == "Dana" and got["role"] == "student" and got["fieldOfStudy"] == "Philosophy"
+    assert got["institution"] == "TAU" and got["degree"] == "MA"
+    assert home.home_dir({"CLAUDE_PLUGIN_DATA": str(data)}) == h
+
+
+def test_cli_set_rejects_teaching_role(tmp_path, monkeypatch):
+    data = tmp_path / "data"
+    data.mkdir()
+    monkeypatch.setenv("CLAUDE_PLUGIN_DATA", str(data))
+    assert home._main(["set", "--path", str(tmp_path / "H"), "--role", "teaching"]) == 2
+    assert not (tmp_path / "H" / ".academic-helper" / "home.md").exists()
+
+
+def test_register_on_corrupt_registry_keeps_file_and_fails(tmp_path, capsys, monkeypatch):
+    import pytest
+    h = tmp_path / "home"
+    reg = h / ".academic-helper" / "workspaces.json"
+    reg.parent.mkdir(parents=True)
+    reg.write_text("{not json", encoding="utf-8")
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    with pytest.raises(home.RegistryError):
+        home.register_workspace(h, ws, "project")
+    assert reg.read_text(encoding="utf-8") == "{not json"
+    assert [p.name for p in reg.parent.iterdir()] == ["workspaces.json"]
+    monkeypatch.setenv("ACADEMIC_HOME", str(h))
+    assert home._main(["register", "--path", str(ws), "--type", "project"]) == 2
+    assert reg.read_text(encoding="utf-8") == "{not json"
+    assert "workspaces.json" in capsys.readouterr().out
+
+
+def test_register_on_non_list_registry_fails_too(tmp_path):
+    import pytest
+    h = tmp_path / "home"
+    reg = h / ".academic-helper" / "workspaces.json"
+    reg.parent.mkdir(parents=True)
+    reg.write_text('{"a": 1}', encoding="utf-8")
+    with pytest.raises(home.RegistryError):
+        home.register_workspace(h, tmp_path, "project")
+    assert reg.read_text(encoding="utf-8") == '{"a": 1}'

@@ -454,6 +454,8 @@ Use the Write tool to save `.academic-helper/profile.md`, populating YAML frontm
 values gathered in Phases 1–3.5. Exact file format and field-by-field template: see
 `references/profile-schema.md#profile-file-format`.
 
+**Home identity:** if `home.md` lacks `name` or `role`, run `home.py profile --name ...` (see `references/home-workspace.md`).
+
 ---
 
 ## Completion

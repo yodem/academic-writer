@@ -93,13 +93,48 @@ def _check_home(env: Mapping[str, str], home: Optional[Path]) -> Check:
     return _check("home", label, True, found=str(home))
 
 
-def _check_profile(env: Mapping[str, str]) -> Check:
+def _workspace_folder(env: Mapping[str, str], cwd: Optional[str]) -> Optional[Path]:
+    """The workspace this run is about: CLAUDE_PROJECT_DIR, else the working folder if it has a profile.
+    Never the server's cwd by accident: a folder without a profile is "no workspace context"."""
+    project = env.get("CLAUDE_PROJECT_DIR")
+    if project:
+        return Path(project)
+    folder = Path(cwd if cwd is not None else os.getcwd())
+    return folder if (folder / ".academic-helper" / "profile.md").is_file() else None
+
+
+def _check_profile(env: Mapping[str, str], cwd: Optional[str] = None) -> Check:
     label = "פרופיל התיקייה הנוכחית"
-    folder = env.get("CLAUDE_PROJECT_DIR") or env.get("PWD") or os.getcwd()
-    profile = Path(folder) / ".academic-helper" / "profile.md"
+    folder = _workspace_folder(env, cwd)
+    if folder is None:
+        return _check("profile", label, None, reason_he="הבדיקה רצה מחוץ לתיקיית עבודה, ולכן אין פרופיל לבדוק")
+    profile = folder / ".academic-helper" / "profile.md"
     if profile.is_file():
         return _check("profile", label, True, found=str(profile))
     return _check("profile", label, False, reason_he="בתיקייה הזו אין פרופיל", fix="/academic-writer:init")
+
+
+def _target_language(env: Mapping[str, str], home: Optional[Path], cwd: Optional[str]) -> Optional[str]:
+    """targetLanguage from the workspace profile, else from home.md; None when neither says."""
+    folder = _workspace_folder(env, cwd)
+    paths = []
+    if folder is not None:
+        paths.append(folder / ".academic-helper" / "profile.md")
+    if home is not None:
+        paths.append(home / ".academic-helper" / "home.md")
+    for path in paths:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        match = re.search(r"^targetLanguage:[ \t]*(.+?)[ \t]*$", text, re.M)
+        if match:
+            return match.group(1).strip("\"'")
+    return None
+
+
+def _is_hebrew(language: Optional[str]) -> bool:
+    return bool(language) and language.strip().lower() in ("he", "heb", "hebrew", "iw", "עברית")
 
 
 def _python(which: Callable[[str], Optional[str]], run: Callable[[List[str]], Tuple[int, str]]
@@ -173,18 +208,23 @@ def _nightly(env: Mapping[str, str], platform: str, role: Optional[str]) -> Chec
 
 
 def run_checks(env: Mapping[str, str], which: Callable[[str], Optional[str]] = shutil.which,
-               run: Callable[[List[str]], Tuple[int, str]] = _run, platform: str = sys.platform) -> List[Check]:
+               run: Callable[[List[str]], Tuple[int, str]] = _run, platform: str = sys.platform,
+               cwd: Optional[str] = None) -> List[Check]:
     home = _home_path(env)
+    hebrew = _is_hebrew(_target_language(env, home, cwd))
     python_check, exe = _python(which, run)
     key_present = bool(env.get("GOOGLE_API_KEY"))  # presence only; the value is never stored or printed
     return [
         _check_home(env, home),
-        _check_profile(env),
+        _check_profile(env, cwd),
         python_check,
         _addons(exe, run),
-        _tool("hspell", "בדיקת איות בעברית", "hspell", which, False,
-              "בודק האיות העברי לא מותקן", SETUP_FIX),
-        _tool("trove", "Trove", "trove", which, False, "Trove לא מותקן", SETUP_FIX),
+        _tool("hspell", "בדיקת איות בעברית", "hspell", which, not hebrew,
+              "בודק האיות העברי לא מותקן, והוא נדרש לכתיבה בעברית" if hebrew
+              else "בודק האיות העברי לא מותקן (נחוץ רק לכתיבה בעברית)", SETUP_FIX),
+        _tool("trove", "Trove", "trove", which, True,
+              "Trove לא מותקן. הוא שומר את המקורות והמאמרים שלך בספרייה אחת שאפשר לחפש בה, "
+              "ובלעדיו אפשר להמשיך לעבוד", SETUP_FIX),
         _check("gemini-key", "מפתח Gemini", key_present, optional=True,
                found="קיים" if key_present else None,
                reason_he=None if key_present else "לא הוגדר מפתח",

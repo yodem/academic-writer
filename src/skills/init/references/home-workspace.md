@@ -34,3 +34,18 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" register --path "$PWD" --type te
 
 Run only the line that matches (`course`, `project`, or `teaching` for a course the researcher
 teaches). Registering is a write inside the home folder only; say so in one sentence.
+
+## Home identity
+
+If `home.py show` named a home that exists and its `home.md` is missing or has no `name`
+(the researcher chose a home folder but never saved who they are), save the answers there too, so the dashboard
+and every other folder see them:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" profile --name "NAME" --field "FIELD" --target-language "LANGUAGE" --citation-style "STYLE"
+```
+
+If `home.md` has no `role`, ask once (Student, Lecturer or Researcher; plain words, no jargon) and add
+`--role student|lecturer|researcher`. A course the researcher teaches is registered as a folder type
+(`home.py register --type teaching`). The call keeps every key `home.md` already has; a non-zero exit prints a
+plain `error` to read out.

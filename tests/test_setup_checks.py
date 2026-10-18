@@ -99,8 +99,59 @@ class SetupChecks(unittest.TestCase):
         got = self.run_checks()
         for cid in ("gemini-key", "notebooklm", "pageindex"):
             self.assertTrue(got[cid]["optional"], cid)
-        for cid in ("python", "trove", "hspell"):
-            self.assertFalse(got[cid]["optional"], cid)
+        self.assertFalse(got["python"]["optional"])
+        self.assertTrue(got["trove"]["optional"])
+        self.assertTrue(got["hspell"]["optional"])  # no profile language: not required
+
+    def _profile(self, language, where="proj"):
+        d = self.home / where / ".academic-helper"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "profile.md").write_text("---\ntargetLanguage: %s\n---\n" % language, encoding="utf-8")
+
+    def test_hspell_required_only_for_hebrew(self):
+        self._profile("he")
+        c = self.run_checks()["hspell"]
+        self.assertFalse(c["optional"])
+        self.assertIs(c["ok"], False)
+        self._profile("English")
+        c = self.run_checks()["hspell"]
+        self.assertTrue(c["optional"])
+
+    def test_hspell_language_from_home_when_profile_lacks_it(self):
+        hh = self.home / "h" / ".academic-helper"
+        hh.mkdir(parents=True)
+        (hh / "home.md").write_text("---\ntargetLanguage: Hebrew\n---\n", encoding="utf-8")
+        env = dict(self.env, ACADEMIC_HOME=str(self.home / "h"))
+        self.assertFalse(self.run_checks(env=env)["hspell"]["optional"])
+
+    def test_trove_optional_with_plain_reason(self):
+        c = self.run_checks()["trove"]
+        self.assertTrue(c["optional"])
+        self.assertIs(c["ok"], False)
+        self.assertIn("Trove", c["reason_he"])
+        self.assertGreater(len(c["reason_he"]), len("Trove לא מותקן"))
+
+    def test_profile_without_workspace_context_is_not_a_failure(self):
+        cwd = self.home / "elsewhere"
+        cwd.mkdir()
+        env = {"HOME": str(self.home)}
+        checks = self.mod.run_checks(env, fake_which({"python3": "/usr/bin/python3"}), fake_run(), "linux",
+                                     cwd=str(cwd))
+        c = by_id(checks)["profile"]
+        self.assertIsNone(c["ok"])
+        self.assertTrue(c["reason_he"])
+        # a profile in the working folder still counts
+        (cwd / ".academic-helper").mkdir()
+        (cwd / ".academic-helper" / "profile.md").write_text("---\nname: X\n---\n", encoding="utf-8")
+        checks = self.mod.run_checks(env, fake_which({"python3": "/usr/bin/python3"}), fake_run(), "linux",
+                                     cwd=str(cwd))
+        self.assertIs(by_id(checks)["profile"]["ok"], True)
+
+    def test_profile_ignores_pwd_env_and_uses_cwd(self):
+        env = {"HOME": str(self.home), "PWD": str(self.home / "stale")}
+        checks = self.mod.run_checks(env, fake_which({"python3": "/usr/bin/python3"}), fake_run(), "linux",
+                                     cwd=str(self.home))
+        self.assertIsNone(by_id(checks)["profile"]["ok"])
 
     def test_key_value_never_in_output(self):
         env = dict(self.env, GOOGLE_API_KEY=SECRET)

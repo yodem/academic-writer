@@ -3,6 +3,7 @@
  * Reads only; never writes. No model call.
  */
 import { existsSync, readFileSync, statSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 export interface ResolvedProfile {
@@ -14,11 +15,18 @@ export interface ResolvedProfile {
 
 const DIR_NAME = '.academic-helper';
 
+/** Expand a leading `~` or `~/` like Python's expanduser (`~user` is left alone). */
+export function expandUser(p: string, env: NodeJS.ProcessEnv = process.env): string {
+  if (p === '~') return env['HOME'] || homedir();
+  if (p.startsWith('~/')) return join(env['HOME'] || homedir(), p.slice(2));
+  return p;
+}
+
 /** ACADEMIC_HOME, then $CLAUDE_PLUGIN_DATA/home.json {"path": ...}, else null. Never throws. */
 export function homeDir(env: NodeJS.ProcessEnv = process.env): string | null {
   try {
     const explicit = env['ACADEMIC_HOME'];
-    if (explicit) return explicit;
+    if (explicit) return expandUser(explicit, env);
     const data = env['CLAUDE_PLUGIN_DATA'];
     if (data) {
       const pointer = join(data, 'home.json');
@@ -26,7 +34,7 @@ export function homeDir(env: NodeJS.ProcessEnv = process.env): string | null {
         const parsed: unknown = JSON.parse(readFileSync(pointer, 'utf-8'));
         if (parsed && typeof parsed === 'object') {
           const value = (parsed as Record<string, unknown>)['path'];
-          if (typeof value === 'string' && value) return value;
+          if (typeof value === 'string' && value) return expandUser(value, env);
         }
       }
     }
