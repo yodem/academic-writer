@@ -1149,3 +1149,18 @@ h1 { font-size: clamp(2.5rem, 4.9vw, 4.4rem); line-height: 1.05; letter-spacing:
 .final__two { grid-template-columns: minmax(0, 1fr); }
 .cmd__pre code { overflow-wrap: normal; word-break: normal; }
 @media (max-width: 420px) { .cmd__pre code { overflow-wrap: anywhere; } }
+
+/* ---------- dashboard and activity section (layout only) ---------- */
+.dash__grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: clamp(24px, 3vw, 40px); align-items: start; }
+.dash__fig { margin: 0; min-width: 0; }
+.dash__img { display: block; inline-size: 100%; block-size: auto; border: 1px solid var(--rule); border-radius: 12px; }
+.dash__img--dark { display: none; }
+.dash__fig figcaption { margin-top: 12px; color: var(--ink-2); font-size: 0.92rem; }
+.dash__trust { margin-top: clamp(24px, 3vw, 36px); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dash__img--light { display: none; }
+  :root:not([data-theme="light"]) .dash__img--dark { display: block; }
+}
+:root[data-theme="dark"] .dash__img--light { display: none; }
+:root[data-theme="dark"] .dash__img--dark { display: block; }
+@media (max-width: 900px) { .dash__grid { grid-template-columns: minmax(0, 1fr); } }
