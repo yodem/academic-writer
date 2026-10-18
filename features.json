@@ -20,37 +20,46 @@
         {
           "id": "init-wizard",
           "name": "Init wizard (Preflight, Integrations, Profile incl. author_key, Gemini Onboarding, Style Analysis, Sources) with --quick mode",
-          "status": "ok"
+          "status": "ok",
+          "tested": "manual"
         },
         {
           "id": "setup-quick",
           "name": "setup skill — one-question-at-a-time first-run wizard (basics, dependency check, ask-before-install per tool, Gemini key walkthrough per OS with a live check after restart, sample paragraph)",
           "status": "ok",
-          "issue": "Rewritten in the 0.15.0 cycle: setup saves profile.md in Step 2 (the SessionStart hook exports GOOGLE_API_KEY only when it exists), installs each missing tool only after an AskUserQuestion 'Install', never asks for the key in chat, and stores it via plugin settings (keychain) or a shell/user environment variable. The key check is `aw models check` plus a curl to the Gemini models list with the key in a header. The old gemini_raw MCP probe and the .academic-helper/secrets.json option are gone (aw reads only GOOGLE_API_KEY). Open: setup's 'No, Claude only' choice leaves every aw model step (all Gemini-routed) unable to run."
+          "issue": "Rewritten in the 0.15.0 cycle: setup saves profile.md in Step 2 (the SessionStart hook exports GOOGLE_API_KEY only when it exists), installs each missing tool only after an AskUserQuestion 'Install', never asks for the key in chat, and stores it via plugin settings (keychain) or a shell/user environment variable. The key check is `aw models check` plus a curl to the Gemini models list with the key in a header. The old gemini_raw MCP probe and the .academic-helper/secrets.json option are gone (aw reads only GOOGLE_API_KEY). Open: setup's 'No, Claude only' choice leaves every aw model step (all Gemini-routed) unable to run.",
+          "tested": "manual"
         },
         {
           "id": "integration-detect",
           "name": "Auto-detect Trove/NotebookLM/Gemini",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "computational-fingerprint",
           "name": "extract-style-metrics.py computational metrics",
           "status": "ok",
-          "issue": "src/scripts/extract-style-metrics.py now exists and emits computationalMetrics + frequentTerms; surfaced into profile.md's Style Fingerprint section by init"
+          "issue": "src/scripts/extract-style-metrics.py now exists and emits computationalMetrics + frequentTerms; surfaced into profile.md's Style Fingerprint section by init",
+          "tested": "unit"
         },
         {
           "id": "hebrew-baseline-fetch",
           "name": "Fetch Hebrew linguistic baseline from Trove",
           "status": "ok",
-          "issue": "Now looked up by exact title (\"Hebrew Linguistic Reference\") via `trove items list --json | jq`, with a loud warning + manual-search instruction if the lookup fails or is ambiguous, and the old hardcoded id kept only as a documented, never-silent last-resort fallback"
+          "issue": "Now looked up by exact title (\"Hebrew Linguistic Reference\") via `trove items list --json | jq`, with a loud warning + manual-search instruction if the lookup fails or is ambiguous, and the old hardcoded id kept only as a documented, never-silent last-resort fallback",
+          "tested": "manual"
         },
         {
           "id": "source-indexing",
           "name": "Index + enrich Trove library",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         }
-      ]
+      ],
+      "tested": "manual",
+      "name_he": "התחלה והגדרה",
+      "description_he": "הגדרה ראשונה, פרופיל ובדיקת הכלים שהתוסף צריך."
     },
     {
       "id": "voice",
@@ -68,41 +77,51 @@
         {
           "id": "voice-migrate",
           "name": "aw voice migrate: import AUTHOR_VOICE.md / fingerprint / exemplars into ${CLAUDE_PLUGIN_DATA}/voice",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "voice-exemplars",
           "name": "aw voice exemplars: author picks thresholds.json voice.selection paragraphs from past-articles/",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "voice-moves",
           "name": "aw voice moves: one Gemini call derives rules.md (writing moves)",
-          "status": "ok"
+          "status": "ok",
+          "tested": "manual"
         },
         {
           "id": "cross-project-share",
           "name": "One voice store in the plugin data dir, shared by all projects and keyed by author_key",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "trove-sync",
           "name": "voice-sync.sh pull/push (last-write-wins, CHANGELOG.jsonl merge)",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "legacy-migrate",
           "name": "voice-migrate.sh legacy AUTHOR_VOICE migration",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "write-voice-gate",
           "name": "write stops unless check-voice-populated.py passes on AUTHOR_VOICE.md",
           "status": "partial",
-          "notes": "unverified — needs an owner to confirm: the write gate checks a project-root AUTHOR_VOICE.md, while the voice skill writes its store to ${CLAUDE_PLUGIN_DATA}/voice and voiceMigrate reads AUTHOR_VOICE.md as input; it is not confirmed that a first-time author with no AUTHOR_VOICE.md can pass the gate by running /academic-writer:voice."
+          "notes": "unverified — needs an owner to confirm: the write gate checks a project-root AUTHOR_VOICE.md, while the voice skill writes its store to ${CLAUDE_PLUGIN_DATA}/voice and voiceMigrate reads AUTHOR_VOICE.md as input; it is not confirmed that a first-time author with no AUTHOR_VOICE.md can pass the gate by running /academic-writer:voice.",
+          "tested": "unit"
         }
       ],
-      "notes": "Parent is partial because of the write-voice-gate subfeature (see its notes). The 7-session interview and the voice-miner/distiller/calibrator/interviewer agents were removed in 0.14.0."
+      "notes": "Parent is partial because of the write-voice-gate subfeature (see its notes). The 7-session interview and the voice-miner/distiller/calibrator/interviewer agents were removed in 0.14.0.",
+      "tested": "manual",
+      "name_he": "הקול שלי",
+      "description_he": "מאגר אחד של סגנון הכתיבה שלך, משותף לכל הפרויקטים."
     },
     {
       "id": "research",
@@ -117,24 +136,31 @@
         {
           "id": "evidence-build",
           "name": "aw evidence build: verbatim-checked passages → .academic-helper/evidence.json (replaces the deep-reader agent)",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "chapter-coverage",
           "name": "Chapter-coverage completeness map",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "notebooklm-query",
           "name": "NotebookLM thematic query (supplementary)",
-          "status": "ok"
+          "status": "ok",
+          "tested": "manual"
         },
         {
           "id": "ideate",
           "name": "Frame a research question",
-          "status": "ok"
+          "status": "ok",
+          "tested": "manual"
         }
-      ]
+      ],
+      "tested": "manual",
+      "name_he": "מחקר ואיסוף ראיות",
+      "description_he": "שאלת מחקר ואיסוף קטעים מאומתים מהמקורות."
     },
     {
       "id": "ingest",
@@ -154,14 +180,19 @@
         {
           "id": "ingest-article",
           "name": "/academic-writer:ingest — single article or chapter with printed page numbers preserved, hinted contents, page-1 reading-and-citation guide (Chicago + Hebrew + profile style), aw ocr with orientation/truncation handling, mandatory read-back",
-          "status": "ok"
+          "status": "ok",
+          "tested": "manual"
         },
         {
           "id": "ingest-book",
           "name": "/academic-writer:ingest-book — whole book/multi-volume/scanned PDF/EPUB as one book with nested navigable ToC metadata (hints on every entry), crosswalk from printed pages, mandatory read-back; repairs a flat ToC",
-          "status": "ok"
+          "status": "ok",
+          "tested": "manual"
         }
-      ]
+      ],
+      "tested": "manual",
+      "name_he": "הוספת מקורות",
+      "description_he": "העלאת מאמר או ספר שלם לספרייה עם מספרי עמודים מודפסים."
     },
     {
       "id": "architecture",
@@ -174,38 +205,47 @@
         {
           "id": "thesis-options",
           "name": "Mode A: 2-3 falsifiable thesis options",
-          "status": "ok"
+          "status": "ok",
+          "tested": "manual"
         },
         {
           "id": "outline",
           "name": "Mode B: structured outline + word/paragraph sizing",
           "status": "partial",
           "issue": "Sections exceeding thresholds.json writerUnit.maxWords are now decomposed into a units[] array of writer-unit subsections sized within writerUnit.minWords-maxWords (target writerUnit.targetWords), adjacent tiny units merged; decomposition is prompt-enforced (markdown agent instructions), not code-enforced",
-          "notes": "The units[] word-bound decomposition (thresholds.json writerUnit.minWords/maxWords/targetWords) is enforced only by prose instructions in src/agents/architect.md (lines ~91-101) — no script validates it and no such script exists under src/scripts/. The current write flow validates the outline with `gate.py outline-v2` and checks drafted length with `aw draft`'s word-bounds gate; whether outline-time sizing and tiny-unit merging are checked anywhere is unverified."
+          "notes": "The units[] word-bound decomposition (thresholds.json writerUnit.minWords/maxWords/targetWords) is enforced only by prose instructions in src/agents/architect.md (lines ~91-101) — no script validates it and no such script exists under src/scripts/. The current write flow validates the outline with `gate.py outline-v2` and checks drafted length with `aw draft`'s word-bounds gate; whether outline-time sizing and tiny-unit merging are checked anywhere is unverified.",
+          "tested": "unit"
         },
         {
           "id": "evidence-ownership",
           "name": "Writes evidence-ownership.json (dedup owner map)",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "chronological-ordering",
           "name": "Surfaces chronological vs thematic ordering",
-          "status": "ok"
+          "status": "ok",
+          "tested": "not tested yet"
         },
         {
           "id": "argument-graph",
           "name": "Explicit premise→support→thesis-link logical model",
           "status": "ok",
-          "issue": "Every section and writer unit now carries an argument-graph node (id, claim, evidence[], depends_on[], thesis_link, argument_role nested as a field); validated up front by write/SKILL.md Step 5.5 (orphan/cycle/empty-evidence/topological-order checks) before section-writers are spawned, not just post-hoc in self-review"
+          "issue": "Every section and writer unit now carries an argument-graph node (id, claim, evidence[], depends_on[], thesis_link, argument_role nested as a field); validated up front by write/SKILL.md Step 5.5 (orphan/cycle/empty-evidence/topological-order checks) before section-writers are spawned, not just post-hoc in self-review",
+          "tested": "unit"
         },
         {
           "id": "ownership-only-mode",
           "name": "Mode C: ownership-only from user draft",
-          "status": "ok"
+          "status": "ok",
+          "tested": "manual"
         }
       ],
-      "notes": "Rolls up from the outline subfeature (see its own notes): the writer-unit word-bound decomposition it performs is not verified anywhere in the pipeline, so the parent stays partial until that subfeature does."
+      "notes": "Rolls up from the outline subfeature (see its own notes): the writer-unit word-bound decomposition it performs is not verified anywhere in the pipeline, so the parent stays partial until that subfeature does.",
+      "tested": "not tested yet",
+      "name_he": "טענה ומבנה",
+      "description_he": "אפשרויות לטענה מרכזית ומתווה למאמר."
     },
     {
       "id": "section-writing",
@@ -221,29 +261,37 @@
         {
           "id": "ordered-draft",
           "name": "aw draft writes dependency-ordered units and intro/conclusion last with code gates",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "batched-audit",
           "name": "One auditor call per writer unit returns indexed verdicts and taggedText",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "rewrite-gate",
           "name": "Failed units redraft with auditor feedback up to rewriteCycles.max",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "diff-synthesis",
           "name": "aw synthesize applies paragraph-level transition edits",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "docx-handoff",
           "name": "generate-docx.py creates Word output; author comments and runs /academic-writer:revise",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         }
-      ]
+      ],
+      "tested": "unit",
+      "name_he": "כתיבת המאמר",
+      "description_he": "כתיבה לפי סדר התלות, בדיקת ציטוטים לכל יחידה ותיקון חוזר."
     },
     {
       "id": "citation-audit",
@@ -256,19 +304,25 @@
         {
           "id": "per-paragraph-audit",
           "name": "Auditor VERDICT PASS/FAIL/PARTIAL per paragraph",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "sources-json-verify",
           "name": "Verify metadata against sources.json only",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "rewrite-cycles",
           "name": "Max rewrite cycles then [NEEDS REVIEW]",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         }
-      ]
+      ],
+      "tested": "unit",
+      "name_he": "בדיקת ציטוטים",
+      "description_he": "כל פסקה נבדקת מול רשימת המקורות; פסקה שנכשלה חוזרת לתיקון."
     },
     {
       "id": "synthesis",
@@ -285,25 +339,32 @@
           "id": "coherence",
           "name": "Cross-section and unit-to-unit coherence/flow review",
           "status": "ok",
-          "issue": "Now aw synthesize: reads drafts in outline order and applies paragraph-level transition edits only, citations untouched (src/cli/src/synthesize.ts). The argument-graph fidelity checks described for the removed synthesizer agent are not confirmed in the current prompt."
+          "issue": "Now aw synthesize: reads drafts in outline order and applies paragraph-level transition edits only, citations untouched (src/cli/src/synthesize.ts). The argument-graph fidelity checks described for the removed synthesizer agent are not confirmed in the current prompt.",
+          "tested": "unit"
         },
         {
           "id": "full-repetition",
           "name": "Full-article repetition sweep",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "abstract",
           "name": "Abstract (single or dual-language)",
-          "status": "ok"
+          "status": "ok",
+          "tested": "not tested yet"
         },
         {
           "id": "self-review-scorecard",
           "name": "6-dimension self-review gate (40/60)",
-          "status": "ok"
+          "status": "ok",
+          "tested": "not tested yet"
         }
       ],
-      "notes": "No automated test exercises src/skills/review/SKILL.md's scorecard logic; the synthesizer agent was replaced in 0.14.0 by aw synthesize (paragraph-level transition edits), whose coherence checks beyond transitions are unverified."
+      "notes": "No automated test exercises src/skills/review/SKILL.md's scorecard logic; the synthesizer agent was replaced in 0.14.0 by aw synthesize (paragraph-level transition edits), whose coherence checks beyond transitions are unverified.",
+      "tested": "not tested yet",
+      "name_he": "חיבור וסקירה",
+      "description_he": "בדיקת רצף בין חלקים, מחקר של חזרות, תקציר וציון עצמי."
     },
     {
       "id": "anti-ai-references",
@@ -319,26 +380,33 @@
         {
           "id": "he-patterns",
           "name": "Hebrew pattern list A-K (openers, meta-summary, dramatic, citation format)",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "en-patterns",
           "name": "English pattern list A-G",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "typography-tier1",
           "name": "Typography auto-fix (referenced by both)",
           "status": "ok",
-          "issue": "detect-ai-typography.py now exists"
+          "issue": "detect-ai-typography.py now exists",
+          "tested": "unit"
         },
         {
           "id": "academic-terminology",
           "name": "Positive discipline-standard terminology lexicon (EN+HE)",
           "status": "ok",
-          "issue": "Added src/skills/write/references/academic-terminology-{english,hebrew}.md (~90 entries each: hedging verbs, argumentation connectives, citation-introduction verbs, section transitions, colloquial→academic substitution tables). Wired into section-writer.md, the Gemini write-section prompt/bundle (positiveTerminology), review/SKILL.md's Academic Conventions dimension, and proofread's idea-flag triggers."
+          "issue": "Added src/skills/write/references/academic-terminology-{english,hebrew}.md (~90 entries each: hedging verbs, argumentation connectives, citation-introduction verbs, section transitions, colloquial→academic substitution tables). Wired into section-writer.md, the Gemini write-section prompt/bundle (positiveTerminology), review/SKILL.md's Academic Conventions dimension, and proofread's idea-flag triggers.",
+          "tested": "not tested yet"
         }
-      ]
+      ],
+      "tested": "not tested yet",
+      "name_he": "סגנון טבעי",
+      "description_he": "רשימות דפוסים שמרחיקות כתיבה מכנית בעברית ובאנגלית."
     },
     {
       "id": "output",
@@ -353,21 +421,27 @@
         {
           "id": "markdown-out",
           "name": "Markdown article output",
-          "status": "ok"
+          "status": "ok",
+          "tested": "manual"
         },
         {
           "id": "docx-out",
           "name": "RTL-aware DOCX with native footnotes",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "citation-formats",
           "name": "inline-parenthetical / chicago / mla / apa",
           "status": "partial",
           "issue": "Hebrew inline-parenthetical citations omit the year ((מחבר, עמ' N)); coverage of that rule differs by prompt.",
-          "notes": "The Gemini MCP server named in earlier notes was removed in 0.14.0. write-synthesize.md recognises Hebrew no-year citations; write-draft.md cites with [^KEY] footnote markers and has no style-specific rule; aw edit only preserves citations. No test asserts the Hebrew no-year form in generated output."
+          "notes": "The Gemini MCP server named in earlier notes was removed in 0.14.0. write-synthesize.md recognises Hebrew no-year citations; write-draft.md cites with [^KEY] footnote markers and has no style-specific rule; aw edit only preserves citations. No test asserts the Hebrew no-year form in generated output.",
+          "tested": "manual"
         }
-      ]
+      ],
+      "tested": "manual",
+      "name_he": "פלט",
+      "description_he": "המאמר כקובץ Markdown או כ-Word עם הערות שוליים."
     },
     {
       "id": "gemini-mcp-retirement",
@@ -380,7 +454,10 @@
         "scripts/build-plugins.sh"
       ],
       "status": "ok",
-      "notes": "Plugin build does not copy the legacy mcp/ subtree. The T15a/T15b integration lead removes plugins/academic-writer/mcp/ after confirming source migration."
+      "notes": "Plugin build does not copy the legacy mcp/ subtree. The T15a/T15b integration lead removes plugins/academic-writer/mcp/ after confirming source migration.",
+      "tested": "unit",
+      "name_he": "עריכה וקריאת סריקות",
+      "description_he": "עריכה וזיהוי טקסט מסריקות דרך פקודות התוסף."
     },
     {
       "id": "editing",
@@ -402,54 +479,67 @@
         {
           "id": "edit-article",
           "name": "Revise a drafted article",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "edit-section",
           "name": "Revise one section",
-          "status": "ok"
+          "status": "ok",
+          "tested": "manual"
         },
         {
           "id": "proofread",
           "name": "aw proofread find, verify, memo, and apply pipeline",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "proofread-editorial",
           "name": "One editorial memo call included in the aw proofread pipeline",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "proofread-language",
           "name": "Finder candidates receive batched meaning verification before eligible changes apply",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "proofread-mechanical",
           "name": "Deterministic must-catch corrections run before model suggestions",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "proofread-tracked-docx",
           "name": "build-tracked-docx.py — real w:ins/w:del/w:comment revisions on the original .docx",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "proofread-venue-profile",
           "name": "Venue profile (.academic-helper/venues/<slug>.md) distilled from a CFP or rejection letter; hebrew-recall.md shipped as example/fixture venue",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "update-field",
           "name": "Update a profile field",
-          "status": "ok"
+          "status": "ok",
+          "tested": "manual"
         },
         {
           "id": "update-tools",
           "name": "Change integrations",
-          "status": "ok"
+          "status": "ok",
+          "tested": "manual"
         }
-      ]
+      ],
+      "tested": "manual",
+      "name_he": "עריכה והגהה",
+      "description_he": "עריכת מאמר או חלק ממנו, והגהה עם הערות ותיקונים."
     },
     {
       "id": "venues",
@@ -462,14 +552,19 @@
         {
           "id": "venue-create",
           "name": "First-use venue notes from a CFP, author guidelines, or rejection letter",
-          "status": "ok"
+          "status": "ok",
+          "tested": "manual"
         },
         {
           "id": "venue-default",
           "name": "defaultVenue: in profile frontmatter",
-          "status": "ok"
+          "status": "ok",
+          "tested": "not tested yet"
         }
-      ]
+      ],
+      "tested": "not tested yet",
+      "name_he": "כתבי עת",
+      "description_he": "פרופיל לכתב עת שנבנה מקריאה לשליחת מאמרים או ממכתב דחייה."
     },
     {
       "id": "infra",
@@ -486,31 +581,39 @@
         {
           "id": "lifecycle-hooks",
           "name": "Profile-scoped lifecycle hooks (TS/esbuild)",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "thresholds",
           "name": "thresholds.json single source of truth",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "build",
           "name": "build-plugins + build-mcp + build:hooks",
-          "status": "ok"
+          "status": "ok",
+          "tested": "e2e"
         },
         {
           "id": "tests",
           "name": "pytest structural + contract + voice tests",
           "status": "partial",
           "issue": "No test asserts referenced scripts exist; missing scripts pass CI",
-          "notes": "Confirmed still open: grepped tests/test_plugin_structure.py for a filesystem existence check keyed off the scripts a skill/agent references (e.g. path.exists() on a script name pulled from markdown) — no match. A skill or agent that references a script which was renamed or deleted would pass the current suite."
+          "notes": "Confirmed still open: grepped tests/test_plugin_structure.py for a filesystem existence check keyed off the scripts a skill/agent references (e.g. path.exists() on a script name pulled from markdown) — no match. A skill or agent that references a script which was renamed or deleted would pass the current suite.",
+          "tested": "unit"
         },
         {
           "id": "help-health",
           "name": "help + health skills",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         }
-      ]
+      ],
+      "tested": "unit",
+      "name_he": "תשתית התוסף",
+      "description_he": "כללי הריצה, הספים והבדיקות שמחזיקים את התוסף יציב."
     },
     {
       "id": "docx-revise-loop",
@@ -526,19 +629,25 @@
         {
           "id": "docx-review-read",
           "name": "Read Word comments and tracked changes",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "revise-classify-apply",
           "name": "Classify and apply author-confirmed review items",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "aw-improve",
           "name": "Cluster plugin defects and report Jev agreement",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         }
-      ]
+      ],
+      "tested": "unit",
+      "name_he": "סבב הערות ב-Word",
+      "description_he": "קריאת הערות ותיקונים ב-Word ועדכון הטיוטה."
     },
     {
       "id": "course-management",
@@ -554,24 +663,31 @@
         {
           "id": "term-setup",
           "name": "Schedule import and per-course Drive, NotebookLM, and Trove resource registry",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "resource-validation",
           "name": "Resource ID and expected-name validation",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "lemida-sync",
           "name": "Moodle/Lemida course resource sync",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "daily-scan",
           "name": "Voice Memos scan and pending lesson queue",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         }
-      ]
+      ],
+      "tested": "unit",
+      "name_he": "ניהול קורסים",
+      "description_he": "סמסטר, משאבים לכל קורס וסריקה יומית."
     },
     {
       "id": "lesson-transcription",
@@ -586,14 +702,19 @@
         {
           "id": "notebooklm-transcript",
           "name": "Recording ingest and NotebookLM transcript queue",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "trove-lesson-pages",
           "name": "Structured lesson pages with nested ToC and registry page tracking",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         }
-      ]
+      ],
+      "tested": "unit",
+      "name_he": "סיכומי שיעורים",
+      "description_he": "הקלטות ותמלולים הופכים לדפי שיעור מסודרים."
     },
     {
       "id": "course-dashboard",
@@ -610,26 +731,33 @@
         {
           "id": "dashboard-state",
           "name": "/api/state joins the registry; next task, ready/missing/waiting state, lede and semester-aware agenda computed deterministically",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "dashboard-security",
           "name": "127.0.0.1 only, per-run key and HttpOnly cookie, Host and Origin checks on writes",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "dashboard-submit",
           "name": "I submitted / undo through tasks.py task submit and task unsubmit",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "dashboard-fetch-queue",
           "name": "Fetch selected writes queue/fetch jobs for refs.py fetch",
           "status": "ok",
-          "notes": "The page only queues jobs; the nightly script drains them with refs.py fetch-queue (retry up to 3 nights, then done/ with status failed). Downloads that need the browser become chores."
+          "notes": "The page only queues jobs; the nightly script drains them with refs.py fetch-queue (retry up to 3 nights, then done/ with status failed). Downloads that need the browser become chores.",
+          "tested": "unit"
         }
       ],
-      "notes": "All dashboard features are ok; queue/fetch is drained nightly by refs.py fetch-queue."
+      "notes": "All dashboard features are ok; queue/fetch is drained nightly by refs.py fetch-queue.",
+      "tested": "unit",
+      "name_he": "לוח הקורסים",
+      "description_he": "לוח מקומי עם השבוע, הקורסים והמטלות."
     },
     {
       "id": "library-routes",
@@ -666,71 +794,86 @@
         {
           "id": "route-choice",
           "name": "Per-project route (trove | pageindex | both, with a choice of which answers) asked in init and update-tools, stored in .academic-helper/library.json; no file means Trove only, as before",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "library-adapter",
           "name": "aw library status|list|toc|read|get: one adapter over Trove and an optional PageIndex command (pageindex_command plugin setting), Trove page numbers as the canonical page space with printed-page mapping through sources.json pageMap",
-          "status": "ok"
+          "status": "ok",
+          "tested": "e2e"
         },
         {
           "id": "quiet-shadow",
           "name": "With route=both the other library runs as a detached background lookup that never changes, delays or fails the answering result (tested with a failing and a hanging fake pilib)",
-          "status": "ok"
+          "status": "ok",
+          "tested": "e2e"
         },
         {
           "id": "retrieval-ledger",
           "name": "Schema-validated .academic-helper/retrieval.jsonl: lookup, shadow and verdict rows (PASS/FAIL, corrected page, shadow-supports computed in code, no model call)",
-          "status": "ok"
+          "status": "ok",
+          "tested": "e2e"
         },
         {
           "id": "library-report",
           "name": "aw library report: page agreement, latency, failures and timeouts, auditor pass rate and second-library support by route",
           "status": "ok",
-          "issue": "The page-agreement (0.6) and quote-support (0.8) cut-offs in thresholds.json are uncalibrated on real Hebrew pairs. Accepted risks, written up in docs/library-routes.md: the shadow worker cap is soft, and a directory swapped for a symlink between the ledger's containment check and its write is not caught."
+          "issue": "The page-agreement (0.6) and quote-support (0.8) cut-offs in thresholds.json are uncalibrated on real Hebrew pairs. Accepted risks, written up in docs/library-routes.md: the shadow worker cap is soft, and a directory swapped for a symlink between the ledger's containment check and its write is not caught.",
+          "tested": "e2e"
         },
         {
           "id": "command-resolution",
           "name": "Which PageIndex command runs: AW_PAGEINDEX_COMMAND (the pageindex_command setting), then library.json, then the plugin-installed helper, then pilib on the path; AW_LIBRARY_ROUTE forces one route",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "builtin-install",
           "name": "aw library install|uninstall: private Python folder in the plugin data folder, hashed pinned requirements, core tier (Python 3.9+) and structure tier (Python 3.10+, pango); the CLI refuses without --yes, the skill asks first",
           "status": "partial",
-          "notes": "The core tier was installed for real (Python 3.9, hashed pip, status check, uninstall). The structure tier (PageIndex tarball, WeasyPrint, pango) has not been installed or run in any test or CI job; its failure mode (falls back to core with degraded: true) is tested only with a fake."
+          "notes": "The core tier was installed for real (Python 3.9, hashed pip, status check, uninstall). The structure tier (PageIndex tarball, WeasyPrint, pango) has not been installed or run in any test or CI job; its failure mode (falls back to core with degraded: true) is tested only with a fake.",
+          "tested": "e2e"
         },
         {
           "id": "ingest-dual-write",
           "name": "aw library index --trove-id: PageIndex tree from the hinted table of contents of a Trove item (same page numbers), Gemini summaries or free hints, summary reuse, read-back against Trove; ingest and ingest-book offer it after the Trove read-back, including adding a reading to an existing item",
           "status": "partial",
-          "notes": "Tested end to end with a fake Trove and a stub Gemini client, including re-indexing a changed item. Not yet run against real Trove and real Gemini at this commit. A book with no hinted table of contents needs the structure tier and Gemini; that fallback is tested only with fakes."
+          "notes": "Tested end to end with a fake Trove and a stub Gemini client, including re-indexing a changed item. Not yet run against real Trove and real Gemini at this commit. A book with no hinted table of contents needs the structure tier and Gemini; that fallback is tested only with fakes.",
+          "tested": "e2e"
         },
         {
           "id": "backfill",
           "name": "aw library backfill: copy existing Trove books into PageIndex (--shelf-current, --ids, --all), repeatable, dry-run estimate first",
           "status": "partial",
-          "notes": "Tested with two fake books and the e2e suite; not yet run against a real Trove shelf."
+          "notes": "Tested with two fake books and the e2e suite; not yet run against a real Trove shelf.",
+          "tested": "e2e"
         },
         {
           "id": "ocr-engines",
           "name": "OCR choice in the ocr skill: the plugin's Gemini OCR, Claude or Codex reading page images, or local Tesseract",
           "status": "partial",
-          "notes": "Only the Gemini engine (aw ocr) is code; Claude, Codex and Tesseract are written procedures in the skill (src/skills/ocr/references/engines.md) that no automated test runs."
+          "notes": "Only the Gemini engine (aw ocr) is code; Claude, Codex and Tesseract are written procedures in the skill (src/skills/ocr/references/engines.md) that no automated test runs.",
+          "tested": "manual"
         },
         {
           "id": "report-tokens",
           "name": "aw library report: returned-text tokens (estimates, characters divided by a ratio), locating-agent tokens and cost from the usage ledger, indexing runs, latency, auditor pass rate, page agreement and shadow-supports; --eval filters one evaluation",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         },
         {
           "id": "library-eval",
           "name": "/academic-writer:library-eval and aw library eval plan|run|pairs|page|import|unblind|status: claims from a draft, locating agents (claude or codex) per route, anonymised A/B pairs with a sealed key, a private judging page (local file), unblinded report with win rate, interval and sign test",
           "status": "partial",
-          "notes": "Tested end to end with a fake claude. Not yet run with a real claude or codex on a real article. The judging page saves to the browser and a downloaded file; the shared-store back-end for a published private page is a stub that returns null until it is wired to the artifact capability, so the claude.ai page option in the skill depends on that. The codex flags were checked only against its --help output. Blinding holds for the human judge; the locating agent can still see the structural difference between a table of contents and an outline tree."
+          "notes": "Tested end to end with a fake claude. Not yet run with a real claude or codex on a real article. The judging page saves to the browser and a downloaded file; the shared-store back-end for a published private page is a stub that returns null until it is wired to the artifact capability, so the claude.ai page option in the skill depends on that. The codex flags were checked only against its --help output. Blinding holds for the human judge; the locating agent can still see the structural difference between a table of contents and an outline tree.",
+          "tested": "e2e"
         }
       ],
-      "notes": "Built and tested with fakes (end-to-end test with a fake claude, fake trove and a stub Gemini client), but the live checks are not recorded yet: a real Gemini indexing run, a real backfill of a Trove book and a real blind evaluation on a real article. The structure tier of the install (PageIndex plus WeasyPrint, Python 3.10+ and pango) has never been installed in CI or in the tests. Details in the subfeatures below."
+      "notes": "Built and tested with fakes (end-to-end test with a fake claude, fake trove and a stub Gemini client), but the live checks are not recorded yet: a real Gemini indexing run, a real backfill of a Trove book and a real blind evaluation on a real article. The structure tier of the install (PageIndex plus WeasyPrint, Python 3.10+ and pango) has never been installed in CI or in the tests. Details in the subfeatures below.",
+      "tested": "manual",
+      "name_he": "ספרייה ומקורות",
+      "description_he": "בחירת הספרייה שממנה נקראים המקורות ובדיקת הדיוק שלה."
     },
     {
       "id": "kotar-fetch",
@@ -745,14 +888,100 @@
         {
           "id": "kotar-tokens",
           "name": "Page tokens from the signed-in viewer tab via one javascript_tool snippet (batches of 10, dashes as spaces)",
-          "status": "ok"
+          "status": "ok",
+          "tested": "manual"
         },
         {
           "id": "kotar-fetch-merge",
           "name": "Cookie-less curl at nStep=9 with a 20 KB size check, merged to one PDF in printed-page order",
-          "status": "ok"
+          "status": "ok",
+          "tested": "unit"
         }
-      ]
+      ],
+      "tested": "manual",
+      "name_he": "הורדה מכותר",
+      "description_he": "הורדת העמודים המצוטטים מספר בכותר כקובץ PDF אחד."
+    },
+    {
+      "id": "home-workspaces",
+      "name": "Home folder and typed workspaces (home.md, workspaces.json, profile merge, migration)",
+      "sources": [
+        "src/scripts/home.py",
+        "src/scripts/home_migrate.py",
+        "src/hooks/src/lib/home.ts"
+      ],
+      "status": "partial",
+      "notes": "Implemented by the home part of the dashboard plan; merged at integration. Tests land with it, so the value here is honest for this part only.",
+      "tested": "not tested yet",
+      "name_he": "תיקיית בית ותיקיות עבודה",
+      "description_he": "תיקייה אחת שמחזיקה את הפרופיל והסמסטר, ותיקיות עבודה שיורשות ממנה."
+    },
+    {
+      "id": "brand",
+      "name": "The Margin brand file, token generator and brand check",
+      "sources": [
+        "src/brand/DESIGN.md",
+        "scripts/gen-brand-tokens.py",
+        "scripts/check-brand.py"
+      ],
+      "status": "partial",
+      "notes": "Implemented by the brand part of the dashboard plan; merged at integration. Tests land with it, so the value here is honest for this part only.",
+      "tested": "not tested yet",
+      "name_he": "מראה אחיד",
+      "description_he": "קובץ עיצוב אחד שהאתר והלוח טוענים ממנו, עם בדיקה אוטומטית."
+    },
+    {
+      "id": "agent-activity",
+      "name": "Agent activity record (activity.jsonl per run, written by aw and hooks, read by a Python reader)",
+      "sources": [
+        "src/cli/src/activity.ts",
+        "src/scripts/activity.py",
+        "src/schemas/activity-event.schema.json"
+      ],
+      "status": "partial",
+      "notes": "Implemented by the activity part of the dashboard plan; merged at integration. Tests land with it, so the value here is honest for this part only.",
+      "tested": "not tested yet",
+      "name_he": "פעילות הסוכנים",
+      "description_he": "רישום קבוע של כל שלב בכתיבה, ללא מודל, להצגה בלוח ובחלון."
+    },
+    {
+      "id": "activity-pane",
+      "name": "Claude Code mod pane for live agent activity (/academic-writer:watch)",
+      "sources": [
+        "src/skills/watch/SKILL.md",
+        "src/mod/"
+      ],
+      "status": "partial",
+      "notes": "The pane needs Claude Code to draw, so the live pane is checked by hand on the Mac; only its logic is unit tested.",
+      "tested": "manual",
+      "name_he": "חלון פעילות",
+      "description_he": "חלון חי ב-Claude Code שמראה את שלבי הכתיבה."
+    },
+    {
+      "id": "setup-checks",
+      "name": "Setup checks script shared by health, setup and the dashboard Setup page",
+      "sources": [
+        "src/scripts/setup_checks.py",
+        "src/skills/health/SKILL.md"
+      ],
+      "status": "ok",
+      "tested": "unit",
+      "subfeatures": [
+        {
+          "id": "setup-checks-rows",
+          "name": "Ten read-only check rows (home, profile, Python, add-ons, hspell, Trove, Gemini key, NotebookLM, PageIndex, nightly job)",
+          "status": "ok",
+          "tested": "unit"
+        },
+        {
+          "id": "setup-checks-no-secrets",
+          "name": "Gemini key presence only; never printed, nothing written or installed",
+          "status": "ok",
+          "tested": "unit"
+        }
+      ],
+      "name_he": "בדיקות הגדרה",
+      "description_he": "בדיקה אחת, ללא התקנה, שמשרתת את הבדיקה, ההגדרה ולוח ההגדרה."
     }
   ]
 }
