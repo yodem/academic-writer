@@ -171,9 +171,9 @@
         "src/skills/ingest-book/SKILL.md",
         "src/skills/ingest-book/references/toc-mechanism.md",
         "src/skills/ingest-book/references/epub-sources.md",
-        "src/skills/ingest-book/scripts/extract_pdf.py",
-        "src/skills/ingest-book/scripts/build_crosswalk.py",
-        "src/skills/ingest-book/scripts/build_toc_enrich.py"
+        "src/scripts/extract_pdf.py",
+        "src/scripts/build_crosswalk.py",
+        "src/scripts/build_toc_enrich.py"
       ],
       "status": "ok",
       "subfeatures": [
@@ -404,9 +404,10 @@
           "tested": "not tested yet"
         }
       ],
-      "tested": "not tested yet",
+      "tested": "unit",
       "name_he": "סגנון טבעי",
-      "description_he": "רשימות דפוסים שמרחיקות כתיבה מכנית בעברית ובאנגלית."
+      "description_he": "רשימות דפוסים שמרחיקות כתיבה מכנית בעברית ובאנגלית.",
+      "notes": "tests/test_anti_ai_pattern_coverage.py checks the reference pattern coverage."
     },
     {
       "id": "output",
@@ -545,7 +546,9 @@
       "id": "venues",
       "name": "Venue profiles",
       "sources": [
-        "src/skills/proofread/references/venues/<slug>.md"
+        "src/skills/proofread/references/editorial-checks.md",
+        "tests/fixtures/proofread/hebrew-recall/venue-example.md",
+        "tests/test_venue_agnostic.py"
       ],
       "status": "ok",
       "subfeatures": [
@@ -562,9 +565,10 @@
           "tested": "not tested yet"
         }
       ],
-      "tested": "not tested yet",
+      "tested": "unit",
       "name_he": "כתבי עת",
-      "description_he": "פרופיל לכתב עת שנבנה מקריאה לשליחת מאמרים או ממכתב דחייה."
+      "description_he": "פרופיל לכתב עת שנבנה מקריאה לשליחת מאמרים או ממכתב דחייה.",
+      "notes": "Only the no-hardcoded-journal and works-without-a-venue-profile behaviour is tested (tests/test_venue_agnostic.py); creating a venue from a CFP is a manual flow and defaultVenue has no test yet."
     },
     {
       "id": "infra",
@@ -732,7 +736,7 @@
           "id": "dashboard-state",
           "name": "/api/state joins the registry; next task, ready/missing/waiting state, lede and semester-aware agenda computed deterministically",
           "status": "ok",
-          "tested": "unit"
+          "tested": "e2e"
         },
         {
           "id": "dashboard-security",
@@ -744,18 +748,26 @@
           "id": "dashboard-submit",
           "name": "I submitted / undo through tasks.py task submit and task unsubmit",
           "status": "ok",
-          "tested": "unit"
+          "tested": "e2e"
         },
         {
           "id": "dashboard-fetch-queue",
           "name": "Fetch selected writes queue/fetch jobs for refs.py fetch",
           "status": "ok",
           "notes": "The page only queues jobs; the nightly script drains them with refs.py fetch-queue (retry up to 3 nights, then done/ with status failed). Downloads that need the browser become chores.",
-          "tested": "unit"
+          "tested": "e2e"
+        },
+        {
+          "id": "dashboard-exams",
+          "name": "Exam tasks with room and material, shown on the overview exams list and the timeline (not counted as submissions)",
+          "status": "ok",
+          "tested": "unit",
+          "name_he": "מבחנים",
+          "notes": "tests/courses/test_dashboard_home.py::test_exams_timeline_and_wispr; the e2e fixtures contain no exam yet."
         }
       ],
-      "notes": "All dashboard features are ok; queue/fetch is drained nightly by refs.py fetch-queue.",
-      "tested": "unit",
+      "notes": "All dashboard features are ok; queue/fetch is drained nightly by refs.py fetch-queue. Unit tests in tests/courses/test_dashboard*.py plus the e2e suite in tests/e2e/dashboard.",
+      "tested": "e2e",
       "name_he": "לוח הקורסים",
       "description_he": "לוח מקומי עם השבוע, הקורסים והמטלות."
     },
@@ -910,9 +922,9 @@
         "src/scripts/home_migrate.py",
         "src/hooks/src/lib/home.ts"
       ],
-      "status": "partial",
-      "notes": "Covered by dedicated automated tests in tests/ and src/cli; the dashboard end-to-end suite exercises it through the pages.",
-      "tested": "unit",
+      "status": "ok",
+      "notes": "Unit tests in tests/test_home.py, tests/test_home_migrate.py and src/cli/tests/home.test.ts; the dashboard e2e suite (tests/e2e/dashboard) runs the home-unreachable fixture and the Setup page banner.",
+      "tested": "e2e",
       "name_he": "תיקיית בית ותיקיות עבודה",
       "description_he": "תיקייה אחת שמחזיקה את הפרופיל והסמסטר, ותיקיות עבודה שיורשות ממנה."
     },
@@ -924,9 +936,9 @@
         "scripts/gen-brand-tokens.py",
         "scripts/check-brand.py"
       ],
-      "status": "partial",
-      "notes": "Covered by dedicated automated tests in tests/ and src/cli; the dashboard end-to-end suite exercises it through the pages.",
-      "tested": "unit",
+      "status": "ok",
+      "notes": "Unit tests in tests/test_brand_tokens.py and tests/test_brand_check.py; the e2e visual baselines and a11y checks load the generated tokens in both themes.",
+      "tested": "e2e",
       "name_he": "מראה אחיד",
       "description_he": "קובץ עיצוב אחד שהאתר והלוח טוענים ממנו, עם בדיקה אוטומטית."
     },
@@ -938,9 +950,9 @@
         "src/scripts/activity.py",
         "src/schemas/activity-event.schema.json"
       ],
-      "status": "partial",
-      "notes": "Covered by dedicated automated tests in tests/ and src/cli; the dashboard end-to-end suite exercises it through the pages.",
-      "tested": "unit",
+      "status": "ok",
+      "notes": "Unit tests in src/cli/tests/activity.test.ts and tests/test_activity_reader.py; tests/e2e/dashboard/live.spec.ts appends to activity.jsonl and checks the Writing page advances.",
+      "tested": "e2e",
       "name_he": "פעילות הסוכנים",
       "description_he": "רישום קבוע של כל שלב בכתיבה, ללא מודל, להצגה בלוח ובחלון."
     },
@@ -952,7 +964,7 @@
         "src/mod/"
       ],
       "status": "partial",
-      "notes": "The pane needs Claude Code to draw, so the live pane is checked by hand on the Mac; only its logic is unit tested.",
+      "notes": "The pane needs Claude Code to draw, so the live pane is checked by hand on the Mac; only its logic is unit tested (src/mod/active.test.ts, src/mod/model.test.ts).",
       "tested": "manual",
       "name_he": "חלון פעילות",
       "description_he": "חלון חי ב-Claude Code שמראה את שלבי הכתיבה."
@@ -965,13 +977,13 @@
         "src/skills/health/SKILL.md"
       ],
       "status": "ok",
-      "tested": "unit",
+      "tested": "e2e",
       "subfeatures": [
         {
           "id": "setup-checks-rows",
           "name": "Ten read-only check rows (home, profile, Python, add-ons, hspell, Trove, Gemini key, NotebookLM, PageIndex, nightly job)",
           "status": "ok",
-          "tested": "unit"
+          "tested": "e2e"
         },
         {
           "id": "setup-checks-no-secrets",
@@ -981,7 +993,8 @@
         }
       ],
       "name_he": "בדיקות הגדרה",
-      "description_he": "בדיקה אחת, ללא התקנה, שמשרתת את הבדיקה, ההגדרה ולוח ההגדרה."
+      "description_he": "בדיקה אחת, ללא התקנה, שמשרתת את הבדיקה, ההגדרה ולוח ההגדרה.",
+      "notes": "Unit tests in tests/test_setup_checks.py and tests/e2e/dashboard/views-setup-about.test.mjs; the e2e suite renders the Setup page for the empty, home-unreachable and python-missing fixtures."
     }
   ]
 }

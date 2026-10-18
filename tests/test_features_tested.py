@@ -7,6 +7,7 @@ skills' frontmatter into src/scripts/courses/dashboard/about.json (the dashboard
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import unittest
@@ -43,6 +44,19 @@ class TestedField(unittest.TestCase):
     def test_new_features_present(self):
         ids = {n["id"] for n in self.data["features"]}
         self.assertTrue(NEW_FEATURES <= ids, NEW_FEATURES - ids)
+
+    def test_every_source_path_exists(self):
+        missing = [(n.get("id"), src) for n in self.nodes for src in n.get("sources") or []
+                   if not (REPO / src).exists()]
+        self.assertEqual(missing, [], "features.json `sources` that do not exist: %s" % missing)
+
+    def test_features_with_tests_are_not_marked_untested(self):
+        by_id = {n["id"]: n for n in self.nodes}
+        for fid in sorted(NEW_FEATURES | {"course-dashboard", "dashboard-state", "dashboard-submit",
+                                          "dashboard-fetch-queue", "dashboard-exams"}):
+            self.assertIn(fid, by_id, fid)
+            self.assertNotEqual(by_id[fid]["tested"], "not tested yet", fid)
+        self.assertEqual(by_id["activity-pane"]["tested"], "manual")  # the live pane needs Claude Code on the Mac
 
     def test_about_up_to_date(self):
         proc = subprocess.run([sys.executable, str(GEN), "--check"], capture_output=True, text=True)
@@ -91,6 +105,20 @@ class TestedField(unittest.TestCase):
         self.assertIsNone(by_id["synthesis"]["command"])
         self.assertEqual(by_id["editing"]["command"], "/academic-writer:edit-section")
         self.assertEqual(by_id["section-writing"]["command"], "/academic-writer:write")
+
+
+class HealthSkillPlainWords(unittest.TestCase):
+    """What the researcher reads in the health skill uses plain words; commands stay in code spans."""
+
+    JARGON = re.compile(r"\b(venv|PATH|pip|CLI|JSON|exit code|stderr|stdout|latency|deterministic|on the path)\b")
+
+    def test_prose_has_no_jargon(self):
+        text = (REPO / "src" / "skills" / "health" / "SKILL.md").read_text(encoding="utf-8")
+        text = text.split("---", 2)[2]  # skip the frontmatter
+        text = re.sub(r"```.*?```", "", text, flags=re.S)
+        text = re.sub(r"`[^`\n]*`", "", text)
+        hits = sorted({m.group(0) for m in self.JARGON.finditer(text)})
+        self.assertEqual(hits, [], "jargon in src/skills/health/SKILL.md prose: %s" % hits)
 
 
 if __name__ == "__main__":
