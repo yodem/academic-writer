@@ -2,15 +2,17 @@
 // `h`, the JSX factory global, and a local `h` breaks the first draw.
 //
 // Read-only: it reads runs/<id>/activity.jsonl with `$.fs` and never writes or submits a prompt. No model call.
+// Which run counts as active is the hooks' rule (active.ts, pinned to findActiveRun by active.test.ts); the age limit
+// comes from the plugin's thresholds.json. A finished run is not shown.
 // The activity file is re-read on a 2 s clock tick only while a run is active; engine events (turn.complete,
 // agent.spawn) are only triggers to re-read.
 import type { EngineInterface as Engine, Register } from 'claude-code'
+import { activeRunMaxAgeMinutes, pickActiveRun, type RunFile } from './active.ts'
 import { type PaneView, parseEvents, viewOf } from './model.ts'
 
 const PANE_ID = 'aw-activity'
 const COMMAND = 'watch'
 const TICK_MS = 2000
-const DEFAULT_MAX_AGE_MIN = 360
 
 type Timer = { cancel: () => void }
 
@@ -35,27 +37,20 @@ async function refresh($: Engine): Promise<void> {
     const root = `${cwd}/.academic-helper`
     if (!(await $.fs.exists(`${root}/profile.md`)) || !(await $.fs.exists(`${root}/runs`))) { setActive($, false, undefined); return }
     const now = await $.clock.now()
-    let running: { text: string; mtime: number } | undefined
-    let finished: { text: string; mtime: number } | undefined
+    const maxAge = activeRunMaxAgeMinutes(await $.fs.read(`${$.plugin.root}/thresholds.json`).catch(() => undefined))
+    const runs: RunFile[] = []
     for (const entry of await $.fs.list(`${root}/runs`)) {
       if (entry.kind !== 'dir') continue
       const file = `${root}/runs/${entry.name}/activity.jsonl`
       try {
         const stat = await $.fs.stat(file, { resolve: false })
-        const mtime = stat.mtimeMs ?? 0
-        if (now - mtime > DEFAULT_MAX_AGE_MIN * 60_000) continue
-        const text = await $.fs.read(file)
-        const kinds = parseEvents(text).map((ev) => ev.kind)
-        if (!kinds.includes('run_start')) continue
-        if (kinds.includes('run_end')) { if (!finished || mtime > finished.mtime) finished = { text, mtime } }
-        else if (!running || mtime > running.mtime) running = { text, mtime }
+        runs.push({ id: entry.name, text: await $.fs.read(file), mtimeMs: stat.mtimeMs ?? 0 })
       } catch {
         // a run folder without an activity file
       }
     }
-    const pick = running ?? finished
-    if (!pick) { setActive($, false, undefined); return }
-    setActive($, running !== undefined, viewOf(parseEvents(pick.text), new Date(now)))
+    const pick = pickActiveRun(runs, now, maxAge)
+    setActive($, pick !== undefined, pick ? viewOf(parseEvents(pick.text), new Date(now)) : undefined)
   } catch {
     // unreadable: keep the last view, never crash the session
   }
@@ -109,7 +104,7 @@ export const register: Register = (on, options) => {
     const v = view
     return (
       <Box flexDirection="column">
-        <Text bold>{v.flow} {active ? '' : '(done)'}  {clock(v.elapsedS)}</Text>
+        <Text bold>{v.flow}  {clock(v.elapsedS)}</Text>
         {v.steps.map((s) => (
           <Text dimColor={s.state === 'todo'}>{STATE_GLYPH[s.state]} {s.id}{s.state === 'current' ? ' ...' : ''}</Text>
         ))}

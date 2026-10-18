@@ -12,6 +12,7 @@ const entries = readdirSync('./tests').filter((f) => f.endsWith('.test.ts')).map
 entries.push('../hooks/src/lifecycle/session-env.test.ts');
 entries.push('../hooks/src/lifecycle/subagent-stop.test.ts');
 entries.push('../mod/model.test.ts');
+entries.push('../mod/active.test.ts');
 await build({
   entryPoints: entries, outdir: './dist-test', outExtension: { '.js': '.mjs' }, bundle: true,
   format: 'esm', platform: 'node', target: 'node20', sourcemap: 'inline',

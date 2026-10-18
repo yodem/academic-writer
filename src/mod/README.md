@@ -12,3 +12,7 @@ A live pane that follows the newest Academic Writer run. Loaded through `src/hoo
 - Never name a local `h` in `register.tsx`: JSX compiles to calls of the global `h`.
 - The live pane is checked by hand (on the Mac); everything else is covered by unit tests and `claude plugin validate`.
 - Without the mod (older Claude Code), the `SubagentStop` hook prints the one-line status instead.
+- `active.ts`: the active-run rule (run_start, no run_end, recent mtime, newest wins; a finished run is not shown) and the age
+  limit read from the plugin's `thresholds.json`. `active.test.ts` runs it and the hooks' `findActiveRun` over the same run
+  folders, so the two cannot drift.
+- Type check: `npx tsc -p src/mod/tsconfig.json` (uses the stub `claude-code.d.ts`, only the API slice the mod uses).
