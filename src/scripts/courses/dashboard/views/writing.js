@@ -71,7 +71,7 @@ function folders(rows){
 function history(rows){
   const body = rows.map(r => {
     const course = r.course && A.course(r.course);
-    const file = r.docx ? `<code class="path">${esc(baseName(r.docx))}</code> <button class="copy" data-copy="${esc(r.docx)}">העתקת הנתיב</button>` : '—';
+    const file = r.docx ? `<code class="path">${esc(baseName(r.docx))}</code> <button class="copy" data-open data-run="${esc(r.run)}" data-ws="${esc(r.workspace)}">פתיחה ב־Word</button> <button class="copy" data-copy="${esc(r.docx)}">העתקת הנתיב</button>` : '—';
     return `<tr><td class="num2">${whenFull(r.started)}</td>
       <td class="wrap"><strong>${name(r)}</strong></td>
       <td class="wrap">${course ? auto(course.name) : r.course ? auto(r.course) : '—'}</td>
@@ -104,6 +104,10 @@ A.views.writing = (st, el) => {
   if (folderRows.length) html += `<section class="section" aria-label="תיקיות עבודה"><h2>תיקיות עבודה</h2>${folders(folderRows)}</section>`;
   html += `<section class="section" aria-label="היסטוריה"><h2>היסטוריה</h2>${w.history.length ? history(w.history) : '<p class="meta">עוד אין ריצות שהסתיימו.</p>'}</section>`;
   el.innerHTML = html;
+  el.querySelectorAll('[data-open]').forEach(btn => btn.addEventListener('click', async () => {
+    try { await A.api('/api/open', {run: btn.dataset.run, workspace: btn.dataset.ws}); toast('הקובץ נפתח ב־Word.'); }
+    catch(e) { toast('לא הצלחתי לפתוח את הקובץ. אפשר להעתיק את הנתיב ולפתוח אותו ידנית.'); }
+  }));
   el.querySelectorAll('[data-copy]').forEach(btn => btn.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(btn.dataset.copy); toast('הנתיב הועתק.'); }
     catch(e) { toast('לא הצלחתי להעתיק. הנתיב: ' + esc(btn.dataset.copy)); }

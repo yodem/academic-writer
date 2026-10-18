@@ -146,7 +146,7 @@ kbd{font:var(--m-label-weight) var(--m-label-size)/1 var(--m-label-font);color:v
 .steps i.d{background:var(--m-course-violet)}
 .steps i.n{background:repeating-linear-gradient(-45deg,var(--m-course-violet) 0 3px,transparent 3px 6px)}
 .steps i.u{border-style:dashed}
-.steps i.s{border-style:dotted}
+.steps i.s{background:repeating-linear-gradient(0deg,transparent 0 3px,var(--m-ink-2) 3px 4px);border-color:var(--m-ink-2)}
 .steplabels{display:flex;gap:4px;margin-top:var(--m-s1)}
 .steplabels span{flex:1;min-width:0;font:var(--m-label-weight) var(--m-label-size)/var(--m-label-leading) var(--m-label-font);color:var(--m-ink-2);overflow-wrap:anywhere}
 .steplabels span.cur{color:var(--m-ink);text-decoration:underline;text-underline-offset:3px}

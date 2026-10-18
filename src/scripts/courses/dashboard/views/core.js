@@ -146,7 +146,7 @@ const STATUS = {
   drafted:  {g:'◐', w:'נכתב',          cls:'wait'},
   redrafted:{g:'⟳', w:'נכתב מחדש',     cls:'night'},
   todo:     {g:'○', w:'בתור',          cls:'wait'},
-  skipped:  {g:'–', w:'דולג',          cls:'wait'}
+  skipped:  {g:'↷', w:'דולג',          cls:'wait'}
 };
 function status(key, word){
   const s = STATUS[key] || STATUS.unknown;
@@ -169,9 +169,9 @@ function runProgress(run){
   const steps = run.steps || [];
   const cur = steps.findIndex(s => s.state === 'current');
   const done = steps.filter(s => s.state === 'done').length;
-  return {total: steps.length, done, index: cur >= 0 ? cur + 1 : Math.min(done + 1, steps.length), current: cur >= 0 ? steps[cur] : null};
+  return {total: steps.length, done, index: cur >= 0 ? cur + 1 : Math.min(done + steps.filter(s => s.state === 'skipped').length + 1, steps.length), current: cur >= 0 ? steps[cur] : null};
 }
-/* one bar of equal segments: done = filled, current = hatched, todo = empty, skipped = dotted, unknown = dashed */
+/* one bar of equal segments: done = filled, current = hatched, todo = empty, skipped = struck through, unknown = dashed */
 function stepBar(run){
   const steps = run.steps || [];
   if (!steps.length) return '';

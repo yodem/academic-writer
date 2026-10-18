@@ -38,6 +38,7 @@ import os
 import re
 import secrets
 import socketserver
+import subprocess
 import sys
 import threading
 import time
@@ -581,6 +582,26 @@ def _clean_str(value: Any) -> Optional[str]:
     return value if isinstance(value, str) and value else None
 
 
+def registry_rows(home: Optional[Path]) -> List[Dict[str, Any]]:
+    """The registered workspaces of `home`, each `{path, type, course, exists}` with plain strings only.
+    A row that is not an object, or whose path is not a non-empty string, is skipped; a type or course that is not
+    a string reads as None. Never raises on a malformed `workspaces.json`."""
+    if home is None:
+        return []
+    rows = []
+    for row in home_mod._load_rows(home):
+        path = row.get("path") if isinstance(row, dict) else None
+        if not isinstance(path, str) or not path or "\0" in path:
+            continue
+        try:
+            exists = Path(path).is_dir()
+        except (OSError, ValueError):
+            exists = False
+        rows.append({"path": path, "type": _clean_str(row.get("type")), "course": _clean_str(row.get("course")),
+                     "exists": exists})
+    return rows
+
+
 def _library_added(sources: Any, now: datetime) -> List[Tuple[str, str, str]]:
     """(id, title, added iso) of `sources.json` entries added within LIBRARY_DAYS; undated entries never count."""
     rows = sources.get("sources") if isinstance(sources, dict) else sources
@@ -605,7 +626,7 @@ def gather_context(home: Optional[Path], checks: Dict[str, Any], now: datetime) 
         try:
             if home.is_dir():
                 values, _ = home_mod._read_md(home / home_mod.DIR_NAME / home_mod.HOME_FILE)
-                rows = home_mod.list_workspaces(home)
+                rows = registry_rows(home)
             else:
                 missing = True
         except OSError:
@@ -849,7 +870,7 @@ def _home_entries(home: Optional[Path]) -> List[Tuple[str, int, int]]:
         except OSError:
             continue
     try:
-        rows = home_mod.list_workspaces(home) if home.is_dir() else []
+        rows = registry_rows(home) if home.is_dir() else []
     except OSError:
         rows = []
     for row in rows:
@@ -881,6 +902,52 @@ def _signature(directory: Optional[Path], root: Path, home: Optional[Path] = Non
     return tuple(sorted(entries))
 
 
+def opener_command(path: Path, platform: Optional[str] = None) -> List[str]:
+    """The argument list that opens `path` in its default app: `open` on macOS, `xdg-open` elsewhere."""
+    return ["open" if (platform or sys.platform) == "darwin" else "xdg-open", str(path)]
+
+
+def default_opener(argv: List[str]) -> None:
+    """Launch `argv` detached, no shell."""
+    subprocess.Popen(argv, shell=False, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+def resolve_run_docx(home: Optional[Path], run: Any, workspace: Any) -> Path:
+    """The Word file recorded by `run` of a registered `workspace`, checked for opening; raises RequestError.
+    The caller names the run and the workspace only: the path always comes from the run's own activity file."""
+    if not isinstance(run, str) or not IDENT_RE.match(run) or ".." in run or not isinstance(workspace, str) or not workspace:
+        raise RequestError(400, "bad run")
+    rows = registry_rows(home)
+    roots = []
+    for row in rows:
+        try:
+            roots.append((row["path"], Path(row["path"]).resolve()))
+        except (OSError, ValueError, RuntimeError):
+            continue
+    match = next((r for given, r in roots if given == workspace), None)
+    if match is None:
+        raise RequestError(404, "unknown workspace")
+    activity = match / home_mod.DIR_NAME / "runs" / run / "activity.jsonl"
+    if not activity.is_file():
+        raise RequestError(404, "unknown run")
+    recorded = activity_mod.read_run(activity, workspace=workspace)["docx"]
+    if not recorded or not recorded.lower().endswith(".docx"):
+        raise RequestError(404, "no Word file recorded")
+    try:
+        candidate = Path(recorded)
+        target = (candidate if candidate.is_absolute() else match / candidate).resolve()
+    except (OSError, ValueError, RuntimeError):
+        raise RequestError(400, "bad path")
+    if target.suffix.lower() != ".docx":
+        raise RequestError(400, "not a Word file")
+    if not any(target == root or root in target.parents for _, root in roots):
+        raise RequestError(400, "outside the workspaces")
+    if not target.is_file():
+        raise RequestError(404, "file not found")
+    return target
+
+
 class _HTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
     allow_reuse_address = False
@@ -894,13 +961,15 @@ class DashboardServer:
                  reason: Optional[Callable[[], str]] = None,
                  home: Optional[Callable[[], Optional[Path]]] = None,
                  setup: Optional[Callable[[], List[Dict[str, Any]]]] = None,
-                 monotonic: Optional[Callable[[], float]] = None):
+                 monotonic: Optional[Callable[[], float]] = None,
+                 opener: Optional[Callable[[List[str]], None]] = None):
         if host not in ("127.0.0.1", "localhost"):
             raise ValueError("the dashboard binds 127.0.0.1 only")
         self.resolve = resolve
         self.home = home or home_mod.home_dir  # the home folder (None when none is chosen)
         self.setup = setup or (lambda: setup_mod.run_checks(os.environ))
         self.monotonic = monotonic or time.monotonic
+        self.opener = opener or default_opener  # injectable so tests never launch an app
         self._setup_cache: Optional[Tuple[float, Dict[str, Any]]] = None
         self._setup_lock = threading.Lock()
         self.host, self.requested_port = "127.0.0.1", port
@@ -946,20 +1015,23 @@ class DashboardServer:
         last = None
         boundary: Optional[datetime] = None
         while not self._closed:
-            sig = _signature(self.resolve(), root, self._home())
-            now = self._clock()
-            changed = last is not None and sig != last
-            crossed = boundary is not None and now >= boundary
-            if changed or crossed:
-                with self._cond:
-                    self.version += 1
-                    self._cond.notify_all()
-            if changed or crossed or last is None:
-                try:
-                    boundary = next_boundary(self.state(), now)
-                except Exception:  # a malformed registry must not stop the watcher; retry at the next change
-                    boundary = None
-            last = sig
+            try:
+                sig = _signature(self.resolve(), root, self._home())
+                now = self._clock()
+                changed = last is not None and sig != last
+                crossed = boundary is not None and now >= boundary
+                if changed or crossed:
+                    with self._cond:
+                        self.version += 1
+                        self._cond.notify_all()
+                if changed or crossed or last is None:
+                    try:
+                        boundary = next_boundary(self.state(), now)
+                    except Exception:  # a malformed registry must not stop the watcher; retry at the next change
+                        boundary = None
+                last = sig
+            except Exception as exc:  # whatever one pass hits, the next pass runs: SSE must outlive any bad file
+                print(f"dashboard watcher: {type(exc).__name__}: {exc}", file=sys.stderr)
             with self._cond:
                 self._cond.wait(timeout=self.interval)
 
@@ -1172,6 +1244,13 @@ class DashboardServer:
                         if task is not None and (not isinstance(task, str) or not IDENT_RE.match(task)):
                             raise RequestError(400, "bad task")
                         result = queue_fetch(directory, slug, refs, task)
+                    elif path == "/api/open":
+                        target = resolve_run_docx(board._home(), body.get("run"), body.get("workspace"))
+                        try:
+                            board.opener(opener_command(target))
+                        except OSError:
+                            raise RequestError(500, "could not open the file")
+                        result = {"ok": True, "name": target.name}
                     else:
                         self._json(404, {"error": "not found"})
                         return
