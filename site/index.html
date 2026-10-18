@@ -3,20 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Academic Writer — cited academic articles with Claude</title>
-<meta name="description" content="Academic Writer is a free, open-source plugin for Claude Code that guides Humanities researchers from a rough idea to a footnoted article in Word, in Hebrew or English. Every citation is checked against your sources.">
+<title>Academic Writer — a Claude Code plugin for cited academic articles</title>
+<meta name="description" content="Academic Writer is a free, open-source Claude Code plugin that guides Humanities researchers from a rough idea to a footnoted article in Word, in Hebrew or English. Every citation is checked against your sources.">
 <link rel="canonical" href="https://yodem.github.io/academic-writer/">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#f6f7fa" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#14131f" media="(prefers-color-scheme: dark)">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Academic Writer — cited academic articles with Claude">
-<meta property="og:description" content="From a rough idea to a footnoted article you can defend. Free, open source, Hebrew and English.">
+<meta property="og:title" content="Academic Writer — a Claude Code plugin for cited academic articles">
+<meta property="og:description" content="A Claude Code plugin: from a rough idea to a footnoted article you can defend. Free, open source, Hebrew and English.">
 <meta property="og:url" content="https://yodem.github.io/academic-writer/">
 <meta property="og:image" content="https://yodem.github.io/academic-writer/assets/img/hero-desk-lg.webp">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Academic Writer — cited academic articles with Claude">
-<meta name="twitter:description" content="From a rough idea to a footnoted article you can defend. Free, open source, Hebrew and English.">
+<meta name="twitter:title" content="Academic Writer — a Claude Code plugin for cited academic articles">
+<meta name="twitter:description" content="A Claude Code plugin: from a rough idea to a footnoted article you can defend. Free, open source, Hebrew and English.">
 <meta name="twitter:image" content="https://yodem.github.io/academic-writer/assets/img/hero-desk-lg.webp">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f6f7fa'/%3E%3Ctext x='32' y='47' font-family='Georgia,serif' font-size='44' text-anchor='middle' fill='%23262a7a'%3EA%C2%B9%3C/text%3E%3C/svg%3E">
 <script>
@@ -54,6 +54,7 @@
       <a href="#how" data-i18n="nav_how">How it works</a>
       <a href="#voice" data-i18n="nav_features">Features</a>
       <a href="#dashboard" data-i18n="nav_dashboard">Dashboard</a>
+      <a href="#news" data-i18n="nav_news">What's new</a>
       <a href="#install" data-i18n="nav_install">Install</a>
       <a href="./guide/" data-i18n="nav_guide">Guide</a>
       <a href="https://github.com/yodem/academic-writer" data-i18n="nav_github">GitHub</a>
@@ -84,8 +85,9 @@
   </figure>
   <div class="wrap hero__grid">
     <div class="hero__text">
+      <p class="eyebrow" data-i18n="hero_kicker">A Claude Code plugin</p>
       <h1 id="hero-h" data-i18n="hero_h">From a rough idea to a footnoted article you can defend.</h1>
-      <p class="lede" data-i18n="r3c_hero_sub">For Cowork and Claude Code: from a rough idea to a cited Word article, in Hebrew or English.</p>
+      <p class="lede" data-i18n="r3c_hero_sub">Claude Code (Cowork works too): from a rough idea to a cited Word article, in Hebrew or English.</p>
       <div class="hero__btns">
         <a class="btn btn--primary" href="#install"><span data-i18n="r2a_hero_cw">Install</span><span class="arr arr--down" aria-hidden="true">↓</span></a>
         <a class="btn btn--ghost" href="#how"><span data-i18n="hero_see">See how it works</span><span class="arr arr--down" aria-hidden="true">↓</span></a>
@@ -533,6 +535,47 @@
         <p data-i18n="t_he_p">Plain-language check when anything breaks.</p>
       </article>
     </div>
+  </div>
+</section>
+
+<!-- WHAT'S NEW (generated from CHANGELOG.md by scripts/gen-site-news.py) -->
+<section class="sec news" id="news" aria-labelledby="news-h">
+  <div class="wrap">
+    <h2 id="news-h" class="rv" data-i18n="news_h">What's new</h2>
+    <p class="lede rv" data-i18n="news_sub">The latest releases of the Claude Code plugin.</p>
+<!-- news:start -->
+<div class="news__grid">
+  <article class="news__rel rv">
+    <h3 dir="ltr"><span class="news__ver">v0.18.0</span> <time class="news__date" datetime="2026-10-18">2026-10-18</time></h3>
+    <ul dir="ltr">
+      <li>One home folder with typed workspaces</li>
+      <li>Agent activity record</li>
+      <li>"The Margin" brand file</li>
+      <li>Redesigned dashboard</li>
+      <li>Setup checks (setup_checks.py --json) used by health, setup, init and the dashboard; a dashboard and activity…</li>
+    </ul>
+  </article>
+  <article class="news__rel rv">
+    <h3 dir="ltr"><span class="news__ver">v0.17.1</span> <time class="news__date" datetime="2026-10-18">2026-10-18</time></h3>
+    <ul dir="ltr">
+      <li>Wispr Flow lecture import (courses.py wispr-scan) is now private by construction</li>
+      <li>No phantom or misattributed lessons</li>
+      <li>Times across the daylight-saving change</li>
+    </ul>
+  </article>
+  <article class="news__rel rv">
+    <h3 dir="ltr"><span class="news__ver">v0.17.0</span> <time class="news__date" datetime="2026-10-16">2026-10-16</time></h3>
+    <ul dir="ltr">
+      <li>Course dashboard</li>
+      <li>Sources per task</li>
+      <li>One fetch chain for a reading</li>
+      <li>Lectures from Wispr Flow</li>
+      <li>Course-book runbook decisions</li>
+    </ul>
+  </article>
+</div>
+<!-- news:end -->
+    <p class="news__more rv"><a class="link-arrow" href="https://github.com/yodem/academic-writer/blob/main/CHANGELOG.md"><span data-i18n="news_all">Full changelog</span> <span class="arr" aria-hidden="true">→</span></a></p>
   </div>
 </section>
 

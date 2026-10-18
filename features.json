@@ -660,6 +660,7 @@
         "src/skills/courses/SKILL.md",
         "src/scripts/courses/courses.py",
         "src/scripts/courses/lemida.py",
+        "src/scripts/courses/nightly.py",
         "tests/courses/"
       ],
       "status": "ok",
@@ -687,6 +688,13 @@
           "name": "Voice Memos scan and pending lesson queue",
           "status": "ok",
           "tested": "unit"
+        },
+        {
+          "id": "nightly-schedule",
+          "name": "Optional nightly run: courses.py nightly status|set --time HH:MM|off|run-now [--dry] (launchd plist on macOS, cron line elsewhere)",
+          "status": "ok",
+          "tested": "unit",
+          "notes": "Unit tests use a fake launchctl; loading the plist into a real launchd is checked by hand on the Mac."
         }
       ],
       "tested": "unit",

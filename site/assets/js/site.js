@@ -18,7 +18,7 @@
   var EN = {
     copied: 'Copied',
     theme_system: 'Theme: match system. Change theme', theme_light: 'Theme: light. Change theme', theme_dark: 'Theme: dark. Change theme',
-    doc_title: 'Academic Writer — cited academic articles with Claude'
+    doc_title: 'Academic Writer — a Claude Code plugin for cited academic articles'
   };
   var lang = root.lang === 'he' ? 'he' : 'en';
   function t(key) { return (lang === 'he' && HE[key]) || EN[key] || (function () { var n = d.querySelector('[data-i18n="' + key + '"]'); return n && n.__en; })() || key; }
