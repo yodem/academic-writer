@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional
 
 DEFAULT_ACTIVE_RUN_MAX_AGE_MINUTES = 360
 
-# Fixed step order per flow (mirrors FLOW_STEPS in src/cli/src/activity.ts).
+# Fixed step order per flow (mirrors FLOW_STEPS in src/cli/src/activity.ts and src/mod/model.ts; a test keeps the three equal).
 FLOW_STEPS: Dict[str, List[str]] = {
     "write": ["outline", "draft", "audit", "redraft", "synthesize", "word"],
     "proofread": ["find", "verify", "memo", "apply"],
@@ -107,7 +107,7 @@ def _usage(run_dir: Path) -> "tuple[Optional[int], Optional[float]]":
     return tokens, (round(cost, 6) if cost is not None else None)
 
 
-def _steps(flow: str, events: List[Dict[str, Any]], ended: bool) -> List[Dict[str, str]]:
+def _steps(flow: str, events: List[Dict[str, Any]], ended: bool, exit_ok: bool = False) -> List[Dict[str, str]]:
     order = FLOW_STEPS.get(flow)
     if order is None:
         return []
@@ -131,6 +131,9 @@ def _steps(flow: str, events: List[Dict[str, Any]], ended: bool) -> List[Dict[st
             state = "done" if index < last_seen else ("unknown" if ended else "current")
         elif step in IMPLICIT_DONE and last_seen > index:
             state = "done"
+        elif ended and exit_ok:
+            # Never happened in a run that finished well (e.g. no redraft was needed): skipped, not still to do.
+            state = "skipped"
         else:
             state = "todo"
         result.append({"id": step, "state": state})
@@ -148,18 +151,28 @@ def _units(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if kind == "unit_drafted":
             # `aw draft` emits `redraft` then `unit_drafted` for a redo: the unit stays "redrafted".
             row["state"] = "redrafted" if row.get("_redo") else "drafted"
+            row.pop("reason", None)
         elif kind == "redraft":
             row["_redo"] = True
             row["state"] = "redrafted"
+            row.pop("reason", None)
         elif kind == "gate" and e.get("ok") is False:
             row["state"] = "rejected"
             if e.get("reason"):
                 row["reason"] = e["reason"]
         elif kind == "audit_verdict":
+            # A rejected paragraph keeps its unit rejected until the unit is drafted again; a verdict that
+            # could not be read leaves a unit that is already passed or rejected as it is.
             verdict = e.get("verdict")
-            row["state"] = "passed" if verdict == "PASS" else "rejected" if verdict in ("FAIL", "PARTIAL") else "unknown"
-            if e.get("reason") and row["state"] != "passed":
-                row["reason"] = e["reason"]
+            if verdict == "PASS":
+                if row["state"] != "rejected":
+                    row["state"] = "passed"
+            elif verdict in ("FAIL", "PARTIAL"):
+                row["state"] = "rejected"
+                if e.get("reason"):
+                    row["reason"] = e["reason"]
+            elif row["state"] not in ("passed", "rejected"):
+                row["state"] = "unknown"
     for row in units.values():
         row.pop("_redo", None)
     return list(units.values())
@@ -212,7 +225,7 @@ def read_run(path: Path, workspace: Optional[str] = None, course: Optional[str] 
         "started": start.get("ts") if start else None,
         "ended": end.get("ts") if end else None,
         "status": status,
-        "steps": _steps(flow, events, end is not None),
+        "steps": _steps(flow, events, end is not None, end is not None and end.get("exit", "OK") == "OK"),
         "units": _units(events),
         "last_verdict": verdicts[-1] if verdicts else None,
         "redrafted": sum(1 for e in events if e["kind"] == "redraft"),

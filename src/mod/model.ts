@@ -16,7 +16,7 @@ export type ActivityEvent = {
   exit?: string;
 };
 
-export type StepState = 'done' | 'current' | 'todo';
+export type StepState = 'done' | 'current' | 'todo' | 'skipped';
 export type UnitState = 'drafted' | 'passed' | 'rejected' | 'redrafted';
 export type PaneView = {
   flow: string;
@@ -27,10 +27,11 @@ export type PaneView = {
   rejections: { unit: string; reason: string }[];
 };
 
+// Kept equal to FLOW_STEPS in src/cli/src/activity.ts and src/scripts/activity.py (src/cli/tests/activity-fixes.test.ts checks it).
 export const FLOW_STEPS: Record<string, string[]> = {
   write: ['outline', 'draft', 'audit', 'redraft', 'synthesize', 'word'],
-  edit: ['draft', 'synthesize', 'word'],
-  'edit-section': ['draft', 'synthesize', 'word'],
+  edit: ['edit'],
+  'edit-section': ['edit'],
   proofread: ['find', 'verify', 'memo', 'apply'],
   revise: ['read', 'update-draft', 'update-stores'],
 };
@@ -66,31 +67,41 @@ export function viewOf(events: ActivityEvent[], now: Date): PaneView {
   const started = new Set<string>();
   const ended = new Set<string>();
   const units = new Map<string, UnitState>();
+  const redone = new Set<string>();
   const rejections: { unit: string; reason: string }[] = [];
   let agent: string | null = null;
   let finished = false;
   let endTs: string | null = null;
+  let endExit = 'OK';
   for (const ev of events) {
     if (ev.kind === 'step_start' && ev.step) started.add(ev.step);
     else if (ev.kind === 'step_end' && ev.step) ended.add(ev.step);
-    else if (ev.kind === 'unit_drafted' && ev.unit) units.set(ev.unit, 'drafted');
-    else if (ev.kind === 'redraft' && ev.unit) units.set(ev.unit, 'redrafted');
+    else if (ev.kind === 'unit_drafted' && ev.unit) units.set(ev.unit, redone.has(ev.unit) ? 'redrafted' : 'drafted');
+    else if (ev.kind === 'redraft' && ev.unit) { redone.add(ev.unit); units.set(ev.unit, 'redrafted'); }
     else if (ev.kind === 'audit_verdict') {
       const unit = unitOf(ev);
-      if (unit && ev.verdict === 'PASS') units.set(unit, 'passed');
+      // A rejected paragraph keeps its unit rejected until the unit is drafted again; a verdict that could not be read changes nothing.
+      if (unit && ev.verdict === 'PASS') { if (units.get(unit) !== 'rejected') units.set(unit, 'passed'); }
       else if (unit && (ev.verdict === 'FAIL' || ev.verdict === 'PARTIAL')) {
         units.set(unit, 'rejected');
         rejections.push({ unit, reason: ev.reason ?? '' });
       }
     } else if (ev.kind === 'subagent_start') agent = ev.agent ?? null;
     else if (ev.kind === 'subagent_stop') agent = null;
-    else if (ev.kind === 'run_end') { finished = true; endTs = ev.ts; }
+    else if (ev.kind === 'run_end') { finished = true; endTs = ev.ts; endExit = ev.exit ?? 'OK'; }
   }
   if (finished) agent = null;
-  const steps = ids.map((id) => ({
-    id,
-    state: (ended.has(id) || (finished && started.has(id)) ? 'done' : started.has(id) && !finished ? 'current' : 'todo') as StepState,
-  }));
+  const lastSeen = Math.max(-1, ...ids.map((id, i) => (started.has(id) || ended.has(id) ? i : -1)));
+  const steps = ids.map((id, i) => {
+    let state: StepState;
+    if (ended.has(id) || (finished && started.has(id))) state = 'done';
+    else if (started.has(id) && !finished) state = 'current';
+    // `outline` is finished by the skill before the first `aw` event of a write run.
+    else if (id === 'outline' && lastSeen > i) state = 'done';
+    // A step that never happened in a run that finished well (no redraft needed) is skipped, not still to do.
+    else state = finished && endExit === 'OK' ? 'skipped' : 'todo';
+    return { id, state };
+  });
   const t0 = Date.parse(events.find((e) => e.kind === 'run_start')?.ts ?? first.ts);
   const t1 = endTs ? Date.parse(endTs) : now.getTime();
   const elapsedS = Number.isFinite(t0) && Number.isFinite(t1) ? Math.max(0, Math.round((t1 - t0) / 1000)) : 0;

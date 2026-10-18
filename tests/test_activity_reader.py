@@ -131,3 +131,73 @@ def test_cli_show(tmp_path):
     path = _run(tmp_path, "done.jsonl")
     out = subprocess.check_output([sys.executable, str(ROOT / "src/scripts/activity.py"), "show", str(path)])
     assert json.loads(out)["status"] == "done"
+
+
+def _write(tmp_path, rows, name="W", mtime=None):
+    run_dir = tmp_path / "ws" / ".academic-helper" / "runs" / name
+    run_dir.mkdir(parents=True)
+    target = run_dir / "activity.jsonl"
+    target.write_text("".join(json.dumps({"v": 1, "run": name, "flow": "write", **r}) + "\n" for r in rows), encoding="utf-8")
+    if mtime is not None:
+        os.utime(target, (mtime, mtime))
+    return target
+
+
+def test_audit_verdicts_with_a_unit_mark_it_passed_or_rejected(tmp_path):
+    path = _write(tmp_path, [
+        {"ts": "2026-10-18T10:00:00.000Z", "kind": "run_start"},
+        {"ts": "2026-10-18T10:00:01.000Z", "kind": "unit_drafted", "unit": "A"},
+        {"ts": "2026-10-18T10:00:02.000Z", "kind": "unit_drafted", "unit": "B"},
+        {"ts": "2026-10-18T10:00:03.000Z", "kind": "unit_drafted", "unit": "C"},
+        {"ts": "2026-10-18T10:01:00.000Z", "kind": "audit_verdict", "step": "audit", "unit": "A", "paragraph": 0, "verdict": "PASS"},
+        {"ts": "2026-10-18T10:01:01.000Z", "kind": "audit_verdict", "step": "audit", "unit": "A", "paragraph": 1, "verdict": "PASS"},
+        {"ts": "2026-10-18T10:01:02.000Z", "kind": "audit_verdict", "step": "audit", "unit": "B", "paragraph": 0, "verdict": "FAIL", "reason": "FAIL, 2 issues"},
+        {"ts": "2026-10-18T10:01:03.000Z", "kind": "audit_verdict", "step": "audit", "unit": "B", "paragraph": 1, "verdict": "PASS"},
+        {"ts": "2026-10-18T10:01:04.000Z", "kind": "audit_verdict", "step": "audit", "unit": "C", "verdict": "unknown"},
+        {"ts": "2026-10-18T10:01:05.000Z", "kind": "audit_verdict", "step": "audit", "paragraph": 0, "verdict": "FAIL"},
+    ], mtime=START + 100)
+    states = {u["id"]: u["state"] for u in activity.read_run(path, now=START + 100)["units"]}
+    # A later PASS never hides a rejected paragraph; an unreadable verdict is unknown; a verdict with no unit marks nothing.
+    assert states == {"A": "passed", "B": "rejected", "C": "unknown"}
+
+
+def test_a_redraft_resets_the_audit_result(tmp_path):
+    path = _write(tmp_path, [
+        {"ts": "2026-10-18T10:00:00.000Z", "kind": "run_start"},
+        {"ts": "2026-10-18T10:00:01.000Z", "kind": "unit_drafted", "unit": "B"},
+        {"ts": "2026-10-18T10:01:00.000Z", "kind": "audit_verdict", "unit": "B", "verdict": "FAIL"},
+        {"ts": "2026-10-18T10:02:00.000Z", "kind": "redraft", "unit": "B"},
+        {"ts": "2026-10-18T10:02:01.000Z", "kind": "unit_drafted", "unit": "B"},
+        {"ts": "2026-10-18T10:03:00.000Z", "kind": "audit_verdict", "unit": "B", "verdict": "PASS"},
+    ], mtime=START + 100)
+    assert activity.read_run(path, now=START + 100)["units"][0]["state"] == "passed"
+
+
+def test_finished_write_run_shows_skipped_not_todo(tmp_path):
+    path = _write(tmp_path, [
+        {"ts": "2026-10-18T10:00:00.000Z", "kind": "run_start"},
+        {"ts": "2026-10-18T10:00:01.000Z", "kind": "step_start", "step": "draft"},
+        {"ts": "2026-10-18T10:00:02.000Z", "kind": "step_end", "step": "draft"},
+        {"ts": "2026-10-18T10:00:03.000Z", "kind": "step_start", "step": "audit"},
+        {"ts": "2026-10-18T10:00:04.000Z", "kind": "audit_verdict", "step": "audit", "unit": "A", "verdict": "PASS"},
+        {"ts": "2026-10-18T10:00:05.000Z", "kind": "step_end", "step": "audit"},
+        {"ts": "2026-10-18T10:00:06.000Z", "kind": "step_start", "step": "synthesize"},
+        {"ts": "2026-10-18T10:00:07.000Z", "kind": "step_end", "step": "synthesize"},
+        {"ts": "2026-10-18T10:00:08.000Z", "kind": "step_start", "step": "word"},
+        {"ts": "2026-10-18T10:00:09.000Z", "kind": "step_end", "step": "word"},
+        {"ts": "2026-10-18T10:00:10.000Z", "kind": "run_end", "exit": "OK"},
+    ])
+    states = _states(activity.read_run(path, now=START + 100))
+    assert states == {"outline": "done", "draft": "done", "audit": "done", "redraft": "skipped",
+                      "synthesize": "done", "word": "done"}
+    assert "todo" not in states.values()
+
+
+def test_failed_run_keeps_unreached_steps_todo(tmp_path):
+    path = _write(tmp_path, [
+        {"ts": "2026-10-18T10:00:00.000Z", "kind": "run_start"},
+        {"ts": "2026-10-18T10:00:01.000Z", "kind": "step_start", "step": "draft"},
+        {"ts": "2026-10-18T10:00:02.000Z", "kind": "run_end", "exit": "ERROR"},
+    ])
+    states = _states(activity.read_run(path, now=START + 100))
+    assert states["synthesize"] == "todo" and states["redraft"] == "todo"

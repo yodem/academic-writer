@@ -13,7 +13,7 @@ Show the status of the newest run. This works in every Claude Code version and i
 1. Run the status command and print its one line for the researcher:
 
    ```bash
-   "${CLAUDE_PLUGIN_ROOT}/bin/aw" activity show --latest
+   "${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "${CLAUDE_PROJECT_DIR:-$PWD}" activity show --latest
    ```
 
    If the output says there is no activity yet, say so in plain words and suggest `/academic-writer:write` to start an article.

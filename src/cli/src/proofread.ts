@@ -9,7 +9,7 @@ import { decide } from './decide.ts';
 import { routeFor } from './routing.ts';
 import { Budget, budgetFor } from './ledger.ts';
 import { pluginRoot } from './pi.ts';
-import { emit, startRunOnce } from './activity.ts';
+import { emit, endRunOnError, startRunOnce } from './activity.ts';
 import findPrompt from './prompts/proofread-find.md';
 import verifyPrompt from './prompts/proofread-verify.md';
 import memoPrompt from './prompts/proofread-memo.md';
@@ -90,6 +90,11 @@ async function find(chunk: Chunk, options: RunProofreadOptions, budget: Budget, 
 }
 
 export async function runProofread(options: RunProofreadOptions): Promise<ProofreadResult> {
+  const project = options.projectDir ?? process.env.CLAUDE_PROJECT_DIR ?? '';
+  return endRunOnError(options.runId, 'proofread', () => proofreadRun(options), project || undefined);
+}
+
+async function proofreadRun(options: RunProofreadOptions): Promise<ProofreadResult> {
   const root = options.article ? pluginRoot() : '';
   const outDir = resolve(options.out ?? '.'); mkdirSync(outDir, { recursive: true });
   const project = options.projectDir ?? process.env.CLAUDE_PROJECT_DIR ?? '';

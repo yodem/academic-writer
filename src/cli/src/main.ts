@@ -1,5 +1,5 @@
 import { pluginRoot } from './pi.ts';
-import { setPathArguments, projectDir, dataDir } from './paths.ts';
+import { setPathArguments, projectDir, projectDirOr, dataDir } from './paths.ts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { stepIds } from './routing.ts';
@@ -150,7 +150,7 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
   const value = (name: string): string | undefined => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
   const run = value('--run');
   if (!run && !args.includes('--latest')) { process.stderr.write('ERROR activity: --run <id> or --latest is required\n'); process.exitCode = 2; }
-  else { try { projectDir(); process.stdout.write(`${activityShow({ run, latest: !run })}\n`); } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : 'ERROR activity: unknown failure'}\n`); process.exitCode = 2; } }
+  else { try { process.stdout.write(`${activityShow({ run, latest: !run }, projectDirOr())}\n`); } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : 'ERROR activity: unknown failure'}\n`); process.exitCode = 2; } }
 } else if (command === 'library') {
   process.exitCode = await runLibraryCli(args.slice(1));
 } else {

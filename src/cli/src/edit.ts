@@ -3,11 +3,14 @@ import { callGemini } from './gemini.ts';
 import { AwError, Budget, budgetFor } from './ledger.ts';
 import { voiceBundle } from './voice.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
-import { emit } from './activity.ts';
+import { emit, endRunOnError } from './activity.ts';
 
 export type EditOptions = { textFile: string; instruction: string; language: 'he' | 'en'; runId: string; out?: string; section?: boolean };
 const schema = { type: 'object', required: ['revised_text'], properties: { revised_text: { type: 'string' } } };
 export async function editText(options: EditOptions): Promise<{ revised_text: string }> {
+  return endRunOnError(options.runId, options.section ? 'edit-section' : 'edit', () => editRun(options));
+}
+async function editRun(options: EditOptions): Promise<{ revised_text: string }> {
   const flow = options.section ? 'edit-section' : 'edit';
   emit(options.runId, flow, 'run_start');
   emit(options.runId, flow, 'step_start', { step: 'edit' });

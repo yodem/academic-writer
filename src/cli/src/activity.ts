@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { projectDir } from './paths.ts';
+import { projectDir, projectDirOr } from './paths.ts';
+import thresholds from '../../thresholds.json' with { type: 'json' };
 
 export type ActivityFlow = 'write' | 'edit' | 'edit-section' | 'proofread' | 'revise';
 export type ActivityKind = 'run_start' | 'run_end' | 'step_start' | 'step_end' | 'unit_drafted' | 'audit_verdict' | 'redraft' | 'gate' | 'file_written' | 'subagent_start' | 'subagent_stop';
@@ -73,8 +74,19 @@ export function readEvents(file: string): ActivityEvent[] {
   return events;
 }
 
-/** One plain status line for a run, e.g. `write run r1: step 2/6 draft (running)`. */
-export function statusLine(events: ActivityEvent[], runId: string): string {
+/** Ends a run as failed when `fn` throws, then rethrows. The reason is a fixed word: an error message may quote the article. */
+export async function endRunOnError<T>(runId: string, flow: ActivityFlow, fn: () => Promise<T> | T, project?: string): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    startRunOnce(runId, flow, project);
+    emit(runId, flow, 'run_end', { exit: 'ERROR', reason: 'command failed' }, project);
+    throw error;
+  }
+}
+
+/** One plain status line for a run, e.g. `write run r1: step 2/6 draft (running)`. A run quiet for longer than the readers' limit is `stalled`. */
+export function statusLine(events: ActivityEvent[], runId: string, stalled = false): string {
   const start = events.find((e) => e.kind === 'run_start') ?? events[0];
   if (!start) return `Run ${runId}: no activity yet.`;
   const flow = start.flow;
@@ -86,7 +98,7 @@ export function statusLine(events: ActivityEvent[], runId: string): string {
   const index = Math.max(1, steps.indexOf(current) + 1);
   const label = current || steps[0] || '';
   if (ended) return `${flow} run ${runId}: ${ended.exit && ended.exit !== 'OK' ? `stopped (${ended.exit})` : 'done'}, step ${current ? index : total}/${total} ${label}`.trimEnd();
-  return `${flow} run ${runId}: step ${index}/${total} ${label} (running)`.trimEnd();
+  return `${flow} run ${runId}: step ${index}/${total} ${label} (${stalled ? 'stalled' : 'running'})`.trimEnd();
 }
 
 export function latestRunId(project?: string): string | undefined {
@@ -102,10 +114,12 @@ export function latestRunId(project?: string): string | undefined {
   return best?.id;
 }
 
-export function activityShow(options: { run?: string; latest?: boolean }, project?: string): string {
+export function activityShow(options: { run?: string; latest?: boolean }, projectArg?: string): string {
+  const project = projectArg ?? projectDirOr();
   const runId = options.run ?? (options.latest ? latestRunId(project) : undefined);
   if (!runId) return 'No agent activity yet.';
   const file = activityFile(runId, project);
   if (!file || !existsSync(file)) return `Run ${runId}: no activity yet.`;
-  return statusLine(readEvents(file), runId);
+  const limitMs = thresholds.activity.activeRunMaxAgeMinutes * 60_000;
+  return statusLine(readEvents(file), runId, Date.now() - statSync(file).mtimeMs > limitMs);
 }
