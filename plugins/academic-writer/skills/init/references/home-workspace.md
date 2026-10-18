@@ -14,7 +14,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA
 ```python
 AskUserQuestion(questions=[{
   "question": "Which course is this folder for, or is it a separate project?",
-  "header": "Which course is this?",
+  "header": "Which course",
   "options": [
     {"label": "A course", "description": "One of the courses of your current term; I will list them."},
     {"label": "Separate project", "description": "An article or research project that is not tied to a course."}

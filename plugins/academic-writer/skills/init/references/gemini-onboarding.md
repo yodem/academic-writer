@@ -12,7 +12,7 @@ auditor either way.
 ```python
 AskUserQuestion(questions=[{
   "question": "Enable Gemini as the prose writer? Claude stays in charge of orchestration and citation audits — Gemini drafts and self-reviews paragraphs.",
-  "header": "Optional — Gemini integration",
+  "header": "Gemini",
   "options": [
     {
       "label": "Yes, enable Gemini",

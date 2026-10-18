@@ -17,7 +17,7 @@ Bash(command="command -v nlm >/dev/null 2>&1 && nlm login --check 2>/dev/null &&
 ```python
 AskUserQuestion(questions=[{
   "question": "Here are the tools I found. Which would you like to enable?",
-  "header": "Integration setup",
+  "header": "Integrations",
   "options": [
     {
       "label": "Trove",
@@ -107,7 +107,7 @@ Only when the researcher picked **Both**:
 ```python
 AskUserQuestion(questions=[{
   "question": "Which library should give the answers while the other is tested in the background?",
-  "header": "Which answers",
+  "header": "Answers",
   "options": [
     {"label": "Trove (recommended)", "description": "Your current library answers; PageIndex is tested quietly."},
     {"label": "PageIndex", "description": "PageIndex answers; Trove is tested quietly."}

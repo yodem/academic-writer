@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" dir="ltr" data-version="v0.18.2">
+<html lang="en" dir="ltr" data-version="v0.18.3">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -546,6 +546,14 @@
 <!-- news:start -->
 <div class="news__grid">
   <article class="news__rel rv">
+    <h3 dir="ltr"><span class="news__ver">v0.18.3</span> <time class="news__date" datetime="2026-10-18">2026-10-18</time></h3>
+    <ul dir="ltr">
+      <li>The field-of-study question in setup and init had no choices to pick from; it now offers examples and a free…</li>
+      <li>The sample paragraph at the end of setup did not show before its question; it is now part of the question</li>
+      <li>The Trove step said it installs with Homebrew; it uses Trove's own installer, and now says so</li>
+    </ul>
+  </article>
+  <article class="news__rel rv">
     <h3 dir="ltr"><span class="news__ver">v0.18.2</span> <time class="news__date" datetime="2026-10-18">2026-10-18</time></h3>
     <ul dir="ltr">
       <li>The live activity pane opens again</li>
@@ -559,16 +567,6 @@
       <li>The site says up front that this is a Claude Code plugin and lists the recent changes, generated from this…</li>
       <li>The home-folder migration finishes the move</li>
       <li>Setup and health say to restart Claude Code after updating the plugin: a running session keeps the old skills…</li>
-    </ul>
-  </article>
-  <article class="news__rel rv">
-    <h3 dir="ltr"><span class="news__ver">v0.18.0</span> <time class="news__date" datetime="2026-10-18">2026-10-18</time></h3>
-    <ul dir="ltr">
-      <li>One home folder with typed workspaces</li>
-      <li>Agent activity record</li>
-      <li>"The Margin" brand file</li>
-      <li>Redesigned dashboard</li>
-      <li>Setup checks (setup_checks.py --json) used by health, setup, init and the dashboard; a dashboard and activity…</li>
     </ul>
   </article>
 </div>
@@ -590,21 +588,37 @@
           <li><span data-i18n-html="r2a_cw3"><b>Add marketplace</b>, then enter:</span>
             <div class="cmd cmd--one"><pre dir="ltr" class="cmd__pre"><code>yodem/academic-writer</code></pre><button type="button" class="copy" data-copy="yodem/academic-writer"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span class="copy__t" data-i18n="copy">Copy</span></button></div>
           </li>
-          <li data-i18n-html="r2a_cw4">Pick <b>academic-writer</b> and click <b>Install</b>.</li>
+          <li data-i18n-html="r2a_cw4">Pick <b>academic-writer</b> and click <b>Install</b>. Then quit and reopen the app so the new commands appear.</li>
         </ol>
       </article>
       <article class="icard rv">
         <div class="icard__top"><h3>Claude Code</h3></div>
         <p class="icard__p" data-i18n="r2a_cc_p">In the terminal</p>
         <ol class="csteps csteps--big">
-          <li><span data-i18n="cc1">Paste these two lines:</span>
+          <li><span data-i18n="cc1">Paste these two lines, one at a time, pressing Enter after each:</span>
             <div class="cmd"><pre dir="ltr" class="cmd__pre"><code>/plugin marketplace add yodem/academic-writer
 /plugin install academic-writer@yodem</code></pre><button type="button" class="copy" data-copy="/plugin marketplace add yodem/academic-writer&#10;/plugin install academic-writer@yodem"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span class="copy__t" data-i18n="copy">Copy</span></button></div>
           </li>
-          <li data-i18n="cc2">Restart Claude Code.</li>
+          <li data-i18n="cc2">Quit Claude Code completely (type /exit) and open it again in the same folder.</li>
         </ol>
       </article>
     </div>
+    <details class="ftbox rv" name="ft">
+      <summary data-i18n="ft_sum">New to Claude Code? Step by step, about 15 minutes</summary>
+      <ol class="csteps">
+        <li data-i18n-html="ft1">You need a Claude plan that includes Claude Code (<b>Pro, Max, Team or Enterprise</b>; the free plan does not). Sign in or subscribe at <a href="https://claude.ai">claude.ai</a>.</li>
+        <li data-i18n-html="ft2">Open the <b>Terminal</b> app (a window where you type commands): press <kbd>Cmd</kbd>+<kbd>Space</kbd>, type <code>Terminal</code>, press <kbd>Enter</kbd>. On Windows, use <b>PowerShell</b> from the Start menu.</li>
+        <li><span data-i18n="ft3">Paste this line and press Enter. It shows no progress for a minute; that is normal. (Windows PowerShell: <code>irm https://claude.ai/install.ps1 | iex</code>.)</span>
+          <div class="cmd cmd--one"><pre dir="ltr" class="cmd__pre"><code>curl -fsSL https://claude.ai/install.sh | bash</code></pre></div>
+        </li>
+        <li data-i18n-html="ft4">Make a folder for your research (for example <b>Academic</b> inside Documents). In Terminal type <code>cd </code> (with a space), drag that folder into the window, press <kbd>Enter</kbd>, then type <code>claude</code> and press <kbd>Enter</kbd>.</li>
+        <li data-i18n="ft5">The first time, your web browser opens so you can sign in. Sign in, then return to the Terminal window.</li>
+        <li data-i18n-html="ft6">At the box where you type to Claude, paste the two install lines above, <b>one at a time</b>, pressing Enter after each. Each one prints a short confirmation. If the first says it cannot find the marketplace, check the line and try again; if it still fails, copy the message to Claude.</li>
+        <li data-i18n-html="ft7">Restart: type <code>/exit</code> and press Enter, then type <code>claude</code> again in the same folder.</li>
+        <li data-i18n-html="ft8">Type <code>/academic-writer:setup</code> and follow the questions. Setup asks before installing anything and explains each step.</li>
+      </ol>
+      <p class="icard__n" data-i18n-html="ft9">If something fails: <code>command not found: claude</code> means you should close Terminal and open a new window. Type <code>/plugin</code> to check that <b>academic-writer</b> is listed under <b>Installed</b>. Otherwise, <a href="https://github.com/yodem/academic-writer/issues">report a problem</a> and paste what the screen says.</p>
+    </details>
     <div class="inst__then rv">
       <span class="inst__tl" data-i18n="inst_then">Then, in either one:</span>
       <div class="cmd cmd--one"><pre dir="ltr" class="cmd__pre"><code>/academic-writer:setup</code></pre><button type="button" class="copy" data-copy="/academic-writer:setup"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span class="copy__t" data-i18n="copy">Copy</span></button></div>
@@ -655,7 +669,7 @@
         </div>
         <div class="final__way">
           <h3>Claude Code</h3>
-          <p class="final__note" data-i18n="cc1">Paste these two lines:</p>
+          <p class="final__note" data-i18n="cc1">Paste these two lines, one at a time, pressing Enter after each:</p>
           <div class="cmd"><pre dir="ltr" class="cmd__pre"><code>/plugin marketplace add yodem/academic-writer
 /plugin install academic-writer@yodem</code></pre><button type="button" class="copy" data-copy="/plugin marketplace add yodem/academic-writer&#10;/plugin install academic-writer@yodem"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span class="copy__t" data-i18n="copy">Copy</span></button></div>
         </div>

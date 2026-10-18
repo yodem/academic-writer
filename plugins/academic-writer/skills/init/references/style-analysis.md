@@ -12,7 +12,7 @@ computational extraction and Stage 1 voice fingerprint chain below are skipped i
 ```python
 AskUserQuestion(questions=[{
   "question": "To write articles that sound like you, I need to analyze your past work. Have you added papers to the past-articles/ folder?",
-  "header": "Step 5 of 5 — Writing Style",
+  "header": "Style (5/5)",
   "options": [
     {
       "label": "Yes, my papers are ready",
@@ -104,7 +104,7 @@ Show the combined fingerprint summary (computational + qualitative) and confirm 
 ```python
 AskUserQuestion(questions=[{
   "question": "Here's the writing fingerprint I extracted. Is this accurate?",
-  "header": "Style fingerprint review",
+  "header": "Style check",
   "options": [
     {"label": "Looks good — save it", "description": "Profile will be saved with this fingerprint."},
     {"label": "I'd like to adjust some things", "description": "Tell me what to change and I'll update before saving."}

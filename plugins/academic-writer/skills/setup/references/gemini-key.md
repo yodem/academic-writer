@@ -34,12 +34,15 @@
 
 ## Getting a key (the researcher does this)
 
-1. Open https://aistudio.google.com/apikey in your browser.
-2. Sign in with your Google account (a personal Gmail account works).
-3. If asked, accept the Google AI Studio terms.
-4. Click **Create API key**. If it asks for a project, choose the default one it offers.
-5. Click the copy icon next to the new key. It is a long code that starts with `AIza`.
-6. Keep that browser tab open until the key is stored.
+Print these as a list, then end your turn with "Tell me when you have copied the key. Don't paste it here."
+
+1. Open https://aistudio.google.com/apikey in your web browser (Safari or Chrome).
+2. Sign in with your Google account (a personal Gmail account works). The page is Google's "AI Studio".
+3. If asked, tick the box to accept the Google AI Studio terms and click **Continue**.
+4. Click the **Create API key** button. If it asks for a project, choose the default one it offers (or **Create API key in new project**).
+5. The new key appears in a list. Click the copy icon (two overlapping squares) next to it. It is a long code that starts with `AIza`.
+   Nothing visible happens when you copy; that is normal.
+6. Keep that browser tab open until the key is stored. Do not paste the key into this conversation.
 
 ## Storing the key
 
@@ -59,11 +62,15 @@ AskUserQuestion(questions=[{
 
 ### Option A — Plugin settings (kept in the keychain)
 
-1. In Claude Code, type `/plugin` and press Enter.
-2. Open the **Installed** tab and select **academic-writer**.
-3. Choose **Configure** (the plugin's options).
-4. In the **google_api_key** ("Gemini API key") field, paste the key and confirm.
-5. Quit Claude Code completely and open it again in this project folder.
+Print these steps, then end your turn ("Tell me when it is saved"). The `/plugin` screen is a text menu inside Claude Code:
+move with the up and down arrow keys, press Enter to choose, Esc to go back. (Clicking with the mouse may not work there.)
+
+1. Click in the prompt box at the bottom of Claude Code, type `/plugin` and press Enter. A menu opens.
+2. Use the arrow keys to open the **Installed** tab (left and right arrows switch tabs) and press Enter on **academic-writer**.
+3. Choose **Configure** and press Enter. A list of the plugin's settings appears.
+4. In the **google_api_key** ("Gemini API key") field, paste the key (Cmd+V on a Mac, Ctrl+V on Windows and Linux) and press Enter to save.
+   The pasted key may show as dots or stars: that is the keychain protecting it.
+5. Press Esc until the menu closes. Then restart Claude Code (see `dependencies.md § Restarting Claude Code`).
 
 Claude Code may also ask for this value when the plugin is first installed or enabled; entering it
 there is the same thing.
@@ -71,11 +78,13 @@ there is the same thing.
 ### Option B — Shell profile / environment variable
 
 **macOS**
-1. Open the Terminal app (Cmd+Space, type "Terminal", Enter).
-2. Type `touch ~/.zshrc && open -e ~/.zshrc` and press Enter. A TextEdit window opens.
-3. On a new line at the end, type `export GOOGLE_API_KEY="` then paste the key, then type `"`.
-4. Save (Cmd+S) and close TextEdit, then quit Terminal.
-5. Quit Claude Code completely and open it again.
+1. Open the Terminal app (Cmd+Space, type `Terminal`, press Enter).
+2. Type `touch ~/.zshrc && open -e ~/.zshrc` and press Enter. A TextEdit window opens with a text file (it may be empty: that is fine).
+3. Click at the very end of the text, press Enter for a new line, then type `export GOOGLE_API_KEY="`, paste the key (Cmd+V), and type `"`.
+   The line should look like: `export GOOGLE_API_KEY="AIza..."` with no spaces around the `=`.
+4. Save (Cmd+S) and close TextEdit, then quit Terminal (Cmd+Q).
+5. Quit Claude Code completely and open it again in the same folder. It must be started from a Terminal window (type `claude`) to see
+   this line; if it was started from the desktop app and the check below says `NO_KEY`, use Option A instead.
 
 **Windows**
 1. Press the Windows key, type "environment variables", and open **Edit environment variables
@@ -88,9 +97,12 @@ there is the same thing.
 a new terminal and restart Claude Code.
 
 A shell-profile key is only seen by Claude Code when Claude Code is started from a terminal or
-login shell. If the check below says the key is missing, use Option A.
+login shell. If the check below says the key is missing, use Option A (it works the same everywhere).
 
 ## Checking the key (after the restart)
+
+Tell the researcher first, in one plain sentence, what is about to happen ("I'll test the key; this sends no article text and shows
+nothing secret"). If setup asks to run the commands below and the permission prompt appears, they should choose **Yes**.
 
 Never print the key. First confirm the plugin's command is available:
 
