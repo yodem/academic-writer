@@ -1,0 +1,8 @@
+/* One violation of each rule kind, one per line, in this order. */
+.a { color: #ff0000; }
+.b { background: rebeccapurple; }
+.c { border-color: rgb(10, 20, 30); }
+.d { font-family: "Comic Sans MS", cursive; }
+.e { font-size: 17px; }
+.f { border-radius: 12px; }
+.g { color: var(--m-not-a-token); }
