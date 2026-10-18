@@ -1133,6 +1133,7 @@ def watch_diff(registry: Registry, slug: str, pages: list[dict[str, Any]], *, ap
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--term", help="term directory name (defaults to ACADEMIC_TERM or the sole configured term)")
+    parser.add_argument("--data-dir", help="the plugin data folder, where the home pointer lives (defaults to CLAUDE_PLUGIN_DATA)")
     sub = parser.add_subparsers(dest="command", required=True)
     validate = sub.add_parser("validate", help="validate all configured live course resources")
     validate.add_argument("--json", action="store_true", help="emit mismatch list as JSON")
@@ -1233,6 +1234,8 @@ def main(argv: list[str] | None = None) -> int:
     import dashboard
     dashboard.add_parser(sub)
     args = parser.parse_args(argv)
+    if args.data_dir:  # skills run this through the Bash tool, which gets no CLAUDE_PLUGIN_DATA
+        os.environ["CLAUDE_PLUGIN_DATA"] = args.data_dir
     if args.command == "dashboard":  # before the registry is read: a fresh install shows the empty state
         return dashboard.run(args)
     try:
