@@ -25,7 +25,7 @@ Two rules hold for the whole wizard:
 
 Reference files (read when the step says so):
 - `references/dependencies.md` — what each tool is for, detection commands, per-OS steps.
-- `references/python-deps.md` — the Python package check.
+- `references/python-deps.md` — the Python package check (the same check `setup_checks.py` runs).
 - `references/gemini-key.md` — getting, storing and checking the Gemini key.
 - `references/troubleshooting.md` — what to do when something fails.
 
@@ -112,8 +112,58 @@ AskUserQuestion(questions=[{
 Map: Inline → `inline-parenthetical`, Chicago → `chicago`, MLA → `mla`, APA → `apa`. Store as
 `citationStyle`.
 
+### 2b. Your role
+
+```python
+AskUserQuestion(questions=[{
+  "question": "Which describes you best? This only decides which next steps I suggest at the end.",
+  "header": "Your role",
+  "options": [
+    {"label": "Student", "description": "Courses, readings, lessons and your own papers."},
+    {"label": "Researcher", "description": "Articles, sources and your own writing style."},
+    {"label": "Teacher", "description": "Courses you teach, plus your own research."}
+  ],
+  "multiSelect": false
+}])
+```
+
+Store as `role` (`student`, `researcher` or `teaching`).
+
+### 2c. Your home folder
+
+The home folder is one visible folder that holds your identity and defaults (`home.md`), your
+course registry and the list of your workspaces (every project or course folder you work in). First
+see whether one is already chosen:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" show
+```
+
+If it names a home that exists, say so in one sentence and keep it. Otherwise choose one:
+
+- **macOS:** open the system folder picker:
+
+  ```bash
+  osascript -e 'POSIX path of (choose folder with prompt "Choose the folder where Academic Writer keeps your work")'
+  ```
+
+- **Any other system, or if the picker fails or is cancelled:** ask with `AskUserQuestion`; offer
+  `~/Documents/Academic`, the current folder, and "Other" (the researcher types a path). Say that
+  the folder is created if it does not exist.
+
+Then save the pointer with `home.py set` (this writes only the pointer file and the home's `.academic-helper/` folder):
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" set --path "CHOSEN_FOLDER"
+```
+
+If the researcher already has courses in the older registry under `~/.academic-writer/courses`
+(the legacy location), tell them in one sentence that a one-time migration can move them, and
+run it as a preview first: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home_migrate.py" --home "CHOSEN_FOLDER"`.
+It deletes nothing; only on a yes in `AskUserQuestion` add `--apply`.
+
 **Save the profile now**, before anything else: write `.academic-helper/profile.md` with these
-three fields (format: `${CLAUDE_PLUGIN_ROOT}/skills/init/references/profile-schema.md`), keeping
+three fields plus `role` (format: `${CLAUDE_PLUGIN_ROOT}/skills/init/references/profile-schema.md`), keeping
 every field an earlier profile already had. The plugin's start-up hook only passes the Gemini key
 on in a project that has this file, so it must exist before the restart in Step 5.
 
@@ -121,11 +171,19 @@ on in a project that has this file, so it must exist before the restart in Step 
 
 ## Step 3 — What I'll check
 
-Run all detection lines from `references/dependencies.md` and the package check from
-`references/python-deps.md` in one parallel batch (they change nothing). Then show a short table
-built from the results — the tool, what it is for in one phrase, and ✓ found / ✗ missing /
-optional — for: Python 3, the Python packages, hspell (Hebrew writers only), Trove,
-NotebookLM, and the Gemini key (✓ when `GOOGLE_API_KEY` is set; never print its value).
+Run the one checks script (it changes nothing and never prints a key):
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup_checks.py" --json
+```
+
+Each row has an `id`, `ok`, `optional` and a plain-language reason. Keep the result: Steps 4 and 8
+read it, and the dashboard's setup page shows the same rows. Show a short table built from the rows
+— the tool, what it is for in one phrase, and ✓ found / ✗ missing / optional — for: Python 3
+(`python`), the Python packages (`python-addons`), hspell (`hspell`, Hebrew writers only), Trove
+(`trove`), NotebookLM (`notebooklm`), and the Gemini key (`gemini-key`). The per-OS detection
+lines in `references/dependencies.md` stay the fallback when the script itself cannot run
+(for example, no Python at all).
 
 > "Here's what I'll go through. Anything already ✓ we skip. For each missing piece I'll tell you
 > what it's for and ask before installing."
@@ -140,14 +198,14 @@ in plain words. A skipped or failed item never blocks setup; note it for the sum
 
 ### 4a. Python 3 (the researcher installs it)
 
-If Python is missing, Claude cannot install it. Give the numbered steps for their system from
+If the `python` row is not ok, Claude cannot install it. Give the numbered steps for their system from
 `references/dependencies.md § Python 3`, then stop here: the rest of setup needs Python, and the
 researcher must restart Claude Code after installing. Tell them to run `/academic-writer:setup`
 again afterwards.
 
 ### 4b. Python packages (Claude installs after asking)
 
-Skip if the check printed `ALL_PRESENT`. Otherwise:
+Skip if the `python-addons` row is ok. Otherwise (the missing names are in its reason):
 
 ```python
 AskUserQuestion(questions=[{
@@ -167,7 +225,7 @@ Only on "Install":
 python3 -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema
 ```
 
-Re-run the package check. On failure, read `references/troubleshooting.md § pip install failures`
+Re-run `setup_checks.py --json` and read the `python-addons` row. On failure, read `references/troubleshooting.md § pip install failures`
 and explain the fix before offering a retry (any retry with a different command is asked again).
 
 ### 4c. Homebrew (macOS, only if hspell or Trove is wanted)
@@ -370,6 +428,7 @@ every existing field. Show:
 > | Item | Status |
 > |------|--------|
 > | Field / language / citation style | [values] |
+> | Home folder | ✓ [path] / ⚠ not chosen |
 > | Python and its add-ons | ✓ Ready / ⚠ [what's missing and the one-line fix] |
 > | Hebrew spelling (hspell) | ✓ / skipped / not available on Windows / not needed |
 > | Trove / NotebookLM | ✓ / skipped (optional) |
@@ -379,7 +438,23 @@ every existing field. Show:
 
 ---
 
-## Step 8 — What next
+## Step 8 — What you can do now
+
+Re-run `setup_checks.py --json` once more, then print a short block (at most 6 lines, plain words, in
+`targetLanguage`) for the researcher's `role`. List only commands whose prerequisites passed in
+that run, and leave out the rest instead of apologising for them. Always end with
+`/academic-writer:intro`.
+
+| Role | Candidate commands | Needs |
+|---|---|---|
+| Student | `/academic-writer:courses` (set up a term), `/academic-writer:lesson-notes`, `/academic-writer:dashboard`, `/academic-writer:write` | `courses` and `dashboard`: home folder; `lesson-notes`: `trove`; `write`: `gemini-key` |
+| Researcher | `/academic-writer:init` (learn your style), `/academic-writer:research`, `/academic-writer:write`, `/academic-writer:proofread` | `write`, `proofread`: `gemini-key`; `research`: `trove` |
+| Teacher | `/academic-writer:courses`, `/academic-writer:dashboard`, then the researcher list | as above |
+
+If nothing but `/academic-writer:intro` qualifies, say that and name the one missing step that
+would unlock the most.
+
+## Step 9 — What next
 
 ```python
 AskUserQuestion(questions=[{
