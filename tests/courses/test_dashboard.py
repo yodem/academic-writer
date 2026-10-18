@@ -350,7 +350,8 @@ def test_same_task_id_in_two_courses_submits_only_the_named_course(server):
 
 
 def test_page_keys_tasks_by_course_and_id():
-    page = (Path(dashboard.ASSETS) / "index.html").read_text(encoding="utf-8")
+    root = Path(dashboard.ASSETS)  # the page is a shell plus one script per view
+    page = "".join(f.read_text(encoding="utf-8") for f in [root / "index.html", *sorted((root / "views").glob("*.js"))])
     assert "TM[t.id]" not in page and "TM[tkey(t)]" in page
     assert "S.moved[t.id]" not in page and "S.moved[tkey(t)]" in page
     assert "{course:t.course, task:t.id}" in page
