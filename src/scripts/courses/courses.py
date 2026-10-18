@@ -1080,7 +1080,7 @@ def check_source(registry: Registry, slug: str, sha8: str | None = None, runner:
     return problems
 
 
-CHORE_KINDS = ("assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual")
+CHORE_KINDS = ("assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual", "exam")
 BLOCKED_MESSAGE = "lemida: blocked, use chrome watcher"
 _BLOCKED_RE = re.compile(r"radware|captcha|bot manager|text/html|<html|expecting value", re.I)
 
@@ -1207,6 +1207,8 @@ def main(argv: list[str] | None = None) -> int:
     cadd.add_argument("--time-left-text", default="")
     cadd.add_argument("--due-text", default="")
     cadd.add_argument("--due-at", help="ISO 8601 deadline")
+    cadd.add_argument("--room", default="", help="exam room")
+    cadd.add_argument("--material", default="", help="exam material")
     clist = chores_sub.add_parser("list", parents=[reg_parent], help="list chores as JSON")
     clist.add_argument("--status", choices=["open", "done"])
     clist.add_argument("--course")
@@ -1268,7 +1270,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.chores_command == "add":
                 chore = chores.add_chore(registry, course=args.course, kind=args.kind, ref=args.ref, title=args.title, text=args.text,
                                          core_texts=args.core_texts, time_left_text=args.time_left_text, due_text=args.due_text,
-                                         due_at=args.due_at)
+                                         due_at=args.due_at, room=args.room, material=args.material)
                 print(json.dumps(chore, ensure_ascii=False))
             elif args.chores_command == "list":
                 print(json.dumps(chores.list_chores(registry, status=args.status, course=args.course), ensure_ascii=False, indent=2))

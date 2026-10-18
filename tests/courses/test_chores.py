@@ -153,3 +153,12 @@ def test_exam_chore_derives_exam_task_with_room(tmp_path):
     plain = chores.add_chore(reg, course="cohen", kind="exam", ref="exam-2", due_at="2027-02-11T09:00:00+02:00")
     assert "room" not in tasks.derive_tasks([], [plain])[0][0]
     assert "בחינה" in chores.render_digest(reg, [chore])
+
+
+def test_cli_chores_add_exam_with_room_and_material(tmp_path):
+    reg = make_registry(tmp_path)
+    assert courses.main(["chores", "add", "--registry", str(reg.directory), "--course", "kane", "--kind", "exam",
+                         "--ref", "exam-cli", "--due-at", "2027-02-10T09:00:00+02:00",
+                         "--room", "Building 502, room 14", "--material", "chapters 1-6"]) == 0
+    [chore] = chores.load(reg)
+    assert chore["kind"] == "exam" and chore["room"] == "Building 502, room 14" and chore["material"] == "chapters 1-6"
