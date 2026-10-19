@@ -35,8 +35,11 @@ its ToC title and a real hint after it.
 
 ## Extraction
 
-PDFs are read with Claude vision first; pages Claude flags as unreadable or low-confidence go to the bundled Gemini
-OCR (`/academic-writer:ocr`). Google Docs are exported natively.
+Nothing is extracted automatically. A downloaded source or reading is turned into text only when the student asks on the
+dashboard ("חילוץ טקסט"; see `../SKILL.md`, "Extract on request"). `auto` reads a docx with python-docx (or pandoc) and a PDF
+text layer with pymupdf per page, keeping printed page numbers (never `pdftotext` on Hebrew); a scan is read with Claude
+vision. Gemini OCR (`/academic-writer:ocr`) and Tesseract run only when the student chose them for that item. Google Docs are
+exported natively.
 
 ## Creating a book for a new course
 

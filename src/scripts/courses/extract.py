@@ -163,19 +163,46 @@ def _import(name: str):
         return None
 
 
+def _block_order(blocks: Dict[int, List[float]], width: float, hebrew: bool) -> List[int]:
+    """Reading order of text blocks. A block entirely in the right or the left half belongs to that column; a block
+    crossing the middle is full width (a title, a footnote rule) and splits the page into bands. Within a band a
+    Hebrew page reads the right column first, any other page the left one; each column runs top to bottom. A page with
+    a single column keeps plain top-to-bottom order."""
+    mid, tol = width / 2.0, width * 0.02
+    side = {b: ("right" if x0 >= mid - tol else "left" if x1 <= mid + tol else "full") for b, (x0, y0, x1, y1) in blocks.items()}
+    by_y = sorted(blocks, key=lambda b: (blocks[b][1], blocks[b][0]))
+    if not ({"right", "left"} <= set(side.values())):
+        return by_y
+    first, second = ("right", "left") if hebrew else ("left", "right")
+    order: List[int] = []
+    band: List[int] = []
+    for b in by_y + [None]:
+        if b is None or side[b] == "full":
+            order += [x for x in band if side[x] == first] + [x for x in band if side[x] == second]
+            band = []
+            if b is not None:
+                order.append(b)
+        else:
+            band.append(b)
+    return order
+
+
 def _page_text_rtl(page: Any) -> str:
-    """One page in logical order. pymupdf returns words in content-stream order, which is logical order for a well-built
-    PDF; sorting by x position would scramble right-to-left lines, so only the line and block structure is used."""
+    """One page in logical order. Within a line, pymupdf's word order is used (sorting by x would scramble
+    right-to-left lines); lines keep their block's order; blocks are put in column reading order (`_block_order`),
+    because a two-column page's content stream can hold the left column first."""
     words = page.get_text("words")  # x0, y0, x1, y1, word, block_no, line_no, word_no
     lines: Dict[Tuple[int, int], List[Tuple[int, str]]] = {}
-    order: List[Tuple[int, int]] = []
+    boxes: Dict[int, List[float]] = {}
     for w in words:
-        k = (int(w[5]), int(w[6]))
-        if k not in lines:
-            lines[k] = []
-            order.append(k)
-        lines[k].append((int(w[7]), str(w[4])))
-    return normalise("\n".join(" ".join(t for _, t in sorted(lines[k])) for k in sorted(order)))
+        b, k = int(w[5]), (int(w[5]), int(w[6]))
+        lines.setdefault(k, []).append((int(w[7]), str(w[4])))
+        box = boxes.setdefault(b, [w[0], w[1], w[2], w[3]])
+        box[0], box[1], box[2], box[3] = min(box[0], w[0]), min(box[1], w[1]), max(box[2], w[2]), max(box[3], w[3])
+    hebrew = len(HEB.findall(" ".join(str(w[4]) for w in words))) > len(re.findall(r"[A-Za-z]", " ".join(str(w[4]) for w in words)))
+    rank = {b: i for i, b in enumerate(_block_order(boxes, float(page.rect.width), hebrew))}
+    keys = sorted(lines, key=lambda k: (rank[k[0]], k[1]))
+    return normalise("\n".join(" ".join(t for _, t in sorted(lines[k])) for k in keys))
 
 
 def pdf_page_texts(path: Path) -> List[Dict[str, Any]]:

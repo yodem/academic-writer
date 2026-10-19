@@ -279,3 +279,39 @@ def test_refs_extract_queue_command_drains_and_prints_handoffs(tmp_path, capsys)
     assert "HANDOFF\tcohen\tsource:aaaaaaaa\tclaude-vision" in out
     assert (reg / "queue" / "extract" / "done" / "a-cohen.json").is_file()
     assert refs.main(["--registry", str(reg), "extract-queue"]) == 0 and "HANDOFF" in capsys.readouterr().out  # still waiting for Claude
+
+
+def _two_column_pdf(path: Path, right: str, left: str, left_first: bool) -> Path:
+    """A Hebrew two-column page. `left_first` draws the left column first, so the content stream is in the wrong
+    reading order for a right-to-left page (what Codex flagged): the extractor must still read the right column first."""
+    doc = fitz.open()
+    page = doc.new_page()
+    width = page.rect.width
+    cols = [(left, 40), (right, width / 2 + 20)] if left_first else [(right, width / 2 + 20), (left, 40)]
+    for text, x in cols:
+        y = 72
+        for i in range(0, len(text.split()), 4):
+            chunk = " ".join(text.split()[i:i + 4])
+            page.insert_text((x, y), chunk[::-1], fontsize=11, fontname="F0", fontfile=FONT)
+            y += 16
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+@needs_font
+@pytest.mark.parametrize("left_first", [True, False])
+def test_two_column_hebrew_page_reads_the_right_column_first(tmp_path, left_first):
+    right = "בראשית ברא אלהים את השמים ואת הארץ והארץ היתה תהו ובהו"
+    left = "ויאמר אלהים יהי אור ויהי אור וירא אלהים את האור כי טוב"
+    pdf = _two_column_pdf(tmp_path / "cols.pdf", right, left, left_first)
+    text = " ".join(extract.pdf_page_texts(pdf)[0]["text"].split())
+    assert "בראשית ברא אלהים" in text and "ויאמר אלהים יהי אור" in text
+    assert text.index("בראשית ברא אלהים") < text.index("ויאמר אלהים יהי אור")
+
+
+@needs_font
+def test_single_column_page_keeps_top_to_bottom_order(tmp_path):
+    pdf = make_pdf(tmp_path / "one.pdf", [HEBREW])
+    text = " ".join(extract.pdf_page_texts(pdf)[0]["text"].split())
+    assert text.index("בראשית ברא אלהים") < text.index("ויאמר אלהים יהי אור")

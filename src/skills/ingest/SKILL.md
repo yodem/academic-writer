@@ -24,7 +24,7 @@ Academic articles and chapters have their own printed page numbers (e.g. 409–4
 
   **Step 0 — Anna's Archive first, for a published work.** Before any OCR, search Anna's Archive for the work: use the `annas-archive-ebooks` skill when it is installed, otherwise search by title, author and ISBN. For a chapter or article, look for the whole book or journal issue. If a copy of the **same edition** exists (same publisher, year and printed pagination), use its text layer or EPUB text, keep the printed page numbers exactly, and skip OCR. Run Gemini OCR (`aw ocr`) only when there is no matching copy or the copy has no usable text. Record the outcome for each item: `annas: found-used`, `annas: found-wrong-edition` or `annas: not-found`.
 
-- **PDF, scan or photo**: a PDF page that already has text is extracted directly; a scan or photo needs OCR (reading the text out of the picture). Use the plugin's own OCR unless the author picks another engine (see "OCR options" below):
+- **PDF, scan or photo**: a PDF page that already has text is extracted directly; a scan or photo needs OCR (reading the text out of the picture). Ask which reader to use (see "OCR options" below); Claude reads by default. The command below is the plugin's own (Gemini) reader, used only when the author picks it:
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" ocr \
@@ -38,8 +38,8 @@ Take `--lang` from the profile's `targetLanguage` when the source language is un
 
 | Choice | Who reads the pages | Good for |
 |---|---|---|
-| **The plugin's own reader (Gemini)** (default) | Google, with your Gemini key | many pages, Hebrew with vowel marks, tables |
-| **Claude** | Anthropic, on your Claude plan | a few pages, difficult layouts |
+| **Claude** (default) | Anthropic, on your Claude plan | most readings; difficult layouts |
+| **The plugin's own reader (Gemini)** | Google, with your Gemini key | many pages, Hebrew with vowel marks, tables |
 | **Codex** | OpenAI, on your Codex plan (only if Codex is installed) | sparing your Claude or Gemini quota |
 | **On this computer (Tesseract)** | nothing leaves your computer; free | clean print, privacy; weaker on scans, vowel marks and mixed Hebrew and English |
 

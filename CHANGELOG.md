@@ -4,6 +4,16 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.18.4] — 2026-10-19
+
+### Changed
+- **Nothing is OCR'd or text-extracted on its own any more.** New course files, fetched readings and Lemida routing only download to the right place (the course's sources folder, Drive and NotebookLM). On the dashboard's course page you tick the files you want as text and press "חילוץ טקסט", choosing how: automatic, Claude, Gemini or Tesseract. The next nightly run does only what you chose.
+- **Extraction without a model where possible.** Word files are read with Python; PDFs that already contain text are read page by page with PyMuPDF, keeping the printed page numbers and reading two-column Hebrew pages right column first. A page that comes out garbled, and every scan, goes to Claude. Gemini and Tesseract run only when you pick them. Claude is now the default reader in the ocr and ingest skills.
+- The nightly's own Claude sessions and their helpers run on Sonnet (`CLAUDE_CODE_SUBAGENT_MODEL`).
+
+### Fixed
+- When Anna's Archive asks for a browser check, the reading is marked "blocked" with a plain note and a reminder, instead of an error about missing JSON.
+
 ## [0.18.3] — 2026-10-18
 
 ### Changed

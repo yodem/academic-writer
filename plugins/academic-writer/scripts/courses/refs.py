@@ -37,13 +37,23 @@ CHORE_KIND = {"kotar": "kotar-source", "print-only": "manual", "not-found": "man
 COURSES_PY = Path(__file__).resolve().with_name("courses.py")
 
 ANNAS_SCRIPT = Path(os.environ.get("ANNAS_ARCHIVE_SCRIPT", "~/.claude/skills/annas-archive-ebooks/annas.py")).expanduser()
-OCR_POLICY = ("gemini-text-first", "tesseract-hidden-check", "empty-gemini-page-blocked")
+# User ruling 2026-10-19: nothing is OCR'd or text-extracted automatically. Fetching only downloads. The student picks
+# what to extract on the dashboard (queue/extract, see extract.py): a docx or a PDF text layer is read by python, a scan by
+# Claude vision, and Gemini or Tesseract run only when the student names them for that item.
+OCR_POLICY = ("no-automatic-ocr", "python-text-layer-on-request", "claude-vision-for-scans-on-request",
+              "gemini-or-tesseract-only-when-chosen")
+ANNAS_BLOCKED_DETAIL = "Anna's Archive asked for a browser check; search it in Chrome"
+BLOCK_WORDS = re.compile(r"ddos|browser check|checking your browser|captcha|cloudflare|just a moment", re.I)
 
 Fetch = Callable[[str], str]
 
 
 class RefsError(Exception):
     """A failure the user can fix: printed as one line, exit 2."""
+
+
+class AnnasBlocked(RefsError):
+    """Anna's Archive answered with its browser check (DDoS-Guard) instead of JSON: only a person in Chrome can search it."""
 
 
 def fetch_url(url: str) -> str:
@@ -394,15 +404,17 @@ def apply_chores(reg: Path, slug: str, plan: list[dict[str, str]],
 # --- fetch chain ----------------------------------------------------------------------------------
 
 def annas_search(citation: str, runner: Callable[..., Any] = subprocess.run) -> list[dict[str, Any]]:
-    """Top Anna's Archive candidates via the global skill's CLI. Raises on any failure (DDoS-Guard, bad JSON)."""
+    """Top Anna's Archive candidates via the global skill's CLI. Raises AnnasBlocked when it printed the DDoS-Guard
+    message or no JSON at all (the plain outcome `blocked`), RefsError on any other failure."""
     result = runner([sys.executable, str(ANNAS_SCRIPT), "search", primo_query(citation), "--json", "--limit", "3"],
                     capture_output=True, text=True, timeout=90)
-    if result.returncode != 0:
-        raise RefsError((result.stderr or "annas.py failed").strip()[:150])
+    out, err = result.stdout or "", result.stderr or ""
+    if result.returncode != 0 and not BLOCK_WORDS.search(out + err):
+        raise RefsError(err.strip()[:150] or "annas.py failed")
     try:
-        found = json.loads(result.stdout)
+        found = json.loads(out)
     except ValueError as exc:
-        raise RefsError(f"annas.py gave no JSON: {exc}") from exc
+        raise AnnasBlocked(ANNAS_BLOCKED_DETAIL) from exc
     return [{k: item.get(k) for k in ("md5", "title", "author", "year", "format")} for item in found if isinstance(item, dict)]
 
 
@@ -413,7 +425,7 @@ def _stamp() -> str:
 def fetch_ref(reg: Path, slug: str, key: str, *, task: str | None = None, dry_run: bool = False, hit: int | None = None,
               file: Path | None = None, env: dict[str, str] | None = None, lookup: Callable[..., list[dict[str, Any]]] | None = None,
               annas: Callable[[str], list[dict[str, Any]]] | None = None) -> dict[str, Any]:
-    """Run the documented order for one ref: (0) Anna's Archive, (1) BIU lookup, (2) download/OCR, Kotar chore, or print-only.
+    """Run the documented order for one ref: (0) Anna's Archive, (1) BIU lookup, (2) download, Kotar chore, or print-only. Never OCR.
 
     Every step is appended to `fetch_log` ({step, outcome, at}). `--dry-run` runs the read-only steps but writes nothing.
     A Primo reply with several hits is never auto-picked: pass --hit N (0-based) after reading the logged hits."""
@@ -452,7 +464,21 @@ def fetch_ref(reg: Path, slug: str, key: str, *, task: str | None = None, dry_ru
         annas_ran = True
         try:
             candidates = annas(citation)
-        except Exception as exc:  # DDoS-Guard, timeouts, bad JSON: record and continue
+        except AnnasBlocked:  # the browser check: a person must search it in Chrome, so it becomes a chore
+            step("annas", "blocked", ANNAS_BLOCKED_DETAIL)
+            set_annas("blocked")
+            if dry_run:
+                step("annas-chore", "chore-would-be-created", f"annas:{slug}:{key}")
+            else:
+                sys.path.insert(0, str(Path(__file__).resolve().parent))
+                import chores as chores_mod
+                import courses
+                short = " ".join(citation.split())[:80]
+                chores_mod.add_chore(courses.Registry(reg), course=slug, kind="manual", ref=f"annas:{slug}:{key}",
+                                     title=f"Search Anna's Archive in Chrome: {short}",
+                                     text=f"{ANNAS_BLOCKED_DETAIL}: {' '.join(citation.split())}")
+                step("annas-chore", "chore-created", f"annas:{slug}:{key}")
+        except Exception as exc:  # timeouts, other failures: record and continue
             step("annas", "error", str(exc)[:150])
             set_annas("error")
         else:
@@ -536,13 +562,7 @@ def fetch_ref(reg: Path, slug: str, key: str, *, task: str | None = None, dry_ru
             if found is not None:
                 ref["download_path"] = str(found)
             step("download", "downloaded", str(found) if found else "path not recorded")
-            moved = found is not None and recorded is not None and found != recorded  # the queued OCR pointed at the old path
-            if not ref.get("ocr") and (not ref.get("ocr_next") or moved):
-                ref["ocr_next"] = {"state": "queued", "policy": list(OCR_POLICY),
-                                   "note": "Gemini text first; Tesseract only as hidden check; empty Gemini => page blocked"}
-                step("ocr", "queued", " > ".join(OCR_POLICY))
-            else:
-                step("ocr", "skipped", "ocr already recorded")
+            # downloading is all a fetch does: no OCR, no Gemini call, no text extraction (extract on request: extract.py)
     elif status == "kotar":
         plan = {"kind": "kotar-source", "ref": f"refs:{slug}:{key}", "title": " ".join(citation.split())[:80],
                 "text": f"run /academic-writer:kotar-fetch for: {' '.join(citation.split())}"}
@@ -717,6 +737,11 @@ def build_parser() -> argparse.ArgumentParser:
     fq.add_argument("--dry-run", action="store_true", help="run read-only steps, move nothing")
     fq.add_argument("--json", action="store_true")
 
+    eq = sub.add_parser("extract-queue", help="run the extraction jobs the student chose on the dashboard (queue/extract/*.json); "
+                                              "python steps run here, claude-vision/gemini/tesseract items are listed for the Claude step")
+    eq.add_argument("--dry-run", action="store_true", help="plan only: extract nothing, move nothing")
+    eq.add_argument("--json", action="store_true")
+
     sys.path.insert(0, str(Path(__file__).resolve().parent))  # python -I leaves the script dir off sys.path
     import tasks as tasks_mod
     tasks_mod.add_task_parser(sub)
@@ -803,6 +828,26 @@ def _dispatch(args: argparse.Namespace) -> int:
             if not report["jobs"]:
                 print("fetch queue empty")
         failed = [j for j in report["jobs"] if j.get("status") in ("retry", "failed", "invalid", "unreadable")]
+        return 1 if failed else 0
+
+    if args.command == "extract-queue":
+        sys.path.insert(0, str(Path(__file__).resolve().parent))  # python -I leaves the script dir off sys.path
+        import extract as extract_mod
+        report = extract_mod.drain(reg, dry_run=args.dry_run)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            for j in report["jobs"]:
+                print(f"{j['job']}\t{j.get('status')}\t{len(j.get('results', {}))} item(s)")
+                for label, r in j.get("results", {}).items():
+                    print(f"  {label}\t{r.get('state')}\t{r.get('method') or r.get('action') or r.get('detail', '')}")
+            if not report["jobs"]:
+                print("extract queue empty")
+            for h in report["handoff"]:
+                print(f"HANDOFF\t{h['course']}\t{h['kind']}:{h['key']}\t{h['method']}\t{h['handoff_file']}")
+            for i in report.get("ingest", []):
+                print(f"INGEST\t{i['course']}\t{i['key']}\t{i['ingest_file']}")
+        failed = [j for j in report["jobs"] if j.get("status") in ("retry", "failed", "invalid")]
         return 1 if failed else 0
 
     if args.command == "task":

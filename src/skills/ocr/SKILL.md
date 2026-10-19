@@ -1,6 +1,6 @@
 ---
 name: ocr
-description: "Turn a scanned PDF or photographed page (or a folder of them) into plain text, choosing who reads the pages: the bundled Gemini reader (default), Claude, Codex or Tesseract on this computer; pages that already contain text are extracted directly. Use when the author has a scan, photo or screenshot of a source and needs its text before research or writing. Takes a file or folder path."
+description: "Turn a scanned PDF or photographed page (or a folder of them) into plain text, choosing who reads the pages: Claude (default), the bundled Gemini reader, Codex or Tesseract on this computer; pages that already contain text are extracted directly. Use when the author has a scan, photo or screenshot of a source and needs its text before research or writing. Takes a file or folder path."
 user-invocable: true
 allowed-tools: [Bash, Read, Write, Glob, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.2.0", summary: "Turn a scan or photo into plain text with Gemini, Claude, Codex or Tesseract, your choice."}
@@ -16,8 +16,8 @@ OCR (optical character recognition) reads the text out of a scanned or photograp
 
 | Choice | Who reads the pages | Good for |
 |---|---|---|
-| **The plugin's own reader (Gemini)** (default for your own scans) | Google, with the author's Gemini key | many pages, Hebrew with vowel marks, tables |
-| **Claude** | Anthropic, in this session | a few pages, hard layouts |
+| **Claude** (default) | Anthropic, in this session | most scans; hard layouts |
+| **The plugin's own reader (Gemini)** | Google, with the author's Gemini key | many pages, Hebrew with vowel marks, tables |
 | **Codex** | OpenAI, if the `codex` program is installed | sparing Claude or Gemini quota |
 | **On this computer (Tesseract)** | nothing leaves the computer; free | clean print, private material; weaker on scans and vowel marks |
 
