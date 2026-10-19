@@ -368,6 +368,8 @@ dialog::backdrop{background:var(--m-ink);opacity:.35}
 .cp-more>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;color:var(--m-indigo);font:var(--m-ui-weight) var(--m-body-size)/1.4 var(--m-ui-font);text-decoration:underline;text-underline-offset:4px}
 .cp-fetchbar{position:sticky;bottom:var(--m-s4);display:flex;flex-wrap:wrap;gap:var(--m-s3) var(--m-s4);align-items:center;justify-content:space-between;padding:var(--m-s3) var(--m-s4);background:var(--m-sheet);border:1.5px solid var(--m-ink);z-index:5}
 .cp-fetchbar[hidden]{display:none}
+.cp-method{display:inline-flex;align-items:center;gap:var(--m-s2)}
+.cp-method select{min-height:44px;font:inherit;background:var(--m-sheet);color:var(--m-ink);border:1.5px solid var(--m-ink);padding:0 var(--m-s2)}
 .cp-list li.ln .sub{display:block}
 .cp-note{margin-top:var(--m-s3)}
 .cp-rail{border-inline-start:1px solid var(--m-rule);padding-inline-start:var(--m-s5);display:grid;gap:var(--m-s5)}

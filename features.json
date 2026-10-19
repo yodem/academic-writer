@@ -766,6 +766,15 @@
           "tested": "e2e"
         },
         {
+          "id": "extract-on-request",
+          "name": "Extract on request: nothing is OCR'd or extracted automatically; the student ticks downloaded sources or readings and picks a method (auto, claude-vision, gemini-ocr, tesseract); the page writes queue/extract jobs and the nightly refs.py extract-queue runs python text layers (pymupdf with a Hebrew quality gate, python-docx) and hands scans to Claude vision",
+          "status": "ok",
+          "name_he": "חילוץ טקסט לפי בקשה",
+          "description_he": "שום דבר לא עובר OCR או חילוץ טקסט מעצמו. בדף הקורס מסמנים מקורות שהורדו ובוחרים שיטה, והדף רק מכניס בקשה לתור. בריצה הלילית הטקסט נקרא בפייתון כשיש שכבת טקסט, וסריקות נקראות על ידי Claude.",
+          "notes": "src/scripts/courses/extract.py; tests/courses/test_extract.py, test_dashboard.py (extract), test_fetch.py (no OCR on fetch), test_daily_script.py. No Playwright check yet.",
+          "tested": "unit"
+        },
+        {
           "id": "dashboard-exams",
           "name": "Exam tasks with room and material, shown on the overview exams list and the timeline (not counted as submissions)",
           "status": "ok",

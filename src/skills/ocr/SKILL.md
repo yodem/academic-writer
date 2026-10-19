@@ -16,14 +16,14 @@ OCR (optical character recognition) reads the text out of a scanned or photograp
 
 | Choice | Who reads the pages | Good for |
 |---|---|---|
-| **The plugin's own reader (Gemini)** (default) | Google, with the author's Gemini key | many pages, Hebrew with vowel marks, tables |
+| **The plugin's own reader (Gemini)** (default for your own scans) | Google, with the author's Gemini key | many pages, Hebrew with vowel marks, tables |
 | **Claude** | Anthropic, in this session | a few pages, hard layouts |
 | **Codex** | OpenAI, if the `codex` program is installed | sparing Claude or Gemini quota |
 | **On this computer (Tesseract)** | nothing leaves the computer; free | clean print, private material; weaker on scans and vowel marks |
 
-The commands and rules for Claude, Codex and Tesseract are in `${CLAUDE_PLUGIN_ROOT}/skills/ocr/references/engines.md`; read it when the author picks one of them. For course readings Claude goes first. Whatever engine the author chose, never move a page to another engine on your own: mark unclear pages "OCR, not image-verified" and, if Gemini might read a page better, ask with `AskUserQuestion` whether that page may be sent to Gemini (its text goes to Google). Record which engine produced the text. The steps below are for the plugin's own reader.
+The commands and rules for Claude, Codex and Tesseract are in `${CLAUDE_PLUGIN_ROOT}/skills/ocr/references/engines.md`; read it when the author picks one of them. Course readings are never OCR'd automatically (user rule 2026-10-19): the student asks for extraction on the dashboard ("חילוץ טקסט"), and the default method there is `auto` (python for text, Claude vision for scans). Gemini or Tesseract read a course reading only when the student named them for that item. Whatever engine the author chose, never move a page to another engine on your own: mark unclear pages "OCR, not image-verified" and, if Gemini might read a page better, ask with `AskUserQuestion` whether that page may be sent to Gemini (its text goes to Google). Record which engine produced the text. The steps below are for the plugin's own reader.
 
-For library and Kotar readings (in copyright) Gemini is the default (user ruling 2026-10-16): use `aw ocr` directly when step 0 finds no usable copy; for any other reading ask which engine first. For scans, Gemini produces the page text. Tesseract runs only as a silent hallucination check (similarity vs the Gemini text) and its text never enters a source. Pages that drift past the gate are flagged for the user. Pages where Gemini returns empty (a copyright/recitation block) are marked "blocked" and surfaced: never fall back to Claude-vision transcription and never substitute Tesseract text.
+For library and Kotar readings (in copyright) that the student asked to extract, Claude vision is the default (user ruling 2026-10-19, replacing the 2026-10-16 Gemini default); use `aw ocr` (Gemini) or Tesseract only when the student chose that engine for the item, and say that with Gemini the page text goes to Google. Pages that Gemini returns empty (a copyright/recitation block) are marked "blocked" and surfaced, never substituted from another engine.
 
 1. If the author gave no path, ask for the file or folder.
 2. Choose the language: `he`, `en` or `mixed`. Take it from `.academic-helper/profile.md`, or ask when the source language is unclear.

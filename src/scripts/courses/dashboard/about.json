@@ -704,6 +704,13 @@
           "subfeatures": []
         },
         {
+          "id": "extract-on-request",
+          "name": "חילוץ טקסט לפי בקשה",
+          "status": "ok",
+          "tested": "unit",
+          "subfeatures": []
+        },
+        {
           "id": "dashboard-exams",
           "name": "מבחנים",
           "status": "ok",

@@ -67,19 +67,79 @@ def test_annas_candidates_keep_definitive_value(tmp_path):
     assert stored(d)["annas"] == "found-used"
 
 
-def test_online_download_enqueues_ocr_per_policy(tmp_path):
+def test_online_download_only_downloads_and_never_runs_or_queues_ocr(tmp_path, monkeypatch):
     pdf = tmp_path / "k.pdf"
     pdf.write_bytes(b"%PDF")
     d = reg_with(tmp_path, {"key": "k", "citation": "Smith Book 1999", "status": "pending"})
     svc = [{"package": "JSTOR", "target_url": "https://x/y", "type": "", "free": ""}]
+    calls = []
+    real_run = refs.subprocess.run
+    monkeypatch.setattr(refs.subprocess, "run", lambda *a, **k: calls.append(a) or real_run(*a, **k))
     out = refs.fetch_ref(d, "nevua", "k", env={}, file=pdf, lookup=lambda c: [hit("online", services=svc)])
     ref = stored(d)
     assert ref["status"] == "downloaded" and ref["download_path"] == str(pdf) and ref["target_url"] == "https://x/y"
-    assert ref["ocr_next"]["state"] == "queued" and ref["ocr_next"]["policy"][0] == "gemini-text-first"
-    assert "empty-gemini-page-blocked" in ref["ocr_next"]["policy"]
-    assert steps(out)["ocr"] == "queued"
-    again = refs.fetch_ref(d, "nevua", "k", env={})  # resume: no second queue entry
-    assert steps(again)["ocr"] == "skipped"
+    assert "ocr_next" not in ref and "ocr" not in steps(out) and "ocr" not in ref
+    assert not calls  # no OCR, Gemini or Tesseract process, no pandoc, nothing but the download record
+    assert not (d / "queue" / "extract").exists() and not (d / "extracted").exists()
+    again = refs.fetch_ref(d, "nevua", "k", env={})
+    assert "ocr" not in steps(again) and "ocr_next" not in stored(d)
+
+
+def test_the_documented_ocr_policy_is_no_automatic_ocr():
+    assert refs.OCR_POLICY[0] == "no-automatic-ocr" and "gemini-or-tesseract-only-when-chosen" in refs.OCR_POLICY
+    assert not any(w.startswith("gemini-text") for w in refs.OCR_POLICY)
+
+
+def test_fetch_queue_never_extracts(tmp_path):
+    pdf = tmp_path / "k.pdf"
+    pdf.write_bytes(b"%PDF")
+    d = reg_with(tmp_path, {"key": "k", "citation": "c", "status": "downloaded", "download_path": str(pdf)})
+    folder = d / "queue" / "fetch"
+    folder.mkdir(parents=True)
+    (folder / "a-nevua.json").write_text(json.dumps({"course": "nevua", "refs": ["k"]}), encoding="utf-8")
+    refs.drain_fetch_queue(d, env={}, lookup=lambda c: pytest.fail("no lookup"), annas=lambda c: pytest.fail("no annas"))
+    assert "ocr_next" not in stored(d) and not (d / "extracted").exists() and not (d / "queue" / "extract").exists()
+
+
+# --- Anna's Archive browser check -------------------------------------------------------------------
+
+class Done:
+    def __init__(self, out="", err="", rc=0):
+        self.stdout, self.stderr, self.returncode = out, err, rc
+
+
+def test_annas_search_turns_the_ddos_guard_page_into_a_blocked_outcome():
+    for stub in (Done("DDoS-Guard\nChecking your browser before accessing annas-archive"),
+                 Done("", "error: DDoS-Guard challenge", rc=1), Done("<html>no json</html>")):
+        with pytest.raises(refs.AnnasBlocked) as err:
+            refs.annas_search("Smith Book 1999", runner=lambda *a, **k: stub)
+        assert str(err.value) == "Anna's Archive asked for a browser check; search it in Chrome"
+    with pytest.raises(refs.RefsError) as plain:  # any other failure stays an error
+        refs.annas_search("Smith Book 1999", runner=lambda *a, **k: Done("", "boom", rc=1))
+    assert not isinstance(plain.value, refs.AnnasBlocked)
+    ok = refs.annas_search("Smith Book 1999", runner=lambda *a, **k: Done('[{"md5": "m", "title": "T", "extra": 1}]'))
+    assert ok == [{"md5": "m", "title": "T", "author": None, "year": None, "format": None}]
+
+
+def test_blocked_annas_is_recorded_plainly_and_becomes_a_search_in_chrome_chore(tmp_path):
+    d = reg_with(tmp_path, {"key": "k", "citation": "Smith Book 1999", "status": "print-only"})
+    stub = lambda *a, **k: Done("DDoS-Guard")
+    out = refs.fetch_ref(d, "nevua", "k", env={"ANNAS_ARCHIVE_KEY": "x"}, annas=lambda c: refs.annas_search(c, runner=stub))
+    log = next(e for e in out["log"] if e["step"] == "annas")
+    assert log["outcome"] == "blocked" and log["detail"] == "Anna's Archive asked for a browser check; search it in Chrome"
+    assert "gave no JSON" not in json.dumps(out["log"]) and stored(d)["annas"] == "blocked"
+    chores = json.loads((d / "chores.json").read_text(encoding="utf-8"))
+    mine = [c for c in chores if c["ref"] == "annas:nevua:k"]
+    assert len(mine) == 1 and mine[0]["kind"] == "manual" and "Chrome" in mine[0]["title"] and "Smith Book 1999" in mine[0]["text"]
+    refs.fetch_ref(d, "nevua", "k", env={"ANNAS_ARCHIVE_KEY": "x"}, annas=lambda c: refs.annas_search(c, runner=stub))
+    assert len([c for c in json.loads((d / "chores.json").read_text(encoding="utf-8")) if c["ref"] == "annas:nevua:k"]) == 1
+
+
+def test_blocked_annas_dry_run_writes_no_chore(tmp_path):
+    d = reg_with(tmp_path, {"key": "k", "citation": "Smith Book 1999", "status": "print-only"})
+    out = refs.fetch_ref(d, "nevua", "k", env={"ANNAS_ARCHIVE_KEY": "x"}, dry_run=True,
+                         annas=lambda c: refs.annas_search(c, runner=lambda *a, **k: Done("DDoS-Guard")))
+    assert steps(out)["annas"] == "blocked" and not (d / "chores.json").exists()
 
 
 def test_online_without_file_needs_browser_download(tmp_path, monkeypatch):
@@ -149,7 +209,7 @@ def test_supplied_file_beats_a_missing_recorded_path(tmp_path):
     d = reg_with(tmp_path, {"key": "k", "citation": "c", "status": "downloaded", "download_path": str(tmp_path / "gone.pdf")})
     out = refs.fetch_ref(d, "nevua", "k", env={}, file=new)
     ref = stored(d)
-    assert ref["download_path"] == str(new) and steps(out)["download"] == "downloaded" and steps(out)["ocr"] == "queued"
+    assert ref["download_path"] == str(new) and steps(out)["download"] == "downloaded" and "ocr" not in steps(out)
 
 
 def test_missing_recorded_path_without_replacement_is_not_success(tmp_path, monkeypatch):

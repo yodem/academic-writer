@@ -8,6 +8,14 @@
 #   c. claude -p --chrome          /academic-writer:courses watch-lemida --all   (COURSES_ONLY="cohen kane" restricts)
 #   c2. courses.py wispr-scan      Wispr Flow lecture recordings -> queue jobs (failure is counted; no Wispr database = no-op)
 #   c3. refs.py fetch-queue        dashboard fetch requests (queue/fetch/*.json): fetch chain per ref, jobs move to queue/fetch/done/ (failure is counted)
+#   c4. refs.py extract-queue      text extraction the student chose on the dashboard (queue/extract/*.json): docx and PDF text layers are read
+#                                  by python, jobs move to queue/extract/done/; scans (claude-vision) and items that name gemini-ocr or tesseract
+#                                  become files in queue/extract/handoff/, and a chosen source that still has its add-source Trove job is
+#                                  listed in queue/extract/ingest/. If any are waiting, one claude -p step (c5) reads them.
+#   c5. claude -p extract          /academic-writer:courses extract-handoff   (only when c4 left handoff or ingest files)
+#
+# Nothing is OCR'd or text-extracted unless the student chose it in the dashboard (user rule 2026-10-19). Steps a-c only DOWNLOAD:
+# queue/sources/*.json (the add-source Trove jobs) are never drained here; a chosen source is ingested after its extraction (c5).
 #   d. queued lesson jobs          /academic-writer:lesson-notes --pending
 #   e. tools/toc_audit.py --all    failure -> a manual chore (the job is not failed by it)
 #   f. courses.py chores digest
@@ -21,15 +29,19 @@ REPO="${ACADEMIC_WRITER_REPO:-$HOME/dev/academic-writer}"
 COURSES="$REPO/src/scripts/courses/courses.py"
 REFS="$REPO/src/scripts/courses/refs.py"
 export ACADEMIC_HOME="${ACADEMIC_HOME:-$HOME/Academic}"
+export CLAUDE_CODE_SUBAGENT_MODEL="${CLAUDE_CODE_SUBAGENT_MODEL:-sonnet}"
 TERM_DIR="${COURSES_TERM_DIR:-$ACADEMIC_HOME/.academic-helper/terms/תשפ״ז}"
 SYNC="$HOME/.academic-writer/bin/courses-sync-nanoclaw.sh"
 PY=/usr/bin/python3
+EXTRACT_PY="${EXTRACT_PY:-$PY}"   # needs pymupdf (and python-docx, or pandoc) to read text layers; without it scans and PDFs go to Claude
 DAY=$(date +%Y-%m-%d)
 DRY="${COURSES_DRY:-}"
 FAILED=0
 
-WATCH_TOOLS="mcp__claude-in-chrome__*,Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(trove items:*),Bash(trove ms show:*),Bash(nlm source:*),Bash(nlm notebook:*),Bash(rclone:*),Bash(pdftoppm:*),Bash(pdftotext:*),Bash(pandoc:*),Bash(ls:*),Bash(mkdir:*),Bash(mv:*),Bash(cp:*),Bash(open:*),Bash(screencapture:*),Bash(date:*)"
+WATCH_TOOLS="mcp__claude-in-chrome__*,Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(trove ms show:*),Bash(nlm source:*),Bash(nlm notebook:*),Bash(rclone:*),Bash(pdftoppm:*),Bash(ls:*),Bash(mkdir:*),Bash(mv:*),Bash(cp:*),Bash(open:*),Bash(screencapture:*),Bash(date:*)"
 LESSON_TOOLS="Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(trove items:*),Bash(trove ms show:*),Bash(trove auth whoami:*),Bash(mkdir:*),Bash(mv:*),Bash(ls:*),Bash(cat:*),Bash(date:*)"
+
+EXTRACT_TOOLS="Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(trove items:*),Bash(trove ms show:*),Bash(trove auth whoami:*),Bash(pdftoppm:*),Bash(aw:*),Bash(tesseract:*),Bash(mkdir:*),Bash(mv:*),Bash(ls:*),Bash(cat:*),Bash(date:*)"
 
 stamp() { date '+%Y-%m-%dT%H:%M:%S%z'; }
 
@@ -91,6 +103,28 @@ run_job() {
   # c3. dashboard fetch requests (queue/fetch/*.json); nonzero = a job errored and waits for tomorrow or gave up
   if ! dry_plan "$PY $REFS --registry $TERM_DIR fetch-queue"; then
     step fetch-queue "$PY" "$REFS" --registry "$TERM_DIR" fetch-queue || FAILED=1
+  fi
+
+  # c4. extraction the student chose on the dashboard (queue/extract/*.json): python steps run here, scans are handed to Claude
+  if ! dry_plan "$EXTRACT_PY $REFS --registry $TERM_DIR extract-queue"; then
+    step extract-queue "$EXTRACT_PY" "$REFS" --registry "$TERM_DIR" extract-queue || FAILED=1
+  fi
+
+  # c5. one Claude step for what python could not read (claude-vision, gemini-ocr, tesseract) and for chosen sources awaiting their Trove ingest
+  shopt -s nullglob
+  HANDOFFS=("$TERM_DIR"/queue/extract/handoff/*.json "$TERM_DIR"/queue/extract/ingest/*.json)
+  shopt -u nullglob
+  if [ ${#HANDOFFS[@]} -eq 0 ]; then
+    echo "no extraction handoffs"
+  else
+    echo "extraction handoffs: ${#HANDOFFS[@]}"
+    if ! dry_plan "printf '%s' '/academic-writer:courses extract-handoff' | claude -p --model sonnet --plugin-dir $REPO/plugins/academic-writer --allowedTools \"$EXTRACT_TOOLS\""; then
+      printf '%s' "/academic-writer:courses extract-handoff" | claude -p --model sonnet \
+        --plugin-dir "$REPO/plugins/academic-writer" --allowedTools "$EXTRACT_TOOLS"
+      rc=$?
+      echo "-- extract-handoff exit=$rc $(stamp)"
+      [ "$rc" -ne 0 ] && FAILED=1
+    fi
   fi
 
   # d. queued lesson jobs
