@@ -164,15 +164,36 @@ def _import(name: str):
 
 
 def _block_order(blocks: Dict[int, List[float]], width: float, hebrew: bool) -> List[int]:
-    """Reading order of text blocks. A block entirely in the right or the left half belongs to that column; a block
-    crossing the middle is full width (a title, a footnote rule) and splits the page into bands. Within a band a
-    Hebrew page reads the right column first, any other page the left one; each column runs top to bottom. A page with
-    a single column keeps plain top-to-bottom order."""
+    """Reading order of text blocks. The page is read as two columns only with real evidence: narrow blocks (under 60%
+    of the page width) entirely in each half that sit side by side (their vertical ranges overlap). Inside
+    that shared stretch a Hebrew page reads the right column first, any other page the left one, each top to bottom.
+    Everything else (titles, centred lines, footnotes below the columns, full-width paragraphs) stays in plain
+    top-to-bottom order and splits the stretch into bands. Without that evidence the whole page is top to bottom."""
     mid, tol = width / 2.0, width * 0.02
-    side = {b: ("right" if x0 >= mid - tol else "left" if x1 <= mid + tol else "full") for b, (x0, y0, x1, y1) in blocks.items()}
     by_y = sorted(blocks, key=lambda b: (blocks[b][1], blocks[b][0]))
-    if not ({"right", "left"} <= set(side.values())):
+
+    def narrow(b: int) -> bool:
+        return (blocks[b][2] - blocks[b][0]) < width * 0.6
+
+    def beside(b: int, c: int) -> bool:  # their vertical ranges overlap
+        return min(blocks[b][3], blocks[c][3]) > max(blocks[b][1], blocks[c][1])
+
+    right_all = [b for b in by_y if blocks[b][0] >= mid - tol and narrow(b)]
+    left_all = [b for b in by_y if blocks[b][2] <= mid + tol and narrow(b)]
+    # a block is column text only when a block on the other side sits beside it (footnotes under the columns do not)
+    right = [b for b in right_all if any(beside(b, c) for c in left_all)]
+    left = [b for b in left_all if any(beside(b, c) for c in right_all)]
+    if not right or not left:
         return by_y
+    top = max(min(blocks[b][1] for b in right), min(blocks[b][1] for b in left))
+    bottom = min(max(blocks[b][3] for b in right), max(blocks[b][3] for b in left))
+    if bottom <= top:
+        return by_y  # the two sides never sit next to each other: not columns
+    side = {}
+    for b in by_y:
+        centre = (blocks[b][1] + blocks[b][3]) / 2.0
+        inside = top - tol <= centre <= bottom + tol
+        side[b] = ("right" if b in right else "left" if b in left else "full") if inside else "full"
     first, second = ("right", "left") if hebrew else ("left", "right")
     order: List[int] = []
     band: List[int] = []

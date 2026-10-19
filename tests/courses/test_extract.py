@@ -315,3 +315,27 @@ def test_single_column_page_keeps_top_to_bottom_order(tmp_path):
     pdf = make_pdf(tmp_path / "one.pdf", [HEBREW])
     text = " ".join(extract.pdf_page_texts(pdf)[0]["text"].split())
     assert text.index("בראשית ברא אלהים") < text.index("ויאמר אלהים יהי אור")
+
+
+def _boxes(*specs):
+    return {i: list(s) for i, s in enumerate(specs)}
+
+
+def test_block_order_single_column_with_short_lines_on_both_sides_stays_top_to_bottom():
+    # a single-column RTL page: a right-aligned short line, a left-aligned short line, then full paragraphs
+    b = _boxes((380, 70, 560, 85), (40, 90, 200, 105), (40, 110, 560, 160), (40, 170, 560, 220))
+    assert extract._block_order(b, 600, True) == [0, 1, 2, 3]
+
+
+def test_block_order_title_and_footnote_stay_outside_the_columns():
+    b = _boxes((150, 40, 450, 60),            # centred title
+               (40, 80, 280, 200), (40, 210, 280, 330),     # left column
+               (320, 80, 560, 200), (320, 210, 560, 330),   # right column
+               (40, 360, 200, 380), (380, 390, 560, 400))   # footnotes below the columns
+    assert extract._block_order(b, 600, True) == [0, 3, 4, 1, 2, 5, 6]
+    assert extract._block_order(b, 600, False) == [0, 1, 2, 3, 4, 5, 6]
+
+
+def test_block_order_sides_that_never_overlap_are_not_columns():
+    b = _boxes((40, 60, 250, 120), (40, 130, 250, 190), (350, 300, 560, 360), (350, 370, 560, 430))
+    assert extract._block_order(b, 600, True) == [0, 1, 2, 3]
