@@ -163,14 +163,15 @@ def _import(name: str):
         return None
 
 
-def _block_order(blocks: Dict[int, List[float]], width: float, hebrew: bool) -> List[int]:
+def _block_order(blocks: Dict[int, List[float]], width: float, hebrew: bool, height: Optional[float] = None) -> List[int]:
     """Reading order of text blocks. The page is read as two columns only with real evidence: narrow blocks (under 60%
     of the page width) entirely in each half that sit side by side (their vertical ranges overlap). Inside
     that shared stretch a Hebrew page reads the right column first, any other page the left one, each top to bottom.
     Everything else (titles, centred lines, footnotes below the columns, full-width paragraphs) stays in plain
     top-to-bottom order and splits the stretch into bands. Without that evidence the whole page is top to bottom."""
     mid, tol = width / 2.0, width * 0.02
-    by_y = sorted(blocks, key=lambda b: (blocks[b][1], blocks[b][0]))
+    # top to bottom; blocks starting at the same height follow the reading direction
+    by_y = sorted(blocks, key=lambda b: (round(blocks[b][1]), -blocks[b][2] if hebrew else blocks[b][0]))
 
     def narrow(b: int) -> bool:
         return (blocks[b][2] - blocks[b][0]) < width * 0.6
@@ -183,8 +184,10 @@ def _block_order(blocks: Dict[int, List[float]], width: float, hebrew: bool) -> 
     # a block is column text only when a block on the other side sits beside it (footnotes under the columns do not)
     right = [b for b in right_all if any(beside(b, c) for c in left_all)]
     left = [b for b in left_all if any(beside(b, c) for c in right_all)]
-    if not right or not left:
-        return by_y
+    tall = (height or max([blocks[b][3] for b in blocks] + [1.0])) * 0.10
+    if (not right or not left or sum(blocks[b][3] - blocks[b][1] for b in right) < tall
+            or sum(blocks[b][3] - blocks[b][1] for b in left) < tall):
+        return by_y  # a running header (title one side, page number the other) is not two columns
     top = max(min(blocks[b][1] for b in right), min(blocks[b][1] for b in left))
     bottom = min(max(blocks[b][3] for b in right), max(blocks[b][3] for b in left))
     if bottom <= top:
@@ -221,7 +224,7 @@ def _page_text_rtl(page: Any) -> str:
         box = boxes.setdefault(b, [w[0], w[1], w[2], w[3]])
         box[0], box[1], box[2], box[3] = min(box[0], w[0]), min(box[1], w[1]), max(box[2], w[2]), max(box[3], w[3])
     hebrew = len(HEB.findall(" ".join(str(w[4]) for w in words))) > len(re.findall(r"[A-Za-z]", " ".join(str(w[4]) for w in words)))
-    rank = {b: i for i, b in enumerate(_block_order(boxes, float(page.rect.width), hebrew))}
+    rank = {b: i for i, b in enumerate(_block_order(boxes, float(page.rect.width), hebrew, float(page.rect.height)))}
     keys = sorted(lines, key=lambda k: (rank[k[0]], k[1]))
     return normalise("\n".join(" ".join(t for _, t in sorted(lines[k])) for k in keys))
 

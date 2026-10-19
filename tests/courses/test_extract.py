@@ -302,8 +302,9 @@ def _two_column_pdf(path: Path, right: str, left: str, left_first: bool) -> Path
 @needs_font
 @pytest.mark.parametrize("left_first", [True, False])
 def test_two_column_hebrew_page_reads_the_right_column_first(tmp_path, left_first):
-    right = "בראשית ברא אלהים את השמים ואת הארץ והארץ היתה תהו ובהו"
-    left = "ויאמר אלהים יהי אור ויהי אור וירא אלהים את האור כי טוב"
+    # real columns run down the page: repeat each column's text so it is many lines tall
+    right = "בראשית ברא אלהים את השמים ואת הארץ והארץ היתה תהו ובהו " + " ".join(["וחשך על פני תהום"] * 30)
+    left = "ויאמר אלהים יהי אור ויהי אור וירא אלהים את האור כי טוב " + " ".join(["ויבדל בין האור"] * 30)
     pdf = _two_column_pdf(tmp_path / "cols.pdf", right, left, left_first)
     text = " ".join(extract.pdf_page_texts(pdf)[0]["text"].split())
     assert "בראשית ברא אלהים" in text and "ויאמר אלהים יהי אור" in text
@@ -339,3 +340,9 @@ def test_block_order_title_and_footnote_stay_outside_the_columns():
 def test_block_order_sides_that_never_overlap_are_not_columns():
     b = _boxes((40, 60, 250, 120), (40, 130, 250, 190), (350, 300, 560, 360), (350, 370, 560, 430))
     assert extract._block_order(b, 600, True) == [0, 1, 2, 3]
+
+
+def test_block_order_running_header_on_one_line_is_not_two_columns():
+    # header: book title on the right, page number on the left, same height; then one column of body text
+    b = _boxes((380, 30, 560, 42), (40, 30, 70, 42), (40, 70, 560, 400), (40, 410, 560, 760))
+    assert extract._block_order(b, 600, True, 842) == [0, 1, 2, 3]
