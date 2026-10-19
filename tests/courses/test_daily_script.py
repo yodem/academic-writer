@@ -8,7 +8,7 @@ import pytest
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "courses-daily.sh.example"
 
 
-def run_dry(tmp_path, chrome_running, extra_env=None, queue=False):
+def run_dry(tmp_path, chrome_running, extra_env=None, queue=False, handoff=False):
     home = tmp_path / "home"
     term = home / ".academic-writer" / "courses" / "term"
     (term / "queue").mkdir(parents=True)
@@ -16,6 +16,9 @@ def run_dry(tmp_path, chrome_running, extra_env=None, queue=False):
     (term / "cohen.json").write_text(json.dumps({"slug": "cohen"}))
     if queue:
         (term / "queue" / "job.json").write_text("{}")
+    if handoff:
+        (term / "queue" / "extract" / "handoff").mkdir(parents=True)
+        (term / "queue" / "extract" / "handoff" / "cohen-source-aaaaaaaa.json").write_text("{}")
     stubs = tmp_path / "stubs"
     stubs.mkdir()
     pgrep = stubs / "pgrep"
@@ -34,17 +37,20 @@ def test_syntax():
 def test_chrome_running_plans_watch_in_order(tmp_path):
     out, plans = run_dry(tmp_path, True, queue=True)
     assert out.returncode == 0, out.stderr
-    keys = ["courses.py daily", "claude -p --chrome", "courses.py wispr-scan", "refs.py --registry", "lesson-notes --pending", "toc_audit.py --all",
+    keys = ["courses.py daily", "claude -p --chrome", "courses.py wispr-scan", "refs.py --registry", "extract-queue", "lesson-notes --pending", "toc_audit.py --all",
             "chores digest", "courses-sync-nanoclaw.sh"]
     idx = [next(i for i, p in enumerate(plans) if k in p) for k in keys]
     assert idx == sorted(idx) and len(plans) == len(keys)
     watch = plans[1]
     assert "courses.py wispr-scan" in plans[2]
     assert plans[3].endswith("fetch-queue") and "refs.py --registry" in plans[3]
+    assert plans[4].endswith("extract-queue") and "refs.py --registry" in plans[4]
     assert "/academic-writer:courses watch-lemida --all'" in watch
     assert "--model sonnet" in watch and "--plugin-dir" in watch
     for tool in ("mcp__claude-in-chrome__*", "Bash(rclone:*)", "Bash(pdftoppm:*)", "Bash(screencapture:*)", "Bash(trove ms show:*)"):
         assert tool in watch
+    for tool in ("pdftotext", "pandoc", "trove items", "tesseract", "aw:"):  # the watch only downloads: no extraction, no Trove upload
+        assert tool not in watch
     assert not any("chores add" in p for p in plans)
     assert not any("bookmarks" in p for p in plans)  # the Chrome bookmarks step is gone (it crashes Chrome; a dashboard replaces it)
 
@@ -114,3 +120,33 @@ def test_fetch_queue_failure_is_counted_but_later_steps_run(tmp_path):
     assert out.returncode == 1
     assert "-- fetch-queue exit=1" in log and "-- nanoclaw-sync exit=0" in log
     assert log.index("-- wispr-scan exit") < log.index("-- fetch-queue") < log.index("-- digest")
+
+
+def test_extract_handoff_step_runs_only_when_python_left_something_for_claude(tmp_path):
+    _, plans = run_dry(tmp_path / "none", True)
+    assert not any("extract-handoff" in p for p in plans)
+    _, plans = run_dry(tmp_path / "some", True, handoff=True)
+    idx = [i for i, p in enumerate(plans) if "extract-queue" in p or "extract-handoff" in p]
+    assert [("extract-queue" in plans[i]) for i in idx] == [True, False] and idx[1] == idx[0] + 1
+    step = plans[idx[1]]
+    assert "claude -p" in step and "--model sonnet" in step and "pdftotext" not in step and "Bash(pdftoppm:*)" in step
+
+
+def test_subagent_model_is_set_near_academic_home_and_no_keychain_key_is_read():
+    text = SCRIPT.read_text(encoding="utf-8")
+    line = 'export CLAUDE_CODE_SUBAGENT_MODEL="${CLAUDE_CODE_SUBAGENT_MODEL:-sonnet}"'
+    assert 0 < text.index(line) - text.index("export ACADEMIC_HOME=") < 200
+    assert "security find-generic-password" not in text and "export ANNAS_ARCHIVE_KEY" not in text
+
+
+def test_nothing_drains_queue_sources_by_default():
+    """The add-source Trove jobs (queue/sources) wait until the student chooses that file on the dashboard."""
+    script = SCRIPT.read_text(encoding="utf-8")
+    code = "\n".join(ln for ln in script.splitlines() if not ln.lstrip().startswith("#"))
+    assert "queue/sources" not in code and "queue/\\*" not in code
+    skill = (SCRIPT.parents[1] / "src" / "skills" / "courses" / "SKILL.md").read_text(encoding="utf-8")
+    watch = (SCRIPT.parents[1] / "src" / "skills" / "courses" / "references" / "lemida-watch.md").read_text(encoding="utf-8")
+    for text in (skill, watch):
+        assert "queue/sources" in text  # documented ...
+    assert "never drained" in skill and "only the file the student chose" in skill  # ... as waiting, not as a step to run
+    assert "drain queue/sources" not in skill.lower() and "process queue/sources" not in skill.lower()

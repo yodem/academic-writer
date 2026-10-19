@@ -109,7 +109,8 @@ jobs:
   # The scripts run on Python 3.9 for researchers on older Macs: the courses scripts, the home folder
   # and migration, the activity reader and the setup checks must not use newer syntax or stdlib.
   py39:
-    runs-on: ubuntu-latest
+    # ubuntu-latest became 26.04 (2026-10-19), which no longer offers Python 3.9 in setup-python
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v4

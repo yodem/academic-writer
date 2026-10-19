@@ -1,26 +1,31 @@
 /* Course page: header in the course colour, tabs (tasks, sources, lessons and recordings, writing, storage), the
    next task as the one primary card with its sources table and "mark missing so Claude fetches it", earlier tasks,
-   and a margin column (to handle, recent lessons, storage). Actions reuse core: markDone, undoDone, queueFetch.
+   and a margin column (to handle, recent lessons, storage). Actions reuse core: markDone, undoDone, queueFetch; "חילוץ טקסט" posts to /api/extract (the page extracts nothing).
    Look: src/brand/DESIGN.md section 4, mockups overview-sunday-v3 and dark-mode. */
 (() => {
 const A = window.AW;
 const {esc, b, auto, $, $$, DN, dm, dueHTML, dueClass, fromIso, status, hueClass, TICK, CARET, NO, titleHTML, glossHTML,
-       verbDone, markDone, undoDone, queueFetch, toast, SEL, tkey, S, saveS, rel, effDate, shortWhen} = A;
+       verbDone, markDone, undoDone, queueFetch, toast, SEL, api, load, tkey, S, saveS, rel, effDate, shortWhen} = A;
 
 const many = (n, one, plural) => n === 1 ? one : plural.replace('#', n);
 const DAYKEY = {Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6};
 const SEM = {A: 'סמסטר א׳', B: 'סמסטר ב׳'};
 const TABS = [['tasks', 'מטלות'], ['sources', 'מקורות'], ['lessons', 'שיעורים והקלטות'], ['writing', 'כתיבה'], ['storage', 'אחסון']];
+const EXT = new Set();                             /* checked "extract text" boxes (type:key), kept across live updates */
+const METHODS = [['auto', 'אוטומטי (מומלץ)'], ['claude-vision', 'Claude קורא את העמודים כתמונות'], ['gemini-ocr', 'Gemini OCR (שולח את העמודים ל־Google)'], ['tesseract', 'Tesseract (במחשב הזה)']];
 const tabOf = {};                                  /* the open tab per course, kept across live updates */
 const lessonWord = l => l.status === 'done' ? 'בטרוב' : l.status === 'appended' ? 'נכתב, עוד לא נבדק' : 'בתור';
 
 /* ---------- sources ---------- */
 function itemGloss(i){
+  if (i.extract_queued) return `<span class="gloss">ממתין לחילוץ טקסט: Claude יטפל בזה בריצה הלילית</span>`;
   if (i.queued) return `<span class="gloss">Claude יחפש את זה בריצה הלילית. מה שדורש הורדה בדפדפן יהפוך למשימה אצלך.</span>`;
   if (i.type === 'chore') return `<span class="gloss red">לא נמצא בחומרי הקורס</span>`;
   if (i.missing) return `<span class="gloss red">${i.status === 'not-found' ? 'לא נמצא בספרייה' : 'קיים רק בדפוס, בלי טקסט'}</span>`;
   if (i.ocr === 'blocked' || i.ocr === 'flagged') return `<span class="gloss">הזיהוי האוטומטי של הטקסט סומן לבדיקה: כדאי להשוות לסריקה לפני שמצטטים</span>`;
   if (i.ocr === 'queued') return `<span class="gloss">ממתין לזיהוי הטקסט</span>`;
+  if (i.extracted) return `<span class="gloss">הטקסט חולץ</span>`;
+  if (i.extractable) return `<span class="gloss">הורד, עוד בלי טקסט. אפשר לבקש חילוץ טקסט</span>`;
   if (i.downloaded || i.in_trove) return '';
   const words = {online: 'זמין ברשת, עוד לא הורד', kotar: 'בכותר, עוד לא הורד', pending: 'עוד לא חיפשו אותו בספרייה'};
   return words[i.status] ? `<span class="gloss">${words[i.status]}</span>` : '';
@@ -30,7 +35,10 @@ function sourceRow(i, taskId){
   const id = `src-${i.type}-${i.key}${taskId ? '-' + taskId : ''}`;
   const pick = i.fetchable && i.type === 'ref' ?
     `<input type="checkbox" id="${esc(id)}" data-src="${esc(i.key)}" data-task="${esc(taskId || '')}"${SEL.has(i.key) ? ' checked' : ''} aria-label="לסמן את המקור כדי ש־Claude יביא אותו">` : '';
-  return `<tr><td class="pick">${pick}</td><td class="wrap cite">${auto(i.title)}${itemGloss(i)}</td>${marks.map(m => `<td class="mk">${m}</td>`).join('')}</tr>`;
+  const xid = `ext-${i.type}-${i.key}${taskId ? '-' + taskId : ''}`;
+  const ext = i.extractable && (i.type === 'ref' || i.type === 'source') ?
+    `<input type="checkbox" id="${esc(xid)}" data-ext="${esc(i.type + ':' + i.key)}"${EXT.has(i.type + ':' + i.key) ? ' checked' : ''} aria-label="לסמן את המקור לחילוץ טקסט">` : '';
+  return `<tr><td class="pick">${pick}${ext}</td><td class="wrap cite">${auto(i.title)}${itemGloss(i)}</td>${marks.map(m => `<td class="mk">${m}</td>`).join('')}</tr>`;
 }
 function sourceTable(items, taskId){
   return `<div class="tscroll" tabindex="0" role="region" aria-label="טבלת מקורות"><table class="cp-src">
@@ -48,6 +56,27 @@ function updateFetchbar(el){
   if (!sel.length) return;
   $('#fetchTxt', el).textContent = sel.length === 1 ? 'נבחר מקור אחד. Claude יחפש אותו בריצה הלילית.' : `נבחרו ${sel.length} מקורות. Claude יחפש אותם בריצה הלילית.`;
   $('#fetchBtn', el).textContent = sel.length === 1 ? 'לבקש מ־Claude להביא את המקור' : `לבקש מ־Claude להביא ${sel.length} מקורות`;
+}
+
+function extractBar(){
+  return `<div class="cp-fetchbar" id="extbar" hidden><p id="extTxt"></p><label class="cp-method">שיטה <select id="extMethod">${METHODS.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select></label><button class="btn" id="extBtn" type="button">חילוץ טקסט</button></div>`;
+}
+function updateExtractbar(el){
+  const bar = $('#extbar', el); if (!bar) return;
+  const sel = $$('input[data-ext]:checked', el);
+  bar.hidden = !sel.length;
+  if (!sel.length) return;
+  $('#extTxt', el).textContent = (sel.length === 1 ? 'נבחר מקור אחד לחילוץ טקסט.' : `נבחרו ${sel.length} מקורות לחילוץ טקסט.`) + ' הדף לא מחלץ כלום: Claude יחלץ בריצה הלילית.';
+}
+async function queueExtract(slug, boxes, method){
+  const items = boxes.map(i => { const [kind, ...rest] = i.dataset.ext.split(':'); return {kind, key: rest.join(':'), method}; });
+  if (!items.length) return;
+  try {
+    await api('/api/extract', {course: slug, items, method});
+    boxes.forEach(i => EXT.delete(i.dataset.ext));
+    toast(items.length === 1 ? 'המקור בתור לחילוץ טקסט. Claude יחלץ אותו בריצה הלילית.' : `${items.length} מקורות בתור לחילוץ טקסט. Claude יחלץ אותם בריצה הלילית.`);
+    await load(true);
+  } catch(e) { if (e.message !== 'forbidden') toast('הבקשה לא נשמרה: ' + esc(e.message)); }
 }
 
 /* ---------- tasks tab ---------- */
@@ -93,7 +122,7 @@ function tasksTab(c){
   return (next ? primaryCard(next) : empty) +
     (rest.length ? `<section class="cp-sec"><h2>עוד פתוח</h2>${rest.map(slip).join('')}</section>` : '') +
     (recent.length ? `<section class="cp-sec"><h2>הוגשו לאחרונה</h2>${recent.map(slip).join('')}</section>` : '') +
-    more + fetchBar() +
+    more + fetchBar() + extractBar() +
     (older.length ? `<section class="cp-sec prev"><h2>מטלות קודמות</h2><ul>${older.map(t => `<li class="ln"><span class="what">${titleHTML(t)}</span><span class="lead" aria-hidden="true"></span><span class="val">${t.due_date ? dueHTML(t) : ''}</span></li>`).join('')}</ul></section>` : '');
 }
 
@@ -105,7 +134,7 @@ function sourcesTab(c){
   if (!all.length) return `<p class="notice">עוד אין מקורות בקורס הזה.</p>`;
   const rows = all.map(([i, tid]) => sourceRow(i, tid)).join('');
   return `<p class="label">לסמן מקור חסר כדי ש־Claude יביא אותו</p><div class="tscroll" tabindex="0" role="region" aria-label="כל המקורות"><table class="cp-src">
-    <thead><tr><th><span class="sr">בחירה</span></th><th>מקור</th><th>הורד</th><th>${b('Trove')}</th><th>${b('NotebookLM')}</th></tr></thead><tbody>${rows}</tbody></table></div>${fetchBar()}`;
+    <thead><tr><th><span class="sr">בחירה</span></th><th>מקור</th><th>הורד</th><th>${b('Trove')}</th><th>${b('NotebookLM')}</th></tr></thead><tbody>${rows}</tbody></table></div>${fetchBar()}${extractBar()}`;
 }
 function lessonsTab(c){
   const list = c.lessons.length ? `<ul class="cp-list">${c.lessons.map((l, k) => `<li class="ln"><span class="what">שיעור ${b(k + 1)}${l.date ? ' · ' + b(dm(l.date)) : ''}${l.new ? ' ' + CARET + '<span class="sr"> (חדש)</span>' : ''}</span><span class="lead" aria-hidden="true"></span><span class="val">${lessonWord(l)}</span></li>`).join('')}</ul>` : '<p class="notice">עוד אין שיעורים מתומללים.</p>';
@@ -201,9 +230,12 @@ function wire(st, el, slug, c){
   $$('[data-undo]', el).forEach(btn => btn.onclick = () => undoDone(btn.dataset.undo));
   $$('input[data-src]', el).forEach(i => i.onchange = () => { i.checked ? SEL.add(i.dataset.src) : SEL.delete(i.dataset.src); updateFetchbar(el); });
   const fb = $('#fetchBtn', el); if (fb) fb.onclick = () => queueFetch(slug, $$('input[data-src]:checked', el));
+  $$('input[data-ext]', el).forEach(i => i.onchange = () => { i.checked ? EXT.add(i.dataset.ext) : EXT.delete(i.dataset.ext); updateExtractbar(el); });
+  const eb = $('#extBtn', el); if (eb) eb.onclick = () => queueExtract(slug, $$('input[data-ext]:checked', el), $('#extMethod', el).value);
   const cp = $('#copyBook', el);
   if (cp) cp.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(cp.dataset.copy).then(() => toast('מספר הספר בטרוב הועתק.'), () => toast('לא הצלחתי להעתיק.')); };
   updateFetchbar(el);
+  updateExtractbar(el);
 }
 
 A.views.course = (st, el) => render(st, el, A.route().id);

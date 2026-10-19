@@ -432,3 +432,80 @@ def test_undo_window_closes_exactly_at_the_scheduled_boundary_across_dst(tmp_pat
     assert boundary == datetime(2026, 10, 25, 11, 30, tzinfo=TZ)  # 12 real hours; the clock fell back at 02:00
     assert gamma(dashboard.build_state(d, now=boundary - timedelta(seconds=1)))["recently_submitted"] is True
     assert gamma(dashboard.build_state(d, now=boundary))["recently_submitted"] is False
+
+
+# --- extract on request ---------------------------------------------------------------------------
+
+def _downloaded_ref(tmp_path, d):
+    pdf = tmp_path / "ref.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    data = json.loads((d / "refs" / "eps.json").read_text())
+    data["refs"][0].update(status="downloaded", download_path=str(pdf))
+    _w(d / "refs" / "eps.json", data)
+
+
+def _eps_ref_item(d):
+    c = by_slug(dashboard.build_state(d, now=NOW))["eps"]
+    return next(i for t in c["tasks"] for i in t["items"] if i["key"] == "e-pend")
+
+
+def test_downloaded_ref_without_text_is_extractable_and_a_queued_one_says_so(server, tmp_path):
+    srv, d, *_ = server
+    _downloaded_ref(tmp_path, d)
+    item = _eps_ref_item(d)
+    assert item["extractable"] and not item["extracted"] and not item["extract_queued"]
+    status, _, body = req(srv, "POST", "/api/extract", {"course": "eps", "items": [{"kind": "ref", "key": "e-pend"}]})
+    assert status == 200 and json.loads(body)["queued"] == ["ref:e-pend"]
+    job = json.loads(next((d / "queue" / "extract").glob("*-eps.json")).read_text())
+    assert job["course"] == "eps" and job["items"] == [{"kind": "ref", "key": "e-pend", "method": "auto"}] and job["created_at"]
+    item = _eps_ref_item(d)
+    assert item["extract_queued"] and not item["extractable"]
+
+
+def test_extracted_text_ends_extractability(tmp_path):
+    d, *_ = make_reg(tmp_path)
+    _downloaded_ref(tmp_path, d)
+    out = d / "extracted" / "eps" / "ref-e-pend.md"
+    out.parent.mkdir(parents=True)
+    out.write_text("## עמוד 1\n", encoding="utf-8")
+    item = _eps_ref_item(d)
+    assert item["extracted"] and not item["extractable"]
+
+
+def test_source_in_trove_is_extractable_only_while_its_add_source_job_is_pending(tmp_path):
+    d, *_ = make_reg(tmp_path)
+    src = lambda: next(i for i in by_slug(dashboard.build_state(d, now=NOW))["beta"]["tasks"][0]["items"] if i["key"] == "bbbbbbbb")
+    assert src()["downloaded"] and not src()["extractable"]  # already in Trove: it has text
+    _w(d / "queue" / "sources" / "beta-bbbbbbbb.json", {"slug": "beta", "sha8": "bbbbbbbb", "file": "x"})
+    assert src()["extractable"]  # downloaded, not extracted: the student may choose it
+    assert (d / "queue" / "sources" / "beta-bbbbbbbb.json").exists()  # the dashboard never drains it
+
+
+def test_extract_post_refuses_unknown_items_methods_and_bad_auth(server, tmp_path):
+    srv, d, *_ = server
+    _downloaded_ref(tmp_path, d)
+    ok = {"course": "eps", "items": [{"kind": "ref", "key": "e-pend", "method": "gemini-ocr"}]}
+    for bad in ({"course": "eps", "items": [{"kind": "ref", "key": "nope"}]},
+                {"course": "eps", "items": [{"kind": "source", "key": "e-pend"}]},     # a ref key under the wrong kind
+                {"course": "eps", "items": [{"kind": "file", "key": "x"}]},
+                {"course": "eps", "items": []},
+                {"course": "eps", "items": "all"},
+                {"course": "eps", "items": [{"kind": "ref", "key": "e-pend", "method": "pdftotext"}]},
+                {"course": "eps", "method": "rm -rf", "items": [{"kind": "ref", "key": "e-pend"}]},
+                {"course": "../etc", "items": [{"kind": "ref", "key": "e-pend"}]},
+                {"course": "ghost", "items": [{"kind": "ref", "key": "e-pend"}]}):
+        assert req(srv, "POST", "/api/extract", bad)[0] == 400, bad
+    assert req(srv, "POST", "/api/extract", ok, cookie=False)[0] == 403
+    assert req(srv, "POST", "/api/extract", ok, origin="http://evil.example")[0] == 403
+    assert req(srv, "POST", "/api/extract", ok, host="localhost:1")[0] == 403
+    assert not (d / "queue" / "extract").exists()  # nothing was written
+    assert req(srv, "POST", "/api/extract", ok)[0] == 200
+    job = json.loads(next((d / "queue" / "extract").glob("*.json")).read_text())
+    assert job["items"][0]["method"] == "gemini-ocr"
+
+
+def test_extract_job_for_a_source_uses_its_sha8(server):
+    srv, d, *_ = server
+    assert req(srv, "POST", "/api/extract", {"course": "beta", "method": "claude-vision", "items": [{"kind": "source", "key": "bbbbbbbb"}]})[0] == 200
+    job = json.loads(next((d / "queue" / "extract").glob("*-beta.json")).read_text())
+    assert job["items"] == [{"kind": "source", "key": "bbbbbbbb", "method": "claude-vision"}]

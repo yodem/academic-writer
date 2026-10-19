@@ -13,8 +13,8 @@ Ask once, with `AskUserQuestion`, in plain words, and say where the pages go:
 
 | Engine | Who reads the pages | Best for | Cost and privacy |
 |---|---|---|---|
-| **Gemini** (the plugin's own reader, the default) | Google, with the author's Gemini key | many pages, Hebrew with vowel marks, tables | uses the Gemini key; pages are sent to Google (on Google's free tier Google may use them to improve its products) |
-| **Claude** | Anthropic, in this session | a few pages, hard layouts; the usual first choice for course readings | uses the author's Claude plan; pages are sent to Anthropic |
+| **Gemini** (the plugin's own reader) | Google, with the author's Gemini key | many pages, Hebrew with vowel marks, tables | uses the Gemini key; pages are sent to Google (on Google's free tier Google may use them to improve its products) |
+| **Claude** (the default) | Anthropic, in this session | most scans, hard layouts; the first choice for course readings | uses the author's Claude plan; pages are sent to Anthropic |
 | **Codex** | OpenAI, through the Codex program | an author who has Codex and wants to spare Claude or Gemini | uses the author's Codex plan; pages are sent to OpenAI |
 | **Tesseract** | this computer only | clean print, private material, no key | free; nothing leaves the computer; weaker on scans, vowel marks and mixed Hebrew and English |
 

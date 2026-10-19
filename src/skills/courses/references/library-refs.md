@@ -119,9 +119,9 @@ From each hit it reads `delivery.availability` (`fulltext`, `available_in_librar
 
 ### A4a. Step 0 before any OCR: Anna's Archive
 
-Before OCR-ing a scan, look for the same edition on Anna's Archive. Same edition means the publisher, the year and the printed pagination all match.
+Before extracting a scan the student asked for, look for the same edition on Anna's Archive. Same edition means the publisher, the year and the printed pagination all match.
 
-- Use its text layer or EPUB text only if the printed page numbers can be kept exactly. Otherwise OCR (A7).
+- Use its text layer or EPUB text only if the printed page numbers can be kept exactly. Otherwise extract the scan (A7).
 - Record the result on the ref as `annas: found-used | found-wrong-edition | not-found | not-checked`.
 - Never use Anna's Archive for a Kotar item.
 - Status as of October 2026: the CLI's mirrors sit behind DDoS-Guard or rate limits, and the `.gl` mirror works only in a real browser.
@@ -156,19 +156,18 @@ Kotar items are read through the user's own BIU licence, for their own study, an
 2. Kotar page indices are not printed page numbers. The print validator in the print dialog's iframe (`CheckPageStart(null, {Value})`) says which labels are valid. Map label to index once per book; the offset comes after the front matter. Never press "send" in Chrome's native print preview: it freezes the browser tool.
 3. In the signed-in viewer tab, `fetch()` the print-pages URL for the range, in batches of at most 10 pages (Kotar's own print limit). Parse the `<img src>` values and save them through a blob `a.download`. The image host is cross-origin, so the page cannot read the bytes itself.
 4. Each image URL carries a `gPageToken`. Fetch the image with `curl -L`, with no cookies; `-L` follows the http-to-https redirect. The `nStep` parameter sets the size: step 9 gives about 1354 × 1807 pixels, and steps 10 and above return a small placeholder.
-5. Merge the images in page order into one PDF, then OCR it (A7).
+5. Merge the images in page order into one PDF, then extract it only if the student asks (A7).
 
 The browser tool may refuse output that contains query strings, so report counts, not URLs.
 
 ### A7. OCR and ingest
 
 - Step 0: check Anna's Archive first (A4a).
-- OCR of scanned library/Kotar readings (user ruling 2026-10-16):
-  1. Gemini (`aw ocr`) produces the page text.
-  2. Tesseract per page (`tess_pages.py`) runs silently as a hallucination check: similarity vs the Gemini text, gate 0.8. Its text never enters a source.
-  3. Pages under the gate are flagged for the user; Gemini's text is kept as is.
-  4. Pages where Gemini returns empty (copyright/recitation block) are marked "blocked" and surfaced. Never fall back to Claude-vision transcription or Tesseract text.
-- JSTOR Hebrew text layers are reversed: never use `pdftotext` on them.
+- No automatic OCR (user ruling 2026-10-19, replacing the 2026-10-16 "Gemini text first" policy). A fetch only downloads. The student picks what to extract on the dashboard; then:
+  1. A docx is read with python-docx or pandoc, a PDF with a text layer with pymupdf per page (printed page numbers kept). A page whose Hebrew fails the sanity check (reversed letters, isolated letters, junk) goes to Claude vision.
+  2. A scanned PDF or image is read by Claude vision (`pdftoppm -r 150`, one page at a time).
+  3. Gemini (`aw ocr`) or Tesseract run only when the student chose that method for the item; with Gemini the pages go to Google. Pages Gemini returns empty are marked "blocked" and surfaced, not transcribed by another engine.
+- Hebrew text layers are often reversed or garbled (JSTOR especially): never use `pdftotext` on them; pymupdf plus the page gate in `extract.py` decides, and a failing page goes to Claude vision.
 - Ingest of in-copyright library readings: the full text goes to Trove and NotebookLM with the printed page numbers exact, and the original PDF goes to the course Drive folder. Register it as a library source:
   ```bash
   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" add-source <file> --course <slug> --origin library --origin-ref <key>
@@ -203,11 +202,11 @@ Chores are deduplicated on course, kind and `ref` (`refs:<slug>:<key>`), so a re
 
 **`refs.py fetch --course X --ref KEY [--task T] [--hit N] [--file PDF] [--dry-run]`** runs the order below and appends each outcome to the ref's `fetch_log: [{step, outcome, at, detail?}]`:
 
-0. Anna's Archive (skipped for Kotar). With `ANNAS_ARCHIVE_KEY` unset it records `annas: not-checked` and goes on; with a key it searches through the global skill's `annas.py`, and a failure (DDoS-Guard) is `annas: error`. A hit is only `annas: candidates` (with `annas_candidates`); a person confirms the edition (A4a).
+0. Anna's Archive (skipped for Kotar). With `ANNAS_ARCHIVE_KEY` unset it records `annas: not-checked` and goes on; with a key it searches through the global skill's `annas.py`, and when it prints the DDoS-Guard page or no JSON the outcome is `annas: blocked` ("Anna's Archive asked for a browser check; search it in Chrome") and the ref gets a `manual` chore to search it in Chrome; any other failure is `annas: error`. A hit is only `annas: candidates` (with `annas_candidates`); a person confirms the edition (A4a).
 1. BIU lookup (Primo + CTO), for a pending ref. Several hits are never auto-picked: the log says `needs-choice`; re-run with `--hit N`.
-2. By status: `online` with a PDF in hand (`--file`, `sources/<slug>/<key>.pdf` or `~/Downloads/<key>.pdf`) becomes `downloaded` with `download_path` and `ocr_next: {state: queued, policy: [gemini-text-first, tesseract-hidden-check, empty-gemini-page-blocked]}`; without a PDF the step is `needs-browser-download` (A5). `kotar` adds a `kotar-source` chore that points to `/academic-writer:kotar-fetch`. `print-only` stays `print-only`.
+2. By status: `online` with a PDF in hand (`--file`, `sources/<slug>/<key>.pdf` or `~/Downloads/<key>.pdf`) becomes `downloaded` with `download_path` (nothing is queued for OCR); without a PDF the step is `needs-browser-download` (A5). `kotar` adds a `kotar-source` chore that points to `/academic-writer:kotar-fetch`. `print-only` stays `print-only`.
 
-`--dry-run` runs the read-only steps and writes nothing. The fetch command does not run OCR; `ocr_next` records what is queued.
+`--dry-run` runs the read-only steps and writes nothing. The fetch command never runs or queues OCR or extraction; text comes only from the dashboard's "חילוץ טקסט" request (`refs.py extract-queue`).
 
 ### A9. The index page and the book layout
 

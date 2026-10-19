@@ -22,7 +22,9 @@ gets no term fields: their overview is built from writing runs, workspaces and r
 
 Writes go only through existing functions: `POST /api/task/submit` and `/api/task/unsubmit` call tasks.py;
 `POST /api/fetch` writes a job to queue/fetch/<ts>-<course>.json for Claude or the nightly run to execute with
-`refs.py fetch` (the server never fetches anything). `GET /api/events` is a Server-Sent Events stream: a server
+`refs.py fetch` (the server never fetches anything). `POST /api/extract` writes a job to queue/extract/<ts>-<course>.json
+({course, items: [{kind: source|ref, key, method}], created_at}) for the nightly run's `refs.py extract-queue` (the server
+never extracts, OCRs or calls a model). Nothing is extracted unless the student asked for it here. `GET /api/events` is a Server-Sent Events stream: a server
 thread scans the registry's mtimes about once a second and sends `state-changed`; the browser never polls.
 """
 from __future__ import annotations
@@ -52,6 +54,7 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # python -I leaves the script dir off sys.path
 import courses  # noqa: E402
 import tasks as tasks_mod  # noqa: E402
+import extract as extract_mod  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 
@@ -197,6 +200,36 @@ def queued_fetches(directory: Path) -> List[Dict[str, Any]]:
     return jobs
 
 
+def queued_extracts(directory: Path) -> set:
+    """(course, kind, key) of every item waiting for extraction: pending queue/extract/*.json jobs, and handoff files
+    (queue/extract/handoff/*.json) whose text Claude has not written yet. Read-only."""
+    waiting = set()
+    folder = directory / "queue" / "extract"
+    for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
+        job = _read_json(path, [])
+        if isinstance(job, dict) and job.get("course"):
+            for it in job.get("items") or []:
+                if isinstance(it, dict):
+                    waiting.add((str(job["course"]), str(it.get("kind")), str(it.get("key"))))
+    handoff = folder / "handoff"
+    for path in sorted(handoff.glob("*.json")) if handoff.is_dir() else []:
+        h = _read_json(path, [])
+        if isinstance(h, dict) and h.get("course") and not (h.get("out") and Path(str(h["out"])).is_file()):
+            waiting.add((str(h["course"]), str(h.get("kind")), str(h.get("key"))))
+    return waiting
+
+
+def pending_source_jobs(directory: Path) -> set:
+    """(course, sha8) of every `courses.py add-source` Trove job still in queue/sources (nothing drains them by itself)."""
+    folder = directory / "queue" / "sources"
+    out = set()
+    for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
+        job = _read_json(path, [])
+        if isinstance(job, dict) and job.get("slug") and job.get("sha8"):
+            out.add((str(job["slug"]), str(job["sha8"])))
+    return out
+
+
 # --- per-source and per-task status --------------------------------------------------------------
 
 def _ocr_waiting(ref: Dict[str, Any]) -> Optional[str]:
@@ -211,7 +244,19 @@ def _ocr_waiting(ref: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def ref_item(ref: Dict[str, Any], sources: List[Dict[str, Any]], queued: bool) -> Dict[str, Any]:
+def _extract_flags(directory: Optional[Path], slug: str, kind: str, key: str, file: Any, downloaded: bool,
+                   in_trove: bool, pending_job: bool, waiting: set) -> Dict[str, Any]:
+    """`extracted` (text file exists), `extract_queued`, and `extractable`: a downloaded file with no extracted text that
+    is not in Trove yet (a source with a pending add-source job counts as not extracted even if its file is the only copy)."""
+    extracted = bool(directory and key and extract_mod.has_extracted_text(directory, slug, kind, key))
+    queued = (slug, kind, key) in waiting
+    on_disk = bool(file) and Path(str(file)).expanduser().is_file()
+    return {"extracted": extracted, "extract_queued": queued,
+            "extractable": bool(downloaded and on_disk and not extracted and not queued and (pending_job or not in_trove))}
+
+
+def ref_item(ref: Dict[str, Any], sources: List[Dict[str, Any]], queued: bool, *, directory: Optional[Path] = None,
+             slug: str = "", waiting: Optional[set] = None) -> Dict[str, Any]:
     st = tasks_mod.ref_status(ref, sources)
     has_text = st["downloaded"] or st["in_trove"]
     status = ref.get("status", "")
@@ -221,15 +266,20 @@ def ref_item(ref: Dict[str, Any], sources: List[Dict[str, Any]], queued: bool) -
             "role": ref.get("role", ""), "downloaded": st["downloaded"], "in_trove": st["in_trove"],
             "in_notebooklm": st["in_notebooklm"], "trove": st["trove"], "missing": missing, "queued": queued,
             "ocr": ocr, "waiting": queued or bool(ocr), "fetchable": not has_text and status != "ingested" and not queued,
-            "tasks": list(ref.get("tasks") or [])}
+            "tasks": list(ref.get("tasks") or []),
+            **_extract_flags(directory, slug, "ref", str(ref.get("key", "")), ref.get("download_path"), st["downloaded"],
+                             st["in_trove"], False, waiting or set())}
 
 
-def source_item(src: Dict[str, Any]) -> Dict[str, Any]:
+def source_item(src: Dict[str, Any], *, directory: Optional[Path] = None, slug: str = "", waiting: Optional[set] = None,
+                pending_jobs: Optional[set] = None) -> Dict[str, Any]:
     st = tasks_mod.source_status(src)
     return {"type": "source", "key": st["key"], "title": src.get("title", ""), "status": src.get("status", ""),
             "role": "", "downloaded": st["downloaded"], "in_trove": st["in_trove"], "in_notebooklm": st["in_notebooklm"],
             "trove": st["trove"], "missing": False, "queued": False, "ocr": None, "waiting": False, "fetchable": False,
-            "tasks": list(src.get("tasks") or [])}
+            "tasks": list(src.get("tasks") or []),
+            **_extract_flags(directory, slug, "source", st["key"], src.get("file"), st["downloaded"], st["in_trove"],
+                             (slug, st["key"]) in (pending_jobs or set()), waiting or set())}
 
 
 def chore_item(chore: Dict[str, Any]) -> Dict[str, Any]:
@@ -444,6 +494,8 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
         store = [dict(c, id="") for c in (_read_json(directory / "digest" / "chores.json", warnings) or [])]
     chores = [c for c in store if isinstance(c, dict)] if isinstance(store, list) else []
     jobs = queued_fetches(directory)
+    extract_waiting = queued_extracts(directory)
+    source_jobs = pending_source_jobs(directory)
     queued_keys = {(j["course"], str(k)) for j in jobs for k in (j.get("refs") or [])}
     lemida_base = str((term.get("lemida") or {}).get("base_url", "")).rstrip("/")
 
@@ -454,8 +506,9 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
         refs_data = _read_json(directory / "refs" / f"{slug}.json", warnings) or {}
         refs_list = [r for r in refs_data.get("refs") or [] if isinstance(r, dict)]
         sources = [s for s in course.get("sources") or [] if isinstance(s, dict)]
-        ref_items = [ref_item(r, sources, (slug, str(r.get("key"))) in queued_keys) for r in refs_list]
-        src_items = [source_item(s) for s in sources if s.get("kind") != "media" and not s.get("lesson_key")]
+        ref_items = [ref_item(r, sources, (slug, str(r.get("key"))) in queued_keys, directory=directory, slug=slug,
+                              waiting=extract_waiting) for r in refs_list]
+        src_items = [source_item(s, directory=directory, slug=slug, waiting=extract_waiting, pending_jobs=source_jobs) for s in sources if s.get("kind") != "media" and not s.get("lesson_key")]
         chore_by_id = {c.get("id"): c for c in course_chores}
 
         task_rows = []
@@ -853,6 +906,40 @@ def queue_fetch(directory: Path, slug: str, ref_keys: List[str], task: Optional[
     return {"queued": keys, "job": path.name}
 
 
+def queue_extract(directory: Path, slug: str, items: Any, method: Any = None) -> Dict[str, Any]:
+    """Write one extract job for the nightly run. Never extracts. Unknown items and unknown methods are refused."""
+    default = "auto" if method in (None, "") else method
+    if default not in extract_mod.METHODS:
+        raise RequestError(400, f"unknown method {default!r}")
+    if not isinstance(items, list) or not items or len(items) > 200:
+        raise RequestError(400, "items must be a non-empty list")
+    course = _read_json(directory / f"{slug}.json", [])
+    course = course if isinstance(course, dict) else {}
+    source_keys = set()
+    for src in course.get("sources") or []:
+        if isinstance(src, dict) and (src.get("sha8") or src.get("sha256")):
+            source_keys.add(str(src.get("sha8") or str(src.get("sha256"))[:8]))
+    ref_keys = {str(r.get("key")) for r in (_read_json(directory / "refs" / f"{slug}.json", {}) or {}).get("refs", [])
+                if isinstance(r, dict)}
+    clean: List[Dict[str, str]] = []
+    for it in items:
+        if not isinstance(it, dict):
+            raise RequestError(400, "bad item")
+        kind, key = it.get("kind"), it.get("key")
+        use = default if it.get("method") in (None, "") else it.get("method")
+        if kind not in extract_mod.KINDS or not isinstance(key, str) or key not in (source_keys if kind == "source" else ref_keys):
+            raise RequestError(400, f"unknown item {kind!r}:{key!r}")
+        if use not in extract_mod.METHODS:
+            raise RequestError(400, f"unknown method {use!r}")
+        if not any(c["kind"] == kind and c["key"] == key for c in clean):
+            clean.append({"kind": kind, "key": key, "method": use})
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    path = directory / "queue" / "extract" / f"{stamp}-{slug}.json"
+    courses._atomic_json(path, {"course": slug, "items": clean, "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                                "requested_by": "dashboard"})
+    return {"queued": [f"{c['kind']}:{c['key']}" for c in clean], "job": path.name}
+
+
 # --- server --------------------------------------------------------------------------------------
 
 def _home_entries(home: Optional[Path]) -> List[Tuple[str, int, int]]:
@@ -886,7 +973,7 @@ def _home_entries(home: Optional[Path]) -> List[Tuple[str, int, int]]:
 
 def _signature(directory: Optional[Path], root: Path, home: Optional[Path] = None) -> Tuple[Any, ...]:
     entries: List[Tuple[str, int, int]] = _home_entries(home)
-    folders = [root] if directory is None else [directory, directory / "refs", directory / "digest", directory / "queue" / "fetch", directory / "logs"]
+    folders = [root] if directory is None else [directory, directory / "refs", directory / "digest", directory / "queue" / "fetch", directory / "queue" / "extract", directory / "queue" / "extract" / "handoff", directory / "queue" / "sources", directory / "logs"]
     for folder in folders:
         try:
             with os.scandir(folder) as it:
@@ -1244,6 +1331,9 @@ class DashboardServer:
                         if task is not None and (not isinstance(task, str) or not IDENT_RE.match(task)):
                             raise RequestError(400, "bad task")
                         result = queue_fetch(directory, slug, refs, task)
+                    elif path == "/api/extract":
+                        slug = _known_course(directory, body.get("course"))
+                        result = queue_extract(directory, slug, body.get("items"), body.get("method"))
                     elif path == "/api/open":
                         target = resolve_run_docx(board._home(), body.get("run"), body.get("workspace"))
                         try:

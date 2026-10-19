@@ -1,5 +1,5 @@
 {
-  "version": "0.18.3",
+  "version": "0.18.4",
   "features": [
     {
       "id": "onboarding",
@@ -701,6 +701,13 @@
           "name": "Fetch selected writes queue/fetch jobs for refs.py fetch",
           "status": "ok",
           "tested": "e2e",
+          "subfeatures": []
+        },
+        {
+          "id": "extract-on-request",
+          "name": "חילוץ טקסט לפי בקשה",
+          "status": "ok",
+          "tested": "unit",
           "subfeatures": []
         },
         {
