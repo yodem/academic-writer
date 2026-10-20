@@ -202,7 +202,9 @@ async function readAuto(scan: Scan, options: OcrOptions, have: Available): Promi
       }
     }
     if (have.gemini) {
-      const [page] = await readGemini([scan], options);
+      const answer = await readGemini([scan], options);
+      if (answer.length !== 1) throw new AwError('ERROR', 'ocr', `Gemini returned ${answer.length} pages for page ${scan.page_number}`);
+      const page = { ...answer[0], page_number: scan.page_number };
       return why ? withNote({ ...page, engine: 'gemini' }, `read by Gemini: ${why}`) : { ...page, engine: 'gemini' };
     }
     if (!free) throw new AwError('ERROR', 'ocr', `page ${scan.page_number}: no reader worked and no Claude or Gemini is available (${failures.join('; ') || 'no free reader installed'})`);

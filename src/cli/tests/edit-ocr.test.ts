@@ -220,3 +220,8 @@ test('an empty Surya reading never hides Tesseract\'s text in the fallback', asy
   assert.equal(c.pages[0]?.engine, 'local');
   assert.equal(c.pages[0]?.text.trim(), HEBREW.trim());
 });
+
+test('a Gemini answer without exactly one page fails instead of passing as read', async () => {
+  __setTransport(async () => ({ text: '[]', finishReason: 'STOP', usage: { in: 2, out: 2 } }));
+  await assert.rejects(auto('gemini-empty', [], [], 'test-key'), /Gemini returned 0 pages for page 1/);
+});
