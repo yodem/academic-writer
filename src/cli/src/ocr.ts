@@ -8,7 +8,7 @@ import { AwError, Budget, budgetFor } from './ledger.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
 
 export type Engine = 'gemini' | 'claude' | 'local' | 'surya';
-export type OcrOptions = { input: string; language: 'he' | 'en' | 'mixed'; runId: string; pages?: string; format?: 'concise' | 'detailed'; out?: string; engine?: Exclude<Engine, 'surya'> | 'auto' };
+export type OcrOptions = { input: string; language: 'he' | 'en' | 'mixed'; runId: string; pages?: string; format?: 'concise' | 'detailed'; out?: string; engine?: Exclude<Engine, 'surya'> | 'auto'; source?: 'required' | 'additional' };
 type Page = { page_number: number; text: string; is_born_digital: boolean; confidence?: string; notes?: string; dpi?: number; engine?: Engine };
 type Scan = { page_number: number; png: string; dpi?: number };
 const schema = { type: 'array', items: { type: 'object', required: ['page_number','text','is_born_digital'], properties: { page_number: { type: 'integer' }, text: { type: 'string' }, is_born_digital: { type: 'boolean' }, confidence: { type: 'string', enum: ['high','medium','low'] }, notes: { type: 'string' } } } };
@@ -159,8 +159,9 @@ function readSurya(scan: Scan): Page {
 }
 
 type Available = { surya: boolean; tesseract: boolean; claude: boolean; gemini: boolean };
-function available(): Available {
-  return { surya: probe('surya_ocr'), tesseract: probe('tesseract'), claude: probe('claude'), gemini: (process.env.GOOGLE_API_KEY ?? '').trim() !== '' };
+/** Free readers only for additional sources: a course's required readings (primary and secondary) get the most accurate reader (user rule 2026-10-20). */
+function available(source: OcrOptions['source'] = 'required'): Available {
+  return { surya: source === 'additional' && probe('surya_ocr'), tesseract: probe('tesseract'), claude: probe('claude'), gemini: (process.env.GOOGLE_API_KEY ?? '').trim() !== '' };
 }
 function withNote(page: Page, note: string, confidence?: string): Page {
   if (!note) return page;
@@ -230,10 +231,11 @@ async function readAuto(scan: Scan, options: OcrOptions, have: Available): Promi
 
 function mimeOf(file: string): string { return /\.jpe?g$/i.test(file) ? 'image/jpeg' : /\.webp$/i.test(file) ? 'image/webp' : /\.tiff?$/i.test(file) ? 'image/tiff' : 'image/png'; }
 
-function autoReason(have: Available): string {
+function autoReason(have: Available, source: OcrOptions['source'] = 'required'): string {
   const steps = [have.surya && have.tesseract ? 'Surya and Tesseract when they agree' : '', have.claude ? `Claude (${cfg.claudeModel})` : '',
     have.gemini ? 'Gemini for refused, short or low-resolution pages' : '', !have.claude && !have.gemini ? 'free readers only' : ''].filter(Boolean);
-  return `cheapest reader that matched Gemini, page by page: ${steps.join(', then ')}`;
+  const why = source === 'additional' ? 'additional source: cheapest reader that matched Gemini' : 'required source: most accurate reader';
+  return `${why}, page by page: ${steps.join(', then ')}`;
 }
 
 export async function ocrDocument(options: OcrOptions): Promise<{ pages: Page[]; truncated: boolean; truncation_message?: string; engine: Engine | 'auto' | 'none'; engine_reason: string }> {
@@ -268,10 +270,12 @@ export async function ocrDocument(options: OcrOptions): Promise<{ pages: Page[];
  }
  // born-digital pages need no engine: choose one only when there is something to read
  const auto = (options.engine ?? 'auto') === 'auto';
- const have = auto && scans.length ? available() : undefined;
+ const have = auto && scans.length ? available(options.source) : undefined;
  if (have && !have.claude && !have.gemini && !have.tesseract && !have.surya) throw new AwError('ERROR', 'ocr', 'no OCR engine available: install Claude Code, set GOOGLE_API_KEY, or install tesseract');
+ // a required reading must reach Claude or Gemini; Tesseract alone is 2-5% wrong on Hebrew, so it runs only when the author names it
+ if (have && !have.claude && !have.gemini && (options.source ?? 'required') === 'required') throw new AwError('ERROR', 'ocr', 'a required source needs Claude Code or a Google API key; to accept the free reader for this source, pass --engine local');
  const { engine, reason } = !scans.length ? { engine: 'none' as const, reason: 'no scanned pages: text extracted from the PDF text layer' }
-   : have ? { engine: 'auto' as const, reason: autoReason(have) } : chooseEngine(options.engine as Exclude<Engine, 'surya'>);
+   : have ? { engine: 'auto' as const, reason: autoReason(have, options.source) } : chooseEngine(options.engine as Exclude<Engine, 'surya'>);
  try {
    const read: Page[] = [];
    if (engine === 'auto' && have) for (const s of scans) read.push(await readAuto(s, options, have));

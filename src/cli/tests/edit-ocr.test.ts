@@ -129,12 +129,12 @@ const HEBREW = 'אבגד הוזח טיכל מנסע פצקר שת '.repeat(12); 
 function suryaBin(text: string): string {
   return fakeBin('surya_ocr', `mkdir -p "$3/page"; printf '{"page":[{"blocks":[{"html":"<p>%s</p>","reading_order":0}]}]}' '${text}' > "$3/page/results.json"`);
 }
-async function auto(name: string, bins: string[], have: string[], key: string, out?: string): Promise<Awaited<ReturnType<typeof ocrDocument>>> {
+async function auto(name: string, bins: string[], have: string[], key: string, out?: string, source: 'required' | 'additional' = 'additional'): Promise<Awaited<ReturnType<typeof ocrDocument>>> {
   const image = join(root, `${name}.png`); writeFileSync(image, Buffer.from('image'));
   const path = process.env.PATH; const saved = process.env.GOOGLE_API_KEY;
   process.env.PATH = `${bins.join(':')}:${path}`; process.env.GOOGLE_API_KEY = key;
   __setProbe((cmd) => have.includes(cmd));
-  try { return await ocrDocument({ input: image, language: 'he', runId: `ocr-${name}`, engine: 'auto', out }); }
+  try { return await ocrDocument({ input: image, language: 'he', runId: `ocr-${name}`, engine: 'auto', out, source }); }
   finally { process.env.PATH = path; process.env.GOOGLE_API_KEY = saved; __setProbe(() => true); }
 }
 const claudeSays = (text: string) => fakeBin('claude', `cat >/dev/null\ncat <<'EOF'\n${JSON.stringify({ type: 'result', is_error: false, result: text })}\nEOF`);
@@ -245,4 +245,17 @@ test('a short but real Claude answer with no Gemini key is kept, flagged low con
   assert.equal(r.pages[0]?.text, 'אבגד הוזח');
   assert.equal(r.pages[0]?.confidence, 'low');
   assert.match(r.pages[0]?.notes ?? '', /much shorter than the free reading; no Google API key/);
+});
+
+test('a required course source never uses the free readers, even when they agree', async () => {
+  const marker = join(root, 'surya-called');
+  const surya = fakeBin('surya_ocr', `touch ${marker}; exit 1`);
+  const r = await auto('required', [surya, fakeBin('tesseract', `echo '${HEBREW}'`), claudeSays(HEBREW)], ALL, '', undefined, 'required');
+  assert.equal(r.pages[0]?.engine, 'claude');
+  assert.match(r.engine_reason, /^required source: most accurate reader/);
+  assert.equal(existsSync(marker), false);
+});
+
+test('a required source with only Tesseract fails with a named error; --engine local still works', async () => {
+  await assert.rejects(auto('required-tess', [fakeBin('tesseract', `echo '${HEBREW}'`)], ['tesseract'], '', undefined, 'required'), /a required source needs Claude Code or a Google API key/);
 });

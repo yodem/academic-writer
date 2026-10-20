@@ -29,8 +29,10 @@ Academic articles and chapters have their own printed page numbers (e.g. 409–4
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" ocr \
   --input <pdf|image|directory> --lang <he|en|mixed> --run <run-id> \
-  --format detailed --out <project-local-output.md>
+  [--source additional] --format detailed --out <project-local-output.md>
 ```
+
+Add `--source additional` only for a source the author added on their own; a course's required readings (primary and secondary) and anything quoted keep the default, the most accurate reader.
 
 Take `--lang` from the profile's `targetLanguage` when the source language is unclear. Never modify or overwrite the source file.
 
