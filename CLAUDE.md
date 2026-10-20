@@ -62,7 +62,7 @@ Slash commands are auto-generated from skills with `user-invocable: true`. To ad
 | `/academic-writer:edit` | edit | Revise a drafted article |
 | `/academic-writer:edit-section` | edit-section | Revise one section only |
 | `/academic-writer:proofread` | proofread | Run the `aw proofread` find, verify, memo, and apply pipeline |
-| `/academic-writer:ocr` | ocr | OCR a scanned PDF/image (or directory) into clean text: Gemini, then Claude, then Tesseract, by what is available |
+| `/academic-writer:ocr` | ocr | OCR a scanned PDF/image (or directory) into clean text, page by page: free readers when Surya and Tesseract agree, then Claude, then Gemini for pages Claude cannot read |
 | `/academic-writer:intro` | intro | Open the bundled HTML guide (`src/guide/index.html`) in the browser |
 | `/academic-writer:courses` | courses | Set up terms and course resources, validate them, sync LMS readings, and run the daily scan |
 | `/academic-writer:dashboard` | dashboard | Serve the local course dashboard (127.0.0.1 only): overview, week agenda and a page per course, live over SSE |

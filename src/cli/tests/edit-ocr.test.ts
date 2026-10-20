@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setPathArguments } from '../src/paths.ts';
 import { __setTransport } from '../src/gemini.ts';
 import { __setDataDir } from '../src/voice.ts';
 import { editText } from '../src/edit.ts';
-import { ocrDocument } from '../src/ocr.ts';
+import { ocrDocument, __setProbe } from '../src/ocr.ts';
 
 const root = mkdtempSync(join(tmpdir(), 'aw-edit-ocr-'));
 setPathArguments(['--data-dir', root, '--project-dir', root]);
@@ -28,7 +28,9 @@ test('edit uses the model response and writes --out', async () => {
 test('OCR transcribes image input and returns the MCP page shape', async () => {
   const image = join(root, 'scan.png'); writeFileSync(image, Buffer.from('image'));
   __setTransport(async () => ({ text: JSON.stringify([{ page_number: 1, text: 'Page text', is_born_digital: false, confidence: 'high', notes: '' }]), finishReason: 'STOP', usage: { in: 2, out: 2 } }));
+  __setProbe(() => false); // auto with only a Google key: Gemini reads the page
   const result = await ocrDocument({ input: image, language: 'he', runId: 'ocr-test' });
+  __setProbe(() => true);
   assert.equal(result.pages[0]?.text, 'Page text');
   assert.equal(result.pages[0]?.is_born_digital, false);
   assert.equal(result.truncated, false);
@@ -37,7 +39,7 @@ test('OCR transcribes image input and returns the MCP page shape', async () => {
 test.after(() => rmSync(root, { recursive: true, force: true }));
 
 import { chmodSync } from 'node:fs';
-import { chooseEngine, __setProbe } from '../src/ocr.ts';
+import { chooseEngine } from '../src/ocr.ts';
 
 function fakeBin(name: string, script: string): string {
   const dir = mkdtempSync(join(tmpdir(), `aw-fake-${name}-`));
@@ -45,18 +47,17 @@ function fakeBin(name: string, script: string): string {
   return dir;
 }
 
-test('engine tiers: Gemini with a key, else Claude, else local, else a named error', () => {
+test('a named engine must be available, with a named error', () => {
   const key = process.env.GOOGLE_API_KEY;
   try {
     __setProbe(() => true);
-    assert.equal(chooseEngine('auto').engine, 'gemini');
+    assert.equal(chooseEngine('gemini').engine, 'gemini');
+    assert.equal(chooseEngine('claude').engine, 'claude');
     process.env.GOOGLE_API_KEY = '';
-    assert.equal(chooseEngine('auto').engine, 'claude');
-    __setProbe((cmd) => cmd === 'tesseract');
-    assert.equal(chooseEngine('auto').engine, 'local');
     __setProbe(() => false);
-    assert.throws(() => chooseEngine('auto'), /no OCR engine available/);
     assert.throws(() => chooseEngine('gemini'), /needs a Google API key/);
+    assert.throws(() => chooseEngine('claude'), /needs the claude program/);
+    assert.throws(() => chooseEngine('local'), /needs tesseract/);
   } finally { process.env.GOOGLE_API_KEY = key; __setProbe(() => true); }
 });
 
@@ -115,4 +116,61 @@ test('a Claude error that is not a content refusal fails the run instead of pass
   try {
     await assert.rejects(ocrDocument({ input: image, language: 'he', runId: 'ocr-claude-auth', engine: 'claude' }), /claude failed: Invalid API key/);
   } finally { process.env.PATH = path; }
+});
+
+test('agreement uses letters only, without vowel points, like the bake-off scorer', async () => {
+  const { __test } = await import('../src/ocr.ts');
+  assert.equal(__test.lettersOnly('בְּרֵאשִׁית, בָּרָא!'), 'בראשית ברא');
+  assert.equal(__test.similarity('abcd', 'abcd'), 1);
+  assert.equal(__test.similarity('abcd', 'abxd'), 0.75);
+});
+
+const HEBREW = 'אבגד הוזח טיכל מנסע פצקר שת '.repeat(12); // over shortAnswerMinChars letters
+function suryaBin(text: string): string {
+  return fakeBin('surya_ocr', `mkdir -p "$3/page"; printf '{"page":[{"blocks":[{"html":"<p>%s</p>","reading_order":0}]}]}' '${text}' > "$3/page/results.json"`);
+}
+async function auto(name: string, bins: string[], have: string[], key: string): Promise<Awaited<ReturnType<typeof ocrDocument>>> {
+  const image = join(root, `${name}.png`); writeFileSync(image, Buffer.from('image'));
+  const path = process.env.PATH; const saved = process.env.GOOGLE_API_KEY;
+  process.env.PATH = `${bins.join(':')}:${path}`; process.env.GOOGLE_API_KEY = key;
+  __setProbe((cmd) => have.includes(cmd));
+  try { return await ocrDocument({ input: image, language: 'he', runId: `ocr-${name}`, engine: 'auto' }); }
+  finally { process.env.PATH = path; process.env.GOOGLE_API_KEY = saved; __setProbe(() => true); }
+}
+const claudeSays = (text: string) => fakeBin('claude', `cat >/dev/null\ncat <<'EOF'\n${JSON.stringify({ type: 'result', is_error: false, result: text })}\nEOF`);
+const ALL = ['surya_ocr', 'tesseract', 'claude'];
+
+test('auto keeps the free reading when Surya and Tesseract agree, and never calls Claude', async () => {
+  const marker = join(root, 'claude-called');
+  const claude = fakeBin('claude', `touch ${marker}; cat >/dev/null`);
+  const r = await auto('agree', [suryaBin(HEBREW), fakeBin('tesseract', `echo '${HEBREW}'`), claude], ALL, '');
+  assert.equal(r.engine, 'auto');
+  assert.equal(r.pages[0]?.engine, 'surya');
+  assert.match(r.pages[0]?.notes ?? '', /Surya and Tesseract agree \(1\.000\)/);
+  assert.equal(existsSync(marker), false);
+});
+
+test('auto sends the page to Claude when the free readers disagree', async () => {
+  const r = await auto('disagree', [suryaBin('שונה לגמרי'), fakeBin('tesseract', `echo '${HEBREW}'`), claudeSays(HEBREW)], ALL, '');
+  assert.equal(r.pages[0]?.engine, 'claude');
+  assert.equal(r.pages[0]?.text, HEBREW);
+});
+
+test('a Claude soft refusal or short answer goes to Gemini when there is a key', async () => {
+  __setTransport(async () => ({ text: JSON.stringify([{ page_number: 1, text: 'Gemini text', is_born_digital: false, confidence: 'high', notes: '' }]), finishReason: 'STOP', usage: { in: 2, out: 2 } }));
+  const soft = await auto('soft', [fakeBin('tesseract', `echo '${HEBREW}'`), claudeSays("I can't transcribe this page verbatim. Summary follows.")], ['tesseract', 'claude'], 'test-key');
+  assert.equal(soft.pages[0]?.engine, 'gemini');
+  assert.match(soft.pages[0]?.notes ?? '', /read by Gemini: Claude declined/);
+  const short = await auto('short', [fakeBin('tesseract', `echo '${HEBREW}'`), claudeSays('אבגד הוזח')], ['tesseract', 'claude'], 'test-key');
+  assert.equal(short.pages[0]?.engine, 'gemini');
+  assert.match(short.pages[0]?.notes ?? '', /much shorter than the free reading/);
+});
+
+test('a Claude refusal with no Gemini key falls back to the free reading, marked low confidence', async () => {
+  const refused = fakeBin('claude', `cat >/dev/null; echo '{"type":"result","is_error":true,"result":"API Error: Output blocked by content filtering policy"}'`);
+  const r = await auto('refused-nokey', [fakeBin('tesseract', `echo '${HEBREW}'`), refused], ['tesseract', 'claude'], '');
+  assert.equal(r.pages[0]?.engine, 'local');
+  assert.equal(r.pages[0]?.confidence, 'low');
+  assert.match(r.pages[0]?.notes ?? '', /Claude refused the page; no Google API key/);
+  assert.equal(r.pages[0]?.text.trim(), HEBREW.trim());
 });

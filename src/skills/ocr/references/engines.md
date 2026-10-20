@@ -9,13 +9,20 @@ Used by `/academic-writer:ocr`, `/academic-writer:ingest` and `/academic-writer:
 - Never overwrite the source file. Write results under the project's `ocr-output/` folder.
 - Say which engine produced the text (`OCR engine: <name>`), wherever the text is stored next.
 
-## Which engine: the tier order (measured 2026-10-20)
+## Which engine: page by page (measured 2026-10-20)
 
-`aw ocr` picks the engine itself unless the author named one (`--engine gemini|claude|local`), and its output says which engine ran and why (`engine`, `engine_reason`):
+`aw ocr` picks the reader for each page unless the author named one for every page (`--engine gemini|claude|local`). Its output says the plan (`engine: auto`, `engine_reason`) and, on every page, who read it (`engine`):
 
-1. **Gemini** (`gemini-3.8-flash`), when a Google API key is set. It ties Claude on accuracy down to 100 dpi, and it is the more accurate reader below 100 dpi and on canonical texts (the vocalized Bible), which Claude refuses to transcribe whole.
-2. **Claude** (Opus, on the author's Claude plan), when there is no Google key. It is accuracy-equal at 100 dpi and up, and the fastest and most consistent of the strong readers. Pages under 100 dpi come back flagged "low resolution: verify".
-3. **On this computer** (Tesseract), when neither is available, or when the author wants nothing to leave the computer. It is free, but it makes 2-5% letter errors on Hebrew and about 23% on English pages, so its text is marked "OCR, not image-verified".
+1. **Free, on this computer** (Surya OCR 2 and Tesseract), only when the author has installed Surya; it needs an NVIDIA graphics card and takes about a minute a page. Both read the page. When their letters agree at `ocr.freeAgreeMin` (98%), Surya's text is kept: every test page that passed matched Gemini. This was measured on 41 pages and is provisional. On their own, the free readers are not good enough: Surya makes 4-5% errors on two-column Hebrew and fails on the vocalized Bible.
+2. **Claude** (Opus, `ocr.claudeModel`, on the author's Claude plan), for the rest. It matched Gemini page by page at every quality from 100 dpi up.
+3. **Gemini** (`gemini-3.8-flash`), when a Google API key is set, for three kinds of page:
+   - pages Claude refused (every full page of the vocalized Bible);
+   - pages where Claude's answer has under 80% of the letters of Tesseract's reading (a polite summary instead of the text);
+   - pages under 100 dpi.
+   Without a key, those pages keep the free reading, marked low confidence.
+4. **Tesseract only**, when there is no Claude and no Google key. It makes 2-5% letter errors on Hebrew and about 23% on English, so its text is marked "OCR, not image-verified".
+
+Sonnet 5.5 matched Opus, but on 2 of 59 pages it answered with a summary and the words "I can't transcribe this page" instead of the text, so Opus stays the Claude reader. Haiku 5.5 was 1.4 points worse on poor scans.
 
 Measured on 52 page images (Hebrew and English academic pages at 200, 150, 100 and 75 dpi, blurred and compressed; the vocalized Bible; 10 real scans from 74 to 600 dpi) plus 15 two-column pages, one page per call, letters-only error rate:
 
@@ -24,18 +31,21 @@ Measured on 52 page images (Hebrew and English academic pages at 200, 150, 100 a
 | gemini-3.8-flash | about 0.3% | 0.3% | right order, 0.1-1.4% | rarely: one copyrighted English page |
 | Claude Opus 5.5 | about 0.3% | 0.95% (guesses words) | right order, 0-1% | every full page of the vocalized Bible |
 | gemini-2.5-flash (the old route) | 3.5-5.3% | 4.8% | not tested | |
+| Claude Sonnet 5.5 | about 0.3% | 0.4% | right order on all but its one refused page | the vocalized Bible, and 2 pages answered with a summary |
+| Claude Haiku 5.5 | 0.7-0.8% | 1.4%, and one 75 dpi page garbled | 0.1-10.7% | the vocalized Bible |
+| Surya OCR 2 (free, local GPU) | 0.1-0.3% Hebrew one column | 0.6% | right order, but 3.7-5.0% on Hebrew | never, but fails on Bible scans |
 | Tesseract | 1.3-5% Hebrew, about 23% English | 18% | right order, 1-9% | never |
 
-Two-column pages need no special handling: every model kept the columns in reading order, and cutting the page into columns first made results worse. Tell the author the tier that ran, in plain words, before showing the text.
+Two-column pages need no special handling: every model kept the columns in reading order, and cutting the page into columns first made results worse. Tell the author, in plain words, which reader read which pages before showing the text.
 
-Ask, with `AskUserQuestion`, only when the author wants a different engine than the tier order gives, and say where the pages go:
+Ask, with `AskUserQuestion`, only when the author wants a different engine than the steps above give, and say where the pages go:
 
 | Engine | Who reads the pages | Cost and privacy |
 |---|---|---|
 | **Gemini** (the plugin's own reader) | Google, with the author's Gemini key | uses the Gemini key; pages are sent to Google (on Google's free tier Google may use them to improve its products) |
 | **Claude** | Anthropic | uses the author's Claude plan; pages are sent to Anthropic |
 | **Codex** | OpenAI, through the Codex program | uses the author's Codex plan; pages are sent to OpenAI |
-| **Tesseract** | this computer only | free; nothing leaves the computer |
+| **Surya and Tesseract** | this computer only | free; nothing leaves the computer |
 
 ## Gemini, Claude or Tesseract through `aw ocr`
 
@@ -45,7 +55,7 @@ Ask, with `AskUserQuestion`, only when the author wants a different engine than 
   [--engine auto|gemini|claude|local] --format detailed --out <project-local-output.md>
 ```
 
-Add `--pages <range>` for some pages. Pages that already contain text are extracted without any engine. A page an engine refuses comes back empty and marked "blocked"; it is never filled in from another engine without asking the author.
+Add `--pages <range>` for some pages. Pages that already contain text are extracted without any engine. Beyond the automatic steps above, a page that comes back "blocked" or "low confidence" is never sent to another engine without asking the author.
 
 ## Claude reading page images in this session (by hand)
 

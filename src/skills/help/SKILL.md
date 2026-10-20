@@ -59,7 +59,7 @@ This table is generated from the plugin itself, so it is always complete.
 | `/academic-writer:review` | Score a completed article on six dimensions (structure, argument logic, citation completeness, source coverage, writing quality, academic conventions) and show a scorecard with concrete findings. |
 | `/academic-writer:research` | Investigate a topic or check a claim against the author's indexed sources, returning only passages whose quotations were verified word for word. |
 | `/academic-writer:ideate` | Guided brainstorming that turns a vague topic into a sharp research question, using who/what/when/where/why/how, a gap check against the author's sources and a choice of approach; saves a research brief that /academic-writer:write reads. |
-| `/academic-writer:ocr` | Turn a scan or photo into plain text: Gemini, then Claude, then Tesseract, by what is available. |
+| `/academic-writer:ocr` | Turn a scan or photo into plain text: free readers when they agree, then Claude, then Gemini for the pages Claude cannot read. |
 | `/academic-writer:ingest` | Upload one article or chapter to the source library with printed page numbers, hinted contents and a citation guide. |
 | `/academic-writer:ingest-book` | Upload a whole book (multi-volume, scanned or EPUB) to the source library with a navigable hinted table of contents and a citation guide. |
 | `/academic-writer:library-eval` | Compare Trove and PageIndex on your own article: anonymised pairs you judge yourself, then the unblinded results. |
