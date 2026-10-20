@@ -235,3 +235,11 @@ def test_explicit_date_matching_two_chores_is_not_folded(tmp_path):
     d, specs, ids = _dup_reg(tmp_path, [("assignment", "1", "א", "2026-10-18T08:00:00+03:00"), ("assignment", "2", "ב", "2026-10-18T09:00:00+03:00")],
                              [{"key": "t1", "title": "מטלה (הגשה 18.10.2026)", "primary": []}])
     assert tasks.migrate(d, specs)["merged"] == []
+
+
+def test_reading_chore_becomes_a_reading_task(tmp_path):
+    d, c = make_reg(tmp_path)
+    r = chores.add_chore(courses.Registry(d), course="kane", kind="reading", ref="1152530", title="קריאה לקראת שיעור הבא",
+                         core_texts=["דן, תולדות תורת הסוד העברית יג, 322-341"], due_at="2026-10-25T14:00:00+02:00")
+    by_id = {t["id"]: t for t in tasks.sync_tasks(d, "kane")}
+    assert by_id[r["id"]]["kind"] == "reading"

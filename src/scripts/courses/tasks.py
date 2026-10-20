@@ -26,7 +26,7 @@ from typing import Any
 import chores as chores_mod
 import courses
 
-TASK_KINDS = ("assignment", "forum-post", "exam")  # perusall-capture chores are readings to capture, not hand-ins
+TASK_KINDS = ("assignment", "forum-post", "exam", "reading")  # perusall-capture chores are readings to capture, not hand-ins
 DEFAULT_SPECS = Path("~/dev/jewish-studies/bar-ilan/courses-tashpaz/tools/specs")
 
 

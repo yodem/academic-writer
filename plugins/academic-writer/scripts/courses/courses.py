@@ -78,6 +78,9 @@ def lemida_module_url(base: str, course: dict[str, Any], ref: Any, chore_kind: s
     ref = str(ref or "")
     seen = ((course.get("watch_seen") or {}).get("modules") or {}).get(ref) or {}
     mod = str(seen.get("type") or CHORE_MODULE_TYPE.get(chore_kind, ""))
+    if base and ref.isdigit() and not seen and chore_kind == "reading":
+        # a reading announced in a forum post: its ref is the discussion id
+        return f"{base.rstrip('/')}/mod/forum/discuss.php?d={ref}"
     if not (base and ref.isdigit() and re.fullmatch(r"[a-z]+", mod)):
         return None
     return f"{base.rstrip('/')}/mod/{mod}/view.php?id={ref}"
@@ -1094,7 +1097,7 @@ def check_source(registry: Registry, slug: str, sha8: str | None = None, runner:
     return problems
 
 
-CHORE_KINDS = ("assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual", "exam")
+CHORE_KINDS = ("assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual", "exam", "reading")
 BLOCKED_MESSAGE = "lemida: blocked, use chrome watcher"
 _BLOCKED_RE = re.compile(r"radware|captcha|bot manager|text/html|<html|expecting value", re.I)
 
