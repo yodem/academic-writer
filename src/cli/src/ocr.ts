@@ -162,11 +162,14 @@ function withNote(page: Page, note: string, confidence?: string): Page {
  * 4. with neither model, the best free reading, marked low confidence.
  */
 async function readAuto(scan: Scan, options: OcrOptions, have: Available): Promise<Page> {
-  const tess = have.tesseract ? readLocal(scan, options.language) : undefined;
+  // the free readers are optional: one that fails (no Hebrew data, no GPU) is skipped, and a model reads the page
+  const tried = (read: () => Page): Page | undefined => { try { return read(); } catch { return undefined; } };
+  const tess = have.tesseract ? tried(() => readLocal(scan, options.language)) : undefined;
   let free = tess;
-  if (have.surya && tess) {
-    const surya = readSurya(scan);
-    const agree = similarity(lettersOnly(surya.text), lettersOnly(tess.text));
+  const surya = have.surya && tess ? tried(() => readSurya(scan)) : undefined;
+  if (surya && tess) {
+    const [a, b] = [lettersOnly(surya.text), lettersOnly(tess.text)];
+    const agree = a && b ? similarity(a, b) : 0; // two empty readings are not an agreement
     if (agree >= cfg.freeAgreeMin) return { ...surya, engine: 'surya', notes: `free reading: Surya and Tesseract agree (${agree.toFixed(3)})` };
     free = { ...surya, engine: 'surya' };
   }
@@ -183,14 +186,14 @@ async function readAuto(scan: Scan, options: OcrOptions, have: Available): Promi
     if (!why) return withNote({ ...claude, engine: 'claude' }, lowResNote('claude', scan.dpi), lowRes ? 'low' : undefined);
     if (!have.gemini) {
       const fallback = free ?? { ...claude, text: '' };
-      return withNote({ ...fallback, engine: free?.engine ?? 'local' }, `${why}; no Google API key for the Gemini fallback, so this is the free reading: check it against the image`, 'low');
+      return withNote({ ...fallback, engine: free ? (free.engine ?? 'local') : 'claude' }, `${why}; no Google API key for the Gemini fallback, so this is the free reading: check it against the image`, 'low');
     }
   }
   if (have.gemini) {
     const [page] = await readGemini([scan], options);
     return why ? withNote({ ...page, engine: 'gemini' }, `read by Gemini: ${why}`) : { ...page, engine: 'gemini' };
   }
-  if (!free) throw new AwError('ERROR', 'ocr', 'no OCR engine available: install Claude Code, set GOOGLE_API_KEY, or install tesseract');
+  if (!free) throw new AwError('ERROR', 'ocr', `page ${scan.page_number}: tesseract failed and no Claude or Gemini is available`);
   return withNote({ ...free, engine: free.engine ?? 'local' }, 'no Claude or Gemini available: free reading only', 'low');
 }
 
@@ -253,7 +256,9 @@ export async function ocrDocument(options: OcrOptions): Promise<{ pages: Page[];
  } finally { if (rasterDir) rmSync(rasterDir, { recursive: true, force: true }); }
  pages.sort((a,b)=>a.page_number-b.page_number);
  const output = { pages, truncated, ...(truncation_message ? { truncation_message } : {}), engine, engine_reason: reason };
- if (options.out) writeFileSync(options.out, `OCR engine: ${engine}\n\n${pages.map(p=>p.text).join('\n\n')}`, 'utf8');
+ // with auto, each scanned page names its own reader in the header, so the saved text keeps who read what
+ const byPage = engine === 'auto' ? ` (${pages.filter((p) => p.engine).map((p) => `page ${p.page_number}: ${p.engine}`).join(', ')})` : '';
+ if (options.out) writeFileSync(options.out, `OCR engine: ${engine}${byPage}\n\n${pages.map(p=>p.text).join('\n\n')}`, 'utf8');
  return output;
 }
 export const __test = { lowResNote, lettersOnly, similarity };

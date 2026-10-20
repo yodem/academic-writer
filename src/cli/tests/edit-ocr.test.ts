@@ -129,12 +129,12 @@ const HEBREW = 'אבגד הוזח טיכל מנסע פצקר שת '.repeat(12); 
 function suryaBin(text: string): string {
   return fakeBin('surya_ocr', `mkdir -p "$3/page"; printf '{"page":[{"blocks":[{"html":"<p>%s</p>","reading_order":0}]}]}' '${text}' > "$3/page/results.json"`);
 }
-async function auto(name: string, bins: string[], have: string[], key: string): Promise<Awaited<ReturnType<typeof ocrDocument>>> {
+async function auto(name: string, bins: string[], have: string[], key: string, out?: string): Promise<Awaited<ReturnType<typeof ocrDocument>>> {
   const image = join(root, `${name}.png`); writeFileSync(image, Buffer.from('image'));
   const path = process.env.PATH; const saved = process.env.GOOGLE_API_KEY;
   process.env.PATH = `${bins.join(':')}:${path}`; process.env.GOOGLE_API_KEY = key;
   __setProbe((cmd) => have.includes(cmd));
-  try { return await ocrDocument({ input: image, language: 'he', runId: `ocr-${name}`, engine: 'auto' }); }
+  try { return await ocrDocument({ input: image, language: 'he', runId: `ocr-${name}`, engine: 'auto', out }); }
   finally { process.env.PATH = path; process.env.GOOGLE_API_KEY = saved; __setProbe(() => true); }
 }
 const claudeSays = (text: string) => fakeBin('claude', `cat >/dev/null\ncat <<'EOF'\n${JSON.stringify({ type: 'result', is_error: false, result: text })}\nEOF`);
@@ -173,4 +173,18 @@ test('a Claude refusal with no Gemini key falls back to the free reading, marked
   assert.equal(r.pages[0]?.confidence, 'low');
   assert.match(r.pages[0]?.notes ?? '', /Claude refused the page; no Google API key/);
   assert.equal(r.pages[0]?.text.trim(), HEBREW.trim());
+});
+
+test('two empty free readings are not an agreement: Claude reads the page', async () => {
+  const r = await auto('empty', [suryaBin(''), fakeBin('tesseract', `echo ''`), claudeSays(HEBREW)], ALL, '');
+  assert.equal(r.pages[0]?.engine, 'claude');
+});
+
+test('a failing free reader is skipped, not fatal, and --out names each page\'s reader', async () => {
+  const out = join(root, 'auto-out.md');
+  const r = await auto('tess-fails', [fakeBin('surya_ocr', 'exit 1'), fakeBin('tesseract', 'echo "no heb data" >&2; exit 1'), claudeSays(HEBREW)], ALL, '', out);
+  assert.equal(r.pages[0]?.engine, 'claude');
+  assert.match(readFileSync(out, 'utf8'), /^OCR engine: auto \(page 1: claude\)/);
+  const s = await auto('surya-fails', [fakeBin('surya_ocr', 'exit 1'), fakeBin('tesseract', `echo '${HEBREW}'`), claudeSays(HEBREW)], ALL, '');
+  assert.equal(s.pages[0]?.engine, 'claude');
 });
