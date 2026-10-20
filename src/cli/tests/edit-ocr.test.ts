@@ -196,3 +196,9 @@ test('with no model, Surya still reads when Tesseract fails, and the failure is 
   assert.match(r.pages[0]?.notes ?? '', /skipped: tesseract failed: missing heb\.traineddata/);
   await assert.rejects(auto('none-works', [fakeBin('tesseract', 'echo "missing heb.traineddata" >&2; exit 1')], ['tesseract'], ''), /no reader worked .*missing heb\.traineddata/);
 });
+
+test('with only Surya installed and no model, Surya reads the page', async () => {
+  const r = await auto('surya-alone', [suryaBin(HEBREW)], ['surya_ocr'], '');
+  assert.equal(r.pages[0]?.engine, 'surya');
+  assert.equal(r.pages[0]?.confidence, 'low');
+});

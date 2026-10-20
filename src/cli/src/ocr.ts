@@ -210,7 +210,7 @@ function mimeOf(file: string): string { return /\.jpe?g$/i.test(file) ? 'image/j
 
 function autoReason(have: Available): string {
   const steps = [have.surya && have.tesseract ? 'Surya and Tesseract when they agree' : '', have.claude ? `Claude (${cfg.claudeModel})` : '',
-    have.gemini ? 'Gemini for refused, short or low-resolution pages' : '', !have.claude && !have.gemini ? 'Tesseract only' : ''].filter(Boolean);
+    have.gemini ? 'Gemini for refused, short or low-resolution pages' : '', !have.claude && !have.gemini ? 'free readers only' : ''].filter(Boolean);
   return `cheapest reader that matched Gemini, page by page: ${steps.join(', then ')}`;
 }
 
@@ -247,7 +247,7 @@ export async function ocrDocument(options: OcrOptions): Promise<{ pages: Page[];
  // born-digital pages need no engine: choose one only when there is something to read
  const auto = (options.engine ?? 'auto') === 'auto';
  const have = auto && scans.length ? available() : undefined;
- if (have && !have.claude && !have.gemini && !have.tesseract) throw new AwError('ERROR', 'ocr', 'no OCR engine available: install Claude Code, set GOOGLE_API_KEY, or install tesseract');
+ if (have && !have.claude && !have.gemini && !have.tesseract && !have.surya) throw new AwError('ERROR', 'ocr', 'no OCR engine available: install Claude Code, set GOOGLE_API_KEY, or install tesseract');
  const { engine, reason } = !scans.length ? { engine: 'none' as const, reason: 'no scanned pages: text extracted from the PDF text layer' }
    : have ? { engine: 'auto' as const, reason: autoReason(have) } : chooseEngine(options.engine as Exclude<Engine, 'surya'>);
  try {
