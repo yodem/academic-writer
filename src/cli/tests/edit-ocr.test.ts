@@ -166,13 +166,15 @@ test('a Claude soft refusal or short answer goes to Gemini when there is a key',
   assert.match(short.pages[0]?.notes ?? '', /much shorter than the free reading/);
 });
 
-test('a Claude refusal with no Gemini key falls back to the free reading, marked low confidence', async () => {
+test('a Claude refusal with no Gemini key stays blank and blocked, not filled from a free reading', async () => {
   const refused = fakeBin('claude', `cat >/dev/null; echo '{"type":"result","is_error":true,"result":"API Error: Output blocked by content filtering policy"}'`);
   const r = await auto('refused-nokey', [fakeBin('tesseract', `echo '${HEBREW}'`), refused], ['tesseract', 'claude'], '');
-  assert.equal(r.pages[0]?.engine, 'local');
-  assert.equal(r.pages[0]?.confidence, 'low');
-  assert.match(r.pages[0]?.notes ?? '', /Claude refused the page; no Google API key/);
-  assert.equal(r.pages[0]?.text.trim(), HEBREW.trim());
+  assert.equal(r.pages[0]?.engine, 'claude');
+  assert.equal(r.pages[0]?.text, '');
+  assert.match(r.pages[0]?.notes ?? '', /^blocked: Claude refused the page; no Google API key .*a free reading by local exists/);
+  const soft = await auto('soft-nokey', [fakeBin('tesseract', `echo '${HEBREW}'`), claudeSays("I can't transcribe this page verbatim.")], ['tesseract', 'claude'], '');
+  assert.equal(soft.pages[0]?.text, '');
+  assert.match(soft.pages[0]?.notes ?? '', /^blocked: Claude declined/);
 });
 
 test('two empty free readings are not an agreement: Claude reads the page', async () => {
@@ -203,25 +205,36 @@ test('with only Surya installed and no model, Surya reads the page', async () =>
   assert.equal(r.pages[0]?.confidence, 'low');
 });
 
-test('Tesseract fails and Claude refuses with no key: an installed Surya is the last free reading', async () => {
-  const refused = fakeBin('claude', `cat >/dev/null; echo '{"type":"result","is_error":true,"result":"API Error: Output blocked by content filtering policy"}'`);
-  const r = await auto('late-surya', [suryaBin(HEBREW), fakeBin('tesseract', 'exit 1'), refused], ALL, '');
-  assert.equal(r.pages[0]?.engine, 'surya');
-  assert.equal(r.pages[0]?.text, HEBREW);
-  assert.match(r.pages[0]?.notes ?? '', /Claude refused the page/);
-});
 
 test('an empty Surya reading never hides Tesseract\'s text in the fallback', async () => {
   const r = await auto('empty-surya', [suryaBin(''), fakeBin('tesseract', `echo '${HEBREW}'`)], ['surya_ocr', 'tesseract'], '');
   assert.equal(r.pages[0]?.engine, 'local');
   assert.equal(r.pages[0]?.text.trim(), HEBREW.trim());
-  const refused = fakeBin('claude', `cat >/dev/null; echo '{"type":"result","is_error":true,"result":"API Error: Output blocked by content filtering policy"}'`);
-  const c = await auto('empty-surya-refused', [suryaBin(''), fakeBin('tesseract', `echo '${HEBREW}'`), refused], ALL, '');
-  assert.equal(c.pages[0]?.engine, 'local');
-  assert.equal(c.pages[0]?.text.trim(), HEBREW.trim());
 });
 
 test('a Gemini answer without exactly one page fails instead of passing as read', async () => {
   __setTransport(async () => ({ text: '[]', finishReason: 'STOP', usage: { in: 2, out: 2 } }));
   await assert.rejects(auto('gemini-empty', [], [], 'test-key'), /Gemini returned 0 pages for page 1/);
+});
+
+test('Surya counts as installed only when SURYA_INFERENCE_URL answers /health', async () => {
+  // the health check blocks this process, so the fake server runs in its own
+  const { spawn } = await import('node:child_process');
+  const server = spawn(process.execPath, ['-e', 'require("node:http").createServer((q, r) => { r.statusCode = q.url === "/health" ? 200 : 404; r.end(); }).listen(0, "127.0.0.1", function () { console.log(this.address().port); })']);
+  const port = await new Promise<number>((done) => server.stdout.once('data', (d: Buffer) => done(Number(String(d).trim()))));
+  const path = process.env.PATH; const url = process.env.SURYA_INFERENCE_URL;
+  const { __test } = await import('../src/ocr.ts');
+  try {
+    process.env.PATH = `${fakeBin('surya_ocr', 'exit 0')}:${path}`;
+    delete process.env.SURYA_INFERENCE_URL;
+    assert.equal(__test.suryaServer(), false);
+    process.env.SURYA_INFERENCE_URL = `http://127.0.0.1:${port}/v1`;
+    assert.equal(__test.suryaServer(), true);
+    process.env.SURYA_INFERENCE_URL = 'http://127.0.0.1:9';
+    assert.equal(__test.suryaServer(), false);
+  } finally {
+    process.env.PATH = path;
+    if (url === undefined) delete process.env.SURYA_INFERENCE_URL; else process.env.SURYA_INFERENCE_URL = url;
+    server.kill();
+  }
 });

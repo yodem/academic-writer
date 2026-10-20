@@ -13,13 +13,13 @@ Used by `/academic-writer:ocr`, `/academic-writer:ingest` and `/academic-writer:
 
 `aw ocr` picks the reader for each page unless the author named one for every page (`--engine gemini|claude|local`). Its output says the plan (`engine: auto`, `engine_reason`) and, on every page, who read it (`engine`):
 
-1. **Free, on this computer** (Surya OCR 2 and Tesseract), only when the author has installed Surya; it needs an NVIDIA graphics card and takes about a minute a page. Both read the page. When their letters agree at `ocr.freeAgreeMin` (98%), Surya's text is kept. On the 54 test pages, 17 passed: Surya got a median 0.3% of letters wrong on them, against 0.13% for Gemini and 0.0% for Opus, and one page that passed had 1.1% wrong. So the free step saves the author's Claude plan at the cost of a few more wrong letters per page. On their own, the free readers are not good enough: Surya makes 4-5% errors on two-column Hebrew and fails on the vocalized Bible.
+1. **Free, on this computer** (Surya OCR 2 and Tesseract), only when the author has installed Surya and pointed it at a running inference server (`SURYA_INFERENCE_URL`, answering `/health`). It needs an NVIDIA graphics card and takes about a minute a page; without a running server Surya starts its own, which can fall back to the computer's processor at several minutes a page, so the plugin skips it. Both read the page. When their letters agree at `ocr.freeAgreeMin` (98%), Surya's text is kept. On the 54 test pages, 17 passed: Surya got a median 0.3% of letters wrong on them, against 0.13% for Gemini and 0.0% for Opus, and one page that passed had 1.1% wrong. So the free step saves the author's Claude plan at the cost of a few more wrong letters per page. On their own, the free readers are not good enough: Surya makes 4-5% errors on two-column Hebrew and fails on the vocalized Bible.
 2. **Claude** (Opus, `ocr.claudeModel`, on the author's Claude plan), for the rest. It matched Gemini page by page at every quality from 100 dpi up.
 3. **Gemini** (`gemini-3.8-flash`), when a Google API key is set, for three kinds of page:
    - pages Claude refused (every full page of the vocalized Bible);
    - pages where Claude's answer has under 80% of the letters of Tesseract's reading (a polite summary instead of the text);
    - pages under 100 dpi.
-   Without a key, those pages keep the free reading, marked low confidence.
+   Without a key, a page Claude refused or declined comes back blank and marked "blocked": the free readings of the vocalized Bible were 33-99% wrong, so they are not substituted. A page under 100 dpi keeps Claude's reading, marked low confidence.
 4. **Tesseract only**, when there is no Claude and no Google key. It makes 2-5% letter errors on Hebrew and about 23% on English, so its text is marked "OCR, not image-verified".
 
 Sonnet 5.5 matched Opus, but on 2 of 59 pages it answered with a summary and the words "I can't transcribe this page" instead of the text, so Opus stays the Claude reader. Haiku 5.5 was 1.4 points worse on poor scans.

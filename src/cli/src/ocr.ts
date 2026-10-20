@@ -36,8 +36,20 @@ const SOFT_REFUSAL = /I can(?:no|['’])t (?:transcribe|reproduce)|copyrighted t
 function stripFence(value: string): string { const match = /```(?:json)?\s*\n([\s\S]*?)\n```/i.exec(value); return match?.[1] ?? value; }
 
 /** Which programs exist on this computer; replaceable in tests. */
-let probe = (cmd: string): boolean => spawnSync(cmd, [cmd === 'surya_ocr' ? '--help' : '--version'], { encoding: 'utf8' }).status === 0;
+let probe = (cmd: string): boolean => (cmd === 'surya_ocr' ? suryaServer() : spawnSync(cmd, ['--version'], { encoding: 'utf8' }).status === 0);
 export function __setProbe(fn: (cmd: string) => boolean): void { probe = fn; }
+
+/**
+ * Surya counts as installed only when the author points it at a running inference server
+ * (SURYA_INFERENCE_URL answering /health). Without one, surya_ocr starts its own server, which on a
+ * machine without the CUDA runtime runs on the CPU at about six minutes a page and keeps running afterwards.
+ */
+function suryaServer(): boolean {
+  const url = (process.env.SURYA_INFERENCE_URL ?? '').trim().replace(/\/+$/, '').replace(/\/v1$/, '');
+  if (!url || spawnSync('surya_ocr', ['--help'], { encoding: 'utf8' }).status !== 0) return false;
+  const health = spawnSync(process.execPath, ['-e', 'fetch(process.argv[1]).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))', `${url}/health`], { timeout: 5_000 });
+  return health.status === 0;
+}
 
 /** Letters and spaces only, without vowel points or cantillation: the bake-off's normalization (bin/score.py). */
 function lettersOnly(text: string): string {
@@ -195,11 +207,9 @@ async function readAuto(scan: Scan, options: OcrOptions, have: Available): Promi
       delete claude.refused;
       if (!why) return withNote({ ...claude, engine: 'claude' }, lowResNote('claude', scan.dpi), lowRes ? 'low' : undefined);
       if (!have.gemini) {
-        // Surya was not run when Tesseract failed and a model was set; it is the last free reading now
-        const late = !free && have.surya && !surya ? tried(() => ({ ...readSurya(scan), engine: 'surya' as const })) : undefined;
-        const last = free ?? late;
-        const fallback = last ?? { ...claude, text: '' };
-        return withNote({ ...fallback, engine: last ? (last.engine ?? 'local') : 'claude' }, `${why}; no Google API key for the Gemini fallback, so this is the free reading: check it against the image`, 'low');
+        // a refused page stays blank: the free readings of such pages (the vocalized Bible) were 33-99% wrong
+        const other = free && lettersOnly(free.text) ? `; a free reading by ${free.engine ?? 'local'} exists but did not pass the agreement check` : '';
+        return { ...claude, text: '', confidence: 'low', engine: 'claude', notes: `blocked: ${why}; no Google API key for the Gemini fallback${other}; ask before sending this page to another engine` };
       }
     }
     if (have.gemini) {
@@ -277,4 +287,4 @@ export async function ocrDocument(options: OcrOptions): Promise<{ pages: Page[];
  if (options.out) writeFileSync(options.out, `OCR engine: ${engine}${byPage}\n\n${pages.map(p=>p.text).join('\n\n')}`, 'utf8');
  return output;
 }
-export const __test = { lowResNote, lettersOnly, similarity };
+export const __test = { lowResNote, lettersOnly, similarity, suryaServer };
