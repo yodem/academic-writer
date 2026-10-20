@@ -124,9 +124,14 @@ var init_thresholds = __esm({
       },
       ocr: {
         perCallPageCap: 40,
-        geminiBatchSize: 6,
+        geminiBatchSize: 1,
+        lowResDpi: 100,
+        claudeModel: "claude-opus-5-5",
+        freeAgreeMin: 0.98,
+        shortAnswerRatio: 0.8,
+        shortAnswerMinChars: 200,
         inlineSizeLimitBytes: 20971520,
-        _comment: "Ported from the retired MCP gemini_ocr tool (PER_CALL_PAGE_CAP, GEMINI_BATCH_SIZE, INLINE_SIZE_LIMIT_BYTES = 20*1024*1024). perCallPageCap bounds how many pages one `aw ocr` invocation processes before truncating (Files API upload path for pages over inlineSizeLimitBytes was not ported to the CLI -- see T15a handoff notes; oversized pages fail with a named ERROR instead of silently uploading)."
+        _comment: "Ported from the retired MCP gemini_ocr tool (PER_CALL_PAGE_CAP, GEMINI_BATCH_SIZE, INLINE_SIZE_LIMIT_BYTES = 20*1024*1024). perCallPageCap bounds how many pages one `aw ocr` invocation processes before truncating (Files API upload path for pages over inlineSizeLimitBytes was not ported to the CLI -- see T15a handoff notes; oversized pages fail with a named ERROR instead of silently uploading). geminiBatchSize is 1 (the bake-off measured one page per call; the 2026-10-16 six-page batches dropped passages) and lowResDpi is 100 from the 2026-10-20 OCR bake-off: below 100 dpi Gemini read Hebrew more accurately than Claude, so the Claude and local tiers flag those pages. claudeModel is the Claude reader (Opus: Sonnet 5.5 tied it but twice answered a book page with a summary instead of the text, and Haiku 5.5 was 1.4 points worse on poor scans). Round 3 of the bake-off set the auto order, page by page: a free reading is kept when Surya and Tesseract agree at freeAgreeMin (letters-only similarity; 17 of 54 test pages passed, Surya median 0.3% letter error on them against 0.13% for Gemini and 0.0% for Opus, worst 1.1%), then Claude, then Gemini. A Claude answer whose letters are under shortAnswerRatio of Tesseract's reading goes to Gemini: every real Claude answer was at least 0.9 of it and every soft refusal under 0.35. Pages whose Tesseract reading has under shortAnswerMinChars letters skip that check."
       },
       citationFloor: {
         minSecondaryPer1000Words: 4,
@@ -204,7 +209,7 @@ var init_thresholds = __esm({
         },
         ocr: {
           provider: "gemini",
-          model: "gemini-2.5-flash",
+          model: "gemini-3.8-flash",
           maxOutputTokens: 8192,
           concurrency: 1,
           piModel: "openrouter/z-ai/glm-5.3"
@@ -47904,7 +47909,7 @@ var Library = class _Library {
       commands: { trove: word(config.troveCommand), pageindex: word(config.pageindexCommand) }
     };
     if (check) {
-      const probe = async (route) => {
+      const probe2 = async (route) => {
         const started = Date.now();
         try {
           const timeoutMs = this.override ?? limits4.timeoutMs.check;
@@ -47915,7 +47920,7 @@ var Library = class _Library {
         }
       };
       const routes = {};
-      for (const route of [config.primary, config.secondary]) if (route) routes[route] = await probe(route);
+      for (const route of [config.primary, config.secondary]) if (route) routes[route] = await probe2(route);
       report.check = routes;
     }
     return report;
@@ -48659,17 +48664,17 @@ function evidenceQuotesFor(unit) {
   }
 }
 async function loadVoiceBundle(runId2) {
-  const cfg = thresholds_default.voice.bundle;
-  const result = await voiceBundle({ n: cfg.exemplars, pairs: cfg.pairs, runId: runId2 });
+  const cfg2 = thresholds_default.voice.bundle;
+  const result = await voiceBundle({ n: cfg2.exemplars, pairs: cfg2.pairs, runId: runId2 });
   const parsed = JSON.parse(readFileSync11(result.path, "utf8"));
   return { exemplars: parsed.exemplars ?? [], pairs: parsed.pairs ?? [], rules: parsed.rules ?? "", styleWords: parsed.styleWords ?? EMPTY_STYLE_WORDS };
 }
 async function voiceCheckFallback(paragraph, styleWords) {
   const bannedHits = styleWords.banned.filter((b) => paragraph.includes(b.word)).length;
   const fillerHits = styleWords.filler.filter((w) => paragraph.includes(w)).length;
-  const cfg = thresholds_default.styleFingerprint;
-  const score = Math.max(0, cfg.maxScore - bannedHits * 2 - fillerHits);
-  return score >= cfg.passThreshold ? "pass" : "fail";
+  const cfg2 = thresholds_default.styleFingerprint;
+  const score = Math.max(0, cfg2.maxScore - bannedHits * 2 - fillerHits);
+  return score >= cfg2.passThreshold ? "pass" : "fail";
 }
 var GATE_REASON = {
   "citation-not-in-sources": "unknown-source",
@@ -48821,8 +48826,8 @@ function outlineContext(path2) {
   }
 }
 async function realGenerate2(units, runId2, budget, outlinePath) {
-  const cfg = thresholds_default.synthesis;
-  const repeats = repeatedOpeners(units, cfg.openerWords, cfg.repeatedOpenerMin);
+  const cfg2 = thresholds_default.synthesis;
+  const repeats = repeatedOpeners(units, cfg2.openerWords, cfg2.repeatedOpenerMin);
   const system = fillTemplate2(write_synthesize_default, {
     units: JSON.stringify(units.map((u) => ({ unitId: u.id, paragraphs: u.paragraphs.map((text4, paragraphIndex) => ({ paragraphIndex, text: text4 })) })), null, 2),
     outline: outlineContext(outlinePath),
@@ -48929,11 +48934,13 @@ Return one JSON object with revised_text.`;
 }
 
 // src/ocr.ts
-import { existsSync as existsSync11, readFileSync as readFileSync14, readdirSync as readdirSync5, statSync as statSync3, writeFileSync as writeFileSync8 } from "node:fs";
+import { existsSync as existsSync11, mkdtempSync, readFileSync as readFileSync14, readdirSync as readdirSync5, rmSync, statSync as statSync3, writeFileSync as writeFileSync8 } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname as dirname6, extname, join as join17, resolve as resolve9 } from "node:path";
 import { spawnSync } from "node:child_process";
 init_thresholds();
 var schema2 = { type: "array", items: { type: "object", required: ["page_number", "text", "is_born_digital"], properties: { page_number: { type: "integer" }, text: { type: "string" }, is_born_digital: { type: "boolean" }, confidence: { type: "string", enum: ["high", "medium", "low"] }, notes: { type: "string" } } } };
+var cfg = thresholds_default.ocr;
 function runScript(name, args2) {
   const plugin2 = resolve9(dirname6(process.argv[1] ?? ""), "..");
   const script = join17(plugin2, "scripts", "ocr", name);
@@ -48951,55 +48958,263 @@ function prompt3(language, format, pages) {
   return `Transcribe these scanned academic document pages faithfully. OCR ONLY: do not correct, paraphrase, modernize, or summarize. Preserve paragraph breaks and omit running headers/footers unless they are content. Ignore watermarks. ${rtl}
 Language: ${language}; detail: ${format ?? "concise"}. Images are pages in this order: ${pages.join(", ")}. Return one JSON array entry per page with page_number, text, is_born_digital=false, confidence (high|medium|low), notes. ${detail}`;
 }
+var PLAIN_PROMPT = "Transcribe all text on this page image exactly as printed, in the natural reading order of the page. Include running heads, page numbers and footnotes (footnotes after the main text). Keep the original spelling, vowel points (niqqud) and punctuation. Do not correct, modernize, translate, summarize or add any commentary. Mark an illegible word as [?]. Output plain text only, no markdown.";
+var GEMINI_REFUSAL = /RECITATION|SAFETY|PROHIBITED_CONTENT|BLOCKLIST|SPII|IMAGE_SAFETY/;
+var CLAUDE_REFUSAL = /content filtering|Output blocked/i;
+var SHORT = "Claude's answer is much shorter than the free reading";
+var SOFT_REFUSAL = /I can(?:no|['’])t (?:transcribe|reproduce)|copyrighted text/i;
 function stripFence(value) {
   const match = /```(?:json)?\s*\n([\s\S]*?)\n```/i.exec(value);
   return match?.[1] ?? value;
+}
+var probe = (cmd) => cmd === "surya_ocr" ? suryaServer() : spawnSync(cmd, ["--version"], { encoding: "utf8" }).status === 0;
+function suryaServer() {
+  const url = (process.env.SURYA_INFERENCE_URL ?? "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
+  if (!url || spawnSync("surya_ocr", ["--help"], { encoding: "utf8" }).status !== 0) return false;
+  const health = spawnSync(process.execPath, ["-e", "fetch(process.argv[1]).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))", `${url}/health`], { timeout: 5e3 });
+  return health.status === 0;
+}
+function lettersOnly(text4) {
+  return text4.normalize("NFC").replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, "").replace(/\[\?\]/g, " ").replace(/[\u05be-]/g, " ").replace(/[\u0591-\u05c7]/g, "").replace(/[^\p{L}\p{M}\s]/gu, " ").toLowerCase().replace(/\s+/g, " ").trim();
+}
+function similarity(a, b) {
+  if (!a.length && !b.length) return 1;
+  let prev = new Uint32Array(b.length + 1), cur = new Uint32Array(b.length + 1);
+  for (let i2 = 1; i2 <= a.length; i2++) {
+    for (let j = 1; j <= b.length; j++) cur[j] = a[i2 - 1] === b[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]);
+    [prev, cur] = [cur, prev];
+  }
+  return 2 * prev[b.length] / (a.length + b.length);
+}
+function chooseEngine(requested) {
+  const hasKey = (process.env.GOOGLE_API_KEY ?? "").trim() !== "";
+  if (requested === "gemini") {
+    if (!hasKey) throw new AwError("ERROR", "ocr", "engine gemini needs a Google API key (GOOGLE_API_KEY)");
+    return { engine: "gemini", reason: "requested" };
+  }
+  if (requested === "claude") {
+    if (!probe("claude")) throw new AwError("ERROR", "ocr", "engine claude needs the claude program on PATH");
+    return { engine: "claude", reason: "requested" };
+  }
+  if (!probe("tesseract")) throw new AwError("ERROR", "ocr", "engine local needs tesseract installed");
+  return { engine: "local", reason: "requested" };
+}
+function nativeDpi(pdf, page) {
+  const out = spawnSync("pdfimages", ["-list", "-f", String(page), "-l", String(page), pdf], { encoding: "utf8" });
+  if (out.status !== 0) return void 0;
+  const rows = out.stdout.split("\n").slice(2).map((l) => l.trim().split(/\s+/)).filter((r2) => r2.length > 12);
+  const big = rows.sort((a, b) => Number(b[3]) * Number(b[4]) - Number(a[3]) * Number(a[4]))[0];
+  const dpi = big ? Number(big[12]) : NaN;
+  return Number.isFinite(dpi) && dpi > 0 ? dpi : void 0;
+}
+function lowResNote(engine, dpi) {
+  if (engine === "gemini" || engine === "none" || dpi === void 0 || dpi >= cfg.lowResDpi) return "";
+  return `low resolution (${dpi} dpi): in the bake-off Gemini read pages under ${cfg.lowResDpi} dpi more accurately; verify against the image`;
+}
+async function readGemini(scans, options) {
+  const pages = [];
+  for (let offset = 0; offset < scans.length; offset += cfg.geminiBatchSize) {
+    const batch = scans.slice(offset, offset + cfg.geminiBatchSize);
+    const numbers = batch.map((s2) => s2.page_number);
+    const parts = batch.map((s2) => ({ inlineData: { mimeType: mimeOf(s2.png), data: readFileSync14(s2.png).toString("base64") } }));
+    let result;
+    try {
+      result = await callGemini({ step: "ocr", system: prompt3(options.language, options.format, numbers), parts: [...parts, prompt3(options.language, options.format, numbers)], responseSchema: schema2, runId: options.runId, budget: new Budget(options.runId, budgetFor("write")) });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      const refusal = GEMINI_REFUSAL.exec(message)?.[0];
+      if (!refusal) throw error;
+      pages.push(...numbers.map((n) => ({ page_number: n, text: "", is_born_digital: false, confidence: "low", notes: `blocked: Gemini refused this page (${refusal}); not substituted from another engine` })));
+      continue;
+    }
+    const parsed = JSON.parse(stripFence(result.text));
+    if (!Array.isArray(parsed) || parsed.some((p) => typeof p.page_number !== "number" || typeof p.text !== "string")) throw new AwError("ERROR", "ocr", "invalid OCR page response");
+    if (batch.length === 1 && parsed.length === 1) parsed[0].page_number = batch[0].page_number;
+    for (const p of parsed) if (!p.text.trim()) {
+      p.confidence = "low";
+      p.notes = "blocked: Gemini returned no text (copyright/recitation block); not substituted from another engine";
+    }
+    pages.push(...parsed);
+  }
+  return pages;
+}
+function readClaude(scan, language) {
+  const message = { type: "user", message: { role: "user", content: [
+    { type: "image", source: { type: "base64", media_type: mimeOf(scan.png), data: readFileSync14(scan.png).toString("base64") } },
+    { type: "text", text: language === "en" ? PLAIN_PROMPT : `${PLAIN_PROMPT} Hebrew columns read right to left.` }
+  ] } };
+  const run = spawnSync("claude", [
+    "-p",
+    "--model",
+    cfg.claudeModel,
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--tools",
+    "",
+    "--system-prompt",
+    "You are a precise OCR transcription engine.",
+    "--input-format",
+    "stream-json",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--no-session-persistence"
+  ], { input: `${JSON.stringify(message)}
+`, encoding: "utf8", cwd: tmpdir(), env: { ...process.env, ENABLE_CLAUDEAI_MCP_SERVERS: "false" }, maxBuffer: 64 * 1024 * 1024, timeout: 9e5 });
+  const line = (run.stdout ?? "").split("\n").find((l) => l.includes('"type":"result"'));
+  if (!line) throw new AwError("ERROR", "ocr", `claude produced no result: ${(run.stderr || run.stdout || "").slice(-300)}`);
+  const result = JSON.parse(line);
+  if (result.is_error) {
+    if (!CLAUDE_REFUSAL.test(result.result ?? "")) throw new AwError("ERROR", "ocr", `claude failed: ${(result.result ?? "").slice(0, 200)}`);
+    return { page_number: scan.page_number, text: "", is_born_digital: false, confidence: "low", refused: true, notes: `blocked by Claude: ${(result.result ?? "").slice(0, 120)}; ask before sending this page to another engine` };
+  }
+  return { page_number: scan.page_number, text: result.result ?? "", is_born_digital: false, confidence: "medium", notes: "" };
+}
+function readLocal(scan, language) {
+  const langs = language === "en" ? "eng" : "heb+eng";
+  const run = spawnSync("tesseract", [scan.png, "-", "-l", langs], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+  if (run.status !== 0) throw new AwError("ERROR", "ocr", `tesseract failed: ${run.stderr.slice(-300)}`);
+  return { page_number: scan.page_number, text: run.stdout, is_born_digital: false, confidence: "low", notes: "Tesseract: OCR, not image-verified (2-5% letter error on Hebrew scans, more on vowel marks)" };
+}
+function readSurya(scan) {
+  const dir = mkdtempSync(join17(tmpdir(), "aw-surya-"));
+  try {
+    const run = spawnSync("surya_ocr", [scan.png, "--output_dir", dir], { encoding: "utf8", env: process.env, maxBuffer: 16 * 1024 * 1024, timeout: 18e5 });
+    const file = readdirSync5(dir).map((d) => join17(dir, d, "results.json")).find((f3) => existsSync11(f3));
+    if (run.status !== 0 || !file) throw new AwError("ERROR", "ocr", `surya_ocr failed: ${(run.stderr || run.stdout || "").trim().split("\n").pop()?.slice(-300) ?? ""}`);
+    const results = JSON.parse(readFileSync14(file, "utf8"));
+    const blocks = (Object.values(results)[0]?.[0]?.blocks ?? []).filter((b) => !b.skipped).sort((a, b) => (a.reading_order ?? 0) - (b.reading_order ?? 0));
+    return { page_number: scan.page_number, text: blocks.map((b) => (b.html ?? "").replace(/<[^>]+>/g, "")).join("\n"), is_born_digital: false, confidence: "medium", notes: "" };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+function available() {
+  return { surya: probe("surya_ocr"), tesseract: probe("tesseract"), claude: probe("claude"), gemini: (process.env.GOOGLE_API_KEY ?? "").trim() !== "" };
+}
+function withNote(page, note, confidence) {
+  if (!note) return page;
+  return { ...page, notes: page.notes ? `${page.notes}; ${note}` : note, ...confidence ? { confidence } : {} };
+}
+async function readAuto(scan, options, have) {
+  const failures = [];
+  const tried = (read) => {
+    try {
+      return read();
+    } catch (error) {
+      failures.push((error instanceof Error ? error.message : String(error)).replace(/^ERROR ocr: /, "").slice(0, 200));
+      return void 0;
+    }
+  };
+  const tess = have.tesseract ? tried(() => readLocal(scan, options.language)) : void 0;
+  const noModel = !have.claude && !have.gemini;
+  const surya = have.surya && (tess || noModel) ? tried(() => readSurya(scan)) : void 0;
+  const free = surya && lettersOnly(surya.text) ? { ...surya, engine: "surya" } : tess ?? (surya ? { ...surya, engine: "surya" } : void 0);
+  const page = await chooseRead();
+  return failures.length ? withNote(page, `skipped: ${failures.join("; ")}`) : page;
+  async function chooseRead() {
+    if (surya && tess) {
+      const [a, b] = [lettersOnly(surya.text), lettersOnly(tess.text)];
+      const agree = a && b ? similarity(a, b) : 0;
+      if (agree >= cfg.freeAgreeMin) return { ...surya, engine: "surya", notes: `free reading: Surya and Tesseract agree (${agree.toFixed(3)})` };
+    }
+    const lowRes = scan.dpi !== void 0 && scan.dpi < cfg.lowResDpi;
+    let why = lowRes ? `under ${cfg.lowResDpi} dpi` : "";
+    if (have.claude && !(lowRes && have.gemini)) {
+      const claude = readClaude(scan, options.language);
+      const ref = tess ? lettersOnly(tess.text).length : 0;
+      why = claude.refused ? "Claude refused the page" : SOFT_REFUSAL.test(claude.text.slice(0, 300)) ? "Claude declined to transcribe the page" : ref >= cfg.shortAnswerMinChars && lettersOnly(claude.text).length < cfg.shortAnswerRatio * ref ? SHORT : "";
+      delete claude.refused;
+      if (!why) return withNote({ ...claude, engine: "claude" }, lowResNote("claude", scan.dpi), lowRes ? "low" : void 0);
+      if (!have.gemini && why === SHORT) {
+        return withNote({ ...claude, engine: "claude" }, `${why}; no Google API key for the Gemini fallback: check it against the image`, "low");
+      }
+      if (!have.gemini) {
+        const other = free && lettersOnly(free.text) ? `; a free reading by ${free.engine ?? "local"} exists but did not pass the agreement check` : "";
+        return { ...claude, text: "", confidence: "low", engine: "claude", notes: `blocked: ${why}; no Google API key for the Gemini fallback${other}; ask before sending this page to another engine` };
+      }
+    }
+    if (have.gemini) {
+      const answer = await readGemini([scan], options);
+      if (answer.length !== 1) throw new AwError("ERROR", "ocr", `Gemini returned ${answer.length} pages for page ${scan.page_number}`);
+      const page2 = { ...answer[0], page_number: scan.page_number };
+      return why ? withNote({ ...page2, engine: "gemini" }, `read by Gemini: ${why}`) : { ...page2, engine: "gemini" };
+    }
+    if (!free) throw new AwError("ERROR", "ocr", `page ${scan.page_number}: no reader worked and no Claude or Gemini is available (${failures.join("; ") || "no free reader installed"})`);
+    return withNote({ ...free, engine: free.engine ?? "local" }, "no Claude or Gemini available: free reading only", "low");
+  }
+}
+function mimeOf(file) {
+  return /\.jpe?g$/i.test(file) ? "image/jpeg" : /\.webp$/i.test(file) ? "image/webp" : /\.tiff?$/i.test(file) ? "image/tiff" : "image/png";
+}
+function autoReason(have) {
+  const steps = [
+    have.surya && have.tesseract ? "Surya and Tesseract when they agree" : "",
+    have.claude ? `Claude (${cfg.claudeModel})` : "",
+    have.gemini ? "Gemini for refused, short or low-resolution pages" : "",
+    !have.claude && !have.gemini ? "free readers only" : ""
+  ].filter(Boolean);
+  return `cheapest reader that matched Gemini, page by page: ${steps.join(", then ")}`;
 }
 async function ocrDocument(options) {
   const input = resolve9(options.input);
   if (!existsSync11(input)) throw new AwError("ERROR", "ocr", `input does not exist: ${input}`);
   const isDir = statSync3(input).isDirectory();
   const imageFiles = isDir ? readdirSync5(input).filter((name) => /\.(png|jpe?g|webp|tiff?)$/i.test(name)).sort().map((name) => join17(input, name)) : [];
-  let pages = [];
+  const pages = [];
   let truncated = false;
   let truncation_message;
+  const scans = [];
+  let rasterDir;
   if (!isDir && extname(input).toLowerCase() === ".pdf") {
     const detected = runScript("detect_text_layer.py", options.pages ? [input, "--pages", options.pages] : [input]);
-    const selected = detected.pages.slice(0, thresholds_default.ocr.perCallPageCap);
+    const selected = detected.pages.slice(0, cfg.perCallPageCap);
     truncated = detected.pages.length > selected.length;
     if (truncated) truncation_message = `${selected.length} of ${detected.pages.length} pages processed; rerun with a narrower page range.`;
     pages.push(...selected.filter((p) => p.is_born_digital).map((p) => ({ page_number: p.page_number, text: p.text, is_born_digital: true, confidence: "high", notes: "" })));
-    const scans = selected.filter((p) => !p.is_born_digital).map((p) => p.page_number);
-    for (let offset = 0; offset < scans.length; offset += thresholds_default.ocr.geminiBatchSize) {
-      const batch = scans.slice(offset, offset + thresholds_default.ocr.geminiBatchSize);
-      const raster = runScript("rasterize_pages.py", [input, "--pages", batch.join(",")]);
-      try {
-        const parts = raster.pages.map((p) => ({ inlineData: { mimeType: "image/png", data: readFileSync14(p.png_path).toString("base64") } }));
-        const result = await callGemini({ step: "ocr", system: prompt3(options.language, options.format, batch), parts: [...parts, prompt3(options.language, options.format, batch)], responseSchema: schema2, runId: options.runId, budget: new Budget(options.runId, budgetFor("write")) });
-        const parsed = JSON.parse(stripFence(result.text));
-        if (!Array.isArray(parsed) || parsed.some((p) => typeof p.page_number !== "number" || typeof p.text !== "string")) throw new AwError("ERROR", "ocr", "invalid OCR page response");
-        pages.push(...parsed);
-      } finally {
-        const fs3 = await import("node:fs/promises");
-        await fs3.rm(raster.temp_dir, { recursive: true, force: true });
-      }
+    const numbers = selected.filter((p) => !p.is_born_digital).map((p) => p.page_number);
+    if (numbers.length) {
+      const raster = runScript("rasterize_pages.py", [input, "--pages", numbers.join(",")]);
+      rasterDir = raster.temp_dir;
+      scans.push(...raster.pages.map((p) => ({ page_number: p.page_number, png: p.png_path, dpi: nativeDpi(input, p.page_number) })));
     }
   } else {
     const files = imageFiles.length ? imageFiles : [input];
     if (isDir && files.length === 0) throw new AwError("ERROR", "ocr", "directory contains no supported image files");
-    for (let index = 0; index < Math.min(files.length, thresholds_default.ocr.perCallPageCap); index++) {
-      const file = files[index];
-      const mime = /\.jpe?g$/i.test(file) ? "image/jpeg" : /\.webp$/i.test(file) ? "image/webp" : /\.tiff?$/i.test(file) ? "image/tiff" : "image/png";
-      const result = await callGemini({ step: "ocr", system: prompt3(options.language, options.format, [index + 1]), parts: [{ inlineData: { mimeType: mime, data: readFileSync14(file).toString("base64") } }, prompt3(options.language, options.format, [index + 1])], responseSchema: schema2, runId: options.runId, budget: new Budget(options.runId, budgetFor("write")) });
-      const parsed = JSON.parse(stripFence(result.text));
-      pages.push(...parsed);
+    const kept = files.slice(0, cfg.perCallPageCap);
+    scans.push(...kept.map((png, index) => ({ page_number: index + 1, png })));
+    truncated = files.length > kept.length;
+    if (truncated) truncation_message = `${kept.length} of ${files.length} images processed.`;
+  }
+  const auto = (options.engine ?? "auto") === "auto";
+  const have = auto && scans.length ? available() : void 0;
+  if (have && !have.claude && !have.gemini && !have.tesseract && !have.surya) throw new AwError("ERROR", "ocr", "no OCR engine available: install Claude Code, set GOOGLE_API_KEY, or install tesseract");
+  const { engine, reason } = !scans.length ? { engine: "none", reason: "no scanned pages: text extracted from the PDF text layer" } : have ? { engine: "auto", reason: autoReason(have) } : chooseEngine(options.engine);
+  try {
+    const read = [];
+    if (engine === "auto" && have) for (const s2 of scans) read.push(await readAuto(s2, options, have));
+    else if (engine === "gemini") read.push(...await readGemini(scans, options));
+    else if (engine !== "none") read.push(...scans.map((s2) => engine === "claude" ? readClaude(s2, options.language) : readLocal(s2, options.language)));
+    for (const page of read) {
+      const scan = scans.find((s2) => s2.page_number === page.page_number);
+      const note = engine === "auto" ? "" : lowResNote(engine, scan?.dpi);
+      if (scan?.dpi !== void 0) page.dpi = scan.dpi;
+      if (note) {
+        page.notes = page.notes ? `${page.notes}; ${note}` : note;
+        page.confidence = "low";
+      }
+      pages.push(page);
     }
-    truncated = files.length > pages.length;
-    if (truncated) truncation_message = `${pages.length} of ${files.length} images processed.`;
+  } finally {
+    if (rasterDir) rmSync(rasterDir, { recursive: true, force: true });
   }
   pages.sort((a, b) => a.page_number - b.page_number);
-  const output = { pages, truncated, ...truncation_message ? { truncation_message } : {} };
-  if (options.out) writeFileSync8(options.out, pages.map((p) => p.text).join("\n\n"), "utf8");
+  const output = { pages, truncated, ...truncation_message ? { truncation_message } : {}, engine, engine_reason: reason };
+  const byPage = engine === "auto" ? ` (${pages.filter((p) => p.engine).map((p) => `page ${p.page_number}: ${p.engine}`).join(", ")})` : "";
+  if (options.out) writeFileSync8(options.out, `OCR engine: ${engine}${byPage}
+
+${pages.map((p) => p.text).join("\n\n")}`, "utf8");
   return output;
 }
 
@@ -50506,7 +50721,7 @@ import { existsSync as existsSync15 } from "node:fs";
 import { randomBytes as randomBytes5 } from "node:crypto";
 import { mkdir as mkdir6, mkdtemp, readFile as readFile6, realpath as realpath3, rm as rm5, writeFile as writeFile4 } from "node:fs/promises";
 import { existsSync as existsSync14 } from "node:fs";
-import { constants as osConstants, tmpdir } from "node:os";
+import { constants as osConstants, tmpdir as tmpdir2 } from "node:os";
 import { join as join20 } from "node:path";
 
 // src/library/eval/agent.ts
@@ -51090,7 +51305,7 @@ async function locateOnce(options, claim, route, group) {
   if (group.stopping) throw new LibraryError("exit", "ERROR library eval run: interrupted");
   const runId2 = runIdFor(options.plan.eval_id, route, claim.id);
   const tag = `${runId2}.${randomBytes5(6).toString("hex")}`;
-  const base = await realpath3(tmpdir());
+  const base = await realpath3(tmpdir2());
   const dir = await mkdtemp(join20(base, "aw-eval-"));
   const started = options.now();
   try {
@@ -52074,13 +52289,13 @@ async function buildPlan(options) {
 // src/library/eval/reset.ts
 import { existsSync as existsSync19 } from "node:fs";
 import { mkdir as mkdir7, rename as rename4 } from "node:fs/promises";
-import { basename as basename9, join as join24 } from "node:path";
+import { basename as basename8, join as join24 } from "node:path";
 async function archiveGeneration(paths, now) {
   const parts = [paths.pairs, paths.sealedDir, paths.judgments, paths.runsDir, paths.reportJson, paths.reportMd, paths.judgeHtml].filter((part) => existsSync19(part));
   if (parts.length === 0) return null;
   const target = join24(paths.archiveDir, now.toISOString().replace(/[:.]/gu, "-"));
   await mkdir7(target, { recursive: true });
-  for (const part of parts) await rename4(part, join24(target, basename9(part)));
+  for (const part of parts) await rename4(part, join24(target, basename8(part)));
   return target;
 }
 
@@ -52945,7 +53160,7 @@ ${next}`)) return true;
   }
   return false;
 }
-async function computeSupports(project, lookupId, quote2, waitMs, page, probe) {
+async function computeSupports(project, lookupId, quote2, waitMs, page, probe2) {
   if (tokens(quote2).length < limits8.supports.minQuoteTokens) return { supports: null, reason: "no_quote" };
   const rows = await rowsForLookup(project, lookupId);
   const lookup = rows.find((row) => row.row_type === "lookup");
@@ -52961,7 +53176,7 @@ async function computeSupports(project, lookupId, quote2, waitMs, page, probe) {
     const spool = await readSpool(project, spoolPath);
     if (first) {
       first = false;
-      await probe?.afterFirstSpoolRead?.();
+      await probe2?.afterFirstSpoolRead?.();
     }
     if (spool) return judge2(spool);
     const shadow = (await rowsForLookup(project, lookupId)).find((row) => row.row_type === "shadow");
@@ -53532,8 +53747,9 @@ Live model verification requires GOOGLE_API_KEY.
     const input = value("--input");
     const language = value("--lang");
     const format = value("--format");
-    if (!runId2 || !input || !["he", "en", "mixed"].includes(language ?? "") || format && !["concise", "detailed"].includes(format)) throw new Error("ERROR ocr: --input, --lang he|en|mixed, and --run are required; --format must be concise|detailed");
-    process.stdout.write(`${JSON.stringify(await ocrDocument({ runId: runId2, input, language, pages: value("--pages"), format, out: value("--out") }))}
+    const engine = value("--engine") ?? "auto";
+    if (!runId2 || !input || !["he", "en", "mixed"].includes(language ?? "") || format && !["concise", "detailed"].includes(format) || !["auto", "gemini", "claude", "local"].includes(engine)) throw new Error("ERROR ocr: --input, --lang he|en|mixed, and --run are required; --format must be concise|detailed; --engine must be auto|gemini|claude|local");
+    process.stdout.write(`${JSON.stringify(await ocrDocument({ runId: runId2, input, language, pages: value("--pages"), format, out: value("--out"), engine }))}
 `);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : "ERROR ocr: unknown failure"}
