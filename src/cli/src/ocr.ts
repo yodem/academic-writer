@@ -163,38 +163,47 @@ function withNote(page: Page, note: string, confidence?: string): Page {
  */
 async function readAuto(scan: Scan, options: OcrOptions, have: Available): Promise<Page> {
   // the free readers are optional: one that fails (no Hebrew data, no GPU) is skipped, and a model reads the page
-  const tried = (read: () => Page): Page | undefined => { try { return read(); } catch { return undefined; } };
+  const failures: string[] = [];
+  const tried = (read: () => Page): Page | undefined => {
+    try { return read(); } catch (error) { failures.push((error instanceof Error ? error.message : String(error)).replace(/^ERROR ocr: /, '').slice(0, 200)); return undefined; }
+  };
   const tess = have.tesseract ? tried(() => readLocal(scan, options.language)) : undefined;
-  let free = tess;
-  const surya = have.surya && tess ? tried(() => readSurya(scan)) : undefined;
-  if (surya && tess) {
-    const [a, b] = [lettersOnly(surya.text), lettersOnly(tess.text)];
-    const agree = a && b ? similarity(a, b) : 0; // two empty readings are not an agreement
-    if (agree >= cfg.freeAgreeMin) return { ...surya, engine: 'surya', notes: `free reading: Surya and Tesseract agree (${agree.toFixed(3)})` };
-    free = { ...surya, engine: 'surya' };
-  }
-  const lowRes = scan.dpi !== undefined && scan.dpi < cfg.lowResDpi;
-  let why = lowRes ? `under ${cfg.lowResDpi} dpi` : '';
-  if (have.claude && !(lowRes && have.gemini)) {
-    const claude = readClaude(scan, options.language);
-    const ref = tess ? lettersOnly(tess.text).length : 0;
-    why = claude.refused ? 'Claude refused the page'
-      : SOFT_REFUSAL.test(claude.text.slice(0, 300)) ? 'Claude declined to transcribe the page'
-      : ref >= cfg.shortAnswerMinChars && lettersOnly(claude.text).length < cfg.shortAnswerRatio * ref ? 'Claude\'s answer is much shorter than the free reading'
-      : '';
-    delete claude.refused;
-    if (!why) return withNote({ ...claude, engine: 'claude' }, lowResNote('claude', scan.dpi), lowRes ? 'low' : undefined);
-    if (!have.gemini) {
-      const fallback = free ?? { ...claude, text: '' };
-      return withNote({ ...fallback, engine: free ? (free.engine ?? 'local') : 'claude' }, `${why}; no Google API key for the Gemini fallback, so this is the free reading: check it against the image`, 'low');
+  const noModel = !have.claude && !have.gemini;
+  // Surya alone settles nothing, so without Tesseract it runs only as the last free reading
+  const surya = have.surya && (tess || noModel) ? tried(() => readSurya(scan)) : undefined;
+  const free: Page | undefined = surya ? { ...surya, engine: 'surya' } : tess;
+  const page = await chooseRead();
+  return failures.length ? withNote(page, `skipped: ${failures.join('; ')}`) : page;
+
+  async function chooseRead(): Promise<Page> {
+    if (surya && tess) {
+      const [a, b] = [lettersOnly(surya.text), lettersOnly(tess.text)];
+      const agree = a && b ? similarity(a, b) : 0; // two empty readings are not an agreement
+      if (agree >= cfg.freeAgreeMin) return { ...surya, engine: 'surya', notes: `free reading: Surya and Tesseract agree (${agree.toFixed(3)})` };
     }
+    const lowRes = scan.dpi !== undefined && scan.dpi < cfg.lowResDpi;
+    let why = lowRes ? `under ${cfg.lowResDpi} dpi` : '';
+    if (have.claude && !(lowRes && have.gemini)) {
+      const claude = readClaude(scan, options.language);
+      const ref = tess ? lettersOnly(tess.text).length : 0;
+      why = claude.refused ? 'Claude refused the page'
+        : SOFT_REFUSAL.test(claude.text.slice(0, 300)) ? 'Claude declined to transcribe the page'
+        : ref >= cfg.shortAnswerMinChars && lettersOnly(claude.text).length < cfg.shortAnswerRatio * ref ? 'Claude\'s answer is much shorter than the free reading'
+        : '';
+      delete claude.refused;
+      if (!why) return withNote({ ...claude, engine: 'claude' }, lowResNote('claude', scan.dpi), lowRes ? 'low' : undefined);
+      if (!have.gemini) {
+        const fallback = free ?? { ...claude, text: '' };
+        return withNote({ ...fallback, engine: free ? (free.engine ?? 'local') : 'claude' }, `${why}; no Google API key for the Gemini fallback, so this is the free reading: check it against the image`, 'low');
+      }
+    }
+    if (have.gemini) {
+      const [page] = await readGemini([scan], options);
+      return why ? withNote({ ...page, engine: 'gemini' }, `read by Gemini: ${why}`) : { ...page, engine: 'gemini' };
+    }
+    if (!free) throw new AwError('ERROR', 'ocr', `page ${scan.page_number}: no reader worked and no Claude or Gemini is available (${failures.join('; ') || 'no free reader installed'})`);
+    return withNote({ ...free, engine: free.engine ?? 'local' }, 'no Claude or Gemini available: free reading only', 'low');
   }
-  if (have.gemini) {
-    const [page] = await readGemini([scan], options);
-    return why ? withNote({ ...page, engine: 'gemini' }, `read by Gemini: ${why}`) : { ...page, engine: 'gemini' };
-  }
-  if (!free) throw new AwError('ERROR', 'ocr', `page ${scan.page_number}: tesseract failed and no Claude or Gemini is available`);
-  return withNote({ ...free, engine: free.engine ?? 'local' }, 'no Claude or Gemini available: free reading only', 'low');
 }
 
 function mimeOf(file: string): string { return /\.jpe?g$/i.test(file) ? 'image/jpeg' : /\.webp$/i.test(file) ? 'image/webp' : /\.tiff?$/i.test(file) ? 'image/tiff' : 'image/png'; }

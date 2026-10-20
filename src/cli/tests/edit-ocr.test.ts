@@ -188,3 +188,11 @@ test('a failing free reader is skipped, not fatal, and --out names each page\'s 
   const s = await auto('surya-fails', [fakeBin('surya_ocr', 'exit 1'), fakeBin('tesseract', `echo '${HEBREW}'`), claudeSays(HEBREW)], ALL, '');
   assert.equal(s.pages[0]?.engine, 'claude');
 });
+
+test('with no model, Surya still reads when Tesseract fails, and the failure is kept in the notes', async () => {
+  const r = await auto('surya-only', [suryaBin(HEBREW), fakeBin('tesseract', 'echo "missing heb.traineddata" >&2; exit 1')], ['surya_ocr', 'tesseract'], '');
+  assert.equal(r.pages[0]?.engine, 'surya');
+  assert.equal(r.pages[0]?.confidence, 'low');
+  assert.match(r.pages[0]?.notes ?? '', /skipped: tesseract failed: missing heb\.traineddata/);
+  await assert.rejects(auto('none-works', [fakeBin('tesseract', 'echo "missing heb.traineddata" >&2; exit 1')], ['tesseract'], ''), /no reader worked .*missing heb\.traineddata/);
+});
