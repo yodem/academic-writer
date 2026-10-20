@@ -202,3 +202,11 @@ test('with only Surya installed and no model, Surya reads the page', async () =>
   assert.equal(r.pages[0]?.engine, 'surya');
   assert.equal(r.pages[0]?.confidence, 'low');
 });
+
+test('Tesseract fails and Claude refuses with no key: an installed Surya is the last free reading', async () => {
+  const refused = fakeBin('claude', `cat >/dev/null; echo '{"type":"result","is_error":true,"result":"API Error: Output blocked by content filtering policy"}'`);
+  const r = await auto('late-surya', [suryaBin(HEBREW), fakeBin('tesseract', 'exit 1'), refused], ALL, '');
+  assert.equal(r.pages[0]?.engine, 'surya');
+  assert.equal(r.pages[0]?.text, HEBREW);
+  assert.match(r.pages[0]?.notes ?? '', /Claude refused the page/);
+});

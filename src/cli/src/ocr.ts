@@ -193,8 +193,11 @@ async function readAuto(scan: Scan, options: OcrOptions, have: Available): Promi
       delete claude.refused;
       if (!why) return withNote({ ...claude, engine: 'claude' }, lowResNote('claude', scan.dpi), lowRes ? 'low' : undefined);
       if (!have.gemini) {
-        const fallback = free ?? { ...claude, text: '' };
-        return withNote({ ...fallback, engine: free ? (free.engine ?? 'local') : 'claude' }, `${why}; no Google API key for the Gemini fallback, so this is the free reading: check it against the image`, 'low');
+        // Surya was not run when Tesseract failed and a model was set; it is the last free reading now
+        const late = !free && have.surya && !surya ? tried(() => ({ ...readSurya(scan), engine: 'surya' as const })) : undefined;
+        const last = free ?? late;
+        const fallback = last ?? { ...claude, text: '' };
+        return withNote({ ...fallback, engine: last ? (last.engine ?? 'local') : 'claude' }, `${why}; no Google API key for the Gemini fallback, so this is the free reading: check it against the image`, 'low');
       }
     }
     if (have.gemini) {
