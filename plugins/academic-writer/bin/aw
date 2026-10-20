@@ -131,7 +131,7 @@ var init_thresholds = __esm({
         shortAnswerRatio: 0.8,
         shortAnswerMinChars: 200,
         inlineSizeLimitBytes: 20971520,
-        _comment: "Ported from the retired MCP gemini_ocr tool (PER_CALL_PAGE_CAP, GEMINI_BATCH_SIZE, INLINE_SIZE_LIMIT_BYTES = 20*1024*1024). perCallPageCap bounds how many pages one `aw ocr` invocation processes before truncating (Files API upload path for pages over inlineSizeLimitBytes was not ported to the CLI -- see T15a handoff notes; oversized pages fail with a named ERROR instead of silently uploading). geminiBatchSize is 1 (the bake-off measured one page per call; the 2026-10-16 six-page batches dropped passages) and lowResDpi is 100 from the 2026-10-20 OCR bake-off: below 100 dpi Gemini read Hebrew more accurately than Claude, so the Claude and local tiers flag those pages. claudeModel is the Claude reader (Opus: Sonnet 5.5 tied it but twice answered a book page with a summary instead of the text, and Haiku 5.5 was 1.4 points worse on poor scans). Round 3 of the bake-off set the auto order, page by page: a free reading is kept when Surya and Tesseract agree at freeAgreeMin (letters-only similarity; 17 of 54 test pages passed, Surya median 0.3% letter error on them against 0.13% for Gemini and 0.0% for Opus, worst 1.1%), then Claude, then Gemini. A Claude answer whose letters are under shortAnswerRatio of Tesseract's reading goes to Gemini: every real Claude answer was at least 0.9 of it and every soft refusal under 0.35. Pages whose Tesseract reading has under shortAnswerMinChars letters skip that check."
+        _comment: "Ported from the retired MCP gemini_ocr tool (PER_CALL_PAGE_CAP, GEMINI_BATCH_SIZE, INLINE_SIZE_LIMIT_BYTES = 20*1024*1024). perCallPageCap bounds how many pages one `aw ocr` invocation processes before truncating (Files API upload path for pages over inlineSizeLimitBytes was not ported to the CLI -- see T15a handoff notes; oversized pages fail with a named ERROR instead of silently uploading). geminiBatchSize is 1 (the bake-off measured one page per call; the 2026-10-16 six-page batches dropped passages) and lowResDpi is 100 from the 2026-10-20 OCR bake-off: below 100 dpi Gemini read Hebrew more accurately than Claude, so the Claude and local tiers flag those pages. claudeModel is the Claude reader (Opus: Sonnet 5.5 tied it but twice answered a book page with a summary instead of the text, and Haiku 5.5 was 1.4 points worse on poor scans). Round 3 of the bake-off set the auto order, page by page: for an additional source only (`aw ocr --source additional`; a course's required readings never use free readers, user rule 2026-10-20), a free reading is kept when Surya and Tesseract agree at freeAgreeMin (letters-only similarity; 17 of 54 test pages passed, Surya median 0.3% letter error on them against 0.13% for Gemini and 0.0% for Opus, worst 1.1%), then Claude, then Gemini. A Claude answer whose letters are under shortAnswerRatio of Tesseract's reading goes to Gemini: every real Claude answer was at least 0.9 of it and every soft refusal under 0.35. Pages whose Tesseract reading has under shortAnswerMinChars letters skip that check."
       },
       citationFloor: {
         minSecondaryPer1000Words: 4,
@@ -49090,8 +49090,8 @@ function readSurya(scan) {
     rmSync(dir, { recursive: true, force: true });
   }
 }
-function available() {
-  return { surya: probe("surya_ocr"), tesseract: probe("tesseract"), claude: probe("claude"), gemini: (process.env.GOOGLE_API_KEY ?? "").trim() !== "" };
+function available(source = "required") {
+  return { surya: source === "additional" && probe("surya_ocr"), tesseract: probe("tesseract"), claude: probe("claude"), gemini: (process.env.GOOGLE_API_KEY ?? "").trim() !== "" };
 }
 function withNote(page, note, confidence) {
   if (!note) return page;
@@ -49148,14 +49148,15 @@ async function readAuto(scan, options, have) {
 function mimeOf(file) {
   return /\.jpe?g$/i.test(file) ? "image/jpeg" : /\.webp$/i.test(file) ? "image/webp" : /\.tiff?$/i.test(file) ? "image/tiff" : "image/png";
 }
-function autoReason(have) {
+function autoReason(have, source = "required") {
   const steps = [
     have.surya && have.tesseract ? "Surya and Tesseract when they agree" : "",
     have.claude ? `Claude (${cfg.claudeModel})` : "",
     have.gemini ? "Gemini for refused, short or low-resolution pages" : "",
     !have.claude && !have.gemini ? "free readers only" : ""
   ].filter(Boolean);
-  return `cheapest reader that matched Gemini, page by page: ${steps.join(", then ")}`;
+  const why = source === "additional" ? "additional source: cheapest reader that matched Gemini" : "required source: most accurate reader";
+  return `${why}, page by page: ${steps.join(", then ")}`;
 }
 async function ocrDocument(options) {
   const input = resolve9(options.input);
@@ -49188,9 +49189,10 @@ async function ocrDocument(options) {
     if (truncated) truncation_message = `${kept.length} of ${files.length} images processed.`;
   }
   const auto = (options.engine ?? "auto") === "auto";
-  const have = auto && scans.length ? available() : void 0;
+  const have = auto && scans.length ? available(options.source) : void 0;
   if (have && !have.claude && !have.gemini && !have.tesseract && !have.surya) throw new AwError("ERROR", "ocr", "no OCR engine available: install Claude Code, set GOOGLE_API_KEY, or install tesseract");
-  const { engine, reason } = !scans.length ? { engine: "none", reason: "no scanned pages: text extracted from the PDF text layer" } : have ? { engine: "auto", reason: autoReason(have) } : chooseEngine(options.engine);
+  if (have && !have.claude && !have.gemini && (options.source ?? "required") === "required") throw new AwError("ERROR", "ocr", "a required source needs Claude Code or a Google API key; to accept the free reader for this source, pass --engine local");
+  const { engine, reason } = !scans.length ? { engine: "none", reason: "no scanned pages: text extracted from the PDF text layer" } : have ? { engine: "auto", reason: autoReason(have, options.source) } : chooseEngine(options.engine);
   try {
     const read = [];
     if (engine === "auto" && have) for (const s2 of scans) read.push(await readAuto(s2, options, have));
@@ -53748,8 +53750,9 @@ Live model verification requires GOOGLE_API_KEY.
     const language = value("--lang");
     const format = value("--format");
     const engine = value("--engine") ?? "auto";
-    if (!runId2 || !input || !["he", "en", "mixed"].includes(language ?? "") || format && !["concise", "detailed"].includes(format) || !["auto", "gemini", "claude", "local"].includes(engine)) throw new Error("ERROR ocr: --input, --lang he|en|mixed, and --run are required; --format must be concise|detailed; --engine must be auto|gemini|claude|local");
-    process.stdout.write(`${JSON.stringify(await ocrDocument({ runId: runId2, input, language, pages: value("--pages"), format, out: value("--out"), engine }))}
+    const source = value("--source") ?? "required";
+    if (!runId2 || !input || !["he", "en", "mixed"].includes(language ?? "") || format && !["concise", "detailed"].includes(format) || !["auto", "gemini", "claude", "local"].includes(engine) || !["required", "additional"].includes(source)) throw new Error("ERROR ocr: --input, --lang he|en|mixed, and --run are required; --format must be concise|detailed; --engine must be auto|gemini|claude|local; --source must be required|additional");
+    process.stdout.write(`${JSON.stringify(await ocrDocument({ runId: runId2, input, language, pages: value("--pages"), format, out: value("--out"), engine, source }))}
 `);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : "ERROR ocr: unknown failure"}

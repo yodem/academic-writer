@@ -4,6 +4,16 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-10-20
+
+### Changed
+- **Scanned pages go to the reader that measured best, page by page.** In a test on 67 scanned pages (Hebrew and English, clean to 75 dpi, one and two columns, the vowel-marked Bible), Claude Opus read as accurately as the best Gemini at every scan quality from 100 dpi up. So `aw ocr` now has Claude read the pages. Gemini, when you have set a Google key, reads only the pages Claude refuses (the vowel-marked Bible), the pages where Claude writes a summary instead of the text, and scans under 100 dpi. Every page reports which reader read it, and so does the saved text.
+- **A course's required readings get the most accurate reader.** The primary and secondary sources of a course, and anything you will quote, are read by Claude, with Gemini covering the pages Claude cannot. For a source you added on your own (`--source additional`), the free readers on your computer go first: if Surya (it needs an NVIDIA graphics card and a running Surya server) and Tesseract agree on 98% of the letters, their text is kept. That saves your Claude plan, at a cost of a few more wrong letters per page (0.3% against Opus's 0.0% in the test).
+- Without a Google key, a page Claude refuses comes back blank and marked "blocked", as before; it is never filled in from a weaker reader.
+- The Gemini reader is now `gemini-3.8-flash`, one page per call. The old `gemini-2.5-flash`, six pages per call, dropped passages.
+- `aw ocr --engine gemini|claude|local` still sends every page to one reader.
+
+
 ## [0.18.4] — 2026-10-19
 
 ### Changed

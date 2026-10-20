@@ -16,10 +16,12 @@ OCR (optical character recognition) reads the text out of a scanned or photograp
 
 | Step | Reader | When | Why |
 |---|---|---|---|
-| 1 | **On this computer** (Surya and Tesseract) | Surya is installed and its server is running (`SURYA_INFERENCE_URL`; it needs an NVIDIA graphics card) | when the two free readers agree on 98% of the letters, Surya's text is kept: close to Gemini (0.3% of letters wrong against 0.13%) but behind Opus (0.0%); free, and nothing leaves the computer |
+| 1 | **On this computer** (Surya and Tesseract) | an additional source (`--source additional`), and Surya is installed and its server is running (`SURYA_INFERENCE_URL`; it needs an NVIDIA graphics card) | when the two free readers agree on 98% of the letters, Surya's text is kept: close to Gemini (0.3% of letters wrong against 0.13%) but behind Opus (0.0%); free, and nothing leaves the computer |
 | 2 | **Claude** (Opus) | the free readers disagree or Surya is not installed | as accurate as Gemini from 100 dpi up, on the author's Claude plan |
 | 3 | **Gemini** (`gemini-3.8-flash`) | a Google API key is set, and Claude refused the page, answered far shorter than the page, or the page is under 100 dpi | the only reader of the vocalized Bible (Claude refuses it) and the better reader under 100 dpi |
-| 4 | **Tesseract only** | no Claude and no Google key | free and private, but 2-5% letter errors on Hebrew |
+| 4 | **Tesseract only** | an additional source, with no Claude and no Google key (a required reading stops instead; the author can accept Tesseract with `--engine local`) | free and private, but 2-5% letter errors on Hebrew |
+
+**Required or additional source.** Pass `--source additional` only for a source the author added on their own. A course's required readings (the primary and secondary sources of a course task) and anything the author will quote get the default, `--source required`: Claude reads every page and Gemini covers the pages Claude cannot, with no free readers, because those texts must be as close to 100% accurate as possible (user rule 2026-10-20). When unsure, use `required`.
 
 With a Google key set, only the pages in step 3 go to Google; without one, a page Claude refused or declined comes back blank and marked "blocked" (the free readings of such pages were mostly wrong), and a page under 100 dpi keeps Claude's reading, marked low confidence. The measured numbers, the two-column findings and the Codex option are in `${CLAUDE_PLUGIN_ROOT}/skills/ocr/references/engines.md`. Tell the author, in plain words, which reader read which pages and where they went (Gemini: Google; Claude: Anthropic; Surya and Tesseract: nowhere). If the author asks for one reader for every page, pass `--engine gemini|claude|local`.
 
@@ -32,7 +34,7 @@ Course readings are never OCR'd automatically (user rule 2026-10-19): the studen
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" ocr \
   --input <pdf|image|directory> --lang <he|en|mixed> --run <run-id> \
-  [--engine auto|gemini|claude|local] --format concise --out <project-local-output.md>
+  [--engine auto|gemini|claude|local] [--source required|additional] --format concise --out <project-local-output.md>
 ```
 
 - Add `--pages <range>` to process only some pages.
