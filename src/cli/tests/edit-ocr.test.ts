@@ -210,3 +210,13 @@ test('Tesseract fails and Claude refuses with no key: an installed Surya is the 
   assert.equal(r.pages[0]?.text, HEBREW);
   assert.match(r.pages[0]?.notes ?? '', /Claude refused the page/);
 });
+
+test('an empty Surya reading never hides Tesseract\'s text in the fallback', async () => {
+  const r = await auto('empty-surya', [suryaBin(''), fakeBin('tesseract', `echo '${HEBREW}'`)], ['surya_ocr', 'tesseract'], '');
+  assert.equal(r.pages[0]?.engine, 'local');
+  assert.equal(r.pages[0]?.text.trim(), HEBREW.trim());
+  const refused = fakeBin('claude', `cat >/dev/null; echo '{"type":"result","is_error":true,"result":"API Error: Output blocked by content filtering policy"}'`);
+  const c = await auto('empty-surya-refused', [suryaBin(''), fakeBin('tesseract', `echo '${HEBREW}'`), refused], ALL, '');
+  assert.equal(c.pages[0]?.engine, 'local');
+  assert.equal(c.pages[0]?.text.trim(), HEBREW.trim());
+});

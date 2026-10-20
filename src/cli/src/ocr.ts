@@ -8,7 +8,7 @@ import { AwError, Budget, budgetFor } from './ledger.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
 
 export type Engine = 'gemini' | 'claude' | 'local' | 'surya';
-export type OcrOptions = { input: string; language: 'he' | 'en' | 'mixed'; runId: string; pages?: string; format?: 'concise' | 'detailed'; out?: string; engine?: Engine | 'auto' };
+export type OcrOptions = { input: string; language: 'he' | 'en' | 'mixed'; runId: string; pages?: string; format?: 'concise' | 'detailed'; out?: string; engine?: Exclude<Engine, 'surya'> | 'auto' };
 type Page = { page_number: number; text: string; is_born_digital: boolean; confidence?: string; notes?: string; dpi?: number; engine?: Engine };
 type Scan = { page_number: number; png: string; dpi?: number };
 const schema = { type: 'array', items: { type: 'object', required: ['page_number','text','is_born_digital'], properties: { page_number: { type: 'integer' }, text: { type: 'string' }, is_born_digital: { type: 'boolean' }, confidence: { type: 'string', enum: ['high','medium','low'] }, notes: { type: 'string' } } } };
@@ -171,7 +171,8 @@ async function readAuto(scan: Scan, options: OcrOptions, have: Available): Promi
   const noModel = !have.claude && !have.gemini;
   // Surya alone settles nothing, so without Tesseract it runs only as the last free reading
   const surya = have.surya && (tess || noModel) ? tried(() => readSurya(scan)) : undefined;
-  const free: Page | undefined = surya ? { ...surya, engine: 'surya' } : tess;
+  // the fallback free reading: Surya's when it has text, else Tesseract's
+  const free: Page | undefined = surya && lettersOnly(surya.text) ? { ...surya, engine: 'surya' } : tess ?? (surya ? { ...surya, engine: 'surya' } : undefined);
   const page = await chooseRead();
   return failures.length ? withNote(page, `skipped: ${failures.join('; ')}`) : page;
 
