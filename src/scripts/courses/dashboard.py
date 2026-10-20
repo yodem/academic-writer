@@ -526,9 +526,10 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
                     claimed_chores.add(chore.get("id"))
             due = _parse_dt(task.get("due_at"), tz)
             submitted_at = _parse_dt(task.get("submitted_at"), tz)
-            lemida_chore = next((chore_by_id[cid] for cid in task.get("chore_ids") or []
-                                 if str(chore_by_id.get(cid, {}).get("ref", "")).isdigit()), {})
-            lemida_url = courses.lemida_module_url(lemida_base, course, lemida_chore.get("ref"), lemida_chore.get("kind", ""))
+            # the first chore whose module type is known gives the link
+            lemida_url = next((url for url in (courses.lemida_module_url(lemida_base, course, chore_by_id.get(cid, {}).get("ref"),
+                                                                         chore_by_id.get(cid, {}).get("kind", ""))
+                                               for cid in task.get("chore_ids") or []) if url), None)
             first_chore = chore_by_id.get((task.get("chore_ids") or [None])[0]) or {}
             task_rows.append({
                 "id": tid, "course": slug, "title": task.get("title") or "", "kind": task.get("kind") or "",
