@@ -133,8 +133,10 @@ function deadlineColumn(st, skip){
     rows.push([e.due_date, line(`<a class="what" href="#course/${encodeURIComponent(c.slug)}" data-nav><strong>מבחן: ${esc(e.title)}</strong><span class="sub">${auto(c.name)}${where ? ' · ' + esc(where) : ''}</span></a>`, b(dm(e.due_date)))]);
   });
   openTasks(st).forEach(([c, t]) => {
-    if (t.exam || t.reading || t === skip || !A.effDate(t)) return;
-    rows.push([A.effDate(t), line(`<a class="what" href="#course/${encodeURIComponent(c.slug)}" data-nav>${esc(t.title)}<span class="sub">${auto(c.name)}</span></a>`, b(dm(A.effDate(t))))]);
+    if (t.exam || t === skip || !A.effDate(t)) return;
+    /* a reading due before a lesson is a deadline too: marked so it is not mistaken for a hand-in */
+    const what = t.reading ? `${esc(t.kind_word)}: ${esc(t.title)}` : esc(t.title);
+    rows.push([A.effDate(t), line(`<a class="what" href="#course/${encodeURIComponent(c.slug)}" data-nav>${what}<span class="sub">${auto(c.name)}</span></a>`, b(dm(A.effDate(t))))]);
   });
   rows.sort((x, y) => x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0);
   const body = rows.length ? `<ul>${rows.slice(0, LIMIT).map(r => r[1]).join('')}</ul>${more(rows.length - LIMIT, '#timeline')}` : none('אין מבחנים או מועדי הגשה קרובים.');

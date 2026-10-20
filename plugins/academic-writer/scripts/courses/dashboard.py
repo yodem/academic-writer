@@ -818,7 +818,8 @@ def lede(course_list: List[Dict[str, Any]], now: datetime) -> List[Dict[str, str
     for t in open_tasks:
         if t["reading"] and t["due_at"] and datetime.fromisoformat(t["due_at"]) <= horizon:
             due = datetime.fromisoformat(t["due_at"])
-            parts.append({"t": f" עד יום {DN[(due.weekday() + 1) % 7]} צריך לקרוא את {t['title']}."})
+            course = names.get(t["course"], t["course"])
+            parts.append({"t": f" עד יום {DN[(due.weekday() + 1) % 7]} צריך לקרוא ל{course}: {t['title']}."})
     for c in course_list:
         if c["new_lesson"]:
             parts.append({"t": f" שיעור חדש תומלל ב{c['name']}."})

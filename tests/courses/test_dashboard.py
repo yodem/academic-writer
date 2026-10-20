@@ -308,7 +308,7 @@ def test_reading_tasks_are_marked_as_readings(tmp_path):
     t = by_slug(s)["delta"]["tasks"][0]
     assert t["reading"] is True and t["kind_word"] == "קריאה" and t["due_time"] == "00:00"
     assert s["overview"]["counts"] == {"submit": 3, "read": 1}
-    assert "עד יום שלישי צריך לקרוא את Chapter two." in "".join(seg["t"] for seg in s["lede"])
+    assert "עד יום שלישי צריך לקרוא לDelta course: Chapter two." in "".join(seg["t"] for seg in s["lede"])
 
 
 def test_only_https_links_reach_the_page(tmp_path):
