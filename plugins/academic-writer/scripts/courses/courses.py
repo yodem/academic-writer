@@ -71,11 +71,16 @@ class Registry:
 
 # Moodle has no generic module page: the module type is part of the path (mod/assign/view.php?id=N)
 CHORE_MODULE_TYPE = {"assignment": "assign", "forum-post": "forum"}
+READING_POST_RE = re.compile(r"d(\d+)-p(\d+)")
 
 
 def lemida_module_url(base: str, course: dict[str, Any], ref: Any, chore_kind: str = "") -> str | None:
     """Lemida page of module `ref`. The type comes from the course's watch_seen, else from the chore kind; None when unknown."""
     ref = str(ref or "")
+    post = READING_POST_RE.fullmatch(ref)
+    if base and post:
+        # a reading announced in a forum post: ref d<discussion>-p<post>, one chore per post
+        return f"{base.rstrip('/')}/mod/forum/discuss.php?d={post.group(1)}#p{post.group(2)}"
     seen = ((course.get("watch_seen") or {}).get("modules") or {}).get(ref) or {}
     mod = str(seen.get("type") or CHORE_MODULE_TYPE.get(chore_kind, ""))
     if not (base and ref.isdigit() and re.fullmatch(r"[a-z]+", mod)):
@@ -1094,7 +1099,7 @@ def check_source(registry: Registry, slug: str, sha8: str | None = None, runner:
     return problems
 
 
-CHORE_KINDS = ("assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual", "exam")
+CHORE_KINDS = ("assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual", "exam", "reading")
 BLOCKED_MESSAGE = "lemida: blocked, use chrome watcher"
 _BLOCKED_RE = re.compile(r"radware|captcha|bot manager|text/html|<html|expecting value", re.I)
 

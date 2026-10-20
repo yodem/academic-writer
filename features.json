@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Feature inventory for the academic-writer plugin. A checklist for future audits: each top-level feature lists its subfeatures, the source of truth, runtime status, and known issues. status: ok | partial | broken | missing. Regenerate/extend this file whenever features are added or removed.",
   "generatedAt": "2026-10-01T00:00:00Z",
-  "pluginVersion": "0.19.0",
+  "pluginVersion": "0.19.1",
   "features": [
     {
       "id": "onboarding",

@@ -15,7 +15,7 @@ from typing import Any
 
 import courses
 
-KINDS = ("assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual", "exam")
+KINDS = ("assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual", "exam", "reading")
 STATUSES = ("open", "done")
 KIND_HE = {
     "assignment": "מטלה",
@@ -25,6 +25,7 @@ KIND_HE = {
     "missing-text": "טקסט חסר",
     "manual": "משימה",
     "exam": "בחינה",
+    "reading": "קריאה",
 }
 FIELDS = ("title", "text", "core_texts", "time_left_text", "due_text", "due_at", "room", "material")
 DIGEST_FILES = ("chores.md", "chores.json", "wispr-unmatched.json")

@@ -50,7 +50,7 @@ def test_all_kinds_accepted(tmp_path):
     reg = make_registry(tmp_path)
     for kind in chores.KINDS:
         chores.add_chore(reg, course="kane", kind=kind, ref="r")
-    assert {c["kind"] for c in chores.load(reg)} == {"assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual", "exam"}
+    assert {c["kind"] for c in chores.load(reg)} == {"assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual", "exam", "reading"}
 
 
 def test_done_stays_done_on_rescan(tmp_path):

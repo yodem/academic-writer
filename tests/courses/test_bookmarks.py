@@ -220,3 +220,12 @@ def test_lemida_module_url_uses_the_module_type():
     assert courses.lemida_module_url(base, {}, "5", "manual") is None
     assert courses.lemida_module_url(base, course, "3251886-a") is None
     assert courses.lemida_module_url("", course, "3251886") is None
+
+
+def test_reading_announced_in_a_post_links_to_the_discussion():
+    base = "https://lemida.example"
+    assert courses.lemida_module_url(base, {}, "d1152530-p1529188", "reading") == \
+        "https://lemida.example/mod/forum/discuss.php?d=1152530#p1529188"
+    # a reading whose ref is a known module keeps the module page
+    course = {"watch_seen": {"modules": {"3251589": {"type": "resource"}}}}
+    assert courses.lemida_module_url(base, course, "3251589", "reading") == "https://lemida.example/mod/resource/view.php?id=3251589"
