@@ -28,6 +28,9 @@ function prompt(language: OcrOptions['language'], format: OcrOptions['format'], 
 }
 // Same instruction as the 2026-10-20 bake-off, where Claude and Gemini were scored with it.
 const PLAIN_PROMPT = 'Transcribe all text on this page image exactly as printed, in the natural reading order of the page. Include running heads, page numbers and footnotes (footnotes after the main text). Keep the original spelling, vowel points (niqqud) and punctuation. Do not correct, modernize, translate, summarize or add any commentary. Mark an illegible word as [?]. Output plain text only, no markdown.';
+const GEMINI_REFUSAL = /RECITATION|SAFETY|PROHIBITED_CONTENT|BLOCKLIST|SPII|IMAGE_SAFETY/;
+// Claude's output filter, as it read on 2026-10-20; any other error result (auth, quota, service) fails the run
+const CLAUDE_REFUSAL = /content filtering|Output blocked/i;
 function stripFence(value: string): string { const match = /```(?:json)?\s*\n([\s\S]*?)\n```/i.exec(value); return match?.[1] ?? value; }
 
 /** Which programs exist on this computer; replaceable in tests. */
@@ -59,8 +62,8 @@ function nativeDpi(pdf: string, page: number): number | undefined {
   const dpi = big ? Number(big[12]) : NaN;
   return Number.isFinite(dpi) && dpi > 0 ? dpi : undefined;
 }
-function lowResNote(engine: Engine, dpi: number | undefined): string {
-  if (engine === 'gemini' || dpi === undefined || dpi >= cfg.lowResDpi) return '';
+function lowResNote(engine: Engine | 'none', dpi: number | undefined): string {
+  if (engine === 'gemini' || engine === 'none' || dpi === undefined || dpi >= cfg.lowResDpi) return '';
   return `low resolution (${dpi} dpi): in the bake-off Gemini read pages under ${cfg.lowResDpi} dpi more accurately; verify against the image`;
 }
 
@@ -70,7 +73,17 @@ async function readGemini(scans: Scan[], options: OcrOptions): Promise<Page[]> {
     const batch = scans.slice(offset, offset + cfg.geminiBatchSize);
     const numbers = batch.map((s) => s.page_number);
     const parts: ImagePart[] = batch.map((s) => ({ inlineData: { mimeType: mimeOf(s.png), data: readFileSync(s.png).toString('base64') } }));
-    const result = await callGemini({ step: 'ocr', system: prompt(options.language, options.format, numbers), parts: [...parts, prompt(options.language, options.format, numbers)], responseSchema: schema, runId: options.runId, budget: new Budget(options.runId, budgetFor('write')) });
+    let result: Awaited<ReturnType<typeof callGemini>>;
+    try {
+      result = await callGemini({ step: 'ocr', system: prompt(options.language, options.format, numbers), parts: [...parts, prompt(options.language, options.format, numbers)], responseSchema: schema, runId: options.runId, budget: new Budget(options.runId, budgetFor('write')) });
+    } catch (error) {
+      // callGemini throws on a non-STOP finish; a content refusal is a result for these pages, anything else stays an error
+      const message = error instanceof Error ? error.message : '';
+      const refusal = GEMINI_REFUSAL.exec(message)?.[0];
+      if (!refusal) throw error;
+      pages.push(...numbers.map((n) => ({ page_number: n, text: '', is_born_digital: false, confidence: 'low', notes: `blocked: Gemini refused this page (${refusal}); not substituted from another engine` })));
+      continue;
+    }
     const parsed = JSON.parse(stripFence(result.text)) as Page[];
     if (!Array.isArray(parsed) || parsed.some((p) => typeof p.page_number !== 'number' || typeof p.text !== 'string')) throw new AwError('ERROR', 'ocr', 'invalid OCR page response');
     // a single image is page 1 to the model; give it the scan's own page number
@@ -93,6 +106,7 @@ function readClaude(scan: Scan, language: OcrOptions['language']): Page {
   if (!line) throw new AwError('ERROR', 'ocr', `claude produced no result: ${(run.stderr || run.stdout || '').slice(-300)}`);
   const result = JSON.parse(line) as { result?: string; is_error?: boolean };
   if (result.is_error) {
+    if (!CLAUDE_REFUSAL.test(result.result ?? '')) throw new AwError('ERROR', 'ocr', `claude failed: ${(result.result ?? '').slice(0, 200)}`);
     // Claude's output filter blocks whole pages of well-known texts (the vocalized Bible in the bake-off).
     return { page_number: scan.page_number, text: '', is_born_digital: false, confidence: 'low', notes: `blocked by Claude: ${(result.result ?? '').slice(0, 120)}; ask before sending this page to another engine` };
   }
@@ -108,10 +122,9 @@ function readLocal(scan: Scan, language: OcrOptions['language']): Page {
 
 function mimeOf(file: string): string { return /\.jpe?g$/i.test(file) ? 'image/jpeg' : /\.webp$/i.test(file) ? 'image/webp' : /\.tiff?$/i.test(file) ? 'image/tiff' : 'image/png'; }
 
-export async function ocrDocument(options: OcrOptions): Promise<{ pages: Page[]; truncated: boolean; truncation_message?: string; engine: Engine; engine_reason: string }> {
+export async function ocrDocument(options: OcrOptions): Promise<{ pages: Page[]; truncated: boolean; truncation_message?: string; engine: Engine | 'none'; engine_reason: string }> {
  const input = resolve(options.input);
  if (!existsSync(input)) throw new AwError('ERROR', 'ocr', `input does not exist: ${input}`);
- const { engine, reason } = chooseEngine(options.engine);
  const isDir = statSync(input).isDirectory();
  const imageFiles = isDir ? readdirSync(input).filter((name) => /\.(png|jpe?g|webp|tiff?)$/i.test(name)).sort().map((name) => join(input, name)) : [];
  const pages: Page[] = [];
@@ -139,8 +152,10 @@ export async function ocrDocument(options: OcrOptions): Promise<{ pages: Page[];
    truncated = files.length > kept.length;
    if (truncated) truncation_message = `${kept.length} of ${files.length} images processed.`;
  }
+ // born-digital pages need no engine: choose one only when there is something to read
+ const { engine, reason } = scans.length ? chooseEngine(options.engine) : { engine: 'none' as const, reason: 'no scanned pages: text extracted from the PDF text layer' };
  try {
-   const read = engine === 'gemini' ? await readGemini(scans, options)
+   const read = engine === 'none' ? [] : engine === 'gemini' ? await readGemini(scans, options)
      : scans.map((s) => (engine === 'claude' ? readClaude(s, options.language) : readLocal(s, options.language)));
    for (const page of read) {
      const scan = scans.find((s) => s.page_number === page.page_number);

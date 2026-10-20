@@ -96,3 +96,23 @@ test('pages under the low-resolution floor are flagged outside the Gemini tier',
   assert.equal(__test.lowResNote('gemini', 74), '');
   assert.equal(__test.lowResNote('claude', 300), '');
 });
+
+test('a Gemini content refusal becomes a blocked page; other Gemini failures still fail', async () => {
+  const image = join(root, 'gemini-refused.png'); writeFileSync(image, Buffer.from('image'));
+  __setTransport(async () => ({ text: '', finishReason: 'RECITATION', usage: { in: 2, out: 0 } }));
+  const refused = await ocrDocument({ input: image, language: 'en', runId: 'ocr-recitation', engine: 'gemini' });
+  assert.equal(refused.pages[0]?.text, '');
+  assert.match(refused.pages[0]?.notes ?? '', /blocked: Gemini refused this page \(RECITATION\)/);
+  __setTransport(async () => ({ text: '', finishReason: 'MAX_TOKENS', usage: { in: 2, out: 0 } }));
+  await assert.rejects(ocrDocument({ input: image, language: 'en', runId: 'ocr-maxtokens', engine: 'gemini' }), /MAX_TOKENS/);
+});
+
+test('a Claude error that is not a content refusal fails the run instead of passing as a blocked page', async () => {
+  const image = join(root, 'claude-auth.png'); writeFileSync(image, Buffer.from('image'));
+  const dir = fakeBin('claude', `cat >/dev/null; echo '{"type":"result","is_error":true,"result":"Invalid API key · Please run /login"}'`);
+  const path = process.env.PATH;
+  process.env.PATH = `${dir}:${path}`;
+  try {
+    await assert.rejects(ocrDocument({ input: image, language: 'he', runId: 'ocr-claude-auth', engine: 'claude' }), /claude failed: Invalid API key/);
+  } finally { process.env.PATH = path; }
+});
