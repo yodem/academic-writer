@@ -252,3 +252,13 @@ def test_two_reading_posts_in_one_thread_are_two_tasks(tmp_path):
     b = chores.add_chore(reg, course="kane", kind="reading", ref="d1152530-p1529999", title="קריאה נוספת")
     assert a["id"] != b["id"]
     assert {a["id"], b["id"]} <= {t["id"] for t in tasks.sync_tasks(d, "kane")}
+
+
+def test_task_follows_its_chore_when_a_rescan_moves_the_deadline(tmp_path):
+    d, c = make_reg(tmp_path)
+    reg = courses.Registry(d)
+    r = chores.add_chore(reg, course="kane", kind="reading", ref="d1-p2", title="קריאה", due_at="2026-10-25T14:00:00+02:00")
+    tasks.sync_tasks(d, "kane")
+    chores.add_chore(reg, course="kane", kind="reading", ref="d1-p2", title="קריאה", due_at="2026-11-01T14:00:00+02:00")
+    by_id = {t["id"]: t for t in tasks.sync_tasks(d, "kane")}
+    assert by_id[r["id"]]["due_at"] == "2026-11-01T14:00:00+02:00"

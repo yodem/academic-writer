@@ -92,6 +92,16 @@ def derive_tasks(existing: list[dict[str, Any]], chores: list[dict[str, Any]]) -
     tasks = [dict(t) for t in existing]
     covered = {cid for t in tasks for cid in t.get("chore_ids", [])}
     changed = False
+    by_id = {c["id"]: c for c in chores}
+    for task in tasks:
+        # a task made from one chore follows it: a rescan that moves the deadline or renames it updates the task
+        chore = by_id.get(task["id"])
+        if chore is None or task.get("chore_ids") != [chore["id"]]:
+            continue
+        for key, value in (("title", chore.get("title") or chore.get("ref", "")), ("due_at", chore.get("due_at"))):
+            if value and task.get(key) != value:
+                task[key] = value
+                changed = True
     for chore in chores:
         if chore.get("kind") not in TASK_KINDS or chore["id"] in covered:
             continue
