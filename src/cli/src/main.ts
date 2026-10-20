@@ -134,9 +134,9 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
 } else if (command === 'ocr') {
   try {
     const value = (name: string): string | undefined => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
-    const runId = value('--run'); const input = value('--input'); const language = value('--lang'); const format = value('--format');
-    if (!runId || !input || !['he','en','mixed'].includes(language ?? '') || (format && !['concise','detailed'].includes(format))) throw new Error('ERROR ocr: --input, --lang he|en|mixed, and --run are required; --format must be concise|detailed');
-    process.stdout.write(`${JSON.stringify(await ocrDocument({ runId, input, language: language as 'he'|'en'|'mixed', pages: value('--pages'), format: format as 'concise'|'detailed'|undefined, out: value('--out') }))}\n`);
+    const runId = value('--run'); const input = value('--input'); const language = value('--lang'); const format = value('--format'); const engine = value('--engine') ?? 'auto';
+    if (!runId || !input || !['he','en','mixed'].includes(language ?? '') || (format && !['concise','detailed'].includes(format)) || !['auto','gemini','claude','local'].includes(engine)) throw new Error('ERROR ocr: --input, --lang he|en|mixed, and --run are required; --format must be concise|detailed; --engine must be auto|gemini|claude|local');
+    process.stdout.write(`${JSON.stringify(await ocrDocument({ runId, input, language: language as 'he'|'en'|'mixed', pages: value('--pages'), format: format as 'concise'|'detailed'|undefined, out: value('--out'), engine: engine as 'auto'|'gemini'|'claude'|'local' }))}\n`);
   } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : 'ERROR ocr: unknown failure'}\n`); process.exitCode = 1; }
 } else if (command === 'docx') {
   try {

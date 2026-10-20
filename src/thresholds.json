@@ -74,9 +74,11 @@
   },
   "ocr": {
     "perCallPageCap": 40,
-    "geminiBatchSize": 6,
+    "geminiBatchSize": 1,
+    "lowResDpi": 100,
+    "claudeModel": "claude-opus-5-5",
     "inlineSizeLimitBytes": 20971520,
-    "_comment": "Ported from the retired MCP gemini_ocr tool (PER_CALL_PAGE_CAP, GEMINI_BATCH_SIZE, INLINE_SIZE_LIMIT_BYTES = 20*1024*1024). perCallPageCap bounds how many pages one `aw ocr` invocation processes before truncating (Files API upload path for pages over inlineSizeLimitBytes was not ported to the CLI -- see T15a handoff notes; oversized pages fail with a named ERROR instead of silently uploading)."
+    "_comment": "Ported from the retired MCP gemini_ocr tool (PER_CALL_PAGE_CAP, GEMINI_BATCH_SIZE, INLINE_SIZE_LIMIT_BYTES = 20*1024*1024). perCallPageCap bounds how many pages one `aw ocr` invocation processes before truncating (Files API upload path for pages over inlineSizeLimitBytes was not ported to the CLI -- see T15a handoff notes; oversized pages fail with a named ERROR instead of silently uploading). geminiBatchSize is 1 (the bake-off measured one page per call; the 2026-10-16 six-page batches dropped passages) and lowResDpi is 100 from the 2026-10-20 OCR bake-off: below 100 dpi Gemini read Hebrew more accurately than Claude, so the Claude and local tiers flag those pages. claudeModel is the Claude tier of `aw ocr --engine`."
   },
   "citationFloor": {
     "minSecondaryPer1000Words": 4.0,
@@ -154,7 +156,7 @@
     },
     "ocr": {
       "provider": "gemini",
-      "model": "gemini-2.5-flash",
+      "model": "gemini-3.8-flash",
       "maxOutputTokens": 8192,
       "concurrency": 1,
       "piModel": "openrouter/z-ai/glm-5.3"
