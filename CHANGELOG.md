@@ -4,6 +4,11 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.19.2] — 2026-10-20
+
+### Fixed
+- **Readings show on the overview.** A reading due before a lesson now appears in the "מבחנים ודדליינים" column, marked "קריאה:", in date order with the deadlines. Before, it was only mentioned in the opening sentence, and there without its course; the sentence now names the course too.
+
 ## [0.19.1] — 2026-10-20
 
 ### Fixed
