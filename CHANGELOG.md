@@ -4,6 +4,15 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.19.1] — 2026-10-20
+
+### Fixed
+- **Task links on the dashboard open the right Lemida page.** They pointed at `mod/view.php?id=…`, a page Moodle does not have; they now name the activity type (`mod/assign/view.php?id=…` for an assignment, `mod/forum/…` for a forum). The same fix applies to the course bookmarks. When the type is not known, no link is shown instead of a broken one.
+- **A task follows its Lemida deadline.** When a lecturer moves a deadline, the next watch updates the task on the dashboard; before, the task kept the first deadline it was given.
+
+### Added
+- **Readings the lecturer announces become reading tasks.** The nightly Lemida watch now reads your Lemida notifications first, so it sees every announcement and forum post, including posts in threads it had already seen. A post that says what to read for the next lesson becomes a reading task, due when that lesson starts, with a link to the post. You close it with "I read".
+
 ## [0.19.0] — 2026-10-20
 
 ### Changed
