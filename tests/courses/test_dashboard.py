@@ -74,7 +74,7 @@ def test_next_task_states_and_groups(tmp_path):
     assert "delta" in s["overview"]["quiet"] and s["overview"]["later"] == ["gamma"]
     assert c["delta"]["new_lesson"] is True
     alpha_task = c["alpha"]["tasks"][0]
-    assert alpha_task["soon"] and alpha_task["lemida_url"] == "https://lms.example/mod/view.php?id=111"
+    assert alpha_task["soon"] and alpha_task["lemida_url"] == "https://lms.example/mod/assign/view.php?id=111"
     assert [i["key"] for i in c["alpha"]["more"]] == ["a-more"]
     assert c["eps"]["notices"][0]["title"] == "Open the library link by hand"
     assert c["alpha"]["links"]["trove_url"] == "https://heytrove.ai/library/book-alpha?page=1"
@@ -509,3 +509,16 @@ def test_extract_job_for_a_source_uses_its_sha8(server):
     assert req(srv, "POST", "/api/extract", {"course": "beta", "method": "claude-vision", "items": [{"kind": "source", "key": "bbbbbbbb"}]})[0] == 200
     job = json.loads(next((d / "queue" / "extract").glob("*-beta.json")).read_text())
     assert job["items"] == [{"kind": "source", "key": "bbbbbbbb", "method": "claude-vision"}]
+
+
+def test_task_link_skips_a_chore_with_no_known_module_type(tmp_path):
+    d, a, b, e = make_reg(tmp_path)
+    reg = courses.Registry(d)
+    x = chores.add_chore(reg, course="alpha", kind="exam", ref="999", title="Alpha exam")
+    tasks.sync_tasks(d, "alpha")  # derives and stores the tasks
+    alpha = json.loads((d / "alpha.json").read_text(encoding="utf-8"))
+    task = next(t for t in alpha["tasks"] if a["id"] in t["chore_ids"])
+    task["chore_ids"] = [x["id"], a["id"]]  # the exam ref has no type; the assignment after it does
+    (d / "alpha.json").write_text(json.dumps(alpha, ensure_ascii=False), encoding="utf-8")
+    alpha_task = next(t for t in by_slug(dashboard.build_state(d, now=NOW))["alpha"]["tasks"] if t["id"] == task["id"])
+    assert alpha_task["lemida_url"] == "https://lms.example/mod/assign/view.php?id=111"

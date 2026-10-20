@@ -526,7 +526,10 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
                     claimed_chores.add(chore.get("id"))
             due = _parse_dt(task.get("due_at"), tz)
             submitted_at = _parse_dt(task.get("submitted_at"), tz)
-            lemida_ref = next((r for r in lemida_refs if r.isdigit()), "")
+            # the first chore whose module type is known gives the link
+            lemida_url = next((url for url in (courses.lemida_module_url(lemida_base, course, chore_by_id.get(cid, {}).get("ref"),
+                                                                         chore_by_id.get(cid, {}).get("kind", ""))
+                                               for cid in task.get("chore_ids") or []) if url), None)
             first_chore = chore_by_id.get((task.get("chore_ids") or [None])[0]) or {}
             task_rows.append({
                 "id": tid, "course": slug, "title": task.get("title") or "", "kind": task.get("kind") or "",
@@ -544,7 +547,7 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
                 "recently_submitted": bool(submitted_at and "closed_chores" in task
                                            and in_undo_window(submitted_at, now)),
                 "desc": first_chore.get("text") or "", "core_texts": list(first_chore.get("core_texts") or []),
-                "lemida_url": _https(f"{lemida_base}/mod/view.php?id={lemida_ref}") if lemida_base and lemida_ref else None,
+                "lemida_url": _https(lemida_url),
                 "state": task_state(task, items), "items": items,
                 "missing_count": sum(1 for i in items if i["missing"]),
             })

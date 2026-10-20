@@ -67,8 +67,9 @@ def plan(registry: courses.Registry, slug: str) -> dict[str, Any]:
         items.append({"title": "Lemida", "url": f"{lemida}/course/view.php?id={course['lemida_course_id']}"})
     task = current_task(registry, slug)
     if task:
-        if lemida and str(task.get("ref", "")).isdigit():
-            items.append({"title": str(task.get("title", "")), "url": f"{lemida}/mod/view.php?id={task['ref']}"})
+        task_url = courses.lemida_module_url(lemida, course, task.get("ref"), str(task.get("kind", "")))
+        if task_url:
+            items.append({"title": str(task.get("title", "")), "url": task_url})
         readings = _reading_items(registry, slug, task)
         # no reading maps to a page: the course's Trove book stands in, once
         if not readings and book_url and book_url not in {item["url"] for item in items}:

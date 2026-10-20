@@ -43,7 +43,7 @@ def test_plan_urls_follow_the_known_forms(tmp_path):
     items = {i["title"]: i["url"] for i in bookmarks.plan(reg, "kane")["items"]}
     assert items["NotebookLM"] == "https://notebooklm.google.com/notebook/nb-1"
     assert items["Lemida"] == "https://lemida.example/course/view.php?id=117904"
-    assert items["מטלה 1"] == "https://lemida.example/mod/view.php?id=3251919"
+    assert items["מטלה 1"] == "https://lemida.example/mod/assign/view.php?id=3251919"
 
 
 def test_earliest_dated_chore_wins(tmp_path):
@@ -208,3 +208,15 @@ def test_scripts_address_chrome_by_bundle_id(tmp_path):
     for script in (bookmarks.build_script(plans), bookmarks.read_script(plans)):
         assert 'application id "com.google.Chrome"' in script
         assert 'application "Google Chrome"' not in script
+
+
+def test_lemida_module_url_uses_the_module_type():
+    course = {"watch_seen": {"modules": {"3251886": {"type": "assign"}, "77": {"type": "quiz"}}}}
+    base = "https://lemida.example/"
+    assert courses.lemida_module_url(base, course, "3251886") == "https://lemida.example/mod/assign/view.php?id=3251886"
+    assert courses.lemida_module_url(base, course, 77, "exam") == "https://lemida.example/mod/quiz/view.php?id=77"
+    assert courses.lemida_module_url(base, {}, "5", "forum-post") == "https://lemida.example/mod/forum/view.php?id=5"
+    # unknown type, non-numeric ref or no base: no link rather than a dead mod/view.php one
+    assert courses.lemida_module_url(base, {}, "5", "manual") is None
+    assert courses.lemida_module_url(base, course, "3251886-a") is None
+    assert courses.lemida_module_url("", course, "3251886") is None

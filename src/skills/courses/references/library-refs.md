@@ -253,7 +253,7 @@ This is the built behaviour in `bookmarks.py` (`plan`). Items are added in this 
 | 1 | NotebookLM | `https://notebooklm.google.com/notebook/<notebook_id>` | Built, when `notebook_id` is set |
 | 2 | Trove book | `https://heytrove.ai/library/<book_id>?page=1` (from `trove_url(book_id)`) | Built, when the course has a Trove `book_id` |
 | 3 | Lemida | `<term lemida.base_url>/course/view.php?id=<lemida_course_id>` | Built, when both are set |
-| 4 | Current task | `<base_url>/mod/view.php?id=<ref>` | Built, when the task's `ref` is numeric. The task is the course's open chore with the earliest `due_at`; undated chores come after the dated ones |
+| 4 | Current task | `<base_url>/mod/<type>/view.php?id=<ref>` | Built, when the task's `ref` is numeric and its module type is known (the course's `watch_seen`, else `assign` for an assignment chore, `forum` for a forum post). The task is the course's open chore with the earliest `due_at`; undated chores come after the dated ones |
 | 5 | That task's readings | one item per `core_texts` entry that matches a source title and has a Trove `book_id` and `page` | Built: URL `https://heytrove.ai/library/<book_id>?page=<page>` |
 
 The Trove URL form `https://heytrove.ai/library/{book_id}?page={page}` was verified in a signed-in browser on 2026-10-18; `trove_url(book_id)` uses page 1 when no page is given.
