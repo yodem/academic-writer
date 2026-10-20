@@ -69,6 +69,20 @@ class Registry:
             self.courses[course["slug"]] = course
 
 
+# Moodle has no generic module page: the module type is part of the path (mod/assign/view.php?id=N)
+CHORE_MODULE_TYPE = {"assignment": "assign", "forum-post": "forum"}
+
+
+def lemida_module_url(base: str, course: dict[str, Any], ref: Any, chore_kind: str = "") -> str | None:
+    """Lemida page of module `ref`. The type comes from the course's watch_seen, else from the chore kind; None when unknown."""
+    ref = str(ref or "")
+    seen = ((course.get("watch_seen") or {}).get("modules") or {}).get(ref) or {}
+    mod = str(seen.get("type") or CHORE_MODULE_TYPE.get(chore_kind, ""))
+    if not (base and ref.isdigit() and re.fullmatch(r"[a-z]+", mod)):
+        return None
+    return f"{base.rstrip('/')}/mod/{mod}/view.php?id={ref}"
+
+
 def courses_root() -> Path:
     """Root that holds one directory per term.
 

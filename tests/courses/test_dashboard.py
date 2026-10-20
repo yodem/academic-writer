@@ -74,7 +74,7 @@ def test_next_task_states_and_groups(tmp_path):
     assert "delta" in s["overview"]["quiet"] and s["overview"]["later"] == ["gamma"]
     assert c["delta"]["new_lesson"] is True
     alpha_task = c["alpha"]["tasks"][0]
-    assert alpha_task["soon"] and alpha_task["lemida_url"] == "https://lms.example/mod/view.php?id=111"
+    assert alpha_task["soon"] and alpha_task["lemida_url"] == "https://lms.example/mod/assign/view.php?id=111"
     assert [i["key"] for i in c["alpha"]["more"]] == ["a-more"]
     assert c["eps"]["notices"][0]["title"] == "Open the library link by hand"
     assert c["alpha"]["links"]["trove_url"] == "https://heytrove.ai/library/book-alpha?page=1"
