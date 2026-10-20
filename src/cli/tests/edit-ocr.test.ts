@@ -238,3 +238,11 @@ test('Surya counts as installed only when SURYA_INFERENCE_URL answers /health', 
     server.kill();
   }
 });
+
+test('a short but real Claude answer with no Gemini key is kept, flagged low confidence', async () => {
+  const r = await auto('short-nokey', [fakeBin('tesseract', `echo '${HEBREW}'`), claudeSays('אבגד הוזח')], ['tesseract', 'claude'], '');
+  assert.equal(r.pages[0]?.engine, 'claude');
+  assert.equal(r.pages[0]?.text, 'אבגד הוזח');
+  assert.equal(r.pages[0]?.confidence, 'low');
+  assert.match(r.pages[0]?.notes ?? '', /much shorter than the free reading; no Google API key/);
+});

@@ -32,6 +32,7 @@ const GEMINI_REFUSAL = /RECITATION|SAFETY|PROHIBITED_CONTENT|BLOCKLIST|SPII|IMAG
 // Claude's output filter, as it read on 2026-10-20; any other error result (auth, quota, service) fails the run
 const CLAUDE_REFUSAL = /content filtering|Output blocked/i;
 // Sonnet 5.5 sometimes answers a full book page with a polite summary instead of the text (2 of 59 pages, 2026-10-20)
+const SHORT = 'Claude\'s answer is much shorter than the free reading';
 const SOFT_REFUSAL = /I can(?:no|['’])t (?:transcribe|reproduce)|copyrighted text/i;
 function stripFence(value: string): string { const match = /```(?:json)?\s*\n([\s\S]*?)\n```/i.exec(value); return match?.[1] ?? value; }
 
@@ -202,10 +203,14 @@ async function readAuto(scan: Scan, options: OcrOptions, have: Available): Promi
       const ref = tess ? lettersOnly(tess.text).length : 0;
       why = claude.refused ? 'Claude refused the page'
         : SOFT_REFUSAL.test(claude.text.slice(0, 300)) ? 'Claude declined to transcribe the page'
-        : ref >= cfg.shortAnswerMinChars && lettersOnly(claude.text).length < cfg.shortAnswerRatio * ref ? 'Claude\'s answer is much shorter than the free reading'
+        : ref >= cfg.shortAnswerMinChars && lettersOnly(claude.text).length < cfg.shortAnswerRatio * ref ? SHORT
         : '';
       delete claude.refused;
       if (!why) return withNote({ ...claude, engine: 'claude' }, lowResNote('claude', scan.dpi), lowRes ? 'low' : undefined);
+      if (!have.gemini && why === SHORT) {
+        // short but a real transcription: keep it, flagged, rather than lose the page
+        return withNote({ ...claude, engine: 'claude' }, `${why}; no Google API key for the Gemini fallback: check it against the image`, 'low');
+      }
       if (!have.gemini) {
         // a refused page stays blank: the free readings of such pages (the vocalized Bible) were 33-99% wrong
         const other = free && lettersOnly(free.text) ? `; a free reading by ${free.engine ?? 'local'} exists but did not pass the agreement check` : '';
