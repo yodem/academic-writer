@@ -137,7 +137,8 @@ function readSurya(scan: Scan): Page {
   try {
     const run = spawnSync('surya_ocr', [scan.png, '--output_dir', dir], { encoding: 'utf8', env: process.env, maxBuffer: 16 * 1024 * 1024, timeout: 1_800_000 });
     const file = readdirSync(dir).map((d) => join(dir, d, 'results.json')).find((f) => existsSync(f));
-    if (run.status !== 0 || !file) throw new AwError('ERROR', 'ocr', `surya_ocr failed: ${(run.stderr || run.stdout || '').slice(-300)}`);
+    // the last line of a Python traceback is the message the author can act on
+    if (run.status !== 0 || !file) throw new AwError('ERROR', 'ocr', `surya_ocr failed: ${(run.stderr || run.stdout || '').trim().split('\n').pop()?.slice(-300) ?? ''}`);
     const results = JSON.parse(readFileSync(file, 'utf8')) as Record<string, Array<{ blocks: Array<{ html?: string; skipped?: boolean; reading_order?: number }> }>>;
     const blocks = (Object.values(results)[0]?.[0]?.blocks ?? []).filter((b) => !b.skipped).sort((a, b) => (a.reading_order ?? 0) - (b.reading_order ?? 0));
     return { page_number: scan.page_number, text: blocks.map((b) => (b.html ?? '').replace(/<[^>]+>/g, '')).join('\n'), is_born_digital: false, confidence: 'medium', notes: '' };
