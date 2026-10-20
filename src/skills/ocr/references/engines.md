@@ -13,7 +13,7 @@ Used by `/academic-writer:ocr`, `/academic-writer:ingest` and `/academic-writer:
 
 `aw ocr` picks the reader for each page unless the author named one for every page (`--engine gemini|claude|local`). Its output says the plan (`engine: auto`, `engine_reason`) and, on every page, who read it (`engine`):
 
-1. **Free, on this computer** (Surya OCR 2 and Tesseract), only when the author has installed Surya; it needs an NVIDIA graphics card and takes about a minute a page. Both read the page. When their letters agree at `ocr.freeAgreeMin` (98%), Surya's text is kept: every test page that passed matched Gemini. This was measured on 41 pages and is provisional. On their own, the free readers are not good enough: Surya makes 4-5% errors on two-column Hebrew and fails on the vocalized Bible.
+1. **Free, on this computer** (Surya OCR 2 and Tesseract), only when the author has installed Surya; it needs an NVIDIA graphics card and takes about a minute a page. Both read the page. When their letters agree at `ocr.freeAgreeMin` (98%), Surya's text is kept. On the 54 test pages, 17 passed: Surya got a median 0.3% of letters wrong on them, against 0.13% for Gemini and 0.0% for Opus, and one page that passed had 1.1% wrong. So the free step saves the author's Claude plan at the cost of a few more wrong letters per page. On their own, the free readers are not good enough: Surya makes 4-5% errors on two-column Hebrew and fails on the vocalized Bible.
 2. **Claude** (Opus, `ocr.claudeModel`, on the author's Claude plan), for the rest. It matched Gemini page by page at every quality from 100 dpi up.
 3. **Gemini** (`gemini-3.8-flash`), when a Google API key is set, for three kinds of page:
    - pages Claude refused (every full page of the vocalized Bible);

@@ -16,7 +16,7 @@ OCR (optical character recognition) reads the text out of a scanned or photograp
 
 | Step | Reader | When | Why |
 |---|---|---|---|
-| 1 | **On this computer** (Surya and Tesseract) | Surya is installed (it needs an NVIDIA graphics card) | when the two free readers agree on 98% of the letters, Surya's text matched Gemini on every test page; free, and nothing leaves the computer |
+| 1 | **On this computer** (Surya and Tesseract) | Surya is installed (it needs an NVIDIA graphics card) | when the two free readers agree on 98% of the letters, Surya's text is kept: close to Gemini (0.3% of letters wrong against 0.13%) but behind Opus (0.0%); free, and nothing leaves the computer |
 | 2 | **Claude** (Opus) | the free readers disagree or Surya is not installed | as accurate as Gemini from 100 dpi up, on the author's Claude plan |
 | 3 | **Gemini** (`gemini-3.8-flash`) | a Google API key is set, and Claude refused the page, answered far shorter than the page, or the page is under 100 dpi | the only reader of the vocalized Bible (Claude refuses it) and the better reader under 100 dpi |
 | 4 | **Tesseract only** | no Claude and no Google key | free and private, but 2-5% letter errors on Hebrew |
