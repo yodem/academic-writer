@@ -1300,6 +1300,9 @@ def main(argv: list[str] | None = None) -> int:
     wdiff.add_argument("--baseline", action="store_true", help="mark everything on --pages as seen (clears a suspect course)")
     wdiff.add_argument("--apply", action="store_true", help="advance the seen state (needs --ok)")
     wdiff.add_argument("--ok", nargs="*", default=None, help="ids (cmid / discussion / section) handled successfully")
+    lcov = sub.add_parser("lemida-coverage-check", help="exit 1 and print each gap when the nightly Lemida watch did not cover everything")
+    lcov.add_argument("--date", help="YYYY-MM-DD of the coverage file (default: today in the term's timezone)")
+    lcov.add_argument("--json", action="store_true")
     chores_p = sub.add_parser("chores", help="things Yotam must do by hand (chores.json and its digest)")
     chores_sub = chores_p.add_subparsers(dest="chores_command", required=True)
     reg_parent = argparse.ArgumentParser(add_help=False)
@@ -1378,6 +1381,18 @@ def main(argv: list[str] | None = None) -> int:
             if args.apply:
                 print(f"advanced {len(advanced)} id(s)", file=sys.stderr)
             return 0
+        if args.command == "lemida-coverage-check":
+            import lemida_coverage
+            day = args.date or lemida_coverage.today(registry)
+            gaps = lemida_coverage.check(registry, day)
+            if args.json:
+                print(json.dumps({"date": day, "ok": not gaps, "gaps": gaps}, ensure_ascii=False))
+            else:
+                for gap in gaps:
+                    print(gap)
+                if not gaps:
+                    print(f"lemida coverage {day}: complete")
+            return 1 if gaps else 0
         if args.command == "chores":
             import chores
             if args.chores_command == "add":

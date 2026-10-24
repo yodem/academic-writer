@@ -93,7 +93,21 @@ Two jobs that build on the registry. Full procedure in `references/library-refs.
 
 ## Nightly Lemida watcher (Chrome)
 
-Moodle's REST API answers every call with a Radware Bot Manager captcha page, so the nightly watch drives the user's already signed-in Chrome with `claude-in-chrome`. Never ask for or store the user's password. Full procedure: `references/lemida-watch.md`. First read the Lemida notifications (`message_popup_get_popup_notifications` through Moodle's AJAX service in the signed-in tab): every post they name from the last 14 days is read and routed, seen or not. Then, per course with a `lemida_course_id`:
+Moodle's REST API answers every call with a Radware Bot Manager captcha page, so the nightly watch drives the user's already signed-in Chrome with `claude-in-chrome`. Never ask for or store the user's password. Full procedure: `references/lemida-watch.md`. The run is complete only when its coverage file says so. Do all of this, then write the coverage file; `courses.py lemida-coverage-check` (step `lemida-coverage` of the nightly job) fails the run for any gap.
+
+- **Notifications, all of them.** Open `https://lemida.biu.ac.il/message/output/popup/notifications.php` in the signed-in tab and scroll until every notification in the window (the last 14 days) is loaded. Open each one (a post, an assignment, a reminder), read it, route it, and record its id. A notification you did not open is a gap.
+- **Every new assignment.** Each `mod/assign` page the watch finds new (the diff's `new_assigns`, or one a notification names) is opened and gets its `assignment` chore, with its core texts.
+- **Coverage file.** Write `REG/logs/lemida-coverage-<YYYY-MM-DD>.json` (REG is the term directory; `logs/` exists after the first run) with exactly this shape:
+
+  ```json
+  {"date": "YYYY-MM-DD",
+   "courses": {"<slug>": {"visited": true, "new_assign_modules": [101], "assign_handled": [101]}},
+   "notifications": {"page": "https://lemida.biu.ac.il/message/output/popup/notifications.php", "listed": [1, 2], "opened": [1, 2]}}
+  ```
+
+  `visited` is true only after the course page was walked (step 1 below); `new_assign_modules` are the assign ids that were new that night, `assign_handled` the ones whose chore was written. `listed` is every notification id in the window, `opened` the ids you opened. Write the file even when the run hit an error, so the gap is named, and say in the run summary which part failed. If Chrome is closed the nightly job does not start this watch at all: the check then reports the missing file, which is the failure the chore already names.
+
+Then, per course with a `lemida_course_id` (every active course needs one; a course without one gets a `manual` chore `lemida-id-<slug>` from the coverage check):
 
 1. Open `course/view.php?id=<lemida_course_id>` and walk every section; extract one PageData JSON per section, forum and assignment, then run `courses.py watch-diff <slug> --pages <json>`. The diff remembers the last section with content, so each night continues from it to find new content.
 2. Always read the `לוח הודעות` (announcements) forum and report new posts. A post that says what to read for a lesson gets a `reading` chore (ref `d<discussion>-p<post>`, one per post, core texts, due at that lesson's start), which the dashboard shows as a reading task.

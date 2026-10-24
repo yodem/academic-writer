@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -39,14 +40,15 @@ def test_syntax():
 def test_chrome_running_plans_watch_in_order(tmp_path):
     out, plans = run_dry(tmp_path, True, queue=True)
     assert out.returncode == 0, out.stderr
-    keys = ["courses.py daily", "claude -p --chrome", "courses.py wispr-scan", "refs.py --registry", "extract-queue", "lesson-notes --pending", "toc_audit.py --all",
+    keys = ["courses.py daily", "claude -p --chrome", "lemida-coverage-check", "courses.py wispr-scan", "refs.py --registry", "extract-queue", "lesson-notes --pending", "toc_audit.py --all",
             "chores digest", "courses-sync-nanoclaw.sh"]
     idx = [next(i for i, p in enumerate(plans) if k in p) for k in keys]
     assert idx == sorted(idx) and len(plans) == len(keys)
     watch = plans[1]
-    assert "courses.py wispr-scan" in plans[2]
-    assert plans[3].endswith("fetch-queue") and "refs.py --registry" in plans[3]
-    assert plans[4].endswith("extract-queue") and "refs.py --registry" in plans[4]
+    assert "lemida-coverage-check --date" in plans[2] and "courses.py" in plans[2]
+    assert "courses.py wispr-scan" in plans[3]
+    assert plans[4].endswith("fetch-queue") and "refs.py --registry" in plans[4]
+    assert plans[5].endswith("extract-queue") and "refs.py --registry" in plans[5]
     assert "/academic-writer:courses watch-lemida --all'" in watch
     assert "--model sonnet" in watch and "--plugin-dir" in watch
     for tool in ("mcp__claude-in-chrome__*", "Bash(rclone:*)", "Bash(pdftoppm:*)", "Bash(screencapture:*)", "Bash(trove ms show:*)"):
@@ -64,6 +66,7 @@ def test_chrome_missing_adds_manual_chore_and_skips_watch(tmp_path):
     chore = next(i for i, p in enumerate(plans) if "chores add --kind manual" in p)
     assert "Open Chrome logged in to Lemida so tonight's scan can run" in plans[chore]
     assert chore == 1 and "courses.py daily" in plans[0]
+    assert any("lemida-coverage-check" in p for p in plans)  # the coverage check runs even when the watch was skipped
     assert not any("lesson-notes" in p for p in plans)  # no queued jobs
 
 
@@ -160,3 +163,11 @@ def test_daily_dry_skips_finished(tmp_path):
     assert out.returncode == 0, out.stderr
     assert "oldcourse" not in out.stdout and "BOOK-OLD-123" not in out.stdout
     assert any("courses.py daily" in p for p in plans)  # the run itself still plans its steps
+
+
+def test_lemida_coverage_step_runs_right_after_watch(tmp_path):
+    _, plans = run_dry(tmp_path, True)
+    watch = next(i for i, p in enumerate(plans) if "claude -p --chrome" in p)
+    coverage = next(i for i, p in enumerate(plans) if "lemida-coverage-check" in p)
+    assert coverage == watch + 1
+    assert "courses.py" in plans[coverage] and f"--date {datetime.now().strftime('%Y-%m-%d')}" in plans[coverage]

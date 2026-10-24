@@ -6,6 +6,8 @@
 #   a. courses.py daily            Voice Memos (exit 5 = Lemida REST blocked by the captcha: expected, not a failure)
 #   b. Chrome check                no "Google Chrome" process -> a manual chore, step c skipped
 #   c. claude -p --chrome          /academic-writer:courses watch-lemida --all   (COURSES_ONLY="cohen kane" restricts)
+#   c1. courses.py lemida-coverage-check   the watch's coverage file (logs/lemida-coverage-<day>.json): every active course visited,
+#                                  every new assignment handled, every notification opened; a gap fails the run and adds chores
 #   c2. courses.py wispr-scan      Wispr Flow lecture recordings -> queue jobs (failure is counted; no Wispr database = no-op)
 #   c3. refs.py fetch-queue        dashboard fetch requests (queue/fetch/*.json): fetch chain per ref, jobs move to queue/fetch/done/ (failure is counted)
 #   c4. refs.py extract-queue      text extraction the student chose on the dashboard (queue/extract/*.json): docx and PDF text layers are read
@@ -93,6 +95,11 @@ run_job() {
       step chrome-chore add_manual_chore "open-chrome-$DAY" "Open Chrome logged in to Lemida so tonight's scan can run" \
         "Chrome was not running at the nightly job on $DAY, so the Lemida scan was skipped." || FAILED=1
     fi
+  fi
+
+  # c1. coverage gate: a missing file or any gap the watch left (course not visited, assignment or notification not handled) fails the job
+  if ! dry_plan "$PY $COURSES lemida-coverage-check --date $DAY"; then
+    step lemida-coverage "$PY" "$COURSES" lemida-coverage-check --date "$DAY" || FAILED=1
   fi
 
   # c2. Wispr Flow lecture recordings: match to course slots, write queue jobs (before the lesson-notes step reads the queue)
