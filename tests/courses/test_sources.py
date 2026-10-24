@@ -49,7 +49,7 @@ class Fake:
         if command[0] == "rclone" and command[1] == "copyto":
             out = ""
         elif command[0] == "rclone" and command[1] == "lsjson":
-            out = json.dumps([{"Name": n} for n in self.drive])
+            out = json.dumps([d if isinstance(d, dict) else {"Name": d.rsplit("/", 1)[-1], "Path": d} for d in self.drive])
         elif command[:3] == ["nlm", "source", "list"]:
             out = json.dumps(self.nlm_list)
         elif command[:3] == ["nlm", "source", "add"]:
@@ -84,7 +84,7 @@ def test_add_source_argv_job_and_record(tmp_path):
     assert result["status"] == "added"
     snap = registry.directory / "sources" / "sample" / f"{sha[:8]}-01 - Reading One.pdf"
     assert snap.read_bytes() == path.read_bytes()
-    assert fake.of("rclone", "copyto") == [["rclone", "copyto", str(snap), f"mydrive:{snap.name}", "--drive-root-folder-id", "folder-1"]]
+    assert fake.of("rclone", "copyto") == [["rclone", "copyto", str(snap), "mydrive:לא ממוין/Reading One.pdf", "--drive-root-folder-id", "folder-1"]]
     assert fake.of("nlm", "source", "add") == [["nlm", "source", "add", "nb-1", "--file", str(snap), "--title", "Reading One", "--wait", "--json"]]
     record = reload(registry)["sources"][0]
     assert record["file"] == str(snap.resolve())
@@ -263,7 +263,7 @@ def media_checked(tmp_path, monkeypatch, status, **fake_kwargs):
     audio.write_bytes(b"a")
     courses.add_source(registry, audio, "sample", runner=Fake())
     registry = courses.Registry(registry.directory)
-    name = Path(reload(registry)["sources"][0]["file"]).name
+    name = reload(registry)["sources"][0]["drive_path"]
     toc = [{"level": 1, "title": "תמלולי שיעורים", "page": 5}, {"level": 2, "title": "2026-10-12", "page": 6}]
     defaults = dict(drive=[name], nlm_list=[{"id": "src-9"}], toc=toc)
     defaults.update(fake_kwargs)
@@ -315,7 +315,7 @@ def checked(tmp_path, trove="book-1:4", **fake_kwargs):
     registry, path, sha8 = done_source(tmp_path)
     courses.source_done(registry, "sample", sha8, trove)
     registry = courses.Registry(registry.directory)
-    defaults = dict(drive=[path.name], nlm_list=[{"id": "src-1"}])
+    defaults = dict(drive=[reload(registry)["sources"][0]["drive_path"]], nlm_list=[{"id": "src-1"}])
     defaults.update(fake_kwargs)
     return courses.check_source(registry, "sample", sha8, runner=Fake(**defaults)), registry, sha8
 
@@ -323,9 +323,9 @@ def checked(tmp_path, trove="book-1:4", **fake_kwargs):
 def test_check_source_passes_and_uses_expected_argv(tmp_path):
     problems, registry, sha8 = checked(tmp_path)
     assert problems == []
-    fake = Fake(drive=[Path(reload(registry)["sources"][0]["file"]).name], nlm_list=[{"id": "src-1"}])
+    fake = Fake(drive=[reload(registry)["sources"][0]["drive_path"]], nlm_list=[{"id": "src-1"}])
     courses.check_source(registry, "sample", runner=fake)
-    assert ["rclone", "lsjson", "gdrive:", "--drive-root-folder-id", "folder-1", "--files-only"] in fake.calls
+    assert ["rclone", "lsjson", "gdrive:", "--drive-root-folder-id", "folder-1", "--files-only", "-R"] in fake.calls
     assert ["trove", "items", "toc", "book-1", "--json", "--no-session"] in fake.calls
 
 
@@ -360,7 +360,7 @@ def test_check_source_missing_readings_entry(tmp_path):
 def test_check_source_requires_done(tmp_path):
     registry, path, sha8 = done_source(tmp_path)
     registry = courses.Registry(registry.directory)
-    problems = courses.check_source(registry, "sample", sha8, runner=Fake(drive=[path.name], nlm_list=[{"id": "src-1"}]))
+    problems = courses.check_source(registry, "sample", sha8, runner=Fake(drive=[reload(registry)["sources"][0]["drive_path"]], nlm_list=[{"id": "src-1"}]))
     assert len(problems) == 1 and "not done" in problems[0]
 
 
