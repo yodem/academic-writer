@@ -10,7 +10,7 @@ metadata: {author: "Yotam Fromm", version: "0.2.19"}
 
 Revise one focused section. For changes across the whole article, hand off to `/academic-writer:edit`.
 
-0. Choose one run ID for this edit, e.g. `edit-ashkenazi-creation-20261015-1430` (a short English label, then the date and time). Use only Latin letters, digits and hyphens. Then record the run before anything else:
+0. Choose the run ID for this edit now (the run ID rule is below, under the edit step). Then record the run before anything else:
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$PWD" --data-dir "${CLAUDE_PLUGIN_DATA}" activity start --flow edit-section --run-id <run-id>

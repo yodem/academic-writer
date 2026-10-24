@@ -12,7 +12,7 @@ Revise an existing article, or selected passages from it, with the `aw edit` com
 
 ## 1. Understand the change
 
-0. Choose one run ID for this edit, e.g. `edit-ashkenazi-creation-20261015-1430` (a short English label, then the date and time). Use only Latin letters, digits and hyphens. Then record the run before anything else:
+0. Choose the run ID for this edit now (the run ID rule is below, under the edit step). Then record the run before anything else:
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$PWD" --data-dir "${CLAUDE_PLUGIN_DATA}" activity start --flow edit --run-id <run-id>
