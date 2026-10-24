@@ -15,7 +15,16 @@ Run `aw proofread` on the article and show its summary. The command does all the
 
 ## Run
 
-For a Markdown article, run the plugin command with a run id and an output folder. Always pass the plugin data directory and the project directory:
+Record the run first, with the same run id the command below uses, and register the workspace. This runs on every path, including a Word file:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" activity start --flow proofread --run-id "proofread-<run-id>"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" register --path "$CLAUDE_PROJECT_DIR" --type project
+```
+
+If `home.py register` says no home folder is set, skip it and tell the researcher once.
+
+For a Markdown article, run the plugin command with a run id and an output folder. Always pass the plugin data directory and the project directory. `aw proofread` records its own `find`, `verify`, `memo` and `apply` steps and ends the run:
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" proofread "path/to/article.md" \
@@ -49,3 +58,5 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build-tracked-docx.py" \
 ## Show the result
 
 Show the short JSON summary that `aw proofread` prints, then links to `proofed.md`, `report.md` and `memo.md` in the output folder (and `proofed.docx` for Word input). Remind the author the original is untouched. Explain that suggestions the checker rejected ("refuted") are still listed in `changes.json` and the report, so the author can review them too.
+
+If the Word path's `pandoc` or `build-tracked-docx.py` step fails, end the run as failed: `"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" activity end --run-id "proofread-<run-id>" --exit ERROR`. After a successful run, `aw proofread` has already ended it, so no call is needed.

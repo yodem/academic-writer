@@ -4,6 +4,16 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-10-24
+
+### Added
+- **Drive files get Chicago-citation names in kind folders.** Course sources are filed by kind: `00 כללי`, `שיעורים/שיעור NN`, `מטלות/מטלה N`, `קריאות/<citation>`, and `לא ממוין` for anything unclassified. Uploads go to their kind folder under a Chicago-style display name, and the NotebookLM source takes the same name. Media keep their lesson titles.
+- **`courses.py drive-reorg`.** `--course SLUG` or `--all` prints the move manifest; `--apply` moves the Drive files (logged move by move) and renames the matching NotebookLM sources.
+- **Writer runs show on the dashboard Writing tab without `workspaces.json`.** The dashboard finds workspace folders up to two levels under the home folder that hold a `profile.md` or `runs/`, and merges them with the registry. `aw activity start|step|end` record each run; the five writing skills (write, edit, edit-section, proofread, revise) call them.
+
+### Changed
+- **Finished terms and courses are skipped by the course loops.** A term or course with `status: "finished"` is left out of the default term lookup and of every loop over all courses (map, validate, wispr scan, Lemida `--all`, drive-reorg `--all`, toc_audit `--all`). Naming one course still works. `toc_audit --include-finished --course SLUG` audits one finished course.
+
 ## [0.19.2] — 2026-10-20
 
 ### Fixed
