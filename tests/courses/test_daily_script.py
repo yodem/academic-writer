@@ -8,12 +8,14 @@ import pytest
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "courses-daily.sh.example"
 
 
-def run_dry(tmp_path, chrome_running, extra_env=None, queue=False, handoff=False):
+def run_dry(tmp_path, chrome_running, extra_env=None, queue=False, handoff=False, extra_courses=()):
     home = tmp_path / "home"
     term = home / ".academic-writer" / "courses" / "term"
     (term / "queue").mkdir(parents=True)
     (term / "term.json").write_text(json.dumps({"term": "t"}))
     (term / "cohen.json").write_text(json.dumps({"slug": "cohen"}))
+    for course in extra_courses:
+        (term / f"{course['slug']}.json").write_text(json.dumps(course))
     if queue:
         (term / "queue" / "job.json").write_text("{}")
     if handoff:
@@ -150,3 +152,11 @@ def test_nothing_drains_queue_sources_by_default():
         assert "queue/sources" in text  # documented ...
     assert "never drained" in skill and "only the file the student chose" in skill  # ... as waiting, not as a step to run
     assert "drain queue/sources" not in skill.lower() and "process queue/sources" not in skill.lower()
+
+
+def test_daily_dry_skips_finished(tmp_path):
+    old = {"slug": "oldcourse", "status": "finished", "book_id": "BOOK-OLD-123"}
+    out, plans = run_dry(tmp_path, True, queue=True, extra_courses=[old])
+    assert out.returncode == 0, out.stderr
+    assert "oldcourse" not in out.stdout and "BOOK-OLD-123" not in out.stdout
+    assert any("courses.py daily" in p for p in plans)  # the run itself still plans its steps

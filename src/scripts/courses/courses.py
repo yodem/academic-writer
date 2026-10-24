@@ -44,14 +44,28 @@ def entry_label(title: object) -> str:
     return normalise_name(str(title).split(" - ", 1)[0])
 
 
+def _is_finished(record: dict[str, Any]) -> bool:
+    """A term or course marked finished in its own JSON (status "finished"): its loops are skipped."""
+    return str(record.get("status", "")) == "finished"
+
+
+def _term_finished(term_dir: Path) -> bool:
+    try:
+        return _is_finished(json.loads((term_dir / "term.json").read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return False
+
+
 def _term_dir(root: Path, term: str | None = None) -> Path:
+    """The term directory: the named one (finished or not), else the single term that is not finished."""
     if term is None:
         term = os.environ.get("ACADEMIC_TERM")
     if term:
         return root / term
     dirs = sorted(p for p in root.iterdir() if p.is_dir()) if root.exists() else []
-    if len(dirs) == 1:
-        return dirs[0]
+    live = [p for p in dirs if not _term_finished(p)]
+    if len(live) == 1:
+        return live[0]
     if (root / "term.json").is_file():
         return root
     raise ValueError(f"term is required; use --term or ACADEMIC_TERM under {root}")
@@ -70,6 +84,12 @@ class Registry:
             if not isinstance(course, dict) or not course.get("slug"):
                 continue
             self.courses[course["slug"]] = course
+
+    def active_courses(self, include: str | None = None) -> dict[str, dict[str, Any]]:
+        """Courses the loops work on: those not finished (their own status or their term's). `include` keeps one named finished course."""
+        term_done = _is_finished(self.term)
+        return {slug: course for slug, course in self.courses.items()
+                if slug == include or not (term_done or _is_finished(course))}
 
 
 # Moodle has no generic module page: the module type is part of the path (mod/assign/view.php?id=N)
@@ -178,7 +198,7 @@ def map_recording(registry: Registry, when: datetime) -> tuple[str | None, str |
     matches: list[str] = []
     had_day = False
     had_semester = False
-    for slug, course in registry.courses.items():
+    for slug, course in registry.active_courses().items():
         for slot in course.get("slots", []):
             slot_day = slot.get("day")
             if WEEKDAYS.get(str(slot_day)) != weekday:
@@ -506,7 +526,7 @@ def validate_registry(registry: Registry, runner: Callable[..., Any] = subproces
     remote = registry.term.get("drive_remote", "gdrive")
     subject_map = registry.term.get("drive_subject_folders", {})
     naming = registry.term.get("naming", {})
-    for slug, course in registry.courses.items():
+    for slug, course in registry.active_courses().items():
         context = {**course, "term": registry.term.get("term", "")}
         try:
             expected = {
@@ -1412,7 +1432,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(source_done(registry, args.slug, args.sha8, args.trove), ensure_ascii=False))
             return 0
         if args.command == "drive-reorg":
-            slugs = sorted(registry.courses) if args.all else [args.course]
+            slugs = sorted(registry.active_courses()) if args.all else [args.course]
             print(json.dumps(drive_reorg(registry, slugs, apply=args.apply), ensure_ascii=False, indent=2))
             return 0
         if args.command == "check-source":

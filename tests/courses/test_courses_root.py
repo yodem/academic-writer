@@ -82,3 +82,16 @@ def test_refs_missing_term_still_raises_refs_error(env, tmp_path, monkeypatch):
     monkeypatch.setenv("ACADEMIC_HOME", str(tmp_path / "acad"))
     with pytest.raises(refs.RefsError):
         refs.registry_dir(None, None)
+
+
+def test_term_dir_skips_finished(env, tmp_path, monkeypatch):
+    root = tmp_path / "terms"
+    live = _term(root, "live")
+    old = _term(root, "old")
+    (old / "term.json").write_text(json.dumps({"term": "old", "status": "finished"}))
+    monkeypatch.setenv("ACADEMIC_COURSES_DIR", str(root))
+    monkeypatch.delenv("ACADEMIC_TERM", raising=False)
+    assert courses._term_dir(root) == live
+    assert courses.registry_dir() == live
+    # an explicitly named finished term still resolves: the user asked for it
+    assert courses._term_dir(root, "old") == old
