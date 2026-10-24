@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { draftAll, __stubs as draftStubs } from '../src/draft.js';
 import { runProofread, __stubs as proofreadStubs } from '../src/proofread.js';
 import { setPathArguments } from '../src/paths.js';
-import { appendEvent, activityShow, readEvents, type ActivityEvent } from '../src/activity.js';
+import { appendEvent, activityShow, readEvents, runActivityCli, type ActivityEvent } from '../src/activity.js';
 import { checkSchema, type JsonSchema } from '../src/library/jsonschema.js';
 import schema from '../../schemas/activity-event.schema.json' with { type: 'json' };
 
@@ -101,4 +101,28 @@ test('activity show prints step k/6', async () => {
   assert.match(activityShow({ run: 'w1' }), /^write run w1: step 2\/6 draft/);
   assert.match(activityShow({ latest: true }), /step 2\/6/);
   assert.equal(activityShow({ run: 'w1' }).includes('\n'), false);
+});
+
+test('activity start writes run_start once and end writes run_end', () => {
+  const { project } = fresh('aw-act-cli-');
+  assert.equal(runActivityCli('start', ['--flow', 'write', '--run-id', 'r2'], project), 'started');
+  assert.equal(runActivityCli('start', ['--flow', 'write', '--run-id', 'r2'], project), 'already started');
+  runActivityCli('step', ['--run-id', 'r2', '--step', 'outline', '--state', 'start'], project);
+  runActivityCli('step', ['--run-id', 'r2', '--step', 'outline', '--state', 'end'], project);
+  assert.equal(runActivityCli('end', ['--run-id', 'r2', '--exit', 'OK'], project), 'ended');
+  assert.equal(runActivityCli('end', ['--run-id', 'r2', '--exit', 'OK'], project), 'already ended');
+  const events = eventsOf(project, 'r2');
+  assert.deepEqual(events.map((e) => e.kind), ['run_start', 'step_start', 'step_end', 'run_end']);
+  assert.equal(events[1].step, 'outline');
+  assert.equal(events[3].exit, 'OK');
+  assert.equal(events[0].flow, 'write');
+});
+
+test('activity CLI refuses a step before start, an unknown flow and a bad exit', () => {
+  const { project } = fresh('aw-act-cli-bad-');
+  assert.throws(() => runActivityCli('step', ['--run-id', 'r3', '--step', 'outline', '--state', 'start'], project), /ERROR activity/);
+  assert.throws(() => runActivityCli('start', ['--flow', 'nope', '--run-id', 'r3'], project), /ERROR activity/);
+  runActivityCli('start', ['--flow', 'edit', '--run-id', 'r3'], project);
+  assert.throws(() => runActivityCli('end', ['--run-id', 'r3', '--exit', 'MAYBE'], project), /ERROR activity/);
+  assert.throws(() => runActivityCli('step', ['--run-id', 'r3', '--step', 'outline', '--state', 'start'], project), /ERROR activity/);
 });

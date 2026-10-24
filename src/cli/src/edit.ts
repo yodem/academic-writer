@@ -3,7 +3,7 @@ import { callGemini } from './gemini.ts';
 import { AwError, Budget, budgetFor } from './ledger.ts';
 import { voiceBundle } from './voice.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
-import { emit, endRunOnError } from './activity.ts';
+import { emit, endRunOnError, startRunOnce } from './activity.ts';
 
 export type EditOptions = { textFile: string; instruction: string; language: 'he' | 'en'; runId: string; out?: string; section?: boolean };
 const schema = { type: 'object', required: ['revised_text'], properties: { revised_text: { type: 'string' } } };
@@ -12,7 +12,7 @@ export async function editText(options: EditOptions): Promise<{ revised_text: st
 }
 async function editRun(options: EditOptions): Promise<{ revised_text: string }> {
   const flow = options.section ? 'edit-section' : 'edit';
-  emit(options.runId, flow, 'run_start');
+  startRunOnce(options.runId, flow);
   emit(options.runId, flow, 'step_start', { step: 'edit' });
   const original = readFileSync(options.textFile, 'utf8');
   if (!original.trim()) throw new AwError('ERROR', 'edit', 'text file is empty');

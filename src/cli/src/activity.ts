@@ -101,6 +101,51 @@ export function statusLine(events: ActivityEvent[], runId: string, stalled = fal
   return `${flow} run ${runId}: step ${index}/${total} ${label} (${stalled ? 'stalled' : 'running'})`.trimEnd();
 }
 
+function argValue(argv: string[], name: string): string | undefined {
+  const i = argv.indexOf(name);
+  return i >= 0 ? argv[i + 1] : undefined;
+}
+
+/** The flow a run was started with (its `run_start` event); undefined when the run has not started. */
+function startedFlow(runId: string, project: string): ActivityFlow | undefined {
+  const file = activityFile(runId, project);
+  if (!file || !existsSync(file)) return undefined;
+  return readEvents(file).find((e) => e.kind === 'run_start')?.flow;
+}
+
+/**
+ * The `aw activity start|step|end` subcommands the skills call, so a run shows in the dashboard even when no
+ * `aw draft` runs (the short-assignment path). Returns one line for stdout; throws an `ERROR activity: ...` message.
+ */
+export function runActivityCli(subcommand: string, argv: string[], project: string): string {
+  const runId = argValue(argv, '--run-id');
+  if (!runId) throw new Error('ERROR activity: --run-id is required');
+  if (subcommand === 'start') {
+    const flow = argValue(argv, '--flow') as ActivityFlow | undefined;
+    if (!flow || !Object.prototype.hasOwnProperty.call(FLOW_STEPS, flow)) throw new Error(`ERROR activity: --flow must be one of ${Object.keys(FLOW_STEPS).join(', ')}`);
+    return startRunOnce(runId, flow, project) ? 'started' : 'already started';
+  }
+  const flow = startedFlow(runId, project);
+  if (!flow) throw new Error(`ERROR activity: run ${runId} has no start; run "aw activity start" first`);
+  if (subcommand === 'step') {
+    const step = argValue(argv, '--step');
+    const state = argValue(argv, '--state');
+    if (!step || !FLOW_STEPS[flow].includes(step)) throw new Error(`ERROR activity: --step must be one of ${FLOW_STEPS[flow].join(', ')} for ${flow}`);
+    if (state !== 'start' && state !== 'end') throw new Error('ERROR activity: --state must be start or end');
+    emit(runId, flow, state === 'start' ? 'step_start' : 'step_end', { step }, project);
+    return `${step} ${state === 'start' ? 'started' : 'ended'}`;
+  }
+  if (subcommand === 'end') {
+    const exit = argValue(argv, '--exit') ?? 'OK';
+    if (exit !== 'OK' && exit !== 'ERROR') throw new Error('ERROR activity: --exit must be OK or ERROR');
+    const file = activityFile(runId, project);
+    if (file && readEvents(file).some((e) => e.kind === 'run_end')) return 'already ended';
+    emit(runId, flow, 'run_end', { exit }, project);
+    return 'ended';
+  }
+  throw new Error(`ERROR activity: unknown subcommand ${subcommand}`);
+}
+
 export function latestRunId(project?: string): string | undefined {
   const root = runsRoot(project);
   if (!root || !existsSync(root)) return undefined;
