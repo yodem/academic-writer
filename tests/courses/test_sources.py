@@ -84,7 +84,7 @@ def test_add_source_argv_job_and_record(tmp_path):
     assert result["status"] == "added"
     snap = registry.directory / "sources" / "sample" / f"{sha[:8]}-01 - Reading One.pdf"
     assert snap.read_bytes() == path.read_bytes()
-    assert fake.of("rclone", "copyto") == [["rclone", "copyto", str(snap), "mydrive:לא ממוין/Reading One.pdf", "--drive-root-folder-id", "folder-1"]]
+    assert fake.of("rclone", "copyto") == [["rclone", "copyto", str(snap), "mydrive:קריאות/Reading One/Reading One.pdf", "--drive-root-folder-id", "folder-1"]]
     assert fake.of("nlm", "source", "add") == [["nlm", "source", "add", "nb-1", "--file", str(snap), "--title", "Reading One", "--wait", "--json"]]
     record = reload(registry)["sources"][0]
     assert record["file"] == str(snap.resolve())

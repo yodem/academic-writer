@@ -1147,6 +1147,7 @@ def drive_reorg(registry: Registry, slugs: list[str], *, apply: bool = False, ru
 
     Without apply it only lists (one read-only rclone listing per course). Each move keeps the file id
     (rclone moveto) and is logged to REG/logs/drive-reorg-<stamp>.jsonl. Media sources keep their lesson titles.
+    Unregistered files and folders are moved too; only registry sources get a recorded drive_path or a NotebookLM rename.
     """
     runner = runner or subprocess.run
     remote = registry.term.get("drive_remote", "gdrive")
@@ -1160,21 +1161,22 @@ def drive_reorg(registry: Registry, slugs: list[str], *, apply: bool = False, ru
         if not folder:
             manifests.append({"slug": slug, "error": "missing drive_folder_id", "moves": []})
             continue
-        listing = _json_from_command(["rclone", "lsjson", f"{remote}:", "--drive-root-folder-id", str(folder), "--files-only", "-R"], runner)
+        listing = _json_from_command(["rclone", "lsjson", f"{remote}:", "--drive-root-folder-id", str(folder), "-R"], runner)
         plan = drive_layout.plan_reorg(course, _as_list(listing, "files", "items"))
-        by_sha = {str(source.get("sha256", "")): source for source in course.get("sources", [])}
+        by_sha = {str(source.get("sha256", "")): source for source in course.get("sources", []) if source.get("sha256")}
         moves = []
         for step in plan:
-            source = by_sha.get(step["sha256"], {})
+            source = by_sha.get(step["sha256"], {}) if step["sha256"] else {}
             is_media = source.get("kind") == "media"
             moves.append({**step, "notebook_source_id": source.get("notebook_source_id"),
-                          "nlm_title": None if is_media else drive_layout.display_title(source)})
+                          "nlm_title": None if is_media or not source else drive_layout.display_title(source)})
         manifests.append({"slug": slug, "drive_folder_id": str(folder), "moves": moves})
         if not apply:
             continue
         drive_layout.apply_reorg(plan, remote, str(folder), log, runner=runner)
         for move in moves:
-            _update_source(registry, slug, move["sha256"], drive_path=move["new"])
+            if move["sha256"]:
+                _update_source(registry, slug, move["sha256"], drive_path=move["new"])
             if move["notebook_source_id"] and move["nlm_title"] and course.get("notebook_id"):
                 runner(["nlm", "source", "rename", str(move["notebook_source_id"]), move["nlm_title"], "--notebook", str(course["notebook_id"])],
                        check=True, text=True, capture_output=True)
