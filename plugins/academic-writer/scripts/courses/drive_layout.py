@@ -11,9 +11,9 @@ The folder comes from the registry (lesson key, task links, origin, title) and, 
 file name. Names come from naming.py. Root folders named `שיעור N` / `מטלה N` move under their kind folder.
 Moves are planned from one full listing and applied by Drive file id (`rclone backend moveid`), never by path,
 so duplicate names cannot be mixed up. Nothing is replaced: every occupied path is reserved, a clash gets a
-" (2)" suffix, and a cycle of moves is broken through a temporary name. Each move, registry update and NotebookLM
-rename is journaled as an intent line before it runs and a done line after it (fsynced), so a crash can be
-resumed from the journal by checking each file id. Standard library only.
+" (2)" suffix, and a cycle of moves is broken through a temporary name. The whole plan is journaled (fsynced)
+before the first move; each move, registry update and NotebookLM rename then gets an intent line before it runs and
+a done line after it, so a crash can be resumed from the journal by checking each file id. Standard library only.
 """
 from __future__ import annotations
 
@@ -477,11 +477,27 @@ def _fields(step: dict[str, Any]) -> dict[str, Any]:
             "sha256": str(step.get("sha256") or ""), "final": bool(step.get("final"))}
 
 
+def _destination_taken(remote: str, root_id: str, new: str, runner: Callable[..., Any]) -> bool:
+    """True when anything is already at `new`. Never overwrite: an unknown answer from rclone refuses the move."""
+    result = runner(["rclone", "lsjson", f"{remote}:{new}", "--stat", "--drive-root-folder-id", str(root_id)],
+                    check=False, text=True, capture_output=True)
+    if result.returncode == 0:
+        return True
+    if result.returncode == 3:  # rclone: object or directory not found
+        return False
+    raise ReorgError(f"{new!r}: cannot check Drive for an existing file, not moving ({str(result.stderr or '').strip()})")
+
+
 def move_file(remote: str, root_id: str, file_id: str, new: str, runner: Callable[..., Any] = subprocess.run) -> None:
-    """Move one Drive file by id to `new` (a path under the course root), creating its parent folders first."""
+    """Move one Drive file by id to `new` (a path under the course root), creating its parent folders first.
+
+    Refuses (ReorgError, nothing moved) when anything is already at `new`: the check runs right before the move.
+    """
     parent = new.rpartition("/")[0]
     if parent:
         runner(["rclone", "mkdir", f"{remote}:{parent}", "--drive-root-folder-id", str(root_id)], check=True, text=True, capture_output=True)
+    if _destination_taken(remote, root_id, new, runner):
+        raise ReorgError(f"{new!r} is occupied in Drive, so {file_id} was not moved there")
     # The destination must carry the remote prefix: a bare path is a LOCAL rclone path, and moveid would pull the file off Drive.
     runner(["rclone", "backend", "moveid", f"{remote}:", str(file_id), f"{remote}:{new}", "--drive-root-folder-id", str(root_id)],
            check=True, text=True, capture_output=True)
@@ -492,16 +508,34 @@ def rmdir_folder(remote: str, root_id: str, path: str, runner: Callable[..., Any
     runner(["rclone", "rmdir", f"{remote}:{path}", "--drive-root-folder-id", str(root_id)], check=True, text=True, capture_output=True)
 
 
+JOURNAL_KIND = {"move": "drive_move", "rmdir": "drive_rmdir"}
+
+
+def _key(line: dict[str, Any]) -> tuple[Any, ...]:
+    """What an action is, independent of its op id: kind, file id, from, to and the source hash."""
+    return (line.get("kind"), str(line.get("file_id") or ""), line.get("old"), line.get("new"), str(line.get("sha256") or ""))
+
+
 class Journal:
-    """Append-only JSON lines. An intent line is written and fsynced before an action; a done line after it."""
+    """Append-only JSON lines: a plan record, then an intent line (fsynced) before each action and a done or failed
+    line after it. A torn last line (a crash mid-write) is cut before the next append, and the cut is logged."""
 
     def __init__(self, path: Path, *, remote: str, root: str, slug: str):
         self.path = path
         self.base = {"remote": remote, "root": str(root), "slug": slug}
         path.parent.mkdir(parents=True, exist_ok=True)
-        self.seq = max((int(line.get("seq", 0)) for line in read_journal(path)), default=0)
+        lines = read_journal(path)
+        self.seq = max((int(line.get("seq", 0)) for line in lines), default=0)
+        self.done_keys: set[tuple[Any, ...]] = set()
+        self.open_intents: dict[tuple[Any, ...], dict[str, Any]] = {}
+        for line in lines:
+            if line.get("phase") == "intent":
+                self.open_intents[_key(line)] = line
+            elif line.get("phase") == "done":
+                self.done_keys.add(_key(line))
+                self.open_intents.pop(_key(line), None)
 
-    def _write(self, line: dict[str, Any]) -> dict[str, Any]:
+    def _append(self, line: dict[str, Any]) -> dict[str, Any]:
         self.seq += 1
         record = {**self.base, "seq": self.seq, "at": datetime.now(timezone.utc).isoformat(), **line}
         with self.path.open("a", encoding="utf-8") as handle:
@@ -510,16 +544,75 @@ class Journal:
             os.fsync(handle.fileno())
         return record
 
-    def run(self, kind: str, fields: dict[str, Any], action: Callable[[], Any]) -> Any:
-        """Write the intent, run the action, write the done line. Returns the action's result."""
-        intent = self._write({"phase": "intent", "op_id": uuid.uuid4().hex, "kind": kind, **fields})
+    def _repair_tail(self) -> None:
+        """A file that does not end with a newline has a torn last line: keep it if it is whole JSON, else cut it off."""
+        if not self.path.exists() or self.path.stat().st_size == 0:
+            return
+        with self.path.open("rb") as handle:
+            handle.seek(-1, os.SEEK_END)
+            if handle.read(1) == b"\n":
+                return
+        data = self.path.read_bytes()
+        cut = data.rfind(b"\n") + 1
+        fragment = data[cut:].decode("utf-8", errors="replace")
+        try:
+            json.loads(fragment)
+            whole = True
+        except ValueError:
+            whole = False
+        with self.path.open("r+b") as handle:
+            if whole:
+                handle.seek(0, os.SEEK_END)
+                handle.write(b"\n")
+            else:
+                handle.truncate(cut)
+            handle.flush()
+            os.fsync(handle.fileno())
+        self._append({"phase": "repair", "action": "completed" if whole else "truncated", "bytes": len(data) - cut,
+                      "fragment": fragment[:200]})
+
+    def _write(self, line: dict[str, Any]) -> dict[str, Any]:
+        self._repair_tail()
+        return self._append(line)
+
+    def write_plan(self, plan: list[dict[str, Any]]) -> list[str]:
+        """The complete ordered plan, fsynced before the first mutation. Returns one op id per step, in order."""
+        if any(line.get("phase") == "plan" for line in read_journal(self.path)):
+            raise ReorgError(f"{self.path}: the journal already has a plan")
+        steps = []
+        for index, step in enumerate(plan, start=1):
+            steps.append({"seq": index, "op_id": uuid.uuid4().hex, "op": step["op"],
+                          "kind": JOURNAL_KIND.get(step["op"], ""), **_fields(step)})
+        self._write({"phase": "plan", "op_id": uuid.uuid4().hex, "steps": steps})
+        return [step["op_id"] for step in steps]
+
+    def is_done(self, kind: str, fields: dict[str, Any]) -> bool:
+        return _key({"kind": kind, **fields}) in self.done_keys
+
+    def run(self, kind: str, fields: dict[str, Any], action: Callable[[], Any], op_id: str | None = None) -> Any:
+        """Write the intent, run the action, write the done line. An action already done is not run again; an intent
+        left open by an earlier run is completed rather than duplicated. Returns the action's result (None if skipped)."""
+        key = _key({"kind": kind, **fields})
+        if key in self.done_keys:
+            return None
+        intent = self.open_intents.get(key)
+        if intent is None:
+            intent = self._write({"phase": "intent", "op_id": op_id or uuid.uuid4().hex, "kind": kind, **fields})
+            self.open_intents[key] = intent
         return self.complete(intent, action)
 
     def complete(self, intent: dict[str, Any], action: Callable[[], Any]) -> Any:
-        """Run the action of an intent already in the journal (a resume), then write its done line."""
-        result = action()
+        """Run the action of an intent already in the journal (a resume), then write its done line. A failure writes a
+        failed line and raises, leaving the intent open."""
         body = {k: v for k, v in intent.items() if k not in ("seq", "at", "phase", "remote", "root", "slug")}
+        try:
+            result = action()
+        except Exception as exc:
+            self._write({**body, "phase": "failed", "error": str(exc)[:500]})
+            raise
         self._write({**body, "phase": "done"})
+        self.done_keys.add(_key(intent))
+        self.open_intents.pop(_key(intent), None)
         return result
 
 
@@ -548,21 +641,34 @@ def pending_ops(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(intents, key=lambda line: int(line.get("seq", 0)))
 
 
+def plan_steps(lines: list[dict[str, Any]]) -> list[tuple[str, dict[str, Any]]]:
+    """The journal's plan as (op id, step) pairs in run order, in the shape `apply_reorg` takes. Raises without a plan."""
+    plans = [line for line in lines if line.get("phase") == "plan"]
+    if len(plans) != 1:
+        raise ReorgError("the journal has no single plan record, so its remaining steps cannot be known; not resuming")
+    return [(str(item["op_id"]), {"op": item["op"], "id": str(item.get("file_id") or ""), "old": item["old"], "new": item["new"],
+                                  "sha256": str(item.get("sha256") or ""), "final": bool(item.get("final"))})
+            for item in plans[0].get("steps", [])]
+
+
 def apply_reorg(plan: list[dict[str, Any]], remote: str, root_id: str, log: Path,
                 runner: Callable[..., Any] = subprocess.run, *, slug: str = "",
                 after_step: Callable[[dict[str, Any], Journal], None] | None = None) -> None:
     """Run a validated plan by file id, journaling every action to `log`.
 
+    The whole plan is written and fsynced first, so `--resume` can run every remaining step, not only the one in flight.
     `after_step(step, journal)` runs after each final move (and for each record step), so the caller can journal its
-    own registry update and NotebookLM rename with `journal.run`. A failure raises and leaves its intent unfinished:
-    `pending_ops` on the journal shows what to reconcile.
+    own registry update and NotebookLM rename with `journal.run`. A failure raises and leaves its intent unfinished.
     """
     validate_plan(plan)
+    if not plan:
+        return  # nothing to move: no journal either
     journal = Journal(log, remote=remote, root=root_id, slug=slug)
-    for step in plan:
+    op_ids = journal.write_plan(plan)
+    for step, op_id in zip(plan, op_ids):
         if step["op"] == "move":
-            journal.run("drive_move", _fields(step), lambda step=step: move_file(remote, root_id, step["id"], step["new"], runner))
+            journal.run("drive_move", _fields(step), lambda step=step: move_file(remote, root_id, step["id"], step["new"], runner), op_id)
         elif step["op"] == "rmdir":
-            journal.run("drive_rmdir", _fields(step), lambda step=step: rmdir_folder(remote, root_id, step["old"], runner))
+            journal.run("drive_rmdir", _fields(step), lambda step=step: rmdir_folder(remote, root_id, step["old"], runner), op_id)
         if after_step is not None and step.get("final") and step.get("sha256"):
             after_step(step, journal)

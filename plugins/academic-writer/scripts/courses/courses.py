@@ -939,7 +939,10 @@ def _add_source_locked(registry: Registry, file: Path, course_slug: str, *, titl
             raise IngestError(f"NotebookLM notebook has {count} sources; configured limit is {limit}", 4)
     preview = {"name": file.name, "file": str(file), "title": title, "origin": origin, "origin_ref": origin_ref, "kind": kind}
     if need_drive:
-        rel = _upload_to_drive(registry, course, file, preview, runner)
+        # The upload holds the registry lock that drive-reorg holds while it plans and moves, so an upload cannot land
+        # on a planned destination mid-reorg. (_upload_to_drive takes no lock itself: no nested locking here.)
+        with _locked_course(registry.directory, course_slug) as locked:
+            rel = _upload_to_drive(registry, locked.payload, file, preview, runner)
         _update_source(registry, course_slug, sha, sha8=sha8, title=title, file=str(file.resolve()), origin=origin, origin_ref=origin_ref,
                        drive=True, drive_path=rel, notebook_source_id=None, trove=None, status="drive_done",
                        added_at=datetime.now(timezone.utc).isoformat())
@@ -1239,8 +1242,13 @@ def drive_reorg(registry: Registry, slugs: list[str], *, apply: bool = False, fo
 
 def drive_reorg_resume(registry: Registry, journal_path: Path, *, force: bool = False,
                        runner: Callable[..., Any] | None = None) -> dict[str, Any]:
-    """Finish a journal's unfinished ops. Each drive move is checked by file id: at its new path it is only marked
-    done, at its old path it is moved again, anywhere else it is reported and left alone."""
+    """Finish a journal's remaining steps, in plan order (not only the one in flight).
+
+    Each Drive step already done is skipped. Each other move is checked by file id: at its new path it is only marked
+    done, at its old path it is moved, anywhere else it is reported and left alone. After every final move the
+    NotebookLM rename and the registry checkpoint run again unless their done lines exist, so a crash or a failed
+    rename past the move still ends with both.
+    """
     runner = runner or subprocess.run
     if not force and _nightly_running(runner):
         raise drive_layout.ReorgError("the nightly courses job is running; wait for it, or pass --force")
@@ -1248,41 +1256,44 @@ def drive_reorg_resume(registry: Registry, journal_path: Path, *, force: bool = 
     if not lines:
         raise drive_layout.ReorgError(f"{journal_path}: empty or missing journal")
     slug, remote, root = str(lines[0]["slug"]), str(lines[0]["remote"]), str(lines[0]["root"])
-    pending = drive_layout.pending_ops(lines)
-    if not pending:
-        return {"slug": slug, "pending": 0, "done": []}
+    steps = drive_layout.plan_steps(lines)
     journal = drive_layout.Journal(journal_path, remote=remote, root=root, slug=slug)
+    remaining = [step for _, step in steps if step["op"] in ("move", "rmdir")
+                 and not journal.is_done(drive_layout.JOURNAL_KIND[step["op"]], drive_layout._fields(step))]
     done: list[str] = []
     with _locked_course(registry.directory, slug) as locked:
-        at = {str(item.get("ID")): drive_layout._listed_path(item) for item in _listing(runner, remote, root)}
-        for op in pending:
-            kind, file_id = op["kind"], str(op.get("file_id") or "")
-            if kind == "drive_move":
-                current = at.get(file_id)
-                if current == op["new"]:
-                    journal.complete(op, lambda: None)
-                elif current == op["old"]:
-                    if op["new"] in at.values():
-                        raise drive_layout.ReorgError(f"{file_id}: {op['new']!r} is occupied, not moving")
-                    journal.complete(op, lambda op=op: drive_layout.move_file(remote, root, file_id, op["new"], runner))
-                    at[file_id] = op["new"]
-                else:
-                    raise drive_layout.ReorgError(f"{file_id} is at {current!r}, neither {op['old']!r} nor {op['new']!r}; not touching it")
-            elif kind == "drive_rmdir":
-                if file_id in at and at[file_id] == op["old"]:
-                    journal.complete(op, lambda op=op: drive_layout.rmdir_folder(remote, root, op["old"], runner))
-                else:
-                    journal.complete(op, lambda: None)
-            elif kind == "nlm_rename":
-                journal.complete(op, lambda op=op: runner(["nlm", "source", "rename", op["notebook_source_id"], op["nlm_title"],
-                                                           "--notebook", op["notebook_id"]], check=True, text=True, capture_output=True))
-            elif kind == "registry":
-                journal.complete(op, lambda op=op: _set_drive_path(locked, op["sha256"], op["new"]))
-            else:
-                raise drive_layout.ReorgError(f"unknown journal op {kind!r}")
-            done.append(f"{kind} {op['old']} -> {op['new']}")
-        registry.courses[slug] = locked.payload
-    return {"slug": slug, "pending": len(pending), "done": done}
+        after_step = _checkpoint(locked, runner, locked.payload.get("notebook_id"))
+        try:
+            at = {str(item.get("ID")): drive_layout._listed_path(item) for item in _listing(runner, remote, root)}
+            for op_id, step in steps:
+                if step["op"] not in ("move", "rmdir"):
+                    if step.get("final") and step.get("sha256"):
+                        after_step(step, journal)
+                    continue
+                kind, fields = drive_layout.JOURNAL_KIND[step["op"]], drive_layout._fields(step)
+                file_id = str(step.get("id") or "")
+                if not journal.is_done(kind, fields):
+                    if step["op"] == "move":
+                        current = at.get(file_id)
+                        if current == step["new"]:
+                            journal.run(kind, fields, lambda: None, op_id)
+                        elif current == step["old"]:
+                            if step["new"] in at.values():
+                                raise drive_layout.ReorgError(f"{file_id}: {step['new']!r} is occupied, not moving")
+                            journal.run(kind, fields, lambda step=step: drive_layout.move_file(remote, root, file_id, step["new"], runner), op_id)
+                            at[file_id] = step["new"]
+                        else:
+                            raise drive_layout.ReorgError(f"{file_id} is at {current!r}, neither {step['old']!r} nor {step['new']!r}; not touching it")
+                    elif file_id in at and at[file_id] == step["old"]:
+                        journal.run(kind, fields, lambda step=step: drive_layout.rmdir_folder(remote, root, step["old"], runner), op_id)
+                    else:
+                        journal.run(kind, fields, lambda: None, op_id)
+                    done.append(f"{kind} {step['old']} -> {step['new']}")
+                if step["op"] == "move" and step.get("final") and step.get("sha256"):
+                    after_step(step, journal)
+        finally:
+            registry.courses[slug] = locked.payload
+    return {"slug": slug, "pending": len(remaining), "done": done}
 
 
 CHORE_KINDS = ("assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual", "exam", "reading")
