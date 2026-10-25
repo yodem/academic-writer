@@ -4,6 +4,12 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.20.1] — 2026-10-25
+
+### Fixed
+- **Lesson transcripts and recordings get names you can read.** A transcript or recording whose own name is machine-made (`wispr-2026-10-23-1201-24673bab.txt`, `zoom-…`, `20261012 120422.m4a`) is now named by its lesson and date, for example `תמלול שיעור 02 · 23.10.2026.txt` or `הקלטת שיעור 01 · 12.10.2026.m4a`, and filed in its lesson folder; a transcript with no lesson goes to `שיעורים/תמלולים`. A recording with a real title keeps it.
+- **A generic title no longer hides what a file is.** When a source is titled only "שיעור 1", "סילבוס", "מבוא" or "פתיחה", its Drive name keeps the fuller original file name ("תפיסות יסוד בספרות הנבואה שיעור 1 תשפז"), not just the generic word.
+
 ## [0.20.0] — 2026-10-25
 
 ### Added
