@@ -680,7 +680,7 @@ def test_add_source_uploads_into_kind_folder_with_chicago_name(tmp_path):
     courses.add_source(registry, path, "sample", title="Syllabus", origin="other", runner=fake)
     copies = fake.of("rclone", "copyto")
     assert len(copies) == 1
-    assert copies[0][3] == "gdrive:00 כללי/Syllabus.pdf" and copies[0][4:] == ["--drive-root-folder-id", "folder-1"]
+    assert copies[0][3] == "gdrive:00 כללי/Syllabus.pdf" and copies[0][4:] == ["--ignore-existing", "--drive-root-folder-id", "folder-1"]
     assert fake.of("nlm", "source", "add")[0][-4:-2] == ["--title", "Syllabus"]
     assert reload(registry)["sources"][0]["drive_path"] == "00 כללי/Syllabus.pdf"
 
@@ -949,3 +949,26 @@ def test_resume_repairs_a_journal_torn_inside_a_hebrew_character_and_continues(t
     assert [line["action"] for line in drive_layout.read_journal(journal) if line["phase"] == "repair"] == ["truncated"]
     assert drive_layout.pending_ops(drive_layout.read_journal(journal)) == []
     assert sorted(drive.files()) == ["קריאות/alpha/alpha.pdf", "קריאות/beta/beta.pdf"] and drive.violations == []
+
+
+def test_resume_refuses_a_journal_for_another_drive_folder(tmp_path):
+    registry = make_registry(tmp_path)
+    journal = tmp_path / "j.jsonl"
+    journal.write_text(json.dumps({"kind": "plan", "phase": "plan", "slug": "sample", "remote": "gdrive",
+                                   "root": "OTHER-ROOT", "steps": []}) + "\n", encoding="utf-8")
+    with pytest.raises(drive_layout.ReorgError, match="select the right term"):
+        courses.drive_reorg_resume(registry, journal, force=True, runner=lambda *a, **k: subprocess.CompletedProcess(a, 0, "[]", ""))
+
+
+def test_add_source_refuses_an_upload_drive_does_not_confirm(tmp_path):
+    registry = make_registry(tmp_path)
+
+    class Clobbered(Fake):
+        def __call__(self, command, **kwargs):
+            if command[:2] == ["rclone", "lsjson"] and "--stat" in command:
+                self.calls.append(command)
+                return subprocess.CompletedProcess(command, 0, json.dumps({"Size": 999999}), "")
+            return super().__call__(command, **kwargs)
+
+    with pytest.raises(courses.IngestError, match="not confirmed"):
+        courses.add_source(registry, pdf(tmp_path, "Syllabus.pdf"), "sample", runner=Clobbered())

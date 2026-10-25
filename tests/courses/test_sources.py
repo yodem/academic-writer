@@ -47,7 +47,11 @@ class Fake:
     def __call__(self, command, **kwargs):
         self.calls.append(command)
         if command[0] == "rclone" and command[1] == "copyto":
+            self.copied = getattr(self, "copied", {})
+            self.copied[command[3]] = Path(command[2]).stat().st_size
             out = ""
+        elif command[0] == "rclone" and command[1] == "lsjson" and "--stat" in command:
+            out = json.dumps({"Path": command[2].split(":", 1)[1], "Size": getattr(self, "copied", {}).get(command[2])})
         elif command[0] == "rclone" and command[1] == "lsjson":
             out = json.dumps([d if isinstance(d, dict) else {"Name": d.rsplit("/", 1)[-1], "Path": d} for d in self.drive])
         elif command[:3] == ["nlm", "source", "list"]:
@@ -84,7 +88,7 @@ def test_add_source_argv_job_and_record(tmp_path):
     assert result["status"] == "added"
     snap = registry.directory / "sources" / "sample" / f"{sha[:8]}-01 - Reading One.pdf"
     assert snap.read_bytes() == path.read_bytes()
-    assert fake.of("rclone", "copyto") == [["rclone", "copyto", str(snap), "mydrive:קריאות/Reading One/Reading One.pdf", "--drive-root-folder-id", "folder-1"]]
+    assert fake.of("rclone", "copyto") == [["rclone", "copyto", str(snap), "mydrive:קריאות/Reading One/Reading One.pdf", "--ignore-existing", "--drive-root-folder-id", "folder-1"]]
     assert fake.of("nlm", "source", "add") == [["nlm", "source", "add", "nb-1", "--file", str(snap), "--title", "Reading One", "--wait", "--json"]]
     record = reload(registry)["sources"][0]
     assert record["file"] == str(snap.resolve())
@@ -209,7 +213,7 @@ def test_media_add_source_copies_to_drive_records_and_delegates(tmp_path, monkey
     result = courses.add_source(registry, audio, "sample", origin="recording", runner=fake, lesson_date="2026-10-12", lesson_time="1204")
     assert result["status"] == "ingested" and result["lesson_key"] == "2026-10-12-1204"
     copies = fake.of("rclone", "copyto")
-    assert len(copies) == 1 and copies[0][4:] == ["--drive-root-folder-id", "folder-1"] and copies[0][3].startswith("gdrive:")
+    assert len(copies) == 1 and copies[0][4:] == ["--ignore-existing", "--drive-root-folder-id", "folder-1"] and copies[0][3].startswith("gdrive:")
     assert calls[0][0] != audio and calls[0][0].parent.name == "sample" and calls[0][0].parent.parent.name == "sources" and calls[0][1]["course_slug"] == "sample"
     assert calls[0][1]["lesson_date"] == "2026-10-12" and calls[0][1]["lesson_time"] == "1204" and calls[0][1]["transcript_file"] is False
     record = reload(registry)["sources"][0]

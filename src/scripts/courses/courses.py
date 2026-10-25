@@ -861,9 +861,16 @@ def _upload_to_drive(registry: Registry, course: dict[str, Any], file: Path, pre
     names = _folder_names(runner, remote, folder, subdir)
     rel = drive_layout.drive_path_for(course, preview, {subdir: names})
     try:
-        runner(["rclone", "copyto", str(file), f"{remote}:{rel}", "--drive-root-folder-id", str(folder)], check=True, text=True, capture_output=True)
-    except (OSError, subprocess.SubprocessError) as exc:
+        # --ignore-existing: a file another Drive client put at this path after the listing is skipped, never replaced.
+        runner(["rclone", "copyto", str(file), f"{remote}:{rel}", "--ignore-existing", "--drive-root-folder-id", str(folder)],
+               check=True, text=True, capture_output=True)
+        stat = _json_from_command(["rclone", "lsjson", f"{remote}:{rel}", "--stat", "--hash", "--drive-root-folder-id", str(folder)], runner)
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
         raise IngestError(f"Drive copy failed: {exc}") from exc
+    size = stat.get("Size") if isinstance(stat, dict) else None
+    if size != file.stat().st_size:
+        raise IngestError(f"Drive copy not confirmed: {rel} on Drive has size {size}, the local file {file.stat().st_size}; "
+                          "another file may hold that path")
     return rel
 
 
@@ -1264,6 +1271,11 @@ def drive_reorg_resume(registry: Registry, journal_path: Path, *, force: bool = 
                  and not journal.is_done(drive_layout.JOURNAL_KIND[step["op"]], drive_layout._fields(step))]
     done: list[str] = []
     with _locked_course(registry.directory, slug) as locked:
+        # The journal must belong to this registry's course: the selected term's course, the same remote and Drive root.
+        expected = (str(registry.term.get("drive_remote", "gdrive")), str(locked.payload.get("drive_folder_id") or ""))
+        if not locked.payload.get("slug") or (remote, root) != expected:
+            raise drive_layout.ReorgError(f"{journal_path}: journal is for {slug} on {remote}:{root}, but the selected "
+                                          f"registry has {expected[0]}:{expected[1] or '(no folder)'}; select the right term")
         after_step = _checkpoint(locked, runner, locked.payload.get("notebook_id"))
         try:
             at = {str(item.get("ID")): drive_layout._listed_path(item) for item in _listing(runner, remote, root)}
