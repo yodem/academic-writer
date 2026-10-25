@@ -45,11 +45,11 @@ def test_chrome_running_plans_watch_in_order(tmp_path):
     idx = [next(i for i, p in enumerate(plans) if k in p) for k in keys]
     assert idx == sorted(idx) and len(plans) == len(keys)
     watch = plans[1]
-    assert "lemida-coverage-check --date" in plans[2] and "courses.py" in plans[2]
+    assert "lemida-coverage-check --date" in plans[2] and "--run-id" in plans[2] and "courses.py" in plans[2]
     assert "courses.py wispr-scan" in plans[3]
     assert plans[4].endswith("fetch-queue") and "refs.py --registry" in plans[4]
     assert plans[5].endswith("extract-queue") and "refs.py --registry" in plans[5]
-    assert "/academic-writer:courses watch-lemida --all'" in watch
+    assert "/academic-writer:courses watch-lemida --all --run-id " in watch
     assert "--model sonnet" in watch and "--plugin-dir" in watch
     for tool in ("mcp__claude-in-chrome__*", "Bash(rclone:*)", "Bash(pdftoppm:*)", "Bash(screencapture:*)", "Bash(trove ms show:*)"):
         assert tool in watch
@@ -72,7 +72,9 @@ def test_chrome_missing_adds_manual_chore_and_skips_watch(tmp_path):
 
 def test_courses_only_is_appended_to_the_prompt(tmp_path):
     _, plans = run_dry(tmp_path, True, {"COURSES_ONLY": "cohen kane"})
-    assert "watch-lemida cohen kane'" in next(p for p in plans if "claude -p --chrome" in p)
+    assert "watch-lemida cohen kane --run-id " in next(p for p in plans if "claude -p --chrome" in p)
+    coverage = next(p for p in plans if "lemida-coverage-check" in p)
+    assert '--courses "cohen kane"' in coverage
 
 
 @pytest.mark.parametrize("chrome", [True, False])
@@ -171,3 +173,32 @@ def test_lemida_coverage_step_runs_right_after_watch(tmp_path):
     coverage = next(i for i, p in enumerate(plans) if "lemida-coverage-check" in p)
     assert coverage == watch + 1
     assert "courses.py" in plans[coverage] and f"--date {datetime.now().strftime('%Y-%m-%d')}" in plans[coverage]
+
+
+def _run_id_of(plan):
+    tokens = plan.replace("'", " ").split()
+    return tokens[tokens.index("--run-id") + 1]
+
+
+def test_watch_and_coverage_share_one_run_id(tmp_path):
+    _, plans = run_dry(tmp_path, True)
+    watch = next(p for p in plans if "claude -p --chrome" in p)
+    coverage = next(p for p in plans if "lemida-coverage-check" in p)
+    run_id = _run_id_of(watch)
+    assert run_id and run_id == _run_id_of(coverage)
+    assert run_id.startswith(datetime.now().strftime("%Y-%m-%d"))  # date + time + pid, unique per run
+    assert run_id.split("-")[-1].isdigit() and len(run_id) > len("2026-01-01T000000-1")
+
+
+def test_coverage_is_unscoped_without_courses_only(tmp_path):
+    _, plans = run_dry(tmp_path, True)
+    coverage = next(p for p in plans if "lemida-coverage-check" in p)
+    assert "--courses" not in coverage
+
+
+def test_coverage_contract_documents_run_id_and_complete_notifications():
+    skill = (SCRIPT.parents[1] / "src" / "skills" / "courses" / "SKILL.md").read_text(encoding="utf-8")
+    watch = (SCRIPT.parents[1] / "src" / "skills" / "courses" / "references" / "lemida-watch.md").read_text(encoding="utf-8")
+    assert '"run_id"' in skill and "--run-id" in skill
+    assert '"complete": true' in skill and "notifications.complete" in skill
+    assert "run_id" in watch and "complete" in watch

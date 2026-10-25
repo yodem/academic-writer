@@ -82,6 +82,6 @@ Unattended runs (`claude -p`, the nightly job): nobody can answer, so never end 
 
 ## Ending a run
 
-Before the digest, write `REG/logs/lemida-coverage-<YYYY-MM-DD>.json` as `../SKILL.md` describes (visited courses, new assignments and their handling, listed and opened notifications). `courses.py lemida-coverage-check` turns any gap into a failed run, so an unwritten file is a failed run.
+Before the digest, write `REG/logs/lemida-coverage-<YYYY-MM-DD>.json` as `../SKILL.md` describes (the `run_id` from your prompt, visited courses, new assignments and their handling, notifications read to the end (`complete`), listed and opened notifications). `courses.py lemida-coverage-check` turns any gap into a failed run, so an unwritten file is a failed run.
 
 `courses.py chores digest` writes the digest of open chores. Report: new announcements, items routed (with `check-source` results), chores added, courses that errored or were `suspect`. A failure for one course never stops the others.

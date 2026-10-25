@@ -5,9 +5,11 @@
 # Steps, each logged to $TERM_DIR/logs/daily-<date>.log; one failing step never stops the rest:
 #   a. courses.py daily            Voice Memos (exit 5 = Lemida REST blocked by the captcha: expected, not a failure)
 #   b. Chrome check                no "Google Chrome" process -> a manual chore, step c skipped
-#   c. claude -p --chrome          /academic-writer:courses watch-lemida --all   (COURSES_ONLY="cohen kane" restricts)
-#   c1. courses.py lemida-coverage-check   the watch's coverage file (logs/lemida-coverage-<day>.json): every active course visited,
-#                                  every new assignment handled, every notification opened; a gap fails the run and adds chores
+#   c. claude -p --chrome          /academic-writer:courses watch-lemida --all --run-id <RUN_ID>   (COURSES_ONLY="cohen kane" restricts)
+#   c1. courses.py lemida-coverage-check --run-id <RUN_ID> [--courses "cohen kane"]   the watch's coverage file
+#                                  (logs/lemida-coverage-<day>.json): written for this run, every active course (in scope) visited,
+#                                  every new assignment handled, notifications read to the end and every listed one opened;
+#                                  a gap (a report from another run included) fails the run and adds chores
 #   c2. courses.py wispr-scan      Wispr Flow lecture recordings -> queue jobs (failure is counted; no Wispr database = no-op)
 #   c3. refs.py fetch-queue        dashboard fetch requests (queue/fetch/*.json): fetch chain per ref, jobs move to queue/fetch/done/ (failure is counted)
 #   c4. refs.py extract-queue      text extraction the student chose on the dashboard (queue/extract/*.json): docx and PDF text layers are read
@@ -37,6 +39,7 @@ SYNC="$HOME/.academic-writer/bin/courses-sync-nanoclaw.sh"
 PY=/usr/bin/python3
 EXTRACT_PY="${EXTRACT_PY:-$PY}"   # needs pymupdf (and python-docx, or pandoc) to read text layers; without it scans and PDFs go to Claude
 DAY=$(date +%Y-%m-%d)
+RUN_ID="$DAY-$(date +%H%M%S)-$$"   # binds the watch's coverage file to this run (stale reports are gaps)
 DRY="${COURSES_DRY:-}"
 FAILED=0
 
@@ -80,7 +83,7 @@ run_job() {
 
   # b/c. Lemida scan through Claude in Chrome
   if pgrep -x "Google Chrome" >/dev/null 2>&1; then
-    PROMPT="/academic-writer:courses watch-lemida ${COURSES_ONLY:---all}"
+    PROMPT="/academic-writer:courses watch-lemida ${COURSES_ONLY:---all} --run-id $RUN_ID"
     if ! dry_plan "printf '%s' '$PROMPT' | claude -p --chrome --model sonnet --plugin-dir $REPO/plugins/academic-writer --allowedTools \"$WATCH_TOOLS\""; then
       echo "-- watch-lemida $(stamp)"
       printf '%s' "$PROMPT" | claude -p --chrome --model sonnet \
@@ -98,8 +101,14 @@ run_job() {
   fi
 
   # c1. coverage gate: a missing file or any gap the watch left (course not visited, assignment or notification not handled) fails the job
-  if ! dry_plan "$PY $COURSES lemida-coverage-check --date $DAY"; then
-    step lemida-coverage "$PY" "$COURSES" lemida-coverage-check --date "$DAY" || FAILED=1
+  COVERAGE_SCOPE=()
+  COVERAGE_SCOPE_TXT=""
+  if [ -n "${COURSES_ONLY:-}" ]; then
+    COVERAGE_SCOPE=(--courses "$COURSES_ONLY")
+    COVERAGE_SCOPE_TXT=" --courses \"$COURSES_ONLY\""
+  fi
+  if ! dry_plan "$PY $COURSES lemida-coverage-check --date $DAY --run-id $RUN_ID$COVERAGE_SCOPE_TXT"; then
+    step lemida-coverage "$PY" "$COURSES" lemida-coverage-check --date "$DAY" --run-id "$RUN_ID" "${COVERAGE_SCOPE[@]}" || FAILED=1
   fi
 
   # c2. Wispr Flow lecture recordings: match to course slots, write queue jobs (before the lesson-notes step reads the queue)
