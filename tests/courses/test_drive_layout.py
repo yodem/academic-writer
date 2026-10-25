@@ -1,3 +1,4 @@
+import hashlib
 import fcntl
 import json
 import subprocess
@@ -971,3 +972,12 @@ def test_add_source_refuses_an_upload_drive_does_not_confirm(tmp_path):
 
     with pytest.raises(courses.IngestError, match="not confirmed"):
         courses.add_source(registry, pdf(tmp_path, "Syllabus.pdf"), "sample", runner=Clobbered())
+
+
+def test_add_source_reuses_a_copy_already_on_drive_instead_of_uploading_twice(tmp_path):
+    registry = make_registry(tmp_path)
+    source = pdf(tmp_path, "Syllabus.pdf")
+    md5 = hashlib.md5(source.read_bytes()).hexdigest()
+    fake = Fake(drive=[{"Name": "Syllabus.pdf", "Path": "Syllabus.pdf", "Hashes": {"md5": md5}}])
+    courses.add_source(registry, source, "sample", runner=fake)
+    assert fake.of("rclone", "copyto") == []

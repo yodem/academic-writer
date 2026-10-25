@@ -840,15 +840,21 @@ def _update_source(registry: Registry, slug: str, sha: str, **fields: Any) -> di
         return dict(entry)
 
 
-def _folder_names(runner: Callable[..., Any], remote: str, root_id: str, subdir: str) -> set[str]:
-    """File names already in a Drive folder under the course root; an absent folder holds none."""
+def _folder_listing(runner: Callable[..., Any], remote: str, root_id: str, subdir: str) -> list[dict[str, Any]]:
+    """Files already in a Drive folder under the course root, with their hashes; an absent folder holds none."""
     try:
-        listing = _json_from_command(["rclone", "lsjson", f"{remote}:{subdir}", "--drive-root-folder-id", str(root_id), "--files-only"], runner)
+        listing = _json_from_command(["rclone", "lsjson", f"{remote}:{subdir}", "--drive-root-folder-id", str(root_id),
+                                      "--files-only", "--hash"], runner)
     except subprocess.CalledProcessError as exc:
         if exc.returncode == 3:  # rclone: directory not found
-            return set()
+            return []
         raise IngestError(f"Drive listing failed: {exc}") from exc
-    return {str(item.get("Name", "")) for item in _as_list(listing, "files", "items")}
+    return [item for item in _as_list(listing, "files", "items") if isinstance(item, dict)]
+
+
+def _folder_names(runner: Callable[..., Any], remote: str, root_id: str, subdir: str) -> set[str]:
+    """File names already in a Drive folder under the course root; an absent folder holds none."""
+    return {str(item.get("Name", "")) for item in _folder_listing(runner, remote, root_id, subdir)}
 
 
 def _upload_to_drive(registry: Registry, course: dict[str, Any], file: Path, preview: dict[str, Any], runner: Callable[..., Any]) -> str:
@@ -858,7 +864,13 @@ def _upload_to_drive(registry: Registry, course: dict[str, Any], file: Path, pre
         raise IngestError(f"{course.get('slug')}: missing drive_folder_id")
     remote = registry.term.get("drive_remote", "gdrive")
     subdir = drive_layout.folder_for(course, preview)
-    names = _folder_names(runner, remote, folder, subdir)
+    listing = _folder_listing(runner, remote, folder, subdir)
+    local_md5 = hashlib.md5(file.read_bytes()).hexdigest()
+    for item in listing:
+        # A retry after an upload that landed but was never recorded: reuse that copy instead of making a second one.
+        if str(((item.get("Hashes") or {}).get("md5") or "")).lower() == local_md5:
+            return f"{subdir}/{item.get('Name')}" if subdir else str(item.get("Name"))
+    names = {str(item.get("Name", "")) for item in listing}
     rel = drive_layout.drive_path_for(course, preview, {subdir: names})
     try:
         # --ignore-existing: a file another Drive client put at this path after the listing is skipped, never replaced.
@@ -868,7 +880,6 @@ def _upload_to_drive(registry: Registry, course: dict[str, Any], file: Path, pre
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
         raise IngestError(f"Drive copy failed: {exc}") from exc
     remote_md5 = ((stat.get("Hashes") or {}).get("md5") or (stat.get("Hashes") or {}).get("MD5")) if isinstance(stat, dict) else None
-    local_md5 = hashlib.md5(file.read_bytes()).hexdigest()
     if not remote_md5 or remote_md5.lower() != local_md5:
         raise IngestError(f"Drive copy not confirmed: the file at {rel} on Drive has MD5 {remote_md5}, the local file {local_md5}; "
                           "another file may hold that path")
