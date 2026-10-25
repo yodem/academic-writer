@@ -37,6 +37,7 @@ UNSORTED_DIR = "לא ממוין"
 SYLLABUS_RE = re.compile(r"סילבוס|פתיחה|syllabus", re.IGNORECASE)
 LESSON_RE = re.compile(r"שיעור\s*(\d+)|lesson\s*(\d+)", re.IGNORECASE)
 TASK_RE = re.compile(r"מטלה\s*(\d+)")
+EXAM_RE = re.compile(r"מבחן|בחינה|עבודה סמינריונית|\bexam\b|\bassign(ment)?\b|\bessay\b", re.IGNORECASE)
 LEGACY_LESSON_DIR_RE = re.compile(r"^שיעור\s*(\d+)$")
 LEGACY_TASK_DIR_RE = re.compile(r"^מטלה\s*(\d+)$")
 DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -250,6 +251,9 @@ def folder_for(course: dict[str, Any], source: dict[str, Any]) -> str:
         return _task_folder(int(match.group(1)))
     if SYLLABUS_RE.search(label):
         return GENERAL_DIR
+    if EXAM_RE.search(label.replace(".", " ").replace("_", " ")):
+        # an exam, a take-home or an assignment file with no task number: under מטלות, in its own folder
+        return f"{TASKS_DIR}/{_segment(label)}"
     if ext in DOC_EXTS:
         return f"{READINGS_DIR}/{_segment(drive_name(source, course))}"
     return UNSORTED_DIR
