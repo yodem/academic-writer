@@ -267,7 +267,7 @@ def test_drive_reorg_lists_the_root_recursively_with_dirs(tmp_path):
     registry = courses.Registry(_make(tmp_path))
     fake = ReorgFake(listing("11111111-syllabus.pdf"))
     courses.drive_reorg(registry, ["sample"], apply=False, runner=fake)
-    assert fake.calls[0] == ["rclone", "lsjson", "gdrive:", "--drive-root-folder-id", "folder-1", "-R"]
+    assert fake.calls[0] == ["rclone", "lsjson", "gdrive:", "--drive-root-folder-id", "folder-1", "-R", "--hash"]
 
 
 def test_apply_reorg_moves_by_id_and_journals_intent_before_done(tmp_path):
@@ -1032,3 +1032,25 @@ def test_a_registry_write_whose_done_line_was_lost_is_closed_on_resume(tmp_path)
     courses.drive_reorg_resume(courses.Registry(registry.directory), journal, runner=drive)
     assert drive_layout.pending_ops(drive_layout.read_journal(journal)) == []
     courses.drive_reorg(courses.Registry(registry.directory), ["sample"], apply=True, runner=drive)  # no longer blocked
+
+
+def test_lesson_numbers_never_shift_when_an_earlier_lesson_arrives_later():
+    course = {"lessons": [{"lesson_key": "2026-10-12-1204"}],
+              "sources": [{"lesson_key": "2026-10-12-1204", "drive_path": "שיעורים/שיעור 01/a.m4a"}]}
+    assert drive_layout.lesson_number(course, "2026-10-12-1204") == 1
+    assert drive_layout.lesson_number(course, "2026-10-05-1204") == 2   # earlier date, imported later: next number
+    fresh = {"lessons": [{"lesson_key": "2026-10-12-1204"}, {"lesson_key": "2026-10-05-1204"}], "sources": []}
+    assert drive_layout.lesson_number(fresh, "2026-10-05-1204") == 1    # nothing on Drive yet: by date
+
+
+def test_a_file_in_a_legacy_folder_is_matched_to_its_source_by_sha256_not_by_name():
+    course = {"sources": [{"sha256": "aa" * 32, "file": "/s/11111111-essay.pdf", "title": "Essay", "tasks": []}]}
+    listing = [
+        {"Path": "מטלה 1", "Name": "מטלה 1", "IsDir": True, "ID": "d1"},
+        {"Path": "מטלה 1/renamed by me.pdf", "Name": "renamed by me.pdf", "IsDir": False, "ID": "f1", "Hashes": {"sha256": "aa" * 32}},
+        {"Path": "מטלה 1/essay.pdf", "Name": "essay.pdf", "IsDir": False, "ID": "f2", "Hashes": {"sha256": "bb" * 32}},
+    ]
+    plan = drive_layout.plan_reorg(course, listing)
+    matched = [s for s in plan if s.get("sha256") == "aa" * 32]
+    assert matched and all(s["id"] == "f1" for s in matched)
+    assert not [s for s in plan if s.get("id") == "f2" and s.get("sha256")]

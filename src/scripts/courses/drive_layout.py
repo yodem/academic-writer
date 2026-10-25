@@ -125,10 +125,27 @@ def lesson_keys(course: dict[str, Any]) -> set[str]:
     return keys
 
 
+LESSON_PATH_RE = re.compile(r"^" + re.escape(LESSONS_DIR) + r"/שיעור (\d+)/")
+
+
+def assigned_lesson_numbers(course: dict[str, Any]) -> dict[str, int]:
+    """Lesson numbers already given on Drive: a recording's recorded drive_path names its lesson folder."""
+    out: dict[str, int] = {}
+    for source in course.get("sources", []):
+        match = LESSON_PATH_RE.match(str(source.get("drive_path") or ""))
+        if source.get("lesson_key") and match:
+            out.setdefault(str(source["lesson_key"]), int(match.group(1)))
+    return out
+
+
 def lesson_number(course: dict[str, Any], lesson_key: str) -> int:
-    """1-based position of a lesson among the course's lessons, ordered by key (the key starts with the date)."""
-    keys = lesson_keys(course) | {lesson_key}
-    return sorted(keys).index(lesson_key) + 1
+    """1-based lesson folder number. A lesson that already has a folder keeps it, so numbers never shift; before any
+    folder exists the lessons are numbered by key (the key starts with the date); a later lesson takes the next number."""
+    assigned = assigned_lesson_numbers(course)
+    if lesson_key in assigned:
+        return assigned[lesson_key]
+    unassigned = sorted((lesson_keys(course) | {lesson_key}) - set(assigned))
+    return max(assigned.values(), default=0) + unassigned.index(lesson_key) + 1
 
 
 def task_number(course: dict[str, Any], task_id: str) -> int | None:
@@ -245,7 +262,8 @@ def _entries(listing: list[dict[str, Any]]) -> list[dict[str, Any]]:
         path = _listed_path(item)
         if not path:
             raise ReorgError("a Drive listing entry has no path")
-        out.append({"n": index, "path": path, "id": str(item.get("ID") or ""), "dir": bool(item.get("IsDir"))})
+        out.append({"n": index, "path": path, "id": str(item.get("ID") or ""), "dir": bool(item.get("IsDir")),
+                    "sha256": str((item.get("Hashes") or {}).get("sha256") or "").lower()})
     return out
 
 
@@ -329,6 +347,24 @@ def plan_reorg(course: dict[str, Any], listing: list[dict[str, Any]]) -> list[di
         claimed.add(entry["n"])
         items.append({"n": entry["n"], "id": entry["id"], "path": entry["path"], "sha": str(source.get("sha256", "")),
                       "source": source, "folder": None, "name": None})
+    # A registry source whose recorded path is gone is still matched exactly when Drive's SHA-256 equals its own,
+    # wherever it sits (a legacy folder included); a hash shared by two files or two sources is not used.
+    claimed_sha = {it["sha"] for it in items if it["sha"]}
+    by_sha: dict[str, list[dict[str, Any]]] = {}
+    for source in course.get("sources", []):
+        sha = str(source.get("sha256") or "").lower()
+        if sha and sha not in claimed_sha:
+            by_sha.setdefault(sha, []).append(source)
+    files_by_sha: dict[str, list[dict[str, Any]]] = {}
+    for entry in entries:
+        if not entry["dir"] and entry["n"] not in claimed and entry["sha256"]:
+            files_by_sha.setdefault(entry["sha256"], []).append(entry)
+    for sha, found in files_by_sha.items():
+        if len(found) == 1 and len(by_sha.get(sha, [])) == 1:
+            entry, source = found[0], by_sha[sha][0]
+            claimed.add(entry["n"])
+            items.append({"n": entry["n"], "id": entry["id"], "path": entry["path"], "sha": str(source.get("sha256", "")),
+                          "source": source, "folder": None, "name": None})
     by_key: dict[str, dict[str, Any]] = {}
     for source in course.get("sources", []):
         file_name = _file_name(source)

@@ -1173,7 +1173,7 @@ def _nightly_running(runner: Callable[..., Any]) -> bool:
 
 
 def _listing(runner: Callable[..., Any], remote: str, folder: str) -> list[dict[str, Any]]:
-    return _as_list(_json_from_command(["rclone", "lsjson", f"{remote}:", "--drive-root-folder-id", str(folder), "-R"], runner), "files", "items")
+    return _as_list(_json_from_command(["rclone", "lsjson", f"{remote}:", "--drive-root-folder-id", str(folder), "-R", "--hash"], runner), "files", "items")
 
 
 def _source_by_sha(course: dict[str, Any], sha: str) -> dict[str, Any] | None:
