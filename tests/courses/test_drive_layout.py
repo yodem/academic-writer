@@ -1017,3 +1017,18 @@ def test_a_fresh_apply_refuses_when_only_the_nlm_rename_and_checkpoint_are_left(
     recorded = json.loads((registry.directory / "sample.json").read_text(encoding="utf-8"))["sources"][0]
     assert recorded["drive_path"] == "00 כללי/Syllabus.pdf"
     courses.drive_reorg(courses.Registry(registry.directory), ["sample"], apply=True, runner=drive)  # finished: allowed again
+
+
+def test_a_registry_write_whose_done_line_was_lost_is_closed_on_resume(tmp_path):
+    registry = _registry_with(tmp_path, [src(sha256="1" * 64, file="/s/11111111-syllabus.pdf", title="Syllabus")])
+    drive = FakeDrive([("11111111-syllabus.pdf", False)])
+    courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    journal = _journal_of(registry)
+    lines = journal.read_text(encoding="utf-8").splitlines()
+    last_done = max(i for i, l in enumerate(lines) if json.loads(l).get("kind") == "registry" and json.loads(l).get("phase") == "done")
+    journal.write_text("\n".join(lines[:last_done] + lines[last_done + 1:]) + "\n", encoding="utf-8")  # lose that done line
+    assert courses._unfinished_journals(courses.Registry(registry.directory), "sample",
+                                        json.loads((registry.directory / "sample.json").read_text(encoding="utf-8")))
+    courses.drive_reorg_resume(courses.Registry(registry.directory), journal, runner=drive)
+    assert drive_layout.pending_ops(drive_layout.read_journal(journal)) == []
+    courses.drive_reorg(courses.Registry(registry.directory), ["sample"], apply=True, runner=drive)  # no longer blocked

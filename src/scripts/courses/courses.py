@@ -1209,9 +1209,13 @@ def _checkpoint(locked: Any, runner: Callable[..., Any], course_id: str | None):
     def after_step(step: dict[str, Any], journal: drive_layout.Journal) -> None:
         sha = str(step.get("sha256") or "")
         source = _source_by_sha(locked.payload, sha)
-        if source is None or source.get("drive_path") == step["new"]:
+        if source is None:
             return
         fields = {"file_id": str(step.get("id") or ""), "old": step["old"], "new": step["new"], "sha256": sha, "final": True}
+        if source.get("drive_path") == step["new"]:
+            # The registry already holds the path (a crash after its write, before the done line): close the record as done.
+            journal.run("registry", fields, lambda: None)
+            return
         title = _nlm_title(source)
         if title and source.get("notebook_source_id") and course_id:
             journal.run("nlm_rename", {**fields, "notebook_id": course_id, "notebook_source_id": str(source["notebook_source_id"]),
