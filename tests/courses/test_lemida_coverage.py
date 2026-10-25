@@ -352,3 +352,17 @@ def test_empty_course_scope_is_a_gap_not_a_pass(tmp_path):
     write_coverage(reg, clean_payload())
     gaps = check(reg, only=[])
     assert len(gaps) == 1 and "nothing was checked" in gaps[0]
+
+
+def test_course_marked_lemida_absent_is_not_a_gap(tmp_path):
+    reg = make_registry(tmp_path, extra=[{"slug": "levy", "name": "לוי", "lemida_absent": "semester B, no Lemida page yet"}])
+    write_coverage(reg, clean_payload())
+    assert check(reg) == []
+    assert not any(c["course"] == "levy" for c in chores.load(reg))
+
+
+def test_blank_lemida_absent_is_still_a_gap(tmp_path):
+    reg = make_registry(tmp_path, extra=[{"slug": "levy", "name": "לוי", "lemida_absent": "  "}])
+    write_coverage(reg, clean_payload())
+    gaps = check(reg)
+    assert len(gaps) == 1 and "levy" in gaps[0] and "lemida_course_id" in gaps[0]

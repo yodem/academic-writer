@@ -4,6 +4,11 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.20.7] — 2026-10-25
+
+### Added
+- **`lemida_absent` on a course.** A course with no Lemida page this term (semester B, tentative, run elsewhere) can carry `"lemida_absent": "<why>"` in its JSON. The nightly coverage check then skips it instead of failing every night and filing a `lemida-id-<slug>` chore. A blank value still counts as missing.
+
 ## [0.20.6] — 2026-10-25
 
 ### Fixed
