@@ -981,3 +981,25 @@ def test_add_source_reuses_a_copy_already_on_drive_instead_of_uploading_twice(tm
     fake = Fake(drive=[{"Name": "Syllabus.pdf", "Path": "Syllabus.pdf", "Hashes": {"md5": md5}}])
     courses.add_source(registry, source, "sample", runner=fake)
     assert fake.of("rclone", "copyto") == []
+
+
+def test_a_fresh_apply_refuses_while_an_earlier_reorg_is_unfinished(tmp_path):
+    registry, drive = _two_unregistered(tmp_path)
+    drive.faults[("moveid", 2)] = "before"
+    with pytest.raises(subprocess.CalledProcessError):
+        courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    drive.faults.clear()
+    before = len(_moves(drive))
+    with pytest.raises(drive_layout.ReorgError, match="--resume"):
+        courses.drive_reorg(courses.Registry(registry.directory), ["sample"], apply=True, runner=drive)
+    assert len(_moves(drive)) == before
+
+
+def test_resume_never_deletes_a_folder_even_from_an_older_journal(tmp_path):
+    registry, drive = _two_unregistered(tmp_path)
+    journal = registry.directory / "logs" / "drive-reorg-old-sample.jsonl"
+    journal.parent.mkdir(parents=True, exist_ok=True)
+    j = drive_layout.Journal(journal, remote="gdrive", root="folder-1", slug="sample")
+    j.write_plan([{"op": "rmdir", "id": "dir-x", "old": "מטלה 1", "new": "", "sha256": "", "final": False}])
+    courses.drive_reorg_resume(courses.Registry(registry.directory), journal, runner=drive, force=True)
+    assert [c for c in drive.calls if c[:2] == ["rclone", "rmdir"]] == []

@@ -1248,6 +1248,10 @@ def drive_reorg(registry: Registry, slugs: list[str], *, apply: bool = False, fo
             manifests.append(_manifest(slug, str(folder), course, drive_layout.plan_reorg(course, _listing(runner, remote, folder))))
             continue
         with _locked_course(registry.directory, slug) as locked:
+            unfinished = _unfinished_journals(registry, slug)
+            if unfinished:
+                raise drive_layout.ReorgError(f"{slug}: an earlier reorg did not finish ({unfinished[0].name}); "
+                                              f"run drive-reorg --resume {unfinished[0]} --apply first")
             plan = drive_layout.plan_reorg(locked.payload, _listing(runner, remote, folder))
             if drive_layout.plan_reorg(locked.payload, _listing(runner, remote, folder)) != plan:
                 raise drive_layout.ReorgError(f"{slug}: Drive changed while planning; nothing was moved, rerun")
@@ -1259,6 +1263,20 @@ def drive_reorg(registry: Registry, slugs: list[str], *, apply: bool = False, fo
             finally:
                 registry.courses[slug] = locked.payload
     return manifests
+
+
+def _unfinished_journals(registry: Registry, slug: str) -> list[Path]:
+    """This course's reorg journals that still hold a step with no done record."""
+    found = []
+    for path in sorted((registry.directory / "logs").glob(f"drive-reorg-*-{slug}.jsonl")):
+        lines = drive_layout.read_journal(path)
+        if not lines:
+            continue
+        journal = drive_layout.Journal(path, remote=str(lines[0]["remote"]), root=str(lines[0]["root"]), slug=slug)
+        if any(step["op"] == "move" and not journal.is_done(drive_layout.JOURNAL_KIND["move"], drive_layout._fields(step))
+               for _, step in drive_layout.plan_steps(lines)):
+            found.append(path)
+    return found
 
 
 def drive_reorg_resume(registry: Registry, journal_path: Path, *, force: bool = False,
@@ -1310,9 +1328,8 @@ def drive_reorg_resume(registry: Registry, journal_path: Path, *, force: bool = 
                             at[file_id] = step["new"]
                         else:
                             raise drive_layout.ReorgError(f"{file_id} is at {current!r}, neither {step['old']!r} nor {step['new']!r}; not touching it")
-                    elif file_id in at and at[file_id] == step["old"]:
-                        journal.run(kind, fields, lambda step=step: drive_layout.rmdir_folder(remote, root, step["old"], runner), op_id)
                     else:
+                        # Folder deletion is never executed, not even from an older journal: the folder is kept.
                         journal.run(kind, fields, lambda: None, op_id)
                     done.append(f"{kind} {step['old']} -> {step['new']}")
                 if step["op"] == "move" and step.get("final") and step.get("sha256"):

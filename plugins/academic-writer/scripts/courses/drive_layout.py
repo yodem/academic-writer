@@ -513,11 +513,6 @@ def move_file(remote: str, root_id: str, file_id: str, new: str, runner: Callabl
         raise ReorgError(f"{new!r} holds {found or 'an unknown object'}, not {file_id}: the move was skipped, so {file_id} was not moved there")
 
 
-def rmdir_folder(remote: str, root_id: str, path: str, runner: Callable[..., Any] = subprocess.run) -> None:
-    """Remove an emptied folder. rclone refuses a non-empty folder, so nothing in it is lost."""
-    runner(["rclone", "rmdir", f"{remote}:{path}", "--drive-root-folder-id", str(root_id)], check=True, text=True, capture_output=True)
-
-
 JOURNAL_KIND = {"move": "drive_move", "rmdir": "drive_rmdir"}
 
 
@@ -682,7 +677,5 @@ def apply_reorg(plan: list[dict[str, Any]], remote: str, root_id: str, log: Path
     for step, op_id in zip(plan, op_ids):
         if step["op"] == "move":
             journal.run("drive_move", _fields(step), lambda step=step: move_file(remote, root_id, step["id"], step["new"], runner), op_id)
-        elif step["op"] == "rmdir":
-            journal.run("drive_rmdir", _fields(step), lambda step=step: rmdir_folder(remote, root_id, step["old"], runner), op_id)
         if after_step is not None and step.get("final") and step.get("sha256"):
             after_step(step, journal)
