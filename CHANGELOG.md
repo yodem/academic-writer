@@ -4,6 +4,11 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.20.6] — 2026-10-25
+
+### Fixed
+- **Drive shortcuts are left in place.** `drive-reorg` tried to move a Drive shortcut by id; rclone gives a shortcut a two-part id, so the move failed and stopped the run. Shortcuts are now left where they are, and `--resume` finishes an older journal that planned one.
+
 ## [0.20.5] — 2026-10-25
 
 ### Fixed
