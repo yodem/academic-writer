@@ -1086,3 +1086,10 @@ def test_a_titled_recording_keeps_its_title_and_a_machine_named_one_gets_its_les
     assert drive_layout.drive_name(titled, course) == "Lesson 2"
     machine = {"file": "/s/ed73a9d2-20261012 120422.m4a", "title": "20261012 120422", "kind": "media", "lesson_key": "2026-10-12-1204"}
     assert drive_layout.drive_name(machine, course) == "הקלטת שיעור 01 · 12.10.2026"
+
+
+def test_a_transcript_registered_as_media_is_still_named_a_transcript():
+    course = {"lessons": [{"lesson_key": "2026-10-11-1405"}], "sources": []}
+    source = {"file": "/s/f21f9f8b-kane__zoom-3263924__transcript-2026-10-11.txt", "title": "kane__zoom-3263924__transcript-2026-10-11",
+              "kind": "media", "lesson_key": "2026-10-11-1405"}
+    assert drive_layout.drive_name(source, course) == "תמלול שיעור 01 · 11.10.2026"
