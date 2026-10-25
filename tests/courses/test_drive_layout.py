@@ -1128,3 +1128,13 @@ def test_the_plan_does_not_depend_on_listing_order_with_duplicate_names():
     one = drive_layout.plan_reorg({"sources": []}, listing)
     two = drive_layout.plan_reorg({"sources": []}, list(reversed(listing)))
     assert one == two
+
+
+def test_a_drive_shortcut_is_left_where_it_is():
+    listing = [
+        {"Path": "מטלה 2", "Name": "מטלה 2", "IsDir": True, "ID": "d1"},
+        {"Path": "מטלה 2/real.docx", "Name": "real.docx", "IsDir": False, "ID": "f1"},
+        {"Path": "מטלה 2/link.docx", "Name": "link.docx", "IsDir": False, "ID": "s1\tt1"},
+    ]
+    plan = drive_layout.plan_reorg({"sources": []}, listing)
+    assert [s["old"] for s in plan if s["op"] == "move"] == ["מטלה 2/real.docx"]

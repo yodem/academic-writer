@@ -308,10 +308,17 @@ def _listed_path(item: dict[str, Any]) -> str:
     return str(item.get("Path") or item.get("Name") or "")
 
 
+def is_shortcut(item: dict[str, Any]) -> bool:
+    """A Drive shortcut: rclone gives it a two-part id joined by a tab, and the shortcut MIME type."""
+    return "\t" in str(item.get("ID") or item.get("id") or "") or item.get("MimeType") == "application/vnd.google-apps.shortcut"
+
+
 def _entries(listing: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out = []
     # Drive lists same-named files in no fixed order; sort by path, then id, so two listings give the same plan.
     listing = sorted(listing, key=lambda item: (_listed_path(item) or "", str(item.get("ID") or "")))
+    # A Drive shortcut (rclone lists its id as "<shortcut id>\t<target id>") is left where it is: it cannot be moved by id.
+    listing = [item for item in listing if not is_shortcut(item)]
     for index, item in enumerate(listing):
         path = _listed_path(item)
         if not path:

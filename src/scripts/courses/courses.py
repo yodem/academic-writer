@@ -1330,6 +1330,11 @@ def drive_reorg_resume(registry: Registry, journal_path: Path, *, force: bool = 
                     continue
                 kind, fields = drive_layout.JOURNAL_KIND[step["op"]], drive_layout._fields(step)
                 file_id = str(step.get("id") or "")
+                if drive_layout.is_shortcut({"ID": file_id}) and not journal.is_done(kind, fields):
+                    # an older journal planned a Drive shortcut; shortcuts are left where they are
+                    journal.run(kind, fields, lambda: None, op_id)
+                    done.append(f"{kind} {step['old']} left in place (shortcut)")
+                    continue
                 if not journal.is_done(kind, fields):
                     if step["op"] == "move":
                         current = at.get(file_id)
