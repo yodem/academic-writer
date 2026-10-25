@@ -4,6 +4,11 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.20.3] — 2026-10-25
+
+### Fixed
+- **`drive-reorg` moves keep the Drive file.** rclone treated a destination under `--drive-root-folder-id` as another remote and copied the file, then deleted the original (it went to the Drive trash, and the copy got a new file id). Moves now pass `--drive-server-side-across-configs`, so they are server-side and the file keeps its id. The post-move id check caught the first such move and stopped the run.
+
 ## [0.20.2] — 2026-10-25
 
 ### Fixed
