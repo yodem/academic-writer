@@ -1,3 +1,4 @@
+import fcntl
 import json
 import subprocess
 import sys
@@ -33,10 +34,13 @@ def listing(*paths):
 def _apply_in_memory(paths, plan):
     """The listing after the plan's moves: a folder step carries everything under it, a file step renames one path."""
     dirs = {entry["Path"] for entry in paths if entry["IsDir"]}
-    moved = {step["old"]: step["new"] for step in plan}
+    moved = {step["old"]: step["new"] for step in plan if step["op"] == "move"}
+    removed = {step["old"] for step in plan if step["op"] == "rmdir"}
     out = []
     for entry in paths:
         path = entry["Path"]
+        if path in removed:
+            continue
         for old, new in moved.items():
             if path == old or (old in dirs and path.startswith(old + "/")):
                 path = new + path[len(old):]
@@ -118,7 +122,8 @@ def test_plan_reorg_moves_each_listed_source_and_skips_missing():
     plan = drive_layout.plan_reorg(course, listing("22222222-syllabus.pdf", "11111111-Reading One.pdf", "33333333-lesson.m4a"))
     by_sha = {step["sha256"]: step for step in plan}
     assert set(by_sha) == {"1" * 64, "2" * 64, "3" * 64}
-    assert by_sha["2" * 64] == {"id": "id-22222222-syllabus.pdf", "old": "22222222-syllabus.pdf", "new": "00 כללי/Syllabus.pdf", "sha256": "2" * 64}
+    assert by_sha["2" * 64] == {"op": "move", "id": "id-22222222-syllabus.pdf", "old": "22222222-syllabus.pdf", "new": "00 כללי/Syllabus.pdf",
+                                "sha256": "2" * 64, "final": True}
     assert by_sha["3" * 64]["new"] == "שיעורים/שיעור 02/Lesson 2.m4a"
     assert by_sha["1" * 64]["new"] == f"קריאות/{BARTON.rstrip('.')}/{BARTON.rstrip('.')}.pdf"
 
@@ -143,8 +148,8 @@ def test_unregistered_root_file_with_a_registry_stem_follows_its_source():
     name = "Barton, History and Rhetoric in the Prophets (1990)"
     course = dict(COURSE, sources=[src(sha256="b" * 64, file="/s/bc16a3f6-barton-1990-history-rhetoric.md", title=name, origin="library")])
     plan = drive_layout.plan_reorg(course, listing("barton-1990-history-rhetoric.pdf"))
-    assert plan == [{"id": "id-barton-1990-history-rhetoric.pdf", "old": "barton-1990-history-rhetoric.pdf",
-                     "new": f"קריאות/{name}/{name}.pdf", "sha256": ""}]
+    assert plan == [{"op": "move", "id": "id-barton-1990-history-rhetoric.pdf", "old": "barton-1990-history-rhetoric.pdf",
+                     "new": f"קריאות/{name}/{name}.pdf", "sha256": "", "final": True}]
 
 
 def test_unregistered_root_lesson_document_goes_to_its_lesson_folder():
@@ -163,11 +168,12 @@ def test_unregistered_root_media_by_date_and_undated_media():
     assert sorted(step["new"] for step in plan) == sorted(["שיעורים/שיעור 02/2026-10-12 talk.m4a", "לא ממוין/random.mp3"])
 
 
-def test_legacy_root_folders_move_as_folders_and_keep_their_files():
-    paths = [item("מטלה 1", True, "dir-1"), item("מטלה 1/notes.pdf"), item("שיעור 2", True, "dir-2")]
+def test_legacy_root_folders_are_emptied_file_by_file_then_removed():
+    paths = [item("מטלה 1", True, "dir-1"), item("מטלה 1/notes.pdf", ident="id-n"), item("שיעור 2", True, "dir-2")]
     assert drive_layout.plan_reorg(dict(COURSE, sources=[]), paths) == [
-        {"id": "dir-1", "old": "מטלה 1", "new": "מטלות/מטלה 1", "sha256": ""},
-        {"id": "dir-2", "old": "שיעור 2", "new": "שיעורים/שיעור 02", "sha256": ""},
+        {"op": "move", "id": "id-n", "old": "מטלה 1/notes.pdf", "new": "מטלות/מטלה 1/notes.pdf", "sha256": "", "final": True},
+        {"op": "rmdir", "id": "dir-1", "old": "מטלה 1", "new": "", "sha256": "", "final": False},
+        {"op": "rmdir", "id": "dir-2", "old": "שיעור 2", "new": "", "sha256": "", "final": False},
     ]
 
 
@@ -175,7 +181,9 @@ def test_legacy_folder_whose_target_exists_merges_its_files_with_unique_names():
     paths = [item("מטלה 1", True), item("מטלה 1/notes.pdf", ident="id-n"), item("מטלות/מטלה 1", True),
              item("מטלות/מטלה 1/notes.pdf")]
     assert drive_layout.plan_reorg(dict(COURSE, sources=[]), paths) == [
-        {"id": "id-n", "old": "מטלה 1/notes.pdf", "new": "מטלות/מטלה 1/notes (2).pdf", "sha256": ""}]
+        {"op": "move", "id": "id-n", "old": "מטלה 1/notes.pdf", "new": "מטלות/מטלה 1/notes (2).pdf", "sha256": "", "final": True},
+        {"op": "rmdir", "id": "id-מטלה 1", "old": "מטלה 1", "new": "", "sha256": "", "final": False},
+    ]
 
 
 def test_files_inside_top_folders_are_never_moved():
@@ -199,7 +207,8 @@ def test_nevua_fixture_leaves_no_file_at_root():
              "malamat-1963-mari.pdf", "pedersen-index.pdf"]
     paths = [item(n) for n in names] + [item("מטלה 1", True, "dir-1"), item("מטלה 1/ספר.pdf")]
     plan = drive_layout.plan_reorg(course, paths)
-    assert len(plan) == 13  # 12 root files and the מטלה 1 folder
+    assert len([s for s in plan if s["op"] == "move"]) == 13  # 12 root files and the file inside מטלה 1
+    assert [s["old"] for s in plan if s["op"] == "rmdir"] == ["מטלה 1"]
     after = _apply_in_memory(paths, plan)
     root_left = [entry["Path"] for entry in after if "/" not in entry["Path"] and entry["Path"] not in TOP]
     assert root_left == []
@@ -214,24 +223,9 @@ def test_plan_reorg_is_idempotent_after_its_moves_are_applied():
     plan = drive_layout.plan_reorg(course, paths)
     assert plan
     after = _apply_in_memory(paths, plan)
-    done = {step["sha256"]: step["new"] for step in plan if step["sha256"]}
+    done = {step["sha256"]: step["new"] for step in plan if step["sha256"] and step["op"] == "move"}
     recorded = dict(course, sources=[dict(s, drive_path=done[s["sha256"]]) if s["sha256"] in done else s for s in course["sources"]])
     assert drive_layout.plan_reorg(recorded, after) == []
-
-
-def test_apply_reorg_moves_and_logs_each_step(tmp_path):
-    calls = []
-
-    def runner(command, **kwargs):
-        calls.append(command)
-        return subprocess.CompletedProcess(command, 0, "", "")
-
-    log = tmp_path / "logs" / "drive-reorg.jsonl"
-    plan = [{"id": "id-0", "old": "a.pdf", "new": "00 כללי/a.pdf", "sha256": "1" * 64}]
-    drive_layout.apply_reorg(plan, "gdrive", "folder-1", log, runner=runner)
-    assert calls == [["rclone", "moveto", "gdrive:a.pdf", "gdrive:00 כללי/a.pdf", "--drive-root-folder-id", "folder-1"]]
-    entries = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
-    assert [(e["old"], e["new"], e["id"]) for e in entries] == [("a.pdf", "00 כללי/a.pdf", "id-0")]
 
 
 def _make(tmp_path):
@@ -275,15 +269,336 @@ def test_drive_reorg_lists_the_root_recursively_with_dirs(tmp_path):
     assert fake.calls[0] == ["rclone", "lsjson", "gdrive:", "--drive-root-folder-id", "folder-1", "-R"]
 
 
-def test_drive_reorg_apply_moves_renames_nlm_and_records_drive_path(tmp_path):
-    registry = courses.Registry(_make(tmp_path))
-    fake = ReorgFake(listing("11111111-syllabus.pdf"))
-    courses.drive_reorg(registry, ["sample"], apply=True, runner=fake)
-    assert ["rclone", "moveto", "gdrive:11111111-syllabus.pdf", "gdrive:00 כללי/Syllabus.pdf", "--drive-root-folder-id", "folder-1"] in fake.calls
-    assert ["nlm", "source", "rename", "nlm-1", "Syllabus", "--notebook", "nb-1"] in fake.calls
-    source = json.loads((registry.directory / "sample.json").read_text(encoding="utf-8"))["sources"][0]
-    assert source["drive_path"] == "00 כללי/Syllabus.pdf"
-    assert len(list((registry.directory / "logs").glob("drive-reorg-*.jsonl"))) == 1
+def test_apply_reorg_moves_by_id_and_journals_intent_before_done(tmp_path):
+    calls = []
+
+    def runner(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    log = tmp_path / "logs" / "drive-reorg.jsonl"
+    plan = [{"op": "move", "id": "id-0", "old": "a.pdf", "new": "00 כללי/a.pdf", "sha256": "1" * 64, "final": True}]
+    drive_layout.apply_reorg(plan, "gdrive", "folder-1", log, runner=runner, slug="sample")
+    assert calls == [
+        ["rclone", "mkdir", "gdrive:00 כללי", "--drive-root-folder-id", "folder-1"],
+        ["rclone", "backend", "moveid", "gdrive:", "id-0", "00 כללי/a.pdf", "--drive-root-folder-id", "folder-1"],
+    ]
+    lines = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+    assert [(line["phase"], line["kind"]) for line in lines] == [("intent", "drive_move"), ("done", "drive_move")]
+    for line in lines:
+        assert {"remote", "root", "slug", "op_id", "seq", "file_id", "old", "new"} <= set(line)
+        assert (line["remote"], line["root"], line["slug"]) == ("gdrive", "folder-1", "sample")
+    assert lines[0]["op_id"] == lines[1]["op_id"] and [line["seq"] for line in lines] == [1, 2]
+
+
+def test_apply_refuses_a_step_without_a_drive_id_before_any_move(tmp_path):
+    calls = []
+    log = tmp_path / "logs" / "drive-reorg.jsonl"
+    plan = [{"op": "move", "id": "", "old": "a.pdf", "new": "00 כללי/a.pdf", "sha256": "", "final": True}]
+    with pytest.raises(drive_layout.ReorgError):
+        drive_layout.apply_reorg(plan, "gdrive", "folder-1", log, runner=lambda c, **k: calls.append(c))
+    assert calls == [] and not log.exists()
+
+
+class FakeDrive:
+    """A stateful Drive keyed by file id. Paths may repeat (Drive allows duplicate names), a move onto an occupied
+    path is recorded as a violation and refused, and faults can fail a call before or after it changes anything."""
+
+    def __init__(self, items, *, nightly=False):
+        self.items = {}
+        self.calls = []
+        self.violations = []
+        self.faults = {}
+        self.counts = {}
+        self.nightly = nightly
+        self.nlm = []
+        self.list_calls = 0
+        self.on_list = None
+        self.lock_file = None
+        self.lock_probe = []
+        self._serial = 0
+        for path, is_dir in items:
+            self.add(path, is_dir)
+
+    def add(self, path, is_dir=False, ident=None):
+        self._serial += 1
+        ident = ident or f"id-{self._serial}-{path}"
+        self.items[ident] = {"Path": path, "Name": path.rsplit("/", 1)[-1], "ID": ident, "IsDir": is_dir}
+        return ident
+
+    def path_of(self, ident):
+        return self.items[ident]["Path"]
+
+    def paths(self):
+        return sorted(item["Path"] for item in self.items.values())
+
+    def files(self):
+        return sorted(item["Path"] for item in self.items.values() if not item["IsDir"])
+
+    def id_at(self, path):
+        return next(ident for ident, item in self.items.items() if item["Path"] == path)
+
+    def _probe(self):
+        if self.lock_file is None:
+            return
+        handle = open(self.lock_file, "a+")
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            self.lock_probe.append(False)
+        except BlockingIOError:
+            self.lock_probe.append(True)
+        finally:
+            handle.close()
+
+    def _fault(self, verb, when):
+        n = self.counts[verb]
+        if self.faults.get((verb, n)) == when:
+            raise subprocess.CalledProcessError(1, verb, "injected fault")
+
+    def _fail(self, command, why):
+        self.violations.append((command, why))
+        raise subprocess.CalledProcessError(1, command, why)
+
+    def __call__(self, command, **kwargs):
+        self.calls.append(list(command))
+        ok = subprocess.CompletedProcess(command, 0, "", "")
+        if command[:1] == ["pgrep"]:
+            return subprocess.CompletedProcess(command, 0, "4242\n", "") if self.nightly else subprocess.CompletedProcess(command, 1, "", "")
+        if command[:2] == ["rclone", "lsjson"]:
+            self.list_calls += 1
+            if self.on_list:
+                self.on_list(self)
+            self._probe()
+            return subprocess.CompletedProcess(command, 0, json.dumps(list(self.items.values())), "")
+        if command[:2] == ["rclone", "mkdir"]:
+            path = command[2].split(":", 1)[1]
+            for index in range(1, len(path.split("/")) + 1):
+                folder = "/".join(path.split("/")[:index])
+                if not any(item["Path"] == folder and item["IsDir"] for item in self.items.values()):
+                    self.add(folder, True)
+            return ok
+        if command[:3] == ["rclone", "backend", "moveid"]:
+            self.counts["moveid"] = self.counts.get("moveid", 0) + 1
+            self._probe()
+            self._fault("moveid", "before")
+            ident, dest = command[4], command[5]
+            if ident not in self.items:
+                self._fail(command, "no such id")
+            parent = dest.rpartition("/")[0]
+            if parent and not any(item["Path"] == parent and item["IsDir"] for item in self.items.values()):
+                self._fail(command, f"parent folder {parent!r} does not exist")
+            if any(item["Path"] == dest for item in self.items.values()):
+                self._fail(command, f"destination {dest!r} is occupied")
+            self.items[ident]["Path"] = dest
+            self.items[ident]["Name"] = dest.rsplit("/", 1)[-1]
+            self._fault("moveid", "after")
+            return ok
+        if command[:2] == ["rclone", "rmdir"]:
+            path = command[2].split(":", 1)[1]
+            if any(item["Path"].startswith(path + "/") or item["Path"] == path and not item["IsDir"] for item in self.items.values()):
+                self._fail(command, "directory not empty")
+            ident = next((i for i, item in self.items.items() if item["Path"] == path and item["IsDir"]), None)
+            if ident is None:
+                self._fail(command, "directory not found")
+            del self.items[ident]
+            return ok
+        if command[:3] == ["nlm", "source", "rename"]:
+            self.nlm.append(command)
+        return ok
+
+
+def _registry_with(tmp_path, sources, tasks=None):
+    registry = make_registry(tmp_path, term={"drive_remote": "gdrive"}, tasks=tasks or [])
+    course = reload(registry)
+    course["sources"] = sources
+    (registry.directory / "sample.json").write_text(json.dumps(course), encoding="utf-8")
+    return courses.Registry(registry.directory)
+
+
+def _moves(drive):
+    return [c for c in drive.calls if c[:3] == ["rclone", "backend", "moveid"]]
+
+
+def test_drive_reorg_apply_moves_by_id_renames_nlm_and_records_drive_path(tmp_path):
+    registry = _registry_with(tmp_path, [src(sha256="1" * 64, file="/s/11111111-syllabus.pdf", title="Syllabus", notebook_source_id="nlm-1")])
+    drive = FakeDrive([("11111111-syllabus.pdf", False)])
+    courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    ident = drive.id_at("00 כללי/Syllabus.pdf")
+    assert _moves(drive) == [["rclone", "backend", "moveid", "gdrive:", ident, "00 כללי/Syllabus.pdf", "--drive-root-folder-id", "folder-1"]]
+    assert ["nlm", "source", "rename", "nlm-1", "Syllabus", "--notebook", "nb-1"] in drive.nlm
+    assert json.loads((registry.directory / "sample.json").read_text(encoding="utf-8"))["sources"][0]["drive_path"] == "00 כללי/Syllabus.pdf"
+    assert len(list((registry.directory / "logs").glob("drive-reorg-*-sample.jsonl"))) == 1
+    assert drive.violations == []
+
+
+def test_swap_of_two_registered_files_is_resolved_with_a_temporary_name(tmp_path):
+    a = src(sha256="a" * 64, file="/s/aaaa1111-a.pdf", title="Syllabus", drive_path="00 כללי/Syllabus Old.pdf")
+    b = src(sha256="b" * 64, file="/s/bbbb2222-b.pdf", title="Syllabus Old", drive_path="00 כללי/Syllabus.pdf")
+    registry = _registry_with(tmp_path, [a, b])
+    drive = FakeDrive([("00 כללי", True), ("00 כללי/Syllabus Old.pdf", False), ("00 כללי/Syllabus.pdf", False)])
+    id_a, id_b = drive.id_at("00 כללי/Syllabus Old.pdf"), drive.id_at("00 כללי/Syllabus.pdf")
+    courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    assert drive.violations == []
+    assert drive.path_of(id_a) == "00 כללי/Syllabus.pdf" and drive.path_of(id_b) == "00 כללי/Syllabus Old.pdf"
+    assert len(_moves(drive)) == 3  # one temporary move breaks the cycle
+    recorded = {s["sha256"]: s["drive_path"] for s in json.loads((registry.directory / "sample.json").read_text(encoding="utf-8"))["sources"]}
+    assert recorded == {"a" * 64: "00 כללי/Syllabus.pdf", "b" * 64: "00 כללי/Syllabus Old.pdf"}
+    again = drive_layout.plan_reorg(json.loads((registry.directory / "sample.json").read_text(encoding="utf-8")), drive.items.values())
+    assert again == []
+
+
+def test_stationary_file_keeps_its_name_and_the_mover_gets_a_suffix(tmp_path):
+    registry = _registry_with(tmp_path, [src(sha256="1" * 64, file="/s/11111111-syllabus.pdf", title="Syllabus")])
+    drive = FakeDrive([("00 כללי", True), ("00 כללי/Syllabus.pdf", False), ("11111111-syllabus.pdf", False)])
+    courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    assert drive.violations == []
+    assert sorted(p for p in drive.paths() if p.startswith("00 כללי/")) == ["00 כללי/Syllabus (2).pdf", "00 כללי/Syllabus.pdf"]
+
+
+def test_duplicate_root_names_are_each_moved_by_their_own_id(tmp_path):
+    registry = _registry_with(tmp_path, [])
+    drive = FakeDrive([("scan.pdf", False), ("scan.pdf", False)])
+    ids = [i for i in drive.items]
+    courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    assert drive.violations == []
+    assert sorted(drive.path_of(i) for i in ids) == ["קריאות/scan/scan (2).pdf", "קריאות/scan/scan.pdf"]
+
+
+def test_registered_source_on_a_duplicated_name_moves_nothing(tmp_path):
+    registry = _registry_with(tmp_path, [src(sha256="1" * 64, file="/s/11111111-syllabus.pdf", title="Syllabus")])
+    drive = FakeDrive([("11111111-syllabus.pdf", False), ("11111111-syllabus.pdf", False)])
+    with pytest.raises(drive_layout.ReorgError):
+        courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    assert _moves(drive) == [] and not any(c[:2] == ["rclone", "mkdir"] for c in drive.calls)
+
+
+def test_duplicated_destination_folder_moves_nothing(tmp_path):
+    registry = _registry_with(tmp_path, [src(sha256="1" * 64, file="/s/11111111-syllabus.pdf", title="Syllabus")])
+    drive = FakeDrive([("00 כללי", True), ("00 כללי", True), ("11111111-syllabus.pdf", False)])
+    with pytest.raises(drive_layout.ReorgError):
+        courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    assert _moves(drive) == [] and drive.paths() == ["00 כללי", "00 כללי", "11111111-syllabus.pdf"]
+
+
+def test_legacy_folder_with_a_subfolder_and_a_registered_source_inside(tmp_path):
+    task = src(sha256="5" * 64, file="/s/55555555-essay.pdf", title="Essay", tasks=["t-a"], drive_path="מטלה 1/essay.pdf")
+    registry = _registry_with(tmp_path, [task], tasks=[{"id": "t-a"}])
+    drive = FakeDrive([("מטלה 1", True), ("מטלה 1/sub", True), ("מטלה 1/sub/x.pdf", False), ("מטלה 1/essay.pdf", False)])
+    courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    assert drive.violations == []
+    assert drive.paths() == ["מטלות", "מטלות/מטלה 1", "מטלות/מטלה 1/Essay.pdf", "מטלות/מטלה 1/sub", "מטלות/מטלה 1/sub/x.pdf"]
+    recorded = json.loads((registry.directory / "sample.json").read_text(encoding="utf-8"))["sources"][0]["drive_path"]
+    assert recorded == "מטלות/מטלה 1/Essay.pdf"
+
+
+def test_legacy_folder_merges_into_an_existing_target_with_unique_names(tmp_path):
+    registry = _registry_with(tmp_path, [])
+    drive = FakeDrive([("מטלה 1", True), ("מטלה 1/notes.pdf", False), ("מטלות", True), ("מטלות/מטלה 1", True), ("מטלות/מטלה 1/notes.pdf", False)])
+    courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    assert drive.violations == []
+    assert sorted(drive.paths()) == ["מטלות", "מטלות/מטלה 1", "מטלות/מטלה 1/notes (2).pdf", "מטלות/מטלה 1/notes.pdf"]
+
+
+def test_listing_that_changes_before_the_moves_aborts_without_moving(tmp_path):
+    registry = _registry_with(tmp_path, [])
+    drive = FakeDrive([("11111111-syllabus.pdf", False)])
+
+    def add_late_file(fake):
+        if fake.list_calls == 2:
+            fake.add("late.pdf")
+    drive.on_list = add_late_file
+    with pytest.raises(drive_layout.ReorgError):
+        courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    assert _moves(drive) == []
+
+
+def test_plan_is_applied_while_the_course_lock_is_held(tmp_path):
+    registry = _registry_with(tmp_path, [src(sha256="1" * 64, file="/s/11111111-syllabus.pdf", title="Syllabus")])
+    drive = FakeDrive([("11111111-syllabus.pdf", False)])
+    drive.lock_file = registry.directory / ".lock"
+    courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    assert drive.lock_probe and all(drive.lock_probe)
+
+
+def test_apply_refuses_while_the_nightly_job_runs_unless_forced(tmp_path):
+    registry = _registry_with(tmp_path, [src(sha256="1" * 64, file="/s/11111111-syllabus.pdf", title="Syllabus")])
+    drive = FakeDrive([("11111111-syllabus.pdf", False)], nightly=True)
+    with pytest.raises(drive_layout.ReorgError, match="nightly"):
+        courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    assert _moves(drive) == []
+    assert courses.drive_reorg(registry, ["sample"], apply=False, runner=drive)[0]["moves"]
+    courses.drive_reorg(registry, ["sample"], apply=True, force=True, runner=drive)
+    assert len(_moves(drive)) == 1
+
+
+def test_a_rerun_after_a_full_apply_plans_nothing(tmp_path):
+    registry = _registry_with(tmp_path, [src(sha256="1" * 64, file="/s/11111111-syllabus.pdf", title="Syllabus")])
+    drive = FakeDrive([("11111111-syllabus.pdf", False)])
+    courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    rerun = courses.drive_reorg(courses.Registry(registry.directory), ["sample"], apply=True, runner=drive)
+    assert rerun[0]["moves"] == [] and len(_moves(drive)) == 1
+
+
+def _two_unregistered(tmp_path):
+    registry = _registry_with(tmp_path, [])
+    drive = FakeDrive([("alpha.pdf", False), ("beta.pdf", False)])
+    return registry, drive
+
+
+def test_failed_move_leaves_an_unfinished_intent_and_resume_finishes_it(tmp_path, monkeypatch):
+    registry, drive = _two_unregistered(tmp_path)
+    drive.faults[("moveid", 2)] = "before"
+    with pytest.raises(subprocess.CalledProcessError):
+        courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    journal = next((registry.directory / "logs").glob("drive-reorg-*-sample.jsonl"))
+    pending = drive_layout.pending_ops(drive_layout.read_journal(journal))
+    assert [(op["kind"], op["old"]) for op in pending] == [("drive_move", "beta.pdf")]
+    drive.faults.clear()
+    before = len(_moves(drive))
+    result = courses.drive_reorg_resume(courses.Registry(registry.directory), journal, runner=drive)
+    assert result["pending"] == 1 and len(_moves(drive)) == before + 1
+    assert drive.violations == [] and sorted(drive.files()) == ["קריאות/alpha/alpha.pdf", "קריאות/beta/beta.pdf"]
+    assert drive_layout.pending_ops(drive_layout.read_journal(journal)) == []
+
+
+def test_crash_after_a_move_is_resumed_by_checking_the_file_id(tmp_path):
+    registry, drive = _two_unregistered(tmp_path)
+    drive.faults[("moveid", 1)] = "after"
+    with pytest.raises(subprocess.CalledProcessError):
+        courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    journal = next((registry.directory / "logs").glob("drive-reorg-*-sample.jsonl"))
+    drive.faults.clear()
+    before = len(_moves(drive))
+    courses.drive_reorg_resume(courses.Registry(registry.directory), journal, runner=drive)
+    assert len(_moves(drive)) == before  # the file was already at its new path: only the done line is written
+    assert len(drive_layout.read_journal(journal)) == 2 and drive_layout.pending_ops(drive_layout.read_journal(journal)) == []
+
+
+def test_resume_refuses_a_file_found_somewhere_else(tmp_path):
+    registry, drive = _two_unregistered(tmp_path)
+    drive.faults[("moveid", 1)] = "before"
+    with pytest.raises(subprocess.CalledProcessError):
+        courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    journal = next((registry.directory / "logs").glob("drive-reorg-*-sample.jsonl"))
+    drive.faults.clear()
+    drive.items[drive.id_at("alpha.pdf")]["Path"] = "elsewhere/alpha.pdf"
+    before = len(_moves(drive))
+    with pytest.raises(drive_layout.ReorgError, match="not touching"):
+        courses.drive_reorg_resume(courses.Registry(registry.directory), journal, runner=drive)
+    assert len(_moves(drive)) == before
+
+
+def test_journal_is_fsynced_once_per_line_in_order(tmp_path, monkeypatch):
+    synced = []
+    real = drive_layout.os.fsync
+    monkeypatch.setattr(drive_layout.os, "fsync", lambda fd: (synced.append(fd), real(fd)))
+    registry, drive = _two_unregistered(tmp_path)
+    courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    journal = next((registry.directory / "logs").glob("drive-reorg-*-sample.jsonl"))
+    lines = drive_layout.read_journal(journal)
+    assert len(synced) == len(lines) == 4  # two moves: an intent and a done line each, every one fsynced
+    assert [(l["phase"], l["kind"]) for l in lines[:2]] == [("intent", "drive_move"), ("done", "drive_move")]
 
 
 def test_drive_reorg_manifest_gives_no_notebook_title_to_unregistered_files(tmp_path):
