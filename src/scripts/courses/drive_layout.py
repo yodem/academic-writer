@@ -38,6 +38,8 @@ EXT_RE = re.compile(r"\.[A-Za-z0-9]{1,5}$")
 PREFIX_RES = (re.compile(r"^[0-9a-f]{8}-"), re.compile(r"^\d{6,8} - "), re.compile(r"^lemida-cm\d+ - "))
 DOC_EXTS = {".pdf", ".docx", ".doc", ".md", ".epub", ".txt"}
 MEDIA_EXTS = {".mp3", ".m4a", ".mp4", ".opus", ".wav"}
+SLIDE_EXTS = {".pptx", ".ppt", ".key"}
+SLIDES_DIR = "שיעורים/שקפים"
 
 
 def _segment(name: str) -> str:
@@ -160,6 +162,9 @@ def folder_for(course: dict[str, Any], source: dict[str, Any]) -> str:
         if match:
             return _lesson_folder(int(match.group(1) or match.group(2)))
         return _lesson_by_date(course, _file_name(source)) or UNSORTED_DIR
+    if ext in SLIDE_EXTS:
+        match = LESSON_RE.search(label)
+        return _lesson_folder(int(match.group(1) or match.group(2))) if match else SLIDES_DIR
     for task_id in source.get("tasks") or []:
         number = task_number(course, str(task_id))
         if number is not None:

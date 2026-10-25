@@ -346,3 +346,8 @@ def test_add_source_collision_in_drive_folder_gets_suffix(tmp_path):
 
     courses.add_source(registry, pdf(tmp_path, "syllabus.pdf", b"%PDF other"), "sample", title="Syllabus", origin="other", runner=runner)
     assert fake.of("rclone", "copyto")[0][3] == "gdrive:00 כללי/Syllabus (2).pdf"
+
+
+def test_slides_go_under_lessons():
+    assert drive_layout.folder_for({}, {"title": "Cohen", "file": "/x/3271974 - Cohen.pptx"}) == "שיעורים/שקפים"
+    assert drive_layout.folder_for({}, {"title": "שיעור 3", "file": "/x/s.pptx"}) == "שיעורים/שיעור 03"
