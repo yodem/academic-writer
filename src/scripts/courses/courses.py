@@ -1248,7 +1248,7 @@ def drive_reorg(registry: Registry, slugs: list[str], *, apply: bool = False, fo
             manifests.append(_manifest(slug, str(folder), course, drive_layout.plan_reorg(course, _listing(runner, remote, folder))))
             continue
         with _locked_course(registry.directory, slug) as locked:
-            unfinished = _unfinished_journals(registry, slug)
+            unfinished = _unfinished_journals(registry, slug, locked.payload)
             if unfinished:
                 raise drive_layout.ReorgError(f"{slug}: an earlier reorg did not finish ({unfinished[0].name}); "
                                               f"run drive-reorg --resume {unfinished[0]} --apply first")
@@ -1265,16 +1265,26 @@ def drive_reorg(registry: Registry, slugs: list[str], *, apply: bool = False, fo
     return manifests
 
 
-def _unfinished_journals(registry: Registry, slug: str) -> list[Path]:
-    """This course's reorg journals that still hold a step with no done record."""
+def _unfinished_journals(registry: Registry, slug: str, course: dict[str, Any]) -> list[Path]:
+    """This course's reorg journals with work left: an intent with no done line, a move not done, or a final step whose
+    registry checkpoint (the commit point, after the NotebookLM rename) is not done while the source still lacks its path."""
     found = []
     for path in sorted((registry.directory / "logs").glob(f"drive-reorg-*-{slug}.jsonl")):
         lines = drive_layout.read_journal(path)
         if not lines:
             continue
         journal = drive_layout.Journal(path, remote=str(lines[0]["remote"]), root=str(lines[0]["root"]), slug=slug)
-        if any(step["op"] == "move" and not journal.is_done(drive_layout.JOURNAL_KIND["move"], drive_layout._fields(step))
-               for _, step in drive_layout.plan_steps(lines)):
+        left = bool(drive_layout.pending_ops(lines))
+        for _, step in drive_layout.plan_steps(lines):
+            if step["op"] == "move" and not journal.is_done(drive_layout.JOURNAL_KIND["move"], drive_layout._fields(step)):
+                left = True
+            if step.get("final") and step.get("sha256"):
+                source = _source_by_sha(course, str(step["sha256"]))
+                checkpoint = {"file_id": str(step.get("id") or ""), "old": step["old"], "new": step["new"],
+                              "sha256": str(step["sha256"]), "final": True}
+                if source is not None and source.get("drive_path") != step["new"] and not journal.is_done("registry", checkpoint):
+                    left = True
+        if left:
             found.append(path)
     return found
 

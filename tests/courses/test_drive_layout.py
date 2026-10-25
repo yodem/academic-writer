@@ -1003,3 +1003,17 @@ def test_resume_never_deletes_a_folder_even_from_an_older_journal(tmp_path):
     j.write_plan([{"op": "rmdir", "id": "dir-x", "old": "מטלה 1", "new": "", "sha256": "", "final": False}])
     courses.drive_reorg_resume(courses.Registry(registry.directory), journal, runner=drive, force=True)
     assert [c for c in drive.calls if c[:2] == ["rclone", "rmdir"]] == []
+
+
+def test_a_fresh_apply_refuses_when_only_the_nlm_rename_and_checkpoint_are_left(tmp_path):
+    registry = _registry_with(tmp_path, [src(sha256="1" * 64, file="/s/11111111-syllabus.pdf", title="Syllabus", notebook_source_id="nlm-1")])
+    drive = FakeDrive([("11111111-syllabus.pdf", False)])
+    drive.nlm_fail = 1
+    with pytest.raises(subprocess.CalledProcessError):
+        courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    with pytest.raises(drive_layout.ReorgError, match="--resume"):
+        courses.drive_reorg(courses.Registry(registry.directory), ["sample"], apply=True, runner=drive)
+    courses.drive_reorg_resume(courses.Registry(registry.directory), _journal_of(registry), runner=drive)
+    recorded = json.loads((registry.directory / "sample.json").read_text(encoding="utf-8"))["sources"][0]
+    assert recorded["drive_path"] == "00 כללי/Syllabus.pdf"
+    courses.drive_reorg(courses.Registry(registry.directory), ["sample"], apply=True, runner=drive)  # finished: allowed again
