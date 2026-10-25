@@ -517,7 +517,7 @@ def lemida_sync(registry: courses.Registry, *, slug: str | None = None, dry_run:
                 add_source: Callable[..., Any] | None = None, run_id: str | None = None) -> dict[str, Any]:
     day = report_date or date.today().isoformat()
     run = run_id or _new_run_id(registry, day)
-    targets = [slug] if slug else [key for key, value in registry.courses.items() if value.get("lemida_course_id")]
+    targets = [slug] if slug else [key for key, value in registry.active_courses().items() if value.get("lemida_course_id")]
     report: dict[str, Any] = {"date": day, "run": run, "courses": [], "announcements": [], "notifications": [], "errors": []}
     checkpoints: dict[str, list[tuple[str, str, int]]] = {}
     for target in targets:

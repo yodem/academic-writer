@@ -90,7 +90,7 @@ def guess_course(registry: courses.Registry, start: datetime) -> str | None:
     lstart = ustart.astimezone(tz)
     day = lstart.date()
     hits: set[str] = set()
-    for slug, course in registry.courses.items():
+    for slug, course in registry.active_courses().items():
         for slot in course.get("slots", []):
             if courses.WEEKDAYS.get(str(slot.get("day"))) != lstart.weekday():
                 continue
@@ -115,7 +115,7 @@ def match_course(registry: courses.Registry, start: datetime, end: datetime) -> 
     duration = uend - ustart
     day = lstart.date()
     matches: set[str] = set()
-    for slug, course in registry.courses.items():
+    for slug, course in registry.active_courses().items():
         for slot in course.get("slots", []):
             if courses.WEEKDAYS.get(str(slot.get("day"))) != lstart.weekday():
                 continue

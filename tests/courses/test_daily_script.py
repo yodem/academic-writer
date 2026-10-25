@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -8,12 +9,14 @@ import pytest
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "courses-daily.sh.example"
 
 
-def run_dry(tmp_path, chrome_running, extra_env=None, queue=False, handoff=False):
+def run_dry(tmp_path, chrome_running, extra_env=None, queue=False, handoff=False, extra_courses=()):
     home = tmp_path / "home"
     term = home / ".academic-writer" / "courses" / "term"
     (term / "queue").mkdir(parents=True)
     (term / "term.json").write_text(json.dumps({"term": "t"}))
     (term / "cohen.json").write_text(json.dumps({"slug": "cohen"}))
+    for course in extra_courses:
+        (term / f"{course['slug']}.json").write_text(json.dumps(course))
     if queue:
         (term / "queue" / "job.json").write_text("{}")
     if handoff:
@@ -37,15 +40,16 @@ def test_syntax():
 def test_chrome_running_plans_watch_in_order(tmp_path):
     out, plans = run_dry(tmp_path, True, queue=True)
     assert out.returncode == 0, out.stderr
-    keys = ["courses.py daily", "claude -p --chrome", "courses.py wispr-scan", "refs.py --registry", "extract-queue", "lesson-notes --pending", "toc_audit.py --all",
+    keys = ["courses.py daily", "claude -p --chrome", "lemida-coverage-check", "courses.py wispr-scan", "refs.py --registry", "extract-queue", "lesson-notes --pending", "toc_audit.py --all",
             "chores digest", "courses-sync-nanoclaw.sh"]
     idx = [next(i for i, p in enumerate(plans) if k in p) for k in keys]
     assert idx == sorted(idx) and len(plans) == len(keys)
     watch = plans[1]
-    assert "courses.py wispr-scan" in plans[2]
-    assert plans[3].endswith("fetch-queue") and "refs.py --registry" in plans[3]
-    assert plans[4].endswith("extract-queue") and "refs.py --registry" in plans[4]
-    assert "/academic-writer:courses watch-lemida --all'" in watch
+    assert "lemida-coverage-check --date" in plans[2] and "--run-id" in plans[2] and "courses.py" in plans[2]
+    assert "courses.py wispr-scan" in plans[3]
+    assert plans[4].endswith("fetch-queue") and "refs.py --registry" in plans[4]
+    assert plans[5].endswith("extract-queue") and "refs.py --registry" in plans[5]
+    assert "/academic-writer:courses watch-lemida --all --run-id " in watch
     assert "--model sonnet" in watch and "--plugin-dir" in watch
     for tool in ("mcp__claude-in-chrome__*", "Bash(rclone:*)", "Bash(pdftoppm:*)", "Bash(screencapture:*)", "Bash(trove ms show:*)"):
         assert tool in watch
@@ -62,12 +66,15 @@ def test_chrome_missing_adds_manual_chore_and_skips_watch(tmp_path):
     chore = next(i for i, p in enumerate(plans) if "chores add --kind manual" in p)
     assert "Open Chrome logged in to Lemida so tonight's scan can run" in plans[chore]
     assert chore == 1 and "courses.py daily" in plans[0]
+    assert any("lemida-coverage-check" in p for p in plans)  # the coverage check runs even when the watch was skipped
     assert not any("lesson-notes" in p for p in plans)  # no queued jobs
 
 
 def test_courses_only_is_appended_to_the_prompt(tmp_path):
     _, plans = run_dry(tmp_path, True, {"COURSES_ONLY": "cohen kane"})
-    assert "watch-lemida cohen kane'" in next(p for p in plans if "claude -p --chrome" in p)
+    assert "watch-lemida cohen kane --run-id " in next(p for p in plans if "claude -p --chrome" in p)
+    coverage = next(p for p in plans if "lemida-coverage-check" in p)
+    assert '--courses "cohen kane"' in coverage
 
 
 @pytest.mark.parametrize("chrome", [True, False])
@@ -150,3 +157,48 @@ def test_nothing_drains_queue_sources_by_default():
         assert "queue/sources" in text  # documented ...
     assert "never drained" in skill and "only the file the student chose" in skill  # ... as waiting, not as a step to run
     assert "drain queue/sources" not in skill.lower() and "process queue/sources" not in skill.lower()
+
+
+def test_daily_dry_skips_finished(tmp_path):
+    old = {"slug": "oldcourse", "status": "finished", "book_id": "BOOK-OLD-123"}
+    out, plans = run_dry(tmp_path, True, queue=True, extra_courses=[old])
+    assert out.returncode == 0, out.stderr
+    assert "oldcourse" not in out.stdout and "BOOK-OLD-123" not in out.stdout
+    assert any("courses.py daily" in p for p in plans)  # the run itself still plans its steps
+
+
+def test_lemida_coverage_step_runs_right_after_watch(tmp_path):
+    _, plans = run_dry(tmp_path, True)
+    watch = next(i for i, p in enumerate(plans) if "claude -p --chrome" in p)
+    coverage = next(i for i, p in enumerate(plans) if "lemida-coverage-check" in p)
+    assert coverage == watch + 1
+    assert "courses.py" in plans[coverage] and f"--date {datetime.now().strftime('%Y-%m-%d')}" in plans[coverage]
+
+
+def _run_id_of(plan):
+    tokens = plan.replace("'", " ").split()
+    return tokens[tokens.index("--run-id") + 1]
+
+
+def test_watch_and_coverage_share_one_run_id(tmp_path):
+    _, plans = run_dry(tmp_path, True)
+    watch = next(p for p in plans if "claude -p --chrome" in p)
+    coverage = next(p for p in plans if "lemida-coverage-check" in p)
+    run_id = _run_id_of(watch)
+    assert run_id and run_id == _run_id_of(coverage)
+    assert run_id.startswith(datetime.now().strftime("%Y-%m-%d"))  # date + time + pid, unique per run
+    assert run_id.split("-")[-1].isdigit() and len(run_id) > len("2026-01-01T000000-1")
+
+
+def test_coverage_is_unscoped_without_courses_only(tmp_path):
+    _, plans = run_dry(tmp_path, True)
+    coverage = next(p for p in plans if "lemida-coverage-check" in p)
+    assert "--courses" not in coverage
+
+
+def test_coverage_contract_documents_run_id_and_complete_notifications():
+    skill = (SCRIPT.parents[1] / "src" / "skills" / "courses" / "SKILL.md").read_text(encoding="utf-8")
+    watch = (SCRIPT.parents[1] / "src" / "skills" / "courses" / "references" / "lemida-watch.md").read_text(encoding="utf-8")
+    assert '"run_id"' in skill and "--run-id" in skill
+    assert '"complete": true' in skill and "notifications.complete" in skill
+    assert "run_id" in watch and "complete" in watch

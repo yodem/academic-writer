@@ -521,3 +521,31 @@ def test_default_opener_uses_an_argument_list_without_a_shell(monkeypatch):
     assert seen["argv"] == ["xdg-open", "/x/a b.docx"] and not seen["kw"].get("shell")
     assert dashboard.opener_command(Path("/x/a.docx"), platform="darwin")[0] == "open"
     assert dashboard.opener_command(Path("/x/a.docx"), platform="linux")[0] == "xdg-open"
+
+
+# --- writing runs without a registry file ----------------------------------------------------------
+
+def test_writing_runs_without_workspaces_json(tmp_path):
+    home = make_home(tmp_path, "student")
+    run_dir = home / "nevua" / ".academic-helper" / "runs" / "r1"
+    run_dir.mkdir(parents=True)
+    events = [{"v": 1, "ts": "2026-10-18T10:00:00Z", "run": "r1", "flow": "write", "kind": "run_start"},
+              {"v": 1, "ts": "2026-10-18T10:05:00Z", "run": "r1", "flow": "write", "kind": "run_end", "exit": "OK"}]
+    (run_dir / "activity.jsonl").write_text("".join(json.dumps(e) + "\n" for e in events), encoding="utf-8")
+    assert not (home / ".academic-helper" / "workspaces.json").exists()
+    ctx = dashboard.gather_context(home, {"complete": True, "checks": []}, NOW)
+    history = ctx["writing"]["history"]
+    assert [(r["run"], r["workspace"]) for r in history] == [("r1", str(home / "nevua"))]
+    assert [w["path"] for w in ctx["workspaces"]] == [str(home / "nevua")]
+
+
+def test_discover_workspaces_depth_and_hidden(tmp_path):
+    import home as home_mod
+    home = make_home(tmp_path, "student")
+    (home / "nevua" / ".academic-helper").mkdir(parents=True)
+    (home / "nevua" / ".academic-helper" / "profile.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+    (home / "deep" / "inner" / ".academic-helper" / "runs").mkdir(parents=True)
+    (home / ".hidden" / ".academic-helper" / "runs").mkdir(parents=True)
+    (home / "deep" / "too" / "far" / ".academic-helper" / "runs").mkdir(parents=True)
+    found = sorted(row["path"] for row in home_mod.discover_workspaces(home, depth=2))
+    assert found == [str(home / "deep" / "inner"), str(home / "nevua")]

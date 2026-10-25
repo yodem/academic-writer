@@ -29,8 +29,8 @@ def registry_dir() -> Path:
     return courses.registry_dir()
 
 
-def load_registry(reg: Path | None = None) -> list[dict]:
-    """Course records (dicts with slug); skips term.json, links.json, slugless files."""
+def load_registry(reg: Path | None = None, include_finished: bool = False) -> list[dict]:
+    """Active course records (dicts with slug); skips term.json, links.json, slugless files and finished courses."""
     reg = reg or registry_dir()
     out = []
     for p in sorted(reg.glob("*.json")):
@@ -41,8 +41,20 @@ def load_registry(reg: Path | None = None) -> list[dict]:
         except (OSError, ValueError):
             continue
         if isinstance(data, dict) and data.get("slug"):
-            out.append(data)
+            if include_finished or not (_finished(data) or _term_finished(reg)):
+                out.append(data)
     return out
+
+
+def _finished(record: dict) -> bool:
+    return str(record.get("status", "")) == "finished"
+
+
+def _term_finished(reg: Path) -> bool:
+    try:
+        return _finished(json.loads((reg / "term.json").read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return False
 
 
 def has_hint(title: str, course_name: str | None = None) -> bool:
@@ -274,7 +286,8 @@ def run(args) -> tuple[list[dict], int]:
         if keep_from:
             _check_keep_from(results[-1], toc, keep_from)
     else:
-        courses = load_registry()
+        # --all works on active courses only; a finished course is reached by naming it with --include-finished --course SLUG
+        courses = load_registry(include_finished=bool(args.include_finished and args.course))
         if args.course:
             courses = [c for c in courses if c["slug"] == args.course]
             if not courses:
@@ -308,8 +321,12 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--toc-json", help="a saved `trove items toc --json` file (no network)")
     ap.add_argument("--keep-from", metavar="TOC_JSON",
                     help="with --course or --book: fail if a title in this saved toc --json is gone from the live ToC")
+    ap.add_argument("--include-finished", action="store_true",
+                    help="with --course SLUG: audit that one finished course too (never with --all)")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     args = ap.parse_args(argv)
+    if args.include_finished and not args.course:
+        ap.error("--include-finished needs --course SLUG (a finished course is never swept in by --all)")
     if args.keep_from and not (args.course or args.book):
         ap.error("--keep-from needs --course or --book")
     results, code = run(args)

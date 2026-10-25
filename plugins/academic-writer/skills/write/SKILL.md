@@ -120,6 +120,16 @@ If the file does not exist, proceed with Phase 1 normally.
 
 Choose one run ID for this article, e.g. `write-ashkenazi-creation-20261015-1430` (a short English label, then the date and time). Use only Latin letters, digits and hyphens: transliterate a Hebrew title or use a short English label, because the library refuses any other character in an id. Pass the same `--run` value to every `aw` command below. The run ID ties the cost ledger and the logs of one article together.
 
+Right after choosing the run ID, before any other step, record the run and register the workspace. Do this on every path, including a short assignment that builds the Word file without `aw draft`:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" activity start --flow write --run-id <run-id>
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" activity step --run-id <run-id> --step outline --state start
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" register --path "$CLAUDE_PROJECT_DIR" --type project
+```
+
+`activity start` writes its opening line only once per run, so repeating it is harmless. If `home.py register` says no home folder is set, skip it and tell the researcher once; the run then shows on the dashboard only after a home folder is set. The `activity` lines let the dashboard's Writing tab show the run while it works.
+
 ### Step 1: Subject & Language
 
 Ask:
@@ -240,7 +250,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" outline-v2 \
   --evidence "$CLAUDE_PROJECT_DIR/.academic-helper/evidence.json"
 ```
 
-The gate must exit `0` before drafting. Exit `1` means revise the outline or approval state and rerun the gate. Exit `2` means the gate could not run; repair the inputs and rerun. See `references/write-intent-outline.md` for artifact examples and recovery details.
+The gate must exit `0` before drafting. Once it exits `0`, close the outline stage: `activity step --run-id <run-id> --step outline --state end`. Exit `1` means revise the outline or approval state and rerun the gate. Exit `2` means the gate could not run; repair the inputs and rerun. See `references/write-intent-outline.md` for artifact examples and recovery details.
 
 Legacy v1 outlines remain supported for existing projects: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py argument-graph <outline.json>` validates their argument graph, and `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py stale-evidence-ownership <outline.json> --evidence-ownership <evidence-ownership.json>` validates their ownership map. Do not proceed to W3 until every check for the outline version in use passes.
 
@@ -259,7 +269,7 @@ calls in sequence) that it belongs in the background:
 ```
 
 Run this via the Bash tool with `run_in_background: true`, then poll for its completion rather than
-blocking the turn on it. It writes `drafts/<unitId>.md` for every unit as it finishes and prints one
+blocking the turn on it. `aw draft` records its own `draft` and `redraft` steps; do not bracket them by hand. It writes `drafts/<unitId>.md` for every unit as it finishes and prints one
 JSON object on stdout: `{"drafted": [unitId, ...], "failures": [{"unit", "gate", "detail"}, ...]}`.
 
 - **Exit 0, empty `failures`** — every unit passed its code gates (citation keys in `sources.json`,
@@ -274,7 +284,7 @@ JSON object on stdout: `{"drafted": [unitId, ...], "failures": [{"unit", "gate",
 
 ### W4: Batched citation audit, then rewrite failed units
 
-Once W3 finishes (all units drafted, or as many as could be), audit every unit's draft. **Use the
+Once W3 finishes (all units drafted, or as many as could be), start the audit stage: `activity step --run-id <run-id> --step audit --state start`. Then audit every unit's draft. **Use the
 Agent tool to spawn one `auditor` subagent per unit — call the Agent tool multiple times in a
 single response so every unit is audited in parallel.** Each call is a single batched call over
 every paragraph in that unit's `drafts/<unitId>.md` (the 847c831 shape: one auditor spawn per unit,
@@ -315,6 +325,8 @@ paragraphs tagged `[NEEDS REVIEW: unresolved after rewrite]` in `drafts/<unitId>
 looping forever — note this in the closing report (W6) so the author knows exactly which
 paragraphs to check by hand.
 
+When every unit is final, close the audit stage: `activity step --run-id <run-id> --step audit --state end`.
+
 ### W5: Synthesize
 
 Once every unit's draft is final (audited, or capped at the rewrite limit), run the diff synthesis
@@ -345,3 +357,5 @@ comments or tracked changes anywhere they want something revisited, and then run
 `/academic-writer:revise` to fold those comments back into the draft and feedback stores. Mention
 any unit that hit the W4 rewrite cap by name, since those paragraphs need the author's attention
 regardless of whether they added a comment.
+
+`aw docx` records its own `word` step and ends the run. If the Word build fails, end the run as failed: `activity end --run-id <run-id> --exit ERROR` (a run that already ended is left as it is). Ending a run that `aw docx` finished needs no call.

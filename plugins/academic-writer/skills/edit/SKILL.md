@@ -12,13 +12,22 @@ Revise an existing article, or selected passages from it, with the `aw edit` com
 
 ## 1. Understand the change
 
+0. Choose the run ID for this edit now (the run ID rule is below, under the edit step). Then record the run before anything else:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$PWD" --data-dir "${CLAUDE_PLUGIN_DATA}" activity start --flow edit --run-id <run-id>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" register --path "$PWD" --type project
+```
+
+`activity start` writes its opening line once per run, so it is safe to repeat. If `home.py register` says no home folder is set, skip it and tell the researcher once.
+
 1. Read the target article. If the author named no file, list `articles/*.md` and ask which one.
 2. If the author has not said what should change, ask in plain words, for example: "What would you like to change: the tone, the order of the argument, a specific passage, or the sources used?"
 3. Keep every claim and citation the author did not ask to change. The citations were verified by the auditor; rewriting them casually would undo that check.
 
 ## 2. Run the edit
 
-Save the selected text and the instruction to temporary files inside the project (never outside it), then run:
+Save the selected text and the instruction to temporary files inside the project (never outside it), then run. `aw edit` records its own `edit` step, so do not bracket it by hand:
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" edit \
@@ -36,3 +45,6 @@ Save the selected text and the instruction to temporary files inside the project
 2. If the edit touched a factual claim or a citation, send the whole edited unit to the `auditor` agent in one single batched call covering every paragraph, with `runId: <run-id>` (the `--run` value used for `aw edit`) in the prompt. The auditor is the plugin's only hard gate for citations, so it must see edited facts before they are accepted.
 3. Commit the auditor's `taggedText` for PASS paragraphs only. Correct FAIL or PARTIAL paragraphs and audit them again before accepting them.
 4. Tell the author which passages changed and whether any paragraph still carries a `[NEEDS REVIEW: ...]` tag they should check by hand.
+
+Finally, end the run: `"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$PWD" --data-dir "${CLAUDE_PLUGIN_DATA}" activity end --run-id <run-id> --exit OK`. If the edit or the auditor check failed and you stop, use `--exit ERROR` instead. Ending a run that `aw edit` already ended is a no-op.
+

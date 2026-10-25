@@ -4,6 +4,23 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-10-25
+
+### Added
+- **Drive files get Chicago-citation names in kind folders.** Course sources are filed by kind: `00 כללי`, `שיעורים/שיעור NN`, `מטלות/מטלה N`, `קריאות/<citation>`, and `לא ממוין` for anything unclassified. Uploads go to their kind folder under a Chicago-style display name, and the NotebookLM source takes the same name. Media keep their lesson titles.
+- **`courses.py drive-reorg`.** `--course SLUG` or `--all` prints the move manifest; `--apply` moves the Drive files and renames the matching NotebookLM sources. Every file left at a course's root, and the files inside old `שיעור N` / `מטלה N` folders, go into their kind folder. Safety:
+  - Files move by Drive file id, never by name, and never over another file: the destination is checked first, the move skips an existing file, and the file id is checked at the destination afterwards.
+  - Nothing is deleted. Emptied old folders stay; remove them by hand.
+  - Every step is written to a journal (`logs/drive-reorg-<time>-<course>.jsonl`) before it runs. After a crash, `drive-reorg --resume <journal> --apply` finishes it, and a new `--apply` refuses while a journal is unfinished.
+  - The reorg holds the course lock for the whole run, and refuses to start while the nightly job runs (`--force` overrides).
+- **Lesson folders keep their numbers.** A lesson that already has a folder keeps it; a lesson imported later takes the next number. A recording is uploaded after its lesson key is fixed, so two recordings from the same minute get two folders.
+- **Uploads are confirmed.** An upload never replaces a file at its path, and is checked by MD5 on Drive. A retried upload reuses the copy already there instead of adding a second one.
+- **The nightly run fails when the Lemida watch leaves a gap** (`courses.py lemida-coverage-check`). The watch writes `logs/lemida-coverage-<date>.json` for its run. The check fails the run when the report is missing or from another run, when an active course has no Lemida id (a chore is added) or was not visited, when a new assignment was not handled, or when a notification on `notifications.php` was not opened. `COURSES_ONLY` limits the check to the named courses.
+- **Writer runs show on the dashboard Writing tab without `workspaces.json`.** The dashboard finds workspace folders up to two levels under the home folder that hold a `profile.md` or `runs/`, and merges them with the registry. `aw activity start|step|end` record each run; the five writing skills (write, edit, edit-section, proofread, revise) call them.
+
+### Changed
+- **Finished terms and courses are skipped by the course loops.** A term or course with `status: "finished"` is left out of the default term lookup and of every loop over all courses (map, validate, wispr scan, Lemida `--all`, drive-reorg `--all`, toc_audit `--all`). Naming one course still works. `toc_audit --include-finished --course SLUG` audits one finished course.
+
 ## [0.19.2] — 2026-10-20
 
 ### Fixed

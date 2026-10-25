@@ -47,9 +47,13 @@ class Fake:
     def __call__(self, command, **kwargs):
         self.calls.append(command)
         if command[0] == "rclone" and command[1] == "copyto":
+            self.copied = getattr(self, "copied", {})
+            self.copied[command[3]] = hashlib.md5(Path(command[2]).read_bytes()).hexdigest()
             out = ""
+        elif command[0] == "rclone" and command[1] == "lsjson" and "--stat" in command:
+            out = json.dumps({"Path": command[2].split(":", 1)[1], "Hashes": {"md5": getattr(self, "copied", {}).get(command[2])}})
         elif command[0] == "rclone" and command[1] == "lsjson":
-            out = json.dumps([{"Name": n} for n in self.drive])
+            out = json.dumps([d if isinstance(d, dict) else {"Name": d.rsplit("/", 1)[-1], "Path": d} for d in self.drive])
         elif command[:3] == ["nlm", "source", "list"]:
             out = json.dumps(self.nlm_list)
         elif command[:3] == ["nlm", "source", "add"]:
@@ -84,7 +88,7 @@ def test_add_source_argv_job_and_record(tmp_path):
     assert result["status"] == "added"
     snap = registry.directory / "sources" / "sample" / f"{sha[:8]}-01 - Reading One.pdf"
     assert snap.read_bytes() == path.read_bytes()
-    assert fake.of("rclone", "copyto") == [["rclone", "copyto", str(snap), f"mydrive:{snap.name}", "--drive-root-folder-id", "folder-1"]]
+    assert fake.of("rclone", "copyto") == [["rclone", "copyto", str(snap), "mydrive:קריאות/Reading One/Reading One.pdf", "--ignore-existing", "--drive-root-folder-id", "folder-1"]]
     assert fake.of("nlm", "source", "add") == [["nlm", "source", "add", "nb-1", "--file", str(snap), "--title", "Reading One", "--wait", "--json"]]
     record = reload(registry)["sources"][0]
     assert record["file"] == str(snap.resolve())
@@ -209,7 +213,7 @@ def test_media_add_source_copies_to_drive_records_and_delegates(tmp_path, monkey
     result = courses.add_source(registry, audio, "sample", origin="recording", runner=fake, lesson_date="2026-10-12", lesson_time="1204")
     assert result["status"] == "ingested" and result["lesson_key"] == "2026-10-12-1204"
     copies = fake.of("rclone", "copyto")
-    assert len(copies) == 1 and copies[0][4:] == ["--drive-root-folder-id", "folder-1"] and copies[0][3].startswith("gdrive:")
+    assert len(copies) == 1 and copies[0][4:] == ["--ignore-existing", "--drive-root-folder-id", "folder-1"] and copies[0][3].startswith("gdrive:")
     assert calls[0][0] != audio and calls[0][0].parent.name == "sample" and calls[0][0].parent.parent.name == "sources" and calls[0][1]["course_slug"] == "sample"
     assert calls[0][1]["lesson_date"] == "2026-10-12" and calls[0][1]["lesson_time"] == "1204" and calls[0][1]["transcript_file"] is False
     record = reload(registry)["sources"][0]
@@ -250,8 +254,11 @@ def test_media_add_source_resumes_without_second_drive_copy(tmp_path, monkeypatc
     fake = Fake()
     with pytest.raises(courses.IngestError):
         courses.add_source(registry, audio, "sample", runner=fake)
-    assert reload(registry)["sources"][0]["drive"] is True
+    # a recording reaches Drive only after ingest has given it its lesson key; the local snapshot keeps it meanwhile
+    assert fake.of("rclone", "copyto") == []
+    assert list((registry.directory / "sources" / "sample").glob("*lesson.m4a"))
     monkeypatch.setattr(courses, "ingest_recording", fake_ingest_factory(registry))
+    courses.add_source(registry, audio, "sample", runner=fake)
     courses.add_source(registry, audio, "sample", runner=fake)
     assert len(fake.of("rclone", "copyto")) == 1 and reload(registry)["sources"][0]["notebook_source_id"] == "src-9"
 
@@ -263,7 +270,7 @@ def media_checked(tmp_path, monkeypatch, status, **fake_kwargs):
     audio.write_bytes(b"a")
     courses.add_source(registry, audio, "sample", runner=Fake())
     registry = courses.Registry(registry.directory)
-    name = Path(reload(registry)["sources"][0]["file"]).name
+    name = reload(registry)["sources"][0]["drive_path"]
     toc = [{"level": 1, "title": "תמלולי שיעורים", "page": 5}, {"level": 2, "title": "2026-10-12", "page": 6}]
     defaults = dict(drive=[name], nlm_list=[{"id": "src-9"}], toc=toc)
     defaults.update(fake_kwargs)
@@ -315,7 +322,7 @@ def checked(tmp_path, trove="book-1:4", **fake_kwargs):
     registry, path, sha8 = done_source(tmp_path)
     courses.source_done(registry, "sample", sha8, trove)
     registry = courses.Registry(registry.directory)
-    defaults = dict(drive=[path.name], nlm_list=[{"id": "src-1"}])
+    defaults = dict(drive=[reload(registry)["sources"][0]["drive_path"]], nlm_list=[{"id": "src-1"}])
     defaults.update(fake_kwargs)
     return courses.check_source(registry, "sample", sha8, runner=Fake(**defaults)), registry, sha8
 
@@ -323,9 +330,9 @@ def checked(tmp_path, trove="book-1:4", **fake_kwargs):
 def test_check_source_passes_and_uses_expected_argv(tmp_path):
     problems, registry, sha8 = checked(tmp_path)
     assert problems == []
-    fake = Fake(drive=[Path(reload(registry)["sources"][0]["file"]).name], nlm_list=[{"id": "src-1"}])
+    fake = Fake(drive=[reload(registry)["sources"][0]["drive_path"]], nlm_list=[{"id": "src-1"}])
     courses.check_source(registry, "sample", runner=fake)
-    assert ["rclone", "lsjson", "gdrive:", "--drive-root-folder-id", "folder-1", "--files-only"] in fake.calls
+    assert ["rclone", "lsjson", "gdrive:", "--drive-root-folder-id", "folder-1", "--files-only", "-R"] in fake.calls
     assert ["trove", "items", "toc", "book-1", "--json", "--no-session"] in fake.calls
 
 
@@ -360,7 +367,7 @@ def test_check_source_missing_readings_entry(tmp_path):
 def test_check_source_requires_done(tmp_path):
     registry, path, sha8 = done_source(tmp_path)
     registry = courses.Registry(registry.directory)
-    problems = courses.check_source(registry, "sample", sha8, runner=Fake(drive=[path.name], nlm_list=[{"id": "src-1"}]))
+    problems = courses.check_source(registry, "sample", sha8, runner=Fake(drive=[reload(registry)["sources"][0]["drive_path"]], nlm_list=[{"id": "src-1"}]))
     assert len(problems) == 1 and "not done" in problems[0]
 
 
@@ -470,3 +477,22 @@ def test_media_ingests_snapshot_and_original_time_survives_deletion(tmp_path):
     meta = json.loads((registry.directory / "lessons" / "sample" / "2026-10-12-1204" / "meta.json").read_text())
     assert Path(meta["audio_path"]) == snapshot.resolve() and snapshot.is_file() and snapshot.parent.name == "sample"
     assert meta["audio_path"] != str(original.resolve())
+
+
+def test_same_minute_recordings_land_in_their_own_lesson_folders(tmp_path, monkeypatch):
+    registry = make_registry(tmp_path, lessons=[{"lesson_key": "2026-10-12-1204", "date": "2026-10-12", "audio_sha256": "x", "status": "done"}])
+
+    def suffixed_ingest(reg, audio, **kwargs):
+        path = reg.directory / "sample.json"
+        data = json.loads(path.read_text())
+        data["lessons"].append({"lesson_key": "2026-10-12-1204-2", "date": "2026-10-12", "audio_sha256": courses._file_sha256(Path(audio)),
+                                "source_id": "src-9", "status": "queued"})
+        path.write_text(json.dumps(data))
+        return {"status": "ingested", "slug": "sample", "lesson_key": "2026-10-12-1204-2", "source_id": "src-9"}
+
+    monkeypatch.setattr(courses, "ingest_recording", suffixed_ingest)
+    audio = tmp_path / "second.m4a"
+    audio.write_bytes(b"b")
+    fake = Fake()
+    courses.add_source(registry, audio, "sample", origin="recording", runner=fake, lesson_date="2026-10-12", lesson_time="1204")
+    assert fake.of("rclone", "copyto")[0][3].startswith("gdrive:שיעורים/שיעור 02/")

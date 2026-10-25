@@ -286,3 +286,19 @@ def test_watch_diff_baseline_marks_everything_seen(tmp_path, monkeypatch, capsys
     diff = json.loads(capsys.readouterr().out)
     assert diff["suspect"] is False and diff["new_modules"] == []
     assert courses.main(base + ["watch-diff", "ghost", "--baseline", "--pages", str(pages)]) == 2
+
+
+def test_registry_active_courses(tmp_path):
+    term = tmp_path / "term"
+    term.mkdir()
+    (term / "term.json").write_text(json.dumps({"term": "t", "status": "active"}))
+    (term / "live.json").write_text(json.dumps({"slug": "live"}))
+    (term / "done.json").write_text(json.dumps({"slug": "done", "status": "finished", "finished_at": "2026-10-01", "book_id": "B1"}))
+    reg = courses.Registry(term)
+    assert set(reg.courses) == {"live", "done"}
+    assert set(reg.active_courses()) == {"live"}
+    # the override keeps one named finished course, never the others
+    assert set(reg.active_courses(include="done")) == {"live", "done"}
+    # a finished term finishes every course in it
+    (term / "term.json").write_text(json.dumps({"term": "t", "status": "finished"}))
+    assert courses.Registry(term).active_courses() == {}

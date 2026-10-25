@@ -15,7 +15,7 @@ import { editText } from './edit.ts';
 import { ocrDocument } from './ocr.ts';
 import { docxSummary, generateDocx } from './docx.ts';
 import { runLibraryCli } from './library/cli.ts';
-import { activityShow } from './activity.ts';
+import { activityShow, runActivityCli } from './activity.ts';
 
 const args = setPathArguments(process.argv.slice(2));
 const [command, subcommand, runId] = args;
@@ -146,6 +146,8 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
     const result = generateDocx({ outlinePath: outline, runId, out, title: value('--title'), coverFile: value('--cover-file'), abstractFile: value('--abstract-file'), formatFile: value('--format-file'), projectDir: projectDir(), dataDir: dataDir(), pluginRoot: pluginRoot() });
     process.stdout.write(`${docxSummary(result, out)}\n`);
   } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : 'ERROR docx: unknown failure'}\n`); process.exitCode = 1; }
+} else if (command === 'activity' && (subcommand === 'start' || subcommand === 'step' || subcommand === 'end')) {
+  try { process.stdout.write(`${runActivityCli(subcommand, args, projectDirOr())}\n`); } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : 'ERROR activity: unknown failure'}\n`); process.exitCode = 2; }
 } else if (command === 'activity' && subcommand === 'show') {
   const value = (name: string): string | undefined => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
   const run = value('--run');

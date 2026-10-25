@@ -658,6 +658,31 @@ def registry_rows(home: Optional[Path]) -> List[Dict[str, Any]]:
     return rows
 
 
+def workspace_rows(home: Optional[Path]) -> List[Dict[str, Any]]:
+    """The registered workspaces of `home` plus the folders found under it that never reached the registry
+    (`home_mod.discover_workspaces`), deduplicated by resolved path so a registered row keeps its own fields."""
+    rows = registry_rows(home)
+    if home is None:
+        return rows
+    known = set()
+    for row in rows:
+        known.add(_resolved(row["path"]))
+    for found in home_mod.discover_workspaces(home):
+        key = _resolved(found["path"])
+        if key in known:
+            continue
+        known.add(key)
+        rows.append({"path": found["path"], "type": None, "course": None, "exists": True})
+    return rows
+
+
+def _resolved(path: str) -> str:
+    try:
+        return str(Path(path).resolve())
+    except (OSError, RuntimeError, ValueError):
+        return path
+
+
 def _library_added(sources: Any, now: datetime) -> List[Tuple[str, str, str]]:
     """(id, title, added iso) of `sources.json` entries added within LIBRARY_DAYS; undated entries never count."""
     rows = sources.get("sources") if isinstance(sources, dict) else sources
@@ -682,7 +707,7 @@ def gather_context(home: Optional[Path], checks: Dict[str, Any], now: datetime) 
         try:
             if home.is_dir():
                 values, _ = home_mod._read_md(home / home_mod.DIR_NAME / home_mod.HOME_FILE)
-                rows = registry_rows(home)
+                rows = workspace_rows(home)
             else:
                 missing = True
         except OSError:
@@ -961,7 +986,7 @@ def _home_entries(home: Optional[Path]) -> List[Tuple[str, int, int]]:
         except OSError:
             continue
     try:
-        rows = registry_rows(home) if home.is_dir() else []
+        rows = workspace_rows(home) if home.is_dir() else []
     except OSError:
         rows = []
     for row in rows:
@@ -1009,7 +1034,7 @@ def resolve_run_docx(home: Optional[Path], run: Any, workspace: Any) -> Path:
     The caller names the run and the workspace only: the path always comes from the run's own activity file."""
     if not isinstance(run, str) or not IDENT_RE.match(run) or ".." in run or not isinstance(workspace, str) or not workspace:
         raise RequestError(400, "bad run")
-    rows = registry_rows(home)
+    rows = workspace_rows(home)
     roots = []
     for row in rows:
         try:

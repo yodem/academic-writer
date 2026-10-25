@@ -23,6 +23,9 @@ import zipfile
 from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
+
+import drive_layout
+import naming
 from xml.etree import ElementTree as ET
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
@@ -41,14 +44,28 @@ def entry_label(title: object) -> str:
     return normalise_name(str(title).split(" - ", 1)[0])
 
 
+def _is_finished(record: dict[str, Any]) -> bool:
+    """A term or course marked finished in its own JSON (status "finished"): its loops are skipped."""
+    return str(record.get("status", "")) == "finished"
+
+
+def _term_finished(term_dir: Path) -> bool:
+    try:
+        return _is_finished(json.loads((term_dir / "term.json").read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return False
+
+
 def _term_dir(root: Path, term: str | None = None) -> Path:
+    """The term directory: the named one (finished or not), else the single term that is not finished."""
     if term is None:
         term = os.environ.get("ACADEMIC_TERM")
     if term:
         return root / term
     dirs = sorted(p for p in root.iterdir() if p.is_dir()) if root.exists() else []
-    if len(dirs) == 1:
-        return dirs[0]
+    live = [p for p in dirs if not _term_finished(p)]
+    if len(live) == 1:
+        return live[0]
     if (root / "term.json").is_file():
         return root
     raise ValueError(f"term is required; use --term or ACADEMIC_TERM under {root}")
@@ -67,6 +84,12 @@ class Registry:
             if not isinstance(course, dict) or not course.get("slug"):
                 continue
             self.courses[course["slug"]] = course
+
+    def active_courses(self, include: str | None = None) -> dict[str, dict[str, Any]]:
+        """Courses the loops work on: those not finished (their own status or their term's). `include` keeps one named finished course."""
+        term_done = _is_finished(self.term)
+        return {slug: course for slug, course in self.courses.items()
+                if slug == include or not (term_done or _is_finished(course))}
 
 
 # Moodle has no generic module page: the module type is part of the path (mod/assign/view.php?id=N)
@@ -175,7 +198,7 @@ def map_recording(registry: Registry, when: datetime) -> tuple[str | None, str |
     matches: list[str] = []
     had_day = False
     had_semester = False
-    for slug, course in registry.courses.items():
+    for slug, course in registry.active_courses().items():
         for slot in course.get("slots", []):
             slot_day = slot.get("day")
             if WEEKDAYS.get(str(slot_day)) != weekday:
@@ -503,7 +526,7 @@ def validate_registry(registry: Registry, runner: Callable[..., Any] = subproces
     remote = registry.term.get("drive_remote", "gdrive")
     subject_map = registry.term.get("drive_subject_folders", {})
     naming = registry.term.get("naming", {})
-    for slug, course in registry.courses.items():
+    for slug, course in registry.active_courses().items():
         context = {**course, "term": registry.term.get("term", "")}
         try:
             expected = {
@@ -817,6 +840,52 @@ def _update_source(registry: Registry, slug: str, sha: str, **fields: Any) -> di
         return dict(entry)
 
 
+def _folder_listing(runner: Callable[..., Any], remote: str, root_id: str, subdir: str) -> list[dict[str, Any]]:
+    """Files already in a Drive folder under the course root, with their hashes; an absent folder holds none."""
+    try:
+        listing = _json_from_command(["rclone", "lsjson", f"{remote}:{subdir}", "--drive-root-folder-id", str(root_id),
+                                      "--files-only", "--hash"], runner)
+    except subprocess.CalledProcessError as exc:
+        if exc.returncode == 3:  # rclone: directory not found
+            return []
+        raise IngestError(f"Drive listing failed: {exc}") from exc
+    return [item for item in _as_list(listing, "files", "items") if isinstance(item, dict)]
+
+
+def _folder_names(runner: Callable[..., Any], remote: str, root_id: str, subdir: str) -> set[str]:
+    """File names already in a Drive folder under the course root; an absent folder holds none."""
+    return {str(item.get("Name", "")) for item in _folder_listing(runner, remote, root_id, subdir)}
+
+
+def _upload_to_drive(registry: Registry, course: dict[str, Any], file: Path, preview: dict[str, Any], runner: Callable[..., Any]) -> str:
+    """Copy a file into its kind folder under its Chicago name, never over another file. Returns its Drive path."""
+    folder = course.get("drive_folder_id")
+    if not folder:
+        raise IngestError(f"{course.get('slug')}: missing drive_folder_id")
+    remote = registry.term.get("drive_remote", "gdrive")
+    subdir = drive_layout.folder_for(course, preview)
+    listing = _folder_listing(runner, remote, folder, subdir)
+    local_md5 = hashlib.md5(file.read_bytes()).hexdigest()
+    for item in listing:
+        # A retry after an upload that landed but was never recorded: reuse that copy instead of making a second one.
+        if str(((item.get("Hashes") or {}).get("md5") or "")).lower() == local_md5:
+            return f"{subdir}/{item.get('Name')}" if subdir else str(item.get("Name"))
+    names = {str(item.get("Name", "")) for item in listing}
+    rel = drive_layout.drive_path_for(course, preview, {subdir: names})
+    try:
+        # --ignore-existing: a file another Drive client put at this path after the listing is skipped, never replaced.
+        runner(["rclone", "copyto", str(file), f"{remote}:{rel}", "--ignore-existing", "--drive-root-folder-id", str(folder)],
+               check=True, text=True, capture_output=True)
+        stat = _json_from_command(["rclone", "lsjson", f"{remote}:{rel}", "--stat", "--hash", "--drive-root-folder-id", str(folder)], runner)
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        raise IngestError(f"Drive copy failed: {exc}") from exc
+    remote_md5 = ((stat.get("Hashes") or {}).get("md5") or (stat.get("Hashes") or {}).get("MD5")) if isinstance(stat, dict) else None
+    if not remote_md5 or remote_md5.lower() != local_md5:
+        raise IngestError(f"Drive copy not confirmed: the file at {rel} on Drive has MD5 {remote_md5}, the local file {local_md5}; "
+                          "another file may hold that path")
+    return rel
+
+
 def add_source(
     registry: Registry,
     file: Path,
@@ -887,20 +956,17 @@ def _add_source_locked(registry: Registry, file: Path, course_slug: str, *, titl
         count = len(_as_list(listed, "sources", "items"))
         if count >= limit:
             raise IngestError(f"NotebookLM notebook has {count} sources; configured limit is {limit}", 4)
+    preview = {"name": file.name, "file": str(file), "title": title, "origin": origin, "origin_ref": origin_ref, "kind": kind}
     if need_drive:
-        folder = course.get("drive_folder_id")
-        if not folder:
-            raise IngestError(f"{course_slug}: missing drive_folder_id")
-        remote = registry.term.get("drive_remote", "gdrive")
-        try:
-            runner(["rclone", "copyto", str(file), f"{remote}:{file.name}", "--drive-root-folder-id", str(folder)], check=True, text=True, capture_output=True)
-        except (OSError, subprocess.SubprocessError) as exc:
-            raise IngestError(f"Drive copy failed: {exc}") from exc
+        # The upload holds the registry lock that drive-reorg holds while it plans and moves, so an upload cannot land
+        # on a planned destination mid-reorg. (_upload_to_drive takes no lock itself: no nested locking here.)
+        with _locked_course(registry.directory, course_slug) as locked:
+            rel = _upload_to_drive(registry, locked.payload, file, preview, runner)
         _update_source(registry, course_slug, sha, sha8=sha8, title=title, file=str(file.resolve()), origin=origin, origin_ref=origin_ref,
-                       drive=True, notebook_source_id=None, trove=None, status="drive_done",
+                       drive=True, drive_path=rel, notebook_source_id=None, trove=None, status="drive_done",
                        added_at=datetime.now(timezone.utc).isoformat())
     if need_nlm:
-        added = _json_from_command(["nlm", "source", "add", str(notebook_id), "--file", str(file), "--title", title, "--wait", "--json"], runner)
+        added = _json_from_command(["nlm", "source", "add", str(notebook_id), "--file", str(file), "--title", drive_layout.display_title(preview), "--wait", "--json"], runner)
         if isinstance(added, dict) and added.get("source_id"):
             source_id = str(added["source_id"])
         else:
@@ -936,18 +1002,6 @@ def _add_media_source(registry: Registry, file: Path, course_slug: str, *, title
     title = title or (existing or {}).get("title") or _default_title(file)
     recorded = Path(str((existing or {}).get("file") or ""))
     snapshot = recorded if existing and existing.get("file") and recorded.is_file() else _snapshot_source(registry, course_slug, file, sha8)
-    if not (existing and existing.get("drive")):
-        folder = course.get("drive_folder_id")
-        if not folder:
-            raise IngestError(f"{course_slug}: missing drive_folder_id")
-        remote = registry.term.get("drive_remote", "gdrive")
-        try:
-            runner(["rclone", "copyto", str(snapshot), f"{remote}:{snapshot.name}", "--drive-root-folder-id", str(folder)], check=True, text=True, capture_output=True)
-        except (OSError, subprocess.SubprocessError) as exc:
-            raise IngestError(f"Drive copy failed: {exc}") from exc
-        _update_source(registry, course_slug, sha, sha8=sha8, title=title, file=str(snapshot.resolve()), origin=origin, origin_ref=origin_ref,
-                       kind="media", drive=True, notebook_source_id=None, lesson_key=None, trove=None, status="drive_done",
-                       added_at=datetime.now(timezone.utc).isoformat())
     # ingest the immutable snapshot; date and time were fixed above from the caller or the original
     result = ingest_recording(registry, snapshot, course_slug=course_slug, lesson_date=lesson_date, lesson_time=lesson_time,
                               runner=runner, transcript_file=transcript, **({"lesson_owner": lesson_owner} if lesson_owner else {}))
@@ -958,6 +1012,16 @@ def _add_media_source(registry: Registry, file: Path, course_slug: str, *, title
             lesson = next((x for x in locked.payload.get("lessons", []) if x.get("audio_sha256") == sha), {})
         lesson_key = lesson_key or lesson.get("lesson_key")
         source_id = source_id or lesson.get("source_id")
+    if not (existing and existing.get("drive")):
+        # Uploaded only now, with the key ingest actually gave this lesson (a same-minute clash gets a suffix there),
+        # so the Drive lesson folder always matches the lesson.
+        preview = {"name": snapshot.name, "file": str(snapshot), "title": title, "origin": origin, "origin_ref": origin_ref,
+                   "kind": "media", "lesson_key": lesson_key or f"{lesson_date}-{lesson_time or '0000'}"}
+        # the listing, the name choice and the copy hold the registry lock, as the document upload does (no nested locking)
+        with _locked_course(registry.directory, course_slug) as locked:
+            rel = _upload_to_drive(registry, locked.payload, snapshot, preview, runner)
+        _update_source(registry, course_slug, sha, sha8=sha8, title=title, file=str(snapshot.resolve()), origin=origin, origin_ref=origin_ref,
+                       kind="media", drive=True, drive_path=rel, trove=None, added_at=datetime.now(timezone.utc).isoformat())
     _update_source(registry, course_slug, sha, kind="media", lesson_key=lesson_key, notebook_source_id=str(source_id) if source_id else None, status="queued")
     merged = dict(result)
     merged.update({"sha8": sha8, "title": title, "file": str(snapshot.resolve())})
@@ -1023,8 +1087,8 @@ def check_source(registry: Registry, slug: str, sha8: str | None = None, runner:
         problems.append(f"{slug}: missing drive_folder_id")
     else:
         try:
-            listing = _json_from_command(["rclone", "lsjson", f"{remote}:", "--drive-root-folder-id", str(folder), "--files-only"], runner)
-            drive_names = {str(item.get("Name", item.get("Path", ""))) for item in _as_list(listing, "files", "items")}
+            listing = _json_from_command(["rclone", "lsjson", f"{remote}:", "--drive-root-folder-id", str(folder), "--files-only", "-R"], runner)
+            drive_names = {str(item.get("Path") or item.get("Name", "")) for item in _as_list(listing, "files", "items")}
         except Exception as exc:
             problems.append(f"{slug}: Drive listing failed: {exc}")
     if course.get("notebook_id"):
@@ -1038,8 +1102,11 @@ def check_source(registry: Registry, slug: str, sha8: str | None = None, runner:
     for source in sources:
         label = f"{slug} {str(source.get('sha256', ''))[:8]} ({source.get('title')})"
         name = Path(str(source.get("file", ""))).name
-        if drive_names is not None and name not in drive_names:
-            problems.append(f"{label}: {name!r} is not in the Drive folder")
+        recorded = source.get("drive_path")
+        # a source moved by drive-reorg is found at its recorded path; an older one at the root under its own name
+        expected = str(recorded) if recorded else name
+        if drive_names is not None and expected not in drive_names:
+            problems.append(f"{label}: {expected!r} is not in the Drive folder")
         source_id = source.get("notebook_source_id")
         if not source_id:
             problems.append(f"{label}: no NotebookLM source recorded")
@@ -1097,6 +1164,193 @@ def check_source(registry: Registry, slug: str, sha8: str | None = None, runner:
             except Exception as exc:
                 problems.append(f"{label}: Trove book {trove['book_id']} ToC lookup failed: {exc}")
     return problems
+
+
+def _nightly_running(runner: Callable[..., Any]) -> bool:
+    """True while the nightly courses job runs (pgrep matches its bash command line)."""
+    result = runner(["pgrep", "-f", drive_layout.NIGHTLY_PATTERN], check=False, text=True, capture_output=True)
+    return result.returncode == 0 and bool(str(result.stdout or "").strip())
+
+
+def _listing(runner: Callable[..., Any], remote: str, folder: str) -> list[dict[str, Any]]:
+    return _as_list(_json_from_command(["rclone", "lsjson", f"{remote}:", "--drive-root-folder-id", str(folder), "-R", "--hash"], runner), "files", "items")
+
+
+def _source_by_sha(course: dict[str, Any], sha: str) -> dict[str, Any] | None:
+    return next((s for s in course.get("sources", []) if sha and s.get("sha256") == sha), None)
+
+
+def _nlm_title(source: dict[str, Any] | None) -> str | None:
+    """The NotebookLM title a source gets after a move; media keep their lesson titles."""
+    if source is None or source.get("kind") == "media":
+        return None
+    return drive_layout.display_title(source)
+
+
+def _set_drive_path(locked: Any, sha: str, new: str) -> None:
+    """Record a source's Drive path under the course lock the caller holds (no re-lock: that would deadlock)."""
+    entry = _source_by_sha(locked.payload, sha)
+    if entry is None:
+        raise drive_layout.ReorgError(f"registry has no source {sha[:8]} to record {new!r} for")
+    entry["drive_path"] = new
+    _atomic_json(locked.path, locked.payload)
+
+
+def _manifest(slug: str, folder: str, course: dict[str, Any], plan: list[dict[str, Any]]) -> dict[str, Any]:
+    moves = []
+    for step in plan:
+        source = _source_by_sha(course, str(step.get("sha256") or ""))
+        moves.append({**step, "notebook_source_id": (source or {}).get("notebook_source_id"), "nlm_title": _nlm_title(source)})
+    return {"slug": slug, "drive_folder_id": str(folder), "moves": moves}
+
+
+def _checkpoint(locked: Any, runner: Callable[..., Any], course_id: str | None):
+    """After each final move: rename the NotebookLM source, then record drive_path (the commit point), each journaled."""
+    def after_step(step: dict[str, Any], journal: drive_layout.Journal) -> None:
+        sha = str(step.get("sha256") or "")
+        source = _source_by_sha(locked.payload, sha)
+        if source is None:
+            return
+        fields = {"file_id": str(step.get("id") or ""), "old": step["old"], "new": step["new"], "sha256": sha, "final": True}
+        if source.get("drive_path") == step["new"]:
+            # The registry already holds the path (a crash after its write, before the done line): close the record as done.
+            journal.run("registry", fields, lambda: None)
+            return
+        title = _nlm_title(source)
+        if title and source.get("notebook_source_id") and course_id:
+            journal.run("nlm_rename", {**fields, "notebook_id": course_id, "notebook_source_id": str(source["notebook_source_id"]),
+                                       "nlm_title": title},
+                        lambda: runner(["nlm", "source", "rename", str(source["notebook_source_id"]), title, "--notebook", str(course_id)],
+                                       check=True, text=True, capture_output=True))
+        journal.run("registry", fields, lambda: _set_drive_path(locked, sha, step["new"]))
+    return after_step
+
+
+def drive_reorg(registry: Registry, slugs: list[str], *, apply: bool = False, force: bool = False,
+                runner: Callable[..., Any] | None = None) -> list[dict[str, Any]]:
+    """Manifest of Drive moves and NotebookLM renames per course; with apply, makes them, journaled by file id.
+
+    Without apply it only lists (one read-only rclone listing per course). With apply, each course is planned and
+    moved under its registry lock: the listing is taken twice and must plan the same moves, else nothing moves.
+    Refuses while the nightly job runs unless `force`. Journal: REG/logs/drive-reorg-<stamp>-<slug>.jsonl.
+    """
+    runner = runner or subprocess.run
+    if apply and not force and _nightly_running(runner):
+        raise drive_layout.ReorgError("the nightly courses job is running; wait for it, or pass --force")
+    remote = registry.term.get("drive_remote", "gdrive")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    manifests: list[dict[str, Any]] = []
+    for slug in slugs:
+        course = registry.courses.get(slug)
+        if course is None:
+            raise ValueError(f"unknown course: {slug}")
+        folder = course.get("drive_folder_id")
+        if not folder:
+            manifests.append({"slug": slug, "error": "missing drive_folder_id", "moves": []})
+            continue
+        if not apply:
+            manifests.append(_manifest(slug, str(folder), course, drive_layout.plan_reorg(course, _listing(runner, remote, folder))))
+            continue
+        with _locked_course(registry.directory, slug) as locked:
+            unfinished = _unfinished_journals(registry, slug, locked.payload)
+            if unfinished:
+                raise drive_layout.ReorgError(f"{slug}: an earlier reorg did not finish ({unfinished[0].name}); "
+                                              f"run drive-reorg --resume {unfinished[0]} --apply first")
+            plan = drive_layout.plan_reorg(locked.payload, _listing(runner, remote, folder))
+            if drive_layout.plan_reorg(locked.payload, _listing(runner, remote, folder)) != plan:
+                raise drive_layout.ReorgError(f"{slug}: Drive changed while planning; nothing was moved, rerun")
+            manifests.append(_manifest(slug, str(folder), locked.payload, plan))
+            log = registry.directory / "logs" / f"drive-reorg-{stamp}-{slug}.jsonl"
+            try:
+                drive_layout.apply_reorg(plan, remote, str(folder), log, runner=runner, slug=slug,
+                                         after_step=_checkpoint(locked, runner, locked.payload.get("notebook_id")))
+            finally:
+                registry.courses[slug] = locked.payload
+    return manifests
+
+
+def _unfinished_journals(registry: Registry, slug: str, course: dict[str, Any]) -> list[Path]:
+    """This course's reorg journals with work left: an intent with no done line, a move not done, or a final step whose
+    registry checkpoint (the commit point, after the NotebookLM rename) is not done while the source still lacks its path."""
+    found = []
+    for path in sorted((registry.directory / "logs").glob(f"drive-reorg-*-{slug}.jsonl")):
+        lines = drive_layout.read_journal(path)
+        if not lines:
+            continue
+        journal = drive_layout.Journal(path, remote=str(lines[0]["remote"]), root=str(lines[0]["root"]), slug=slug)
+        left = bool(drive_layout.pending_ops(lines))
+        for _, step in drive_layout.plan_steps(lines):
+            if step["op"] == "move" and not journal.is_done(drive_layout.JOURNAL_KIND["move"], drive_layout._fields(step)):
+                left = True
+            if step.get("final") and step.get("sha256"):
+                source = _source_by_sha(course, str(step["sha256"]))
+                checkpoint = {"file_id": str(step.get("id") or ""), "old": step["old"], "new": step["new"],
+                              "sha256": str(step["sha256"]), "final": True}
+                if source is not None and source.get("drive_path") != step["new"] and not journal.is_done("registry", checkpoint):
+                    left = True
+        if left:
+            found.append(path)
+    return found
+
+
+def drive_reorg_resume(registry: Registry, journal_path: Path, *, force: bool = False,
+                       runner: Callable[..., Any] | None = None) -> dict[str, Any]:
+    """Finish a journal's remaining steps, in plan order (not only the one in flight).
+
+    Each Drive step already done is skipped. Each other move is checked by file id: at its new path it is only marked
+    done, at its old path it is moved, anywhere else it is reported and left alone. After every final move the
+    NotebookLM rename and the registry checkpoint run again unless their done lines exist, so a crash or a failed
+    rename past the move still ends with both.
+    """
+    runner = runner or subprocess.run
+    if not force and _nightly_running(runner):
+        raise drive_layout.ReorgError("the nightly courses job is running; wait for it, or pass --force")
+    lines = drive_layout.read_journal(journal_path)
+    if not lines:
+        raise drive_layout.ReorgError(f"{journal_path}: empty or missing journal")
+    slug, remote, root = str(lines[0]["slug"]), str(lines[0]["remote"]), str(lines[0]["root"])
+    steps = drive_layout.plan_steps(lines)
+    journal = drive_layout.Journal(journal_path, remote=remote, root=root, slug=slug)
+    remaining = [step for _, step in steps if step["op"] in ("move", "rmdir")
+                 and not journal.is_done(drive_layout.JOURNAL_KIND[step["op"]], drive_layout._fields(step))]
+    done: list[str] = []
+    with _locked_course(registry.directory, slug) as locked:
+        # The journal must belong to this registry's course: the selected term's course, the same remote and Drive root.
+        expected = (str(registry.term.get("drive_remote", "gdrive")), str(locked.payload.get("drive_folder_id") or ""))
+        if not locked.payload.get("slug") or (remote, root) != expected:
+            raise drive_layout.ReorgError(f"{journal_path}: journal is for {slug} on {remote}:{root}, but the selected "
+                                          f"registry has {expected[0]}:{expected[1] or '(no folder)'}; select the right term")
+        after_step = _checkpoint(locked, runner, locked.payload.get("notebook_id"))
+        try:
+            at = {str(item.get("ID")): drive_layout._listed_path(item) for item in _listing(runner, remote, root)}
+            for op_id, step in steps:
+                if step["op"] not in ("move", "rmdir"):
+                    if step.get("final") and step.get("sha256"):
+                        after_step(step, journal)
+                    continue
+                kind, fields = drive_layout.JOURNAL_KIND[step["op"]], drive_layout._fields(step)
+                file_id = str(step.get("id") or "")
+                if not journal.is_done(kind, fields):
+                    if step["op"] == "move":
+                        current = at.get(file_id)
+                        if current == step["new"]:
+                            journal.run(kind, fields, lambda: None, op_id)
+                        elif current == step["old"]:
+                            if step["new"] in at.values():
+                                raise drive_layout.ReorgError(f"{file_id}: {step['new']!r} is occupied, not moving")
+                            journal.run(kind, fields, lambda step=step: drive_layout.move_file(remote, root, file_id, step["new"], runner), op_id)
+                            at[file_id] = step["new"]
+                        else:
+                            raise drive_layout.ReorgError(f"{file_id} is at {current!r}, neither {step['old']!r} nor {step['new']!r}; not touching it")
+                    else:
+                        # Folder deletion is never executed, not even from an older journal: the folder is kept.
+                        journal.run(kind, fields, lambda: None, op_id)
+                    done.append(f"{kind} {step['old']} -> {step['new']}")
+                if step["op"] == "move" and step.get("final") and step.get("sha256"):
+                    after_step(step, journal)
+        finally:
+            registry.courses[slug] = locked.payload
+    return {"slug": slug, "pending": len(remaining), "done": done}
 
 
 CHORE_KINDS = ("assignment", "forum-post", "perusall-capture", "kotar-source", "missing-text", "manual", "exam", "reading")
@@ -1207,12 +1461,24 @@ def main(argv: list[str] | None = None) -> int:
     csrc = sub.add_parser("check-source", help="verify sources are in Drive, NotebookLM and nested in Trove")
     csrc.add_argument("slug")
     csrc.add_argument("--sha", help="check only the source with this sha prefix")
+    reorg = sub.add_parser("drive-reorg", help="move course sources into their kind folders under Chicago names (prints the manifest; moves only with --apply)")
+    reorg_scope = reorg.add_mutually_exclusive_group()
+    reorg_scope.add_argument("--course", metavar="SLUG")
+    reorg_scope.add_argument("--all", action="store_true")
+    reorg_scope.add_argument("--resume", type=Path, metavar="JOURNAL", help="finish the unfinished ops of a drive-reorg journal (needs --apply)")
+    reorg.add_argument("--apply", action="store_true", help="make the moves and NotebookLM renames (default: manifest only)")
+    reorg.add_argument("--force", action="store_true", help="apply even while the nightly courses job is running")
     wdiff = sub.add_parser("watch-diff", help="diff Chrome-extracted Lemida pages against the course's watch state")
     wdiff.add_argument("slug")
     wdiff.add_argument("--pages", type=Path, required=True, help="JSON file: a list of page objects")
     wdiff.add_argument("--baseline", action="store_true", help="mark everything on --pages as seen (clears a suspect course)")
     wdiff.add_argument("--apply", action="store_true", help="advance the seen state (needs --ok)")
     wdiff.add_argument("--ok", nargs="*", default=None, help="ids (cmid / discussion / section) handled successfully")
+    lcov = sub.add_parser("lemida-coverage-check", help="exit 1 and print each gap when the nightly Lemida watch did not cover everything")
+    lcov.add_argument("--date", help="YYYY-MM-DD of the coverage file (default: today in the term's timezone)")
+    lcov.add_argument("--run-id", required=True, help="the run id the nightly job passed to the watch; a report with another run_id is a stale gap")
+    lcov.add_argument("--courses", help="space or comma separated slugs to check (default: every active course)")
+    lcov.add_argument("--json", action="store_true")
     chores_p = sub.add_parser("chores", help="things Yotam must do by hand (chores.json and its digest)")
     chores_sub = chores_p.add_subparsers(dest="chores_command", required=True)
     reg_parent = argparse.ArgumentParser(add_help=False)
@@ -1291,6 +1557,19 @@ def main(argv: list[str] | None = None) -> int:
             if args.apply:
                 print(f"advanced {len(advanced)} id(s)", file=sys.stderr)
             return 0
+        if args.command == "lemida-coverage-check":
+            import lemida_coverage
+            day = args.date or lemida_coverage.today(registry)
+            only = [s for s in (args.courses or "").replace(",", " ").split()] if args.courses is not None else None
+            gaps = lemida_coverage.check(registry, day, args.run_id, only=only)
+            if args.json:
+                print(json.dumps({"date": day, "ok": not gaps, "gaps": gaps}, ensure_ascii=False))
+            else:
+                for gap in gaps:
+                    print(gap)
+                if not gaps:
+                    print(f"lemida coverage {day}: complete")
+            return 1 if gaps else 0
         if args.command == "chores":
             import chores
             if args.chores_command == "add":
@@ -1343,6 +1622,17 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "source-done":
             print(json.dumps(source_done(registry, args.slug, args.sha8, args.trove), ensure_ascii=False))
+            return 0
+        if args.command == "drive-reorg":
+            if args.resume:
+                if not args.apply:
+                    parser.error("--resume makes the pending moves; add --apply")
+                print(json.dumps(drive_reorg_resume(registry, args.resume, force=args.force), ensure_ascii=False, indent=2))
+                return 0
+            if not (args.course or args.all):
+                parser.error("drive-reorg needs --course, --all or --resume")
+            slugs = sorted(registry.active_courses()) if args.all else [args.course]
+            print(json.dumps(drive_reorg(registry, slugs, apply=args.apply, force=args.force), ensure_ascii=False, indent=2))
             return 0
         if args.command == "check-source":
             problems = check_source(registry, args.slug, args.sha)

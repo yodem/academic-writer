@@ -10,6 +10,15 @@ metadata: {author: "Yotam Fromm", version: "0.2.19"}
 
 Revise one focused section. For changes across the whole article, hand off to `/academic-writer:edit`.
 
+0. Choose the run ID for this edit now (the run ID rule is below, under the edit step). Then record the run before anything else:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$PWD" --data-dir "${CLAUDE_PLUGIN_DATA}" activity start --flow edit-section --run-id <run-id>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" register --path "$PWD" --type project
+```
+
+`activity start` writes its opening line once per run, so it is safe to repeat. If `home.py register` says no home folder is set, skip it and tell the researcher once.
+
 1. Read the section the author chose. If it is unclear which one, list the article's headings and ask.
 2. If the author gave no instruction, ask what they want: rewrite, expand, shorten, fix a citation, or change the style.
 3. Write the section and the instruction to temporary files inside the project, then run:
@@ -26,3 +35,6 @@ Revise one focused section. For changes across the whole article, hand off to `/
 4. Read the returned `revised_text` and the output file. Show the author the before/after before applying it.
 5. Keep the section's citations unless the author asked to change them. If a factual claim or citation changed, send every paragraph of the section to the `auditor` agent in one batched call, with `runId: <run-id>` (the `--run` value used for `aw edit`) in the prompt: the auditor is the only gate that checks citations against the real sources.
 6. Replace the accepted text only with PASS paragraphs and their `taggedText`. Correct and re-audit any FAIL or PARTIAL paragraph first.
+
+Finally, end the run: `"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$PWD" --data-dir "${CLAUDE_PLUGIN_DATA}" activity end --run-id <run-id> --exit OK`. If the edit or the auditor check failed and you stop, use `--exit ERROR` instead. Ending a run that `aw edit` already ended is a no-op.
+

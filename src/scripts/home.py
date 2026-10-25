@@ -292,6 +292,37 @@ def list_workspaces(home: Path) -> list:
             for row in _load_rows(home) if isinstance(row, dict) and row.get("path")]
 
 
+def discover_workspaces(home: Path, depth: int = 2) -> list:
+    """Folders up to `depth` levels under `home` that hold `.academic-helper/profile.md` or `.academic-helper/runs/`.
+    Read-only and never raises: nothing is registered. Hidden folders are skipped, a found workspace is not searched
+    further, and the home folder itself is not listed. Each row is `{path, type: None, course: None}`."""
+    found: list = []
+
+    def walk(folder: Path, level: int) -> None:
+        if level > depth:
+            return
+        try:
+            children = sorted(c for c in folder.iterdir() if c.is_dir() and not c.name.startswith("."))
+        except OSError:
+            return
+        for child in children:
+            meta = child / DIR_NAME
+            try:
+                is_workspace = (meta / PROFILE_FILE).is_file() or (meta / "runs").is_dir()
+            except OSError:
+                is_workspace = False
+            if is_workspace:
+                found.append({"path": str(child), "type": None, "course": None})
+            else:
+                walk(child, level + 1)
+
+    try:
+        walk(Path(home), 1)
+    except Exception:
+        return found
+    return found
+
+
 def _main(argv: Optional[list] = None) -> int:
     ap = argparse.ArgumentParser(description="Home folder pointer and workspace registry")
     # Skills run this through the Bash tool, which gets no CLAUDE_PLUGIN_DATA; they pass it here instead.
