@@ -4,6 +4,11 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.20.2] — 2026-10-25
+
+### Fixed
+- **A lesson transcript is named a transcript.** A `.txt` transcript registered as a recording was named "הקלטת שיעור …"; it is now "תמלול שיעור …".
+
 ## [0.20.1] — 2026-10-25
 
 ### Fixed

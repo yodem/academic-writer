@@ -142,7 +142,7 @@ def _lesson_title(course: dict[str, Any] | None, source: dict[str, Any]) -> str:
             found = re.search(r"שיעור (\d+)$", folder)
             number = int(found.group(1)) if found else None
     date = NAME_DATE_RE.search(key) or NAME_DATE_RE.search(file_name)
-    word = "הקלטת" if media else "תמלול"
+    word = "תמלול" if ext in TRANSCRIPT_EXTS else "הקלטת"  # a transcript stays a transcript even when registered as media
     title = f"{word} שיעור {number:02d}" if number else f"{word} שיעור"
     return f"{title} · {date.group(3)}.{date.group(2)}.{date.group(1)}" if date else title
 
