@@ -398,9 +398,13 @@ def plan_reorg(course: dict[str, Any], listing: list[dict[str, Any]]) -> list[di
         raw = _source_path(source, by_path)
         if raw is None:
             continue
-        if len(by_path[raw]) > 1:
-            raise ReorgError(f"{raw}: more than one Drive file has this name, so the registry source cannot be matched")
-        entry = by_path[raw][0]
+        matches = by_path[raw]
+        if len(matches) > 1:
+            # Drive allows two files with one name in a folder: the recorded Drive file id still tells them apart
+            matches = [e for e in matches if source.get("drive_id") and e["id"] == source.get("drive_id")]
+            if len(matches) != 1:
+                raise ReorgError(f"{raw}: more than one Drive file has this name, so the registry source cannot be matched")
+        entry = matches[0]
         if entry["dir"]:
             continue
         if entry["n"] in claimed:

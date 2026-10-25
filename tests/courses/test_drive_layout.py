@@ -1138,3 +1138,25 @@ def test_a_drive_shortcut_is_left_where_it_is():
     ]
     plan = drive_layout.plan_reorg({"sources": []}, listing)
     assert [s["old"] for s in plan if s["op"] == "move"] == ["מטלה 2/real.docx"]
+
+
+def _listing(*files):
+    return [{"Path": p, "Name": p.rsplit("/", 1)[-1], "ID": i, "IsDir": False, "Size": 1} for p, i in files]
+
+
+def test_duplicated_name_is_matched_by_the_recorded_drive_id():
+    files = _listing(("קריאות/x/שיעור 1.docx", "id-a"), ("קריאות/x/שיעור 1.docx", "id-b"))
+    course = {"slug": "s", "sources": [
+        {"sha256": "a" * 64, "name": "שיעור 1.docx", "drive_path": "קריאות/x/שיעור 1.docx", "drive_id": "id-a"},
+        {"sha256": "b" * 64, "name": "שיעור 1.docx", "drive_path": "קריאות/x/שיעור 1.docx", "drive_id": "id-b"}]}
+    plan = drive_layout.plan_reorg(course, files)
+    moved = [step for step in plan if step.get("op") == "move"]
+    assert len({step["new"] for step in moved}) == len(moved)  # never two moves onto one path
+    assert {step["id"] for step in moved} <= {"id-a", "id-b"}
+
+
+def test_duplicated_name_without_a_matching_drive_id_still_refuses():
+    files = _listing(("a.docx", "id-a"), ("a.docx", "id-b"))
+    course = {"slug": "s", "sources": [{"sha256": "a" * 64, "name": "a.docx", "drive_path": "a.docx", "drive_id": "id-z"}]}
+    with pytest.raises(drive_layout.ReorgError, match="more than one Drive file"):
+        drive_layout.plan_reorg(course, files)
