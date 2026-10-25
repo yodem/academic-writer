@@ -491,7 +491,9 @@ def _destination_taken(remote: str, root_id: str, new: str, runner: Callable[...
 def move_file(remote: str, root_id: str, file_id: str, new: str, runner: Callable[..., Any] = subprocess.run) -> None:
     """Move one Drive file by id to `new` (a path under the course root), creating its parent folders first.
 
-    Refuses (ReorgError, nothing moved) when anything is already at `new`: the check runs right before the move.
+    Refuses (ReorgError, nothing moved) when anything is already at `new`. The check runs right before the move, but
+    moveid delegates to moveto, which would replace a file created in between; `--ignore-existing` makes it skip
+    instead. The object at `new` is then checked to carry this file's id, so a skip is raised as a failure.
     """
     parent = new.rpartition("/")[0]
     if parent:
@@ -499,8 +501,17 @@ def move_file(remote: str, root_id: str, file_id: str, new: str, runner: Callabl
     if _destination_taken(remote, root_id, new, runner):
         raise ReorgError(f"{new!r} is occupied in Drive, so {file_id} was not moved there")
     # The destination must carry the remote prefix: a bare path is a LOCAL rclone path, and moveid would pull the file off Drive.
-    runner(["rclone", "backend", "moveid", f"{remote}:", str(file_id), f"{remote}:{new}", "--drive-root-folder-id", str(root_id)],
+    runner(["rclone", "backend", "moveid", f"{remote}:", str(file_id), f"{remote}:{new}", "--ignore-existing", "--drive-root-folder-id", str(root_id)],
            check=True, text=True, capture_output=True)
+    result = runner(["rclone", "lsjson", f"{remote}:{new}", "--stat", "--drive-root-folder-id", str(root_id)], check=False, text=True, capture_output=True)
+    if result.returncode != 0:
+        raise ReorgError(f"{new!r}: cannot confirm {file_id} arrived there ({str(result.stderr or '').strip()}); not moving on")
+    try:
+        found = str(json.loads(str(result.stdout or "")).get("ID", ""))
+    except (ValueError, AttributeError):
+        found = ""
+    if found != str(file_id):
+        raise ReorgError(f"{new!r} holds {found or 'an unknown object'}, not {file_id}: the move was skipped, so {file_id} was not moved there")
 
 
 def rmdir_folder(remote: str, root_id: str, path: str, runner: Callable[..., Any] = subprocess.run) -> None:
@@ -553,12 +564,12 @@ class Journal:
             if handle.read(1) == b"\n":
                 return
         data = self.path.read_bytes()
-        cut = data.rfind(b"\n") + 1
+        cut = data.rfind(b"\n") + 1  # byte-wise: the fragment may end inside a multi-byte character
         fragment = data[cut:].decode("utf-8", errors="replace")
         try:
-            json.loads(fragment)
+            json.loads(data[cut:].decode("utf-8"))
             whole = True
-        except ValueError:
+        except (UnicodeDecodeError, ValueError):
             whole = False
         with self.path.open("r+b") as handle:
             if whole:
@@ -617,19 +628,23 @@ class Journal:
 
 
 def read_journal(path: Path) -> list[dict[str, Any]]:
-    """Every line of a journal. A torn last line (a crash mid-write) is ignored: its action had not started."""
+    """Every line of a journal. A torn last line (a crash mid-write) is ignored: its action had not started.
+
+    Split on the newline byte first and decode each line alone: a crash can cut a multi-byte UTF-8 character (Hebrew),
+    and decoding the whole file would then fail before the torn tail is found.
+    """
     if not path.exists():
         return []
-    lines = path.read_text(encoding="utf-8").splitlines()
+    pieces = path.read_bytes().split(b"\n")
     out: list[dict[str, Any]] = []
-    for index, text in enumerate(lines):
-        if not text.strip():
+    for index, raw in enumerate(pieces):
+        if not raw.strip():
             continue
         try:
-            out.append(json.loads(text))
-        except json.JSONDecodeError:
-            if index == len(lines) - 1:
-                break
+            out.append(json.loads(raw.decode("utf-8")))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            if index == len(pieces) - 1:
+                break  # the torn fragment; _repair_tail cuts it before the next append
             raise ReorgError(f"{path}: line {index + 1} is not JSON")
     return out
 

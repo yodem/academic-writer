@@ -987,7 +987,9 @@ def _add_media_source(registry: Registry, file: Path, course_slug: str, *, title
         # the lesson key is the one ingest will give this lesson (date and time, a suffix only on a clash)
         preview = {"name": snapshot.name, "file": str(snapshot), "title": title, "origin": origin, "origin_ref": origin_ref,
                    "kind": "media", "lesson_key": f"{lesson_date}-{lesson_time or '0000'}"}
-        rel = _upload_to_drive(registry, course, snapshot, preview, runner)
+        # the listing, the name choice and the copy hold the registry lock, as the document upload does (no nested locking)
+        with _locked_course(registry.directory, course_slug) as locked:
+            rel = _upload_to_drive(registry, locked.payload, snapshot, preview, runner)
         _update_source(registry, course_slug, sha, sha8=sha8, title=title, file=str(snapshot.resolve()), origin=origin, origin_ref=origin_ref,
                        kind="media", drive=True, drive_path=rel, notebook_source_id=None, lesson_key=None, trove=None, status="drive_done",
                        added_at=datetime.now(timezone.utc).isoformat())

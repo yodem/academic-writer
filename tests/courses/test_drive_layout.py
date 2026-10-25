@@ -272,10 +272,16 @@ def test_drive_reorg_lists_the_root_recursively_with_dirs(tmp_path):
 
 def test_apply_reorg_moves_by_id_and_journals_intent_before_done(tmp_path):
     calls = []
+    moved = []
 
     def runner(command, **kwargs):
         calls.append(command)
-        return subprocess.CompletedProcess(command, 3 if "--stat" in command else 0, "", "")  # 3: nothing at the destination
+        if command[:3] == ["rclone", "backend", "moveid"]:
+            moved.append(command)
+            return subprocess.CompletedProcess(command, 0, "", "")
+        if "--stat" in command:  # before the move: 3, nothing there; after it: the moved file's id
+            return subprocess.CompletedProcess(command, 0, json.dumps({"ID": "id-0"}), "") if moved else subprocess.CompletedProcess(command, 3, "", "")
+        return subprocess.CompletedProcess(command, 0, "", "")
 
     log = tmp_path / "logs" / "drive-reorg.jsonl"
     plan = [{"op": "move", "id": "id-0", "old": "a.pdf", "new": "00 כללי/a.pdf", "sha256": "1" * 64, "final": True}]
@@ -283,7 +289,8 @@ def test_apply_reorg_moves_by_id_and_journals_intent_before_done(tmp_path):
     assert calls == [
         ["rclone", "mkdir", "gdrive:00 כללי", "--drive-root-folder-id", "folder-1"],
         ["rclone", "lsjson", "gdrive:00 כללי/a.pdf", "--stat", "--drive-root-folder-id", "folder-1"],
-        ["rclone", "backend", "moveid", "gdrive:", "id-0", "gdrive:00 כללי/a.pdf", "--drive-root-folder-id", "folder-1"],
+        ["rclone", "backend", "moveid", "gdrive:", "id-0", "gdrive:00 כללי/a.pdf", "--ignore-existing", "--drive-root-folder-id", "folder-1"],
+        ["rclone", "lsjson", "gdrive:00 כללי/a.pdf", "--stat", "--drive-root-folder-id", "folder-1"],
     ]
     lines = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
     assert [line["phase"] for line in lines] == ["plan", "intent", "done"]
@@ -319,6 +326,8 @@ class FakeDrive:
         self.list_calls = 0
         self.on_list = None
         self.on_stat = None
+        self.on_moveid = None  # called at the start of each moveid: a file can appear after the destination check
+        self.skipped = []  # (file id, destination) of each moveid that --ignore-existing skipped
         self.lock_file = None
         self.lock_probe = []
         self._serial = 0
@@ -395,6 +404,8 @@ class FakeDrive:
         if command[:3] == ["rclone", "backend", "moveid"]:
             self.counts["moveid"] = self.counts.get("moveid", 0) + 1
             self._probe()
+            if self.on_moveid:
+                self.on_moveid(self)
             self._fault("moveid", "before")
             ident, dest = command[4], command[5]
             if ":" not in dest:
@@ -406,6 +417,9 @@ class FakeDrive:
             if parent and not any(item["Path"] == parent and item["IsDir"] for item in self.items.values()):
                 self._fail(command, f"parent folder {parent!r} does not exist")
             if any(item["Path"] == dest for item in self.items.values()):
+                if "--ignore-existing" in command:  # rclone moveto: skip, leave both files where they are
+                    self.skipped.append((ident, dest))
+                    return ok
                 self._fail(command, f"destination {dest!r} is occupied")
             self.items[ident]["Path"] = dest
             self.items[ident]["Name"] = dest.rsplit("/", 1)[-1]
@@ -445,7 +459,7 @@ def test_drive_reorg_apply_moves_by_id_renames_nlm_and_records_drive_path(tmp_pa
     drive = FakeDrive([("11111111-syllabus.pdf", False)])
     courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
     ident = drive.id_at("00 כללי/Syllabus.pdf")
-    assert _moves(drive) == [["rclone", "backend", "moveid", "gdrive:", ident, "gdrive:00 כללי/Syllabus.pdf", "--drive-root-folder-id", "folder-1"]]
+    assert _moves(drive) == [["rclone", "backend", "moveid", "gdrive:", ident, "gdrive:00 כללי/Syllabus.pdf", "--ignore-existing", "--drive-root-folder-id", "folder-1"]]
     assert ["nlm", "source", "rename", "nlm-1", "Syllabus", "--notebook", "nb-1"] in drive.nlm
     assert json.loads((registry.directory / "sample.json").read_text(encoding="utf-8"))["sources"][0]["drive_path"] == "00 כללי/Syllabus.pdf"
     assert len(list((registry.directory / "logs").glob("drive-reorg-*-sample.jsonl"))) == 1
@@ -692,13 +706,39 @@ def test_slides_go_under_lessons():
 
 def test_moveid_destination_stays_on_the_drive_remote():
     calls = []
+    moved = []
     def runner(argv, **kw):
         calls.append(argv)
+        if argv[:3] == ["rclone", "backend", "moveid"]:
+            moved.append(argv)
+            return subprocess.CompletedProcess(argv, 0, "", "")
+        if "--stat" in argv and moved:
+            return subprocess.CompletedProcess(argv, 0, json.dumps({"ID": "FILEID"}), "")
         return subprocess.CompletedProcess(argv, 3 if "--stat" in argv else 0, "", "")
     drive_layout.move_file("gdrive-biu", "ROOT", "FILEID", "קריאות/A/a.pdf", runner=runner)
     moveid = [c for c in calls if c[:3] == ["rclone", "backend", "moveid"]][0]
     assert moveid[5] == "gdrive-biu:קריאות/A/a.pdf"
     assert all(not a.startswith("קריאות") for a in moveid)
+
+
+def test_a_file_that_appears_after_the_destination_check_is_never_replaced(tmp_path):
+    registry, drive = _two_unregistered(tmp_path)
+    original = drive.id_at("alpha.pdf")
+    squatter = {}
+
+    def appear(fake):
+        # after the destination check and just before moveid: someone creates a file at the planned destination
+        if not squatter:
+            squatter["id"] = fake.add("קריאות/alpha/alpha.pdf")
+    drive.on_moveid = appear
+    with pytest.raises(drive_layout.ReorgError, match="not moved"):
+        courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    assert squatter and drive.path_of(squatter["id"]) == "קריאות/alpha/alpha.pdf"  # the other file is untouched
+    assert drive.path_of(original) == "alpha.pdf"  # moveto skipped rather than replaced; the source stays put
+    assert drive.skipped == [(original, "קריאות/alpha/alpha.pdf")] and drive.violations == []
+    assert drive.path_of(drive.id_at("beta.pdf")) == "beta.pdf"  # the run stopped at the failure
+    lines = drive_layout.read_journal(_journal_of(registry))
+    assert [(l["phase"], l["kind"]) for l in lines if l["phase"] != "plan"] == [("intent", "drive_move"), ("failed", "drive_move")]
 
 
 def _lock_is_held(path):
@@ -864,3 +904,48 @@ def test_resume_appends_readably_after_a_torn_journal_tail(tmp_path):
         json.loads(line)  # every line is a complete record
     assert drive_layout.pending_ops(drive_layout.read_journal(journal)) == []
     assert sorted(drive.files()) == ["קריאות/alpha/alpha.pdf", "קריאות/beta/beta.pdf"]
+
+
+def test_media_upload_copies_while_the_registry_lock_is_held(tmp_path, monkeypatch):
+    from test_sources import fake_ingest_factory
+    registry = make_registry(tmp_path, term={"drive_remote": "gdrive"})
+    audio = tmp_path / "lesson.m4a"
+    audio.write_bytes(b"a")
+    monkeypatch.setattr(courses, "ingest_recording", fake_ingest_factory(registry))
+    fake = Fake()
+    seen = []
+
+    def runner(command, **kwargs):
+        if command[:2] == ["rclone", "copyto"]:
+            seen.append(_lock_is_held(registry.directory / ".lock"))
+        return fake(command, **kwargs)
+    courses.add_source(registry, audio, "sample", origin="recording", runner=runner, lesson_date="2026-10-12", lesson_time="1204")
+    assert seen == [True]
+
+
+def test_read_journal_keeps_the_prefix_when_the_tail_is_cut_inside_a_hebrew_character(tmp_path):
+    path = tmp_path / "j.jsonl"
+    prefix = (json.dumps({"phase": "plan", "seq": 1, "note": "קריאות"}, ensure_ascii=False) + "\n").encode("utf-8")
+    fragment = '{"phase": "done", "note": "ק'.encode("utf-8")
+    path.write_bytes(prefix + fragment[:-1])  # the crash splits the two-byte letter
+    assert drive_layout.read_journal(path) == [{"phase": "plan", "seq": 1, "note": "קריאות"}]
+
+
+def test_resume_repairs_a_journal_torn_inside_a_hebrew_character_and_continues(tmp_path):
+    registry, drive = _two_unregistered(tmp_path)
+    drive.faults[("moveid", 2)] = "before"
+    with pytest.raises(subprocess.CalledProcessError):
+        courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
+    journal = _journal_of(registry)
+    drive.faults.clear()
+    fragment = '{"phase": "done", "note": "קריאות"}'.encode("utf-8")
+    with journal.open("ab") as handle:
+        handle.write(fragment[:fragment.index("ק".encode("utf-8")) + 1])  # cut one byte into the letter
+    courses.drive_reorg_resume(courses.Registry(registry.directory), journal, runner=drive)
+    data = journal.read_bytes()
+    assert data.endswith(b"\n")
+    for line in data.decode("utf-8").splitlines():
+        json.loads(line)  # every line is a complete record
+    assert [line["action"] for line in drive_layout.read_journal(journal) if line["phase"] == "repair"] == ["truncated"]
+    assert drive_layout.pending_ops(drive_layout.read_journal(journal)) == []
+    assert sorted(drive.files()) == ["קריאות/alpha/alpha.pdf", "קריאות/beta/beta.pdf"] and drive.violations == []
