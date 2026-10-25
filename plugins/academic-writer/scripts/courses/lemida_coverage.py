@@ -133,6 +133,9 @@ def check(registry: courses.Registry, day: str, run_id: str, only: Iterable[str]
         covered = {}
     for slug in slugs:
         course = registry.courses[slug]
+        absent = course.get("lemida_absent")
+        if isinstance(absent, str) and absent.strip() and not course.get("lemida_course_id"):
+            continue  # the student marked this course as having no Lemida page (the value says why)
         if not course.get("lemida_course_id"):
             gaps.append(f"{slug}: no lemida_course_id (a manual chore was added)")
             _lemida_id_chore(registry, slug)
