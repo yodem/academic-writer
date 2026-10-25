@@ -1002,16 +1002,6 @@ def _add_media_source(registry: Registry, file: Path, course_slug: str, *, title
     title = title or (existing or {}).get("title") or _default_title(file)
     recorded = Path(str((existing or {}).get("file") or ""))
     snapshot = recorded if existing and existing.get("file") and recorded.is_file() else _snapshot_source(registry, course_slug, file, sha8)
-    if not (existing and existing.get("drive")):
-        # the lesson key is the one ingest will give this lesson (date and time, a suffix only on a clash)
-        preview = {"name": snapshot.name, "file": str(snapshot), "title": title, "origin": origin, "origin_ref": origin_ref,
-                   "kind": "media", "lesson_key": f"{lesson_date}-{lesson_time or '0000'}"}
-        # the listing, the name choice and the copy hold the registry lock, as the document upload does (no nested locking)
-        with _locked_course(registry.directory, course_slug) as locked:
-            rel = _upload_to_drive(registry, locked.payload, snapshot, preview, runner)
-        _update_source(registry, course_slug, sha, sha8=sha8, title=title, file=str(snapshot.resolve()), origin=origin, origin_ref=origin_ref,
-                       kind="media", drive=True, drive_path=rel, notebook_source_id=None, lesson_key=None, trove=None, status="drive_done",
-                       added_at=datetime.now(timezone.utc).isoformat())
     # ingest the immutable snapshot; date and time were fixed above from the caller or the original
     result = ingest_recording(registry, snapshot, course_slug=course_slug, lesson_date=lesson_date, lesson_time=lesson_time,
                               runner=runner, transcript_file=transcript, **({"lesson_owner": lesson_owner} if lesson_owner else {}))
@@ -1022,6 +1012,16 @@ def _add_media_source(registry: Registry, file: Path, course_slug: str, *, title
             lesson = next((x for x in locked.payload.get("lessons", []) if x.get("audio_sha256") == sha), {})
         lesson_key = lesson_key or lesson.get("lesson_key")
         source_id = source_id or lesson.get("source_id")
+    if not (existing and existing.get("drive")):
+        # Uploaded only now, with the key ingest actually gave this lesson (a same-minute clash gets a suffix there),
+        # so the Drive lesson folder always matches the lesson.
+        preview = {"name": snapshot.name, "file": str(snapshot), "title": title, "origin": origin, "origin_ref": origin_ref,
+                   "kind": "media", "lesson_key": lesson_key or f"{lesson_date}-{lesson_time or '0000'}"}
+        # the listing, the name choice and the copy hold the registry lock, as the document upload does (no nested locking)
+        with _locked_course(registry.directory, course_slug) as locked:
+            rel = _upload_to_drive(registry, locked.payload, snapshot, preview, runner)
+        _update_source(registry, course_slug, sha, sha8=sha8, title=title, file=str(snapshot.resolve()), origin=origin, origin_ref=origin_ref,
+                       kind="media", drive=True, drive_path=rel, trove=None, added_at=datetime.now(timezone.utc).isoformat())
     _update_source(registry, course_slug, sha, kind="media", lesson_key=lesson_key, notebook_source_id=str(source_id) if source_id else None, status="queued")
     merged = dict(result)
     merged.update({"sha8": sha8, "title": title, "file": str(snapshot.resolve())})

@@ -254,8 +254,11 @@ def test_media_add_source_resumes_without_second_drive_copy(tmp_path, monkeypatc
     fake = Fake()
     with pytest.raises(courses.IngestError):
         courses.add_source(registry, audio, "sample", runner=fake)
-    assert reload(registry)["sources"][0]["drive"] is True
+    # a recording reaches Drive only after ingest has given it its lesson key; the local snapshot keeps it meanwhile
+    assert fake.of("rclone", "copyto") == []
+    assert list((registry.directory / "sources" / "sample").glob("*lesson.m4a"))
     monkeypatch.setattr(courses, "ingest_recording", fake_ingest_factory(registry))
+    courses.add_source(registry, audio, "sample", runner=fake)
     courses.add_source(registry, audio, "sample", runner=fake)
     assert len(fake.of("rclone", "copyto")) == 1 and reload(registry)["sources"][0]["notebook_source_id"] == "src-9"
 
@@ -474,3 +477,22 @@ def test_media_ingests_snapshot_and_original_time_survives_deletion(tmp_path):
     meta = json.loads((registry.directory / "lessons" / "sample" / "2026-10-12-1204" / "meta.json").read_text())
     assert Path(meta["audio_path"]) == snapshot.resolve() and snapshot.is_file() and snapshot.parent.name == "sample"
     assert meta["audio_path"] != str(original.resolve())
+
+
+def test_same_minute_recordings_land_in_their_own_lesson_folders(tmp_path, monkeypatch):
+    registry = make_registry(tmp_path, lessons=[{"lesson_key": "2026-10-12-1204", "date": "2026-10-12", "audio_sha256": "x", "status": "done"}])
+
+    def suffixed_ingest(reg, audio, **kwargs):
+        path = reg.directory / "sample.json"
+        data = json.loads(path.read_text())
+        data["lessons"].append({"lesson_key": "2026-10-12-1204-2", "date": "2026-10-12", "audio_sha256": courses._file_sha256(Path(audio)),
+                                "source_id": "src-9", "status": "queued"})
+        path.write_text(json.dumps(data))
+        return {"status": "ingested", "slug": "sample", "lesson_key": "2026-10-12-1204-2", "source_id": "src-9"}
+
+    monkeypatch.setattr(courses, "ingest_recording", suffixed_ingest)
+    audio = tmp_path / "second.m4a"
+    audio.write_bytes(b"b")
+    fake = Fake()
+    courses.add_source(registry, audio, "sample", origin="recording", runner=fake, lesson_date="2026-10-12", lesson_time="1204")
+    assert fake.of("rclone", "copyto")[0][3].startswith("gdrive:שיעורים/שיעור 02/")
