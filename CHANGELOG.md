@@ -4,6 +4,11 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.20.5] — 2026-10-25
+
+### Fixed
+- **`drive-reorg` plans the same way twice when a folder has same-named files.** Drive lists duplicate names in no fixed order, so the " (2)" suffix could land on a different file in the safety re-plan, and the reorg refused ("Drive changed while planning"). The listing is now sorted by path and file id first.
+
 ## [0.20.4] — 2026-10-25
 
 ### Fixed

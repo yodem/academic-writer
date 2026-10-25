@@ -310,6 +310,8 @@ def _listed_path(item: dict[str, Any]) -> str:
 
 def _entries(listing: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out = []
+    # Drive lists same-named files in no fixed order; sort by path, then id, so two listings give the same plan.
+    listing = sorted(listing, key=lambda item: (_listed_path(item) or "", str(item.get("ID") or "")))
     for index, item in enumerate(listing):
         path = _listed_path(item)
         if not path:

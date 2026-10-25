@@ -1117,3 +1117,14 @@ def test_moveid_is_server_side_so_the_file_keeps_its_id():
 ])
 def test_exam_and_assignment_files_go_under_tasks(name, folder):
     assert drive_layout.folder_for({}, {"file": f"/s/{name}"}) == folder
+
+
+def test_the_plan_does_not_depend_on_listing_order_with_duplicate_names():
+    listing = [
+        {"Path": "מטלה 1", "Name": "מטלה 1", "IsDir": True, "ID": "d1"},
+        {"Path": "מטלה 1/a.docx", "Name": "a.docx", "IsDir": False, "ID": "f2"},
+        {"Path": "מטלה 1/a.docx", "Name": "a.docx", "IsDir": False, "ID": "f1"},
+    ]
+    one = drive_layout.plan_reorg({"sources": []}, listing)
+    two = drive_layout.plan_reorg({"sources": []}, list(reversed(listing)))
+    assert one == two
