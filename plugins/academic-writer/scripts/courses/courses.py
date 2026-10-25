@@ -867,9 +867,10 @@ def _upload_to_drive(registry: Registry, course: dict[str, Any], file: Path, pre
         stat = _json_from_command(["rclone", "lsjson", f"{remote}:{rel}", "--stat", "--hash", "--drive-root-folder-id", str(folder)], runner)
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
         raise IngestError(f"Drive copy failed: {exc}") from exc
-    size = stat.get("Size") if isinstance(stat, dict) else None
-    if size != file.stat().st_size:
-        raise IngestError(f"Drive copy not confirmed: {rel} on Drive has size {size}, the local file {file.stat().st_size}; "
+    remote_md5 = ((stat.get("Hashes") or {}).get("md5") or (stat.get("Hashes") or {}).get("MD5")) if isinstance(stat, dict) else None
+    local_md5 = hashlib.md5(file.read_bytes()).hexdigest()
+    if not remote_md5 or remote_md5.lower() != local_md5:
+        raise IngestError(f"Drive copy not confirmed: the file at {rel} on Drive has MD5 {remote_md5}, the local file {local_md5}; "
                           "another file may hold that path")
     return rel
 

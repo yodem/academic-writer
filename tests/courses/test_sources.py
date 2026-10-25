@@ -48,10 +48,10 @@ class Fake:
         self.calls.append(command)
         if command[0] == "rclone" and command[1] == "copyto":
             self.copied = getattr(self, "copied", {})
-            self.copied[command[3]] = Path(command[2]).stat().st_size
+            self.copied[command[3]] = hashlib.md5(Path(command[2]).read_bytes()).hexdigest()
             out = ""
         elif command[0] == "rclone" and command[1] == "lsjson" and "--stat" in command:
-            out = json.dumps({"Path": command[2].split(":", 1)[1], "Size": getattr(self, "copied", {}).get(command[2])})
+            out = json.dumps({"Path": command[2].split(":", 1)[1], "Hashes": {"md5": getattr(self, "copied", {}).get(command[2])}})
         elif command[0] == "rclone" and command[1] == "lsjson":
             out = json.dumps([d if isinstance(d, dict) else {"Name": d.rsplit("/", 1)[-1], "Path": d} for d in self.drive])
         elif command[:3] == ["nlm", "source", "list"]:

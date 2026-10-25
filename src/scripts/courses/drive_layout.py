@@ -287,7 +287,7 @@ def plan_reorg(course: dict[str, Any], listing: list[dict[str, Any]]) -> list[di
     1. a file that must move: one move per step, `op` "move", by Drive id (a cycle of moves first moves one file to a
        temporary name, `final` False, then on to its target);
     2. a registry source already at its target but without the recorded drive_path: `op` "record" (no Drive move);
-    3. the folders emptied by merging a legacy root folder (`שיעור N` / `מטלה N`): `op` "rmdir", deepest first.
+    3. no deletions: folders emptied by merging a legacy root folder (`שיעור N` / `מטלה N`) are kept.
     A legacy root folder is never moved as a whole: its files go one by one into its kind folder, merged with
     collision-safe names, and each registry source inside it is planned like any other source.
     Nothing outside a legacy folder is moved except registry sources and unregistered root files. A registry
@@ -424,9 +424,8 @@ def plan_reorg(course: dict[str, Any], listing: list[dict[str, Any]]) -> list[di
         recorded = str(item["source"].get("drive_path") or "")
         if recorded != item["target"]:
             plan.append({"op": "record", "id": "", "old": item["target"], "new": item["target"], "sha256": item["sha"], "final": True})
-    emptied = [entry for entry in entries if entry["dir"] and (entry["path"] in legacy or legacy_root(entry["path"]) is not None)]
-    for entry in sorted(emptied, key=lambda e: e["path"].count("/"), reverse=True):
-        plan.append({"op": "rmdir", "id": entry["id"], "old": entry["path"], "new": "", "sha256": "", "final": False})
+    # Emptied legacy folders are kept: deleting a Drive folder can race with another client adding a file to it,
+    # and a folder delete takes its children with it. The student removes empty folders by hand.
     simulate(plan, entries)
     return plan
 

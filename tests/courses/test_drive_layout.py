@@ -47,7 +47,9 @@ def _apply_in_memory(paths, plan):
                 path = new + path[len(old):]
                 break
         out.append(dict(entry, Path=path, Name=path.rsplit("/", 1)[-1]))
-    return out
+    # Emptied legacy folders are kept on purpose (no deletes); a folder with no file under it does not count as left over.
+    files = [e["Path"] for e in out if not e["IsDir"]]
+    return [e for e in out if not e["IsDir"] or any(f.startswith(e["Path"] + "/") for f in files)]
 
 
 @pytest.mark.parametrize("fields, folder", [
@@ -173,8 +175,6 @@ def test_legacy_root_folders_are_emptied_file_by_file_then_removed():
     paths = [item("מטלה 1", True, "dir-1"), item("מטלה 1/notes.pdf", ident="id-n"), item("שיעור 2", True, "dir-2")]
     assert drive_layout.plan_reorg(dict(COURSE, sources=[]), paths) == [
         {"op": "move", "id": "id-n", "old": "מטלה 1/notes.pdf", "new": "מטלות/מטלה 1/notes.pdf", "sha256": "", "final": True},
-        {"op": "rmdir", "id": "dir-1", "old": "מטלה 1", "new": "", "sha256": "", "final": False},
-        {"op": "rmdir", "id": "dir-2", "old": "שיעור 2", "new": "", "sha256": "", "final": False},
     ]
 
 
@@ -183,7 +183,6 @@ def test_legacy_folder_whose_target_exists_merges_its_files_with_unique_names():
              item("מטלות/מטלה 1/notes.pdf")]
     assert drive_layout.plan_reorg(dict(COURSE, sources=[]), paths) == [
         {"op": "move", "id": "id-n", "old": "מטלה 1/notes.pdf", "new": "מטלות/מטלה 1/notes (2).pdf", "sha256": "", "final": True},
-        {"op": "rmdir", "id": "id-מטלה 1", "old": "מטלה 1", "new": "", "sha256": "", "final": False},
     ]
 
 
@@ -209,7 +208,7 @@ def test_nevua_fixture_leaves_no_file_at_root():
     paths = [item(n) for n in names] + [item("מטלה 1", True, "dir-1"), item("מטלה 1/ספר.pdf")]
     plan = drive_layout.plan_reorg(course, paths)
     assert len([s for s in plan if s["op"] == "move"]) == 13  # 12 root files and the file inside מטלה 1
-    assert [s["old"] for s in plan if s["op"] == "rmdir"] == ["מטלה 1"]
+    assert [s for s in plan if s["op"] == "rmdir"] == []  # emptied legacy folders are kept
     after = _apply_in_memory(paths, plan)
     root_left = [entry["Path"] for entry in after if "/" not in entry["Path"] and entry["Path"] not in TOP]
     assert root_left == []
@@ -521,7 +520,7 @@ def test_legacy_folder_with_a_subfolder_and_a_registered_source_inside(tmp_path)
     drive = FakeDrive([("מטלה 1", True), ("מטלה 1/sub", True), ("מטלה 1/sub/x.pdf", False), ("מטלה 1/essay.pdf", False)])
     courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
     assert drive.violations == []
-    assert drive.paths() == ["מטלות", "מטלות/מטלה 1", "מטלות/מטלה 1/Essay.pdf", "מטלות/מטלה 1/sub", "מטלות/מטלה 1/sub/x.pdf"]
+    assert drive.paths() == ["מטלה 1", "מטלה 1/sub", "מטלות", "מטלות/מטלה 1", "מטלות/מטלה 1/Essay.pdf", "מטלות/מטלה 1/sub", "מטלות/מטלה 1/sub/x.pdf"]  # emptied legacy folders kept
     recorded = json.loads((registry.directory / "sample.json").read_text(encoding="utf-8"))["sources"][0]["drive_path"]
     assert recorded == "מטלות/מטלה 1/Essay.pdf"
 
@@ -531,7 +530,7 @@ def test_legacy_folder_merges_into_an_existing_target_with_unique_names(tmp_path
     drive = FakeDrive([("מטלה 1", True), ("מטלה 1/notes.pdf", False), ("מטלות", True), ("מטלות/מטלה 1", True), ("מטלות/מטלה 1/notes.pdf", False)])
     courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
     assert drive.violations == []
-    assert sorted(drive.paths()) == ["מטלות", "מטלות/מטלה 1", "מטלות/מטלה 1/notes (2).pdf", "מטלות/מטלה 1/notes.pdf"]
+    assert sorted(drive.paths()) == ["מטלה 1", "מטלות", "מטלות/מטלה 1", "מטלות/מטלה 1/notes (2).pdf", "מטלות/מטלה 1/notes.pdf"]  # emptied legacy folder kept
 
 
 def test_listing_that_changes_before_the_moves_aborts_without_moving(tmp_path):
@@ -967,7 +966,7 @@ def test_add_source_refuses_an_upload_drive_does_not_confirm(tmp_path):
         def __call__(self, command, **kwargs):
             if command[:2] == ["rclone", "lsjson"] and "--stat" in command:
                 self.calls.append(command)
-                return subprocess.CompletedProcess(command, 0, json.dumps({"Size": 999999}), "")
+                return subprocess.CompletedProcess(command, 0, json.dumps({"Size": 14, "Hashes": {"md5": "0" * 32}}), "")
             return super().__call__(command, **kwargs)
 
     with pytest.raises(courses.IngestError, match="not confirmed"):
