@@ -1108,3 +1108,12 @@ def test_moveid_is_server_side_so_the_file_keeps_its_id():
         pass
     moveid = [c for c in calls if c[:3] == ["rclone", "backend", "moveid"]]
     assert moveid and "--drive-server-side-across-configs" in moveid[0]
+
+
+@pytest.mark.parametrize("name, folder", [
+    ("מבחן בית - יותם פרום.docx", "מטלות/מבחן בית - יותם פרום"),
+    ("perception.assign.2025.pdf", "מטלות/perception.assign.2025"),
+    ("סיכום הספר.docx", "קריאות/סיכום הספר"),
+])
+def test_exam_and_assignment_files_go_under_tasks(name, folder):
+    assert drive_layout.folder_for({}, {"file": f"/s/{name}"}) == folder

@@ -4,6 +4,11 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.20.4] — 2026-10-25
+
+### Fixed
+- **Exams and assignment files go under מטלות.** A file named as an exam, take-home, seminar paper or assignment ("מבחן בית", "perception.assign.2025") with no task number is filed in `מטלות/<its name>/` instead of `קריאות/`.
+
 ## [0.20.3] — 2026-10-25
 
 ### Fixed
