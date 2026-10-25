@@ -584,7 +584,9 @@ def move_file(remote: str, root_id: str, file_id: str, new: str, runner: Callabl
     if _destination_taken(remote, root_id, new, runner):
         raise ReorgError(f"{new!r} is occupied in Drive, so {file_id} was not moved there")
     # The destination must carry the remote prefix: a bare path is a LOCAL rclone path, and moveid would pull the file off Drive.
-    runner(["rclone", "backend", "moveid", f"{remote}:", str(file_id), f"{remote}:{new}", "--ignore-existing", "--drive-root-folder-id", str(root_id)],
+    # --drive-server-side-across-configs: without it rclone sees the --drive-root-folder-id destination as another remote and
+    # copies then deletes (a new file id, the original in the trash); with it the move is server-side and the id is kept.
+    runner(["rclone", "backend", "moveid", f"{remote}:", str(file_id), f"{remote}:{new}", "--ignore-existing", "--drive-server-side-across-configs", "--drive-root-folder-id", str(root_id)],
            check=True, text=True, capture_output=True)
     result = runner(["rclone", "lsjson", f"{remote}:{new}", "--stat", "--drive-root-folder-id", str(root_id)], check=False, text=True, capture_output=True)
     if result.returncode != 0:

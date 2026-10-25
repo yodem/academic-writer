@@ -289,7 +289,7 @@ def test_apply_reorg_moves_by_id_and_journals_intent_before_done(tmp_path):
     assert calls == [
         ["rclone", "mkdir", "gdrive:00 כללי", "--drive-root-folder-id", "folder-1"],
         ["rclone", "lsjson", "gdrive:00 כללי/a.pdf", "--stat", "--drive-root-folder-id", "folder-1"],
-        ["rclone", "backend", "moveid", "gdrive:", "id-0", "gdrive:00 כללי/a.pdf", "--ignore-existing", "--drive-root-folder-id", "folder-1"],
+        ["rclone", "backend", "moveid", "gdrive:", "id-0", "gdrive:00 כללי/a.pdf", "--ignore-existing", "--drive-server-side-across-configs", "--drive-root-folder-id", "folder-1"],
         ["rclone", "lsjson", "gdrive:00 כללי/a.pdf", "--stat", "--drive-root-folder-id", "folder-1"],
     ]
     lines = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
@@ -459,7 +459,7 @@ def test_drive_reorg_apply_moves_by_id_renames_nlm_and_records_drive_path(tmp_pa
     drive = FakeDrive([("11111111-syllabus.pdf", False)])
     courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
     ident = drive.id_at("00 כללי/Syllabus.pdf")
-    assert _moves(drive) == [["rclone", "backend", "moveid", "gdrive:", ident, "gdrive:00 כללי/Syllabus.pdf", "--ignore-existing", "--drive-root-folder-id", "folder-1"]]
+    assert _moves(drive) == [["rclone", "backend", "moveid", "gdrive:", ident, "gdrive:00 כללי/Syllabus.pdf", "--ignore-existing", "--drive-server-side-across-configs", "--drive-root-folder-id", "folder-1"]]
     assert ["nlm", "source", "rename", "nlm-1", "Syllabus", "--notebook", "nb-1"] in drive.nlm
     assert json.loads((registry.directory / "sample.json").read_text(encoding="utf-8"))["sources"][0]["drive_path"] == "00 כללי/Syllabus.pdf"
     assert len(list((registry.directory / "logs").glob("drive-reorg-*-sample.jsonl"))) == 1
@@ -1093,3 +1093,18 @@ def test_a_transcript_registered_as_media_is_still_named_a_transcript():
     source = {"file": "/s/f21f9f8b-kane__zoom-3263924__transcript-2026-10-11.txt", "title": "kane__zoom-3263924__transcript-2026-10-11",
               "kind": "media", "lesson_key": "2026-10-11-1405"}
     assert drive_layout.drive_name(source, course) == "תמלול שיעור 01 · 11.10.2026"
+
+
+
+def test_moveid_is_server_side_so_the_file_keeps_its_id():
+    calls = []
+    def runner(argv, **kw):
+        calls.append(argv)
+        out = '{"ID": "FILEID"}' if "--stat" in argv and argv[2].endswith("a.pdf") else ""
+        return subprocess.CompletedProcess(argv, 3 if "--stat" in argv and len(calls) == 2 else 0, out, "")
+    try:
+        drive_layout.move_file("gdrive-biu", "ROOT", "FILEID", "קריאות/A/a.pdf", runner=runner)
+    except Exception:
+        pass
+    moveid = [c for c in calls if c[:3] == ["rclone", "backend", "moveid"]]
+    assert moveid and "--drive-server-side-across-configs" in moveid[0]
