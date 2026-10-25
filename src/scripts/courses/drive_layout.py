@@ -482,7 +482,8 @@ def move_file(remote: str, root_id: str, file_id: str, new: str, runner: Callabl
     parent = new.rpartition("/")[0]
     if parent:
         runner(["rclone", "mkdir", f"{remote}:{parent}", "--drive-root-folder-id", str(root_id)], check=True, text=True, capture_output=True)
-    runner(["rclone", "backend", "moveid", f"{remote}:", str(file_id), new, "--drive-root-folder-id", str(root_id)],
+    # The destination must carry the remote prefix: a bare path is a LOCAL rclone path, and moveid would pull the file off Drive.
+    runner(["rclone", "backend", "moveid", f"{remote}:", str(file_id), f"{remote}:{new}", "--drive-root-folder-id", str(root_id)],
            check=True, text=True, capture_output=True)
 
 

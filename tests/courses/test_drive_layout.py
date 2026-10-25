@@ -281,7 +281,7 @@ def test_apply_reorg_moves_by_id_and_journals_intent_before_done(tmp_path):
     drive_layout.apply_reorg(plan, "gdrive", "folder-1", log, runner=runner, slug="sample")
     assert calls == [
         ["rclone", "mkdir", "gdrive:00 כללי", "--drive-root-folder-id", "folder-1"],
-        ["rclone", "backend", "moveid", "gdrive:", "id-0", "00 כללי/a.pdf", "--drive-root-folder-id", "folder-1"],
+        ["rclone", "backend", "moveid", "gdrive:", "id-0", "gdrive:00 כללי/a.pdf", "--drive-root-folder-id", "folder-1"],
     ]
     lines = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
     assert [(line["phase"], line["kind"]) for line in lines] == [("intent", "drive_move"), ("done", "drive_move")]
@@ -383,6 +383,9 @@ class FakeDrive:
             self._probe()
             self._fault("moveid", "before")
             ident, dest = command[4], command[5]
+            if ":" not in dest:
+                self._fail(command, f"destination {dest!r} has no remote prefix: rclone would treat it as a local path")
+            dest = dest.split(":", 1)[1]
             if ident not in self.items:
                 self._fail(command, "no such id")
             parent = dest.rpartition("/")[0]
@@ -425,7 +428,7 @@ def test_drive_reorg_apply_moves_by_id_renames_nlm_and_records_drive_path(tmp_pa
     drive = FakeDrive([("11111111-syllabus.pdf", False)])
     courses.drive_reorg(registry, ["sample"], apply=True, runner=drive)
     ident = drive.id_at("00 כללי/Syllabus.pdf")
-    assert _moves(drive) == [["rclone", "backend", "moveid", "gdrive:", ident, "00 כללי/Syllabus.pdf", "--drive-root-folder-id", "folder-1"]]
+    assert _moves(drive) == [["rclone", "backend", "moveid", "gdrive:", ident, "gdrive:00 כללי/Syllabus.pdf", "--drive-root-folder-id", "folder-1"]]
     assert ["nlm", "source", "rename", "nlm-1", "Syllabus", "--notebook", "nb-1"] in drive.nlm
     assert json.loads((registry.directory / "sample.json").read_text(encoding="utf-8"))["sources"][0]["drive_path"] == "00 כללי/Syllabus.pdf"
     assert len(list((registry.directory / "logs").glob("drive-reorg-*-sample.jsonl"))) == 1
@@ -666,3 +669,11 @@ def test_add_source_collision_in_drive_folder_gets_suffix(tmp_path):
 def test_slides_go_under_lessons():
     assert drive_layout.folder_for({}, {"title": "Cohen", "file": "/x/3271974 - Cohen.pptx"}) == "שיעורים/שקפים"
     assert drive_layout.folder_for({}, {"title": "שיעור 3", "file": "/x/s.pptx"}) == "שיעורים/שיעור 03"
+
+
+def test_moveid_destination_stays_on_the_drive_remote():
+    calls = []
+    drive_layout.move_file("gdrive-biu", "ROOT", "FILEID", "קריאות/A/a.pdf", runner=lambda argv, **kw: calls.append(argv))
+    moveid = [c for c in calls if c[:3] == ["rclone", "backend", "moveid"]][0]
+    assert moveid[5] == "gdrive-biu:קריאות/A/a.pdf"
+    assert all(not a.startswith("קריאות") for a in moveid)

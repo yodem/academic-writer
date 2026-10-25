@@ -95,17 +95,17 @@ Two jobs that build on the registry. Full procedure in `references/library-refs.
 
 Moodle's REST API answers every call with a Radware Bot Manager captcha page, so the nightly watch drives the user's already signed-in Chrome with `claude-in-chrome`. Never ask for or store the user's password. Full procedure: `references/lemida-watch.md`. The run is complete only when its coverage file says so. Do all of this, then write the coverage file; `courses.py lemida-coverage-check` (step `lemida-coverage` of the nightly job) fails the run for any gap.
 
-- **Notifications, all of them.** Open `https://lemida.biu.ac.il/message/output/popup/notifications.php` in the signed-in tab and scroll until every notification in the window (the last 14 days) is loaded. Open each one (a post, an assignment, a reminder), read it, route it, and record its id. A notification you did not open is a gap.
+- **Notifications, all of them.** Open `https://lemida.biu.ac.il/message/output/popup/notifications.php` in the signed-in tab and scroll until every notification in the window (the last 14 days) is loaded. Open each one (a post, an assignment, a reminder), read it, route it, and record its id. A notification you did not open is a gap. Set `notifications.complete` to true only once you have scrolled to the end of the list and it stopped growing.
 - **Every new assignment.** Each `mod/assign` page the watch finds new (the diff's `new_assigns`, or one a notification names) is opened and gets its `assignment` chore, with its core texts.
 - **Coverage file.** Write `REG/logs/lemida-coverage-<YYYY-MM-DD>.json` (REG is the term directory; `logs/` exists after the first run) with exactly this shape:
 
   ```json
-  {"date": "YYYY-MM-DD",
+  {"date": "YYYY-MM-DD", "run_id": "<the value of --run-id in your prompt>",
    "courses": {"<slug>": {"visited": true, "new_assign_modules": [101], "assign_handled": [101]}},
-   "notifications": {"page": "https://lemida.biu.ac.il/message/output/popup/notifications.php", "listed": [1, 2], "opened": [1, 2]}}
+   "notifications": {"page": "https://lemida.biu.ac.il/message/output/popup/notifications.php", "complete": true, "listed": [1, 2], "opened": [1, 2]}}
   ```
 
-  `visited` is true only after the course page was walked (step 1 below); `new_assign_modules` are the assign ids that were new that night, `assign_handled` the ones whose chore was written. `listed` is every notification id in the window, `opened` the ids you opened. Write the file even when the run hit an error, so the gap is named, and say in the run summary which part failed. If Chrome is closed the nightly job does not start this watch at all: the check then reports the missing file, which is the failure the chore already names.
+  `run_id` is the `--run-id` your prompt names, copied verbatim: the nightly job passes it to the watch and to `lemida-coverage-check --run-id`, so a report that carries another run's id (a leftover from an earlier night) is a stale gap. `visited` is true only after the course page was walked (step 1 below); `new_assign_modules` are the assign ids that were new that night, `assign_handled` the ones whose chore was written. `listed` is every notification id in the window, `opened` the ids you opened, and `complete` is true only when the notifications list was read to its end. Every key above must be present with these types; a missing or malformed section is a gap, not a pass. When the job restricts the scan (`COURSES_ONLY`), the check covers only the named courses, so write entries for them. Write the file even when the run hit an error, so the gap is named, and say in the run summary which part failed. If Chrome is closed the nightly job does not start this watch at all: the check then reports the missing file, which is the failure the chore already names.
 
 Then, per course with a `lemida_course_id` (every active course needs one; a course without one gets a `manual` chore `lemida-id-<slug>` from the coverage check):
 
