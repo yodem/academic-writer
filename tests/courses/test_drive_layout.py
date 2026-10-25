@@ -1054,3 +1054,35 @@ def test_a_file_in_a_legacy_folder_is_matched_to_its_source_by_sha256_not_by_nam
     matched = [s for s in plan if s.get("sha256") == "aa" * 32]
     assert matched and all(s["id"] == "f1" for s in matched)
     assert not [s for s in plan if s.get("id") == "f2" and s.get("sha256")]
+
+
+def test_a_wispr_transcript_is_named_by_its_lesson_and_date():
+    course = {"lessons": [{"lesson_key": "2026-10-16-1201"}, {"lesson_key": "2026-10-23-1201"}], "sources": []}
+    source = {"file": "/s/1c9dd544-wispr-2026-10-23-1201-24673bab.txt", "title": "wispr-2026-10-23-1201-24673bab",
+              "lesson_key": "2026-10-23-1201"}
+    assert drive_layout.drive_path_for(course, source, {}) == "שיעורים/שיעור 02/תמלול שיעור 02 · 23.10.2026.txt"
+
+
+def test_a_transcript_without_a_lesson_key_goes_to_its_lesson_by_date_or_the_transcripts_folder():
+    course = {"lessons": [{"lesson_key": "2026-10-16-1201"}], "sources": []}
+    dated = {"file": "/s/wispr-2026-10-16-1201-d5a4c087.txt", "title": "wispr-2026-10-16-1201-d5a4c087"}
+    assert drive_layout.folder_for(course, dated) == "שיעורים/שיעור 01"
+    undated = {"file": "/s/zoom-transcript.txt", "title": "zoom-transcript"}
+    assert drive_layout.folder_for(course, undated) == "שיעורים/תמלולים"
+
+
+def test_a_generic_title_gives_way_to_the_fuller_file_name():
+    notes = {"file": "/s/121aac44-תפיסות יסוד בספרות הנבואה שיעור 1 תשפז.docx", "title": "שיעור 1"}
+    assert drive_layout.drive_name(notes) == "תפיסות יסוד בספרות הנבואה שיעור 1 תשפז"
+    syllabus = {"file": "/s/b34cc5eb-סילבוס פילוסופיה של הרגשות בעת החדשה.docx", "title": "סילבוס"}
+    assert drive_layout.drive_name(syllabus) == "סילבוס פילוסופיה של הרגשות בעת החדשה"
+    plain = {"file": "/s/414536ae-01 - Reading One.pdf", "title": "Reading One"}
+    assert drive_layout.drive_name(plain) == "Reading One"
+
+
+def test_a_titled_recording_keeps_its_title_and_a_machine_named_one_gets_its_lesson():
+    course = {"lessons": [{"lesson_key": "2026-10-12-1204"}], "sources": []}
+    titled = {"file": "/s/lesson.m4a", "title": "Lesson 2", "kind": "media", "lesson_key": "2026-10-12-1204"}
+    assert drive_layout.drive_name(titled, course) == "Lesson 2"
+    machine = {"file": "/s/ed73a9d2-20261012 120422.m4a", "title": "20261012 120422", "kind": "media", "lesson_key": "2026-10-12-1204"}
+    assert drive_layout.drive_name(machine, course) == "הקלטת שיעור 01 · 12.10.2026"

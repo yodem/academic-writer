@@ -113,10 +113,55 @@ def display_title(source: dict[str, Any]) -> str:
     return naming.display_name(_meta(source))
 
 
-def drive_name(source: dict[str, Any]) -> str:
-    """The file and folder name: `Author, Short Title (Year)` for a structured citation, else the display title."""
+TRANSCRIPT_EXTS = {".txt", ".md", ".vtt", ".srt"}
+TRANSCRIPT_RE = re.compile(r"^(wispr|zoom)[-_ ]|__zoom|transcript|תמלול", re.IGNORECASE)
+NAME_DATE_RE = re.compile(r"(20\d{2})-?(\d{2})-?(\d{2})")
+
+
+GENERIC_TITLE_RE = re.compile(r"^(שיעור\s*\d+|סילבוס|syllabus|מבוא|פתיחה|lesson\s*\d+)$", re.IGNORECASE)
+MACHINE_NAME_RE = re.compile(r"^[\d\W_]+$")
+
+
+def _lesson_title(course: dict[str, Any] | None, source: dict[str, Any]) -> str:
+    """`תמלול שיעור NN · DD.MM.YYYY` for a lesson transcript, `הקלטת שיעור NN · …` for a recording, when its own name is
+    machine-made (wispr-…, zoom-…, a bare date and time). A recording or transcript with a real title keeps it."""
+    file_name = _file_name(source)
+    ext = Path(file_name).suffix.lower()
+    label = _label(source)
+    media = source.get("kind") == "media" or ext in MEDIA_EXTS
+    machine = bool(TRANSCRIPT_RE.search(_stem(file_name) + " " + label)) or bool(MACHINE_NAME_RE.match(label))
+    if not machine or not (media or ext in TRANSCRIPT_EXTS):
+        return ""
+    key = str(source.get("lesson_key") or "")
+    number = None
+    if course is not None:
+        if key:
+            number = lesson_number(course, key)
+        else:
+            folder = _lesson_by_date(course, file_name) or ""
+            found = re.search(r"שיעור (\d+)$", folder)
+            number = int(found.group(1)) if found else None
+    date = NAME_DATE_RE.search(key) or NAME_DATE_RE.search(file_name)
+    word = "הקלטת" if media else "תמלול"
+    title = f"{word} שיעור {number:02d}" if number else f"{word} שיעור"
+    return f"{title} · {date.group(3)}.{date.group(2)}.{date.group(1)}" if date else title
+
+
+def drive_name(source: dict[str, Any], course: dict[str, Any] | None = None) -> str:
+    """The file and folder name: `Author, Short Title (Year)` for a structured citation; for a lesson transcript or
+    recording, its lesson and date; else the display title, or the fuller original file name when the title is only a
+    generic part of it (a lecturer's "שיעור 1" in "תפיסות יסוד בספרות הנבואה שיעור 1")."""
     meta = _meta(source)
-    return _short_name(meta) or naming.display_name(meta)
+    short = _short_name(meta)
+    if short or meta.get("raw"):
+        return short or naming.display_name(meta)
+    lesson = _lesson_title(course, source)
+    if lesson:
+        return lesson
+    label, stem = _label(source), _stem(_file_name(source))
+    if GENERIC_TITLE_RE.match(label) and len(stem) > len(label) and label.casefold() in stem.casefold():
+        return stem
+    return naming.display_name(meta)
 
 
 def lesson_keys(course: dict[str, Any]) -> set[str]:
@@ -188,12 +233,15 @@ def folder_for(course: dict[str, Any], source: dict[str, Any]) -> str:
     if ext in SLIDE_EXTS:
         match = LESSON_RE.search(label)
         return _lesson_folder(int(match.group(1) or match.group(2))) if match else SLIDES_DIR
+    if ext in TRANSCRIPT_EXTS and _lesson_title(None, source):
+        # a machine-named lesson transcript (wispr-…, zoom-…): its lesson by date, else the transcripts folder
+        return _lesson_by_date(course, _file_name(source)) or f"{LESSONS_DIR}/תמלולים"
     for task_id in source.get("tasks") or []:
         number = task_number(course, str(task_id))
         if number is not None:
             return _task_folder(number)
     if source.get("origin") == "library" or source.get("ref") or source.get("kind") == "reading":
-        return f"{READINGS_DIR}/{_segment(drive_name(source))}"
+        return f"{READINGS_DIR}/{_segment(drive_name(source, course))}"
     match = LESSON_RE.search(label)
     if match:
         return _lesson_folder(int(match.group(1) or match.group(2)))
@@ -203,7 +251,7 @@ def folder_for(course: dict[str, Any], source: dict[str, Any]) -> str:
     if SYLLABUS_RE.search(label):
         return GENERAL_DIR
     if ext in DOC_EXTS:
-        return f"{READINGS_DIR}/{_segment(drive_name(source))}"
+        return f"{READINGS_DIR}/{_segment(drive_name(source, course))}"
     return UNSORTED_DIR
 
 
@@ -215,7 +263,7 @@ def drive_path_for(course: dict[str, Any], source: dict[str, Any], taken: dict[s
     folder = folder_for(course, source)
     names = taken.setdefault(folder, set())
     ext = Path(name or _file_name(source)).suffix
-    file_name = naming.drive_filename({"stem": drive_name(source)}, ext, names)
+    file_name = naming.drive_filename({"stem": drive_name(source, course)}, ext, names)
     names.add(file_name)
     return f"{folder}/{file_name}"
 
@@ -391,7 +439,7 @@ def plan_reorg(course: dict[str, Any], listing: list[dict[str, Any]]) -> list[di
             continue
         folder, _, current = item["path"].rpartition("/")
         ext = Path(current).suffix
-        ideal = naming.drive_filename({"stem": drive_name(item["source"])}, ext, set())
+        ideal = naming.drive_filename({"stem": drive_name(item["source"], course)}, ext, set())
         base = ideal[: len(ideal) - len(ext)] if ext else ideal
         item["folder"] = folder_for(course, item["source"])
         item["ext"] = ext
@@ -412,7 +460,7 @@ def plan_reorg(course: dict[str, Any], listing: list[dict[str, Any]]) -> list[di
             continue
         names = reserved.setdefault(item["folder"], set())
         if item["source"] is not None:
-            name = naming.drive_filename({"stem": drive_name(item["source"])}, item["ext"], names)
+            name = naming.drive_filename({"stem": drive_name(item["source"], course)}, item["ext"], names)
         else:
             name = _unique(item["name"], names)
         names.add(name)
