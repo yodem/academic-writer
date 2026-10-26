@@ -17,6 +17,7 @@ All notable changes to the academic-writer plugin are documented here.
 - Validator reports for double commas, double periods, mirrored parentheses and gershayim used as quotation marks; double spaces and a no-break space before a colon are advisory.
 
 ### Fixed
+- **Term and style-word corrections no longer corrupt Hebrew words or quoted sources.** `must-catch.py` matched a variant or banned word as a raw substring and applied it automatically, so it rewrote a stem inside a longer word (it would have cut `ממש` out of `וממשיך`) and changed the spelling of cited titles. It now matches whole words, with a Hebrew prefix of one to three letters allowed, and leaves quotations, block quotes, footnote definitions, the bibliography, tables, code and URLs alone. A match that relies on a prefix (`מממש` may be מ+ממש or the verb) is shown to the author instead of applied, and never counts toward a cap. Caps reset at every heading.
 - **`/revise` reads footnotes, formatting changes and paragraph context.** It used to read only the body and returned context-free fragments.
 - **Parentheses between two citations are no longer swapped.** `fix_rtl_punctuation` matched the gap between two correct parentheses.
 - **Convention suggestions never auto-apply,** even when a risk verdict comes back low.
