@@ -1,7 +1,7 @@
 # אמצעי קישור — Hebrew Linking Words Reference
 
 > Used by the Section Writer (Skill 4: Academic Language & Linking Words).
-> Every paragraph of 3+ sentences must contain at least 2 linking words, varied and contextually correct.
+> Each connective states a real logical relation between two claims; there is no minimum count per paragraph. Vague links (וכך, והוא, ממנו as a vague back-reference) are replaced by the explicit relation the argument needs.
 
 ---
 
@@ -353,7 +353,9 @@
 
 ## Usage Guidelines for Section Writers
 
-1. **Minimum density:** Every paragraph of 3+ sentences must contain **at least 2** linking words.
+1. **Precision, not a quota:** There is no minimum number of linking words per paragraph. Use a connective only where two claims stand in a real logical relation (reason, consequence, contrast, addition, example, concession), and pick the word that states that relation. A sentence with no connective is better than one with a connective that asserts a relation the argument does not have.
+   - **Flag vague links** and replace each with the explicit relation: `וכך` joining two statements that are not cause and effect (→ `לכן` or `מכאן ש` if it is a consequence, otherwise no connective); `והוא` opening a new claim about a different subject (→ `וזהו`, or start a new sentence); `ממנו` as a vague back-reference (→ `מכאן`, or name what it refers to).
+   - Do not add a connective to reach a count, and do not treat the absence of one as a defect.
 2. **Variety:** Do not repeat the same linking word within a paragraph. Vary across the category.
 3. **Context match:** Choose the linking word that matches the logical relationship, not just any word from the list.
 4. **Register:** Prefer formal/academic linking words (אולם, לפיכך, יתרה מכך) over colloquial ones (אבל, בגלל).

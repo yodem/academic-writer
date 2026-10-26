@@ -70,5 +70,12 @@ recall matters as much as the argument's quality.
   no venue was specified so only general norms were applied.
 - **With a venue profile:** apply all six, then add anything the profile's own
   "what they reject" list names. Where the profile is stricter, follow the profile.
+- **Bundled profile:** the plugin ships one opt-in profile, `bar-ilan-seminar-apa-he` (a Hebrew seminar
+  paper with author-year citations in the text, short footnotes and an APA 7 reference list; file
+  `venues/bar-ilan-seminar-apa-he.md` in the plugin). `--venue bar-ilan-seminar-apa-he` loads it. A
+  profile with the same slug in `.academic-helper/venues/` wins, so the researcher can copy and adapt
+  it. It is a citation and layout house style, not a journal, and every item in it is a suggestion.
+  Without `--venue` the author's own footnote style is left alone. Wording and punctuation
+  suggestions for Hebrew are in `skills/write/references/hebrew-editorial-conventions.md`.
 - **Never** invent a venue convention. If a check depends on knowing the venue's
   conventions and you do not, say so rather than guessing.

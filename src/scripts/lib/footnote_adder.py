@@ -27,22 +27,126 @@ import tempfile
 import shutil
 import os
 import re
+import unicodedata
+
+
+def first_strong_direction(text):
+    """Direction of the first strong character of ``text``.
+
+    Returns ``"ltr"`` when the first strong character is Latin (or any other
+    left-to-right letter), ``"rtl"`` when it is Hebrew/Arabic, and ``None``
+    when the text has no strong character (digits, punctuation, spaces only).
+    Paragraph direction of notes and bibliography entries follows this
+    character, not the majority script: a Hebrew-leading note with a long
+    English title stays RTL.
+    """
+    for ch in text or "":
+        bidi_class = unicodedata.bidirectional(ch)
+        if bidi_class == "L":
+            return "ltr"
+        if bidi_class in ("R", "AL"):
+            return "rtl"
+    return None
+
+
+def latin_dominant(text):
+    """True when ``text`` has more Latin-script letters than Hebrew/Arabic
+    letters (English bibliography entries, English footnotes, URL lines).
+    Used to pick the Latin font for a whole paragraph; Latin tokens inside a
+    Hebrew-dominant paragraph keep the Hebrew font on purpose.
+    """
+    latin = rtl = 0
+    for ch in text or "":
+        if not ch.isalpha():
+            continue
+        bidi_class = unicodedata.bidirectional(ch)
+        if bidi_class == "L":
+            latin += 1
+        elif bidi_class in ("R", "AL"):
+            rtl += 1
+    return latin > rtl
+
+
+_RTL_LETTERS = "\u0590-\u05ff\ufb1d-\ufb4f\u0600-\u06ff"
+_RTL_SEGMENT = re.compile(
+    "[%s]+(?:[ \u00a0\"'\u2019][%s]+)*" % (_RTL_LETTERS, _RTL_LETTERS)
+)
+
+
+def split_rtl_segments(text):
+    """Split ``text`` into ``[(chunk, is_rtl)]``: Hebrew/Arabic stretches
+    (a run of letters, joined across single spaces or quote marks) versus
+    everything else. Used in LTR paragraphs, where Word chooses the font slot
+    by the run's ``w:rtl`` flag and not by the character, so a Hebrew word
+    only gets the Hebrew font when it sits in its own ``w:rtl`` run.
+    """
+    chunks = []
+    cursor = 0
+    for match in _RTL_SEGMENT.finditer(text or ""):
+        if match.start() > cursor:
+            chunks.append((text[cursor:match.start()], False))
+        chunks.append((match.group(0), True))
+        cursor = match.end()
+    if cursor < len(text or ""):
+        chunks.append((text[cursor:], False))
+    return chunks
+
+
+def paragraph_fonts(text, font_name, latin_font, rtl=False):
+    """(ascii/hAnsi font, complex-script font) for a paragraph of ``text``.
+
+    The Latin font is used only for a Latin-dominant LTR paragraph (English
+    bibliography entry, English footnote, URL line); the Hebrew words inside
+    it must then be split into their own RTL runs (``split_rtl_segments``) to
+    keep ``font_name``. An RTL paragraph, Hebrew-leading with whatever
+    English in it, keeps ``font_name`` for every character: Word picks the
+    font slot of an RTL run from its complex-script setting, so a Latin token
+    inside a Hebrew sentence never switches font. ``latin_font`` falsy
+    switches the behaviour off.
+    """
+    if latin_font and not rtl and latin_dominant(text):
+        return latin_font, font_name
+    return font_name, font_name
 
 
 class FootnoteAdder:
     """Helper class to add real Word footnotes to documents."""
 
-    def __init__(self, is_rtl: bool = False):
+    def __init__(self, is_rtl: bool = False, font_name=None, latin_font=None,
+                 auto_direction: bool = True):
         """Initialize FootnoteAdder.
 
         Args:
-            is_rtl: When True, footnote paragraphs and text runs get RTL
-                    direction elements (w:bidi, w:jc right, w:rtl). Set this
-                    to True for Hebrew/Arabic documents.
+            is_rtl: Document direction. When True, footnote paragraphs and
+                    text runs get RTL direction elements (w:bidi, w:rtl).
+                    Set this to True for Hebrew/Arabic documents.
+            font_name: Font for the footnote text (all slots). None leaves
+                    the font to the document defaults.
+            latin_font: Font for Latin-dominant footnotes (e.g. Times New
+                    Roman); None keeps ``font_name`` for every footnote.
+            auto_direction: When True (default) each footnote paragraph
+                    follows its first strong character: Latin-leading is an
+                    LTR left-aligned paragraph (w:bidi val=0, w:jc left,
+                    runs without w:rtl), Hebrew-leading is RTL. A note with
+                    no strong character follows ``is_rtl``. False gives
+                    every note the document direction.
         """
         self.footnote_id = 0
         self.footnotes_to_add = []
         self.is_rtl = is_rtl
+        self.font_name = font_name
+        self.latin_font = latin_font
+        self.auto_direction = auto_direction
+
+    def _note_is_rtl(self, text):
+        """Effective direction of one footnote paragraph."""
+        if self.auto_direction:
+            strong = first_strong_direction(text)
+            if strong == "ltr":
+                return False
+            if strong == "rtl":
+                return True
+        return self.is_rtl
 
     def add_footnote(self, paragraph, text, footnote_text):
         """Add a footnote reference to a paragraph.
@@ -109,12 +213,19 @@ class FootnoteAdder:
                 pStyle = etree.SubElement(pPr, "{%s}pStyle" % w_ns)
                 pStyle.set("{%s}val" % w_ns, "FootnoteText")
 
-                # RTL paragraph direction for Hebrew footnotes
-                if self.is_rtl:
+                note_rtl = self._note_is_rtl(fn_text)
+                if note_rtl:
                     bidi_el = etree.SubElement(pPr, "{%s}bidi" % w_ns)
                     bidi_el.set("{%s}val" % w_ns, "1")
                     # No w:jc: in a <w:bidi/> paragraph Word renders jc="right" at the
                     # LEFT margin; the bidi default (start) is the right margin.
+                else:
+                    # LTR note (Latin-leading, or an LTR document): explicit
+                    # bidi=0 overrides the FootnoteText style, left aligned.
+                    bidi_el = etree.SubElement(pPr, "{%s}bidi" % w_ns)
+                    bidi_el.set("{%s}val" % w_ns, "0")
+                    jc_el = etree.SubElement(pPr, "{%s}jc" % w_ns)
+                    jc_el.set("{%s}val" % w_ns, "left")
 
                 # Footnote reference mark (superscript via FootnoteReference style)
                 r1 = etree.SubElement(p, "{%s}r" % w_ns)
@@ -129,13 +240,31 @@ class FootnoteAdder:
                 t2.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
                 t2.text = " "
 
-                # Footnote text — with RTL run direction for Hebrew
-                r3 = etree.SubElement(p, "{%s}r" % w_ns)
-                if self.is_rtl:
-                    rPr3 = etree.SubElement(r3, "{%s}rPr" % w_ns)
-                    etree.SubElement(rPr3, "{%s}rtl" % w_ns)
-                t3 = etree.SubElement(r3, "{%s}t" % w_ns)
-                t3.text = fn_text
+                # Footnote text: explicit fonts, and w:rtl only on RTL notes.
+                # A Latin-font note (LTR) puts its Hebrew words in their own
+                # RTL runs so they keep the Hebrew font.
+                ascii_font = cs_font = None
+                if self.font_name:
+                    ascii_font, cs_font = paragraph_fonts(
+                        fn_text, self.font_name, self.latin_font, rtl=note_rtl
+                    )
+                split = bool(self.font_name) and not note_rtl and ascii_font != cs_font
+                chunks = split_rtl_segments(fn_text) if split else [(fn_text, note_rtl)]
+                for chunk, chunk_rtl in chunks:
+                    r3 = etree.SubElement(p, "{%s}r" % w_ns)
+                    if self.font_name or chunk_rtl:
+                        rPr3 = etree.SubElement(r3, "{%s}rPr" % w_ns)
+                        if self.font_name:
+                            font = cs_font if chunk_rtl else ascii_font
+                            rf = etree.SubElement(rPr3, "{%s}rFonts" % w_ns)
+                            rf.set("{%s}ascii" % w_ns, font)
+                            rf.set("{%s}hAnsi" % w_ns, font)
+                            rf.set("{%s}cs" % w_ns, cs_font)
+                        if chunk_rtl:
+                            etree.SubElement(rPr3, "{%s}rtl" % w_ns)
+                    t3 = etree.SubElement(r3, "{%s}t" % w_ns)
+                    t3.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+                    t3.text = chunk
 
             tree.write(footnotes_path, xml_declaration=True, encoding="UTF-8", standalone="yes")
 

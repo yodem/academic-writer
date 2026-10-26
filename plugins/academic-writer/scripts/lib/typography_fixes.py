@@ -4,12 +4,25 @@
 """
 Academic Writer — AI Typography Fix Library
 
-Deterministic (non-LLM) fix functions for the mechanical typography tells
-left behind by LLM generation: em/en-dashes used as parenthetical breaks,
-curly/straight quote mismatches across script direction, RTL punctuation-order
-mistakes in Hebrew, and stray Unicode directional-formatting characters.
+Deterministic (non-LLM) fix functions for the mechanical typography defects
+left behind by LLM generation and by hand-typing: a spaced hyphen standing in
+for the Hebrew dash, quotation marks that do not follow the Hebrew convention,
+RTL punctuation-order mistakes, stray Unicode directional-formatting
+characters, and stray whitespace.
 
-Used by scripts/detect-ai-typography.py. No third-party dependencies.
+Conventions (author decisions of 2026-10-26, from a professional editor's
+review of a Hebrew seminar paper):
+
+- Dash: the spaced em dash " — " is the Hebrew dash for an aside. It is kept,
+  never "fixed" away; a spaced hyphen standing in for it is turned into one.
+  Compound hyphens (בר-אילן), numeric ranges (45-67, 45–67), bullets, URLs and
+  table cells are left alone.
+- Quotes: straight ASCII " around Hebrew quotations, quoted terms and titles;
+  curly “…” for Latin-script quotations. Gershayim ״ and geresh ׳ belong only
+  inside abbreviations (רמב״ם, ר׳) and Hebrew-letter numerals (תשכ״ב).
+
+Used by scripts/detect-ai-typography.py and scripts/validate-hebrew-punctuation.py.
+No third-party dependencies.
 """
 
 from __future__ import annotations
@@ -38,41 +51,67 @@ CURLY_CLOSE_DQUOTE = "”"
 DIRECTIONAL_MARKS_RE = re.compile("[‎‏؜‪‫‬‭‮⁦⁧⁨⁩]")
 
 TERMINAL_PUNCT = "?!."
+
+# typography.dashReplacement. "em" (the default) and "keep" leave every dash as
+# the author wrote it; "em" additionally turns a spaced hyphen used as a dash
+# into a spaced em dash (fix_spaced_hyphen_dashes). The other four values are
+# the pre-0.21 convention (an em dash is an AI tell, so replace it) and stay
+# available through typography.dashReplacement or --dash-replacement.
 DASH_REPLACEMENTS = {
+    "em": None,
+    "keep": None,
     "hyphen": "-",
     "comma": ",",
     "colon": ":",
     "remove": "",
 }
+KEEP_DASH_STYLES = frozenset({"em", "keep"})
+DEFAULT_DASH_STYLE = "em"
 
 
-def load_default_dash_replacement(script_dir: Path) -> str:
-    """Read typography.dashReplacement from thresholds.json, resolved
-    relative to the calling script's directory (src/scripts/ or the built
-    plugin's scripts/ dir — thresholds.json is always one level up in both
-    layouts). Falls back to "hyphen" if unreadable — never raises."""
+def load_default_dash_replacement(script_dir: Path, latin: bool = False) -> str:
+    """Read typography.dashReplacement (or, for Latin-script text,
+    typography.dashReplacementLatin) from thresholds.json, resolved relative to
+    the calling script's directory (src/scripts/ or the built plugin's scripts/
+    dir — thresholds.json is always one level up in both layouts). Falls back
+    to "em" (Hebrew) or "hyphen" (Latin) if unreadable — never raises.
+
+    The em-dash decision (2026-10-26) covers Hebrew prose only; English text
+    keeps the earlier convention."""
+    key, fallback = ("dashReplacementLatin", "hyphen") if latin else ("dashReplacement", DEFAULT_DASH_STYLE)
     candidates = [script_dir.parent / "thresholds.json", script_dir / "thresholds.json"]
     for candidate in candidates:
         try:
             data = json.loads(candidate.read_text(encoding="utf-8"))
-            value = data.get("typography", {}).get("dashReplacement")
+            value = data.get("typography", {}).get(key)
             if value in DASH_REPLACEMENTS:
                 return value
         except (OSError, json.JSONDecodeError, AttributeError):
             continue
-    return "hyphen"
+    return fallback
+
+
+def is_latin_dominant(text: str) -> bool:
+    """True when Latin letters outnumber Hebrew letters (an English article)."""
+    hebrew = len(HEBREW_CHAR_RE.findall(text))
+    latin = sum(len(m) for m in LATIN_RUN_RE.findall(text))
+    return latin > hebrew
 
 
 def fix_dashes(text: str, replacement_key: str) -> tuple[str, list[dict]]:
-    """Fix em-dashes and en-dashes.
+    """Replace em/en dashes, only for the legacy replacement styles.
 
-    - Em-dash (—) is always an AI/English typographic tell in Hebrew academic
-      prose and is replaced per `replacement_key`.
-    - En-dash (–) is the correct, documented convention for numeric page/verse
-      ranges (anti-ai-patterns-hebrew.md section J: "עמ' N–M"). An en-dash
-      flanked by digits on both sides is left untouched; any other en-dash
-      (used as a parenthetical break) is fixed the same way as an em-dash.
+    The spaced em dash is the Hebrew dash for an aside (author decision
+    2026-10-26), so with "em" or "keep" (the default) nothing is replaced and
+    the result is the input. With a legacy key (hyphen, comma, colon, remove):
+
+    - Em-dash (—) is replaced per `replacement_key`.
+    - En-dash (–) flanked by digits on both sides is a numeric range
+      ("עמ' N–M") and is left untouched; any other en-dash is replaced the
+      same way as an em-dash.
     """
+    if replacement_key in KEEP_DASH_STYLES:
+        return text, []
     replacement = DASH_REPLACEMENTS[replacement_key]
     fixes: list[dict] = []
     out_chars: list[str] = []
@@ -109,35 +148,338 @@ def fix_dashes(text: str, replacement_key: str) -> tuple[str, list[dict]]:
     return "".join(out_chars), fixes
 
 
-def _looks_like_abbreviation(inner: str) -> bool:
-    """A short run of Hebrew letters with no internal whitespace (e.g. an
-    acronym like תנ״ך) reads as an abbreviation, not a quoted phrase."""
-    return (
-        bool(inner)
-        and len(inner) <= 5
-        and HEBREW_CHAR_RE.match(inner[0]) is not None
-        and " " not in inner
-    )
-
-
-# An ASCII apostrophe or double quote standing in for Hebrew geresh/gershayim
-# must be resolved BEFORE span pairing, or the span regex pairs it with an
-# unrelated quote further along the line and rewrites the Hebrew between them.
-# Measured: `ר' יוסף בעמ' 12` paired the two apostrophes, read " יוסף בעמ" as
-# a quoted phrase, and returned `ר" יוסף בעמ" 12` — turning geresh (Rabbi) into
-# gershayim, a meaning change. Four writers on one Hebrew article hit this
-# independently and rejected the whole diff by hand.
+# --- Prose-line scanner shared by the dash and whitespace fixers --------------
 #
-# Folding these to their real characters is the correct typographic fix in its
-# own right, and it also removes them from span_re's character class, so the
-# pairing bug cannot recur. Same-length substitution, so `fixes` offsets stay
-# accurate. The geresh discriminator is shared with the style-metrics
-# tokenizer, where it was measured against 517 real occurrences.
-_ASCII_GERSHAYIM_RE = re.compile(rf'(?<=[{HEBREW_RANGE}])"(?=[{HEBREW_RANGE}])')
+# Markdown carries structure the fixers must not touch: YAML frontmatter, fenced
+# code, table rows, and (for dashes) the bibliography, whose entries copy
+# catalogue records verbatim ("אורנים - בית הספר לחינוך").
+
+_FENCE_RE = re.compile(r"^\s*(```|~~~)")
+# A GFM delimiter row ("---|---", "| :-- | --: |"): marks the line above and the
+# rows below (up to a blank line) as a table, with or without outer pipes.
+_TABLE_DELIM_RE = re.compile(r"^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)+\|?\s*$")
+
+
+def _table_line_indices(lines: list[str]) -> set[int]:
+    rows: set[int] = set()
+    for i, line in enumerate(lines):
+        if not _TABLE_DELIM_RE.match(line) or i == 0 or "|" not in lines[i - 1]:
+            continue
+        rows.update((i - 1, i))
+        j = i + 1
+        while j < len(lines) and lines[j].strip() and "|" in lines[j]:
+            rows.add(j)
+            j += 1
+    return rows
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*\S)\s*$")
+_BIBLIOGRAPHY_TITLES = frozenset(
+    {
+        "ביבליוגרפיה",
+        "רשימה ביבליוגרפית",
+        "רשימת מקורות",
+        "רשימת המקורות",
+        "מקורות",
+        "bibliography",
+        "references",
+        "works cited",
+        "sources",
+    }
+)
+_MARKUP_RE = re.compile(r"</?[A-Za-z][^>]*>|[*_`#:]+")
+
+
+def _heading_text(line: str) -> str:
+    m = _HEADING_RE.match(line)
+    body = m.group(2) if m else line
+    return _MARKUP_RE.sub("", body).strip().lower()
+
+
+def _iter_lines(text: str):
+    """Yield (offset, line, structural, in_bibliography) for each line.
+
+    `structural` is True inside frontmatter or a fenced code block, and on
+    table rows. `in_bibliography` turns on at a bibliography heading and off at
+    the next markdown heading of the same or a higher level (a plain-text
+    heading stays on to the end of the text)."""
+    offset = 0
+    lines = text.split("\n")
+    in_front = bool(lines) and lines[0].strip() == "---"
+    in_fence = False
+    table_rows = _table_line_indices(lines)
+    bib_level: int | None = None  # 0 = plain-text heading, 1..6 = markdown level
+    for idx, line in enumerate(lines):
+        structural = False
+        if idx == 0 and in_front:
+            structural = True
+        elif in_front:
+            structural = True
+            if line.strip() in ("---", "..."):
+                in_front = False
+        elif _FENCE_RE.match(line):
+            in_fence = not in_fence
+            structural = True
+        elif in_fence:
+            structural = True
+        elif line.lstrip().startswith("|") or idx in table_rows:
+            structural = True
+        if not structural:
+            hm = _HEADING_RE.match(line)
+            if hm:
+                level = len(hm.group(1))
+                if bib_level is not None and (bib_level == 0 or level <= bib_level):
+                    bib_level = None
+                if _heading_text(line) in _BIBLIOGRAPHY_TITLES:
+                    bib_level = level
+            elif _heading_text(line) in _BIBLIOGRAPHY_TITLES and len(line) < 40:
+                bib_level = 0
+        yield offset, line, structural, bib_level is not None
+        offset += len(line) + 1
+
+
+# Public name for the scanner, used by validate-hebrew-punctuation.py.
+iter_text_lines = _iter_lines
+
+
+# --- Spaced hyphen used as a dash -> spaced em dash ---------------------------
+
+_SPACED_HYPHEN_RE = re.compile(r"(?<=\S) - (?=\S)")
+_PROTECTED_SPAN_RE = re.compile(
+    r"(?<!`)(`+)(?!`).*?(?<!`)\1(?!`)"  # inline code: a backtick run closed by a run of the same length
+    r"|(?:https?|ftp)://\S+|www\.\S+|mailto:\S+"  # URLs
+    r"|\]\([^)\n]*\)"  # markdown link target
+)
+_DASH_CHARS = "-" + EN_DASH + EM_DASH
+
+
+def _has_hebrew(s: str) -> bool:
+    return HEBREW_CHAR_RE.search(s) is not None
+
+
+def fix_spaced_hyphen_dashes(text: str) -> tuple[str, list[dict]]:
+    """Turn a mid-line spaced hyphen used as a dash (" - ") into " — ".
+
+    Converted only when all of these hold; everything else is left alone:
+
+    - a non-space, non-hyphen character on both sides (a letter or punctuation
+      such as ")" or "("); a hyphen with digits on BOTH sides is a numeric
+      range ("12 - 14");
+    - at least one of the two neighbouring words has a Hebrew letter, so Latin
+      titles and Latin-only sentences keep their hyphens;
+    - the hyphen is not inside a paired quotation (a source's own dash is the
+      source's), inline code, a URL or a markdown link target;
+    - the line is not a table row, frontmatter, fenced code, or inside the
+      bibliography section.
+
+    A line-initial "- " (markdown bullet) never matches because the pattern
+    needs a character before the space. Hyphens without spaces (בר-אילן) and
+    en dashes between digits never match either."""
+    fixes: list[dict] = []
+    out_lines: list[str] = []
+    for offset, line, structural, in_bib in _iter_lines(text):
+        if structural or in_bib or " - " not in line or not _has_hebrew(line):
+            out_lines.append(line)
+            continue
+        protected = [False] * len(line)
+        for m in _PROTECTED_SPAN_RE.finditer(line):
+            # A code span protects its interior only; a URL or link target also
+            # protects the character next to it (the URL's last character).
+            inner = m.group(0).startswith("`")
+            for k in range(m.start() + inner, m.end() - inner):
+                protected[k] = True
+        in_quotation = [False] * len(line)
+        pairs, _, _ = analyse_double_quotes(line, '"“”״')
+        for o, c in pairs:
+            for k in range(o, c + 1):
+                in_quotation[k] = True
+        chars = list(line)
+        for m in _SPACED_HYPHEN_RE.finditer(line):
+            i = m.start() + 1  # the hyphen itself
+            before, after = line[m.start() - 1], line[m.end()]
+            if before in _DASH_CHARS or after in _DASH_CHARS:
+                continue
+            if before.isdigit() and after.isdigit():
+                continue
+            if in_quotation[i] or protected[i] or protected[m.start() - 1] or protected[m.end()]:
+                continue
+            prev_word = line[: m.start()].split()[-1]
+            next_word = line[m.end():].split()[0]
+            if not (_has_hebrew(prev_word) or _has_hebrew(next_word)):
+                continue
+            chars[i] = EM_DASH
+            fixes.append(
+                {
+                    "type": "spaced_hyphen_dash",
+                    "original": "-",
+                    "replacement": EM_DASH,
+                    "position": offset + i,
+                }
+            )
+        out_lines.append("".join(chars))
+    return "\n".join(out_lines), fixes
+
+
+# --- Whitespace ---------------------------------------------------------------
+
+_INNER_DOUBLE_SPACE_RE = re.compile(r"(?<=\S) {2,}(?=\S)")
+_SPACE_BEFORE_COLON_RE = re.compile("(?<=\\S)[\u00a0\u202f]+(?=:)")
+
+
+def fix_whitespace(text: str) -> tuple[str, list[dict]]:
+    """Collapse a run of spaces between two words to one space, and remove a
+    no-break space (U+00A0, U+202F) standing before a colon (Hebrew takes no
+    space before ":"; the catalogue records the editor removed these).
+
+    Leading indentation, trailing spaces (a markdown hard break), table rows,
+    frontmatter, fenced code, inline code and URLs are untouched."""
+    fixes: list[dict] = []
+    out_lines: list[str] = []
+    for offset, line, structural, _ in _iter_lines(text):
+        if structural:
+            out_lines.append(line)
+            continue
+        pieces: list[str] = []
+        pos = 0
+        spans = [(m.start(), m.end()) for m in _PROTECTED_SPAN_RE.finditer(line)] + [(len(line), len(line))]
+        for start, end in spans:
+            pieces.append(_fix_whitespace_segment(line[pos:start], offset + pos, fixes))
+            pieces.append(line[start:end])
+            pos = end
+        out_lines.append("".join(pieces))
+    return "\n".join(out_lines), fixes
+
+
+def _fix_whitespace_segment(seg: str, base: int, fixes: list[dict]) -> str:
+    for m in _SPACE_BEFORE_COLON_RE.finditer(seg):
+        fixes.append({"type": "nbsp_before_colon", "original": f"U+{ord(m.group(0)[0]):04X}",
+                      "replacement": "", "position": base + m.start()})
+    seg = _SPACE_BEFORE_COLON_RE.sub("", seg)
+    for m in _INNER_DOUBLE_SPACE_RE.finditer(seg):
+        fixes.append({"type": "double_space", "original": m.group(0), "replacement": " ",
+                      "position": base + m.start()})
+    return _INNER_DOUBLE_SPACE_RE.sub(" ", seg)
+
+
+# --- Double quotes: which one is a quotation mark, which one gershayim ---------
+#
+# A `"` between two Hebrew letters is gershayim (תשכ"ב, רמב"ם) -- except when it
+# is the OPENING quotation mark of a quote attached to a one- or two-letter
+# prefix (ב"תשורי", ש"יפה", ה"יש מאין"), which has a matching closing quote on
+# the same line. Folding every in-word `"` onto ״ turned about 14 of the
+# editor's openers in one 12,000-word paper into gershayim (136 across ten past
+# articles). Two tests decide, and both must hold for an opener:
+#   1. the letters before the quote are all Hebrew prefix letters and there are
+#      one or two of them (so כ"ד, ש"ס, מו"ל all fail the second test, and
+#      חז"ל, רמב"ם fail this one);
+#   2. at least two Hebrew letters follow the quote (an acronym's gershayim
+#      precedes exactly one final letter);
+# and then only if a closing quote on the same line pairs with it. An opener
+# with no closer is gershayim after all.
+
+_HEB_LETTER_RE = re.compile("[א-ת]")
+_PREFIX_LETTERS = frozenset("ובהלכמש")
+_OPEN_BEFORE = frozenset(" \t([{<>*“„–—־-/")
+# "[" starts a footnote marker ([^1]) right after a closing quote.
+_CLOSE_AFTER = frozenset(" \t)]}[<>*,.;:!?”–—־-/")
+
+
+def _is_heb(ch: str) -> bool:
+    return bool(ch) and _HEB_LETTER_RE.match(ch) is not None
+
+
+def _quote_role(line: str, i: int) -> str:
+    """'abbr', 'prefix_open', 'open', 'close' or 'stray' for the quote at i."""
+    prev = line[i - 1] if i > 0 else ""
+    nxt = line[i + 1] if i + 1 < len(line) else ""
+    if _is_heb(prev) and _is_heb(nxt):
+        j = i
+        while j > 0 and _is_heb(line[j - 1]):
+            j -= 1
+        k = i + 1
+        while k < len(line) and _is_heb(line[k]):
+            k += 1
+        before = line[j:i]
+        if 1 <= len(before) <= 2 and set(before) <= _PREFIX_LETTERS and k - (i + 1) >= 2:
+            return "prefix_open"
+        return "abbr"
+    if (not prev or prev in _OPEN_BEFORE) and nxt and nxt not in " \t":
+        return "open"
+    if prev and prev not in " \t" and (not nxt or nxt in _CLOSE_AFTER):
+        return "close"
+    return "stray"
+
+
+def classify_double_quotes(
+    line: str, chars: str = '"״'
+) -> tuple[list[tuple[int, int]], set[int], set[int], set[int]]:
+    """Classify the double-quote characters `chars` on one line.
+
+    Returns (pairs, abbreviation_marks, stray, dangling). `pairs` are (open,
+    close) quotation-mark pairs; `abbreviation_marks` are in-word marks that are
+    gershayim; `stray` are marks that are neither (an unpaired quote, or one in
+    an ambiguous position); `dangling` are prefix-attached openers (ב"תשורי)
+    that no closing quote pairs with. Curly “ opens and ” closes whatever its
+    context."""
+    pairs: list[tuple[int, int]] = []
+    abbr: set[int] = set()
+    stray: set[int] = set()
+    dangling: set[int] = set()
+    stack: list[tuple[int, str]] = []
+    for i, ch in enumerate(line):
+        if ch not in chars:
+            continue
+        if ch == "“":
+            role = "open"
+        elif ch == "”":
+            role = "close"
+        else:
+            role = _quote_role(line, i)
+        if role == "abbr":
+            abbr.add(i)
+        elif role in ("open", "prefix_open"):
+            stack.append((i, role))
+        elif role == "close":
+            if stack:
+                pairs.append((stack.pop()[0], i))
+            else:
+                stray.add(i)
+        else:
+            stray.add(i)
+    for i, role in stack:
+        (dangling if role == "prefix_open" else stray).add(i)
+    return pairs, abbr, stray, dangling
+
+
+def analyse_double_quotes(
+    line: str, chars: str = '"״'
+) -> tuple[list[tuple[int, int]], set[int], set[int]]:
+    """(pairs, abbreviation_marks, stray) -- see classify_double_quotes. A
+    prefix-attached opener with no closer counts as an abbreviation mark here,
+    which is what the fixers want (it folds to gershayim)."""
+    pairs, abbr, stray, dangling = classify_double_quotes(line, chars)
+    return pairs, abbr | dangling, stray
+
+
+def outer_pairs(pairs: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """The pairs that are not nested inside another pair. A quotation inside a
+    quotation (a source's own marks) is left exactly as typed."""
+    return [
+        (o, c)
+        for o, c in pairs
+        if not any(o2 < o and c < c2 for o2, c2 in pairs)
+    ]
 
 
 def fix_hebrew_marks(text: str) -> tuple[str, list[dict]]:
-    """Fold ASCII stand-ins for gershayim/geresh onto U+05F4 / U+05F3."""
+    """Make gershayim/geresh and Hebrew quotation marks follow the convention.
+
+    - An in-word ASCII `"` that is gershayim (not a prefix-attached opener with
+      a closer on the line) becomes ״ (תשכ"ב -> תשכ״ב).
+    - A ״ used as a quotation mark (word-boundary, paired on the line, or a
+      prefix-attached opener with its closer) becomes a straight `"`: gershayim
+      belong only inside abbreviations and numerals.
+    - An ASCII `'` or a curly ’ after a Hebrew letter that is a geresh
+      (ר', לר’) becomes ׳. A ’ that closes a ‘…’ span on the line stays.
+    """
     from style_metrics_core import _classify_apostrophes  # noqa: PLC0415
 
     fixes: list[dict] = []
@@ -145,14 +487,27 @@ def fix_hebrew_marks(text: str) -> tuple[str, list[dict]]:
     offset = 0
     for line in text.split("\n"):
         chars = list(line)
-        for m in _ASCII_GERSHAYIM_RE.finditer(line):
-            chars[m.start()] = GERSHAYIM
-            fixes.append({
-                "type": "hebrew_gershayim",
-                "original": '"',
-                "replacement": GERSHAYIM,
-                "position": offset + m.start(),
-            })
+        if '"' in line or GERSHAYIM in line:
+            pairs, abbr, _ = analyse_double_quotes(line, '"' + GERSHAYIM)
+            for i in sorted(abbr):
+                if line[i] == '"':
+                    chars[i] = GERSHAYIM
+                    fixes.append({
+                        "type": "hebrew_gershayim",
+                        "original": '"',
+                        "replacement": GERSHAYIM,
+                        "position": offset + i,
+                    })
+            for o, c in outer_pairs(pairs):
+                for i in (o, c):
+                    if line[i] == GERSHAYIM:
+                        chars[i] = STRAIGHT_DQUOTE
+                        fixes.append({
+                            "type": "gershayim_quote_to_ascii",
+                            "original": GERSHAYIM,
+                            "replacement": STRAIGHT_DQUOTE,
+                            "position": offset + i,
+                        })
         geresh_positions, _ = _classify_apostrophes(line)
         for i in sorted(geresh_positions):
             chars[i] = GERESH
@@ -162,6 +517,26 @@ def fix_hebrew_marks(text: str) -> tuple[str, list[dict]]:
                 "replacement": GERESH,
                 "position": offset + i,
             })
+        if "’" in line:
+            open_single = False
+            for i, ch in enumerate(line):
+                if ch == "‘":
+                    open_single = True
+                elif ch == "’":
+                    prev = line[i - 1] if i else ""
+                    nxt = line[i + 1] if i + 1 < len(line) else ""
+                    if not _is_heb(prev):
+                        continue
+                    if open_single and not _is_heb(nxt):
+                        open_single = False  # closes a ‘…’ span
+                        continue
+                    chars[i] = GERESH
+                    fixes.append({
+                        "type": "hebrew_geresh",
+                        "original": "’",
+                        "replacement": GERESH,
+                        "position": offset + i,
+                    })
         out_lines.append("".join(chars))
         offset += len(line) + 1
     return "\n".join(out_lines), fixes
@@ -169,7 +544,7 @@ def fix_hebrew_marks(text: str) -> tuple[str, list[dict]]:
 
 def _is_word_internal(text: str, i: int) -> bool:
     """True when the character at `i` has a letter on both sides."""
-    if text[i] not in "'\u2019":
+    if text[i] not in "'’":
         return False
     before = text[i - 1] if i else " "
     after = text[i + 1] if i + 1 < len(text) else " "
@@ -178,75 +553,88 @@ def _is_word_internal(text: str, i: int) -> bool:
     )
 
 
-def fix_quotes(text: str) -> tuple[str, list[dict]]:
-    """Normalize quotation marks per detected script inside each quoted span:
+def _quote_marks_for(inner: str) -> tuple[str, str] | None:
+    """The quote marks for a span by the script of its letters, or None when it
+    has no letters. Hebrew-majority -> straight; Latin-majority -> curly."""
+    heb = len(_HEB_LETTER_RE.findall(inner))
+    lat = len(re.findall(r"[A-Za-z]", inner))
+    if heb == 0 and lat == 0:
+        return None
+    if heb >= lat:
+        return STRAIGHT_DQUOTE, STRAIGHT_DQUOTE
+    return CURLY_OPEN_DQUOTE, CURLY_CLOSE_DQUOTE
 
-    - Hebrew, acronym-shaped -> gershayim (or geresh for a single letter).
-    - Hebrew, phrase-shaped -> straight double quote.
-    - Latin/English -> curly typographer's quotes.
-    - Mixed/neither -> straight double quote (safe default).
+
+_SINGLE_SPAN_RE = re.compile(r"(['‘’])([^'‘’\"“”\n]*)(['‘’])")
+
+
+def fix_quotes(text: str) -> tuple[str, list[dict]]:
+    """Normalize quotation marks per the script of each quoted span:
+
+    - Hebrew (or Hebrew-majority) -> straight double quote `"`. Never gershayim
+      or geresh: those are abbreviation marks, not quotation marks.
+    - Latin/English (or Latin-majority) -> curly typographer's quotes “…”.
+
+    Double quotes (", “, ”) are paired by their role on the line (see
+    analyse_double_quotes), not blindly two by two, so an unpaired or in-word
+    mark never drags an unrelated quote along. A single-quoted span is
+    converted to curly double quotes only when it is Latin; a Hebrew one
+    ('פיידון' inside a title) and any single-quoted span nested inside a double
+    quotation are left as typed.
     """
     fixes: list[dict] = []
-    span_re = re.compile(r'(["\'“”‘’])([^"\'“”‘’\n]*)(["\'“”‘’])')
-
-    result: list[str] = []
-    last_end = 0
-    for m in span_re.finditer(text):
-        opener, inner, closer = m.group(1), m.group(2), m.group(3)
-        start, end = m.start(), m.end()
-        if not inner:
-            continue
-        # An apostrophe with a letter on both sides is inside a word — an
-        # English contraction or possessive (don't, writer's), or a Hebrew
-        # geresh. It is never a span delimiter, and pairing two of them
-        # rewrote everything between: `don't break the writer's text` came
-        # back as `don“t break the writer”s text`.
-        if _is_word_internal(text, start) or _is_word_internal(text, end - 1):
-            continue
-
-        has_hebrew = bool(HEBREW_RUN_RE.search(inner))
-        has_latin = bool(LATIN_RUN_RE.search(inner))
-
-        if has_hebrew and not has_latin:
-            new_open = new_close = (
-                GERESH
-                if len(inner) == 1
-                else (GERSHAYIM if _looks_like_abbreviation(inner) else STRAIGHT_DQUOTE)
-            )
-        elif has_latin and not has_hebrew:
-            new_open, new_close = CURLY_OPEN_DQUOTE, CURLY_CLOSE_DQUOTE
-        else:
-            new_open = new_close = STRAIGHT_DQUOTE
-
-        replaced_any = False
-        if opener != new_open:
-            fixes.append(
-                {
-                    "type": "quote_normalize",
-                    "original": opener,
-                    "replacement": new_open,
-                    "position": start,
-                }
-            )
-            replaced_any = True
-        if closer != new_close:
-            fixes.append(
-                {
-                    "type": "quote_normalize",
-                    "original": closer,
-                    "replacement": new_close,
-                    "position": end - 1,
-                }
-            )
-            replaced_any = True
-
-        if replaced_any:
-            result.append(text[last_end:start])
-            result.append(new_open + inner + new_close)
-            last_end = end
-
-    result.append(text[last_end:])
-    return "".join(result), fixes
+    out_lines: list[str] = []
+    offset = 0
+    for line in text.split("\n"):
+        chars = list(line)
+        pairs, _, _ = analyse_double_quotes(line, '"“”')
+        covered = [False] * len(line)
+        for o, c in pairs:
+            for k in range(o, c + 1):
+                covered[k] = True
+        for o, c in outer_pairs(pairs):
+            new = _quote_marks_for(line[o + 1 : c])
+            if new is None:
+                continue
+            for idx, mark in ((o, new[0]), (c, new[1])):
+                if line[idx] != mark:
+                    chars[idx] = mark
+                    fixes.append(
+                        {
+                            "type": "quote_normalize",
+                            "original": line[idx],
+                            "replacement": mark,
+                            "position": offset + idx,
+                        }
+                    )
+        for m in _SINGLE_SPAN_RE.finditer(line):
+            start, end = m.start(), m.end()
+            inner = m.group(2)
+            if not inner or covered[start] or covered[end - 1]:
+                continue
+            # An apostrophe with a letter on both sides is inside a word — an
+            # English contraction or possessive (don't, writer's), or a Hebrew
+            # geresh. It is never a span delimiter, and pairing two of them
+            # rewrote everything between: `don't break the writer's text` came
+            # back as `don“t break the writer”s text`.
+            if _is_word_internal(line, start) or _is_word_internal(line, end - 1):
+                continue
+            new = _quote_marks_for(inner)
+            if new is None or new[0] == STRAIGHT_DQUOTE:
+                continue  # Hebrew-majority single quotes stay as typed
+            for idx, mark in ((start, new[0]), (end - 1, new[1])):
+                chars[idx] = mark
+                fixes.append(
+                    {
+                        "type": "quote_normalize",
+                        "original": line[idx],
+                        "replacement": mark,
+                        "position": offset + idx,
+                    }
+                )
+        out_lines.append("".join(chars))
+        offset += len(line) + 1
+    return "\n".join(out_lines), fixes
 
 
 def _fix_leading_terminal_punctuation(
@@ -287,23 +675,45 @@ def fix_rtl_punctuation(text: str) -> tuple[str, list[dict]]:
     """
     fixes: list[dict] = []
 
-    paren_re = re.compile(r"\)([^()\n]*)\(")
-
-    def _paren_repl(m: re.Match) -> str:
-        inner = m.group(1)
-        if HEBREW_CHAR_RE.search(inner):
+    # A reversed pair is a ")" that closes nothing followed, with no other
+    # parenthesis between, by a "(" that is never closed. Matching each pair
+    # first matters: a bare regex for ")...(" also matches the gap between two
+    # correct pairs, "(א) ב (ג)", and rewrote it to "(א( ב )ג)" -- 107 times in
+    # one 12,000-word paper.
+    paren_lines = []
+    offset = 0
+    for line in text.split("\n"):
+        stack: list[int] = []
+        unmatched_close: list[int] = []
+        for i, ch in enumerate(line):
+            if ch == "(":
+                stack.append(i)
+            elif ch == ")":
+                if stack:
+                    stack.pop()
+                else:
+                    unmatched_close.append(i)
+        unmatched_open = set(stack)
+        chars = list(line)
+        for c in unmatched_close:
+            nxt = next((j for j in range(c + 1, len(line)) if line[j] in "()"), None)
+            if nxt is None or line[nxt] != "(" or nxt not in unmatched_open:
+                continue
+            inner = line[c + 1 : nxt]
+            if not HEBREW_CHAR_RE.search(inner):
+                continue
+            chars[c], chars[nxt] = "(", ")"
             fixes.append(
                 {
                     "type": "reversed_parens",
-                    "original": m.group(0),
+                    "original": line[c : nxt + 1],
                     "replacement": f"({inner})",
-                    "position": m.start(),
+                    "position": offset + c,
                 }
             )
-            return f"({inner})"
-        return m.group(0)
-
-    text = paren_re.sub(_paren_repl, text)
+        paren_lines.append("".join(chars))
+        offset += len(line) + 1
+    text = "\n".join(paren_lines)
 
     out_lines = []
     offset = 0
@@ -348,11 +758,12 @@ def fix_directional_marks(text: str) -> tuple[str, list[dict]]:
 
 def run(
     text: str,
-    dash_replacement: str,
+    dash_replacement: str = DEFAULT_DASH_STYLE,
     do_dashes: bool = True,
     do_quotes: bool = True,
     do_rtl: bool = True,
     do_directional: bool = True,
+    do_whitespace: bool = True,
 ) -> dict:
     """Run the enabled fix categories in a fixed, deterministic order and
     return {"fixed_text": ..., "fixes": [...]}."""
@@ -363,9 +774,18 @@ def run(
         working, fixes = fix_directional_marks(working)
         all_fixes.extend(fixes)
 
+    if do_whitespace:
+        # Before the dash pass: a doubled space around a dash ("  -  ") must
+        # collapse first or the spaced-hyphen fixer would not see it.
+        working, fixes = fix_whitespace(working)
+        all_fixes.extend(fixes)
+
     if do_dashes:
         working, fixes = fix_dashes(working, dash_replacement)
         all_fixes.extend(fixes)
+        if dash_replacement == "em":
+            working, fixes = fix_spaced_hyphen_dashes(working)
+            all_fixes.extend(fixes)
 
     if do_quotes:
         # Hebrew geresh/gershayim first: an ASCII stand-in left in place is a

@@ -117,38 +117,102 @@ function extractCitationKeys(text: string): string[] {
 }
 
 const HEBREW_LETTER = /[א-ת]/;
-// A gershayim (״) with a Hebrew letter on both sides is an abbreviation
-// mark (e.g. רמב״ם), never a quotation delimiter -- filter those out before
-// pairing the rest as open/close quote marks.
-function isAbbreviationGershayim(text: string, index: number): boolean {
+// A gershayim (״) or a straight double quote (") with a Hebrew letter on both sides is an abbreviation
+// or numeral mark (e.g. רמב״ם, תשכ"ב), never a quotation delimiter -- filter those out before
+// pairing the rest as open/close quote marks. Hebrew quotations are written with a straight " (author
+// decision 2026-10-26); gershayim is accepted here only so older drafts still pair correctly.
+function isAbbreviationMark(text: string, index: number): boolean {
   const prev = text[index - 1];
   const next = text[index + 1];
   // An acronym's gershayim precede exactly ONE final letter (רמב״ם, ז״ל, ע״י). A quote opened after a
-  // prefix letter (ה״יש מאין״) has a longer word after it and IS a delimiter; treating it as an
+  // prefix letter (ה"יש מאין", ה״יש מאין״) has a longer word after it and IS a delimiter; treating it as an
   // acronym broke the pairing of every later quote (live rehearsal 2026-09-23).
   const after = text[index + 2];
   return Boolean(prev && next && HEBREW_LETTER.test(prev) && HEBREW_LETTER.test(next) && !(after && HEBREW_LETTER.test(after)));
 }
 
-function pairDelimiters(text: string, char: string, filterAbbreviation: boolean): string[] {
-  const positions: number[] = [];
-  for (let index = 0; index < text.length; index += 1) {
-    if (text[index] !== char) continue;
-    if (filterAbbreviation && isAbbreviationGershayim(text, index)) continue;
-    positions.push(index);
-  }
-  const spans: string[] = [];
-  for (let index = 0; index + 1 < positions.length; index += 2) {
-    spans.push(text.slice(positions[index]! + 1, positions[index + 1]));
-  }
-  return spans;
+const PREFIX_LETTERS = 'והבכלמש';
+const MAX_AMBIGUOUS_MARKS = 12;
+
+// A quotation opens before a letter, digit, opening bracket or ellipsis, after a non-letter or after a word
+// of one or two prefix letters (ב"תשורי", וב"ב"); it closes after a non-space and before a non-letter. An acronym-shaped mark that could also
+// open a quotation (ב"ה, ש"ס, or the one-letter quotation ב"א") is ambiguous; any other acronym-shaped
+// mark (רמב"ם, ז"ל, תשכ"ב) is always an acronym.
+function canOpen(text: string, index: number): boolean {
+  const next = text[index + 1];
+  if (!next || !/[\p{L}\p{N}(\[\u2018'\u2026]/u.test(next)) return false;
+  let start = index;
+  while (start > 0 && /\p{L}/u.test(text[start - 1]!)) start -= 1;
+  const cluster = text.slice(start, index);
+  return !cluster || (cluster.length <= 2 && [...cluster].every((letter) => PREFIX_LETTERS.includes(letter)));
 }
 
-function extractQuotedSpans(text: string): string[] {
-  const gershayim = pairDelimiters(text, '״', true); // ״…״
-  const curly = [...text.matchAll(/“([^“”]+)”/g)].map((m) => m[1]!); // "…"
-  const straight = pairDelimiters(text, '"', false); // "…"
-  return [...gershayim, ...curly, ...straight].filter((span) => span.trim().length > 0);
+function canClose(text: string, index: number): boolean {
+  const prev = text[index - 1]; const next = text[index + 1];
+  return Boolean(prev) && !/\s/u.test(prev!) && (!next || !/\p{L}/u.test(next));
+}
+
+// Curly quotes nest by direction, so they are parsed as a stack: every “…” span, outer and inner, is checked
+// (the outer span keeps the inner marks, so a long outer quotation is never hidden behind a short inner one),
+// and a stray “ or ” makes the quotes uncheckable.
+function curlySpans(text: string): string[] | null {
+  const open: number[] = []; const spans: string[] = [];
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] === '\u201C') open.push(index);
+    else if (text[index] === '\u201D') {
+      const start = open.pop();
+      if (start === undefined) return null;
+      spans.push(text.slice(start + 1, index));
+    }
+  }
+  return open.length ? null : spans;
+}
+
+type Reading = { spans: string[] };
+
+// The plausible readings of one quote character: every assignment of the ambiguous marks (acronym or
+// quotation mark) is tried -- just one when there are none -- and kept only when the marks pair up and
+// every pair can open and close where it sits. A same-character nested quotation ("א "ב" ג") has a
+// closing mark before a letter, so it admits no plausible reading and the gate fails closed.
+function readings(text: string, char: string): Reading[] | null {
+  const sure: number[] = []; const ambiguous: number[] = [];
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] !== char) continue;
+    if (!isAbbreviationMark(text, index)) sure.push(index);
+    else if (canOpen(text, index)) ambiguous.push(index);
+  }
+  const spansOf = (marks: number[]): string[] => {
+    const spans: string[] = [];
+    for (let index = 0; index + 1 < marks.length; index += 2) spans.push(text.slice(marks[index]! + 1, marks[index + 1]));
+    return spans;
+  };
+  if (ambiguous.length > MAX_AMBIGUOUS_MARKS) return null;
+  const plausible: Reading[] = [];
+  for (let mask = 0; mask < 1 << ambiguous.length; mask += 1) {
+    const marks = [...sure, ...ambiguous.filter((_, bit) => (mask >> bit) & 1)].sort((a, b) => a - b);
+    if (marks.length % 2 === 1) continue;
+    // A mark that could both open and close ("(", ")") lets a nested reading hide behind a flat one, so a
+    // reading that relies on one is not checkable.
+    if (marks.some((mark) => canOpen(text, mark) && canClose(text, mark))) continue;
+    let ok = true;
+    for (let index = 0; ok && index + 1 < marks.length; index += 2) ok = canOpen(text, marks[index]!) && canClose(text, marks[index + 1]!);
+    if (ok) plausible.push({ spans: spansOf(marks) });
+  }
+  return plausible.length ? plausible : null;
+}
+
+// Every plausible reading must pass the evidence gate; when the marks admit no plausible reading the
+// quotes cannot be checked, and the gate fails closed rather than letting an unsupported quotation through.
+function extractQuotedSpans(text: string): { spans: string[]; unbalanced: boolean } {
+  const curly = curlySpans(text); // “…” (Latin-script quotations)
+  const spans: string[] = [...(curly ?? [])];
+  let unbalanced = curly === null;
+  for (const char of ['״', '"']) { // ״…״ (older style) and "…" (Hebrew quotations)
+    const found = readings(text, char);
+    if (!found) unbalanced = true;
+    else for (const reading of found) spans.push(...reading.spans);
+  }
+  return { spans: spans.filter((span) => span.trim().length > 0), unbalanced };
 }
 
 function countOccurrences(haystack: string, needle: string): number {
@@ -166,7 +230,9 @@ function runGates(unit: OutlineUnit, text: string, paragraphs: string[], ctx: { 
   if (leftover) return { gate: 'quote-not-in-evidence', detail: `unknown quote placeholder ${leftover[1]}` };
   const pool = ctx.evidenceQuotes.map(normalize).filter(Boolean);
   const termMaxWords = (thresholds.paragraph as { quotedTermMaxWords?: number }).quotedTermMaxWords ?? 0;
-  for (const quote of extractQuotedSpans(quoteText)) {
+  const quoted = extractQuotedSpans(quoteText);
+  if (quoted.unbalanced) return { gate: 'quote-not-in-evidence', detail: 'quotation marks cannot be paired, so the quotations cannot be checked against the evidence: balance every opening " with a closing one, put a quotation inside a quotation in single quotes (\'…\'), and bring source wording through ⟦Q:ID⟧ placeholders' };
+  for (const quote of quoted.spans) {
     const needle = normalize(quote);
     if (!needle) continue;
     // A short span in quotation marks is a term or phrase ("יש מאין"), not a source quotation.
@@ -308,16 +374,17 @@ function quoteIndex(): Map<string, string> {
   } catch { return new Map(); }
 }
 
-// ⟦Q:id⟧ -> ״verbatim quote״ (Hebrew) or "quote"; an unknown id is left in place so the
-// quote gate reports it instead of silently dropping it.
+// ⟦Q:id⟧ -> "verbatim quote" with a straight double quote (Hebrew) or “quote” with curly quotes
+// (Latin script); gershayim (״) is an abbreviation mark, never a quotation mark. An unknown id is
+// left in place so the quote gate reports it instead of silently dropping it.
 export function substituteQuotes(text: string, quotes: Map<string, string>): string {
   return text.replace(/⟦Q:([^⟧\s]+)⟧([.,;:]?)/gu, (whole, id: string, after: string) => {
     const quote = quotes.get(id);
     if (quote === undefined) return whole;
     // When the sentence punctuation follows the placeholder, drop the quote's own final mark so the
-    // result is `...״.` and not `....״.` (live rehearsal 2026-09-23).
+    // result is `...".` and not `....".` (live rehearsal 2026-09-23).
     const body = after ? quote.replace(/[.,;:]+\s*$/u, '') : quote;
-    return (/[\u0590-\u05FF]/u.test(body) ? `״${body}״` : `"${body}"`) + after;
+    return (/[\u0590-\u05FF]/u.test(body) ? `"${body}"` : `\u201C${body}\u201D`) + after;
   });
 }
 

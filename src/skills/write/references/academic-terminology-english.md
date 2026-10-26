@@ -5,7 +5,7 @@
 > - [`anti-ai-patterns-english.md`](./anti-ai-patterns-english.md) — patterns/phrases to **AVOID**
 >   (AI-writing tells, formulaic hedging, inflated language, capped per-article).
 > - [`../../../words-english.md`](../../../words-english.md) — the **linking words** reference
->   (connectives every paragraph must draw from; distinct from the separate `bannedTerms` block
+>   (connectives to choose from when a real logical relation needs one; no per-paragraph quota; distinct from the separate `bannedTerms` block
 >   loaded from `profile.md`, which lists terms that must never appear).
 >
 > Where the anti-ai and banned-terms files tell the writer what to strike, this file tells the

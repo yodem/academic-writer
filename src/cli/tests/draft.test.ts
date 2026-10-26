@@ -153,7 +153,7 @@ test('evidence passages reach the drafter with their ids, sources and locators',
 test('quote placeholders are replaced by the verbatim evidence quote; unknown ids stay for the gate', async () => {
   const { substituteQuotes } = await import('../src/draft.ts');
   const q = new Map([['p1', 'ראיתי להעתיק הספר'], ['e1', 'the lexicon']]);
-  assert.equal(substituteQuotes('כתב ⟦Q:p1⟧ ועוד ⟦Q:e1⟧ ו⟦Q:zz⟧', q), 'כתב ״ראיתי להעתיק הספר״ ועוד "the lexicon" ו⟦Q:zz⟧');
+  assert.equal(substituteQuotes('כתב ⟦Q:p1⟧ ועוד ⟦Q:e1⟧ ו⟦Q:zz⟧', q), 'כתב "ראיתי להעתיק הספר" ועוד \u201Cthe lexicon\u201D ו⟦Q:zz⟧');
 });
 
 test('sources listed in evidence.json count as known sources when sources.json is absent', async () => {
@@ -183,7 +183,7 @@ test('quote gate: inserted quotes with inner marks pass; short term quotes pass;
 
 test('inserted quote before sentence punctuation drops the quote\'s own final period', async () => {
   const { substituteQuotes } = await import('../src/draft.ts');
-  assert.equal(substituteQuotes('הוא כתב ⟦Q:p1⟧.', new Map([['p1', 'וזהו כפירה בתורה.']])), 'הוא כתב ״וזהו כפירה בתורה״.');
+  assert.equal(substituteQuotes('הוא כתב ⟦Q:p1⟧.', new Map([['p1', 'וזהו כפירה בתורה.']])), 'הוא כתב "וזהו כפירה בתורה".');
 });
 
 test('footnote definitions for passage keys are rendered from evidence metadata', async () => {
@@ -204,4 +204,184 @@ test('quote pairing: acronym gershayim are skipped, prefix-attached quotes are d
   __stubs({ gen: async () => 'הרמב״ם דן במושג ה״יש מאין״ ובמושג ה״אין״ אצל הקב״ה ז״ל, וזו טענה ארוכה מאוד על הדברים.', voice });
   const r = await draftAll({ units: [{ id: 'U1', dependsOn: [] }] }, { runId: 'q4' });
   assert.deepEqual(r.failures, []);
+});
+
+test('Hebrew quotations get a straight quote, never gershayim; Latin ones get curly quotes', async () => {
+  const { substituteQuotes } = await import('../src/draft.ts');
+  const out = substituteQuotes('⟦Q:h⟧ ו⟦Q:l⟧ ו⟦Q:a⟧', new Map([['h', 'הרמב"ם כתב כך'], ['l', 'Shemarya wrote'], ['a', 'תשכ״ב']]));
+  assert.equal(out, '"הרמב"ם כתב כך" ו\u201CShemarya wrote\u201D ו"תשכ״ב"');
+  assert.ok(!out.includes('\u05F4\u05F4'));
+  // the inserted Hebrew quote contains no gershayim as a delimiter: its first and last characters are ASCII
+  const hebrew = substituteQuotes('⟦Q:h⟧', new Map([['h', 'שלום עולם']]));
+  assert.equal(hebrew[0], '"');
+  assert.equal(hebrew[hebrew.length - 1], '"');
+});
+
+test('quote pairing: straight-quote acronyms are skipped, prefix-attached straight quotes are delimiters', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { setPathArguments } = await import('../src/paths.ts');
+  const root = mkdtempSync(join(tmpdir(), 'aw-q5-')); const h = join(root, '.academic-helper'); mkdirSync(h, { recursive: true });
+  writeFileSync(join(h, 'evidence.json'), JSON.stringify({ sources: [{ id: 's1' }], passages: [] }));
+  setPathArguments(['--data-dir', root, '--project-dir', root]);
+  const voice = { exemplars: [], pairs: [], rules: '', styleWords: { banned: [], capped: [], filler: [] } };
+  __stubs({ gen: async () => 'הרמב"ם דן במושג ה"יש מאין" ובמושג ה"אין" אצל הקב"ה ז"ל בשנת תשכ"ב, וזו טענה ארוכה מאוד על הדברים.', voice });
+  const r = await draftAll({ units: [{ id: 'U1', dependsOn: [] }] }, { runId: 'q5' });
+  assert.deepEqual(r.failures, []);
+});
+
+test('quote gate: a long invented quote in straight quotes still fails after acronyms are filtered', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { setPathArguments } = await import('../src/paths.ts');
+  const root = mkdtempSync(join(tmpdir(), 'aw-q6-')); const h = join(root, '.academic-helper'); mkdirSync(h, { recursive: true });
+  writeFileSync(join(h, 'evidence.json'), JSON.stringify({ sources: [{ id: 's1' }], passages: [] }));
+  setPathArguments(['--data-dir', root, '--project-dir', root]);
+  const voice = { exemplars: [], pairs: [], rules: '', styleWords: { banned: [], capped: [], filler: [] } };
+  __stubs({ gen: async () => 'הרמב"ם כתב "משפט ארוך שלא הופיע בשום מקור בכלל" בספרו.', voice });
+  const r = await draftAll({ units: [{ id: 'U1', dependsOn: [] }] }, { runId: 'q6' });
+  assert.deepEqual(r.failures.map((f) => [f.unit, f.gate]), [['U1', 'quote-not-in-evidence']]);
+});
+
+test('quote gate: a prefix glued to a one-letter quotation cannot smuggle a long invented quote past the gate', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { setPathArguments } = await import('../src/paths.ts');
+  const root = mkdtempSync(join(tmpdir(), 'aw-q7-')); const h = join(root, '.academic-helper'); mkdirSync(h, { recursive: true });
+  writeFileSync(join(h, 'evidence.json'), JSON.stringify({ sources: [{ id: 's1' }], passages: [] }));
+  setPathArguments(['--data-dir', root, '--project-dir', root]);
+  const voice = { exemplars: [], pairs: [], rules: '', styleWords: { banned: [], capped: [], filler: [] } };
+  __stubs({ gen: async () => 'הכותב דן ב"א" ואז "משפט ארוך שלא הופיע בשום מקור בכלל" בספרו.', voice });
+  const r = await draftAll({ units: [{ id: 'U1', dependsOn: [] }] }, { runId: 'q7' });
+  assert.deepEqual(r.failures.map((f) => [f.unit, f.gate]), [['U1', 'quote-not-in-evidence']]);
+});
+
+test('quote gate: two glued one-letter quotations restoring an even count still cannot hide an invented quote', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { setPathArguments } = await import('../src/paths.ts');
+  const root = mkdtempSync(join(tmpdir(), 'aw-q8-')); const h = join(root, '.academic-helper'); mkdirSync(h, { recursive: true });
+  writeFileSync(join(h, 'evidence.json'), JSON.stringify({ sources: [{ id: 's1' }], passages: [] }));
+  setPathArguments(['--data-dir', root, '--project-dir', root]);
+  const voice = { exemplars: [], pairs: [], rules: '', styleWords: { banned: [], capped: [], filler: [] } };
+  __stubs({ gen: async () => 'הכותב דן ב"א" ואז "משפט ארוך שלא הופיע בשום מקור בכלל" וב"ב".', voice });
+  const r = await draftAll({ units: [{ id: 'U1', dependsOn: [] }] }, { runId: 'q8' });
+  assert.deepEqual(r.failures.map((f) => [f.unit, f.gate]), [['U1', 'quote-not-in-evidence']]);
+});
+
+test('quote gate: a quotation that ends in an acronym still passes when its text is in the evidence', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { setPathArguments } = await import('../src/paths.ts');
+  const root = mkdtempSync(join(tmpdir(), 'aw-q9-')); const h = join(root, '.academic-helper'); mkdirSync(h, { recursive: true });
+  writeFileSync(join(h, 'evidence.json'), JSON.stringify({ sources: [{ id: 's1' }], passages: [{ id: 'p1', sourceId: 's1', quote: 'כדברי חז"ל' }, { id: 'p2', sourceId: 's1', quote: 'ציטוט ארוך מן המקור עצמו כלשונו' }] }));
+  setPathArguments(['--data-dir', root, '--project-dir', root]);
+  const voice = { exemplars: [], pairs: [], rules: '', styleWords: { banned: [], capped: [], filler: [] } };
+  __stubs({ gen: async () => 'הוא כתב "כדברי חז"ל" ואחר כך "ציטוט ארוך מן המקור עצמו כלשונו" בספרו.', voice });
+  const r = await draftAll({ units: [{ id: 'U1', dependsOn: [] }] }, { runId: 'q9' });
+  assert.deepEqual(r.failures.map((f) => [f.unit, f.gate]), []);
+});
+
+test('quote gate: punctuation inside glued one-letter quotations cannot hide an invented quote', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { setPathArguments } = await import('../src/paths.ts');
+  const root = mkdtempSync(join(tmpdir(), 'aw-q10-')); const h = join(root, '.academic-helper'); mkdirSync(h, { recursive: true });
+  writeFileSync(join(h, 'evidence.json'), JSON.stringify({ sources: [{ id: 's1' }], passages: [] }));
+  setPathArguments(['--data-dir', root, '--project-dir', root]);
+  const voice = { exemplars: [], pairs: [], rules: '', styleWords: { banned: [], capped: [], filler: [] } };
+  __stubs({ gen: async () => 'הכותב דן ב"א." ואז "משפט ארוך שלא הופיע בשום מקור בכלל" וב"ב.".', voice });
+  const r = await draftAll({ units: [{ id: 'U1', dependsOn: [] }] }, { runId: 'q10' });
+  assert.deepEqual(r.failures.map((f) => [f.unit, f.gate]), [['U1', 'quote-not-in-evidence']]);
+});
+
+test('quote gate: a one-letter quotation and a quotation ending in an acronym in one sentence pass with evidence', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { setPathArguments } = await import('../src/paths.ts');
+  const root = mkdtempSync(join(tmpdir(), 'aw-q11-')); const h = join(root, '.academic-helper'); mkdirSync(h, { recursive: true });
+  writeFileSync(join(h, 'evidence.json'), JSON.stringify({ sources: [{ id: 's1' }], passages: [{ id: 'p1', sourceId: 's1', quote: 'כדברי חז"ל' }] }));
+  setPathArguments(['--data-dir', root, '--project-dir', root]);
+  const voice = { exemplars: [], pairs: [], rules: '', styleWords: { banned: [], capped: [], filler: [] } };
+  __stubs({ gen: async () => 'הכותב דן ב"א" ואחר כך "כדברי חז"ל" בספרו.', voice });
+  const r = await draftAll({ units: [{ id: 'U1', dependsOn: [] }] }, { runId: 'q11' });
+  assert.deepEqual(r.failures.map((f) => [f.unit, f.gate]), []);
+});
+
+test('quote gate: a same-character nested quotation cannot hide an unsupported outer quotation', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { setPathArguments } = await import('../src/paths.ts');
+  const root = mkdtempSync(join(tmpdir(), 'aw-q12-')); const h = join(root, '.academic-helper'); mkdirSync(h, { recursive: true });
+  writeFileSync(join(h, 'evidence.json'), JSON.stringify({ sources: [{ id: 's1' }], passages: [] }));
+  setPathArguments(['--data-dir', root, '--project-dir', root]);
+  const voice = { exemplars: [], pairs: [], rules: '', styleWords: { banned: [], capped: [], filler: [] } };
+  __stubs({ gen: async () => 'הוא כתב "אחד שניים "שלוש ארבע" חמש שש".', voice });
+  const r = await draftAll({ units: [{ id: 'U1', dependsOn: [] }] }, { runId: 'q12' });
+  assert.deepEqual(r.failures.map((f) => [f.unit, f.gate]), [['U1', 'quote-not-in-evidence']]);
+});
+
+test('quote gate: an English same-character nested quotation cannot hide an unsupported outer quotation', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { setPathArguments } = await import('../src/paths.ts');
+  const root = mkdtempSync(join(tmpdir(), 'aw-q13-')); const h = join(root, '.academic-helper'); mkdirSync(h, { recursive: true });
+  writeFileSync(join(h, 'evidence.json'), JSON.stringify({ sources: [{ id: 's1' }], passages: [] }));
+  setPathArguments(['--data-dir', root, '--project-dir', root]);
+  const voice = { exemplars: [], pairs: [], rules: '', styleWords: { banned: [], capped: [], filler: [] } };
+  __stubs({ gen: async () => 'He wrote "one two "three four" five six".', voice });
+  const r = await draftAll({ units: [{ id: 'U1', dependsOn: [] }] }, { runId: 'q13' });
+  assert.deepEqual(r.failures.map((f) => [f.unit, f.gate]), [['U1', 'quote-not-in-evidence']]);
+});
+
+test('quote gate: a curly nested quotation is checked on its outer span', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { setPathArguments } = await import('../src/paths.ts');
+  const root = mkdtempSync(join(tmpdir(), 'aw-q14-')); const h = join(root, '.academic-helper'); mkdirSync(h, { recursive: true });
+  writeFileSync(join(h, 'evidence.json'), JSON.stringify({ sources: [{ id: 's1' }], passages: [] }));
+  setPathArguments(['--data-dir', root, '--project-dir', root]);
+  const voice = { exemplars: [], pairs: [], rules: '', styleWords: { banned: [], capped: [], filler: [] } };
+  __stubs({ gen: async () => 'He wrote \u201Cone two \u201Cthree four\u201D five six\u201D in his book.', voice });
+  const r = await draftAll({ units: [{ id: 'U1', dependsOn: [] }] }, { runId: 'q14' });
+  assert.deepEqual(r.failures.map((f) => [f.unit, f.gate]), [['U1', 'quote-not-in-evidence']]);
+});
+
+test('quote gate: an unmatched curly opening quote fails closed', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { setPathArguments } = await import('../src/paths.ts');
+  const root = mkdtempSync(join(tmpdir(), 'aw-q15-')); const h = join(root, '.academic-helper'); mkdirSync(h, { recursive: true });
+  writeFileSync(join(h, 'evidence.json'), JSON.stringify({ sources: [{ id: 's1' }], passages: [] }));
+  setPathArguments(['--data-dir', root, '--project-dir', root]);
+  const voice = { exemplars: [], pairs: [], rules: '', styleWords: { banned: [], capped: [], filler: [] } };
+  __stubs({ gen: async () => 'He wrote \u201Cone two three four five six seven in his book.', voice });
+  const r = await draftAll({ units: [{ id: 'U1', dependsOn: [] }] }, { runId: 'q15' });
+  assert.deepEqual(r.failures.map((f) => [f.unit, f.gate]), [['U1', 'quote-not-in-evidence']]);
+});
+
+test('quote gate: a nested quotation whose inner marks touch punctuation fails closed (English)', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { setPathArguments } = await import('../src/paths.ts');
+  const root = mkdtempSync(join(tmpdir(), 'aw-q16-')); const h = join(root, '.academic-helper'); mkdirSync(h, { recursive: true });
+  writeFileSync(join(h, 'evidence.json'), JSON.stringify({ sources: [{ id: 's1' }], passages: [] }));
+  setPathArguments(['--data-dir', root, '--project-dir', root]);
+  const voice = { exemplars: [], pairs: [], rules: '', styleWords: { banned: [], capped: [], filler: [] } };
+  __stubs({ gen: async () => 'He wrote "one two "(three four)" five six".', voice });
+  const r = await draftAll({ units: [{ id: 'U1', dependsOn: [] }] }, { runId: 'q16' });
+  assert.deepEqual(r.failures.map((f) => [f.unit, f.gate]), [['U1', 'quote-not-in-evidence']]);
+});
+
+test('quote gate: a nested quotation whose inner marks touch punctuation fails closed (Hebrew)', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { setPathArguments } = await import('../src/paths.ts');
+  const root = mkdtempSync(join(tmpdir(), 'aw-q17-')); const h = join(root, '.academic-helper'); mkdirSync(h, { recursive: true });
+  writeFileSync(join(h, 'evidence.json'), JSON.stringify({ sources: [{ id: 's1' }], passages: [] }));
+  setPathArguments(['--data-dir', root, '--project-dir', root]);
+  const voice = { exemplars: [], pairs: [], rules: '', styleWords: { banned: [], capped: [], filler: [] } };
+  __stubs({ gen: async () => 'הוא כתב "אחד שניים "(שלוש ארבע)" חמש שש".', voice });
+  const r = await draftAll({ units: [{ id: 'U1', dependsOn: [] }] }, { runId: 'q17' });
+  assert.deepEqual(r.failures.map((f) => [f.unit, f.gate]), [['U1', 'quote-not-in-evidence']]);
 });

@@ -494,8 +494,11 @@ class TestScriptSmoke(unittest.TestCase):
     SCRIPTS_DIR = os.path.join(SRC_DIR, "scripts")
 
     def test_detect_ai_typography_fixes_sample_text(self):
+        # Editor-review decision 1 (2026-10-26): the spaced em dash is the Hebrew
+        # dash and is KEPT; a spaced hyphen standing in for it becomes one, and
+        # an ASCII gershayim stand-in inside an acronym folds to the real mark.
         script = os.path.join(self.SCRIPTS_DIR, "detect-ai-typography.py")
-        sample = 'זהו משפט לדוגמה — עם "מרכאות" רגילות.'
+        sample = 'זהו משפט לדוגמה \u2014 עם "מרכאות" רגילות - ועוד על הרמב"ם.'
         proc = subprocess.run(
             [sys.executable, script, "--fix-and-output", "--json"],
             input=sample,
@@ -508,8 +511,14 @@ class TestScriptSmoke(unittest.TestCase):
         self.assertIn("fixed_text", data)
         self.assertIn("fixes", data)
         self.assertIsInstance(data["fixes"], list)
-        self.assertGreater(len(data["fixes"]), 0, "Expected em-dash fix to be reported")
-        self.assertNotIn("—", data["fixed_text"], "em-dash should have been fixed")
+        self.assertEqual(
+            data["fixed_text"],
+            'זהו משפט לדוגמה \u2014 עם "מרכאות" רגילות \u2014 ועוד על הרמב\u05f4ם.',
+        )
+        self.assertEqual(
+            sorted(f["type"] for f in data["fixes"]),
+            ["hebrew_gershayim", "spaced_hyphen_dash"],
+        )
 
     def test_detect_ai_typography_no_fixes_still_valid_json(self):
         script = os.path.join(self.SCRIPTS_DIR, "detect-ai-typography.py")
