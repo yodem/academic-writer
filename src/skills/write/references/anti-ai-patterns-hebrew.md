@@ -139,6 +139,18 @@ AI models sometimes use literary-dramatic language when analyzing religious or n
 | `כאן אין עמימות` / `אין ספק` as analytical conclusion about a text | Claims the text is unambiguous without showing why | Replace with evidence: `הנוסח המותנה (`אם`) אינו שולל ודאות — להיפך, הוא מחזק אותה` — cite the specific phrase |
 | Dramatic verbs applied to narrative elements or structures: `מתמוטטת`, `צורמת`, `רועמת`, `נפתח` | Fiction-register verbs in analytical context | Replace with analytical verbs: `מטשטשת`, `מפרה`, `מגדירה`, `מרחיב` |
 
+### L. Dashes (מקפים ומפרידים)
+
+The spaced em dash ` — ` is the ordinary Hebrew dash for an aside, so its presence is **not** an AI tell and is never auto-replaced. What reads as machine-written is overuse: a dash in most sentences of a paragraph, or a dash where a comma, a colon or parentheses would do. A hyphen standing in for the dash (` - `) is a typing shortcut that `scripts/detect-ai-typography.py` turns into ` — `.
+
+| AI Pattern | Better |
+|---|---|
+| A dash pair or a lone dash in most sentences of a paragraph | Keep a dash only for a true aside (a gloss, an apposition, a break after a parenthetical citation); use a comma, a colon or a new sentence for the rest |
+| A dash used where a colon introduces a quotation or an explanation | `:` |
+| ` - ` (spaced hyphen) as the dash | ` — ` (spaced em dash) |
+
+Left alone: hyphens inside compounds (`בר-אילן`, `תלת-שכבתית`), the en dash in numeric ranges (`עמ' N–M`), markdown bullets, tables, URLs.
+
 ## Scoring Dimensions
 
 Use these dimensions to **read** the paragraph, not to score it. **Do not assign a number and do not gate on one.** The numeric gate was removed in 0.9.0 because nothing computed the score — the drafting model rated its own unrevised draft, and it returned a flat maximum on every paragraph of a live 13-unit run while the auditor failed several of the same paragraphs. If a paragraph trips a dimension below, rewrite it; the auditor's VERDICT is the binding per-paragraph gate.

@@ -85,6 +85,11 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
   if [[ -d "$SRC_DIR/guide" ]]; then
     cp -R "$SRC_DIR/guide" "$PLUGIN_DIR/"
   fi
+  # Ship the bundled, opt-in venue profiles (`aw proofread --venue <slug>` falls back to them
+  # when the project has no .academic-helper/venues/<slug>.md).
+  if [[ -d "$SRC_DIR/venues" ]]; then
+    cp -R "$SRC_DIR/venues" "$PLUGIN_DIR/"
+  fi
   # Ship canonical JSON schemas beside the runtime scripts for gate.py.
   if [[ -d "$SRC_DIR/schemas" ]]; then
     cp -R "$SRC_DIR/schemas" "$PLUGIN_DIR/"

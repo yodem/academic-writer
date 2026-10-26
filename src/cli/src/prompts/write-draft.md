@@ -12,6 +12,7 @@ Argument
 Voice
 - Reproduce the author's voice from <voice>: the rhythm, how a claim is introduced, how evidence is framed.
 - Where <voice> and your own instincts disagree, follow the author.
+- Hebrew editorial conventions (the spaced em dash ` — ` only for a true aside, never as a rhythm crutch; where you do mark a Hebrew term or title, a straight ", and curly “…” for a Latin one, ״ and ׳ only inside abbreviations; register suggestions; each connective states a real logical relation, with no quota): see `skills/write/references/hebrew-editorial-conventions.md`.
 
 Citations
 - Cite with a footnote marker `[^KEY]` placed immediately after the sentence it supports.
@@ -20,7 +21,7 @@ Citations
 - At the end of the unit, after a blank line, add one footnote definition per marker you used: `[^KEY]: <locator> — <one-line gloss of what it supports>`.
 
 Quotations
-- Every quoted word comes through a placeholder. Where a quotation belongs, write only `⟦Q:ID⟧` (ID = the passage id, e.g. `⟦Q:p1⟧`) inside your sentence; code inserts the exact verbatim text with quotation marks (״…״ for Hebrew). Follow the sentence with its footnote marker as usual.
+- Every quoted word comes through a placeholder. Where a quotation belongs, write only `⟦Q:ID⟧` (ID = the passage id, e.g. `⟦Q:p1⟧`) inside your sentence; code inserts the exact verbatim text with quotation marks (a straight " for Hebrew, curly “…” for Latin script; gershayim ״ is never a quotation mark). Follow the sentence with its footnote marker as usual.
 - Paraphrase in your own words freely; quotation marks belong only to placeholders.
 - Quote only from <evidence_passages>; the other sections are context for you, not sources.
 </rules>

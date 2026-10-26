@@ -32,7 +32,7 @@ For a Markdown article, run the plugin command with a run id and an output folde
   --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$CLAUDE_PROJECT_DIR"
 ```
 
-- Add `--venue <slug>` when the author names a journal or venue.
+- Add `--venue <slug>` when the author names a journal or venue. The project's `.academic-helper/venues/<slug>.md` is used when it exists; otherwise a venue bundled with the plugin is used. The one bundled profile is `bar-ilan-seminar-apa-he` (hybrid citation style for a Hebrew seminar paper); use it only when the author asks for that style.
 - Add `--only mechanical`, `--only language` or `--only editorial` when the author wants just one pass (mechanical = typos and punctuation; language = wording and grammar; editorial = the memo on clarity and flow).
 - Do not read or print the article into the conversation. The command writes the detailed results to the output folder; copying the article here would only cost time and tokens.
 

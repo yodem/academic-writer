@@ -6,6 +6,10 @@ researcher submits to their own journals, not the one that happened to reject th
 this feature was built from. So the venue-specific list lives in the researcher's own
 `.academic-helper/venues/<slug>.md`, and everything venue-independent lives in
 src/skills/proofread/references/editorial-checks.md, which is always loaded.
+
+One exception is allow-listed below: `bar-ilan-seminar-apa-he`, an opt-in citation and layout
+house style (not a journal) bundled in src/venues/. It loads only with `--venue`, and a project
+file with the same slug wins. The default stays venue-free.
 """
 
 import os
@@ -93,16 +97,22 @@ class TestNoHardcodedVenue(unittest.TestCase):
             f"own .academic-helper/venues/: {offenders}",
         )
 
-    def test_no_venue_profile_is_shipped(self):
+    # Bundled profiles are opt-in citation and layout house styles, never journals. The default
+    # (no --venue) stays venue-free. Adding a name here is a deliberate decision, not a reflex.
+    BUNDLED_VENUE_PROFILES = {"bar-ilan-seminar-apa-he.md"}
+
+    def test_no_venue_profile_is_shipped_except_the_bundled_allowlist(self):
         tracked = subprocess.run(
             ["git", "ls-files"], cwd=REPO, capture_output=True, text=True, check=True
         ).stdout.split()
         shipped_venues = [
             p for p in tracked
-            if re.search(r"^(src|plugins)/.*/venues/", p)
+            if re.search(r"^(src|plugins)/(.*/)?venues/", p)
+            and os.path.basename(p) not in self.BUNDLED_VENUE_PROFILES
         ]
         self.assertEqual(
-            shipped_venues, [], f"the plugin must ship no venue profile: {shipped_venues}"
+            shipped_venues, [],
+            f"the plugin may bundle only the allow-listed opt-in profiles: {shipped_venues}",
         )
 
 

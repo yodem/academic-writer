@@ -21,7 +21,7 @@ type Stubs = { find?: (chunk: Chunk) => Promise<Change[]>; verify?: (changes: Ch
 let stubs: Stubs = {};
 export function __stubs(value: Stubs): void { stubs = value; }
 
-const findSchema = { type: 'object', required: ['changes'], properties: { changes: { type: 'array', items: { type: 'object', required: ['id','line','before','after','class','meaningRisk'], properties: { id: { type: 'string' }, line: { type: 'integer' }, before: { type: 'string' }, after: { type: ['string','null'] }, class: { type: 'string' }, meaningRisk: { type: 'string', enum: ['low','medium','high'] } } } } } };
+const findSchema = { type: 'object', required: ['changes'], properties: { changes: { type: 'array', items: { type: 'object', required: ['id','line','before','after','class','meaningRisk'], properties: { id: { type: 'string' }, line: { type: 'integer' }, before: { type: 'string' }, after: { type: ['string','null'] }, class: { type: 'string' }, meaningRisk: { type: 'string', enum: ['low','medium','high'] }, suggestion: { type: 'boolean' } } } } } };
 const verifySchema = { type: 'object', required: ['verdicts'], properties: { verdicts: { type: 'array', items: { type: 'object', required: ['id','verdict'], properties: { id: { type: 'string' }, verdict: { type: 'string', enum: ['uphold','refute'] } } } } } };
 const prompt = (file: string): string => file === 'proofread-find.md' ? findPrompt : file === 'proofread-verify.md' ? verifyPrompt : memoPrompt;
 type ContractChange = { change_id: string; stage: 'mechanical' | 'language'; line: number; type: string; level: 'letter' | 'word' | 'sentence'; before: string; after: string | null; rationale: string; meaningRisk: Change['meaningRisk']; mustCatch?: boolean; applied?: boolean; skipReason?: string | null; refutedBy?: string[]; occurrence?: number };
@@ -38,7 +38,7 @@ function contractChange(change: Change): ContractChange {
   return { change_id: createHash('sha256').update(idSeed).digest('hex').slice(0, 12), stage, line: change.line, type, level: ['typo','punctuation','typography'].includes(type) ? 'letter' : type === 'word' ? 'word' : 'sentence', before: change.before, after: change.after, rationale: typeof change.rationale === 'string' ? change.rationale : 'Proofread suggestion; compare with the surrounding context.', meaningRisk: change.meaningRisk, ...(change.mustCatch ? { mustCatch: true } : {}), ...(applied !== undefined ? { applied } : {}), ...(skipReason ? { skipReason } : {}), ...(typeof change.occurrence === 'number' ? { occurrence: change.occurrence } : {}) };
 }
 
-export type RunProofreadOptions = { article?: string; chunks?: number | Chunk[]; runId: string; venue?: string; only?: 'mechanical' | 'language' | 'editorial'; out?: string; dataDir?: string; projectDir?: string; voiceRules?: string };
+export type RunProofreadOptions = { article?: string; chunks?: number | Chunk[]; runId: string; venue?: string; only?: 'mechanical' | 'language' | 'editorial'; out?: string; dataDir?: string; projectDir?: string; voiceRules?: string; venueProfile?: string };
 export type ProofreadResult = { changes: Change[]; memo: string; proofed: string; report: string };
 
 async function command(bin: string, args: string[], cwd?: string): Promise<string> {
@@ -76,17 +76,29 @@ async function mapLimit<T, R>(items: T[], limit: number, operation: (item: T) =>
   return results;
 }
 async function find(chunk: Chunk, options: RunProofreadOptions, budget: Budget, hspell: Change[]): Promise<Change[]> {
-  const raw = stubs.find ? await stubs.find(chunk) : (await callGemini({ step: 'proofread.find', system: prompt('proofread-find.md'), parts: [`Chunk ${chunk.index}; absolute lines ${chunk.startLine}-${chunk.endLine}\n${options.voiceRules ?? ''}\nDictionary candidates (propose the correct spelling, or return none if a legitimate name/term):\n${JSON.stringify(hspell)}\n${chunk.text}`], responseSchema: findSchema, runId: options.runId, budget })).json as { changes: Change[] };
+  const raw = stubs.find ? await stubs.find(chunk) : (await callGemini({ step: 'proofread.find', system: prompt('proofread-find.md'), parts: [`Chunk ${chunk.index}; absolute lines ${chunk.startLine}-${chunk.endLine}\n${options.voiceRules ?? ''}\n${options.venueProfile ? `Venue profile ${options.venue} (opt-in; citation-form suggestions only):\n${options.venueProfile}\n` : ''}Dictionary candidates (propose the correct spelling, or return none if a legitimate name/term):\n${JSON.stringify(hspell)}\n${chunk.text}`], responseSchema: findSchema, runId: options.runId, budget })).json as { changes: Change[] };
   let candidates = Array.isArray(raw) ? raw : raw.changes;
   const kept: Change[] = [];
   for (const candidate of candidates) {
     const decision = await decide({ point: 'proofread.triage', question: 'Is this candidate a genuine proofread error?', options: ['keep','discard'], context: JSON.stringify(candidate), runId: options.runId, fallback: async () => 'keep' });
     if (decision.answer === 'keep') {
       const risk = await decide({ point: 'proofread.risk', question: 'What meaning risk does this candidate carry?', options: ['low','medium','high'], context: JSON.stringify(candidate), runId: options.runId, fallback: async () => candidate.meaningRisk });
-      kept.push({ ...candidate, meaningRisk: risk.answer as Change['meaningRisk'] });
+      // A convention suggestion is the author's call (never auto-applied), so no risk verdict lowers it below medium.
+      const meaningRisk = candidate.suggestion === true && risk.answer === 'low' ? 'medium' : risk.answer as Change['meaningRisk'];
+      kept.push({ ...candidate, meaningRisk });
     } else kept.push({ ...candidate, status: 'triaged-out' });
   }
   return kept;
+}
+
+// A venue profile is the project's own file when it has one, else the profile bundled in the plugin
+// (<plugin>/venues/<slug>.md). The project file always wins. The slug becomes a file name, so a slug
+// with a path separator or '..' resolves to nothing instead of leaving the venues folders.
+export function resolveVenueProfile(slug: string | undefined, project: string, root: string): string {
+  if (!slug || slug.trim() !== slug || /[\\/]/.test(slug) || slug.includes('..')) return '';
+  const candidates = [project ? join(project, '.academic-helper', 'venues', `${slug}.md`) : '', root ? join(root, 'venues', `${slug}.md`) : ''];
+  for (const path of candidates) if (path && existsSync(path)) return readFileSync(path, 'utf8');
+  return '';
 }
 
 export async function runProofread(options: RunProofreadOptions): Promise<ProofreadResult> {
@@ -126,7 +138,8 @@ async function proofreadRun(options: RunProofreadOptions): Promise<ProofreadResu
   }
   const voicePath = join(options.dataDir ?? process.env.CLAUDE_PLUGIN_DATA ?? '', 'voice', 'rules.md');
   const voiceRules = options.voiceRules ?? (existsSync(voicePath) ? readFileSync(voicePath, 'utf8') : '');
-  const stageOptions = { ...options, voiceRules };
+  const venueProfile = resolveVenueProfile(options.venue, project, root);
+  const stageOptions = { ...options, voiceRules, venueProfile };
   const hspell = deterministic.filter((change) => change.class === 'typo' && change.after === null);
   stepStart('find');
   const found = options.only === 'editorial' ? [] : await mapLimit(chunks, routeFor('proofread.find').concurrency, (chunk) => find(chunk, stageOptions, budget, hspell.filter((item) => item.line >= chunk.startLine && item.line <= chunk.endLine)));
@@ -178,8 +191,6 @@ async function proofreadRun(options: RunProofreadOptions): Promise<ProofreadResu
   const all: Change[] = [...deterministic.map((change) => ({ ...change, status: change.status ?? (change.after === null ? 'flag' : change.mustCatch === false ? 'suggestion' : 'must-catch'), applied: change.after !== null && change.mustCatch !== false })), ...candidates.map((change) => statusMap.get(change.id) ?? { ...change, status: 'unverified' })];
   const editorialChecksPath = join(root, 'skills', 'proofread', 'references', 'editorial-checks.md');
   const editorialChecks = article && existsSync(editorialChecksPath) ? readFileSync(editorialChecksPath, 'utf8') : '';
-  const venuePath = options.venue && project ? join(project, '.academic-helper', 'venues', `${options.venue}.md`) : '';
-  const venueProfile = venuePath && existsSync(venuePath) ? readFileSync(venuePath, 'utf8') : '';
   stepStart('memo');
   // The editorial memo is its own pass: --only mechanical|language skips it (it was always billed).
   const memo = options.only && options.only !== 'editorial' ? '' : stubs.memo ? await stubs.memo() : (await callGemini({ step: 'proofread.memo', system: prompt('proofread-memo.md'), parts: [`Global editorial checks (always apply):\n${editorialChecks}\n\nOptional additive venue profile${options.venue ? ` (${options.venue})` : ''}:\n${venueProfile || 'None available.'}\n\nArticle:\n${content}`], runId: options.runId, budget })).text;

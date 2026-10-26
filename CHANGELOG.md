@@ -4,8 +4,24 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+### Changed
+- **The spaced em dash is the Hebrew dash.** Hebrew prose keeps ` — ` for an aside, and a mid-line spaced hyphen used as a dash becomes ` — ` (bullets, tables, frontmatter, code, URLs, ranges, compounds and the bibliography are left alone). English text keeps the hyphen convention (`typography.dashReplacementLatin`). The drafting prompt still keeps dashes for true asides.
+- **Straight quotes for Hebrew quotations.** Hebrew quotations, terms and titles take a straight `"`, Latin-script ones curly `“…”`; ״ and ׳ appear only inside abbreviations and Hebrew-letter numerals. `aw draft` inserts quotations this way.
+- **No linking-word quota.** The "at least two linking words per paragraph" rule is replaced by: each connective states a real logical relation.
+- **Word output.** David for Hebrew and Times New Roman for Latin-dominant paragraphs (set per run); English-leading footnotes and references are left-to-right; real Heading 1/2 styles; a Word table-of-contents field (page numbers fill in when Word updates fields); an unnumbered cover page; each top-level section on a new page. Each is switchable under `format`.
+- **The quote evidence gate parses quotation marks by placement.** Ambiguous marks (ב"א", ב"ה) are read every plausible way and every reading must pass; nested or unpaired marks fail closed with a fix-it message, so an unsupported quotation can no longer slip past.
+
+### Added
+- `/academic-writer:revise --editor`: a deep review of a professionally edited Word file — every tracked change (body, footnotes, formatting) extracted with a stable id by `docx-editor-diff.py`, analysed per chunk, merged into a rule catalogue, checked by skeptics and confirmed with the author.
+- `skills/write/references/hebrew-editorial-conventions.md` (suggestions for drafting and proofreading; never auto-applied) and a bundled opt-in venue profile `venues/bar-ilan-seminar-apa-he.md` (in-text author/year/עמ׳ citations, short-form notes, APA 7 and Hebrew-adapted reference lists, Maagarim manuscript witnesses). `--venue` finds a bundled profile when the project has none, and the finder sees it too.
+- Validator reports for double commas, double periods, mirrored parentheses and gershayim used as quotation marks; double spaces and a no-break space before a colon are advisory.
+
 ### Fixed
 - **Term and style-word corrections no longer corrupt Hebrew words or quoted sources.** `must-catch.py` matched a variant or banned word as a raw substring and applied it automatically, so it rewrote a stem inside a longer word (it would have cut `ממש` out of `וממשיך`) and changed the spelling of cited titles. It now matches whole words, with a Hebrew prefix of one to three letters allowed, and leaves quotations, block quotes, footnote definitions, the bibliography, tables, code and URLs alone. A match that relies on a prefix (`מממש` may be מ+ממש or the verb) is shown to the author instead of applied, and never counts toward a cap. Caps reset at every heading.
+- **`/revise` reads footnotes, formatting changes and paragraph context.** It used to read only the body and returned context-free fragments.
+- **Parentheses between two citations are no longer swapped.** `fix_rtl_punctuation` matched the gap between two correct parentheses.
+- **Convention suggestions never auto-apply,** even when a risk verdict comes back low.
+- The repo-root `scripts/validate-hebrew-punctuation.py` runs the canonical validator instead of crashing on import.
 
 ## [0.20.8] — 2026-10-26
 
