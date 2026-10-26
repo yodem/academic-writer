@@ -41991,13 +41991,13 @@ async function proofreadRun(options) {
     return true;
   });
   deterministic = deterministic.map((miss) => {
-    if (miss.after !== null) return miss;
+    if (miss.after !== null || miss.class !== "typo" || miss.mustCatch === false) return miss;
     const correction = candidates2.find((candidate) => candidate.line === miss.line && candidate.after !== null && (candidate.before.includes(miss.before) || miss.before.includes(candidate.before)));
     return correction ? { ...correction, id: miss.id, mustCatch: true, status: "must-catch+finder" } : miss;
   });
   candidates2 = candidates2.map((candidate) => hspell.some((miss) => miss.line === candidate.line && candidate.after !== null && (candidate.before.includes(miss.before) || miss.before.includes(candidate.before))) ? { ...candidate, status: "superseded-by-must-catch", applied: false, skipReason: "superseded-by-must-catch" } : candidate);
   candidates2 = candidates2.map((candidate) => {
-    const winner = deterministic.find((fixed) => fixed.after !== null && fixed.line === candidate.line && (fixed.before.includes(candidate.before) || candidate.before.includes(fixed.before)));
+    const winner = deterministic.find((fixed) => fixed.after !== null && fixed.mustCatch !== false && fixed.line === candidate.line && (fixed.before.includes(candidate.before) || candidate.before.includes(fixed.before)));
     return winner ? { ...candidate, status: "superseded-by-must-catch", applied: false, skipReason: "superseded-by-must-catch" } : candidate;
   });
   const verifiable = candidates2.filter((change) => change.status !== "triaged-out" && change.status !== "superseded-by-must-catch" && (change.meaningRisk === "low" || change.meaningRisk === "medium" && change.class === "wrong_word"));
@@ -42027,7 +42027,7 @@ ${JSON.stringify(changes)}`, schema: verifySchema, runId: options.runId, finderP
   });
   stepEnd("verify");
   const statusMap = new Map(verified.flat().map((change) => [change.id, change]));
-  const all = [...deterministic.map((change) => ({ ...change, status: change.status ?? (change.after === null ? "flag" : "must-catch"), applied: change.after !== null })), ...candidates2.map((change) => statusMap.get(change.id) ?? { ...change, status: "unverified" })];
+  const all = [...deterministic.map((change) => ({ ...change, status: change.status ?? (change.after === null ? "flag" : change.mustCatch === false ? "suggestion" : "must-catch"), applied: change.after !== null && change.mustCatch !== false })), ...candidates2.map((change) => statusMap.get(change.id) ?? { ...change, status: "unverified" })];
   const editorialChecksPath = join5(root, "skills", "proofread", "references", "editorial-checks.md");
   const editorialChecks = article && existsSync3(editorialChecksPath) ? readFileSync4(editorialChecksPath, "utf8") : "";
   const venuePath = options.venue && project ? join5(project, ".academic-helper", "venues", `${options.venue}.md`) : "";

@@ -139,7 +139,7 @@ async function proofreadRun(options: RunProofreadOptions): Promise<ProofreadResu
   // A dictionary miss is a prompt for the finder, not a correction. Prefer a
   // non-null finder correction covering that token; otherwise retain the flag.
   deterministic = deterministic.map((miss) => {
-    if (miss.after !== null) return miss;
+    if (miss.after !== null || miss.class !== 'typo' || miss.mustCatch === false) return miss;
     const correction = candidates.find((candidate) => candidate.line === miss.line && candidate.after !== null && (candidate.before.includes(miss.before) || miss.before.includes(candidate.before)));
     return correction ? { ...correction, id: miss.id, mustCatch: true, status: 'must-catch+finder' } : miss;
   });
@@ -149,7 +149,7 @@ async function proofreadRun(options: RunProofreadOptions): Promise<ProofreadResu
   // Explicit terminology and other deterministic corrections win on an
   // overlapping source span; record the finder as superseded for the report.
   candidates = candidates.map((candidate) => {
-    const winner = deterministic.find((fixed) => fixed.after !== null && fixed.line === candidate.line && (fixed.before.includes(candidate.before) || candidate.before.includes(fixed.before)));
+    const winner = deterministic.find((fixed) => fixed.after !== null && fixed.mustCatch !== false && fixed.line === candidate.line && (fixed.before.includes(candidate.before) || candidate.before.includes(fixed.before)));
     return winner ? { ...candidate, status: 'superseded-by-must-catch', applied: false, skipReason: 'superseded-by-must-catch' } : candidate;
   });
   const verifiable = candidates.filter((change) => change.status !== 'triaged-out' && change.status !== 'superseded-by-must-catch' && (change.meaningRisk === 'low' || (change.meaningRisk === 'medium' && change.class === 'wrong_word')));
@@ -175,7 +175,7 @@ async function proofreadRun(options: RunProofreadOptions): Promise<ProofreadResu
   });
   stepEnd('verify');
   const statusMap = new Map(verified.flat().map((change) => [change.id, change]));
-  const all: Change[] = [...deterministic.map((change) => ({ ...change, status: change.status ?? (change.after === null ? 'flag' : 'must-catch'), applied: change.after !== null })), ...candidates.map((change) => statusMap.get(change.id) ?? { ...change, status: 'unverified' })];
+  const all: Change[] = [...deterministic.map((change) => ({ ...change, status: change.status ?? (change.after === null ? 'flag' : change.mustCatch === false ? 'suggestion' : 'must-catch'), applied: change.after !== null && change.mustCatch !== false })), ...candidates.map((change) => statusMap.get(change.id) ?? { ...change, status: 'unverified' })];
   const editorialChecksPath = join(root, 'skills', 'proofread', 'references', 'editorial-checks.md');
   const editorialChecks = article && existsSync(editorialChecksPath) ? readFileSync(editorialChecksPath, 'utf8') : '';
   const venuePath = options.venue && project ? join(project, '.academic-helper', 'venues', `${options.venue}.md`) : '';

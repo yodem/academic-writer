@@ -4,6 +4,9 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- **Term and style-word corrections no longer corrupt Hebrew words or quoted sources.** `must-catch.py` matched a variant or banned word as a raw substring and applied it automatically, so it rewrote a stem inside a longer word (it would have cut `ממש` out of `וממשיך`) and changed the spelling of cited titles. It now matches whole words, with a Hebrew prefix of one to three letters allowed, and leaves quotations, block quotes, footnote definitions, the bibliography, tables, code and URLs alone. A match that relies on a prefix (`מממש` may be מ+ממש or the verb) is shown to the author instead of applied, and never counts toward a cap. Caps reset at every heading.
+
 ## [0.20.8] — 2026-10-26
 
 ### Fixed

@@ -97,3 +97,30 @@ test('--only mechanical skips the editorial memo call', async () => {
   const r = await runProofread({ chunks: 1, runId: 'onlymech', only: 'mechanical' });
   assert.equal(memoCalls, 0); assert.equal(r.memo, '');
 });
+
+test('a must-catch match that relies on a Hebrew prefix is reported for the author, never applied', async () => {
+  __stubs({
+    find: async (chunk) => [{ id: 'f1', line: chunk.startLine, before: 'מממש', after: 'מממש', class: 'typo', meaningRisk: 'low' }],
+    mustCatch: async () => [{ id: 'mc-0001', line: 1, before: 'ממש', after: '', class: 'style_words', meaningRisk: 'medium', mustCatch: false, prefixed: true, finder: 'must-catch' }],
+    verify: async (changes) => changes.map((change) => ({ id: change.id, verdict: 'uphold' })),
+    memo: async () => '',
+  });
+  const result = await runProofread({ chunks: [{ id: 'c', index: 0, startLine: 1, endLine: 1, text: 'הוא מממש את הרעיון.' }], runId: 't-prefixed', out: paths() });
+  const change = result.changes.find((item) => item.id === 'mc-0001');
+  assert.equal(change?.status, 'suggestion');
+  assert.notEqual(change?.applied, true);
+  assert.notEqual(result.changes.find((item) => item.id === 'f1')?.status, 'superseded-by-must-catch');
+});
+
+test('a prefixed must-catch flag with no correction is not promoted by a finder correction', async () => {
+  __stubs({
+    find: async (chunk) => [{ id: 'f2', line: chunk.startLine, before: 'ממש', after: 'בדיוק', class: 'register', meaningRisk: 'low' }],
+    mustCatch: async () => [{ id: 'mc-0002', line: 1, before: 'ממש', after: null, class: 'style_words', meaningRisk: 'medium', mustCatch: false, prefixed: true, finder: 'must-catch' }],
+    verify: async (changes) => changes.map((change) => ({ id: change.id, verdict: 'refute' })),
+    memo: async () => '',
+  });
+  const result = await runProofread({ chunks: [{ id: 'c', index: 0, startLine: 1, endLine: 1, text: 'הוא מממש רעיון.' }], runId: 't-prefixed-flag', out: paths() });
+  const change = result.changes.find((item) => item.id === 'mc-0002');
+  assert.notEqual(change?.mustCatch, true);
+  assert.notEqual(change?.applied, true);
+});
