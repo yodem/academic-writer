@@ -97,3 +97,18 @@ test('--only mechanical skips the editorial memo call', async () => {
   const r = await runProofread({ chunks: 1, runId: 'onlymech', only: 'mechanical' });
   assert.equal(memoCalls, 0); assert.equal(r.memo, '');
 });
+
+test('a convention suggestion is never applied, even when its risk comes back low', async () => {
+  let verified = 0;
+  __stubs({
+    find: async (chunk) => [{ id: 'conv', line: chunk.startLine, before: 'אחר כך', after: 'לאחר מכן', class: 'register', meaningRisk: 'low', suggestion: true }],
+    mustCatch: async () => [],
+    verify: async (changes) => { verified += changes.length; return changes.map((change) => ({ id: change.id, verdict: 'uphold' })); },
+    memo: async () => '',
+  });
+  const result = await runProofread({ chunks: [{ id: 'c', index: 0, startLine: 1, endLine: 1, text: 'אחר כך' }], runId: 't-suggestion', out: paths() });
+  const change = result.changes.find((item) => item.id === 'conv');
+  assert.equal(change?.meaningRisk, 'medium');
+  assert.notEqual(change?.applied, true);
+  assert.equal(verified, 0);
+});

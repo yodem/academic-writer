@@ -17,16 +17,28 @@ script direction, so this validator counts pairs in logical order exactly as
 it would for any other language -- it does not try to reason about visual
 left/right position.
 
-Also implements one acronym-aware heuristic for Hebrew straight-quote (")
-usage: a `"` with a Hebrew letter immediately before AND after it (no
-whitespace) is a rashei-tevot / acronym marker (e.g. tanach, malachim-alef)
-rather than a quotation delimiter, and is excluded from quotation-pair
-counting so it doesn't produce false positives.
+Quote convention (author decision 2026-10-26): a straight `"` around Hebrew
+quotations, quoted terms and titles; curly for Latin; gershayim (״) only
+inside abbreviations and numerals. A `"` between two Hebrew letters is an
+acronym/numeral marker (רמב"ם, תשכ"ב) and is excluded from quotation-pair
+counting, EXCEPT a prefix-attached opener (ב"תשורי", ה"יש מאין") that has a
+closing quote on the same line; the shared classifier is
+typography_fixes.analyse_double_quotes.
+
+Reports (none of them rewrites anything):
+    UNBALANCED_BRACKET / UNBALANCED_QUOTE / MIXED_QUOTE_CHARACTER (gershayim
+    and a straight quote delimiting ONE quotation, or both styles delimiting
+    quotations in one paragraph) / GERSHAYIM_AS_QUOTE (a quotation delimited by
+    ״) / BIDI_MARK_LIKELY_MISSING / MIRRORED_PARENTHESES (a `)` before its `(`)
+    / DOUBLE_COMMA (`,,` or `, ,`) / DOUBLE_PERIOD (`..` that is not an
+    ellipsis and not bracketed) / DOUBLE_SPACE / NBSP_BEFORE_COLON.
 
 Usage:
     python3 scripts/validate-hebrew-punctuation.py <file-or-directory> [...]
 
-Exit code: 0 if no violations found, 1 if any violations found.
+Exit code: 0 if no violations found, 1 if any violations found. DOUBLE_SPACE and
+NBSP_BEFORE_COLON are advisory (printed, never fail the gate): the typography
+fixer removes them deterministically.
 Dependency-free (Python 3 stdlib only).
 """
 
@@ -35,6 +47,10 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+
+from typography_fixes import classify_double_quotes, iter_text_lines, outer_pairs  # noqa: E402
 
 HEB = r"א-ת"  # Hebrew alef-tav block
 HEB_ANY = r"֐-׿יִ-ﭏ"  # Hebrew block + presentation forms
@@ -49,7 +65,15 @@ BIDI_MARKS = (
 
 PAREN_PAIRS = [("(", ")"), ("[", "]")]
 
-ACRONYM_QUOTE_RE = re.compile(rf"(?<=[{HEB}])\"(?=[{HEB}])")
+DOUBLE_COMMA_RE = re.compile(r",[ ]?,")
+# `..` that is neither part of a longer run (an ellipsis) nor bracketed ([..]).
+DOUBLE_PERIOD_RE = re.compile(r"(?<![.\[(/])\.\.(?![.\])/])")
+# Reported but never gate-failing: detect-ai-typography's fix_whitespace removes them.
+ADVISORY_CODES = {"DOUBLE_SPACE", "NBSP_BEFORE_COLON"}
+INNER_DOUBLE_SPACE_RE = re.compile(r"(?<=\S) {2,}(?=\S)")
+SPACE_BEFORE_COLON_RE = re.compile("(?<=\\S)[\u00a0\u202f]+(?=:)")
+# A list enumerator such as "1)" or "א)" is a `)` with no `(`; not bidi debris.
+ENUMERATOR_RE = re.compile(rf"(?:^|(?<=\s))[0-9{HEB}a-zA-Z]{{1,2}}\)")
 
 # A run of 2+ Latin letters or digits (a "foreign" run) sitting inside a
 # Hebrew-majority paragraph, immediately abutting a Hebrew quotation mark
@@ -112,29 +136,80 @@ def check_paragraph(path: Path, start_line: int, para: str) -> list[str]:
                 f"'{open_ch}'={opens} vs '{close_ch}'={closes} :: ...{snippet}..."
             )
 
-    # Quote-pair check: drop acronym-style quotes first, then require an even
-    # count of the remainder.
-    stripped = ACRONYM_QUOTE_RE.sub("", para)
-    dq_count = stripped.count('"')
-    if dq_count % 2 == 1:
-        idx = para.rfind('"')
-        snippet = context_snippet(para, idx if idx >= 0 else 0)
+    flat = para.replace("\n", " ")
+
+    # Mirrored parentheses: a `)` that comes before its `(` while the counts
+    # are equal (unequal counts are UNBALANCED_BRACKET above). This is what a
+    # bidi-reordered ")text(" looks like in logical order.
+    if flat.count("(") == flat.count(")"):
+        scan = ENUMERATOR_RE.sub(lambda m: " " * len(m.group(0)), flat)
+        depth = 0
+        for idx, ch in enumerate(scan):
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth < 0:
+                    violations.append(
+                        f"{path}:{start_line}: MIRRORED_PARENTHESES "
+                        f"')' appears before its '(' (reversed pair) :: "
+                        f"...{context_snippet(flat, idx)}..."
+                    )
+                    break
+
+    # Quote check, by the shared classifier: in-word `"` (acronym/numeral
+    # marks) are dropped, a prefix-attached opener with a closer is kept, and
+    # the rest must pair up. Parity of the remaining straight quotes is the
+    # balance test.
+    all_pairs, abbr, stray, dangling = classify_double_quotes(flat, '"״“”')
+    # A prefix-attached opener (ב"תשורי) with no closing quote is a dangling
+    # quotation mark here, not an abbreviation: it counts toward the parity.
+    dq_count = sum(1 for i, ch in enumerate(flat) if ch == '"' and i not in abbr)
+    unpaired = sorted(i for i in stray | dangling if flat[i] == '"')
+    if dq_count % 2 == 1 or unpaired:
+        idx = unpaired[0] if unpaired else flat.rfind('"')
+        what = "is odd" if dq_count % 2 == 1 else "has an unpaired quote"
         violations.append(
             f"{path}:{start_line}: UNBALANCED_QUOTE "
-            f"straight-double-quote count (excl. acronym markers) is odd "
-            f"({dq_count}) :: ...{snippet}..."
+            f"straight-double-quote count (excl. acronym markers) {what} "
+            f"({dq_count}) :: ...{context_snippet(flat, idx if idx >= 0 else 0)}..."
         )
 
-    # Gershayim balance (paired quotation use of ״ is much rarer than
-    # acronym use, but a lone gershayim adjacent to a straight quote is a
-    # strong signal of a mixed-quote-character defect, e.g. ״text" ).
-    mixed = re.search(r'״[^״"]{0,200}"', para) or re.search(r'"[^״"]{0,200}״', para)
-    if mixed:
-        idx = mixed.start()
-        snippet = context_snippet(para, idx)
+    # Gershayim is an abbreviation mark, not a quotation mark. A pair delimited
+    # by ״ is the old plugin style; a pair that mixes ״ with `"` is a defect
+    # either way; ״-quotes next to `"`-quotes in one paragraph is inconsistent.
+    # Only outermost pairs count: a quotation inside a quotation keeps the
+    # source's own marks.
+    pairs = outer_pairs(all_pairs)
+    mixed_pair = next(
+        ((o, c) for o, c in pairs if (flat[o] == "״") != (flat[c] == "״")), None
+    )
+    gersh_pairs = [(o, c) for o, c in pairs if flat[o] == "״" and flat[c] == "״"]
+    straight_pairs = [(o, c) for o, c in pairs if flat[o] == '"' and flat[c] == '"']
+    if mixed_pair or (gersh_pairs and straight_pairs):
+        idx = mixed_pair[0] if mixed_pair else gersh_pairs[0][0]
         violations.append(
             f"{path}:{start_line}: MIXED_QUOTE_CHARACTER "
-            f'gershayim (״) paired with a straight quote (") :: ...{snippet}...'
+            f'gershayim (״) and a straight quote (") both used as quotation '
+            f"marks :: ...{context_snippet(flat, idx)}..."
+        )
+    elif gersh_pairs:
+        violations.append(
+            f"{path}:{start_line}: GERSHAYIM_AS_QUOTE "
+            f"gershayim (״) used as a quotation mark; use a straight quote (\") "
+            f"for Hebrew quotations :: ...{context_snippet(flat, gersh_pairs[0][0])}..."
+        )
+
+    for m in DOUBLE_COMMA_RE.finditer(flat):
+        violations.append(
+            f"{path}:{start_line}: DOUBLE_COMMA "
+            f"',,' or ', ,' :: ...{context_snippet(flat, m.start())}..."
+        )
+    for m in DOUBLE_PERIOD_RE.finditer(flat):
+        violations.append(
+            f"{path}:{start_line}: DOUBLE_PERIOD "
+            f"'..' that is not an ellipsis or bracketed :: "
+            f"...{context_snippet(flat, m.start())}..."
         )
 
     # Bidi-mark sanity heuristic: only applies to Hebrew-majority paragraphs
@@ -166,6 +241,30 @@ def check_file(path: Path) -> list[str]:
             # just don't special-case them out -- fall through.
             pass
         violations.extend(check_paragraph(path, start_line, para))
+    violations.extend(check_whitespace(path, text))
+    return violations
+
+
+def check_whitespace(path: Path, text: str) -> list[str]:
+    """Double spaces between words and a no-break space before ':'. Table rows,
+    frontmatter, fenced code, leading indentation and a trailing hard break
+    (two spaces at the end of a line) are not reported."""
+    violations: list[str] = []
+    for line_no, (_, line, structural, _bib) in enumerate(iter_text_lines(text), start=1):
+        if structural:
+            continue
+        for m in SPACE_BEFORE_COLON_RE.finditer(line):
+            violations.append(
+                f"{path}:{line_no}: NBSP_BEFORE_COLON "
+                f"no-break space (U+{ord(m.group(0)[0]):04X}) before ':' :: "
+                f"...{context_snippet(line, m.start())}..."
+            )
+        for m in INNER_DOUBLE_SPACE_RE.finditer(line):
+            violations.append(
+                f"{path}:{line_no}: DOUBLE_SPACE "
+                f"{len(m.group(0))} spaces between words :: "
+                f"...{context_snippet(line, m.start())}..."
+            )
     return violations
 
 
@@ -193,14 +292,19 @@ def main(argv: list[str]) -> int:
         return 0
 
     total_violations = 0
+    advisory = 0
     for f in files:
         violations = check_file(f)
         for v in violations:
             print(v)
-        total_violations += len(violations)
+            if (m := re.match(r".*?:\d+: ([A-Z_]+)", v)) and m.group(1) in ADVISORY_CODES:
+                advisory += 1
+            else:
+                total_violations += 1
 
     print()
-    print(f"Checked {len(files)} file(s); {total_violations} violation(s) found.")
+    print(f"Checked {len(files)} file(s); {total_violations} violation(s) found"
+          + (f", plus {advisory} advisory whitespace note(s)." if advisory else "."))
     return 1 if total_violations else 0
 
 

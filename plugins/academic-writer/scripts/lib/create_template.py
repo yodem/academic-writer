@@ -137,8 +137,9 @@ def create_template_with_footnotes(template_path="footnote_template.docx"):
     fn_text_rPr = etree.SubElement(fn_text_style, "{%s}rPr" % w_ns)
     etree.SubElement(fn_text_rPr, "{%s}sz" % w_ns).set("{%s}val" % w_ns, "20")
     etree.SubElement(fn_text_rPr, "{%s}szCs" % w_ns).set("{%s}val" % w_ns, "20")
-    # RTL run direction for Hebrew footnote text
-    etree.SubElement(fn_text_rPr, "{%s}rtl" % w_ns)
+    # No w:rtl in the style: run direction is set per footnote run by
+    # FootnoteAdder (an inherited w:rtl cannot be removed from an LTR run
+    # without an explicit w:rtl w:val="0" override).
 
     styles_tree.write(styles_path, xml_declaration=True, encoding="UTF-8", standalone="yes")
 

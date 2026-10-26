@@ -63,7 +63,7 @@ print(m.group(1) if m else 'null')
 "
 ```
 
-And load linking words reference and the positive terminology reference for Academic Conventions (dimension 6) — the terminology file's language-specific variant is picked from the article's `targetLanguage` (read from `.academic-helper/profile.md`'s frontmatter, e.g. `targetLanguage: Hebrew`; fall back to the English file if the language-specific file is missing):
+And load linking words reference (judge whether each connective states a real logical relation and flag vague links such as וכך, והוא or ממנו used loosely; do not count connectives or penalise a paragraph for having few) and the positive terminology reference for Academic Conventions (dimension 6) — the terminology file's language-specific variant is picked from the article's `targetLanguage` (read from `.academic-helper/profile.md`'s frontmatter, e.g. `targetLanguage: Hebrew`; fall back to the English file if the language-specific file is missing):
 ```bash
 LANG_LOWER=$(grep -m1 '^targetLanguage:' .academic-helper/profile.md 2>/dev/null | sed 's/^targetLanguage:[[:space:]]*//' | tr '[:upper:]' '[:lower:]')
 LANG_LOWER=${LANG_LOWER:-hebrew}

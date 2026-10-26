@@ -5,11 +5,16 @@
 """
 Academic Writer — AI Typography Detector / Fixer (CLI)
 
-Deterministic (non-LLM) pass over a paragraph of text that scrubs the
-mechanical typography tells left behind by LLM generation: em/en-dashes used
-as parenthetical breaks, curly/straight quote mismatches across script
-direction, RTL punctuation-order mistakes in Hebrew, and stray Unicode
-directional-formatting characters.
+Deterministic (non-LLM) pass over a paragraph of text that fixes the
+mechanical typography defects left behind by LLM generation and hand-typing: a
+spaced hyphen used as the Hebrew dash (turned into a spaced em dash), quotation
+marks that do not follow the Hebrew convention (straight " for Hebrew, curly
+for Latin; gershayim only inside abbreviations), RTL punctuation-order mistakes
+in Hebrew, stray Unicode directional-formatting characters, and stray
+whitespace (double spaces, a no-break space before a colon).
+
+The spaced em dash " — " is the Hebrew dash for an aside and is kept. Nothing
+here rewrites it unless a legacy --dash-replacement value is chosen.
 
 This script never touches content, wording, or citations — it only fixes
 typography. Content-level "Anti-AI" scoring (Tier 2) is a separate, LLM-driven
@@ -26,7 +31,7 @@ are zero fixes:
     {
       "fixed_text": "...",
       "fixes": [
-        {"type": "em_dash", "original": "—", "replacement": "-", "position": 42},
+        {"type": "spaced_hyphen_dash", "original": "-", "replacement": "—", "position": 42},
         ...
       ]
     }
@@ -39,12 +44,17 @@ Flags:
     --json               Emit JSON (currently the only supported output
                          format; kept explicit for forward compatibility).
     --input FILE         Read text from FILE instead of stdin.
-    --dash-replacement {hyphen,comma,colon,remove}
-                         Convention used to fix em-dashes and non-numeric-
-                         range en-dashes. Defaults to
+    --dash-replacement {em,keep,hyphen,comma,colon,remove}
+                         Dash convention. "em" (the default) keeps every dash
+                         and turns a spaced hyphen used as a dash into a
+                         spaced em dash; "keep" leaves all dashes untouched;
+                         hyphen/comma/colon/remove are the legacy convention
+                         that replaces em-dashes and non-numeric-range
+                         en-dashes. Defaults to
                          thresholds.json > typography.dashReplacement (falls
-                         back to "hyphen" if thresholds.json is unreadable).
-    --no-dashes, --no-quotes, --no-rtl-punctuation, --no-directional-marks
+                         back to "em" if thresholds.json is unreadable).
+    --no-dashes, --no-quotes, --no-rtl-punctuation, --no-directional-marks,
+    --no-whitespace
                          Disable individual fix categories.
 
 No third-party dependencies — Python 3 standard library only.
@@ -63,6 +73,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from typography_fixes import (  # noqa: E402
     DASH_REPLACEMENTS,
     load_default_dash_replacement,
+    is_latin_dominant,
     run as run_fixes,
 )
 
@@ -88,7 +99,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--dash-replacement",
         choices=sorted(DASH_REPLACEMENTS.keys()),
         default=None,
-        help="Override the em/en-dash fix convention (default: thresholds.json > typography.dashReplacement).",
+        help="Dash convention: em (default; spaced hyphen -> spaced em dash), keep, or a legacy replacement for em/en dashes (default: thresholds.json > typography.dashReplacement).",
     )
     parser.add_argument("--no-dashes", action="store_true", help="Disable dash fixes.")
     parser.add_argument(
@@ -103,6 +114,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--no-directional-marks",
         action="store_true",
         help="Disable directional-mark stripping.",
+    )
+    parser.add_argument(
+        "--no-whitespace",
+        action="store_true",
+        help="Disable whitespace fixes (double spaces, no-break space before a colon).",
     )
     return parser
 
@@ -122,8 +138,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         text = text[:-1]
 
     script_dir = Path(__file__).resolve().parent
+    # The em-dash convention is Hebrew; an English (Latin-dominant) text keeps
+    # typography.dashReplacementLatin unless --dash-replacement is given.
     dash_replacement = args.dash_replacement or load_default_dash_replacement(
-        script_dir
+        script_dir, latin=is_latin_dominant(text)
     )
 
     report = run_fixes(
@@ -133,6 +151,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         do_quotes=not args.no_quotes,
         do_rtl=not args.no_rtl_punctuation,
         do_directional=not args.no_directional_marks,
+        do_whitespace=not args.no_whitespace,
     )
 
     if not args.fix_and_output:

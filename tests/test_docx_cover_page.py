@@ -112,7 +112,7 @@ class CoverPageFullyPopulatedTests(unittest.TestCase):
             "studentId": "123456789",
             "supervisor": "פרופ' כהן",
             "course": "סמינר מתקדם",
-            "date": "תשפ״ה",  # gershayim -- matches validate_hebrew_text's own output
+            "date": "תשפ״ה",  # typed gershayim: the renderer leaves it (and straight quotes) untouched
             "aiUseDeclaration": "הצהרה מפורשת על שימוש בבינה מלאכותית.",
         }
         self.data = _base_data(coverPage=self.cover)
@@ -222,11 +222,10 @@ class CoverPagePageBreakTests(unittest.TestCase):
 class CoverPageDefaultDeclarationTests(unittest.TestCase):
     """Assertions run the constant through `validate_hebrew_text` -- the
     same normalization every paragraph's text passes through in `add_para`
-    -- rather than comparing against the raw constant. The constants
-    currently contain no em-dash or straight quote, so this makes no
-    difference today, but it means these tests keep tracking the rendered
-    text (not a snapshot of today's punctuation) if a human edits the
-    wording later to include either.
+    -- rather than comparing against the raw constant, so these tests keep
+    tracking the rendered text if a human edits the wording. Since decisions
+    1 and 2 (2026-10-26) the function no longer converts dashes or quotes;
+    it only strips stray directional marks and orphan punctuation.
     """
 
     def setUp(self):
