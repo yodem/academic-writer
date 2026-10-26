@@ -4,6 +4,8 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-10-26
+
 ### Changed
 - **The spaced em dash is the Hebrew dash.** Hebrew prose keeps ` — ` for an aside, and a mid-line spaced hyphen used as a dash becomes ` — ` (bullets, tables, frontmatter, code, URLs, ranges, compounds and the bibliography are left alone). English text keeps the hyphen convention (`typography.dashReplacementLatin`). The drafting prompt still keeps dashes for true asides.
 - **Straight quotes for Hebrew quotations.** Hebrew quotations, terms and titles take a straight `"`, Latin-script ones curly `“…”`; ״ and ׳ appear only inside abbreviations and Hebrew-letter numerals. `aw draft` inserts quotations this way.
