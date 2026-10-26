@@ -97,7 +97,7 @@ Moodle's REST API answers every call with a Radware Bot Manager captcha page, so
 
 - **Notifications, all of them.** Open `https://lemida.biu.ac.il/message/output/popup/notifications.php` in the signed-in tab and scroll until every notification in the window (the last 14 days) is loaded. Open each one (a post, an assignment, a reminder), read it, route it, and record its id. A notification you did not open is a gap. Set `notifications.complete` to true only once you have scrolled to the end of the list and it stopped growing.
 - **Every new assignment.** Each `mod/assign` page the watch finds new (the diff's `new_assigns`, or one a notification names) is opened and gets its `assignment` chore, with its core texts.
-- **Coverage file.** Write `REG/logs/lemida-coverage-<YYYY-MM-DD>.json` (REG is the term directory; `logs/` exists after the first run) with exactly this shape:
+- **Coverage file.** Write `REG/logs/lemida-coverage-<YYYY-MM-DD>.json` (REG is the term directory; `logs/` exists after the first run) with exactly this shape. The date in the file name and in `date` is the first ten characters of `--run-id` (the day the nightly started), not today's date: a run often ends after midnight.
 
   ```json
   {"date": "YYYY-MM-DD", "run_id": "<the value of --run-id in your prompt>",

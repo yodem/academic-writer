@@ -22,6 +22,12 @@ All notable changes to the academic-writer plugin are documented here.
 - **Convention suggestions never auto-apply,** even when a risk verdict comes back low.
 - The repo-root `scripts/validate-hebrew-punctuation.py` runs the canonical validator instead of crashing on import.
 
+## [0.20.8] — 2026-10-26
+
+### Fixed
+- **`drive-reorg` tells same-named Drive files apart.** Drive allows two files with one name in a folder (for example two `שיעור 1.docx` copies). The reorg refused such a folder because it could not tell which registry source meant which file. It now matches by the source's recorded `drive_id`, and still refuses when the id does not settle it.
+- **A nightly run that ends after midnight no longer fails its Lemida check.** The watch dated its coverage file by its own clock, while the check read the file for the day the run started and found an older run's report ("stale report"). The check now also reads the next day's file when that file carries this run's id, and the watch is told to date the file by its run id.
+
 ## [0.20.7] — 2026-10-25
 
 ### Added

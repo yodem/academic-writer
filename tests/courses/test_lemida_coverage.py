@@ -366,3 +366,22 @@ def test_blank_lemida_absent_is_still_a_gap(tmp_path):
     write_coverage(reg, clean_payload())
     gaps = check(reg)
     assert len(gaps) == 1 and "levy" in gaps[0] and "lemida_course_id" in gaps[0]
+
+
+def _next(day):
+    import datetime
+    return (datetime.date.fromisoformat(day) + datetime.timedelta(days=1)).isoformat()
+
+
+def test_report_written_after_midnight_is_found_by_its_run_id(tmp_path):
+    reg = make_registry(tmp_path)
+    write_coverage(reg, clean_payload(run_id="older-run"))  # the afternoon's report on the run's own day
+    write_coverage(reg, clean_payload(date=_next(DATE)), date=_next(DATE))
+    assert check(reg) == []
+
+
+def test_next_day_report_from_another_run_is_not_used(tmp_path):
+    reg = make_registry(tmp_path)
+    write_coverage(reg, clean_payload(date=_next(DATE), run_id="older-run"), date=_next(DATE))
+    gaps = check(reg)
+    assert len(gaps) == 1 and "missing" in gaps[0]
