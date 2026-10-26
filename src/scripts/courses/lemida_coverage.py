@@ -9,7 +9,7 @@ a listed notification. Python decides; the watch only reports what it did.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo
@@ -22,6 +22,21 @@ NOTIFICATIONS_URL = "https://lemida.biu.ac.il/message/output/popup/notifications
 
 def coverage_path(registry: courses.Registry, day: str) -> Path:
     return registry.directory / "logs" / f"lemida-coverage-{day}.json"
+
+
+def _next_day(day: str) -> str:
+    try:
+        return (date.fromisoformat(day) + timedelta(days=1)).isoformat()
+    except ValueError:
+        return day
+
+
+def _run_id_of(path: Path) -> Any:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data.get("run_id") if isinstance(data, dict) else None
 
 
 def today(registry: courses.Registry) -> str:
@@ -95,6 +110,10 @@ def check(registry: courses.Registry, day: str, run_id: str, only: Iterable[str]
                   "notifications": {"page": NOTIFICATIONS_URL, "complete": true, "listed": [ids], "opened": [ids]}}`.
     Every section is validated before any set comparison: a missing or malformed one is a gap."""
     path = coverage_path(registry, day)
+    rolled = coverage_path(registry, _next_day(day))
+    if rolled.is_file() and _run_id_of(rolled) == run_id and _run_id_of(path) != run_id:
+        # the watch ran past midnight and dated its file by its own clock: this run's report is the next day's file
+        path, day = rolled, _next_day(day)
     if not path.is_file():
         return [f"coverage file missing: {path}"]
     try:
