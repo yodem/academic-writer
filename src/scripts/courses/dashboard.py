@@ -55,6 +55,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # python -I leaves the
 import courses  # noqa: E402
 import tasks as tasks_mod  # noqa: E402
 import extract as extract_mod  # noqa: E402
+import nightly as nightly_mod  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 
@@ -219,15 +220,40 @@ def queued_extracts(directory: Path) -> set:
     return waiting
 
 
-def pending_source_jobs(directory: Path) -> set:
-    """(course, sha8) of every `courses.py add-source` Trove job still in queue/sources (nothing drains them by itself)."""
+def pending_source_jobs(directory: Path) -> Dict[Tuple[str, str], float]:
+    """(course, sha8) -> the job file's mtime, for every `courses.py add-source` Trove job still in queue/sources
+    (nothing drains them by itself; the mtime is when the file was downloaded and registered)."""
     folder = directory / "queue" / "sources"
-    out = set()
+    out: Dict[Tuple[str, str], float] = {}
     for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
         job = _read_json(path, [])
         if isinstance(job, dict) and job.get("slug") and job.get("sha8"):
-            out.add((str(job["slug"]), str(job["sha8"])))
+            try:
+                out[(str(job["slug"]), str(job["sha8"]))] = path.stat().st_mtime
+            except OSError:
+                continue
     return out
+
+
+def extract_watch_on(agents: Optional[Path] = None) -> bool:
+    """True when `courses.py nightly watch on` installed the LaunchAgent that extracts and ingests a dashboard pick at once."""
+    folder = agents or Path.home() / "Library" / "LaunchAgents"
+    return (folder / (nightly_mod.WATCH_LABEL + ".plist")).is_file()
+
+
+def _untroved_days(src: Dict[str, Any], st: Dict[str, Any], since: Optional[float], now: Optional[datetime]) -> Optional[int]:
+    """Whole days a downloaded source has waited outside Trove (its add-source job's age, else its file's), or None
+    when it is in Trove or was never downloaded."""
+    if not st["downloaded"] or st["in_trove"]:
+        return None
+    if since is None:
+        try:
+            since = Path(str(src.get("file"))).expanduser().stat().st_mtime if src.get("file") else None
+        except OSError:
+            since = None
+    if since is None or now is None:
+        return 0
+    return max(0, (now - datetime.fromtimestamp(since, now.tzinfo)).days)
 
 
 # --- per-source and per-task status --------------------------------------------------------------
@@ -272,14 +298,16 @@ def ref_item(ref: Dict[str, Any], sources: List[Dict[str, Any]], queued: bool, *
 
 
 def source_item(src: Dict[str, Any], *, directory: Optional[Path] = None, slug: str = "", waiting: Optional[set] = None,
-                pending_jobs: Optional[set] = None) -> Dict[str, Any]:
+                pending_jobs: Optional[Dict[Tuple[str, str], float]] = None, now: Optional[datetime] = None) -> Dict[str, Any]:
     st = tasks_mod.source_status(src)
+    jobs = pending_jobs or {}
     return {"type": "source", "key": st["key"], "title": src.get("title", ""), "status": src.get("status", ""),
             "role": "", "downloaded": st["downloaded"], "in_trove": st["in_trove"], "in_notebooklm": st["in_notebooklm"],
             "trove": st["trove"], "missing": False, "queued": False, "ocr": None, "waiting": False, "fetchable": False,
             "tasks": list(src.get("tasks") or []),
+            "untroved_days": _untroved_days(src, st, jobs.get((slug, st["key"])), now),
             **_extract_flags(directory, slug, "source", st["key"], src.get("file"), st["downloaded"], st["in_trove"],
-                             (slug, st["key"]) in (pending_jobs or set()), waiting or set())}
+                             (slug, st["key"]) in jobs, waiting or set())}
 
 
 def chore_item(chore: Dict[str, Any]) -> Dict[str, Any]:
@@ -508,8 +536,9 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
         sources = [s for s in course.get("sources") or [] if isinstance(s, dict)]
         ref_items = [ref_item(r, sources, (slug, str(r.get("key"))) in queued_keys, directory=directory, slug=slug,
                               waiting=extract_waiting) for r in refs_list]
-        src_items = [source_item(s, directory=directory, slug=slug, waiting=extract_waiting, pending_jobs=source_jobs) for s in sources if s.get("kind") != "media" and not s.get("lesson_key")]
+        src_items = [source_item(s, directory=directory, slug=slug, waiting=extract_waiting, pending_jobs=source_jobs, now=now) for s in sources if s.get("kind") != "media" and not s.get("lesson_key")]
         chore_by_id = {c.get("id"): c for c in course_chores}
+        untroved = [i["untroved_days"] for i in src_items if i["untroved_days"] is not None]
 
         task_rows = []
         linked_keys = set()
@@ -596,6 +625,7 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
             "storage": {"trove_book_id": book_id, "notebook_sources": sum(1 for s in sources if s.get("notebook_source_id")),
                         "drive": bool(drive), "sources": len(src_items), "refs": len(ref_items)},
             "queued_jobs": sum(1 for j in jobs if j["course"] == slug),
+            "untroved": {"count": len(untroved), "oldest_days": max(untroved, default=0)},
         })
 
     by_slug = {c["slug"]: c for c in out_courses}
@@ -623,7 +653,7 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
 
     state = {
         "empty": False, "reason": None, "term": term.get("term"), "timezone": str(tz), "now": now.isoformat(),
-        "today": today.isoformat(), "nightly": _nightly(directory), "courses": out_courses,
+        "today": today.isoformat(), "nightly": _nightly(directory), "extract_watch": extract_watch_on(), "courses": out_courses,
         "overview": {"rows": rows, "quiet": quiet, "later": later, "counts": counts},
         "lede": lede(out_courses, now), "agenda": agenda(term, out_courses, start, today),
         "wispr_unmatched": unmatched, "queued_jobs": len(jobs), "warnings": warnings,

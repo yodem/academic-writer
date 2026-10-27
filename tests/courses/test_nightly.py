@@ -281,3 +281,65 @@ def test_off_refuses_when_launchd_state_is_unknown(env):
     env["launchctl"].write_text('#!/bin/sh\necho "$@" >> "%s"\nexit 3\n' % env["log"])
     assert call(env, "off") == 1
     assert (env["agents"] / (LABEL + ".plist")).exists()
+
+
+def watch(env, action, *extra):
+    term = env["tmp"] / "term"
+    term.mkdir(exist_ok=True)
+    return call(env, "watch", action, "--script", str(env["script"]), "--term-dir", str(term), *extra)
+
+
+def test_watch_on_writes_a_watchpaths_plist_and_loads_it(env, capsys):
+    assert watch(env, "on") == 0
+    path = env["agents"] / (nightly.WATCH_LABEL + ".plist")
+    data = plistlib.loads(path.read_bytes())
+    term = env["tmp"] / "term"
+    assert data["ProgramArguments"] == ["/bin/bash", str(env["script"]), "--extract-only"]
+    assert data["WatchPaths"] == [str(term / "queue" / "extract")] and (term / "queue" / "extract").is_dir()
+    assert data["RunAtLoad"] is True and data["ThrottleInterval"] == nightly.WATCH_THROTTLE
+    assert data["EnvironmentVariables"]["COURSES_TERM_DIR"] == str(term)
+    assert any(c.startswith("bootstrap ") and c.endswith(str(path)) for c in launchctl_calls(env))
+    assert "Extraction watcher on" in capsys.readouterr().out
+
+
+def test_watch_is_never_taken_for_the_nightly_plist(env, capsys):
+    assert watch(env, "on") == 0
+    assert call(env, "set", "--time", "03:30", "--script", str(env["script"])) == 0
+    assert plists(env) == sorted([nightly.WATCH_LABEL + ".plist", LABEL + ".plist"])
+    watcher = plistlib.loads((env["agents"] / (nightly.WATCH_LABEL + ".plist")).read_bytes())
+    assert "StartCalendarInterval" not in watcher and watcher["ProgramArguments"][-1] == "--extract-only"
+    assert call(env, "off") == 0
+    assert (env["agents"] / (nightly.WATCH_LABEL + ".plist")).is_file()  # `nightly off` leaves the watcher alone
+
+
+def test_watch_takes_the_nightly_plist_environment(env):
+    data = {"Label": LABEL, "ProgramArguments": ["/bin/bash", str(env["script"])],
+            "StartCalendarInterval": {"Hour": 3, "Minute": 0}, "EnvironmentVariables": {"EXTRACT_PY": "/x/python3"}}
+    (env["agents"] / (LABEL + ".plist")).write_bytes(plistlib.dumps(data))
+    assert call(env, "watch", "on", "--term-dir", str(env["tmp"])) == 0  # script comes from the nightly plist
+    watcher = plistlib.loads((env["agents"] / (nightly.WATCH_LABEL + ".plist")).read_bytes())
+    assert watcher["EnvironmentVariables"]["EXTRACT_PY"] == "/x/python3"
+    assert watcher["ProgramArguments"][1] == str(env["script"])
+
+
+def test_watch_off_and_status(env, capsys):
+    assert watch(env, "status") == 0
+    assert "Extraction watcher: off" in capsys.readouterr().out
+    assert watch(env, "on") == 0
+    assert watch(env, "status", "--json") == 0
+    capsys.readouterr()
+    assert watch(env, "status", "--json") == 0
+    assert json.loads(capsys.readouterr().out)["on"] is True
+    assert watch(env, "off") == 0
+    assert nightly.WATCH_LABEL + ".plist" not in plists(env)
+    assert any(c.startswith("bootout ") and c.endswith(nightly.WATCH_LABEL) for c in launchctl_calls(env))
+
+
+def test_watch_on_missing_script_exits_2(env, capsys):
+    assert call(env, "watch", "on", "--script", str(env["tmp"] / "nope.sh"), "--term-dir", str(env["tmp"])) == 2
+    assert nightly.WATCH_LABEL + ".plist" not in plists(env)
+
+
+def test_watch_on_linux_writes_nothing(env, capsys):
+    assert call(env, "watch", "on", "--term-dir", str(env["tmp"]), platform="linux") == 0
+    assert plists(env) == []

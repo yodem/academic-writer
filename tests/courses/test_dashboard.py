@@ -1,5 +1,6 @@
 import http.client
 import json
+import os
 import socket
 import sys
 import time
@@ -522,3 +523,35 @@ def test_task_link_skips_a_chore_with_no_known_module_type(tmp_path):
     (d / "alpha.json").write_text(json.dumps(alpha, ensure_ascii=False), encoding="utf-8")
     alpha_task = next(t for t in by_slug(dashboard.build_state(d, now=NOW))["alpha"]["tasks"] if t["id"] == task["id"])
     assert alpha_task["lemida_url"] == "https://lms.example/mod/assign/view.php?id=111"
+
+
+def test_downloaded_source_outside_trove_reports_its_waiting_days(tmp_path):
+    d, *_ = make_reg(tmp_path)
+    job = d / "queue" / "sources" / "beta-bbbbbbbb.json"
+    _w(job, {"slug": "beta", "sha8": "bbbbbbbb", "file": "x"})
+    ten_days_ago = (NOW - timedelta(days=10, hours=1)).timestamp()
+    os.utime(job, (ten_days_ago, ten_days_ago))
+    data = json.loads((d / "beta.json").read_text())
+    for s in data["sources"]:
+        s.pop("trove", None)
+    _w(d / "beta.json", data)
+    course = by_slug(dashboard.build_state(d, now=NOW))["beta"]
+    src = next(i for i in course["tasks"][0]["items"] if i["key"] == "bbbbbbbb")
+    assert src["untroved_days"] == 10
+    assert course["untroved"] == {"count": 1, "oldest_days": 10}
+
+
+def test_source_in_trove_has_no_waiting_days(tmp_path):
+    d, *_ = make_reg(tmp_path)
+    course = by_slug(dashboard.build_state(d, now=NOW))["beta"]
+    src = next(i for i in course["tasks"][0]["items"] if i["key"] == "bbbbbbbb")
+    assert src["in_trove"] and src["untroved_days"] is None
+    assert course["untroved"]["count"] == 0
+
+
+def test_extract_watch_flag_follows_the_launch_agent(tmp_path):
+    agents = tmp_path / "agents"
+    assert dashboard.extract_watch_on(agents) is False
+    agents.mkdir()
+    (agents / "com.academic-writer.courses-extract-watch.plist").write_text("x")
+    assert dashboard.extract_watch_on(agents) is True
