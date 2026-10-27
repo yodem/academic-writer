@@ -27,10 +27,11 @@ metadata (`trove items enrich <book_id> --toc ...`), not from headings in the pa
 `tools/toc_rebuild.py` after appending pages; `tools/toc_audit.py --all` must exit 0.
 
 **Replacing a page resets the whole ToC.** `trove items put <book_id>:<page>` makes Trove regenerate the book's
-ToC from the page headings: every hint and the nesting are lost, for all pages, not just the edited one. Before a
-`put`, keep the book's applied plan (`<registry>/toc-work/<slug>.plan.json`). After it, re-apply that plan when the
-page count is unchanged, otherwise run `toc_rebuild.py --course <slug> --hints <registry>/toc-work/hints.json --apply`,
-and confirm with `toc_audit.py --course <slug>`. A course title that contains " - " needs an en dash (" – ") in
+ToC from the page headings: every hint and the nesting are lost, for all pages, not just the edited one. After a
+`put`, run `toc_rebuild.py --course <slug> --hints <registry>/toc-work/hints.json --apply` and confirm with
+`toc_audit.py --course <slug>`. The rebuild keeps the title, hint and level of every page whose heading is unchanged
+from the last applied plan (`<registry>/toc-work/<slug>.plan.json`, which records each page's heading); never delete
+or hand-edit that file. `--prior <plan>` restores from an older plan copy. A course title that contains " - " needs an en dash (" – ") in
 its ToC title and a real hint after it.
 
 ## Extraction
