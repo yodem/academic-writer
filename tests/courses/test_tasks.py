@@ -262,3 +262,10 @@ def test_task_follows_its_chore_when_a_rescan_moves_the_deadline(tmp_path):
     chores.add_chore(reg, course="kane", kind="reading", ref="d1-p2", title="קריאה", due_at="2026-11-01T14:00:00+02:00")
     by_id = {t["id"]: t for t in tasks.sync_tasks(d, "kane")}
     assert by_id[r["id"]]["due_at"] == "2026-11-01T14:00:00+02:00"
+
+
+def test_task_due_at_falls_back_to_the_chores_due_text():
+    chore = {"id": "c1", "kind": "assignment", "course": "x", "ref": "1", "title": "מטלה 1", "status": "open",
+             "due_text": "יום שני, 2 נובמבר 2026, 00:00", "due_at": None}
+    derived, _ = tasks.derive_tasks([], [chore])
+    assert derived[0]["due_at"] == "2026-11-02T00:00:00+02:00"

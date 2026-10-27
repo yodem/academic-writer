@@ -1,3 +1,4 @@
+import pytest
 import json
 import sys
 from pathlib import Path
@@ -162,3 +163,16 @@ def test_cli_chores_add_exam_with_room_and_material(tmp_path):
                          "--room", "Building 502, room 14", "--material", "chapters 1-6"]) == 0
     [chore] = chores.load(reg)
     assert chore["kind"] == "exam" and chore["room"] == "Building 502, room 14" and chore["material"] == "chapters 1-6"
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("יום שני, 2 נובמבר 2026, 00:00", "2026-11-02T00:00:00+02:00"),
+    ("יום ראשון, 25 באוקטובר 2026, 23:59", "2026-10-25T23:59:00+02:00"),
+    ("Monday, 2 November 2026, 11:59 PM", "2026-11-02T23:59:00+02:00"),
+    ("Sunday, 1 March 2026, 12:00 AM", "2026-03-01T00:00:00+02:00"),
+    ("נותר 5 ימים 15 שעות", None),
+    ("", None),
+    (None, None),
+])
+def test_due_at_from_lemida_text(text, expected):
+    assert chores.due_at_from_text(text) == expected
