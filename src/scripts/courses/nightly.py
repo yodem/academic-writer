@@ -4,6 +4,11 @@
     nightly set --time HH:MM [--script P] [--label L]
     nightly off
     nightly run-now [--dry] [--script P]
+    nightly watch on|off|status [--script P] [--term-dir D]
+
+`watch on` adds a second LaunchAgent that runs `courses-daily.sh --extract-only` whenever the dashboard writes an
+extraction job to queue/extract/, so a chosen source is extracted and sent to Trove within minutes instead of at the
+next nightly run. The nightly plist is never matched as the watcher and the watcher never as the nightly plist.
 
 On macOS the schedule is a LaunchAgent plist (an existing one is updated in place and backed up first). Elsewhere
 `set` prints a cron line and writes nothing. Stdlib only, Python 3.9+; never reads the registry except for the
@@ -29,6 +34,9 @@ SCRIPT_NAME = "courses-daily.sh"
 EXAMPLE = "scripts/courses-daily.sh.example"
 TIME_RE = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 DISABLED = ".disabled"
+WATCH_LABEL = "com.academic-writer.courses-extract-watch"
+EXTRACT_FLAG = "--extract-only"
+WATCH_THROTTLE = 30  # seconds launchd waits between two runs of the watcher
 NOT_LOADED = 113  # launchctl print: "Could not find service"; any other failure leaves the state unknown
 
 
@@ -84,8 +92,9 @@ def find_plist(agents: Path, label: Optional[str]) -> Tuple[Optional[Path], Opti
                     return p, _read_plist(p) or {}, disabled
         parsed = [(p, _read_plist(p)) for p in candidates]
         for p, data in parsed:
+            argv = data.get("ProgramArguments") or [] if data else []
             if data and ((label and data.get("Label") == label) or
-                         any(isinstance(a, str) and a.endswith(SCRIPT_NAME) for a in data.get("ProgramArguments") or [])):
+                         (EXTRACT_FLAG not in argv and any(isinstance(a, str) and a.endswith(SCRIPT_NAME) for a in argv))):
                 return p, data, disabled
     return None, None, False
 
@@ -274,6 +283,80 @@ def _run_now(args: argparse.Namespace) -> int:
     return subprocess.run(["bash", str(script)], env=env).returncode
 
 
+def _watch_plist(agents: Path) -> Path:
+    return agents / (WATCH_LABEL + ".plist")
+
+
+def _watch(args: argparse.Namespace) -> int:
+    agents = _agents_dir(args)
+    target = _watch_plist(agents)
+    if args.watch_action == "status":
+        data = _read_plist(target) if target.is_file() else None
+        paths = (data or {}).get("WatchPaths") or []
+        if args.json:
+            print(json.dumps({"on": bool(data), "plist": str(target) if data else None,
+                              "watch_path": paths[0] if paths else None}, ensure_ascii=False, indent=2))
+        elif data:
+            print("Extraction watcher: on. A dashboard extraction pick runs at once (%s, watching %s)."
+                  % (target, paths[0] if paths else "?"))
+        else:
+            print("Extraction watcher: off. A dashboard extraction pick waits for the nightly run. `nightly watch on` turns it on.")
+        return 0
+    if args.platform != "darwin":
+        print("Not macOS: there is no extraction watcher; a dashboard extraction pick waits for the nightly run.")
+        return 0
+    if args.watch_action == "off":
+        if not target.is_file():
+            print("The extraction watcher is already off.")
+            return 0
+        if not args.no_load:
+            service = "%s/%s" % (_domain(), WATCH_LABEL)
+            if _launchctl(args, "bootout", service) != 0 and _launchctl(args, "print", service) != NOT_LOADED:
+                print("error: launchctl could not unload %s; nothing was changed. Try: launchctl bootout %s"
+                      % (WATCH_LABEL, service), file=sys.stderr)
+                return 1
+        target.unlink()
+        print("Extraction watcher off. A dashboard extraction pick now waits for the nightly run.")
+        return 0
+    _, nightly_data, _ = find_plist(agents, None)
+    script, problem = _resolve_script(args, nightly_data)
+    if problem:
+        print(problem, file=sys.stderr)
+        return 2
+    term = Path(args.term_dir).expanduser() if args.term_dir else _term_dir()
+    if term is None or not term.is_dir():
+        print("error: no term folder found to watch (pass --term-dir)", file=sys.stderr)
+        return 2
+    queue = term / "queue" / "extract"
+    queue.mkdir(parents=True, exist_ok=True)
+    env = {k: v for k, v in ((nightly_data or {}).get("EnvironmentVariables") or {}).items()
+           if isinstance(k, str) and isinstance(v, str)}
+    if os.environ.get("ACADEMIC_HOME"):
+        env["ACADEMIC_HOME"] = os.environ["ACADEMIC_HOME"]
+    env["COURSES_TERM_DIR"] = str(term)
+    log = str(term / "logs" / "launchd-extract.log")
+    (term / "logs").mkdir(parents=True, exist_ok=True)
+    plist = {"Label": WATCH_LABEL, "ProgramArguments": ["/bin/bash", str(script), EXTRACT_FLAG],
+             "WatchPaths": [str(queue)], "ThrottleInterval": WATCH_THROTTLE, "RunAtLoad": True,
+             "StandardOutPath": log, "StandardErrorPath": log, "EnvironmentVariables": env}
+    agents.mkdir(parents=True, exist_ok=True)
+    backup = _backup(target) if target.is_file() else None
+    scratch = target.with_name(target.name + ".tmp")
+    scratch.write_bytes(plistlib.dumps(plist))
+    os.replace(scratch, target)
+    if not args.no_load:
+        _launchctl(args, "bootout", "%s/%s" % (_domain(), WATCH_LABEL))  # not loaded yet is fine
+        code = _launchctl(args, "bootstrap", _domain(), str(target))
+        if code != 0:
+            print("warning: launchctl bootstrap exited %d; the plist is written, load it with: launchctl bootstrap %s %s"
+                  % (code, _domain(), target), file=sys.stderr)
+    print("Extraction watcher on: a dashboard extraction pick now runs `%s %s` within a minute (%s)."
+          % (script, EXTRACT_FLAG, target))
+    if backup:
+        print("Previous plist saved as %s" % backup)
+    return 0
+
+
 def add_parser(sub) -> None:
     nightly = sub.add_parser("nightly", help="choose the nightly run time, turn the schedule off, or run it now")
     shared = argparse.ArgumentParser(add_help=False)
@@ -292,8 +375,13 @@ def add_parser(sub) -> None:
     rn = actions.add_parser("run-now", parents=[shared], help="run the nightly script now, in the foreground")
     rn.add_argument("--script", help="the nightly script (default: the plist's, else ~/.academic-writer/bin/%s)" % SCRIPT_NAME)
     rn.add_argument("--dry", action="store_true", help="print the planned steps without running them (COURSES_DRY=1)")
+    wa = actions.add_parser("watch", parents=[shared], help="run extraction and the Trove ingest as soon as the dashboard asks for it")
+    wa.add_argument("watch_action", choices=["on", "off", "status"])
+    wa.add_argument("--script", help="the nightly script (default: the nightly plist's, else ~/.academic-writer/bin/%s)" % SCRIPT_NAME)
+    wa.add_argument("--term-dir", help="the term folder whose queue/extract/ is watched (default: the current term)")
+    wa.add_argument("--json", action="store_true", help="status as JSON")
 
 
 def run(args: argparse.Namespace) -> int:
-    handlers = {"status": _status, "set": _set, "off": _off, "run-now": _run_now}
+    handlers = {"status": _status, "set": _set, "off": _off, "run-now": _run_now, "watch": _watch}
     return handlers[args.nightly_command](args)

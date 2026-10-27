@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -202,3 +203,132 @@ def test_coverage_contract_documents_run_id_and_complete_notifications():
     assert '"run_id"' in skill and "--run-id" in skill
     assert '"complete": true' in skill and "notifications.complete" in skill
     assert "run_id" in watch and "complete" in watch
+
+
+def run_extract_only(tmp_path, *, dry, jobs=0, handoff=False, refs_body="import sys\nsys.exit(0)\n", hold_lock=False,
+                     lock_wait="0"):
+    """`courses-daily.sh --extract-only` against a stub repo; claude is a stub that records its prompt."""
+    home = tmp_path / "home"
+    term = home / ".academic-writer" / "courses" / "term"
+    (term / "queue" / "extract").mkdir(parents=True)
+    for n in range(jobs):
+        (term / "queue" / "extract" / f"2026102{n}T000000-cohen.json").write_text("{}")
+    if handoff:
+        (term / "queue" / "extract" / "ingest").mkdir()
+        (term / "queue" / "extract" / "ingest" / "cohen-aaaaaaaa.json").write_text("{}")
+    holder = None
+    if hold_lock:  # another run holds the flock until this process exits
+        (term / "locks").mkdir(parents=True)
+        holder = subprocess.Popen([sys.executable, "-c", "import fcntl,sys,time\nf=open(sys.argv[1],'a')\n"
+                                   "fcntl.flock(f, fcntl.LOCK_EX)\nprint('held', flush=True)\ntime.sleep(60)\n",
+                                   str(term / "locks" / "extract.lock")], stdout=subprocess.PIPE, text=True)
+        assert holder.stdout.readline().strip() == "held"
+    repo = tmp_path / "repo"
+    scripts = repo / "src" / "scripts" / "courses"
+    scripts.mkdir(parents=True)
+    (scripts / "courses.py").write_text("import sys\nsys.exit(0)\n")
+    (scripts / "refs.py").write_text(refs_body)
+    stubs = tmp_path / "stubs"
+    stubs.mkdir()
+    calls = tmp_path / "claude-calls"
+    (stubs / "claude").write_text(f"#!/bin/sh\ncat >> {calls}\necho >> {calls}\nexit 0\n")
+    (stubs / "claude").chmod(0o755)
+    env = {**os.environ, "HOME": str(home), "COURSES_TERM_DIR": str(term), "ACADEMIC_WRITER_REPO": str(repo),
+           "EXTRACT_PY": "/usr/bin/python3", "EXTRACT_LOCK_WAIT": lock_wait, "PATH": f"{stubs}:{os.environ['PATH']}"}
+    env.pop("COURSES_DRY", None)
+    if dry:
+        env["COURSES_DRY"] = "1"
+    try:
+        out = subprocess.run(["bash", str(SCRIPT), "--extract-only"], env=env, capture_output=True, text=True, timeout=60)
+    finally:
+        if holder:
+            holder.kill()
+            holder.wait()
+    log = next((term / "logs").glob("extract-now-*.log"), None) if (term / "logs").is_dir() else None
+    return out, term, (log.read_text() if log else ""), (calls.read_text() if calls.exists() else "")
+
+
+def test_extract_only_without_a_job_is_silent(tmp_path):
+    out, term, log, calls = run_extract_only(tmp_path, dry=False, handoff=True)
+    assert out.returncode == 0 and out.stdout == "" and log == "" and calls == ""  # an old ingest file alone never wakes Claude
+    assert not (term / "logs").exists()
+
+
+def test_extract_only_dry_plans_c4_and_c5_and_nothing_else(tmp_path):
+    out, _, _, _ = run_extract_only(tmp_path, dry=True, jobs=1, handoff=True)
+    plans = [ln for ln in out.stdout.splitlines() if ln.startswith("PLAN: ")]
+    assert out.returncode == 0, out.stderr
+    assert len(plans) == 2 and plans[0].endswith("extract-queue") and "extract-handoff" in plans[1]
+
+
+@pytest.mark.skipif(not Path("/usr/bin/python3").exists(), reason="script hardcodes /usr/bin/python3")
+def test_extract_only_runs_c4_then_c5_and_releases_the_lock(tmp_path):
+    drain = ("import pathlib,sys\nreg=pathlib.Path(sys.argv[2])\nq=reg/'queue'/'extract'\n(q/'done').mkdir(exist_ok=True)\n"
+             "(q/'ingest').mkdir(exist_ok=True)\nfor j in q.glob('*.json'):\n    (q/'ingest'/j.name).write_text('{}')\n"
+             "    j.rename(q/'done'/j.name)\n")
+    out, term, log, calls = run_extract_only(tmp_path, dry=False, jobs=2, refs_body=drain)
+    assert out.returncode == 0, out.stderr + log
+    assert log.index("-- extract-queue exit=0") < log.index("-- extract-handoff exit=0")
+    assert log.count("-- extract-queue exit") == 1  # the queue emptied: one round
+    assert calls.count("/academic-writer:courses extract-handoff") == 1
+    assert_lock_free(term)
+
+
+@pytest.mark.skipif(not Path("/usr/bin/python3").exists(), reason="script hardcodes /usr/bin/python3")
+def test_extract_only_does_not_loop_on_a_job_c4_cannot_finish(tmp_path):
+    out, _, log, _ = run_extract_only(tmp_path, dry=False, jobs=1, refs_body="import sys\nsys.exit(1)\n")
+    assert out.returncode == 1
+    assert log.count("-- extract-queue exit=1") == 1
+
+
+def assert_lock_free(term):
+    """The script released its flock: a fresh process can take it without waiting."""
+    probe = subprocess.run([sys.executable, "-c", "import fcntl,sys\nf=open(sys.argv[1],'a')\n"
+                            "fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)\n", str(term / "locks" / "extract.lock")])
+    assert probe.returncode == 0
+
+
+@pytest.mark.skipif(not Path("/usr/bin/python3").exists(), reason="script hardcodes /usr/bin/python3")
+def test_extract_only_skips_while_another_run_holds_the_lock(tmp_path):
+    out, _, log, calls = run_extract_only(tmp_path, dry=False, jobs=1, hold_lock=True)
+    assert out.returncode == 1 and "c4/c5 skipped" in log and calls == ""
+    assert "-- extract-queue" not in log
+
+
+@pytest.mark.skipif(not Path("/usr/bin/python3").exists(), reason="script hardcodes /usr/bin/python3")
+def test_a_lock_file_left_by_a_dead_run_does_not_block(tmp_path):
+    term = tmp_path / "home" / ".academic-writer" / "courses" / "term"
+    (term / "locks").mkdir(parents=True)
+    (term / "locks" / "extract.lock").write_text("")
+    (term / "locks" / "extract.lock.owner").write_text("99999 earlier")
+    out, _, log, _ = run_extract_only(tmp_path, dry=False, jobs=1)
+    assert out.returncode == 0 and "-- extract-queue exit=0" in log
+
+
+@pytest.mark.skipif(not Path("/usr/bin/python3").exists(), reason="script hardcodes /usr/bin/python3")
+def test_a_stuck_job_left_beside_a_finished_one_is_not_retried(tmp_path):
+    finish_first = ("import pathlib,sys\nq=pathlib.Path(sys.argv[2])/'queue'/'extract'\n(q/'done').mkdir(exist_ok=True)\n"
+                    "(q/'ingest').mkdir(exist_ok=True)\n(q/'ingest'/'x.json').write_text('{}')\n"
+                    "j=sorted(q.glob('*.json'))[0]\nj.rename(q/'done'/j.name)\n")
+    out, _, log, calls = run_extract_only(tmp_path, dry=False, jobs=2, refs_body=finish_first)
+    assert out.returncode == 0, out.stderr + log
+    assert log.count("-- extract-queue exit") == 1 and calls.count("extract-handoff") == 1
+
+
+@pytest.mark.skipif(not Path("/usr/bin/python3").exists(), reason="script hardcodes /usr/bin/python3")
+def test_a_job_that_arrives_during_a_round_gets_a_second_round(tmp_path):
+    late = ("import pathlib,sys\nq=pathlib.Path(sys.argv[2])/'queue'/'extract'\n(q/'done').mkdir(exist_ok=True)\n"
+            "first=not (q/'done'/'late.json').exists() and not (q/'late.json').exists()\n"
+            "[j.rename(q/'done'/j.name) for j in q.glob('*.json')]\n"
+            "first and (q/'late.json').write_text('{}')\n")
+    out, _, log, _ = run_extract_only(tmp_path, dry=False, jobs=1, refs_body=late)
+    assert out.returncode == 0, out.stderr + log
+    assert log.count("-- extract-queue exit=0") == 2
+
+
+@pytest.mark.skipif(not Path("/usr/bin/python3").exists(), reason="script hardcodes /usr/bin/python3")
+def test_nightly_takes_the_extract_lock_around_c4(tmp_path):
+    out, log = run_live_with_failing_bookmarks(tmp_path)
+    assert out.returncode == 0, out.stderr + log
+    assert "-- extract-queue exit=0" in log
+    assert_lock_free(tmp_path / "home" / ".academic-writer" / "courses" / "term")

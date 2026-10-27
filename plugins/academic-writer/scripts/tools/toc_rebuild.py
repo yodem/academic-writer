@@ -35,6 +35,15 @@ def extract_heading(text: str) -> str:
     return ""
 
 
+def raw_heading(text: str) -> str:
+    """The first heading exactly as written (page marker kept): it tells "Barton · p. 51" from "Barton · p. 52"."""
+    for line in text.splitlines():
+        m = re.match(r"^#{1,6}\s+(.*\S)\s*$", line)
+        if m:
+            return m.group(1).strip()
+    return ""
+
+
 def _cut(s: str, limit: int) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     if len(s) <= limit:
@@ -119,9 +128,69 @@ def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", s or "").strip().casefold()
 
 
+MARK_RE = re.compile(r"\((עמ'|טור|לוח|p\.)\s*([^)\s]+)\)\s*$")
+
+
+def previous_entries(plan: dict | None) -> dict[int, dict]:
+    """{page: {"title", "hint", "level", "heading"}} from the last applied plan (toc-work/<slug>.applied.json).
+
+    A `trove items put` resets the live ToC to bare headings, so the live ToC alone cannot carry curated titles
+    and hints across a rebuild; the applied plan can. `heading` is the raw page heading the plan was built from
+    (None for plans written before headings were recorded)."""
+    if not isinstance(plan, dict):
+        return {}
+    headings = {int(k): v for k, v in (plan.get("headings") or {}).items() if str(k).isdigit()}
+    out: dict[int, dict] = {}
+    for e in plan.get("toc") or []:
+        page = e.get("page")
+        if not isinstance(page, int) or page in out:
+            continue
+        head, _, hint = str(e.get("title", "")).partition(" - ")
+        out[page] = {"title": head.strip(), "hint": hint.strip(), "level": e.get("level", 1), "heading": headings.get(page)}
+    return out
+
+
+def _same_page(prev: dict, raw: str) -> bool:
+    """True when the previous plan's entry still describes this page. `raw` is the page's heading with its page
+    marker. A recorded heading must be identical. Older plans (no heading recorded): the title equals the raw heading,
+    or the title ends in a printed-page marker ("(עמ' 307)", "(טור 565)", "(לוח יח)", "(p. 51)") and the raw heading
+    carries the same marker of the same kind."""
+    dash = lambda s: _norm(s).replace("–", "-")
+    if prev.get("heading") is not None:
+        return dash(prev["heading"]) == dash(raw)
+    if not raw:
+        return False
+    if dash(prev["title"]) == dash(raw):
+        return True
+    m = MARK_RE.search(prev["title"])
+    return bool(m and re.search(re.escape(m.group(1)) + r"\s*" + re.escape(m.group(2)) + r"(?![\w])", raw))
+
+
+def strip_title_echo(hint: str, title: str) -> str:
+    """A source title that itself contains " - " ("שיעור 2 - קישוריות") splits as label + hint on the next rebuild,
+    so its tail comes back at the front of the hint, once more per rebuild. Drop every such copy."""
+    tail = title.partition(" - ")[2].strip()
+    if not tail:
+        return hint
+    while _norm(hint).startswith(_norm(tail)):
+        rest = hint.strip()[len(tail):].lstrip()
+        if rest.startswith("-"):
+            rest = rest[1:].lstrip()
+        elif rest.startswith(";"):
+            rest = rest[1:].lstrip()
+        elif rest:
+            break
+        hint = rest
+    return hint
+
+
 def build_plan(page_count: int, existing: list[dict], get_page, hints: dict | None = None,
-               sources: list[dict] | None = None, overrides: dict | None = None) -> dict:
-    """Return {toc, needs_hint, counts}. get_page(n) -> markdown text.
+               sources: list[dict] | None = None, overrides: dict | None = None,
+               previous: dict[int, dict] | None = None) -> dict:
+    """Return {toc, needs_hint, counts, headings}. get_page(n) -> markdown text.
+
+    previous: previous_entries() of the last applied plan; a page whose heading still matches keeps that plan's
+    title, hint and level (they win over the live ToC, which a page `put` resets).
 
     sources: registry sources as {"title", "page"} (page set when the source's pages are in
     this book, None when it lives in its own book and this book holds a pointer page).
@@ -138,15 +207,22 @@ def build_plan(page_count: int, existing: list[dict], get_page, hints: dict | No
         if isinstance(p, int) and 1 <= p <= page_count:
             by_page.setdefault(p, []).append(e)
     toc, needs, state = [], [], None
-    counts = {"pages": page_count, "reused": 0, "derived": 0, "supplied": 0, "needs_hint": 0, "merged": 0}
+    counts = {"pages": page_count, "reused": 0, "derived": 0, "supplied": 0, "needs_hint": 0, "merged": 0, "kept": 0}
+    headings: dict[str, str] = {}
     prev_level = 0
     for p in range(1, page_count + 1):
         text = get_page(p)
         heading = extract_heading(text)
         kind = classify(heading)
+        raw = raw_heading(text)
+        headings[str(p)] = raw
         ex = merge_existing(by_page[p]) if p in by_page else None
         if ex and len(by_page[p]) > 1:
             counts["merged"] += 1
+        prev = (previous or {}).get(p)
+        if prev and prev["title"] and _same_page(prev, raw):
+            ex = {"title": prev["title"], "hint": prev["hint"] or (ex or {}).get("hint", ""), "level": prev["level"]}
+            counts["kept"] += 1
         title = (ex or {}).get("title") or heading or f"Page {p}"
         ov = overrides.get(p, {})
         if ov.get("title"):
@@ -160,6 +236,8 @@ def build_plan(page_count: int, existing: list[dict], get_page, hints: dict | No
             hint, src = ex["hint"], "reused"
         else:
             hint, src = extract_hint(text), "derived"
+        if src_title and src == "reused":  # only the live ToC's split carries the echo; a supplied hint is meant as is
+            hint = strip_title_echo(hint, src_title) or extract_hint(text)
         # level
         if p == 1:
             default = 1
@@ -199,7 +277,7 @@ def build_plan(page_count: int, existing: list[dict], get_page, hints: dict | No
             toc.append({"title": title, "page": p, "level": level, "kind": kind, "grp": grp})
             needs.append({"page": p, "title": title, "first_800_chars": text[:800]})
         prev_level = level
-    return {"toc": tree_order(toc), "needs_hint": needs, "counts": counts}
+    return {"toc": tree_order(toc), "needs_hint": needs, "counts": counts, "headings": headings}
 
 
 def tree_order(toc: list[dict]) -> list[dict]:
@@ -269,7 +347,7 @@ def course_hints(hints: dict, slug: str) -> dict:
     return hints
 
 
-def process_course(c: dict, work: Path, hints: dict, apply: bool, out=print) -> int:
+def process_course(c: dict, work: Path, hints: dict, apply: bool, out=print, prior: str | None = None) -> int:
     slug, bid = c["slug"], c.get("book_id")
     if not bid:
         out(f"{slug}: no book_id in registry")
@@ -281,24 +359,33 @@ def process_course(c: dict, work: Path, hints: dict, apply: bool, out=print) -> 
                for x in c.get("sources", []) if x.get("title") and x.get("kind") != "media"]
     ov_file = work / "overrides.json"
     overrides = json.loads(ov_file.read_text(encoding="utf-8")).get(slug, {}) if ov_file.exists() else {}
+    plan_file = work / f"{slug}.plan.json"
+    applied_file = work / f"{slug}.applied.json"  # written only after a successful apply: what Trove really shows
+    source = applied_file if applied_file.exists() else plan_file  # plan.json: plans from before applied.json existed
+    last = json.loads(source.read_text(encoding="utf-8")) if source.exists() else None
+    if prior is not None:
+        last = json.loads(Path(prior).read_text(encoding="utf-8"))
     plan = build_plan(n, existing, lambda p: trove_get_page(bid, p), course_hints(hints, slug),
-                      sources=sources, overrides=overrides)
+                      sources=sources, overrides=overrides, previous=previous_entries(last))
     work.mkdir(parents=True, exist_ok=True)
-    (work / f"{slug}.plan.json").write_text(json.dumps(
+    plan_file.write_text(json.dumps(
         {"slug": slug, "book_id": bid, "version": version, "page_count": n,
-         "counts": plan["counts"], "toc": plan["toc"]}, ensure_ascii=False, indent=2), encoding="utf-8")
+         "counts": plan["counts"], "toc": plan["toc"], "headings": plan["headings"]}, ensure_ascii=False, indent=2),
+        encoding="utf-8")
     nh = work / f"{slug}.needs-hint.json"
     if plan["needs_hint"]:
         nh.write_text(json.dumps(plan["needs_hint"], ensure_ascii=False, indent=2), encoding="utf-8")
     elif nh.exists():
         nh.unlink()
     c_ = plan["counts"]
-    out(f"{slug}: pages={c_['pages']} reused={c_['reused']} derived={c_['derived']} "
+    out(f"{slug}: pages={c_['pages']} kept={c_['kept']} reused={c_['reused']} derived={c_['derived']} "
         f"supplied={c_['supplied']} merged={c_['merged']} needs-hint={c_['needs_hint']} "
         f"(entries before={len(existing)} after={len(plan['toc'])})")
     if apply:
         code, msg = apply_plan(bid, plan["toc"], n, version, len(existing), sources=registered_source_titles(c))
         out(f"{slug}: {msg}")
+        if code == 0:
+            applied_file.write_text(plan_file.read_text(encoding="utf-8"), encoding="utf-8")
         return code
     return 3 if plan["needs_hint"] else 0
 
@@ -310,6 +397,8 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--course", help="one course slug")
     ap.add_argument("--hints", help='JSON file: {"<page>": "hint"} (single course) or {"<slug>": {"<page>": "hint"}}')
     ap.add_argument("--apply", action="store_true", help="write the ToC to Trove (only if the audit passes)")
+    ap.add_argument("--prior", help="an earlier applied plan to keep titles and hints from (default: toc-work/<slug>.plan.json); "
+                                    "needs --course")
     args = ap.parse_args(argv)
     courses = load_registry()
     if args.course:
@@ -317,12 +406,15 @@ def main(argv: list[str] | None = None) -> int:
         if not courses:
             print(f"no course with slug {args.course!r} in {registry_dir()}", file=sys.stderr)
             return 2
+    if args.prior and not args.course:
+        print("--prior needs --course", file=sys.stderr)
+        return 2
     hints = json.loads(Path(args.hints).read_text(encoding="utf-8")) if args.hints else {}
     work = registry_dir() / "toc-work"
     codes = []
     for c in courses:  # sequential: low-RAM host
         try:
-            codes.append(process_course(c, work, hints, args.apply))
+            codes.append(process_course(c, work, hints, args.apply, prior=args.prior))
         except Exception as exc:  # noqa: BLE001
             print(f"{c['slug']}: ERROR {exc}", file=sys.stderr)
             codes.append(1)

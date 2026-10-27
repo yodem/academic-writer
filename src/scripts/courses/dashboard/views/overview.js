@@ -154,6 +154,8 @@ function notReadyColumn(st){
       const val = t.state === 'missing' ? status('missing') : queued ? status('night') : status('waiting');
       rows.push(line(`<a class="what" href="#course/${encodeURIComponent(c.slug)}" data-nav>${esc(t.title)}<span class="sub">${auto(c.name)} · ${esc(note)}</span></a>`, val));
     });
+    const u = c.untroved || {};
+    if (u.count) rows.push(line(`<a class="what" href="#course/${encodeURIComponent(c.slug)}" data-nav>${many(u.count, 'מקור אחד הורד ועוד לא בטרוב', '# מקורות הורדו ועוד לא בטרוב')}<span class="sub">${auto(c.name)}${u.oldest_days >= 2 ? ` · הוותיק ${u.oldest_days} ימים` : ''} · לבחור חילוץ טקסט בעמוד הקורס</span></a>`, status(u.oldest_days >= 2 ? 'missing' : 'waiting')));
     if (c.perusall_open) rows.push(line(`<a class="what" href="#course/${encodeURIComponent(c.slug)}" data-nav>${many(c.perusall_open, 'קריאה אחת ב־Perusall', '# קריאות ב־Perusall')}<span class="sub">${auto(c.name)} · עוד לא צולמו</span></a>`, status('waiting')));
   });
   const un = (st.wispr_unmatched || []).length;

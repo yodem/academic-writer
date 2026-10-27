@@ -12,6 +12,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import courses
 
@@ -80,6 +81,36 @@ def load(registry: courses.Registry) -> list[dict[str, Any]]:
     return data
 
 
+MONTHS = {"ינואר": 1, "פברואר": 2, "מרץ": 3, "מרס": 3, "אפריל": 4, "מאי": 5, "יוני": 6, "יולי": 7, "אוגוסט": 8,
+          "ספטמבר": 9, "אוקטובר": 10, "נובמבר": 11, "דצמבר": 12,
+          "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6, "july": 7, "august": 8,
+          "september": 9, "october": 10, "november": 11, "december": 12}
+DUE_RE = re.compile(r"(\d{1,2})\s+(?:ב)?([^\W\d_]+),?\s+(\d{4})(?:,?\s+(\d{1,2}):(\d{2}))?")
+
+
+def due_at_from_text(text: str | None, timezone_name: str = "Asia/Jerusalem") -> str | None:
+    """Lemida's due text ("יום שני, 2 נובמבר 2026, 00:00" or "Monday, 2 November 2026, 12:00 AM") as an ISO time in
+    the term's zone; None when it does not read as a date. The watcher passes due_at itself when it can; this is
+    the fallback, so a dated assignment never becomes undated because the date was left as text."""
+    m = DUE_RE.search(str(text or ""))
+    if not m:
+        return None
+    month = MONTHS.get(m.group(2).casefold())
+    if not month:
+        return None
+    hour, minute = int(m.group(4) or 0), int(m.group(5) or 0)
+    tail = str(text)[m.end():].strip().upper()
+    if tail.startswith("PM") and hour < 12:
+        hour += 12
+    elif tail.startswith("AM") and hour == 12:
+        hour = 0
+    try:
+        when = datetime(int(m.group(3)), month, int(m.group(1)), hour, minute, tzinfo=ZoneInfo(timezone_name))
+    except (ValueError, KeyError):  # an impossible date, or an unknown zone name (ZoneInfoNotFoundError)
+        return None
+    return when.isoformat()
+
+
 def add_chore(registry: courses.Registry, *, course: str, kind: str, ref: str, title: str = "", text: str = "",
               core_texts: list[str] | None = None, time_left_text: str = "", due_text: str = "",
               due_at: str | None = None, room: str = "", material: str = "") -> dict[str, Any]:
@@ -96,6 +127,8 @@ def add_chore(registry: courses.Registry, *, course: str, kind: str, ref: str, t
         course = GENERAL
     if course != GENERAL and course not in registry.courses:
         raise ValueError(f"unknown course {course!r} (use {GENERAL!r} for a chore not tied to a course)")
+    if not due_at and due_text:
+        due_at = due_at_from_text(due_text, registry.term.get("timezone", "Asia/Jerusalem"))
     values = {"title": title, "text": text, "core_texts": list(core_texts or []), "time_left_text": time_left_text,
               "due_text": due_text, "due_at": due_at, "room": room, "material": material}
     handle = _lock(registry)

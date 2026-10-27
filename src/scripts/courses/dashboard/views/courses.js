@@ -30,6 +30,8 @@ function openActions(c){
   if (missing) out.push(status('missing', many(missing, 'מקור אחד חסר', '# מקורות חסרים')));
   if (queued) out.push(status('night', many(queued, 'Claude יביא מקור אחד', 'Claude יביא # מקורות')));
   if (ocr) out.push(status('waiting', many(ocr, 'מקור אחד מחכה לזיהוי הטקסט', '# מקורות מחכים לזיהוי הטקסט')));
+  const u = c.untroved || {};
+  if (u.count) out.push(status(u.oldest_days >= 2 ? 'missing' : 'waiting', many(u.count, 'מקור אחד הורד ועוד לא בטרוב', '# מקורות הורדו ועוד לא בטרוב') + (u.oldest_days >= 2 ? ` · הוותיק ${u.oldest_days} ימים` : '')));
   if (c.perusall_open) out.push(status('waiting', many(c.perusall_open, 'קריאה אחת ב־Perusall לצילום', '# קריאות ב־Perusall לצילום')));
   if (c.unmatched_recordings) out.push(status('waiting', many(c.unmatched_recordings, 'הקלטה אחת לא שויכה', '# הקלטות לא שויכו')));
   if (c.new_lesson) out.push(status('ok', 'שיעור חדש תומלל'));
