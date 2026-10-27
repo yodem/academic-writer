@@ -30,7 +30,8 @@ metadata (`trove items enrich <book_id> --toc ...`), not from headings in the pa
 ToC from the page headings: every hint and the nesting are lost, for all pages, not just the edited one. After a
 `put`, run `toc_rebuild.py --course <slug> --hints <registry>/toc-work/hints.json --apply` and confirm with
 `toc_audit.py --course <slug>`. The rebuild keeps the title, hint and level of every page whose heading is unchanged
-from the last applied plan (`<registry>/toc-work/<slug>.plan.json`, which records each page's heading); never delete
+from the last applied plan (`<registry>/toc-work/<slug>.applied.json`, written only after a successful apply, which
+records each page's raw heading); never delete
 or hand-edit that file. `--prior <plan>` restores from an older plan copy. A course title that contains " - " needs an en dash (" – ") in
 its ToC title and a real hint after it.
 

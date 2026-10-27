@@ -227,3 +227,43 @@ def test_strip_title_echo_leaves_other_hints_alone():
     assert tr.strip_title_echo("מדריך", "שיעור 1 - מבוא") == "מדריך"
     assert tr.strip_title_echo("מבואות לשיעור", "שיעור 1 - מבוא") == "מבואות לשיעור"
     assert tr.strip_title_echo("hint", "No dash title") == "hint"
+
+
+def test_reordered_pages_do_not_inherit_each_others_titles():
+    pages = {1: "# Barton · p. 52\n\nsecond\n", 2: "# Barton · p. 51\n\nfirst\n"}  # swapped since the last apply
+    prev = tr.previous_entries({"toc": [{"title": "Barton - curated for 51", "page": 1, "level": 1},
+                                        {"title": "Barton - curated for 52", "page": 2, "level": 1}],
+                                "headings": {"1": "Barton · p. 51", "2": "Barton · p. 52"}})
+    plan = tr.build_plan(2, [], lambda p: pages[p], previous=prev)
+    assert plan["counts"]["kept"] == 0
+    assert plan["headings"] == {"1": "Barton · p. 52", "2": "Barton · p. 51"}
+
+
+def test_legacy_marker_must_be_the_same_kind_of_marker():
+    prev = tr.previous_entries({"toc": [{"title": "2. דמות היסטורית (עמ' 26) - curated", "page": 1, "level": 3}]})
+    assert tr.build_plan(1, [], lambda p: "# מלמט, מארי · טור 26\n\nx\n", previous=prev)["counts"]["kept"] == 0
+    assert tr.build_plan(1, [], lambda p: "# הופמן, ירמיהו · עמ' 26\n\nx\n", previous=prev)["counts"]["kept"] == 1
+    assert tr.build_plan(1, [], lambda p: "# הופמן, ירמיהו · עמ' 260\n\nx\n", previous=prev)["counts"]["kept"] == 0
+
+
+def test_a_supplied_hint_that_repeats_the_title_tail_is_kept():
+    title = "Book - Introduction"
+    plan = tr.build_plan(1, [], lambda p: "# Book\n\nx\n", hints={1: "Introduction"}, sources=[{"title": title, "page": 1}])
+    assert plan["toc"][0]["title"] == "Book - Introduction - Introduction"
+
+
+def test_only_a_successful_apply_becomes_the_applied_plan(tmp_path, monkeypatch):
+    pages = {1: "# Course · X\n\n> Load this page when: overview\n"}
+    monkeypatch.setattr(tr, "fetch_toc", lambda bid: ([], 1, None))
+    monkeypatch.setattr(tr, "book_version", lambda bid: 7)
+    monkeypatch.setattr(tr, "trove_get_page", lambda bid, p: pages[p])
+    monkeypatch.setattr(tr, "registered_source_titles", lambda c: [])
+    course = {"slug": "x", "book_id": "b1", "sources": []}
+    monkeypatch.setattr(tr, "apply_plan", lambda *a, **k: (1, "refused"))
+    assert tr.process_course(course, tmp_path, {}, apply=True, out=lambda *_: None) == 1
+    assert (tmp_path / "x.plan.json").exists() and not (tmp_path / "x.applied.json").exists()
+    tr.process_course(course, tmp_path, {}, apply=False, out=lambda *_: None)
+    assert not (tmp_path / "x.applied.json").exists()  # a dry run never counts as applied
+    monkeypatch.setattr(tr, "apply_plan", lambda *a, **k: (0, "applied"))
+    assert tr.process_course(course, tmp_path, {}, apply=True, out=lambda *_: None) == 0
+    assert (tmp_path / "x.applied.json").read_text() == (tmp_path / "x.plan.json").read_text()

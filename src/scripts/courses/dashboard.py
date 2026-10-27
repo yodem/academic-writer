@@ -530,7 +530,7 @@ def build_state(directory: Optional[Path], now: Optional[datetime] = None, week:
     out_courses = []
     for slug, course in raw_courses.items():
         course_chores = [c for c in chores if c.get("course") == slug]
-        derived, _ = tasks_mod.derive_tasks(course.get("tasks") or [], [c for c in course_chores if c.get("id")])
+        derived, _ = tasks_mod.derive_tasks(course.get("tasks") or [], [c for c in course_chores if c.get("id")], str(tz))
         refs_data = _read_json(directory / "refs" / f"{slug}.json", warnings) or {}
         refs_list = [r for r in refs_data.get("refs") or [] if isinstance(r, dict)]
         sources = [s for s in course.get("sources") or [] if isinstance(s, dict)]
@@ -955,7 +955,8 @@ def queue_fetch(directory: Path, slug: str, ref_keys: List[str], task: Optional[
         raise RequestError(400, "no refs")
     if task is not None:
         tasks_mod.resolve_task(tasks_mod.derive_tasks(tasks_mod.load_course(directory, slug).get("tasks") or [],
-                                                      tasks_mod._chores(directory, slug))[0], task)
+                                                      tasks_mod._chores(directory, slug),
+                                                      tasks_mod.term_timezone(directory))[0], task)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     path = directory / "queue" / "fetch" / f"{stamp}-{slug}.json"
     job = {"course": slug, "refs": keys, "task": task, "created": datetime.now().astimezone().isoformat(timespec="seconds"),

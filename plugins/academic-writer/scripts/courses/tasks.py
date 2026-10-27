@@ -87,7 +87,23 @@ def _chores(directory: Path, slug: str) -> list[dict[str, Any]]:
     return [c for c in _read(path) if isinstance(c, dict) and c.get("course") == slug]
 
 
-def derive_tasks(existing: list[dict[str, Any]], chores: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], bool]:
+
+def _due_at(chore: dict[str, Any], timezone_name: str) -> str | None:
+    """The chore's due_at, else its Lemida due text read as a date in the term's zone (chores saved before add_chore
+    parsed it)."""
+    return chore.get("due_at") or chores_mod.due_at_from_text(chore.get("due_text"), timezone_name)
+
+
+def term_timezone(directory: Path) -> str:
+    """The term's zone name from term.json (Asia/Jerusalem when unset or unreadable)."""
+    try:
+        term = _read(directory / "term.json")
+    except (OSError, ValueError):
+        return "Asia/Jerusalem"
+    return str(term.get("timezone") or "Asia/Jerusalem") if isinstance(term, dict) else "Asia/Jerusalem"
+
+def derive_tasks(existing: list[dict[str, Any]], chores: list[dict[str, Any]],
+                 timezone_name: str = "Asia/Jerusalem") -> tuple[list[dict[str, Any]], bool]:
     """Existing tasks plus one new task per task-like chore not yet covered. Returns (tasks, changed). Never removes."""
     tasks = [dict(t) for t in existing]
     covered = {cid for t in tasks for cid in t.get("chore_ids", [])}
@@ -98,7 +114,7 @@ def derive_tasks(existing: list[dict[str, Any]], chores: list[dict[str, Any]]) -
         chore = by_id.get(task["id"])
         if chore is None or task.get("chore_ids") != [chore["id"]]:
             continue
-        for key, value in (("title", chore.get("title") or chore.get("ref", "")), ("due_at", chore.get("due_at"))):
+        for key, value in (("title", chore.get("title") or chore.get("ref", "")), ("due_at", _due_at(chore, timezone_name))):
             if value and task.get(key) != value:
                 task[key] = value
                 changed = True
@@ -106,7 +122,7 @@ def derive_tasks(existing: list[dict[str, Any]], chores: list[dict[str, Any]]) -
         if chore.get("kind") not in TASK_KINDS or chore["id"] in covered:
             continue
         done = chore.get("status") == "done"
-        task = {"id": chore["id"], "title": chore.get("title") or chore.get("ref", ""), "due_at": chore.get("due_at"),
+        task = {"id": chore["id"], "title": chore.get("title") or chore.get("ref", ""), "due_at": _due_at(chore, timezone_name),
                 "chore_ids": [chore["id"]], "status": "submitted" if done else "open",
                 "submitted_at": chore.get("updated") if done else None, "kind": chore["kind"]}
         for optional in ("room", "material"):
@@ -122,7 +138,7 @@ def sync_tasks(directory: Path, slug: str, *, write: bool = True) -> list[dict[s
     handle = _lock(directory)
     try:
         course = load_course(directory, slug)
-        tasks, changed = derive_tasks(course.get("tasks", []), _chores(directory, slug))
+        tasks, changed = derive_tasks(course.get("tasks", []), _chores(directory, slug), term_timezone(directory))
         if changed and write:
             course["tasks"] = tasks
             courses._atomic_json(course_path(directory, slug), course)
@@ -205,7 +221,7 @@ def task_link(directory: Path, slug: str, ident: str, *, ref: str | None = None,
     handle = _lock(directory)
     try:
         course = load_course(directory, slug)
-        tasks, changed = derive_tasks(course.get("tasks", []), _chores(directory, slug))
+        tasks, changed = derive_tasks(course.get("tasks", []), _chores(directory, slug), term_timezone(directory))
         task = resolve_task(tasks, ident)
         if ref:
             data = load_refs_data(directory, slug)
@@ -235,7 +251,7 @@ def task_submit(directory: Path, slug: str, ident: str) -> dict[str, Any]:
     handle = _lock(directory)
     try:
         course = load_course(directory, slug)
-        tasks, _ = derive_tasks(course.get("tasks", []), _chores(directory, slug))
+        tasks, _ = derive_tasks(course.get("tasks", []), _chores(directory, slug), term_timezone(directory))
         task = resolve_task(tasks, ident)
         closed = []
         registry = courses.Registry(directory)
@@ -262,7 +278,7 @@ def task_unsubmit(directory: Path, slug: str, ident: str) -> dict[str, Any]:
     handle = _lock(directory)
     try:
         course = load_course(directory, slug)
-        tasks, _ = derive_tasks(course.get("tasks", []), _chores(directory, slug))
+        tasks, _ = derive_tasks(course.get("tasks", []), _chores(directory, slug), term_timezone(directory))
         task = resolve_task(tasks, ident)
         reopened = []
         if task.get("status") == "submitted":
@@ -343,7 +359,7 @@ def migrate(directory: Path, specs_dir: Path | None = None, *, dry_run: bool = F
     registry = courses.Registry(directory)
     for slug in sorted(registry.courses):
         course = load_course(directory, slug)
-        tasks, changed = derive_tasks(course.get("tasks", []), _chores(directory, slug))
+        tasks, changed = derive_tasks(course.get("tasks", []), _chores(directory, slug), term_timezone(directory))
         refs_data = load_refs_data(directory, slug)
         refs_list = refs_data["refs"] if refs_data else []
         sources = course.get("sources", [])

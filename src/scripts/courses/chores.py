@@ -106,7 +106,7 @@ def due_at_from_text(text: str | None, timezone_name: str = "Asia/Jerusalem") ->
         hour = 0
     try:
         when = datetime(int(m.group(3)), month, int(m.group(1)), hour, minute, tzinfo=ZoneInfo(timezone_name))
-    except ValueError:
+    except (ValueError, KeyError):  # an impossible date, or an unknown zone name (ZoneInfoNotFoundError)
         return None
     return when.isoformat()
 
