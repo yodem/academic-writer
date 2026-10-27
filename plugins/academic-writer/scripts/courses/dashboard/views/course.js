@@ -14,18 +14,22 @@ const TABS = [['tasks', 'מטלות'], ['sources', 'מקורות'], ['lessons', 
 const EXT = new Set();                             /* checked "extract text" boxes (type:key), kept across live updates */
 const METHODS = [['auto', 'אוטומטי (מומלץ)'], ['claude-vision', 'Claude קורא את העמודים כתמונות'], ['gemini-ocr', 'Gemini OCR (שולח את העמודים ל־Google)'], ['tesseract', 'Tesseract (במחשב הזה)']];
 const tabOf = {};                                  /* the open tab per course, kept across live updates */
+let WATCH = false;                                 /* `nightly watch on`: a chosen extraction runs within minutes, not tonight */
+const WHEN = () => WATCH ? 'בדקות הקרובות' : 'בריצה הלילית';
+const waited = d => d >= 2 ? ` · ממתין ${d} ימים` : d === 1 ? ' · ממתין יום' : '';
 const lessonWord = l => l.status === 'done' ? 'בטרוב' : l.status === 'appended' ? 'נכתב, עוד לא נבדק' : 'בתור';
 
 /* ---------- sources ---------- */
 function itemGloss(i){
-  if (i.extract_queued) return `<span class="gloss">ממתין לחילוץ טקסט: Claude יטפל בזה בריצה הלילית</span>`;
+  if (i.extract_queued) return `<span class="gloss">ממתין לחילוץ טקסט: Claude יטפל בזה ${WHEN()}</span>`;
   if (i.queued) return `<span class="gloss">Claude יחפש את זה בריצה הלילית. מה שדורש הורדה בדפדפן יהפוך למשימה אצלך.</span>`;
   if (i.type === 'chore') return `<span class="gloss red">לא נמצא בחומרי הקורס</span>`;
   if (i.missing) return `<span class="gloss red">${i.status === 'not-found' ? 'לא נמצא בספרייה' : 'קיים רק בדפוס, בלי טקסט'}</span>`;
   if (i.ocr === 'blocked' || i.ocr === 'flagged') return `<span class="gloss">הזיהוי האוטומטי של הטקסט סומן לבדיקה: כדאי להשוות לסריקה לפני שמצטטים</span>`;
   if (i.ocr === 'queued') return `<span class="gloss">ממתין לזיהוי הטקסט</span>`;
+  if (i.extracted && !i.in_trove) return `<span class="gloss">הטקסט חולץ, עוד לא בטרוב: Claude יעלה אותו ${WHEN()}${waited(i.untroved_days)}</span>`;
   if (i.extracted) return `<span class="gloss">הטקסט חולץ</span>`;
-  if (i.extractable) return `<span class="gloss">הורד, עוד בלי טקסט. אפשר לבקש חילוץ טקסט</span>`;
+  if (i.extractable) return `<span class="gloss${i.untroved_days >= 2 ? ' red' : ''}">הורד, עוד לא בטרוב. סמנו לחילוץ טקסט כדי שייכנס${waited(i.untroved_days)}</span>`;
   if (i.downloaded || i.in_trove) return '';
   const words = {online: 'זמין ברשת, עוד לא הורד', kotar: 'בכותר, עוד לא הורד', pending: 'עוד לא חיפשו אותו בספרייה'};
   return words[i.status] ? `<span class="gloss">${words[i.status]}</span>` : '';
@@ -66,7 +70,7 @@ function updateExtractbar(el){
   const sel = $$('input[data-ext]:checked', el);
   bar.hidden = !sel.length;
   if (!sel.length) return;
-  $('#extTxt', el).textContent = (sel.length === 1 ? 'נבחר מקור אחד לחילוץ טקסט.' : `נבחרו ${sel.length} מקורות לחילוץ טקסט.`) + ' הדף לא מחלץ כלום: Claude יחלץ בריצה הלילית.';
+  $('#extTxt', el).textContent = (sel.length === 1 ? 'נבחר מקור אחד לחילוץ טקסט.' : `נבחרו ${sel.length} מקורות לחילוץ טקסט.`) + ` הדף לא מחלץ כלום: Claude יחלץ ויעלה לטרוב ${WHEN()}.`;
 }
 async function queueExtract(slug, boxes, method){
   const items = boxes.map(i => { const [kind, ...rest] = i.dataset.ext.split(':'); return {kind, key: rest.join(':'), method}; });
@@ -74,7 +78,7 @@ async function queueExtract(slug, boxes, method){
   try {
     await api('/api/extract', {course: slug, items, method});
     boxes.forEach(i => EXT.delete(i.dataset.ext));
-    toast(items.length === 1 ? 'המקור בתור לחילוץ טקסט. Claude יחלץ אותו בריצה הלילית.' : `${items.length} מקורות בתור לחילוץ טקסט. Claude יחלץ אותם בריצה הלילית.`);
+    toast(items.length === 1 ? `המקור בתור לחילוץ טקסט. Claude יחלץ אותו ${WHEN()}.` : `${items.length} מקורות בתור לחילוץ טקסט. Claude יחלץ אותם ${WHEN()}.`);
     await load(true);
   } catch(e) { if (e.message !== 'forbidden') toast('הבקשה לא נשמרה: ' + esc(e.message)); }
 }
@@ -195,6 +199,7 @@ function rail(c){
 
 /* ---------- page ---------- */
 function render(st, el, slug){
+  WATCH = !!st.extract_watch;
   const c = A.course(slug);
   if (!c){
     el.innerHTML = `<p class="crumb"><a href="#overview">סקירה</a></p><header class="pagehead"><h1>אין קורס כזה</h1><p class="lede">אולי הוא הוסר מהרישום. אפשר לחזור לרשימת הקורסים.</p></header>`;
