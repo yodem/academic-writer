@@ -4,6 +4,17 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-10-27
+
+### Added
+- **A dashboard extraction pick reaches Trove within minutes.** `courses.py nightly watch on` installs a LaunchAgent that watches `queue/extract/` and runs `courses-daily.sh --extract-only` (extraction, then the Trove ingest) as soon as the dashboard writes a job, instead of waiting for the nightly run. It shares a kernel lock with the nightly run, exits at once when no job is waiting, and never retries a job it could not finish (the nightly run does). `nightly watch off|status` manage it; `nightly set/off` never touch it.
+- **The dashboard shows what is downloaded but not in Trove.** Each course counts its sources waiting outside Trove with the oldest wait in days (red after two days), on the course card, in the overview's "not ready" column and on every source row; a source whose text was extracted no longer reads as done while it is still outside Trove.
+
+### Fixed
+- **Ready sources go to Trove before OCR.** `extract-handoff` places every source whose text already exists first, then runs the OCR handoffs, then places what they produced, so a long OCR batch no longer keeps ready lessons out of the course book.
+- **A page `put` no longer wipes curated ToC titles and hints.** `toc_rebuild.py` keeps the title, hint and level of every page whose heading is unchanged from the last successfully applied plan (`toc-work/<slug>.applied.json`, which records each page's raw heading); `--prior <plan>` restores from an older copy. Source titles that contain " - " no longer repeat their tail in the hint on every rebuild.
+- **An assignment whose due date was left as Lemida text now has a date.** Hebrew and English Moodle due text ("יום שני, 2 נובמבר 2026, 00:00") is read in the term's time zone when the watcher saved no `due_at`, so the task appears under deadlines.
+
 ## [0.21.0] — 2026-10-26
 
 ### Changed
