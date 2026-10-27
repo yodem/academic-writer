@@ -29,7 +29,7 @@
 # `courses-daily.sh --extract-only` runs only c4 and c5, logged to $TERM_DIR/logs/extract-now-<date>.log, and exits at
 # once when queue/extract/ holds no job. `courses.py nightly watch on` installs a LaunchAgent that runs it whenever the
 # dashboard writes an extraction job, so a chosen source reaches Trove in minutes instead of at the next night.
-# c4+c5 hold $TERM_DIR/locks/extract.lock (the nightly run waits for it too), so the two never ingest the same file.
+# c4+c5 hold a flock on $TERM_DIR/locks/extract.lock (the nightly run waits for it too), so the two never ingest the same file.
 # Exit status is nonzero only when a step failed.
 # COURSES_DRY=1 prints each planned command to stdout instead of running it (no log file).
 export PATH="${PATH:+$PATH:}$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
@@ -49,7 +49,7 @@ DRY="${COURSES_DRY:-}"
 FAILED=0
 EXTRACT_ONLY=""
 [ "${1:-}" = "--extract-only" ] && EXTRACT_ONLY=1
-EXTRACT_LOCK="$TERM_DIR/locks/extract.lock"
+EXTRACT_LOCK="$TERM_DIR/locks/extract.lock"   # flock target; extract.lock.owner names the last holder
 
 WATCH_TOOLS="mcp__claude-in-chrome__*,Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(trove ms show:*),Bash(nlm source:*),Bash(nlm notebook:*),Bash(rclone:*),Bash(pdftoppm:*),Bash(ls:*),Bash(mkdir:*),Bash(mv:*),Bash(cp:*),Bash(open:*),Bash(screencapture:*),Bash(date:*)"
 LESSON_TOOLS="Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(trove items:*),Bash(trove ms show:*),Bash(trove auth whoami:*),Bash(mkdir:*),Bash(mv:*),Bash(ls:*),Bash(cat:*),Bash(date:*)"
@@ -79,27 +79,27 @@ add_manual_chore() {  # <ref> <title> <text>
   "$PY" "$COURSES" chores add --course general --kind manual --ref "$1" --title "$2" --text "$3"
 }
 
-# extract lock: a directory holding the owner's pid; a lock whose pid is gone is stale and taken over.
-# Waits up to EXTRACT_LOCK_WAIT seconds (default 90 minutes); returns 1 when it is still held.
+# extract lock: a kernel flock on fd 9 (python's fcntl, so it works where flock(1) is missing). The kernel drops it when
+# the holder exits, so a crashed run never leaves a stale lock. Waits up to EXTRACT_LOCK_WAIT seconds (default 90 minutes);
+# returns 1 when another run still holds it. Commands started under the lock get `9>&-` so none of them keeps it alive.
 take_extract_lock() {
   [ -n "$DRY" ] && return 0
   mkdir -p "$TERM_DIR/locks"
-  local waited=0 pid
-  while ! mkdir "$EXTRACT_LOCK" 2>/dev/null; do
-    pid=$(cat "$EXTRACT_LOCK/pid" 2>/dev/null)
-    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
-      rm -rf "$EXTRACT_LOCK"
-      continue
+  exec 9>>"$EXTRACT_LOCK"
+  local waited=0
+  until "$PY" -c 'import fcntl; fcntl.flock(9, fcntl.LOCK_EX | fcntl.LOCK_NB)' 2>/dev/null; do
+    if [ "$waited" -ge "${EXTRACT_LOCK_WAIT:-5400}" ]; then
+      exec 9>&-
+      return 1
     fi
-    [ "$waited" -ge "${EXTRACT_LOCK_WAIT:-5400}" ] && return 1
     sleep 15
     waited=$((waited + 15))
   done
-  echo $$ > "$EXTRACT_LOCK/pid"
+  echo "$$ $(stamp)" > "$EXTRACT_LOCK.owner"
 }
 
 release_extract_lock() {
-  [ -n "$DRY" ] || rm -rf "$EXTRACT_LOCK"
+  [ -n "$DRY" ] || exec 9>&-
 }
 
 # the top-level extraction jobs the dashboard wrote (c4 moves finished ones to queue/extract/done/)
@@ -113,7 +113,7 @@ extract_jobs() {
 run_extract() {
   # c4. extraction the student chose on the dashboard (queue/extract/*.json): python steps run here, scans are handed to Claude
   if ! dry_plan "$EXTRACT_PY $REFS --registry $TERM_DIR extract-queue"; then
-    step extract-queue "$EXTRACT_PY" "$REFS" --registry "$TERM_DIR" extract-queue || FAILED=1
+    step extract-queue "$EXTRACT_PY" "$REFS" --registry "$TERM_DIR" extract-queue 9>&- || FAILED=1
   fi
 
   # c5. one Claude step for what python could not read (claude-vision, gemini-ocr, tesseract) and for chosen sources awaiting their Trove ingest
@@ -126,7 +126,7 @@ run_extract() {
     echo "extraction handoffs: ${#HANDOFFS[@]}"
     if ! dry_plan "printf '%s' '/academic-writer:courses extract-handoff' | claude -p --model sonnet --plugin-dir $REPO/plugins/academic-writer --allowedTools \"$EXTRACT_TOOLS\""; then
       printf '%s' "/academic-writer:courses extract-handoff" | claude -p --model sonnet \
-        --plugin-dir "$REPO/plugins/academic-writer" --allowedTools "$EXTRACT_TOOLS"
+        --plugin-dir "$REPO/plugins/academic-writer" --allowedTools "$EXTRACT_TOOLS" 9>&-
       rc=$?
       echo "-- extract-handoff exit=$rc $(stamp)"
       [ "$rc" -ne 0 ] && FAILED=1
@@ -137,27 +137,31 @@ run_extract() {
 # c4+c5 under the lock; nightly and --extract-only both come through here
 locked_extract() {
   if ! take_extract_lock; then
-    echo "extract lock still held after ${EXTRACT_LOCK_WAIT:-5400}s: c4/c5 skipped ($(cat "$EXTRACT_LOCK/pid" 2>/dev/null))"
+    echo "extract lock still held after ${EXTRACT_LOCK_WAIT:-5400}s: c4/c5 skipped (holder: $(cat "$EXTRACT_LOCK.owner" 2>/dev/null))"
     FAILED=1
     return
   fi
-  trap release_extract_lock EXIT
   run_extract
   release_extract_lock
-  trap - EXIT
 }
 
-# --extract-only: run c4+c5 again while new jobs keep arriving during a round (a second dashboard pick), at most 3 rounds
+# --extract-only: one c4+c5 round, and another only for jobs that arrived during it (a second dashboard pick); a job
+# c4 could not finish is never retried here (the nightly run retries it), so Claude is not called twice for it. At most 3 rounds.
 run_extract_only() {
   echo "== extract now $(stamp)"
-  local before rounds=0
+  local jobs fresh attempted="" rounds=0
   while [ "$rounds" -lt 3 ]; do
-    before=$(extract_jobs)
-    [ -n "$before" ] || break
+    jobs=$(extract_jobs)
+    if [ -n "$attempted" ]; then
+      fresh=$(printf '%s\n' "$jobs" | grep -vxF -f <(printf '%s\n' "$attempted"))
+    else
+      fresh=$jobs
+    fi
+    [ -n "$fresh" ] || break
+    attempted=$(printf '%s\n%s' "$attempted" "$jobs" | sed '/^$/d')
     locked_extract
     rounds=$((rounds + 1))
     [ -n "$DRY" ] && break
-    [ "$(extract_jobs)" = "$before" ] && break  # the same jobs are still there: c4 could not finish them, the nightly retries
   done
   echo "== done $(stamp) failed=$FAILED"
 }
