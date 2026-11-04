@@ -58,7 +58,12 @@ mkdir -p .ctx
 BASELINE_TITLE="Hebrew Linguistic Reference"
 BASELINE_ID=$(trove items list --json 2>/dev/null | jq -r --arg t "$BASELINE_TITLE" '[(if type == "object" then .items else . end)[] | select(.title == $t)] | if length == 1 then .[0].id elif length > 1 then (sort_by(.id) | .[0].id) else empty end')
 if [ -n "$BASELINE_ID" ]; then
-  trove items get "$BASELINE_ID" > .ctx/hebrew-linguistic-reference.md
+  if trove items get "$BASELINE_ID" > .ctx/hebrew-linguistic-reference.md.tmp && [ -s .ctx/hebrew-linguistic-reference.md.tmp ]; then
+    mv .ctx/hebrew-linguistic-reference.md.tmp .ctx/hebrew-linguistic-reference.md
+  else
+    rm -f .ctx/hebrew-linguistic-reference.md.tmp
+    echo "Found '$BASELINE_TITLE' but could not download it — continuing without a contrastive baseline (non-fatal)."
+  fi
 else
   echo "Could not find Trove item titled '$BASELINE_TITLE' by exact title match — continuing without a contrastive baseline (non-fatal)."
   echo "If you want contrastive scoring, search Trove manually (trove items list --json | jq) and rename the item to match exactly, or re-run init after adding it."
