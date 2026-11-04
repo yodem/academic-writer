@@ -56,7 +56,7 @@ fall back to:
 ```bash
 mkdir -p .ctx
 BASELINE_TITLE="Hebrew Linguistic Reference"
-BASELINE_ID=$(trove items list --json 2>/dev/null | jq -r --arg t "$BASELINE_TITLE" '[.[] | select(.title == $t)] | if length == 1 then .[0].id elif length > 1 then (sort_by(.id) | .[0].id) else empty end')
+BASELINE_ID=$(trove items list --json 2>/dev/null | jq -r --arg t "$BASELINE_TITLE" '[(if type == "object" then .items else . end)[] | select(.title == $t)] | if length == 1 then .[0].id elif length > 1 then (sort_by(.id) | .[0].id) else empty end')
 if [ -n "$BASELINE_ID" ]; then
   trove items get "$BASELINE_ID" > .ctx/hebrew-linguistic-reference.md
 else

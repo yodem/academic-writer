@@ -1,0 +1,48 @@
+{
+  "items": [
+    {
+      "id": "cmexampleother0000000000",
+      "title": "Some Other Book",
+      "description": "Unrelated item, kept so the lookup must filter by title.",
+      "author": null,
+      "sourceType": "markdown",
+      "needsEnrichment": false,
+      "enrichmentConfidence": null,
+      "enrichedAt": null,
+      "createdAt": "2026-11-04T10:29:21.264Z",
+      "updatedAt": "2026-11-04T10:29:21.264Z",
+      "pageCount": 3,
+      "status": "READY",
+      "health": "ok",
+      "healthReason": null,
+      "isSystem": false,
+      "locked": false,
+      "tagged": false,
+      "shelves": []
+    },
+    {
+      "id": "cmomjonvy0fdmk30zwef79c48",
+      "title": "Hebrew Linguistic Reference",
+      "description": "Curated Hebrew editorial knowledge. Source: github.com/yodem/hebrew-linguistics-data",
+      "author": null,
+      "sourceType": "markdown",
+      "needsEnrichment": false,
+      "enrichmentConfidence": null,
+      "enrichedAt": "2026-05-04T17:40:06.648Z",
+      "createdAt": "2026-05-01T06:41:45.454Z",
+      "updatedAt": "2026-11-04T07:56:07.325Z",
+      "pageCount": 12,
+      "status": "READY",
+      "health": "ok",
+      "healthReason": null,
+      "isSystem": false,
+      "locked": false,
+      "tagged": true,
+      "shelves": [
+        {"id": "cmexampleshelf00000000000", "slug": "academic-writing-method", "name": "Academic Writing & Method"}
+      ]
+    }
+  ],
+  "enrichmentQueue": [],
+  "pickUrl": null
+}
