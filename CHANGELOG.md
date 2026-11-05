@@ -4,6 +4,9 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- **A lesson page past the first ~20 KB of a course book is found again.** `find-lesson-page`, `check-lesson` and `check-source` read the book with `trove items get`, which stops at its 20,000-byte limit with no cursor, so in a grown book every later lesson page was reported as "found on None" and the lesson could never be marked done. They now read every page through `trove items read --json`, following its `next` cursor (and joining the parts of a page over the limit), and take page numbers from the reply instead of counting `# ` headings. A cursor that repeats is an error, not a silent short read.
+
 ## [0.22.0] — 2026-10-27
 
 ### Added

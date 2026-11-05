@@ -277,8 +277,10 @@ def media_checked(tmp_path, monkeypatch, status, **fake_kwargs):
     fake = Fake(**defaults)
     original = fake.__call__
     def with_find(command, **kwargs):
-        if command[:3] == ["trove", "items", "get"]:
-            return subprocess.CompletedProcess(command, 0, "# a\n# b\n# c\n# d\n# e\n# f\n" + courses.LESSON_KEY_PREFIX + "2026-10-12-1204\n", "")
+        if command[:3] == ["trove", "items", "read"]:
+            pages = [{"pageNum": n, "content": f"# p{n}\n", "part": 1, "parts": 1} for n in range(1, 6)]
+            pages.append({"pageNum": 6, "content": "# p6\n" + courses.LESSON_KEY_PREFIX + "2026-10-12-1204\n", "part": 1, "parts": 1})
+            return subprocess.CompletedProcess(command, 0, json.dumps({"items": [{"id": "b", "pages": pages, "next": None}]}), "")
         return original(command, **kwargs)
     return courses.check_source(registry, "sample", runner=with_find)
 
