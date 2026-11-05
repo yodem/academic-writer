@@ -21,7 +21,7 @@ import subprocess
 from collections import Counter
 from pathlib import Path
 
-from .trove_source import trove_env
+from .trove_source import IndexFailure, read_pages, trove_env
 
 NIQQUD = re.compile("[֑-ׇ]")  # cantillation + points (U+0591-U+05C7)
 HEBREW = re.compile("[א-ת]")
@@ -58,11 +58,11 @@ def parse_pages(spec: str | None) -> set[int]:
 
 
 def fetch_pages(trove_id: str, pages: str | None) -> dict[int, str]:
-    doc = json.loads(trove("items", "read", f"{trove_id}:{pages or 'all'}", "--json"))
-    item = doc["items"][0]
-    if doc.get("truncatedItemIds") or item.get("truncated"):
-        raise SystemExit(f"{trove_id}: Trove truncated the read; pass a smaller --pages range")
-    return {int(p["pageNum"]): p.get("content") or "" for p in item["pages"]}
+    """Every page in `pages` (default all), following Trove's `next` cursor past its ~20 KB reply."""
+    try:
+        return read_pages(trove_id, pages or "all")[0]
+    except IndexFailure as exc:
+        raise SystemExit(f"{trove_id}: {exc}")
 
 
 IMG = re.compile(r"!\[[^\]]*\]\([^)]*\)")

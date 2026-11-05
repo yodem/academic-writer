@@ -36,9 +36,10 @@ def install_fake_trove(tmp_path, monkeypatch, books=("hinted-demo", "flat-demo")
     log = Path(tmp_path) / "trove-calls.log"
     monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ.get('PATH', '')}")
     monkeypatch.setenv("FAKE_TROVE_DIR", str(data))
-    monkeypatch.setenv("AW_LIBRARY_PASS_ENV", "FAKE_TROVE_DIR,FAKE_TROVE_LOG,FAKE_TROVE_ENV_LOG,FAKE_TROVE_TRUNCATED")  # trove_env is an allow-list: the fake Trove names what it needs
+    monkeypatch.setenv("AW_LIBRARY_PASS_ENV", "FAKE_TROVE_DIR,FAKE_TROVE_LOG,FAKE_TROVE_ENV_LOG,FAKE_TROVE_TRUNCATED,FAKE_TROVE_PAGE_LIMIT")  # trove_env is an allow-list: the fake Trove names what it needs
     monkeypatch.setenv("FAKE_TROVE_LOG", str(log))
     monkeypatch.delenv("FAKE_TROVE_TRUNCATED", raising=False)
+    monkeypatch.delenv("FAKE_TROVE_PAGE_LIMIT", raising=False)
     return data, log
 
 

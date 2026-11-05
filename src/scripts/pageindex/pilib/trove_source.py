@@ -74,17 +74,52 @@ def fetch(trove_id: str) -> dict:
     toc_doc = _json(trove("items", "toc", trove_id, "--json"), f"trove items toc {trove_id}")
     item = first_item(toc_doc, f"trove items toc {trove_id}")
     toc = item.get("toc") if isinstance(item.get("toc"), list) else []
-    pages_doc = _json(trove("items", "read", f"{trove_id}:all", "--json"), f"trove items read {trove_id}:all")
-    got = first_item(pages_doc, f"trove items read {trove_id}:all")
-    if pages_doc.get("truncatedItemIds") or got.get("truncated"):
-        raise IndexFailure("trove_truncated", f"Trove truncated the full read of {trove_id}; it is too large to index in one read")
-    pages = {}
-    for entry in got.get("pages") or []:
-        try:
-            number = int(entry["pageNum"])
-        except (KeyError, TypeError, ValueError):
-            continue
-        pages[number] = entry.get("content") or ""
+    pages, got = read_pages(trove_id, "all")
     return {"title": item.get("title") or got.get("title") or trove_id,
             "author": item.get("author") or got.get("author") or "",
             "toc": toc, "pages": pages}
+
+
+READ_MAX_CALLS = 500
+
+
+def read_pages(trove_id: str, spec: str = "all") -> tuple[dict, dict]:
+    """({page number: full text}, first reply item) for the pages in `spec`, read-only on Trove.
+
+    One `trove items read` reply holds about 20,000 bytes: a longer read comes back with fewer
+    pages, `truncated` false, and the rest named only in `next` (`{"pages": "8-23"}`, plus
+    `"part": n` when a page over the limit continues). Reading `<id>:all` once indexed 7 of 23
+    pages of a real course book (2026-11-05). Follow the cursor to its end and join the parts of
+    each page; a repeating cursor, or a reply Trove itself marks truncated, is a failure.
+    """
+    what = f"trove items read {trove_id}:{spec}"
+    pages: dict = {}
+    first: dict | None = None
+    args = ["items", "read", f"{trove_id}:{spec}", "--json"]
+    seen: set = set()
+    for _ in range(READ_MAX_CALLS):
+        doc = _json(trove(*args), what)
+        got = first_item(doc, what)
+        if doc.get("truncatedItemIds") or got.get("truncated"):
+            raise IndexFailure("trove_truncated", f"Trove truncated the read of {trove_id}; it is too large to index")
+        first = first if first is not None else got
+        for entry in got.get("pages") or []:
+            try:
+                number = int(entry["pageNum"])
+                part = int(entry.get("part") or 1)
+            except (KeyError, TypeError, ValueError):
+                continue
+            text = entry.get("content") or ""
+            pages[number] = pages[number] + text if part > 1 and number in pages else text
+        nxt = got.get("next")
+        if not isinstance(nxt, dict) or not nxt.get("pages"):
+            return pages, first
+        key = (str(nxt["pages"]), nxt.get("part"))
+        if key in seen:
+            raise IndexFailure("trove_failed", f"{what}: the next cursor repeated at {nxt}")
+        seen.add(key)
+        args = ["items", "read", trove_id, "--pages", str(nxt["pages"])]
+        if nxt.get("part"):
+            args += ["--part", str(nxt["part"])]
+        args.append("--json")
+    raise IndexFailure("trove_failed", f"{what}: more than {READ_MAX_CALLS} replies without reaching the end")

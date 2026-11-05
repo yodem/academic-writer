@@ -1046,3 +1046,24 @@ def test_publish_and_prune_need_the_lock_and_read_the_pointer_under_it(env, caps
         assert lib.current_name(HINTED) == first and first in version_names(HINTED)
         lib.discard_unpublished(HINTED, version)              # the pointer never named it now: removed
         assert version.name not in version_names(HINTED)
+
+
+def test_a_read_cut_short_by_trove_is_followed_to_the_last_page(env, monkeypatch):
+    # 2026-11-05: `trove items read <id>:all` returned 7 of 23 pages of a real course book,
+    # `truncated` false, the rest named only in `next`; the index silently covered a third of it.
+    from pilib import trove_source
+    monkeypatch.setenv("FAKE_TROVE_PAGE_LIMIT", "2")
+    pages, _ = trove_source.read_pages(HINTED)
+    assert [pages[n] for n in sorted(pages)] == fixture_pages(HINTED)
+    calls = [json.loads(line) for line in env.log.read_text(encoding="utf-8").splitlines()]
+    reads = [c for c in calls if c[:2] == ["items", "read"]]
+    assert reads[0][2] == HINTED + ":all" and len(reads) == -(-len(fixture_pages(HINTED)) // 2)
+    assert all("--pages" in c for c in reads[1:])
+
+
+def test_a_repeating_read_cursor_fails_instead_of_looping(env, monkeypatch):
+    from pilib import trove_source
+    reply = json.dumps({"items": [{"pages": [{"pageNum": 1, "content": "x"}], "next": {"pages": "2-3"}}]})
+    monkeypatch.setattr(trove_source, "trove", lambda *a: reply)
+    with pytest.raises(trove_source.IndexFailure, match="repeated"):
+        trove_source.read_pages(HINTED)

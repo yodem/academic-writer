@@ -4,6 +4,8 @@
     trove items read <id>:all --json --no-session
 
 Every call is appended to $FAKE_TROVE_LOG. FAKE_TROVE_TRUNCATED=1 marks the full read as truncated.
+FAKE_TROVE_PAGE_LIMIT=N serves at most N pages per read and names the rest in `next`, as the real
+~20 KB reply does; continuations come back as `<id> --pages a-b`.
 It refuses write commands, like the real one would be asked never to be used for here.
 """
 import json
@@ -31,9 +33,24 @@ if not os.path.exists(path):
     sys.exit(1)
 doc = json.load(open(path, encoding="utf-8"))
 if args[1] == "read":
-    if args[2] != book + ":all":
-        sys.stderr.write("fake trove: only <id>:all is served\n")
+    # `<id>:all`, or a continuation `<id> --pages a-b [--part n]` named by a previous reply's `next`
+    if args[2] == book + ":all":
+        wanted = None
+    elif args[2] == book and "--pages" in args:
+        a, _, b = args[args.index("--pages") + 1].partition("-")
+        wanted = range(int(a), int(b or a) + 1)
+    else:
+        sys.stderr.write("fake trove: only <id>:all or <id> --pages a-b is served\n")
         sys.exit(2)
+    item = doc["items"][0]
+    pages = [p for p in item.get("pages") or [] if wanted is None or int(p["pageNum"]) in wanted]
+    limit = int(os.environ.get("FAKE_TROVE_PAGE_LIMIT") or 0)  # like the real ~20 KB reply: fewer pages, rest in `next`
+    item["next"] = None
+    if limit and len(pages) > limit:
+        rest = pages[limit:]
+        pages = pages[:limit]
+        item["next"] = {"pages": f"{rest[0]['pageNum']}-{rest[-1]['pageNum']}"}
+    item["pages"] = pages
     if os.environ.get("FAKE_TROVE_TRUNCATED"):
         doc["truncatedItemIds"] = [book]
 sys.stdout.write(json.dumps(doc, ensure_ascii=False))
