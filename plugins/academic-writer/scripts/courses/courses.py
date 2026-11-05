@@ -707,17 +707,51 @@ def find_lesson_page(registry: Registry, slug: str, lesson_key: str, runner: Cal
         raise ValueError(f"unknown course: {slug}")
     if not course.get("book_id"):
         raise ValueError(f"{slug}: missing book_id")
-    result = runner(["trove", "items", "get", str(course["book_id"]), "--no-session"], check=True, text=True, capture_output=True)
-    page = 0
     found = None
-    for line in result.stdout.splitlines():
-        if line.startswith("# "):
-            page += 1
-        elif line.strip() == LESSON_KEY_PREFIX + lesson_key:
+    for page, content in sorted(read_book_pages(str(course["book_id"]), runner=runner).items()):
+        if any(line.strip() == LESSON_KEY_PREFIX + lesson_key for line in content.splitlines()):
             if found is not None and found != page:
                 raise ValueError(f"{slug}: lesson key {lesson_key} appears on pages {found} and {page}")
             found = page
     return found
+
+
+READ_BOOK_MAX_CALLS = 500
+
+
+def read_book_pages(book_id: str, runner: Callable[..., Any] = subprocess.run) -> dict[int, str]:
+    """Return {page number: full page text} for every page of a Trove book.
+
+    ``trove items read`` returns at most about 20,000 bytes per call and names the rest in ``next``
+    ({"pages": "<range>", "part": <n>} when a page over the limit continues). ``trove items get`` stops
+    at that limit with no cursor in its output, which hid every page after it; so follow the cursor until
+    it ends, joining the parts of each page. A cursor that repeats or never ends is an error, not a short read.
+    """
+    pages: dict[int, str] = {}
+    cursor: dict[str, Any] = {"pages": "all"}
+    seen: set[tuple[str, Any]] = set()
+    for _ in range(READ_BOOK_MAX_CALLS):
+        key = (str(cursor.get("pages")), cursor.get("part"))
+        if key in seen:
+            raise ValueError(f"trove items read {book_id}: cursor repeated at {cursor}")
+        seen.add(key)
+        cmd = ["trove", "items", "read", book_id, "--pages", str(cursor["pages"]), "--json", "--no-session"]
+        if cursor.get("part"):
+            cmd[6:6] = ["--part", str(cursor["part"])]
+        result = runner(cmd, check=True, text=True, capture_output=True)
+        items = json.loads(result.stdout).get("items") or []
+        if not items:
+            raise ValueError(f"trove items read {book_id}: no item in the reply")
+        item = items[0]
+        for entry in item.get("pages") or []:
+            number = int(entry["pageNum"])
+            text = str(entry.get("content") or "")
+            pages[number] = pages[number] + text if int(entry.get("part") or 1) > 1 and number in pages else text
+        nxt = item.get("next")
+        if not nxt or not nxt.get("pages"):
+            return pages
+        cursor = {"pages": nxt["pages"], "part": nxt.get("part")}
+    raise ValueError(f"trove items read {book_id}: more than {READ_BOOK_MAX_CALLS} calls without reaching the end")
 
 
 LESSONS_ENTRY = "תמלולי שיעורים"

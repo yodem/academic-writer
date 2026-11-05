@@ -13,11 +13,21 @@ def _registry(tmp_path, lessons):
     return courses.Registry(tmp_path)
 
 
+def _read_reply(text_or_pages, nxt=None):
+    """A `trove items read --json` reply: a book text split on '# ' headings, or {page: content}."""
+    if isinstance(text_or_pages, str):
+        chunks = ["# " + c for c in text_or_pages.split("# ") if c.strip()] if text_or_pages.startswith("# ") else []
+        pages = [{"pageNum": i, "content": c, "part": 1, "parts": 1} for i, c in enumerate(chunks, 1)]
+    else:
+        pages = text_or_pages
+    return json.dumps({"items": [{"id": "book-1", "pages": pages, "next": nxt}]})
+
+
 def _runner(toc, book=None):
     def run(cmd, **kwargs):
-        if cmd[:3] == ["trove", "items", "get"]:
+        if cmd[:3] == ["trove", "items", "read"]:
             text = book if book is not None else "# a\n# b\n# c\n- מפתח שיעור: 2026-01-05-1204\n# d\n"
-            return subprocess.CompletedProcess(cmd, 0, text, "")
+            return subprocess.CompletedProcess(cmd, 0, _read_reply(text), "")
         assert cmd[:3] == ["trove", "items", "toc"]
         return subprocess.CompletedProcess(cmd, 0, json.dumps({"items": [{"id": "book-1", "toc": toc}]}), "")
     return run
@@ -88,8 +98,8 @@ def test_lesson_done_records_appended_then_done(tmp_path):
 
 def _book_runner(text):
     def run(cmd, **kwargs):
-        assert cmd[:3] == ["trove", "items", "get"]
-        return subprocess.CompletedProcess(cmd, 0, text, "")
+        assert cmd[:3] == ["trove", "items", "read"]
+        return subprocess.CompletedProcess(cmd, 0, _read_reply(text), "")
     return run
 
 
@@ -118,3 +128,63 @@ def test_exact_key_rejects_page_of_another_lesson(tmp_path):
     reg = _registry(tmp_path, [{"date": "2026-01-05", "lesson_key": "2026-01-05-1204", "status": "appended", "trove_page": 3}])
     other = "# a\n# b\n# c\n- מפתח שיעור: 2026-01-05-1610\n# d\n"
     assert "does not carry lesson key" in courses.check_lesson(reg, "c1", "2026-01-05-1204", runner=_runner(TOC, other))[0]
+
+
+def _paged_runner(replies):
+    """Serve `trove items read` replies keyed by (--pages, --part); record the calls."""
+    calls = []
+
+    def run(cmd, **kwargs):
+        assert cmd[:3] == ["trove", "items", "read"]
+        rng = cmd[cmd.index("--pages") + 1]
+        part = cmd[cmd.index("--part") + 1] if "--part" in cmd else None
+        calls.append((rng, part))
+        return subprocess.CompletedProcess(cmd, 0, replies[(rng, part)], "")
+    run.calls = calls
+    return run
+
+
+def _page(n, content, part=1, parts=1):
+    return {"pageNum": n, "content": content, "part": part, "parts": parts}
+
+
+def test_find_lesson_page_follows_the_cursor_past_the_byte_limit(tmp_path):
+    # the old `items get` stopped at ~20 KB: a key on a later page was "found on None"
+    reg = _registry(tmp_path, [])
+    runner = _paged_runner({
+        ("all", None): _read_reply([_page(1, "# Course · C\n"), _page(2, "# תמלולי שיעורים\n")], {"pages": "3-4"}),
+        ("3-4", None): _read_reply([_page(3, "# x\n")], {"pages": "4"}),
+        ("4", None): _read_reply([_page(4, "# שיעור 1\n- מפתח שיעור: 2026-01-05-0000\n")]),
+    })
+    assert courses.find_lesson_page(reg, "c1", "2026-01-05-0000", runner=runner) == 4
+    assert runner.calls == [("all", None), ("3-4", None), ("4", None)]
+
+
+def test_read_book_pages_joins_parts_of_a_long_page():
+    runner = _paged_runner({
+        ("all", None): _read_reply([_page(1, "# a\n"), _page(2, "# long\nfirst half ", 1, 2)], {"pages": "2-3", "part": 2}),
+        ("2-3", "2"): _read_reply([_page(2, "second half\n", 2, 2), _page(3, "# c\n")]),
+    })
+    pages = courses.read_book_pages("book-1", runner=runner)
+    assert pages == {1: "# a\n", 2: "# long\nfirst half second half\n", 3: "# c\n"}
+
+
+def test_read_book_pages_rejects_a_repeating_cursor():
+    import pytest
+    runner = _paged_runner({
+        ("all", None): _read_reply([_page(1, "# a\n")], {"pages": "2"}),
+        ("2", None): _read_reply([_page(2, "# b\n")], {"pages": "2"}),
+    })
+    with pytest.raises(ValueError, match="cursor repeated"):
+        courses.read_book_pages("book-1", runner=runner)
+
+
+def test_find_lesson_page_uses_page_numbers_not_heading_count(tmp_path):
+    # a page with two '# ' headings no longer shifts every later page number
+    reg = _registry(tmp_path, [])
+    runner = _paged_runner({("all", None): _read_reply([
+        _page(1, "# Course · C\n# second heading on page 1\n"),
+        _page(2, "# שיעור 1\n- מפתח שיעור: 2026-01-05-0000\n"),
+    ])})
+    assert courses.find_lesson_page(reg, "c1", "2026-01-05-0000", runner=runner) == 2
+
