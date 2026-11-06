@@ -555,3 +555,35 @@ def test_extract_watch_flag_follows_the_launch_agent(tmp_path):
     agents.mkdir()
     (agents / "com.academic-writer.courses-extract-watch.plist").write_text("x")
     assert dashboard.extract_watch_on(agents) is True
+
+
+def _hebrew_task(d, slug, ident="s-משימה 1"):
+    data = json.loads((d / f"{slug}.json").read_text())
+    data["tasks"] = [{"id": ident, "title": "קריאה לשיעור", "due_at": "2026-10-26T12:00:00+02:00", "chore_ids": [],
+                      "status": "open", "submitted_at": None, "kind": "reading", "spec_key": ident[2:]}]
+    _w(d / f"{slug}.json", data)
+
+
+def test_submit_unsubmit_and_fetch_accept_a_hebrew_spec_task_id(server):
+    srv, d, *_ = server
+    _hebrew_task(d, "alpha")
+    status, _, body = req(srv, "POST", "/api/task/submit", {"course": "alpha", "task": "s-משימה 1"})
+    assert status == 200, body
+    assert json.loads((d / "alpha.json").read_text())["tasks"][0]["status"] == "submitted"
+    assert req(srv, "POST", "/api/task/unsubmit", {"course": "alpha", "task": "s-משימה 1"})[0] == 200
+    assert json.loads((d / "alpha.json").read_text())["tasks"][0]["status"] == "open"
+    status, _, body = req(srv, "POST", "/api/fetch", {"course": "alpha", "refs": ["a-miss"], "task": "s-משימה 1"})
+    assert status == 200, body
+    job = json.loads(next((d / "queue" / "fetch").glob("*-alpha.json")).read_text())
+    assert job["task"] == "s-משימה 1"
+    assert job["run"] == ["refs.py fetch --course alpha --ref a-miss --task 's-משימה 1'"]
+
+
+def test_task_posts_need_an_exact_task_id_of_that_course(server):
+    srv, d, *_ = server
+    _hebrew_task(d, "alpha")
+    for task in ("s-מש", "משימה 1", "", "s-משימה 1\n", 7, None):  # prefix, spec key, junk: never a unique match
+        assert req(srv, "POST", "/api/task/submit", {"course": "alpha", "task": task})[0] == 400, task
+    assert req(srv, "POST", "/api/fetch", {"course": "alpha", "refs": ["a-miss"], "task": "s-מש"})[0] == 400
+    assert json.loads((d / "alpha.json").read_text())["tasks"][0]["status"] == "open"
+    assert not list((d / "queue" / "fetch").glob("*-alpha.json"))
