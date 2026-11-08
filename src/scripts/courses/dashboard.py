@@ -39,6 +39,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import socketserver
 import subprocess
 import sys
@@ -941,6 +942,21 @@ def _known_course(directory: Optional[Path], slug: Any) -> str:
     return slug
 
 
+def _known_task(directory: Path, slug: str, task: Any) -> str:
+    """The posted task id, only when it is exactly one of this course's task ids.
+
+    Task ids are not ASCII-only: a spec task is `s-<spec key>`, and spec keys are Hebrew (`s-משימה 1`),
+    so membership in the course's own tasks is the check, not a character class.
+    """
+    if not isinstance(task, str) or not task or len(task) > 200:
+        raise RequestError(400, "bad task")
+    tasks = tasks_mod.derive_tasks(tasks_mod.load_course(directory, slug).get("tasks") or [],
+                                   tasks_mod._chores(directory, slug), tasks_mod.term_timezone(directory))[0]
+    if not any(t.get("id") == task for t in tasks):
+        raise RequestError(400, "bad task")
+    return task
+
+
 def queue_fetch(directory: Path, slug: str, ref_keys: List[str], task: Optional[str] = None) -> Dict[str, Any]:
     """Write one fetch job for Claude/the nightly run. Never fetches. Unknown refs are refused."""
     data = tasks_mod.load_refs_data(directory, slug) or {"refs": []}
@@ -961,7 +977,7 @@ def queue_fetch(directory: Path, slug: str, ref_keys: List[str], task: Optional[
     path = directory / "queue" / "fetch" / f"{stamp}-{slug}.json"
     job = {"course": slug, "refs": keys, "task": task, "created": datetime.now().astimezone().isoformat(timespec="seconds"),
            "requested_by": "dashboard",
-           "run": [f"refs.py fetch --course {slug} --ref {k}" + (f" --task {task}" if task else "") for k in keys]}
+           "run": [f"refs.py fetch --course {slug} --ref {k}" + (f" --task {shlex.quote(task)}" if task else "") for k in keys]}
     courses._atomic_json(path, job)
     return {"queued": keys, "job": path.name}
 
@@ -1377,9 +1393,7 @@ class DashboardServer:
                 try:
                     if path in ("/api/task/submit", "/api/task/unsubmit"):
                         slug = _known_course(directory, body.get("course"))
-                        task = body.get("task")
-                        if not isinstance(task, str) or not IDENT_RE.match(task):
-                            raise RequestError(400, "bad task")
+                        task = _known_task(directory, slug, body.get("task"))
                         fn = tasks_mod.task_submit if path.endswith("/submit") else tasks_mod.task_unsubmit
                         result = fn(directory, slug, task)
                     elif path == "/api/fetch":
@@ -1388,8 +1402,8 @@ class DashboardServer:
                         task = body.get("task")
                         if not isinstance(refs, list) or len(refs) > 200:
                             raise RequestError(400, "refs must be a list")
-                        if task is not None and (not isinstance(task, str) or not IDENT_RE.match(task)):
-                            raise RequestError(400, "bad task")
+                        if task is not None:
+                            task = _known_task(directory, slug, task)
                         result = queue_fetch(directory, slug, refs, task)
                     elif path == "/api/extract":
                         slug = _known_course(directory, body.get("course"))

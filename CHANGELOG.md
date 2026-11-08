@@ -4,6 +4,11 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.22.2] — 2026-11-08
+
+### Fixed
+- **The dashboard's "I read" / "I submitted" buttons work on tasks with Hebrew ids.** A task made from an assignment spec is `s-<spec key>`, and spec keys are Hebrew (`s-משימה 1`), but the submit, unsubmit and fetch endpoints only accepted ASCII ids, so every such task failed with "bad task" before anything was saved. They now accept a task only when it is exactly one of that course's own task ids (no prefix or spec-key matching), and the task id in a fetch job's command line is shell-quoted.
+
 ## [0.22.1] — 2026-11-05
 
 ### Fixed
