@@ -41,15 +41,16 @@ def test_syntax():
 def test_chrome_running_plans_watch_in_order(tmp_path):
     out, plans = run_dry(tmp_path, True, queue=True)
     assert out.returncode == 0, out.stderr
-    keys = ["courses.py daily", "claude -p --chrome", "lemida-coverage-check", "courses.py wispr-scan", "refs.py --registry", "extract-queue", "lesson-notes --pending", "toc_audit.py --all",
-            "chores digest", "courses-sync-nanoclaw.sh"]
+    keys = ["courses.py daily", "claude -p --chrome", "lemida-coverage-check", "courses.py wispr-scan", "refs.py --registry", "extract-enqueue",
+            "extract-queue", "lesson-notes --pending", "toc_audit.py --all", "chores digest", "courses-sync-nanoclaw.sh"]
     idx = [next(i for i, p in enumerate(plans) if k in p) for k in keys]
     assert idx == sorted(idx) and len(plans) == len(keys)
     watch = plans[1]
     assert "lemida-coverage-check --date" in plans[2] and "--run-id" in plans[2] and "courses.py" in plans[2]
     assert "courses.py wispr-scan" in plans[3]
     assert plans[4].endswith("fetch-queue") and "refs.py --registry" in plans[4]
-    assert plans[5].endswith("extract-queue") and "refs.py --registry" in plans[5]
+    assert plans[5].endswith("extract-enqueue") and "refs.py --registry" in plans[5]  # every new text is queued for OCR (2026-11-09)
+    assert plans[6].endswith("extract-queue") and "refs.py --registry" in plans[6]
     assert "/academic-writer:courses watch-lemida --all --run-id " in watch
     assert "--model sonnet" in watch and "--plugin-dir" in watch
     for tool in ("mcp__claude-in-chrome__*", "Bash(rclone:*)", "Bash(pdftoppm:*)", "Bash(screencapture:*)", "Bash(trove ms show:*)"):
@@ -147,8 +148,8 @@ def test_subagent_model_is_set_near_academic_home_and_no_keychain_key_is_read():
     assert "security find-generic-password" not in text and "export ANNAS_ARCHIVE_KEY" not in text
 
 
-def test_nothing_drains_queue_sources_by_default():
-    """The add-source Trove jobs (queue/sources) wait until the student chooses that file on the dashboard."""
+def test_nothing_drains_queue_sources_directly():
+    """The add-source Trove jobs (queue/sources) are ingested only after their text was extracted (extract-enqueue -> c4/c5)."""
     script = SCRIPT.read_text(encoding="utf-8")
     code = "\n".join(ln for ln in script.splitlines() if not ln.lstrip().startswith("#"))
     assert "queue/sources" not in code and "queue/\\*" not in code
@@ -156,7 +157,7 @@ def test_nothing_drains_queue_sources_by_default():
     watch = (SCRIPT.parents[1] / "src" / "skills" / "courses" / "references" / "lemida-watch.md").read_text(encoding="utf-8")
     for text in (skill, watch):
         assert "queue/sources" in text  # documented ...
-    assert "never drained" in skill and "only the file the student chose" in skill  # ... as waiting, not as a step to run
+    assert "waits for the text" in skill and "Nothing reads `queue/sources/*.json` directly" in skill  # ... as waiting for extraction
     assert "drain queue/sources" not in skill.lower() and "process queue/sources" not in skill.lower()
 
 
@@ -206,7 +207,7 @@ def test_coverage_contract_documents_run_id_and_complete_notifications():
 
 
 def run_extract_only(tmp_path, *, dry, jobs=0, handoff=False, refs_body="import sys\nsys.exit(0)\n", hold_lock=False,
-                     lock_wait="0"):
+                     lock_wait="0", claude_body=""):
     """`courses-daily.sh --extract-only` against a stub repo; claude is a stub that records its prompt."""
     home = tmp_path / "home"
     term = home / ".academic-writer" / "courses" / "term"
@@ -231,7 +232,7 @@ def run_extract_only(tmp_path, *, dry, jobs=0, handoff=False, refs_body="import 
     stubs = tmp_path / "stubs"
     stubs.mkdir()
     calls = tmp_path / "claude-calls"
-    (stubs / "claude").write_text(f"#!/bin/sh\ncat >> {calls}\necho >> {calls}\nexit 0\n")
+    (stubs / "claude").write_text(f"#!/bin/sh\necho \"ARGS $*\" >> {calls}\ncat >> {calls}\necho >> {calls}\n{claude_body}\nexit 0\n")
     (stubs / "claude").chmod(0o755)
     env = {**os.environ, "HOME": str(home), "COURSES_TERM_DIR": str(term), "ACADEMIC_WRITER_REPO": str(repo),
            "EXTRACT_PY": "/usr/bin/python3", "EXTRACT_LOCK_WAIT": lock_wait, "PATH": f"{stubs}:{os.environ['PATH']}"}
@@ -332,3 +333,39 @@ def test_nightly_takes_the_extract_lock_around_c4(tmp_path):
     assert out.returncode == 0, out.stderr + log
     assert "-- extract-queue exit=0" in log
     assert_lock_free(tmp_path / "home" / ".academic-writer" / "courses" / "term")
+
+
+def test_new_steps_are_planned_trove_notes_and_calendar(tmp_path):
+    home = tmp_path / "home"
+    (home / ".academic-writer" / "bin").mkdir(parents=True)
+    (home / ".academic-writer" / "bin" / "calendar-pending.py").write_text("")
+    out, plans = run_dry(tmp_path, True)
+    assert out.returncode == 0, out.stderr
+    assert any("calendar-sync" in p for p in plans)  # the calendar step is planned when its helper exists
+    assert not any("trove-notes" in p for p in plans)  # no notes queued: no Trove notes step
+
+
+@pytest.mark.skipif(not Path("/usr/bin/python3").exists(), reason="script hardcodes /usr/bin/python3")
+def test_extract_step_has_no_subagents_and_its_leftover_book_locks_are_released(tmp_path):
+    drain = ("import pathlib,sys\nreg=pathlib.Path(sys.argv[2])\nq=reg/'queue'/'extract'\n(q/'done').mkdir(exist_ok=True)\n"
+             "(q/'ingest').mkdir(exist_ok=True)\nfor j in q.glob('*.json'):\n    (q/'ingest'/j.name).write_text('{}')\n"
+             "    j.rename(q/'done'/j.name)\n")
+    # the stub Claude takes a book lock as this run and "dies" holding it; a lock of another holder stays
+    stub = ('mkdir -p "$COURSES_TERM_DIR/locks/cohen.lock" "$COURSES_TERM_DIR/locks/kane.lock"\n'
+            'echo "$BOOK_LOCK_SESSION" > "$COURSES_TERM_DIR/locks/cohen.lock/owner"\n'
+            'echo someone-else > "$COURSES_TERM_DIR/locks/kane.lock/owner"')
+    for helper in (False, True):
+        root = tmp_path / ("with-helper" if helper else "no-helper")
+        root.mkdir()
+        if helper:  # the real book-lock.sh: it refuses to release a lock that is not the caller's
+            bin_dir = root / "home" / ".academic-writer" / "bin"
+            bin_dir.mkdir(parents=True)
+            real = Path.home() / ".academic-writer" / "bin" / "book-lock.sh"
+            (bin_dir / "book-lock.sh").write_text(real.read_text() if real.exists() else
+                '#!/bin/bash\n[ "$(cat "$COURSES_LOCK_DIR/$2.lock/owner")" = "$3" ] || exit 1\nrm -rf "$COURSES_LOCK_DIR/$2.lock"\n')
+            (bin_dir / "book-lock.sh").chmod(0o755)
+        out, term, log, calls = run_extract_only(root, dry=False, jobs=1, refs_body=drain, claude_body=stub + "\nexit 1")
+        assert out.returncode == 1, out.stderr + log  # the Claude step failed: counted
+        assert '--disallowedTools Agent,Task' in calls
+        assert not (term / "locks" / "cohen.lock").exists() and "released stale lock cohen" in log
+        assert (term / "locks" / "kane.lock").exists() and "kane" not in log
