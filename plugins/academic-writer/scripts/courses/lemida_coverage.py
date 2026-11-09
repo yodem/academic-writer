@@ -96,6 +96,26 @@ def _notification_gaps(notifications: Any) -> list[str]:
     if lists_ok:
         unopened = sorted(_ids(notifications["listed"]) - _ids(notifications["opened"]), key=_sort_key)
         gaps.extend(f"notification {note} listed but not opened" for note in unopened)
+    if notifications.get("marked_read") is not True:
+        gaps.append("notifications.marked_read is not true: the watch did not clear the notifications in Lemida")
+    return gaps
+
+
+def _event_gaps(events: Any) -> list[str]:
+    """`events` is the watch's read of the Lemida upcoming-events calendar: every listed event must have its chore."""
+    if not isinstance(events, dict):
+        return ["events section missing or not an object"]
+    gaps: list[str] = []
+    if events.get("complete") is not True:
+        gaps.append("events.complete is not true: the watch did not read the Lemida upcoming events")
+    lists_ok = True
+    for key in ("listed", "handled"):
+        if not _is_id_list(events.get(key)):
+            gaps.append(f"events.{key} is missing or not a list of ids")
+            lists_ok = False
+    if lists_ok:
+        missing = sorted(_ids(events["listed"]) - _ids(events["handled"]), key=_sort_key)
+        gaps.extend(f"event {event} listed but has no chore" for event in missing)
     return gaps
 
 
@@ -107,7 +127,9 @@ def check(registry: courses.Registry, day: str, run_id: str, only: Iterable[str]
 
     The file is `{"date": day, "run_id": run_id,
                   "courses": {slug: {"visited": true, "new_assign_modules": [ids], "assign_handled": [ids]}},
-                  "notifications": {"page": NOTIFICATIONS_URL, "complete": true, "listed": [ids], "opened": [ids]}}`.
+                  "notifications": {"page": NOTIFICATIONS_URL, "complete": true, "listed": [ids], "opened": [ids],
+                                    "marked_read": true},
+                  "events": {"complete": true, "listed": [event ids], "handled": [event ids]}}`.
     Every section is validated before any set comparison: a missing or malformed one is a gap."""
     path = coverage_path(registry, day)
     rolled = coverage_path(registry, _next_day(day))
@@ -168,6 +190,7 @@ def check(registry: courses.Registry, day: str, run_id: str, only: Iterable[str]
         gaps.append("notifications section missing or not an object")
     else:
         gaps.extend(_notification_gaps(data["notifications"]))
+    gaps.extend(_event_gaps(data.get("events")))
     return gaps
 
 

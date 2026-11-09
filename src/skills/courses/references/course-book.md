@@ -37,8 +37,8 @@ its ToC title and a real hint after it.
 
 ## Extraction
 
-Nothing is extracted automatically. A downloaded source or reading is turned into text only when the student asks on the
-dashboard ("חילוץ טקסט"; see `../SKILL.md`, "Extract on request"). `auto` reads a docx with python-docx (or pandoc) and a PDF
+Every downloaded source or reading is turned into text by the nightly run (`refs.py extract-enqueue`, user rule
+2026-11-09); the student can also ask on the dashboard ("חילוץ טקסט"; see `../SKILL.md`, "Extract on request"). `auto` reads a docx with python-docx (or pandoc) and a PDF
 text layer with pymupdf per page, keeping printed page numbers (never `pdftotext` on Hebrew); a scan is read with Claude
 vision. Gemini OCR (`/academic-writer:ocr`) and Tesseract run only when the student chose them for that item. Google Docs are
 exported natively.

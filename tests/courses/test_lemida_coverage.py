@@ -36,7 +36,9 @@ def clean_payload(**overrides):
             "complete": True,
             "listed": [1, 2, 3],
             "opened": [3, 1, 2],
+            "marked_read": True,
         },
+        "events": {"complete": True, "listed": [501, 502], "handled": [502, 501]},
     }
     payload.update(overrides)
     return payload
@@ -385,3 +387,27 @@ def test_next_day_report_from_another_run_is_not_used(tmp_path):
     write_coverage(reg, clean_payload(date=_next(DATE), run_id="older-run"), date=_next(DATE))
     gaps = check(reg)
     assert len(gaps) == 1 and "missing" in gaps[0]
+
+
+def test_notifications_not_marked_read_is_a_gap(tmp_path):
+    reg = make_registry(tmp_path)
+    payload = clean_payload()
+    payload["notifications"]["marked_read"] = False
+    write_coverage(reg, payload)
+    assert any("marked_read" in g for g in check(reg))
+
+
+def test_event_without_chore_is_a_gap(tmp_path):
+    reg = make_registry(tmp_path)
+    write_coverage(reg, clean_payload(events={"complete": True, "listed": [501, 502], "handled": [501]}))
+    assert check(reg) == ["event 502 listed but has no chore"]
+
+
+def test_missing_or_incomplete_events_section_is_a_gap(tmp_path):
+    reg = make_registry(tmp_path)
+    payload = clean_payload()
+    del payload["events"]
+    write_coverage(reg, payload)
+    assert check(reg) == ["events section missing or not an object"]
+    write_coverage(reg, clean_payload(events={"complete": False, "listed": [], "handled": []}))
+    assert any("events.complete" in g for g in check(reg))

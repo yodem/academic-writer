@@ -448,6 +448,71 @@ def run_item(reg: Path, slug: str, entry: Dict[str, Any]) -> Dict[str, Any]:
             "fallback": result["fallback"]}
 
 
+TEXT_SUFFIXES = (".pdf",) + DOCX_SUFFIXES + IMAGE_SUFFIXES
+
+
+def _queued_keys(reg: Path) -> set:
+    """(course, kind, key) of every item already in a pending extract job or a handoff."""
+    seen = set()
+    folder = reg / "queue" / "extract"
+    for path in list(folder.glob("*.json")) + list((folder / "handoff").glob("*.json")):
+        job = _read_json(path, {})
+        if not isinstance(job, dict):
+            continue
+        slug = str(job.get("course") or "")
+        for item in job.get("items") or [job]:
+            if isinstance(item, dict) and item.get("kind") and item.get("key"):
+                seen.add((slug, str(item["kind"]), str(item["key"])))
+    return seen
+
+
+def pending_texts(reg: Path) -> Dict[str, List[Dict[str, str]]]:
+    """Per course, every downloaded text with no extracted text yet: sources (not recordings, not already in Trove)
+    and refs with a `download_path`. Items already queued or handed off are left out."""
+    queued = _queued_keys(reg)
+    out: Dict[str, List[Dict[str, str]]] = {}
+    for course_file in sorted(reg.glob("*.json")):
+        course = _read_json(course_file, {})
+        if not isinstance(course, dict) or not course.get("slug") or course_file.stem != course.get("slug"):
+            continue
+        slug = str(course["slug"])
+        items: List[Dict[str, str]] = []
+        for src in course.get("sources") or []:
+            if not isinstance(src, dict) or src.get("kind") == "media" or src.get("trove") or src.get("status") == "done":
+                continue
+            key, file = str(src.get("sha8") or ""), str(src.get("file") or "")
+            if key and file and Path(file).suffix.lower() in TEXT_SUFFIXES and Path(file).is_file():
+                items.append({"kind": "source", "key": key})
+        for ref in (_read_json(reg / "refs" / f"{slug}.json", {}).get("refs") or []):
+            if not isinstance(ref, dict) or not ref.get("key") or not ref.get("download_path"):
+                continue
+            path = Path(str(ref["download_path"])).expanduser()
+            if path.suffix.lower() in TEXT_SUFFIXES and path.is_file():
+                items.append({"kind": "ref", "key": str(ref["key"])})
+        items = [i for i in items if (slug, i["kind"], i["key"]) not in queued
+                 and not has_extracted_text(reg, slug, i["kind"], i["key"])]
+        if items:
+            out[slug] = items
+    return out
+
+
+def enqueue_all(reg: Path, *, method: str = "auto", dry_run: bool = False) -> Dict[str, Any]:
+    """The nightly OCR step (user rule 2026-11-09, replacing download-only): queue every downloaded text with no extracted
+    text yet, one job per course, as if the student had ticked it on the dashboard. `drain` then runs the jobs."""
+    if method not in METHODS:
+        raise ExtractError(f"unknown method {method!r}")
+    report: Dict[str, Any] = {"dry_run": dry_run, "jobs": []}
+    stamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+    for slug, items in pending_texts(reg).items():
+        name = f"{stamp}-{slug}-nightly.json"
+        report["jobs"].append({"job": name, "course": slug, "items": items})
+        if not dry_run:
+            _write_json(reg / "queue" / "extract" / name, {
+                "course": slug, "items": [{**i, "method": method} for i in items],
+                "created_at": _stamp(), "origin": "nightly"})
+    return report
+
+
 def drain(reg: Path, *, dry_run: bool = False) -> Dict[str, Any]:
     """Run every job in queue/extract/*.json, oldest first. Finished jobs move to queue/extract/done/.
 

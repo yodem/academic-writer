@@ -41,15 +41,16 @@ def test_syntax():
 def test_chrome_running_plans_watch_in_order(tmp_path):
     out, plans = run_dry(tmp_path, True, queue=True)
     assert out.returncode == 0, out.stderr
-    keys = ["courses.py daily", "claude -p --chrome", "lemida-coverage-check", "courses.py wispr-scan", "refs.py --registry", "extract-queue", "lesson-notes --pending", "toc_audit.py --all",
-            "chores digest", "courses-sync-nanoclaw.sh"]
+    keys = ["courses.py daily", "claude -p --chrome", "lemida-coverage-check", "courses.py wispr-scan", "refs.py --registry", "extract-enqueue",
+            "extract-queue", "lesson-notes --pending", "toc_audit.py --all", "chores digest", "courses-sync-nanoclaw.sh"]
     idx = [next(i for i, p in enumerate(plans) if k in p) for k in keys]
     assert idx == sorted(idx) and len(plans) == len(keys)
     watch = plans[1]
     assert "lemida-coverage-check --date" in plans[2] and "--run-id" in plans[2] and "courses.py" in plans[2]
     assert "courses.py wispr-scan" in plans[3]
     assert plans[4].endswith("fetch-queue") and "refs.py --registry" in plans[4]
-    assert plans[5].endswith("extract-queue") and "refs.py --registry" in plans[5]
+    assert plans[5].endswith("extract-enqueue") and "refs.py --registry" in plans[5]  # every new text is queued for OCR (2026-11-09)
+    assert plans[6].endswith("extract-queue") and "refs.py --registry" in plans[6]
     assert "/academic-writer:courses watch-lemida --all --run-id " in watch
     assert "--model sonnet" in watch and "--plugin-dir" in watch
     for tool in ("mcp__claude-in-chrome__*", "Bash(rclone:*)", "Bash(pdftoppm:*)", "Bash(screencapture:*)", "Bash(trove ms show:*)"):
@@ -147,8 +148,8 @@ def test_subagent_model_is_set_near_academic_home_and_no_keychain_key_is_read():
     assert "security find-generic-password" not in text and "export ANNAS_ARCHIVE_KEY" not in text
 
 
-def test_nothing_drains_queue_sources_by_default():
-    """The add-source Trove jobs (queue/sources) wait until the student chooses that file on the dashboard."""
+def test_nothing_drains_queue_sources_directly():
+    """The add-source Trove jobs (queue/sources) are ingested only after their text was extracted (extract-enqueue -> c4/c5)."""
     script = SCRIPT.read_text(encoding="utf-8")
     code = "\n".join(ln for ln in script.splitlines() if not ln.lstrip().startswith("#"))
     assert "queue/sources" not in code and "queue/\\*" not in code
@@ -156,7 +157,7 @@ def test_nothing_drains_queue_sources_by_default():
     watch = (SCRIPT.parents[1] / "src" / "skills" / "courses" / "references" / "lemida-watch.md").read_text(encoding="utf-8")
     for text in (skill, watch):
         assert "queue/sources" in text  # documented ...
-    assert "never drained" in skill and "only the file the student chose" in skill  # ... as waiting, not as a step to run
+    assert "waits for the text" in skill and "Nothing reads `queue/sources/*.json` directly" in skill  # ... as waiting for extraction
     assert "drain queue/sources" not in skill.lower() and "process queue/sources" not in skill.lower()
 
 
@@ -332,3 +333,13 @@ def test_nightly_takes_the_extract_lock_around_c4(tmp_path):
     assert out.returncode == 0, out.stderr + log
     assert "-- extract-queue exit=0" in log
     assert_lock_free(tmp_path / "home" / ".academic-writer" / "courses" / "term")
+
+
+def test_new_steps_are_planned_trove_notes_and_calendar(tmp_path):
+    home = tmp_path / "home"
+    (home / ".academic-writer" / "bin").mkdir(parents=True)
+    (home / ".academic-writer" / "bin" / "calendar-pending.py").write_text("")
+    out, plans = run_dry(tmp_path, True)
+    assert out.returncode == 0, out.stderr
+    assert any("calendar-sync" in p for p in plans)  # the calendar step is planned when its helper exists
+    assert not any("trove-notes" in p for p in plans)  # no notes queued: no Trove notes step

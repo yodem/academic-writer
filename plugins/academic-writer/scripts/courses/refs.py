@@ -37,10 +37,10 @@ CHORE_KIND = {"kotar": "kotar-source", "print-only": "manual", "not-found": "man
 COURSES_PY = Path(__file__).resolve().with_name("courses.py")
 
 ANNAS_SCRIPT = Path(os.environ.get("ANNAS_ARCHIVE_SCRIPT", "~/.claude/skills/annas-archive-ebooks/annas.py")).expanduser()
-# User ruling 2026-10-19: nothing is OCR'd or text-extracted automatically. Fetching only downloads. The student picks
-# what to extract on the dashboard (queue/extract, see extract.py): a docx or a PDF text layer is read by python, a scan by
+# User ruling 2026-11-09 (replacing download-only, 2026-10-19): fetching downloads, and the nightly then queues every
+# downloaded text for extraction (`extract-enqueue`, see extract.py): a docx or a PDF text layer is read by python, a scan by
 # Claude vision, and Gemini or Tesseract run only when the student names them for that item.
-OCR_POLICY = ("no-automatic-ocr", "python-text-layer-on-request", "claude-vision-for-scans-on-request",
+OCR_POLICY = ("fetch-downloads-only", "nightly-extracts-every-text", "python-text-layer-first", "claude-vision-for-scans",
               "gemini-or-tesseract-only-when-chosen")
 ANNAS_BLOCKED_DETAIL = "Anna's Archive asked for a browser check; search it in Chrome"
 BLOCK_WORDS = re.compile(r"ddos|browser check|checking your browser|captcha|cloudflare|just a moment", re.I)
@@ -742,6 +742,12 @@ def build_parser() -> argparse.ArgumentParser:
     eq.add_argument("--dry-run", action="store_true", help="plan only: extract nothing, move nothing")
     eq.add_argument("--json", action="store_true")
 
+    ee = sub.add_parser("extract-enqueue", help="queue every downloaded source or ref with no extracted text yet "
+                                                "(one queue/extract job per course; the nightly OCR step)")
+    ee.add_argument("--method", default="auto", help="auto (default), claude-vision, gemini-ocr or tesseract")
+    ee.add_argument("--dry-run", action="store_true", help="list what would be queued, write nothing")
+    ee.add_argument("--json", action="store_true")
+
     sys.path.insert(0, str(Path(__file__).resolve().parent))  # python -I leaves the script dir off sys.path
     import tasks as tasks_mod
     tasks_mod.add_task_parser(sub)
@@ -829,6 +835,23 @@ def _dispatch(args: argparse.Namespace) -> int:
                 print("fetch queue empty")
         failed = [j for j in report["jobs"] if j.get("status") in ("retry", "failed", "invalid", "unreadable")]
         return 1 if failed else 0
+
+    if args.command == "extract-enqueue":
+        sys.path.insert(0, str(Path(__file__).resolve().parent))  # python -I leaves the script dir off sys.path
+        import extract as extract_mod
+        try:
+            report = extract_mod.enqueue_all(reg, method=args.method, dry_run=args.dry_run)
+        except extract_mod.ExtractError as exc:
+            print(f"refs: {exc}", file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            for j in report["jobs"]:
+                print(f"{j['job']}\t{len(j['items'])} item(s)\t" + " ".join(f"{i['kind']}:{i['key']}" for i in j["items"]))
+            if not report["jobs"]:
+                print("nothing to extract")
+        return 0
 
     if args.command == "extract-queue":
         sys.path.insert(0, str(Path(__file__).resolve().parent))  # python -I leaves the script dir off sys.path

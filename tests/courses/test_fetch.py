@@ -85,8 +85,9 @@ def test_online_download_only_downloads_and_never_runs_or_queues_ocr(tmp_path, m
     assert "ocr" not in steps(again) and "ocr_next" not in stored(d)
 
 
-def test_the_documented_ocr_policy_is_no_automatic_ocr():
-    assert refs.OCR_POLICY[0] == "no-automatic-ocr" and "gemini-or-tesseract-only-when-chosen" in refs.OCR_POLICY
+def test_the_documented_ocr_policy_fetch_downloads_and_the_nightly_extracts():
+    assert refs.OCR_POLICY[:2] == ("fetch-downloads-only", "nightly-extracts-every-text")
+    assert "gemini-or-tesseract-only-when-chosen" in refs.OCR_POLICY
     assert not any(w.startswith("gemini-text") for w in refs.OCR_POLICY)
 
 

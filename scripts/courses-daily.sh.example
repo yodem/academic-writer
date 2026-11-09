@@ -16,12 +16,18 @@
 #                                  by python, jobs move to queue/extract/done/; scans (claude-vision) and items that name gemini-ocr or tesseract
 #                                  become files in queue/extract/handoff/, and a chosen source that still has its add-source Trove job is
 #                                  listed in queue/extract/ingest/. If any are waiting, one claude -p step (c5) reads them.
+#   c3b. refs.py extract-enqueue   every downloaded text with no extracted text yet -> one queue/extract job per course (method auto)
 #   c5. claude -p extract          /academic-writer:courses extract-handoff   (only when c4 left handoff or ingest files)
 #
-# Nothing is OCR'd or text-extracted unless the student chose it in the dashboard (user rule 2026-10-19). Steps a-c only DOWNLOAD:
-# queue/sources/*.json (the add-source Trove jobs) are never drained here; a chosen source is ingested after its extraction (c5).
+# Every text is extracted (user rule 2026-11-09, replacing download-only of 2026-10-19): steps a-c download, c3b queues each new
+# text, c4 reads text layers with python and c5 reads scans with Claude vision and places each source in Trove.
+# The watch (c) also reads Lemida's upcoming events (a dated chore each), marks the notifications read once every one
+# was opened, and writes course-page notes to queue/trove-notes/.
 #   d. queued lesson jobs          /academic-writer:lesson-notes --pending
+#   d2. claude -p trove-notes      /academic-writer:courses trove-notes   (only when queue/trove-notes/*.json exist)
 #   e. tools/toc_audit.py --all    failure -> a manual chore (the job is not failed by it)
+#   e2. calendar                   calendar-pending.py list; Chrome running -> claude -p --chrome /academic-writer:courses calendar-sync
+#                                  (Google Calendar in the signed-in Chrome, 7d/3d/1d reminders); what is still unmapped -> a manual chore
 #   f. courses.py chores digest
 #   g. courses-sync-nanoclaw.sh    failure is logged, not fatal
 # Schedule it with `courses.py nightly set --time HH:MM` (`off` = run on demand, `run-now [--dry]` = run once now).
@@ -55,6 +61,8 @@ WATCH_TOOLS="mcp__claude-in-chrome__*,Read,Write,Edit,Glob,Grep,Bash(python3:*),
 LESSON_TOOLS="Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(trove items:*),Bash(trove ms show:*),Bash(trove auth whoami:*),Bash(mkdir:*),Bash(mv:*),Bash(ls:*),Bash(cat:*),Bash(date:*)"
 
 EXTRACT_TOOLS="Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(trove items:*),Bash(trove ms show:*),Bash(trove auth whoami:*),Bash(pdftoppm:*),Bash(aw:*),Bash(tesseract:*),Bash(mkdir:*),Bash(mv:*),Bash(ls:*),Bash(cat:*),Bash(date:*)"
+CAL_TOOLS="mcp__claude-in-chrome__*,Read,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(date:*)"
+NOTES_TOOLS="Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(trove items:*),Bash(trove auth whoami:*),Bash($HOME/.academic-writer/bin/book-lock.sh:*),Bash(mkdir:*),Bash(mv:*),Bash(ls:*),Bash(cat:*),Bash(date:*)"
 
 stamp() { date '+%Y-%m-%dT%H:%M:%S%z'; }
 
@@ -216,7 +224,12 @@ run_job() {
     step fetch-queue "$PY" "$REFS" --registry "$TERM_DIR" fetch-queue || FAILED=1
   fi
 
-  # c4 + c5. extraction the student chose on the dashboard, then the Trove ingest of what it produced (see run_extract)
+  # c3b. every downloaded text with no extracted text yet is queued for extraction (user rule 2026-11-09)
+  if ! dry_plan "$PY $REFS --registry $TERM_DIR extract-enqueue"; then
+    step extract-enqueue "$PY" "$REFS" --registry "$TERM_DIR" extract-enqueue || FAILED=1
+  fi
+
+  # c4 + c5. extraction (the nightly's own jobs and the dashboard's), then the Trove ingest of what it produced (see run_extract)
   locked_extract
 
   # d. queued lesson jobs
@@ -236,6 +249,23 @@ run_job() {
     fi
   fi
 
+  # d2. course-page notes the watch wrote (announcements, assignments, events, links) -> the Trove course page
+  shopt -s nullglob
+  NOTES=("$TERM_DIR"/queue/trove-notes/*.json)
+  shopt -u nullglob
+  if [ ${#NOTES[@]} -eq 0 ]; then
+    echo "no trove notes"
+  else
+    echo "trove notes: ${#NOTES[@]}"
+    if ! dry_plan "printf '%s' '/academic-writer:courses trove-notes' | claude -p --model sonnet --plugin-dir $REPO/plugins/academic-writer --allowedTools \"$NOTES_TOOLS\""; then
+      printf '%s' "/academic-writer:courses trove-notes" | claude -p --model sonnet \
+        --plugin-dir "$REPO/plugins/academic-writer" --allowedTools "$NOTES_TOOLS"
+      rc=$?
+      echo "-- trove-notes exit=$rc $(stamp)"
+      [ "$rc" -ne 0 ] && FAILED=1
+    fi
+  fi
+
   # e. Trove ToC audit: a failure becomes a chore, it does not fail the job
   if ! dry_plan "$PY $REPO/tools/toc_audit.py --all"; then
     AUDIT=$("$PY" "$REPO/tools/toc_audit.py" --all --json 2>&1)
@@ -251,6 +281,38 @@ except Exception:
       add_manual_chore "toc-audit-$DAY" "ToC audit failed: ${BOOKS:-see the daily log}" \
         "tools/toc_audit.py --all failed on $DAY. Run it to see the missing, duplicate or unhinted entries." \
         || echo "could not record the ToC chore"
+    fi
+  fi
+
+  # e2. calendar: open future-dated chores with no event in calendar.json. With Chrome running, one claude -p --chrome step
+  # creates them in Google Calendar (headless claude -p has no Calendar connector, so it drives calendar.google.com) and
+  # records each with calendar-pending.py record; whatever is still unmapped becomes one manual chore.
+  CALPY="$HOME/.academic-writer/bin/calendar-pending.py"
+  if [ ! -f "$CALPY" ]; then
+    echo "calendar: helper not installed, step skipped"
+  elif ! dry_plan "$PY $CALPY list; with Chrome: calendar-sync in Google Calendar; still unmapped -> manual chore"; then
+    UNMAPPED=$("$PY" "$CALPY" list 2>&1)
+    rc=$?
+    echo "-- calendar-check exit=$rc"
+    if [ "$rc" -eq 0 ] && [ -n "$UNMAPPED" ] && pgrep -x "Google Chrome" >/dev/null 2>&1; then
+      printf '%s' "/academic-writer:courses calendar-sync" | claude -p --chrome --model sonnet \
+        --plugin-dir "$REPO/plugins/academic-writer" --allowedTools "$CAL_TOOLS"
+      rc=$?
+      echo "-- calendar-sync exit=$rc $(stamp)"
+      [ "$rc" -ne 0 ] && FAILED=1
+      UNMAPPED=$("$PY" "$CALPY" list 2>&1)
+      rc=$?
+    fi
+    if [ "$rc" -ne 0 ]; then
+      echo "$UNMAPPED" | head -10
+    elif [ -n "$UNMAPPED" ]; then
+      IDS=$(printf '%s\n' "$UNMAPPED" | "$PY" -c 'import json,sys; print(", ".join(json.loads(l)["id"] for l in sys.stdin if l.strip()))')
+      echo "dated chores without a calendar event: $IDS"
+      add_manual_chore "calendar-sync-$DAY" "Add Google Calendar events for dated chores: $IDS" \
+        "The nightly calendar step could not create these events (Chrome closed, or signed out of Google Calendar). Run /academic-writer:courses calendar-sync in an interactive session." \
+        || echo "could not record the calendar chore"
+    else
+      echo "calendar: every open dated chore has an event"
     fi
   fi
 
