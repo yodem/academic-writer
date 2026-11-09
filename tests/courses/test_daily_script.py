@@ -207,7 +207,7 @@ def test_coverage_contract_documents_run_id_and_complete_notifications():
 
 
 def run_extract_only(tmp_path, *, dry, jobs=0, handoff=False, refs_body="import sys\nsys.exit(0)\n", hold_lock=False,
-                     lock_wait="0"):
+                     lock_wait="0", claude_body=""):
     """`courses-daily.sh --extract-only` against a stub repo; claude is a stub that records its prompt."""
     home = tmp_path / "home"
     term = home / ".academic-writer" / "courses" / "term"
@@ -232,7 +232,7 @@ def run_extract_only(tmp_path, *, dry, jobs=0, handoff=False, refs_body="import 
     stubs = tmp_path / "stubs"
     stubs.mkdir()
     calls = tmp_path / "claude-calls"
-    (stubs / "claude").write_text(f"#!/bin/sh\ncat >> {calls}\necho >> {calls}\nexit 0\n")
+    (stubs / "claude").write_text(f"#!/bin/sh\necho \"ARGS $*\" >> {calls}\ncat >> {calls}\necho >> {calls}\n{claude_body}\nexit 0\n")
     (stubs / "claude").chmod(0o755)
     env = {**os.environ, "HOME": str(home), "COURSES_TERM_DIR": str(term), "ACADEMIC_WRITER_REPO": str(repo),
            "EXTRACT_PY": "/usr/bin/python3", "EXTRACT_LOCK_WAIT": lock_wait, "PATH": f"{stubs}:{os.environ['PATH']}"}
@@ -343,3 +343,19 @@ def test_new_steps_are_planned_trove_notes_and_calendar(tmp_path):
     assert out.returncode == 0, out.stderr
     assert any("calendar-sync" in p for p in plans)  # the calendar step is planned when its helper exists
     assert not any("trove-notes" in p for p in plans)  # no notes queued: no Trove notes step
+
+
+@pytest.mark.skipif(not Path("/usr/bin/python3").exists(), reason="script hardcodes /usr/bin/python3")
+def test_extract_step_has_no_subagents_and_its_leftover_book_locks_are_released(tmp_path):
+    drain = ("import pathlib,sys\nreg=pathlib.Path(sys.argv[2])\nq=reg/'queue'/'extract'\n(q/'done').mkdir(exist_ok=True)\n"
+             "(q/'ingest').mkdir(exist_ok=True)\nfor j in q.glob('*.json'):\n    (q/'ingest'/j.name).write_text('{}')\n"
+             "    j.rename(q/'done'/j.name)\n")
+    # the stub Claude takes a book lock as this run and "dies" holding it; a lock of another holder stays
+    stub = ('mkdir -p "$COURSES_TERM_DIR/locks/cohen.lock" "$COURSES_TERM_DIR/locks/kane.lock"\n'
+            'echo "$BOOK_LOCK_SESSION" > "$COURSES_TERM_DIR/locks/cohen.lock/owner"\n'
+            'echo someone-else > "$COURSES_TERM_DIR/locks/kane.lock/owner"')
+    out, term, log, calls = run_extract_only(tmp_path, dry=False, jobs=1, refs_body=drain, claude_body=stub)
+    assert out.returncode == 0, out.stderr + log
+    assert '--disallowedTools Agent,Task' in calls
+    assert not (term / "locks" / "cohen.lock").exists() and "released stale lock cohen" in log
+    assert (term / "locks" / "kane.lock").exists()

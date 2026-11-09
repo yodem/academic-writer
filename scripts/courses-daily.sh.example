@@ -60,11 +60,25 @@ EXTRACT_LOCK="$TERM_DIR/locks/extract.lock"   # flock target; extract.lock.owner
 WATCH_TOOLS="mcp__claude-in-chrome__*,Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(trove ms show:*),Bash(nlm source:*),Bash(nlm notebook:*),Bash(rclone:*),Bash(pdftoppm:*),Bash(ls:*),Bash(mkdir:*),Bash(mv:*),Bash(cp:*),Bash(open:*),Bash(screencapture:*),Bash(date:*)"
 LESSON_TOOLS="Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(trove items:*),Bash(trove ms show:*),Bash(trove auth whoami:*),Bash(mkdir:*),Bash(mv:*),Bash(ls:*),Bash(cat:*),Bash(date:*)"
 
-EXTRACT_TOOLS="Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(trove items:*),Bash(trove ms show:*),Bash(trove auth whoami:*),Bash(pdftoppm:*),Bash(aw:*),Bash(tesseract:*),Bash(mkdir:*),Bash(mv:*),Bash(ls:*),Bash(cat:*),Bash(date:*)"
+EXTRACT_TOOLS="Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(trove items:*),Bash(trove ms show:*),Bash(trove auth whoami:*),Bash(pdftoppm:*),Bash(aw:*),Bash(tesseract:*),Bash($HOME/.academic-writer/bin/book-lock.sh:*),Bash(mkdir:*),Bash(mv:*),Bash(ls:*),Bash(cat:*),Bash(date:*)"
 CAL_TOOLS="mcp__claude-in-chrome__*,Read,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(date:*)"
 NOTES_TOOLS="Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),Bash(trove items:*),Bash(trove auth whoami:*),Bash($HOME/.academic-writer/bin/book-lock.sh:*),Bash(mkdir:*),Bash(mv:*),Bash(ls:*),Bash(cat:*),Bash(date:*)"
 
 stamp() { date '+%Y-%m-%dT%H:%M:%S%z'; }
+
+# Claude steps that write Trove take their book locks as this session; after each step the script releases what is
+# still held under it (the step ended, so the holder is gone). Locks of any other holder are never touched.
+export BOOK_LOCK_SESSION="nightly-$RUN_ID"
+release_own_locks() {
+  local d
+  for d in "$TERM_DIR"/locks/*.lock; do
+    [ -d "$d" ] || continue
+    if [ "$(cat "$d/owner" 2>/dev/null)" = "$BOOK_LOCK_SESSION" ]; then
+      COURSES_LOCK_DIR="$TERM_DIR/locks" "$HOME/.academic-writer/bin/book-lock.sh" release "$(basename "$d" .lock)" "$BOOK_LOCK_SESSION" >/dev/null 2>&1 || rm -rf "$d"
+      echo "released stale lock $(basename "$d" .lock) of $BOOK_LOCK_SESSION"
+    fi
+  done
+}
 
 # plan "<description>" -> in dry mode prints it; returns 0 when the caller should skip running
 dry_plan() {
@@ -134,8 +148,9 @@ run_extract() {
     echo "extraction handoffs: ${#HANDOFFS[@]}"
     if ! dry_plan "printf '%s' '/academic-writer:courses extract-handoff' | claude -p --model sonnet --plugin-dir $REPO/plugins/academic-writer --allowedTools \"$EXTRACT_TOOLS\""; then
       printf '%s' "/academic-writer:courses extract-handoff" | claude -p --model sonnet \
-        --plugin-dir "$REPO/plugins/academic-writer" --allowedTools "$EXTRACT_TOOLS" 9>&-
+        --plugin-dir "$REPO/plugins/academic-writer" --allowedTools "$EXTRACT_TOOLS" --disallowedTools "Agent,Task" 9>&-
       rc=$?
+      release_own_locks
       echo "-- extract-handoff exit=$rc $(stamp)"
       [ "$rc" -ne 0 ] && FAILED=1
     fi
@@ -259,8 +274,9 @@ run_job() {
     echo "trove notes: ${#NOTES[@]}"
     if ! dry_plan "printf '%s' '/academic-writer:courses trove-notes' | claude -p --model sonnet --plugin-dir $REPO/plugins/academic-writer --allowedTools \"$NOTES_TOOLS\""; then
       printf '%s' "/academic-writer:courses trove-notes" | claude -p --model sonnet \
-        --plugin-dir "$REPO/plugins/academic-writer" --allowedTools "$NOTES_TOOLS"
+        --plugin-dir "$REPO/plugins/academic-writer" --allowedTools "$NOTES_TOOLS" --disallowedTools "Agent,Task"
       rc=$?
+      release_own_locks
       echo "-- trove-notes exit=$rc $(stamp)"
       [ "$rc" -ne 0 ] && FAILED=1
     fi
