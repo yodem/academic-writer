@@ -66,16 +66,26 @@ NOTES_TOOLS="Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(/usr/bin/python3:*),
 
 stamp() { date '+%Y-%m-%dT%H:%M:%S%z'; }
 
-# Claude steps that write Trove take their book locks as this session; after each step the script releases what is
-# still held under it (the step ended, so the holder is gone). Locks of any other holder are never touched.
+# Claude steps that write Trove take their book locks as this session (in this term's lock directory); after each step the
+# script releases what is still held under it (the step ended, so the holder is gone). Another holder's lock is never touched.
 export BOOK_LOCK_SESSION="nightly-$RUN_ID"
+export COURSES_LOCK_DIR="$TERM_DIR/locks"
+BOOK_LOCK="$HOME/.academic-writer/bin/book-lock.sh"
 release_own_locks() {
-  local d
-  for d in "$TERM_DIR"/locks/*.lock; do
+  local d slug
+  for d in "$COURSES_LOCK_DIR"/*.lock; do
     [ -d "$d" ] || continue
-    if [ "$(cat "$d/owner" 2>/dev/null)" = "$BOOK_LOCK_SESSION" ]; then
-      COURSES_LOCK_DIR="$TERM_DIR/locks" "$HOME/.academic-writer/bin/book-lock.sh" release "$(basename "$d" .lock)" "$BOOK_LOCK_SESSION" >/dev/null 2>&1 || rm -rf "$d"
-      echo "released stale lock $(basename "$d" .lock) of $BOOK_LOCK_SESSION"
+    [ "$(cat "$d/owner" 2>/dev/null)" = "$BOOK_LOCK_SESSION" ] || continue
+    slug=$(basename "$d" .lock)
+    if [ -x "$BOOK_LOCK" ]; then
+      "$BOOK_LOCK" release "$slug" "$BOOK_LOCK_SESSION" >/dev/null 2>&1   # refuses when the owner changed meanwhile
+    elif [ "$(cat "$d/owner" 2>/dev/null)" = "$BOOK_LOCK_SESSION" ]; then
+      rm -rf "$d"   # no helper installed: same owner check, then the same atomic-dir removal
+    fi
+    if [ -d "$d" ]; then
+      echo "lock $slug still held (by $(cat "$d/owner" 2>/dev/null)): left alone"
+    else
+      echo "released stale lock $slug of $BOOK_LOCK_SESSION"
     fi
   done
 }

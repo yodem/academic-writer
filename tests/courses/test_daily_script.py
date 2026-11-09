@@ -354,8 +354,18 @@ def test_extract_step_has_no_subagents_and_its_leftover_book_locks_are_released(
     stub = ('mkdir -p "$COURSES_TERM_DIR/locks/cohen.lock" "$COURSES_TERM_DIR/locks/kane.lock"\n'
             'echo "$BOOK_LOCK_SESSION" > "$COURSES_TERM_DIR/locks/cohen.lock/owner"\n'
             'echo someone-else > "$COURSES_TERM_DIR/locks/kane.lock/owner"')
-    out, term, log, calls = run_extract_only(tmp_path, dry=False, jobs=1, refs_body=drain, claude_body=stub)
-    assert out.returncode == 0, out.stderr + log
-    assert '--disallowedTools Agent,Task' in calls
-    assert not (term / "locks" / "cohen.lock").exists() and "released stale lock cohen" in log
-    assert (term / "locks" / "kane.lock").exists()
+    for helper in (False, True):
+        root = tmp_path / ("with-helper" if helper else "no-helper")
+        root.mkdir()
+        if helper:  # the real book-lock.sh: it refuses to release a lock that is not the caller's
+            bin_dir = root / "home" / ".academic-writer" / "bin"
+            bin_dir.mkdir(parents=True)
+            real = Path.home() / ".academic-writer" / "bin" / "book-lock.sh"
+            (bin_dir / "book-lock.sh").write_text(real.read_text() if real.exists() else
+                '#!/bin/bash\n[ "$(cat "$COURSES_LOCK_DIR/$2.lock/owner")" = "$3" ] || exit 1\nrm -rf "$COURSES_LOCK_DIR/$2.lock"\n')
+            (bin_dir / "book-lock.sh").chmod(0o755)
+        out, term, log, calls = run_extract_only(root, dry=False, jobs=1, refs_body=drain, claude_body=stub + "\nexit 1")
+        assert out.returncode == 1, out.stderr + log  # the Claude step failed: counted
+        assert '--disallowedTools Agent,Task' in calls
+        assert not (term / "locks" / "cohen.lock").exists() and "released stale lock cohen" in log
+        assert (term / "locks" / "kane.lock").exists() and "kane" not in log
