@@ -96,8 +96,13 @@ def _notification_gaps(notifications: Any) -> list[str]:
     if lists_ok:
         unopened = sorted(_ids(notifications["listed"]) - _ids(notifications["opened"]), key=_sort_key)
         gaps.extend(f"notification {note} listed but not opened" for note in unopened)
-    if notifications.get("marked_read") is not True:
-        gaps.append("notifications.marked_read is not true: the watch did not clear the notifications in Lemida")
+        if not _is_id_list(notifications.get("marked_read")):
+            gaps.append("notifications.marked_read is missing or not a list of ids")
+        else:
+            # an unopened one must stay unread (it is already a gap above); every opened one must be marked read
+            opened = _ids(notifications["listed"]) & _ids(notifications["opened"])
+            unread = sorted(opened - _ids(notifications["marked_read"]), key=_sort_key)
+            gaps.extend(f"notification {note} opened but not marked read in Lemida" for note in unread)
     return gaps
 
 
@@ -128,7 +133,7 @@ def check(registry: courses.Registry, day: str, run_id: str, only: Iterable[str]
     The file is `{"date": day, "run_id": run_id,
                   "courses": {slug: {"visited": true, "new_assign_modules": [ids], "assign_handled": [ids]}},
                   "notifications": {"page": NOTIFICATIONS_URL, "complete": true, "listed": [ids], "opened": [ids],
-                                    "marked_read": true},
+                                    "marked_read": [ids]},
                   "events": {"complete": true, "listed": [event ids], "handled": [event ids]}}`.
     Every section is validated before any set comparison: a missing or malformed one is a gap."""
     path = coverage_path(registry, day)

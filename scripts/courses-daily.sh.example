@@ -305,6 +305,8 @@ except Exception:
     fi
     if [ "$rc" -ne 0 ]; then
       echo "$UNMAPPED" | head -10
+      FAILED=1
+      add_manual_chore "calendar-helper-$DAY" "Calendar check failed (calendar-pending.py list exit $rc)"         "$(printf '%s' "$UNMAPPED" | tail -3)" || echo "could not record the calendar chore"
     elif [ -n "$UNMAPPED" ]; then
       IDS=$(printf '%s\n' "$UNMAPPED" | "$PY" -c 'import json,sys; print(", ".join(json.loads(l)["id"] for l in sys.stdin if l.strip()))')
       echo "dated chores without a calendar event: $IDS"

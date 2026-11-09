@@ -29,7 +29,7 @@ function itemGloss(i){
   if (i.ocr === 'queued') return `<span class="gloss">ממתין לזיהוי הטקסט</span>`;
   if (i.extracted && !i.in_trove) return `<span class="gloss">הטקסט חולץ, עוד לא בטרוב: Claude יעלה אותו ${WHEN()}${waited(i.untroved_days)}</span>`;
   if (i.extracted) return `<span class="gloss">הטקסט חולץ</span>`;
-  if (i.extractable) return `<span class="gloss${i.untroved_days >= 2 ? ' red' : ''}">הורד, עוד לא בטרוב. סמנו לחילוץ טקסט כדי שייכנס${waited(i.untroved_days)}</span>`;
+  if (i.extractable) return `<span class="gloss${i.untroved_days >= 2 ? ' red' : ''}">הורד, עוד לא בטרוב: Claude יחלץ את הטקסט ${WHEN()}${waited(i.untroved_days)}</span>`;
   if (i.downloaded || i.in_trove) return '';
   const words = {online: 'זמין ברשת, עוד לא הורד', kotar: 'בכותר, עוד לא הורד', pending: 'עוד לא חיפשו אותו בספרייה'};
   return words[i.status] ? `<span class="gloss">${words[i.status]}</span>` : '';

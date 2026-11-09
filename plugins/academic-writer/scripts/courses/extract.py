@@ -452,12 +452,16 @@ TEXT_SUFFIXES = (".pdf",) + DOCX_SUFFIXES + IMAGE_SUFFIXES
 
 
 def _queued_keys(reg: Path) -> set:
-    """(course, kind, key) of every item already in a pending extract job or a handoff."""
+    """(course, kind, key) of every item already in a pending extract job or a handoff, or one whose job gave up
+    (moved to done/ as `failed` after MAX_ATTEMPTS): the nightly must not queue an unreadable file again every night."""
     seen = set()
     folder = reg / "queue" / "extract"
-    for path in list(folder.glob("*.json")) + list((folder / "handoff").glob("*.json")):
+    paths = list(folder.glob("*.json")) + list((folder / "handoff").glob("*.json"))
+    for path in paths + list((folder / "done").glob("*.json")):
         job = _read_json(path, {})
         if not isinstance(job, dict):
+            continue
+        if path.parent.name == "done" and job.get("status") != "failed":
             continue
         slug = str(job.get("course") or "")
         for item in job.get("items") or [job]:
@@ -503,13 +507,27 @@ def enqueue_all(reg: Path, *, method: str = "auto", dry_run: bool = False) -> Di
         raise ExtractError(f"unknown method {method!r}")
     report: Dict[str, Any] = {"dry_run": dry_run, "jobs": []}
     stamp = datetime.now().strftime("%Y%m%dT%H%M%S")
-    for slug, items in pending_texts(reg).items():
-        name = f"{stamp}-{slug}-nightly.json"
-        report["jobs"].append({"job": name, "course": slug, "items": items})
+    folder = reg / "queue" / "extract"
+    if dry_run:
+        pending = pending_texts(reg)
+    else:
+        folder.mkdir(parents=True, exist_ok=True)
+        lock = (folder / ".drain.lock").open("a+")  # the same lock as drain: no job lands between the scan and the write
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+    try:
         if not dry_run:
-            _write_json(reg / "queue" / "extract" / name, {
-                "course": slug, "items": [{**i, "method": method} for i in items],
-                "created_at": _stamp(), "origin": "nightly"})
+            pending = pending_texts(reg)
+        for slug, items in pending.items():
+            name = f"{stamp}-{slug}-nightly.json"
+            report["jobs"].append({"job": name, "course": slug, "items": items})
+            if not dry_run:
+                _write_json(folder / name, {
+                    "course": slug, "items": [{**i, "method": method} for i in items],
+                    "created_at": _stamp(), "origin": "nightly"})
+    finally:
+        if not dry_run:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+            lock.close()
     return report
 
 

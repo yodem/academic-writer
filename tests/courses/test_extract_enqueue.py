@@ -51,3 +51,11 @@ def test_enqueue_skips_items_already_handed_off(tmp_path):
     hand = reg / "queue" / "extract" / "handoff"; hand.mkdir(parents=True)
     (hand / "cohen-source-aaaaaaaa.json").write_text(json.dumps({"course": "cohen", "kind": "source", "key": "aaaaaaaa"}))
     assert extract.enqueue_all(reg, dry_run=True)["jobs"][0]["items"] == [{"kind": "ref", "key": "k1"}]
+
+
+def test_enqueue_does_not_requeue_an_item_whose_job_gave_up(tmp_path):
+    reg = _reg(tmp_path)
+    done = reg / "queue" / "extract" / "done"; done.mkdir(parents=True)
+    (done / "old.json").write_text(json.dumps({"course": "cohen", "status": "failed", "items": [{"kind": "source", "key": "aaaaaaaa"}]}))
+    (done / "ok.json").write_text(json.dumps({"course": "cohen", "status": "done", "items": [{"kind": "ref", "key": "k1"}]}))
+    assert extract.enqueue_all(reg, dry_run=True)["jobs"][0]["items"] == [{"kind": "ref", "key": "k1"}]

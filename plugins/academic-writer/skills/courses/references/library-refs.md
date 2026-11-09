@@ -163,7 +163,7 @@ The browser tool may refuse output that contains query strings, so report counts
 ### A7. OCR and ingest
 
 - Step 0: check Anna's Archive first (A4a).
-- No automatic OCR (user ruling 2026-10-19, replacing the 2026-10-16 "Gemini text first" policy). A fetch only downloads. The student picks what to extract on the dashboard; then:
+- Every downloaded text is extracted (user ruling 2026-11-09, replacing download-only of 2026-10-19). A fetch only downloads; the nightly then queues each new text (`refs.py extract-enqueue`, method `auto`), and the student can also pick items on the dashboard; then:
   1. A docx is read with python-docx or pandoc, a PDF with a text layer with pymupdf per page (printed page numbers kept). A page whose Hebrew fails the sanity check (reversed letters, isolated letters, junk) goes to Claude vision.
   2. A scanned PDF or image is read by Claude vision (`pdftoppm -r 150`, one page at a time).
   3. Gemini (`aw ocr`) or Tesseract run only when the student chose that method for the item; with Gemini the pages go to Google. Pages Gemini returns empty are marked "blocked" and surfaced, not transcribed by another engine.

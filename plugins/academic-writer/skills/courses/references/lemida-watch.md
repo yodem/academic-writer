@@ -59,22 +59,27 @@ A rerun updates the same chore (same course, kind and ref). Record every event i
 
 ## Clear the notifications
 
-Last of all, after every listed notification was opened and routed (and only then), mark them all read in Lemida. The user id is the `useridto` of any notification the list returned:
+Last of all, mark read in Lemida exactly the notifications this run opened and routed, one id at a time. Never use `core_message_mark_all_notifications_as_read`: it clears every unread notification of the user, including ones outside the 14-day window that nobody read.
 
 ```js
 await (async () => {
-  const r = await fetch(M.cfg.wwwroot + '/lib/ajax/service.php?sesskey=' + M.cfg.sesskey + '&info=core_message_mark_all_notifications_as_read',
-    {method: 'POST', credentials: 'include', body: JSON.stringify([{index: 0, methodname: 'core_message_mark_all_notifications_as_read', args: {useridto: USERID, useridfrom: 0}}])});
-  const j = await r.json();
-  return j[0].error ? 'error: ' + JSON.stringify(j[0].exception) : 'ok';
+  const ids = [/* the ids in notifications.opened */];
+  const done = [];
+  for (const id of ids) {
+    const r = await fetch(M.cfg.wwwroot + '/lib/ajax/service.php?sesskey=' + M.cfg.sesskey + '&info=core_message_mark_notification_read',
+      {method: 'POST', credentials: 'include', body: JSON.stringify([{index: 0, methodname: 'core_message_mark_notification_read', args: {notificationid: id, timeread: Math.floor(Date.now() / 1000)}}])});
+    const j = await r.json();
+    if (!j[0].error) done.push(id);
+  }
+  return done.join(',');
 })()
 ```
 
-Set `notifications.marked_read` to true only when the call returned `ok`. If any notification is unopened, do not mark them read: leave `marked_read` false so the coverage check names the gap. An empty list counts as cleared (`marked_read: true`).
+Record the ids Lemida accepted as `notifications.marked_read` (a list). Mark nothing while any listed notification is unopened; the coverage check fails the run for every listed id that is not in `marked_read`.
 
 ## Course-page notes for Trove
 
-For each course, write what this run found that is not a file to `REG/queue/trove-notes/<slug>-<run_id>.json`: `{"course": "<slug>", "run_id": "...", "notes": [{"kind": "announcement" | "assignment" | "event" | "link" | "zoom", "date": "YYYY-MM-DD", "title": "...", "text": "<a short summary, 300 characters at most>", "url": "<Lemida link>"}]}`. Skip a course with nothing new. The nightly's Trove step (`/academic-writer:courses trove-notes`) places these on the course page; the watch never writes to Trove itself.
+For each course, write what this run found that is not a file to `REG/queue/trove-notes/<slug>-<run_id>.json`: `{"course": "<slug>", "run_id": "...", "notes": [{"kind": "announcement" | "assignment" | "event" | "link" | "zoom", "date": "YYYY-MM-DD", "title": "...", "text": "<a short summary, 300 characters at most>", "url": "<Lemida link>"}]}`. Skip a course with nothing new. The nightly's Trove step (`/academic-writer:courses trove-notes`) places these on the book's `Course · Changelog` page; the watch never writes to Trove itself.
 
 ## Per course
 
@@ -122,6 +127,6 @@ Unattended runs (`claude -p`, the nightly job): nobody can answer, so never end 
 
 ## Ending a run
 
-Before the digest, clear the notifications ("Clear the notifications" above; never before every one was opened), then write `REG/logs/lemida-coverage-<YYYY-MM-DD>.json` as `../SKILL.md` describes (the `run_id` from your prompt, visited courses, new assignments and their handling, notifications read to the end (`complete`), listed and opened notifications, `marked_read`, and the `events` section). `courses.py lemida-coverage-check` turns any gap into a failed run, so an unwritten file is a failed run.
+Before the digest, clear the notifications ("Clear the notifications" above; never before every one was opened), then write `REG/logs/lemida-coverage-<YYYY-MM-DD>.json` as `../SKILL.md` describes (the `run_id` from your prompt, visited courses, new assignments and their handling, notifications read to the end (`complete`), listed, opened and marked-read notifications, and the `events` section). `courses.py lemida-coverage-check` turns any gap into a failed run, so an unwritten file is a failed run.
 
 `courses.py chores digest` writes the digest of open chores. Report: new announcements, items routed (with `check-source` results), chores added, courses that errored or were `suspect`. A failure for one course never stops the others.

@@ -36,7 +36,7 @@ def clean_payload(**overrides):
             "complete": True,
             "listed": [1, 2, 3],
             "opened": [3, 1, 2],
-            "marked_read": True,
+            "marked_read": [1, 2, 3],
         },
         "events": {"complete": True, "listed": [501, 502], "handled": [502, 501]},
     }
@@ -392,9 +392,12 @@ def test_next_day_report_from_another_run_is_not_used(tmp_path):
 def test_notifications_not_marked_read_is_a_gap(tmp_path):
     reg = make_registry(tmp_path)
     payload = clean_payload()
-    payload["notifications"]["marked_read"] = False
+    payload["notifications"]["marked_read"] = [1, 3]
     write_coverage(reg, payload)
-    assert any("marked_read" in g for g in check(reg))
+    assert check(reg) == ["notification 2 opened but not marked read in Lemida"]
+    payload["notifications"]["marked_read"] = True
+    write_coverage(reg, payload)
+    assert check(reg) == ["notifications.marked_read is missing or not a list of ids"]
 
 
 def test_event_without_chore_is_a_gap(tmp_path):
