@@ -310,7 +310,7 @@ Re-audit only the redrafted unit (one more batched `auditor` call over just its 
 same `runId`), and repeat. Track rewrite attempts **per unit**, reading the ceiling at runtime rather than inlining it:
 
 ```bash
-sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "import json;print(json.load(open('${CLAUDE_PLUGIN_ROOT}/thresholds.json', encoding='utf-8'))['rewriteCycles']['max'])"
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "import json,sys;print(json.load(open(sys.argv[1], encoding='utf-8'))['rewriteCycles']['max'])" "${CLAUDE_PLUGIN_ROOT}/thresholds.json"
 ```
 
 A unit that still has failing paragraphs after `rewriteCycles.max` attempts ships with those

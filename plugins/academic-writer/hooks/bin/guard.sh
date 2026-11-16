@@ -32,15 +32,19 @@ fi
 
 # No node: read stdin only to learn the session_id, for at most ~2 seconds (a producer may leave it open).
 input=""
+tmpf=""
 if [ ! -t 0 ]; then
-  tmpf="${TMPDIR:-/tmp}/aw-guard-$$"
+  tmpf=$(mktemp "${TMPDIR:-/tmp}/aw-guard.XXXXXX" 2>/dev/null) || tmpf=""
+  trap '[ -n "$tmpf" ] && rm -f "$tmpf"' EXIT
+fi
+if [ ! -t 0 ] && [ -n "$tmpf" ]; then
   exec 3<&0
   dd bs=65536 count=1 <&3 >"$tmpf" 2>/dev/null &
   rpid=$!
   ( sleep 2; kill "$rpid" 2>/dev/null ) >/dev/null 2>&1 &
   kpid=$!
   wait "$rpid" 2>/dev/null
-  kill "$kpid" 2>/dev/null
+  { kill "$kpid"; wait "$kpid"; } 2>/dev/null
   exec 3<&-
   input=$(cat "$tmpf" 2>/dev/null)
   rm -f "$tmpf"

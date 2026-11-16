@@ -13,6 +13,9 @@ All notable changes to the academic-writer plugin are documented here.
 - CI runs the Python resolver, the setup checks and the hook guard on `windows-latest`.
 
 ### Fixed
+
+- The hook guard's stdin capture uses a private `mktemp` file (no predictable name in the temp folder) and no longer prints a shell job notice.
+- The rewrite-cycles lookup in the write skill passes the thresholds path as an argument, so a Windows folder path no longer breaks the Python line.
 - **Shell scripts keep LF line endings on Windows.** Git for Windows turns files into CRLF by default, which broke `sh` on `bin/aw-python` and `hooks/bin/guard.sh`. A root `.gitattributes` pins every shell script and shebang file to LF, and a test checks it.
 - **The `aw` command finds Python the same way `aw-python` does** (`python3`, then `python`, then `py -3`, Python 3.9 or newer) instead of calling `python3`, which does not exist on a normal Windows install. `aw-python` and the setup check now share the same minimum version, and the Node.js row reports a failed version check instead of passing.
 - **Python runs in UTF-8 mode** (`PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`) through `aw-python` and `aw`, so Hebrew profiles and articles read and write correctly on Windows. Skill and script file reads and writes now name their encoding.
