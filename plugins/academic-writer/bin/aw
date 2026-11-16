@@ -49049,7 +49049,7 @@ Return one JSON object with revised_text.`;
 }
 
 // src/ocr.ts
-import { closeSync, existsSync as existsSync11, mkdirSync as mkdirSync9, mkdtempSync, openSync, readFileSync as readFileSync14, readdirSync as readdirSync5, rmSync, statSync as statSync3, writeFileSync as writeFileSync8 } from "node:fs";
+import { appendFileSync as appendFileSync8, existsSync as existsSync11, linkSync, mkdirSync as mkdirSync9, mkdtempSync, readFileSync as readFileSync14, readdirSync as readdirSync5, rmSync, statSync as statSync3, writeFileSync as writeFileSync8 } from "node:fs";
 import { randomBytes as randomBytes3 } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname as dirname6, extname, isAbsolute as isAbsolute3, join as join17, resolve as resolve9 } from "node:path";
@@ -49058,17 +49058,31 @@ init_thresholds();
 var schema2 = { type: "array", items: { type: "object", required: ["page_number", "text", "is_born_digital"], properties: { page_number: { type: "integer" }, text: { type: "string" }, is_born_digital: { type: "boolean" }, confidence: { type: "string", enum: ["high", "medium", "low"] }, notes: { type: "string" } } } };
 var cfg = thresholds_default.ocr;
 var HELD = "needs approval: Gemini";
+function reserveFile(runId2) {
+  return join17(projectDir(), ".academic-helper", "runs", runId2, "gemini-ocr-reserved.jsonl");
+}
 function countGeminiOcr(runId2) {
-  const file = join17(projectDir(), ".academic-helper", "runs", runId2, "usage.jsonl");
-  if (!existsSync11(file)) return 0;
-  return readFileSync14(file, "utf8").split("\n").filter(Boolean).filter((l) => {
+  const rows = (file) => existsSync11(file) ? readFileSync14(file, "utf8").split("\n").filter(Boolean) : [];
+  const reserved = rows(reserveFile(runId2)).reduce((n, l) => {
+    try {
+      return n + Number(JSON.parse(l).pages ?? 1);
+    } catch {
+      return n + 1;
+    }
+  }, 0);
+  const ledger = rows(join17(projectDir(), ".academic-helper", "runs", runId2, "usage.jsonl")).filter((l) => {
     try {
       const r2 = JSON.parse(l);
       return r2.step === "ocr" && r2.provider === "gemini";
     } catch {
-      return false;
+      return true;
     }
   }).length;
+  return Math.max(reserved, ledger);
+}
+function reserve(runId2, pages) {
+  appendFileSync8(reserveFile(runId2), `${JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), pid: process.pid, pages: pages.length, page_numbers: pages })}
+`);
 }
 function checkRunId(runId2) {
   if (!runId2 || isAbsolute3(runId2) || /[\\/]/.test(runId2) || runId2.includes("..")) throw new AwError("ERROR", "ocr", `invalid --run id: ${runId2}`);
@@ -49083,14 +49097,16 @@ function ownerAlive(pid) {
   }
 }
 function tryCreate(path2, token) {
+  const tmp = `${path2}.${process.pid}.${token}`;
+  writeFileSync8(tmp, JSON.stringify({ pid: process.pid, token }));
   try {
-    const fd = openSync(path2, "wx");
-    writeFileSync8(fd, JSON.stringify({ pid: process.pid, token }));
-    closeSync(fd);
+    linkSync(tmp, path2);
     return true;
   } catch (error) {
     if (error.code === "EEXIST") return false;
     throw error;
+  } finally {
+    rmSync(tmp, { force: true });
   }
 }
 function lockRun(runId2) {
@@ -49100,10 +49116,11 @@ function lockRun(runId2) {
   const path2 = join17(dir, "ocr-gate.lock");
   const token = randomBytes3(16).toString("hex");
   if (tryCreate(path2, token)) return { path: path2, token };
-  let owner = {};
+  let owner;
   try {
     owner = JSON.parse(readFileSync14(path2, "utf8"));
   } catch {
+    throw new AwError("ERROR", "ocr", `the lock for --run ${runId2} cannot be read (${path2}); if no aw ocr is running with this run id, delete that file and retry`);
   }
   if (ownerAlive(Number(owner.pid))) throw new AwError("ERROR", "ocr", `another aw ocr is running with --run ${runId2} (pid ${owner.pid}); wait for it or use another run id`);
   rmSync(path2, { force: true });
@@ -49221,11 +49238,12 @@ async function readGemini(scans, options, gate) {
   for (let offset = 0; offset < scans.length; offset += cfg.geminiBatchSize) {
     const batch = scans.slice(offset, offset + cfg.geminiBatchSize);
     const numbers = batch.map((s2) => s2.page_number);
-    if (!gate.confirm && gate.used >= gate.cap) {
+    if (!gate.confirm && gate.used + numbers.length > gate.cap) {
       pages.push(...numbers.map((n) => heldPage(n, gate)));
       continue;
     }
-    gate.used += 1;
+    reserve(options.runId, numbers);
+    gate.used += numbers.length;
     const parts = batch.map((s2) => ({ inlineData: { mimeType: mimeOf(s2.png), data: readFileSync14(s2.png).toString("base64") } }));
     let result;
     try {

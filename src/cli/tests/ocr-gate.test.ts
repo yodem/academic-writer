@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setPathArguments } from '../src/paths.ts';
 import { __setTransport } from '../src/gemini.ts';
-import { ocrDocument, exitCodeFor, releaseGate } from '../src/ocr.ts';
+import { ocrDocument, exitCodeFor, releaseGate, countGeminiOcr } from '../src/ocr.ts';
 
 const root = mkdtempSync(join(tmpdir(), 'aw-ocr-gate-'));
 setPathArguments(['--data-dir', root, '--project-dir', root]);
@@ -114,4 +114,19 @@ test('ocr rejects a run id that is a path', async () => {
   for (const runId of ['../escape', '/abs/run', 'a/b', 'a\\b']) {
     await assert.rejects(ocrDocument({ input: scans('path', 1), language: 'he', runId, engine: 'gemini' }), /invalid --run id/);
   }
+});
+
+test('ocr gate refuses an unreadable lock instead of reclaiming it', async () => {
+  const dir = join(root, '.academic-helper', 'runs', 'gate-garbled'); mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'ocr-gate.lock'), '');
+  stub();
+  await assert.rejects(ocrDocument({ input: scans('garbled', 1), language: 'he', runId: 'gate-garbled', engine: 'gemini' }), /cannot be read/);
+  assert.equal(existsSync(join(dir, 'ocr-gate.lock')), true);
+});
+
+test('ocr gate reserves a page before the Gemini request, so a failed or killed call still counts', async () => {
+  __setTransport(async () => { throw new Error('connection reset mid-request'); });
+  await assert.rejects(ocrDocument({ input: scans('killed', 1), language: 'he', runId: 'gate-killed', engine: 'gemini' }));
+  assert.equal(countGeminiOcr('gate-killed'), 1);
+  assert.equal(existsSync(join(root, '.academic-helper', 'runs', 'gate-killed', 'ocr-gate.lock')), false);
 });

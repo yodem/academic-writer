@@ -1,4 +1,4 @@
-import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, extname, isAbsolute, join, resolve } from 'node:path';
@@ -17,11 +17,17 @@ const schema = { type: 'array', items: { type: 'object', required: ['page_number
 const cfg = thresholds.ocr;
 const HELD = 'needs approval: Gemini';
 /** Gemini pages already billed to this run id: ledger rows with step 'ocr' and provider 'gemini'. */
+function reserveFile(runId: string): string { return join(projectDir(), '.academic-helper', 'runs', runId, 'gemini-ocr-reserved.jsonl'); }
+/** Gemini OCR pages already spent by this run id: the larger of the pages reserved before each request (written before the
+ * call, so a run killed mid-request still counts) and the ledger's ocr/gemini rows (runs from before reservations existed). */
 export function countGeminiOcr(runId: string): number {
-  const file = join(projectDir(), '.academic-helper', 'runs', runId, 'usage.jsonl');
-  if (!existsSync(file)) return 0;
-  return readFileSync(file, 'utf8').split('\n').filter(Boolean).filter((l) => { try { const r = JSON.parse(l) as { step?: string; provider?: string }; return r.step === 'ocr' && r.provider === 'gemini'; } catch { return false; } }).length;
+  const rows = (file: string): string[] => (existsSync(file) ? readFileSync(file, 'utf8').split('\n').filter(Boolean) : []);
+  const reserved = rows(reserveFile(runId)).reduce((n, l) => { try { return n + Number((JSON.parse(l) as { pages?: number }).pages ?? 1); } catch { return n + 1; } }, 0);
+  const ledger = rows(join(projectDir(), '.academic-helper', 'runs', runId, 'usage.jsonl')).filter((l) => { try { const r = JSON.parse(l) as { step?: string; provider?: string }; return r.step === 'ocr' && r.provider === 'gemini'; } catch { return true; } }).length;
+  return Math.max(reserved, ledger);
 }
+/** Record the pages of one Gemini request before it is sent. */
+function reserve(runId: string, pages: number[]): void { appendFileSync(reserveFile(runId), `${JSON.stringify({ ts: new Date().toISOString(), pid: process.pid, pages: pages.length, page_numbers: pages })}\n`); }
 /** One cost gate for every Gemini OCR path: cumulative per run id (ledger rows plus calls made now), lifted by --confirm-cost. */
 export type Gate = { used: number; cap: number; confirm: boolean; held: number; lock: RunLock };
 /** A run id names a folder under .academic-helper/runs: no path separators, no '..', not absolute. */
@@ -36,9 +42,14 @@ function ownerAlive(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try { process.kill(pid, 0); return true; } catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM'; }
 }
+/** The lock appears with its owner already written: write a private temp file, then hard-link it to the lock path
+ * (link fails with EEXIST atomically), so no other process can ever read a half-written lock. */
 function tryCreate(path: string, token: string): boolean {
-  try { const fd = openSync(path, 'wx'); writeFileSync(fd, JSON.stringify({ pid: process.pid, token })); closeSync(fd); return true; }
+  const tmp = `${path}.${process.pid}.${token}`;
+  writeFileSync(tmp, JSON.stringify({ pid: process.pid, token }));
+  try { linkSync(tmp, path); return true; }
   catch (error) { if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false; throw error; }
+  finally { rmSync(tmp, { force: true }); }
 }
 function lockRun(runId: string): RunLock {
   checkRunId(runId);
@@ -47,8 +58,9 @@ function lockRun(runId: string): RunLock {
   const path = join(dir, 'ocr-gate.lock');
   const token = randomBytes(16).toString('hex');
   if (tryCreate(path, token)) return { path, token };
-  let owner: { pid?: number } = {};
-  try { owner = JSON.parse(readFileSync(path, 'utf8')) as { pid?: number }; } catch { /* unreadable or half-written: treat as unowned */ }
+  let owner: { pid?: number };
+  try { owner = JSON.parse(readFileSync(path, 'utf8')) as { pid?: number }; }
+  catch { throw new AwError('ERROR', 'ocr', `the lock for --run ${runId} cannot be read (${path}); if no aw ocr is running with this run id, delete that file and retry`); }
   if (ownerAlive(Number(owner.pid))) throw new AwError('ERROR', 'ocr', `another aw ocr is running with --run ${runId} (pid ${owner.pid}); wait for it or use another run id`);
   rmSync(path, { force: true });
   if (!tryCreate(path, token)) throw new AwError('ERROR', 'ocr', `another aw ocr took --run ${runId} at the same moment; retry`);
@@ -163,8 +175,9 @@ async function readGemini(scans: Scan[], options: OcrOptions, gate: Gate): Promi
   for (let offset = 0; offset < scans.length; offset += cfg.geminiBatchSize) {
     const batch = scans.slice(offset, offset + cfg.geminiBatchSize);
     const numbers = batch.map((s) => s.page_number);
-    if (!gate.confirm && gate.used >= gate.cap) { pages.push(...numbers.map((n) => heldPage(n, gate))); continue; }
-    gate.used += 1;
+    if (!gate.confirm && gate.used + numbers.length > gate.cap) { pages.push(...numbers.map((n) => heldPage(n, gate))); continue; }
+    reserve(options.runId, numbers);  // persisted before the request: a run killed mid-call still counts these pages
+    gate.used += numbers.length;
     const parts: ImagePart[] = batch.map((s) => ({ inlineData: { mimeType: mimeOf(s.png), data: readFileSync(s.png).toString('base64') } }));
     let result: Awaited<ReturnType<typeof callGemini>>;
     try {
