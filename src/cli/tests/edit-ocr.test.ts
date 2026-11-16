@@ -214,7 +214,7 @@ test('an empty Surya reading never hides Tesseract\'s text in the fallback', asy
 
 test('a Gemini answer without exactly one page fails instead of passing as read', async () => {
   __setTransport(async () => ({ text: '[]', finishReason: 'STOP', usage: { in: 2, out: 2 } }));
-  await assert.rejects(auto('gemini-empty', [], [], 'test-key'), /Gemini returned 0 pages for page 1/);
+  await assert.rejects(auto('gemini-empty', [], [], 'test-key'), /Gemini returned 0 pages for page 1|missing, extra or duplicate pages/);
 });
 
 test('Surya counts as installed only when SURYA_INFERENCE_URL answers /health', async () => {

@@ -1,5 +1,4 @@
-import { appendFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -17,66 +16,41 @@ const schema = { type: 'array', items: { type: 'object', required: ['page_number
 const cfg = thresholds.ocr;
 const HELD = 'needs approval: Gemini';
 /** Gemini pages already billed to this run id: ledger rows with step 'ocr' and provider 'gemini'. */
+/** "1-3,7" -> {1,2,3,7}; rejects anything else. */
+export function pageSet(spec: string): Set<number> {
+  const out = new Set<number>();
+  for (const part of spec.split(',').map((x) => x.trim()).filter(Boolean)) {
+    const m = /^(\d+)(?:-(\d+))?$/.exec(part);
+    if (!m) throw new AwError('ERROR', 'ocr', `invalid --pages: ${spec}`);
+    const a = Number(m[1]), b = Number(m[2] ?? m[1]);
+    if (a < 1 || b < a) throw new AwError('ERROR', 'ocr', `invalid --pages: ${spec}`);
+    for (let n = a; n <= b; n++) out.add(n);
+  }
+  return out;
+}
 function reserveFile(runId: string): string { return join(projectDir(), '.academic-helper', 'runs', runId, 'gemini-ocr-reserved.jsonl'); }
-/** Gemini OCR pages already spent by this run id: the larger of the pages reserved before each request (written before the
- * call, so a run killed mid-request still counts) and the ledger's ocr/gemini rows (runs from before reservations existed). */
+/** Gemini OCR pages already spent by this run id: the pages reserved before each request (written before the call, so a
+ * run killed mid-request still counts them). One aw ocr per run id at a time: parallel runs with the same --run are not
+ * supported (the skills and the nightly never start them). A line that cannot be parsed counts as one page. */
 export function countGeminiOcr(runId: string): number {
-  const rows = (file: string): string[] => (existsSync(file) ? readFileSync(file, 'utf8').split('\n').filter(Boolean) : []);
-  const reserved = rows(reserveFile(runId)).reduce((n, l) => { try { return n + Number((JSON.parse(l) as { pages?: number }).pages ?? 1); } catch { return n + 1; } }, 0);
-  const ledger = rows(join(projectDir(), '.academic-helper', 'runs', runId, 'usage.jsonl')).filter((l) => { try { const r = JSON.parse(l) as { step?: string; provider?: string }; return r.step === 'ocr' && r.provider === 'gemini'; } catch { return true; } }).length;
-  return Math.max(reserved, ledger);
+  const file = reserveFile(runId);
+  if (!existsSync(file)) return 0;
+  return readFileSync(file, 'utf8').split('\n').filter(Boolean).reduce((n, l) => { try { return n + Number((JSON.parse(l) as { pages?: number }).pages ?? 1); } catch { return n + 1; } }, 0);
 }
 /** Record the pages of one Gemini request before it is sent. */
-function reserve(runId: string, pages: number[]): void { appendFileSync(reserveFile(runId), `${JSON.stringify({ ts: new Date().toISOString(), pid: process.pid, pages: pages.length, page_numbers: pages })}\n`); }
+function reserve(runId: string, pages: number[]): void { mkdirSync(dirname(reserveFile(runId)), { recursive: true }); appendFileSync(reserveFile(runId), `${JSON.stringify({ ts: new Date().toISOString(), pid: process.pid, pages: pages.length, page_numbers: pages })}\n`); }
 /** One cost gate for every Gemini OCR path: cumulative per run id (ledger rows plus calls made now), lifted by --confirm-cost. */
-export type Gate = { used: number; cap: number; confirm: boolean; held: number; lock: RunLock };
+export type Gate = { used: number; cap: number; confirm: boolean; held: number };
 /** A run id names a folder under .academic-helper/runs: no path separators, no '..', not absolute. */
 function checkRunId(runId: string): void {
   if (!runId || isAbsolute(runId) || /[\\/]/.test(runId) || runId.includes('..')) throw new AwError('ERROR', 'ocr', `invalid --run id: ${runId}`);
-}
-/** One aw ocr per run id at a time, so the Gemini page count has a single writer: the lock file holds its owner's pid and a
- * random token. A lock is reclaimed only when its owner process is gone (never by age: a long OCR run keeps its lock), and a
- * run deletes the lock only while it still holds its own token. */
-type RunLock = { path: string; token: string };
-function ownerAlive(pid: number): boolean {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try { process.kill(pid, 0); return true; } catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM'; }
-}
-/** The lock appears with its owner already written: write a private temp file, then hard-link it to the lock path
- * (link fails with EEXIST atomically), so no other process can ever read a half-written lock. */
-function tryCreate(path: string, token: string): boolean {
-  const tmp = `${path}.${process.pid}.${token}`;
-  writeFileSync(tmp, JSON.stringify({ pid: process.pid, token }));
-  try { linkSync(tmp, path); return true; }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false; throw error; }
-  finally { rmSync(tmp, { force: true }); }
-}
-function lockRun(runId: string): RunLock {
-  checkRunId(runId);
-  const dir = join(projectDir(), '.academic-helper', 'runs', runId);
-  mkdirSync(dir, { recursive: true });
-  const path = join(dir, 'ocr-gate.lock');
-  const token = randomBytes(16).toString('hex');
-  if (tryCreate(path, token)) return { path, token };
-  let owner: { pid?: number };
-  try { owner = JSON.parse(readFileSync(path, 'utf8')) as { pid?: number }; }
-  catch { throw new AwError('ERROR', 'ocr', `the lock for --run ${runId} cannot be read (${path}); if no aw ocr is running with this run id, delete that file and retry`); }
-  if (ownerAlive(Number(owner.pid))) throw new AwError('ERROR', 'ocr', `another aw ocr is running with --run ${runId} (pid ${owner.pid}); wait for it or use another run id`);
-  rmSync(path, { force: true });
-  if (!tryCreate(path, token)) throw new AwError('ERROR', 'ocr', `another aw ocr took --run ${runId} at the same moment; retry`);
-  return { path, token };
-}
-export function releaseGate(gate: Gate): void {
-  try { const owner = JSON.parse(readFileSync(gate.lock.path, 'utf8')) as { token?: string }; if (owner.token === gate.lock.token) rmSync(gate.lock.path, { force: true }); } catch { /* already gone */ }
 }
 export function makeGate(options: Pick<OcrOptions, 'runId' | 'confirmCost'>): Gate {
   const env = (process.env.AW_OCR_GEMINI_CAP ?? '').trim();
   // the env var can only lower the cap (tests, the live check); raising it needs --confirm-cost
   const cap = /^\d+$/.test(env) ? Math.min(Number(env), cfg.geminiConfirmPages) : cfg.geminiConfirmPages;
-  const lock = lockRun(options.runId);
-  const gate: Gate = { used: 0, cap, confirm: options.confirmCost === true, held: 0, lock };
-  try { gate.used = countGeminiOcr(options.runId); } catch (error) { releaseGate(gate); throw error; }  // setup failed: give the lock back
-  return gate;
+  checkRunId(options.runId);
+  return { used: countGeminiOcr(options.runId), cap, confirm: options.confirmCost === true, held: 0 };
 }
 function heldPage(page_number: number, gate: Gate): Page { gate.held += 1; return { page_number, text: '', is_born_digital: false, confidence: 'low', notes: `${HELD}, __N__ pages, est. $__USD__; rerun with --confirm-cost` }; }
 /** Fills the page count and dollar estimate into held pages once the run knows how many there are. */
@@ -194,6 +168,8 @@ async function readGemini(scans: Scan[], options: OcrOptions, gate: Gate): Promi
     if (!Array.isArray(parsed) || parsed.some((p) => typeof p.page_number !== 'number' || typeof p.text !== 'string')) throw new AwError('ERROR', 'ocr', 'invalid OCR page response');
     // a single image is page 1 to the model; give it the scan's own page number
     if (batch.length === 1 && parsed.length === 1) parsed[0].page_number = batch[0].page_number;
+    const got = parsed.map((p) => p.page_number).sort((x, y) => x - y);
+    if (got.length !== numbers.length || got.some((n, k) => n !== [...numbers].sort((x, y) => x - y)[k])) throw new AwError('ERROR', 'ocr', `Gemini answered pages [${got.join(', ')}] for pages [${numbers.join(', ')}]: missing, extra or duplicate pages`);
     for (const p of parsed) if (!p.text.trim()) { p.confidence = 'low'; p.notes = 'blocked: Gemini returned no text (copyright/recitation block); not substituted from another engine'; }
     pages.push(...parsed);
   }
@@ -327,7 +303,7 @@ function autoReason(have: Available, source: OcrOptions['source'] = 'required'):
 export async function ocrDocument(options: OcrOptions): Promise<{ pages: Page[]; summary: ReturnType<typeof summarize>; truncated: boolean; truncation_message?: string; engine: Engine | 'auto' | 'none'; engine_reason: string }> {
  checkOverrides(options);
  const gate = makeGate(options);
- try { return await ocrRun(options, gate); } finally { releaseGate(gate); }
+ return ocrRun(options, gate);
 }
 
 async function ocrRun(options: OcrOptions, gate: Gate): Promise<Awaited<ReturnType<typeof ocrDocument>>> {
@@ -355,10 +331,13 @@ async function ocrRun(options: OcrOptions, gate: Gate): Promise<Awaited<ReturnTy
  } else {
    const files = imageFiles.length ? imageFiles : [input];
    if (isDir && files.length === 0) throw new AwError('ERROR', 'ocr', 'directory contains no supported image files');
-   const kept = files.slice(0, cfg.perCallPageCap);
-   scans.push(...kept.map((png, index) => ({ page_number: index + 1, png })));
-   truncated = files.length > kept.length;
-   if (truncated) truncation_message = `${kept.length} of ${files.length} images processed.`;
+   const wanted = options.pages ? pageSet(options.pages) : undefined;
+   const numbered = files.map((png, index) => ({ page_number: index + 1, png })).filter((f) => !wanted || wanted.has(f.page_number));
+   if (wanted && numbered.length === 0) throw new AwError('ERROR', 'ocr', `--pages ${options.pages} selects none of the ${files.length} images`);
+   const kept = numbered.slice(0, cfg.perCallPageCap);
+   scans.push(...kept);
+   truncated = numbered.length > kept.length;
+   if (truncated) truncation_message = `${kept.length} of ${numbered.length} images processed.`;
  }
  // born-digital pages need no engine: choose one only when there is something to read
  const auto = (options.engine ?? 'auto') === 'auto';

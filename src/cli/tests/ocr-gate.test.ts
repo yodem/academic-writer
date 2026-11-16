@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setPathArguments } from '../src/paths.ts';
 import { __setTransport } from '../src/gemini.ts';
-import { ocrDocument, exitCodeFor, releaseGate, countGeminiOcr } from '../src/ocr.ts';
+import { ocrDocument, exitCodeFor, countGeminiOcr, pageSet } from '../src/ocr.ts';
 
 const root = mkdtempSync(join(tmpdir(), 'aw-ocr-gate-'));
 setPathArguments(['--data-dir', root, '--project-dir', root]);
@@ -45,8 +45,8 @@ test('ocr gate counts earlier calls in the same run', async () => {
   process.env.AW_OCR_GEMINI_CAP = '3';
   try {
     const dir = join(root, '.academic-helper', 'runs', 'gate-run'); mkdirSync(dir, { recursive: true });
-    const row = (step: string, provider: string) => JSON.stringify({ run_id: 'gate-run', step, provider, model: 'm', input_tokens: 1, output_tokens: 1, cost_usd: null, latency_ms: 1, exit: 'OK', same_family: false });
-    writeFileSync(join(dir, 'usage.jsonl'), [row('ocr', 'gemini'), row('ocr', 'gemini'), row('write.draft', 'gemini'), row('ocr', 'code')].join('\n') + '\n');
+    // two pages already reserved by an earlier aw ocr with this run id
+    writeFileSync(join(dir, 'gemini-ocr-reserved.jsonl'), [1, 2].map((n) => JSON.stringify({ ts: 't', pid: 1, pages: 1, page_numbers: [n] })).join('\n') + '\n');
     const state = stub();
     const out = await ocrDocument({ input: scans('prior', 3), language: 'en', runId: 'gate-run', engine: 'gemini' });
     assert.equal(state.calls, 1);
@@ -78,37 +78,6 @@ test('ocr gate env var cannot raise the cap', async () => {
   } finally { delete process.env.AW_OCR_GEMINI_CAP; }
 });
 
-test('ocr gate reclaims a lock whose owner is dead', async () => {
-  const dir = join(root, '.academic-helper', 'runs', 'gate-dead'); mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'ocr-gate.lock'), JSON.stringify({ pid: 2147483646, token: 'stale' }));
-  stub();
-  const out = await ocrDocument({ input: scans('dead', 1), language: 'he', runId: 'gate-dead', engine: 'gemini' });
-  assert.equal(out.pages.length, 1);
-  assert.equal(existsSync(join(dir, 'ocr-gate.lock')), false);
-});
-
-test('ocr gate refuses a lock whose owner is alive', async () => {
-  const dir = join(root, '.academic-helper', 'runs', 'gate-busy'); mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'ocr-gate.lock'), JSON.stringify({ pid: process.pid, token: 'someone-else' }));
-  stub();
-  await assert.rejects(ocrDocument({ input: scans('busy', 1), language: 'he', runId: 'gate-busy', engine: 'gemini' }), /another aw ocr is running/);
-  assert.equal(existsSync(join(dir, 'ocr-gate.lock')), true);
-});
-
-test('ocr gate never deletes another run\'s lock', () => {
-  const dir = join(root, '.academic-helper', 'runs', 'gate-foreign'); mkdirSync(dir, { recursive: true });
-  const path = join(dir, 'ocr-gate.lock');
-  writeFileSync(path, JSON.stringify({ pid: process.pid, token: 'theirs' }));
-  releaseGate({ used: 0, cap: 20, confirm: false, held: 0, lock: { path, token: 'mine' } });
-  assert.equal(existsSync(path), true);
-});
-
-test('ocr gate releases its lock when the run ends', async () => {
-  stub();
-  await ocrDocument({ input: scans('release', 1), language: 'he', runId: 'gate-release', engine: 'gemini' });
-  await ocrDocument({ input: scans('release2', 1), language: 'he', runId: 'gate-release', engine: 'gemini' });
-});
-
 test('ocr rejects a run id that is a path', async () => {
   stub();
   for (const runId of ['../escape', '/abs/run', 'a/b', 'a\\b']) {
@@ -116,17 +85,21 @@ test('ocr rejects a run id that is a path', async () => {
   }
 });
 
-test('ocr gate refuses an unreadable lock instead of reclaiming it', async () => {
-  const dir = join(root, '.academic-helper', 'runs', 'gate-garbled'); mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'ocr-gate.lock'), '');
-  stub();
-  await assert.rejects(ocrDocument({ input: scans('garbled', 1), language: 'he', runId: 'gate-garbled', engine: 'gemini' }), /cannot be read/);
-  assert.equal(existsSync(join(dir, 'ocr-gate.lock')), true);
-});
-
 test('ocr gate reserves a page before the Gemini request, so a failed or killed call still counts', async () => {
   __setTransport(async () => { throw new Error('connection reset mid-request'); });
   await assert.rejects(ocrDocument({ input: scans('killed', 1), language: 'he', runId: 'gate-killed', engine: 'gemini' }));
   assert.equal(countGeminiOcr('gate-killed'), 1);
-  assert.equal(existsSync(join(root, '.academic-helper', 'runs', 'gate-killed', 'ocr-gate.lock')), false);
+});
+
+test('ocr --pages on an image folder keeps each image\'s own page number', async () => {
+  stub();
+  const out = await ocrDocument({ input: scans('subset', 5), language: 'he', runId: 'gate-subset', engine: 'gemini', pages: '2,4-5' });
+  assert.deepEqual(out.pages.map((p) => p.page_number), [2, 4, 5]);
+  assert.deepEqual([...pageSet('1-3,7')], [1, 2, 3, 7]);
+  assert.throws(() => pageSet('3-1'), /invalid --pages/);
+});
+
+test('ocr rejects a Gemini reply with missing or extra pages', async () => {
+  __setTransport(async () => ({ text: JSON.stringify([]), finishReason: 'STOP', usage: { in: 1, out: 1 } }));
+  await assert.rejects(ocrDocument({ input: scans('missing', 1), language: 'he', runId: 'gate-missing', engine: 'gemini' }), /missing, extra or duplicate pages/);
 });

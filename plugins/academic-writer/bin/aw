@@ -21348,7 +21348,7 @@ var require_websocket = __commonJS({
     var http3 = __require("http");
     var net = __require("net");
     var tls = __require("tls");
-    var { randomBytes: randomBytes9, createHash: createHash8 } = __require("crypto");
+    var { randomBytes: randomBytes8, createHash: createHash8 } = __require("crypto");
     var { Duplex, Readable: Readable2 } = __require("stream");
     var { URL: URL2 } = __require("url");
     var PerMessageDeflate2 = require_permessage_deflate();
@@ -21886,7 +21886,7 @@ var require_websocket = __commonJS({
         }
       }
       const defaultPort = isSecure ? 443 : 80;
-      const key = randomBytes9(16).toString("base64");
+      const key = randomBytes8(16).toString("base64");
       const request = isSecure ? https2.request : http3.request;
       const protocolSet = /* @__PURE__ */ new Set();
       let perMessageDeflate;
@@ -49049,8 +49049,7 @@ Return one JSON object with revised_text.`;
 }
 
 // src/ocr.ts
-import { appendFileSync as appendFileSync8, existsSync as existsSync11, linkSync, mkdirSync as mkdirSync9, mkdtempSync, readFileSync as readFileSync14, readdirSync as readdirSync5, rmSync, statSync as statSync3, writeFileSync as writeFileSync8 } from "node:fs";
-import { randomBytes as randomBytes3 } from "node:crypto";
+import { appendFileSync as appendFileSync8, existsSync as existsSync11, mkdirSync as mkdirSync9, mkdtempSync, readFileSync as readFileSync14, readdirSync as readdirSync5, rmSync, statSync as statSync3, writeFileSync as writeFileSync8 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname as dirname6, extname, isAbsolute as isAbsolute3, join as join17, resolve as resolve9 } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -49058,94 +49057,44 @@ init_thresholds();
 var schema2 = { type: "array", items: { type: "object", required: ["page_number", "text", "is_born_digital"], properties: { page_number: { type: "integer" }, text: { type: "string" }, is_born_digital: { type: "boolean" }, confidence: { type: "string", enum: ["high", "medium", "low"] }, notes: { type: "string" } } } };
 var cfg = thresholds_default.ocr;
 var HELD = "needs approval: Gemini";
+function pageSet(spec) {
+  const out = /* @__PURE__ */ new Set();
+  for (const part of spec.split(",").map((x2) => x2.trim()).filter(Boolean)) {
+    const m2 = /^(\d+)(?:-(\d+))?$/.exec(part);
+    if (!m2) throw new AwError("ERROR", "ocr", `invalid --pages: ${spec}`);
+    const a = Number(m2[1]), b = Number(m2[2] ?? m2[1]);
+    if (a < 1 || b < a) throw new AwError("ERROR", "ocr", `invalid --pages: ${spec}`);
+    for (let n = a; n <= b; n++) out.add(n);
+  }
+  return out;
+}
 function reserveFile(runId2) {
   return join17(projectDir(), ".academic-helper", "runs", runId2, "gemini-ocr-reserved.jsonl");
 }
 function countGeminiOcr(runId2) {
-  const rows = (file) => existsSync11(file) ? readFileSync14(file, "utf8").split("\n").filter(Boolean) : [];
-  const reserved = rows(reserveFile(runId2)).reduce((n, l) => {
+  const file = reserveFile(runId2);
+  if (!existsSync11(file)) return 0;
+  return readFileSync14(file, "utf8").split("\n").filter(Boolean).reduce((n, l) => {
     try {
       return n + Number(JSON.parse(l).pages ?? 1);
     } catch {
       return n + 1;
     }
   }, 0);
-  const ledger = rows(join17(projectDir(), ".academic-helper", "runs", runId2, "usage.jsonl")).filter((l) => {
-    try {
-      const r2 = JSON.parse(l);
-      return r2.step === "ocr" && r2.provider === "gemini";
-    } catch {
-      return true;
-    }
-  }).length;
-  return Math.max(reserved, ledger);
 }
 function reserve(runId2, pages) {
+  mkdirSync9(dirname6(reserveFile(runId2)), { recursive: true });
   appendFileSync8(reserveFile(runId2), `${JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), pid: process.pid, pages: pages.length, page_numbers: pages })}
 `);
 }
 function checkRunId(runId2) {
   if (!runId2 || isAbsolute3(runId2) || /[\\/]/.test(runId2) || runId2.includes("..")) throw new AwError("ERROR", "ocr", `invalid --run id: ${runId2}`);
 }
-function ownerAlive(pid) {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error.code === "EPERM";
-  }
-}
-function tryCreate(path2, token) {
-  const tmp = `${path2}.${process.pid}.${token}`;
-  writeFileSync8(tmp, JSON.stringify({ pid: process.pid, token }));
-  try {
-    linkSync(tmp, path2);
-    return true;
-  } catch (error) {
-    if (error.code === "EEXIST") return false;
-    throw error;
-  } finally {
-    rmSync(tmp, { force: true });
-  }
-}
-function lockRun(runId2) {
-  checkRunId(runId2);
-  const dir = join17(projectDir(), ".academic-helper", "runs", runId2);
-  mkdirSync9(dir, { recursive: true });
-  const path2 = join17(dir, "ocr-gate.lock");
-  const token = randomBytes3(16).toString("hex");
-  if (tryCreate(path2, token)) return { path: path2, token };
-  let owner;
-  try {
-    owner = JSON.parse(readFileSync14(path2, "utf8"));
-  } catch {
-    throw new AwError("ERROR", "ocr", `the lock for --run ${runId2} cannot be read (${path2}); if no aw ocr is running with this run id, delete that file and retry`);
-  }
-  if (ownerAlive(Number(owner.pid))) throw new AwError("ERROR", "ocr", `another aw ocr is running with --run ${runId2} (pid ${owner.pid}); wait for it or use another run id`);
-  rmSync(path2, { force: true });
-  if (!tryCreate(path2, token)) throw new AwError("ERROR", "ocr", `another aw ocr took --run ${runId2} at the same moment; retry`);
-  return { path: path2, token };
-}
-function releaseGate(gate) {
-  try {
-    const owner = JSON.parse(readFileSync14(gate.lock.path, "utf8"));
-    if (owner.token === gate.lock.token) rmSync(gate.lock.path, { force: true });
-  } catch {
-  }
-}
 function makeGate(options) {
   const env = (process.env.AW_OCR_GEMINI_CAP ?? "").trim();
   const cap = /^\d+$/.test(env) ? Math.min(Number(env), cfg.geminiConfirmPages) : cfg.geminiConfirmPages;
-  const lock = lockRun(options.runId);
-  const gate = { used: 0, cap, confirm: options.confirmCost === true, held: 0, lock };
-  try {
-    gate.used = countGeminiOcr(options.runId);
-  } catch (error) {
-    releaseGate(gate);
-    throw error;
-  }
-  return gate;
+  checkRunId(options.runId);
+  return { used: countGeminiOcr(options.runId), cap, confirm: options.confirmCost === true, held: 0 };
 }
 function heldPage(page_number, gate) {
   gate.held += 1;
@@ -49258,6 +49207,8 @@ async function readGemini(scans, options, gate) {
     const parsed = JSON.parse(stripFence(result.text));
     if (!Array.isArray(parsed) || parsed.some((p) => typeof p.page_number !== "number" || typeof p.text !== "string")) throw new AwError("ERROR", "ocr", "invalid OCR page response");
     if (batch.length === 1 && parsed.length === 1) parsed[0].page_number = batch[0].page_number;
+    const got = parsed.map((p) => p.page_number).sort((x2, y) => x2 - y);
+    if (got.length !== numbers.length || got.some((n, k) => n !== [...numbers].sort((x2, y) => x2 - y)[k])) throw new AwError("ERROR", "ocr", `Gemini answered pages [${got.join(", ")}] for pages [${numbers.join(", ")}]: missing, extra or duplicate pages`);
     for (const p of parsed) if (!p.text.trim()) {
       p.confidence = "low";
       p.notes = "blocked: Gemini returned no text (copyright/recitation block); not substituted from another engine";
@@ -49392,11 +49343,7 @@ function autoReason(have, source = "required") {
 async function ocrDocument(options) {
   checkOverrides(options);
   const gate = makeGate(options);
-  try {
-    return await ocrRun(options, gate);
-  } finally {
-    releaseGate(gate);
-  }
+  return ocrRun(options, gate);
 }
 async function ocrRun(options, gate) {
   const input = resolve9(options.input);
@@ -49423,10 +49370,13 @@ async function ocrRun(options, gate) {
   } else {
     const files = imageFiles.length ? imageFiles : [input];
     if (isDir && files.length === 0) throw new AwError("ERROR", "ocr", "directory contains no supported image files");
-    const kept = files.slice(0, cfg.perCallPageCap);
-    scans.push(...kept.map((png, index) => ({ page_number: index + 1, png })));
-    truncated = files.length > kept.length;
-    if (truncated) truncation_message = `${kept.length} of ${files.length} images processed.`;
+    const wanted = options.pages ? pageSet(options.pages) : void 0;
+    const numbered = files.map((png, index) => ({ page_number: index + 1, png })).filter((f3) => !wanted || wanted.has(f3.page_number));
+    if (wanted && numbered.length === 0) throw new AwError("ERROR", "ocr", `--pages ${options.pages} selects none of the ${files.length} images`);
+    const kept = numbered.slice(0, cfg.perCallPageCap);
+    scans.push(...kept);
+    truncated = numbered.length > kept.length;
+    if (truncated) truncation_message = `${kept.length} of ${numbered.length} images processed.`;
   }
   const auto = (options.engine ?? "auto") === "auto";
   const have = auto && scans.length ? available(options.source) : void 0;
@@ -49572,10 +49522,10 @@ init_thresholds();
 // src/library/index-cmd.ts
 init_thresholds();
 import { spawn as spawn6 } from "node:child_process";
-import { randomBytes as randomBytes5 } from "node:crypto";
+import { randomBytes as randomBytes4 } from "node:crypto";
 
 // src/library/eval/files.ts
-import { createHash as createHash6, randomBytes as randomBytes4 } from "node:crypto";
+import { createHash as createHash6, randomBytes as randomBytes3 } from "node:crypto";
 import { existsSync as existsSync13, lstatSync as lstatSync2, realpathSync as realpathSync3 } from "node:fs";
 import { appendFile, chmod, lstat as lstat2, mkdir as mkdir4, readFile as readFile4, rename as rename3, rm as rm4, writeFile as writeFile3 } from "node:fs/promises";
 import { dirname as dirname8, join as join19, sep as sep2 } from "node:path";
@@ -50195,7 +50145,7 @@ function sha256(data) {
   return createHash6("sha256").update(data).digest("hex");
 }
 function newNonce() {
-  return randomBytes4(32).toString("hex");
+  return randomBytes3(32).toString("hex");
 }
 function canonicalJson(value) {
   const sort = (item) => {
@@ -50218,7 +50168,7 @@ async function writeText(file, text4, mode = 420) {
   } catch (error) {
     if (error instanceof LibraryError) throw error;
   }
-  const temp = `${file}.${process.pid}.${randomBytes4(4).toString("hex")}.tmp`;
+  const temp = `${file}.${process.pid}.${randomBytes3(4).toString("hex")}.tmp`;
   await writeFile3(temp, text4, { encoding: "utf8", mode });
   await chmod(temp, mode);
   await rename3(temp, file);
@@ -50420,7 +50370,7 @@ function count(value) {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.round(value) : 0;
 }
 function newRunId(now, prefix = "index") {
-  return `${prefix}-${now.toISOString().slice(0, 19).replace(/[-:T]/gu, "")}-${randomBytes5(2).toString("hex")}`;
+  return `${prefix}-${now.toISOString().slice(0, 19).replace(/[-:T]/gu, "")}-${randomBytes4(2).toString("hex")}`;
 }
 function callCap(request) {
   const wanted = request.maxCalls ?? limits5.index.maxCalls;
@@ -50759,7 +50709,7 @@ async function runBackfill(indexer, request) {
 // src/library/eval/cli.ts
 import { existsSync as existsSync20 } from "node:fs";
 import { readFile as readFile7, rm as rm6 } from "node:fs/promises";
-import { randomBytes as randomBytes7 } from "node:crypto";
+import { randomBytes as randomBytes6 } from "node:crypto";
 import { isAbsolute as isAbsolute5, join as join25, relative as relative3, resolve as resolve12 } from "node:path";
 
 // src/library/eval/limits.ts
@@ -50961,7 +50911,7 @@ async function importJudgments(options) {
 import { existsSync as existsSync15 } from "node:fs";
 
 // src/library/eval/runner.ts
-import { randomBytes as randomBytes6 } from "node:crypto";
+import { randomBytes as randomBytes5 } from "node:crypto";
 import { mkdir as mkdir6, mkdtemp, readFile as readFile6, realpath as realpath3, rm as rm5, writeFile as writeFile4 } from "node:fs/promises";
 import { existsSync as existsSync14 } from "node:fs";
 import { constants as osConstants, tmpdir as tmpdir2 } from "node:os";
@@ -51547,7 +51497,7 @@ function expectedFingerprint(options, claim, route) {
 async function locateOnce(options, claim, route, group) {
   if (group.stopping) throw new LibraryError("exit", "ERROR library eval run: interrupted");
   const runId2 = runIdFor(options.plan.eval_id, route, claim.id);
-  const tag = `${runId2}.${randomBytes6(6).toString("hex")}`;
+  const tag = `${runId2}.${randomBytes5(6).toString("hex")}`;
   const base = await realpath3(tmpdir2());
   const dir = await mkdtemp(join20(base, "aw-eval-"));
   const started = options.now();
@@ -52961,7 +52911,7 @@ async function runEvalCli(argv, io) {
     if (subcommand2 === "pairs") {
       const plan3 = await readValid("plan", paths.plan, "plan");
       const aw = makeAwRunner(project, awCommandFor(io, env), env);
-      const { summary } = await buildPairs({ evalId, paths, plan: plan3, seed: text3(flags, "--seed") ?? randomBytes7(32).toString("hex"), aw, now, force: flags.has("--force") });
+      const { summary } = await buildPairs({ evalId, paths, plan: plan3, seed: text3(flags, "--seed") ?? randomBytes6(32).toString("hex"), aw, now, force: flags.has("--force") });
       print(summary);
       return 0;
     }
@@ -53381,7 +53331,7 @@ function formatReport(report) {
 
 // src/library/verdict.ts
 init_thresholds();
-import { randomBytes as randomBytes8 } from "node:crypto";
+import { randomBytes as randomBytes7 } from "node:crypto";
 import { join as join27 } from "node:path";
 var limits8 = thresholds_default.library;
 function sleep3(ms2) {
@@ -53437,7 +53387,7 @@ function nowNs() {
   return String(WALL_AT_START + (process.hrtime.bigint() - MONO_AT_START));
 }
 function newKey() {
-  return { verdict_at: nowNs(), pid: process.pid, nonce: randomBytes8(8).toString("hex") };
+  return { verdict_at: nowNs(), pid: process.pid, nonce: randomBytes7(8).toString("hex") };
 }
 var pendingName = (lookupId, paragraph, nonce) => `pending-${lookupId}-${textSha(paragraph ?? "").slice(0, 8)}-${nonce}.json`;
 var pendingFile = (project, lookupId, paragraph, nonce) => join27(spoolDir(project), pendingName(lookupId, paragraph, nonce));
