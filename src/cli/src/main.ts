@@ -12,7 +12,7 @@ import { classify, applyPlan, type RevisePlan } from './revise.ts';
 import { draftAll } from './draft.ts';
 import { synthesizeAll } from './synthesize.ts';
 import { editText } from './edit.ts';
-import { ocrDocument } from './ocr.ts';
+import { ocrDocument, exitCodeFor } from './ocr.ts';
 import { docxSummary, generateDocx } from './docx.ts';
 import { runLibraryCli } from './library/cli.ts';
 import { activityShow, runActivityCli } from './activity.ts';
@@ -135,8 +135,11 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
   try {
     const value = (name: string): string | undefined => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
     const runId = value('--run'); const input = value('--input'); const language = value('--lang'); const format = value('--format'); const engine = value('--engine') ?? 'auto'; const source = value('--source') ?? 'required';
-    if (!runId || !input || !['he','en','mixed'].includes(language ?? '') || (format && !['concise','detailed'].includes(format)) || !['auto','gemini','claude','local'].includes(engine) || !['required','additional'].includes(source)) throw new Error('ERROR ocr: --input, --lang he|en|mixed, and --run are required; --format must be concise|detailed; --engine must be auto|gemini|claude|local; --source must be required|additional');
-    process.stdout.write(`${JSON.stringify(await ocrDocument({ runId, input, language: language as 'he'|'en'|'mixed', pages: value('--pages'), format: format as 'concise'|'detailed'|undefined, out: value('--out'), engine: engine as 'auto'|'gemini'|'claude'|'local', source: source as 'required'|'additional' }))}\n`);
+    if (!runId || !input || !['he','en','mixed'].includes(language ?? '') || (format && !['concise','detailed'].includes(format)) || !['auto','gemini','claude','local'].includes(engine) || !['required','additional'].includes(source)) throw new Error('ERROR ocr: --input, --lang he|en|mixed, and --run are required; --format must be concise|detailed; --engine must be auto|gemini|claude|local; --source must be required|additional; --confirm-cost lifts the Gemini page cap; --gemini-model and --claude-model (stronger model, one run) need --confirm-cost');
+    const confirmCost = args.includes('--confirm-cost');
+    const result = await ocrDocument({ confirmCost, geminiModel: value('--gemini-model'), claudeModel: value('--claude-model'), runId, input, language: language as 'he'|'en'|'mixed', pages: value('--pages'), format: format as 'concise'|'detailed'|undefined, out: value('--out'), engine: engine as 'auto'|'gemini'|'claude'|'local', source: source as 'required'|'additional' });
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+    if (exitCodeFor(result)) process.exitCode = exitCodeFor(result);
   } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : 'ERROR ocr: unknown failure'}\n`); process.exitCode = 1; }
 } else if (command === 'docx') {
   try {

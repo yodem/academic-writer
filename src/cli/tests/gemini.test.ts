@@ -47,3 +47,26 @@ test('plaintext secrets.json is not an API key source', async () => {
     else process.env.CLAUDE_PROJECT_DIR = oldProject;
   }
 });
+
+test('gemini sends the least thinking for the ocr route', async () => {
+  process.env.GOOGLE_API_KEY = 'test-key';
+  const { thinkingConfigFor } = await import('../src/gemini.ts');
+  let seen: { model: string; thinking_budget?: number } | undefined;
+  __setTransport(async (r) => { seen = r; return { text: 'x', finishReason: 'STOP', usage: { in: 1, out: 1 } }; });
+  await callGemini({ step: 'ocr', system: '', parts: ['x'], runId: 'think-route' });
+  assert.equal(seen?.model, 'gemini-3.8-flash');
+  assert.equal(seen?.thinking_budget, 0);
+  assert.deepEqual(thinkingConfigFor(seen!.model, seen!.thinking_budget), { thinkingConfig: { thinkingLevel: 'LOW' } });
+  assert.deepEqual(thinkingConfigFor('gemini-2.5-flash', 0), { thinkingConfig: { thinkingBudget: 0 } });
+});
+
+test('gemini omits thinkingConfig for a Pro override', async () => {
+  process.env.GOOGLE_API_KEY = 'test-key';
+  const { thinkingConfigFor } = await import('../src/gemini.ts');
+  let seen: { model: string; thinking_budget?: number } | undefined;
+  __setTransport(async (r) => { seen = r; return { text: 'x', finishReason: 'STOP', usage: { in: 1, out: 1 } }; });
+  await callGemini({ step: 'ocr', system: '', parts: ['x'], runId: 'think-pro', model: 'gemini-2.5-pro' });
+  assert.equal(seen?.model, 'gemini-2.5-pro');
+  assert.deepEqual(thinkingConfigFor(seen!.model, seen!.thinking_budget), {});
+  assert.deepEqual(thinkingConfigFor('gemini-3.8-flash', undefined), {});
+});

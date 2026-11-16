@@ -22,7 +22,7 @@ Academic articles and chapters have their own printed page numbers (e.g. 409–4
 - **Word (.docx)**: convert with `pandoc "<file>" -t markdown`; if pandoc is missing, extract the text with Python's `zipfile` and a tag strip.
 - **PDF, scan or photo of a published work**: do step 0 first.
 
-  **Step 0 — Anna's Archive first, for a published work.** Before any OCR, search Anna's Archive for the work: use the `annas-archive-ebooks` skill when it is installed, otherwise search by title, author and ISBN. For a chapter or article, look for the whole book or journal issue. If a copy of the **same edition** exists (same publisher, year and printed pagination), use its text layer or EPUB text, keep the printed page numbers exactly, and skip OCR. OCR only when there is no matching copy or the copy has no usable text, with the reader the author picks (Claude by default; `aw ocr` is the Gemini reader). Record the outcome for each item: `annas: found-used`, `annas: found-wrong-edition` or `annas: not-found`.
+  **Step 0 — Anna's Archive first, for a published work.** Before any OCR, search Anna's Archive for the work: use the `annas-archive-ebooks` skill when it is installed, otherwise search by title, author and ISBN. For a chapter or article, look for the whole book or journal issue. If a copy of the **same edition** exists (same publisher, year and printed pagination), use its text layer or EPUB text, keep the printed page numbers exactly, and skip OCR. OCR only when there is no matching copy or the copy has no usable text, with the reader the author picks (Claude by default; `aw ocr` falls back to Gemini 3.8 Flash, paid, only for pages Claude refuses or cannot read well). Record the outcome for each item: `annas: found-used`, `annas: found-wrong-edition` or `annas: not-found`.
 
 - **PDF, scan or photo**: a PDF page that already has text is extracted directly; a scan or photo needs OCR (reading the text out of the picture). Ask which reader to use (see "OCR options" below); Claude reads by default. The command below is the plugin's own (Gemini) reader, used only when the author picks it:
 
@@ -41,7 +41,7 @@ Take `--lang` from the profile's `targetLanguage` when the source language is un
 | Choice | Who reads the pages | Good for |
 |---|---|---|
 | **Claude** (default) | Anthropic, on your Claude plan | most readings; difficult layouts |
-| **The plugin's own reader (Gemini)** | Google, with your Gemini key | many pages, Hebrew with vowel marks, tables |
+| **Gemini 3.8 Flash (the plugin's paid fallback)** | Google, with your Gemini key; about $0.004 a page; at most 20 pages per run before it asks again | pages Claude refuses (Hebrew with vowel marks) or reads as a summary, and pages under 100 dpi |
 | **Codex** | OpenAI, on your Codex plan (only if Codex is installed) | sparing your Claude or Gemini quota |
 | **On this computer (Tesseract)** | nothing leaves your computer; free | clean print, privacy; weaker on scans, vowel marks and mixed Hebrew and English |
 
