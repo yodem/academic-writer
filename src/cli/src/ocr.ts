@@ -1,18 +1,71 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, extname, join, resolve } from 'node:path';
+import { dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { allowedEnv } from './library/backends.ts';
 import { callGemini, type ImagePart } from './gemini.ts';
 import { AwError, Budget, budgetFor } from './ledger.ts';
+import { projectDir } from './paths.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
 
 export type Engine = 'gemini' | 'claude' | 'local' | 'surya';
-export type OcrOptions = { input: string; language: 'he' | 'en' | 'mixed'; runId: string; pages?: string; format?: 'concise' | 'detailed'; out?: string; engine?: Exclude<Engine, 'surya'> | 'auto'; source?: 'required' | 'additional' };
+export type OcrOptions = { input: string; language: 'he' | 'en' | 'mixed'; runId: string; pages?: string; format?: 'concise' | 'detailed'; out?: string; engine?: Exclude<Engine, 'surya'> | 'auto'; source?: 'required' | 'additional'; confirmCost?: boolean; geminiModel?: string; claudeModel?: string };
 type Page = { page_number: number; text: string; is_born_digital: boolean; confidence?: string; notes?: string; dpi?: number; engine?: Engine };
 type Scan = { page_number: number; png: string; dpi?: number };
 const schema = { type: 'array', items: { type: 'object', required: ['page_number','text','is_born_digital'], properties: { page_number: { type: 'integer' }, text: { type: 'string' }, is_born_digital: { type: 'boolean' }, confidence: { type: 'string', enum: ['high','medium','low'] }, notes: { type: 'string' } } } };
 const cfg = thresholds.ocr;
+const HELD = 'needs approval: Gemini';
+/** Gemini pages already billed to this run id: ledger rows with step 'ocr' and provider 'gemini'. */
+/** "1-3,7" -> {1,2,3,7}; rejects anything else. */
+export function pageSet(spec: string): Set<number> {
+  const out = new Set<number>();
+  for (const part of spec.split(',').map((x) => x.trim()).filter(Boolean)) {
+    const m = /^(\d+)(?:-(\d+))?$/.exec(part);
+    if (!m) throw new AwError('ERROR', 'ocr', `invalid --pages: ${spec}`);
+    const a = Number(m[1]), b = Number(m[2] ?? m[1]);
+    if (a < 1 || b < a) throw new AwError('ERROR', 'ocr', `invalid --pages: ${spec}`);
+    for (let n = a; n <= b; n++) out.add(n);
+  }
+  return out;
+}
+function reserveFile(runId: string): string { return join(projectDir(), '.academic-helper', 'runs', runId, 'gemini-ocr-reserved.jsonl'); }
+/** Gemini OCR pages already spent by this run id: the pages reserved before each request (written before the call, so a
+ * run killed mid-request still counts them). One aw ocr per run id at a time: parallel runs with the same --run are not
+ * supported (the skills and the nightly never start them). A line that cannot be parsed counts as one page. */
+export function countGeminiOcr(runId: string): number {
+  const file = reserveFile(runId);
+  if (!existsSync(file)) return 0;
+  return readFileSync(file, 'utf8').split('\n').filter(Boolean).reduce((n, l) => { try { return n + Number((JSON.parse(l) as { pages?: number }).pages ?? 1); } catch { return n + 1; } }, 0);
+}
+/** Record the pages of one Gemini request before it is sent. */
+function reserve(runId: string, pages: number[]): void { mkdirSync(dirname(reserveFile(runId)), { recursive: true }); appendFileSync(reserveFile(runId), `${JSON.stringify({ ts: new Date().toISOString(), pid: process.pid, pages: pages.length, page_numbers: pages })}\n`); }
+/** One cost gate for every Gemini OCR path: cumulative per run id (ledger rows plus calls made now), lifted by --confirm-cost. */
+export type Gate = { used: number; cap: number; confirm: boolean; held: number };
+/** A run id names a folder under .academic-helper/runs: no path separators, no '..', not absolute. */
+function checkRunId(runId: string): void {
+  if (!runId || isAbsolute(runId) || /[\\/]/.test(runId) || runId.includes('..')) throw new AwError('ERROR', 'ocr', `invalid --run id: ${runId}`);
+}
+export function makeGate(options: Pick<OcrOptions, 'runId' | 'confirmCost'>): Gate {
+  const env = (process.env.AW_OCR_GEMINI_CAP ?? '').trim();
+  // the env var can only lower the cap (tests, the live check); raising it needs --confirm-cost
+  const cap = /^\d+$/.test(env) ? Math.min(Number(env), cfg.geminiConfirmPages) : cfg.geminiConfirmPages;
+  checkRunId(options.runId);
+  return { used: countGeminiOcr(options.runId), cap, confirm: options.confirmCost === true, held: 0 };
+}
+function heldPage(page_number: number, gate: Gate): Page { gate.held += 1; return { page_number, text: '', is_born_digital: false, confidence: 'low', notes: `${HELD}, __N__ pages, est. $__USD__; rerun with --confirm-cost` }; }
+/** Fills the page count and dollar estimate into held pages once the run knows how many there are. */
+function finishHeld(pages: Page[], gate: Gate): void {
+  for (const p of pages) if (p.notes?.startsWith(HELD)) p.notes = p.notes.replace('__N__', String(gate.held)).replace('__USD__', (Math.ceil(gate.held * cfg.geminiUsdPerPage * 100) / 100).toFixed(2));
+}
+export function summarize(pages: Page[]): { needs_approval: number[]; escalation_candidates: number[] } {
+  return { needs_approval: pages.filter((p) => p.notes?.startsWith(HELD)).map((p) => p.page_number), escalation_candidates: pages.filter((p) => p.confidence === 'low' && p.text.trim() && !p.notes?.startsWith(HELD)).map((p) => p.page_number) };
+}
+/** Exit code for the finished run: 4 when any page waits for the author's approval. */
+export function exitCodeFor(output: { summary: { needs_approval: number[] } }): number { return output.summary.needs_approval.length ? 4 : 0; }
+/** A different reader model is a stronger-model run: only with --confirm-cost. */
+function checkOverrides(options: OcrOptions): void {
+  if ((options.geminiModel || options.claudeModel) && !options.confirmCost) throw new AwError('ERROR', 'ocr', '--gemini-model and --claude-model run a stronger model that needs the author\'s approval; add --confirm-cost to confirm');
+}
 function runScript(name: string, args: string[]): unknown {
   const plugin = resolve(dirname(process.argv[1] ?? ''), '..');
   // OCR helpers moved from the retired MCP server to <plugin>/scripts/ocr/ (T15 integration).
@@ -91,15 +144,18 @@ function lowResNote(engine: Engine | 'none', dpi: number | undefined): string {
   return `low resolution (${dpi} dpi): in the bake-off Gemini read pages under ${cfg.lowResDpi} dpi more accurately; verify against the image`;
 }
 
-async function readGemini(scans: Scan[], options: OcrOptions): Promise<Page[]> {
+async function readGemini(scans: Scan[], options: OcrOptions, gate: Gate): Promise<Page[]> {
   const pages: Page[] = [];
   for (let offset = 0; offset < scans.length; offset += cfg.geminiBatchSize) {
     const batch = scans.slice(offset, offset + cfg.geminiBatchSize);
     const numbers = batch.map((s) => s.page_number);
+    if (!gate.confirm && gate.used + numbers.length > gate.cap) { pages.push(...numbers.map((n) => heldPage(n, gate))); continue; }
+    reserve(options.runId, numbers);  // persisted before the request: a run killed mid-call still counts these pages
+    gate.used += numbers.length;
     const parts: ImagePart[] = batch.map((s) => ({ inlineData: { mimeType: mimeOf(s.png), data: readFileSync(s.png).toString('base64') } }));
     let result: Awaited<ReturnType<typeof callGemini>>;
     try {
-      result = await callGemini({ step: 'ocr', system: prompt(options.language, options.format, numbers), parts: [...parts, prompt(options.language, options.format, numbers)], responseSchema: schema, runId: options.runId, budget: new Budget(options.runId, budgetFor('write')) });
+      result = await callGemini({ step: 'ocr', system: prompt(options.language, options.format, numbers), parts: [...parts, prompt(options.language, options.format, numbers)], responseSchema: schema, runId: options.runId, model: options.geminiModel, budget: new Budget(options.runId, budgetFor('write')) });
     } catch (error) {
       // callGemini throws on a non-STOP finish; a content refusal is a result for these pages, anything else stays an error
       const message = error instanceof Error ? error.message : '';
@@ -112,18 +168,20 @@ async function readGemini(scans: Scan[], options: OcrOptions): Promise<Page[]> {
     if (!Array.isArray(parsed) || parsed.some((p) => typeof p.page_number !== 'number' || typeof p.text !== 'string')) throw new AwError('ERROR', 'ocr', 'invalid OCR page response');
     // a single image is page 1 to the model; give it the scan's own page number
     if (batch.length === 1 && parsed.length === 1) parsed[0].page_number = batch[0].page_number;
+    const got = parsed.map((p) => p.page_number).sort((x, y) => x - y);
+    if (got.length !== numbers.length || got.some((n, k) => n !== [...numbers].sort((x, y) => x - y)[k])) throw new AwError('ERROR', 'ocr', `Gemini answered pages [${got.join(', ')}] for pages [${numbers.join(', ')}]: missing, extra or duplicate pages`);
     for (const p of parsed) if (!p.text.trim()) { p.confidence = 'low'; p.notes = 'blocked: Gemini returned no text (copyright/recitation block); not substituted from another engine'; }
     pages.push(...parsed);
   }
   return pages;
 }
 
-function readClaude(scan: Scan, language: OcrOptions['language']): Page & { refused?: boolean } {
+function readClaude(scan: Scan, language: OcrOptions['language'], model: string = cfg.claudeModel): Page & { refused?: boolean } {
   const message = { type: 'user', message: { role: 'user', content: [
     { type: 'image', source: { type: 'base64', media_type: mimeOf(scan.png), data: readFileSync(scan.png).toString('base64') } },
     { type: 'text', text: language === 'en' ? PLAIN_PROMPT : `${PLAIN_PROMPT} Hebrew columns read right to left.` }] } };
   // Isolated: no user settings, hooks, plugins, MCP servers or tools, so the call costs about image plus prompt.
-  const run = spawnSync('claude', ['-p', '--model', cfg.claudeModel, '--setting-sources', '', '--strict-mcp-config', '--tools', '',
+  const run = spawnSync('claude', ['-p', '--model', model, '--setting-sources', '', '--strict-mcp-config', '--tools', '',
     '--system-prompt', 'You are a precise OCR transcription engine.', '--input-format', 'stream-json', '--output-format', 'stream-json',
     '--verbose', '--no-session-persistence'], { input: `${JSON.stringify(message)}\n`, encoding: 'utf8', cwd: tmpdir(), env: { ...process.env, ENABLE_CLAUDEAI_MCP_SERVERS: 'false' }, maxBuffer: 64 * 1024 * 1024, timeout: 900_000 });
   const line = (run.stdout ?? '').split('\n').find((l) => l.includes('"type":"result"'));
@@ -176,7 +234,7 @@ function withNote(page: Page, note: string, confidence?: string): Page {
  * 3. Gemini, for pages Claude refused or answered much shorter than the free reading, and low-resolution pages;
  * 4. with neither model, the best free reading, marked low confidence.
  */
-async function readAuto(scan: Scan, options: OcrOptions, have: Available): Promise<Page> {
+async function readAuto(scan: Scan, options: OcrOptions, have: Available, gate: Gate): Promise<Page> {
   // the free readers are optional: one that fails (no Hebrew data, no GPU) is skipped, and a model reads the page
   const failures: string[] = [];
   const tried = (read: () => Page): Page | undefined => {
@@ -199,14 +257,16 @@ async function readAuto(scan: Scan, options: OcrOptions, have: Available): Promi
     }
     const lowRes = scan.dpi !== undefined && scan.dpi < cfg.lowResDpi;
     let why = lowRes ? `under ${cfg.lowResDpi} dpi` : '';
+    let kept: Page | undefined; // a short but real Claude reading, kept if the cost gate holds the Gemini fallback
     if (have.claude && !(lowRes && have.gemini)) {
-      const claude = readClaude(scan, options.language);
+      const claude = readClaude(scan, options.language, options.claudeModel);
       const ref = tess ? lettersOnly(tess.text).length : 0;
       why = claude.refused ? 'Claude refused the page'
         : SOFT_REFUSAL.test(claude.text.slice(0, 300)) ? 'Claude declined to transcribe the page'
         : ref >= cfg.shortAnswerMinChars && lettersOnly(claude.text).length < cfg.shortAnswerRatio * ref ? SHORT
         : '';
       delete claude.refused;
+      if (why === SHORT) kept = { ...claude, engine: 'claude' };
       if (!why) return withNote({ ...claude, engine: 'claude' }, lowResNote('claude', scan.dpi), lowRes ? 'low' : undefined);
       if (!have.gemini && why === SHORT) {
         // short but a real transcription: keep it, flagged, rather than lose the page
@@ -219,9 +279,11 @@ async function readAuto(scan: Scan, options: OcrOptions, have: Available): Promi
       }
     }
     if (have.gemini) {
-      const answer = await readGemini([scan], options);
+      const answer = await readGemini([scan], options, gate);
       if (answer.length !== 1) throw new AwError('ERROR', 'ocr', `Gemini returned ${answer.length} pages for page ${scan.page_number}`);
       const page = { ...answer[0], page_number: scan.page_number };
+      // held by the cost gate: keep Claude's short reading (still flagged, still counted as needing approval) rather than lose the page
+      if (page.notes?.startsWith(HELD)) return kept ? { ...kept, confidence: 'low', notes: `${page.notes} (Claude's reading kept: ${SHORT})` } : page;
       return why ? withNote({ ...page, engine: 'gemini' }, `read by Gemini: ${why}`) : { ...page, engine: 'gemini' };
     }
     if (!free) throw new AwError('ERROR', 'ocr', `page ${scan.page_number}: no reader worked and no Claude or Gemini is available (${failures.join('; ') || 'no free reader installed'})`);
@@ -238,7 +300,13 @@ function autoReason(have: Available, source: OcrOptions['source'] = 'required'):
   return `${why}, page by page: ${steps.join(', then ')}`;
 }
 
-export async function ocrDocument(options: OcrOptions): Promise<{ pages: Page[]; truncated: boolean; truncation_message?: string; engine: Engine | 'auto' | 'none'; engine_reason: string }> {
+export async function ocrDocument(options: OcrOptions): Promise<{ pages: Page[]; summary: ReturnType<typeof summarize>; truncated: boolean; truncation_message?: string; engine: Engine | 'auto' | 'none'; engine_reason: string }> {
+ checkOverrides(options);
+ const gate = makeGate(options);
+ return ocrRun(options, gate);
+}
+
+async function ocrRun(options: OcrOptions, gate: Gate): Promise<Awaited<ReturnType<typeof ocrDocument>>> {
  const input = resolve(options.input);
  if (!existsSync(input)) throw new AwError('ERROR', 'ocr', `input does not exist: ${input}`);
  const isDir = statSync(input).isDirectory();
@@ -263,10 +331,13 @@ export async function ocrDocument(options: OcrOptions): Promise<{ pages: Page[];
  } else {
    const files = imageFiles.length ? imageFiles : [input];
    if (isDir && files.length === 0) throw new AwError('ERROR', 'ocr', 'directory contains no supported image files');
-   const kept = files.slice(0, cfg.perCallPageCap);
-   scans.push(...kept.map((png, index) => ({ page_number: index + 1, png })));
-   truncated = files.length > kept.length;
-   if (truncated) truncation_message = `${kept.length} of ${files.length} images processed.`;
+   const wanted = options.pages ? pageSet(options.pages) : undefined;
+   const numbered = files.map((png, index) => ({ page_number: index + 1, png })).filter((f) => !wanted || wanted.has(f.page_number));
+   if (wanted && numbered.length === 0) throw new AwError('ERROR', 'ocr', `--pages ${options.pages} selects none of the ${files.length} images`);
+   const kept = numbered.slice(0, cfg.perCallPageCap);
+   scans.push(...kept);
+   truncated = numbered.length > kept.length;
+   if (truncated) truncation_message = `${kept.length} of ${numbered.length} images processed.`;
  }
  // born-digital pages need no engine: choose one only when there is something to read
  const auto = (options.engine ?? 'auto') === 'auto';
@@ -278,9 +349,9 @@ export async function ocrDocument(options: OcrOptions): Promise<{ pages: Page[];
    : have ? { engine: 'auto' as const, reason: autoReason(have, options.source) } : chooseEngine(options.engine as Exclude<Engine, 'surya'>);
  try {
    const read: Page[] = [];
-   if (engine === 'auto' && have) for (const s of scans) read.push(await readAuto(s, options, have));
-   else if (engine === 'gemini') read.push(...await readGemini(scans, options));
-   else if (engine !== 'none') read.push(...scans.map((s) => (engine === 'claude' ? readClaude(s, options.language) : readLocal(s, options.language))));
+   if (engine === 'auto' && have) for (const s of scans) read.push(await readAuto(s, options, have, gate));
+   else if (engine === 'gemini') read.push(...await readGemini(scans, options, gate));
+   else if (engine !== 'none') read.push(...scans.map((s) => (engine === 'claude' ? readClaude(s, options.language, options.claudeModel) : readLocal(s, options.language))));
    for (const page of read) {
      const scan = scans.find((s) => s.page_number === page.page_number);
      const note = engine === 'auto' ? '' : lowResNote(engine, scan?.dpi);
@@ -290,7 +361,8 @@ export async function ocrDocument(options: OcrOptions): Promise<{ pages: Page[];
    }
  } finally { if (rasterDir) rmSync(rasterDir, { recursive: true, force: true }); }
  pages.sort((a,b)=>a.page_number-b.page_number);
- const output = { pages, truncated, ...(truncation_message ? { truncation_message } : {}), engine, engine_reason: reason };
+ finishHeld(pages, gate);
+ const output = { pages, summary: summarize(pages), truncated, ...(truncation_message ? { truncation_message } : {}), engine, engine_reason: reason };
  // with auto, each scanned page names its own reader in the header, so the saved text keeps who read what
  const byPage = engine === 'auto' ? ` (${pages.filter((p) => p.engine).map((p) => `page ${p.page_number}: ${p.engine}`).join(', ')})` : '';
  if (options.out) writeFileSync(options.out, `OCR engine: ${engine}${byPage}\n\n${pages.map(p=>p.text).join('\n\n')}`, 'utf8');

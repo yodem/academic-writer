@@ -32,7 +32,9 @@ Measured on 52 page images (Hebrew and English academic pages at 200, 150, 100 a
 |---|---|---|---|---|
 | gemini-3.8-flash | about 0.3% | 0.3% | right order, 0.1-1.4% | rarely: one copyrighted English page |
 | Claude Opus 5.5 | about 0.3% | 0.95% (guesses words) | right order, 0-1% | every full page of the vocalized Bible |
-| gemini-2.5-flash (the old route) | 3.5-5.3% | 4.8% | not tested | |
+| gemini-2.5-flash (the old route, six pages per call) | 3.5-5.3% | 4.8% | not tested | |
+
+Re-measured 2026-11-16 on 12 Hebrew book pages of one scan, one page per call, the same plain prompt as Claude, scored as letter difference from Opus with the running head dropped: `gemini-3.8-flash` with thinking low (the reader) a median 0.25%, two-column glossary in Opus's order, about $0.004 a page; `gemini-2.5-flash` with thinking off a median 1.2%, glossary columns in a different order, about $0.002 a page. Every `aw ocr` run id sends at most 20 pages to Gemini before it asks (exit 4, `--confirm-cost`).
 | Claude Sonnet 5.5 | about 0.3% | 0.4% | right order on all but its one refused page | the vocalized Bible, and 2 pages answered with a summary |
 | Claude Haiku 5.5 | 0.7-0.8% | 1.4%, and one 75 dpi page garbled | 0.1-10.7% | the vocalized Bible |
 | Surya OCR 2 (free, local GPU) | 0.1-0.3% Hebrew one column | 0.6% | right order, but 3.7-5.0% on Hebrew | never, but fails on Bible scans |

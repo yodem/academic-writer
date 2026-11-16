@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "Single source of truth for all numeric quality gates (self-review, rewrite limits, paragraph/unit word bounds, style-fingerprint compliance, voice rule-coverage/corpus minimums, typography). Edit here; every skill and agent references this file. Gemini model/thinking-budget defaults and retry policy are NOT read from here — they live in SPEC_DEFAULTS in plugins/academic-writer/mcp/gemini-server/src/gemini-client.ts (overridable per-project via profile.md), and the retry constants are hardcoded in that same file. The antiAi block was REMOVED in 0.9.0: nothing computed that score, so it was the drafting model rating its own unrevised draft, and it measured a flat maximum on every paragraph of a live 13-unit run while the auditor failed several of the same paragraphs. Anti-AI patterns are now writing guidance (write/references/anti-ai-patterns-*.md), not a scored gate; the auditor's VERDICT is the per-paragraph gate.",
+  "description": "Single source of truth for all numeric quality gates (self-review, rewrite limits, paragraph/unit word bounds, style-fingerprint compliance, voice rule-coverage/corpus minimums, typography). Edit here; every skill and agent references this file. Per-step model routes (provider, model, thinking_budget, output cap) are read from the models block below by src/cli/src/routing.ts; the retired MCP gemini-server (SPEC_DEFAULTS) is no longer used. The antiAi block was REMOVED in 0.9.0: nothing computed that score, so it was the drafting model rating its own unrevised draft, and it measured a flat maximum on every paragraph of a live 13-unit run while the auditor failed several of the same paragraphs. Anti-AI patterns are now writing guidance (write/references/anti-ai-patterns-*.md), not a scored gate; the auditor's VERDICT is the per-paragraph gate.",
   "selfReview": {
     "minScore": 40,
     "maxScore": 60,
@@ -77,11 +77,13 @@
     "geminiBatchSize": 1,
     "lowResDpi": 100,
     "claudeModel": "claude-opus-5-5",
+    "geminiConfirmPages": 20,
+    "geminiUsdPerPage": 0.004,
     "freeAgreeMin": 0.98,
     "shortAnswerRatio": 0.8,
     "shortAnswerMinChars": 200,
     "inlineSizeLimitBytes": 20971520,
-    "_comment": "Ported from the retired MCP gemini_ocr tool (PER_CALL_PAGE_CAP, GEMINI_BATCH_SIZE, INLINE_SIZE_LIMIT_BYTES = 20*1024*1024). perCallPageCap bounds how many pages one `aw ocr` invocation processes before truncating (Files API upload path for pages over inlineSizeLimitBytes was not ported to the CLI -- see T15a handoff notes; oversized pages fail with a named ERROR instead of silently uploading). geminiBatchSize is 1 (the bake-off measured one page per call; the 2026-10-16 six-page batches dropped passages) and lowResDpi is 100 from the 2026-10-20 OCR bake-off: below 100 dpi Gemini read Hebrew more accurately than Claude, so the Claude and local tiers flag those pages. claudeModel is the Claude reader (Opus: Sonnet 5.5 tied it but twice answered a book page with a summary instead of the text, and Haiku 5.5 was 1.4 points worse on poor scans). Round 3 of the bake-off set the auto order, page by page: for an additional source only (`aw ocr --source additional`; a course's required readings never use free readers, user rule 2026-10-20), a free reading is kept when Surya and Tesseract agree at freeAgreeMin (letters-only similarity; 17 of 54 test pages passed, Surya median 0.3% letter error on them against 0.13% for Gemini and 0.0% for Opus, worst 1.1%), then Claude, then Gemini. A Claude answer whose letters are under shortAnswerRatio of Tesseract's reading goes to Gemini: every real Claude answer was at least 0.9 of it and every soft refusal under 0.35. Pages whose Tesseract reading has under shortAnswerMinChars letters skip that check."
+    "_comment": "Cost policy (Yotam 2026-11-16: money first; measured 2026-11-16 on 12 Hebrew book pages of one scan, one page per call, same plain prompt as Claude): the paid Gemini fallback is gemini-3.8-flash with the least thinking it accepts (models.ocr.thinking_budget 0 -> thinkingLevel low; it reported 0 thinking tokens): median 0.25% letter difference from Opus, glossary columns kept in order, about $0.004 a page at the 2026 introductory price ($0.75/$3.75 per 1M), about $0.007 from 2027-01-01. gemini-2.5-flash with thinkingBudget 0 cost about $0.002 a page but differed from Opus by a median 1.2% and scrambled two-column glossary order, so it was not chosen. geminiConfirmPages caps Gemini pages per --run id (cumulative, read from the run ledger); pages past it come back blank as 'needs approval' and aw ocr exits 4 unless --confirm-cost; geminiUsdPerPage only feeds that estimate. --gemini-model/--claude-model (a stronger reader for named pages) also need --confirm-cost; nothing escalates on its own. claudeModel is the Claude reader, on the author's subscription (no per-page money): Opus, because in the 2026-10-20 bake-off Sonnet 5.5 tied it but answered 2 of 59 pages with a summary, and each such page would fall back to paid Gemini; Haiku 5.5 was 1.4 points worse on poor scans. geminiBatchSize is 1 (six-page batches dropped passages, 2026-10-16). lowResDpi is 100: below it Gemini read Hebrew more accurately than Claude. freeAgreeMin: for an additional source only (--source additional; required readings never use free readers, user rule 2026-10-20), a free reading is kept when Surya and Tesseract agree at this letters-only similarity. A Claude answer whose letters are under shortAnswerRatio of Tesseract's reading goes to Gemini (every real answer was at least 0.9, every soft refusal under 0.35); pages whose Tesseract reading has under shortAnswerMinChars letters skip that check. perCallPageCap bounds pages per aw ocr invocation; pages over inlineSizeLimitBytes fail with a named error."
   },
   "citationFloor": {
     "minSecondaryPer1000Words": 4.0,
@@ -161,6 +163,7 @@
     "ocr": {
       "provider": "gemini",
       "model": "gemini-3.8-flash",
+      "thinking_budget": 0,
       "maxOutputTokens": 8192,
       "concurrency": 1,
       "piModel": "openrouter/z-ai/glm-5.3"
@@ -288,7 +291,11 @@
       "verdictSettle": 3000
     },
     "shadow": {
-      "ops": ["list", "toc", "read"],
+      "ops": [
+        "list",
+        "toc",
+        "read"
+      ],
       "maxConcurrent": 3,
       "readAllMaxPages": 40,
       "lockStaleMs": 120000,
@@ -347,7 +354,10 @@
       "venvTimeoutMs": 180000,
       "healthTimeoutMs": 90000,
       "probeTimeoutMs": 15000,
-      "approxSizeMb": { "core": 100, "structure": 500 },
+      "approxSizeMb": {
+        "core": 100,
+        "structure": 500
+      },
       "_comment": "aw library install: pageindexCommit is the pinned PageIndex commit (its tarball sha256 lives in PINNED.json), minPython the least Python for the structure tier, minPythonCore the least for the core tier (index from the table of contents), pipTimeoutMs bounds one pip install (15 minutes), venvTimeoutMs the creation of the private Python folder, healthTimeoutMs the check after the install, probeTimeoutMs asking one Python what version it is. approxSizeMb is the rough disk size quoted to the researcher before an install (an estimate, not a measurement)."
     },
     "eval": {

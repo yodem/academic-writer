@@ -166,7 +166,7 @@ The browser tool may refuse output that contains query strings, so report counts
 - Every downloaded text is extracted (user ruling 2026-11-09, replacing download-only of 2026-10-19). A fetch only downloads; the nightly then queues each new text (`refs.py extract-enqueue`, method `auto`), and the student can also pick items on the dashboard; then:
   1. A docx is read with python-docx or pandoc, a PDF with a text layer with pymupdf per page (printed page numbers kept). A page whose Hebrew fails the sanity check (reversed letters, isolated letters, junk) goes to Claude vision.
   2. A scanned PDF or image is read by Claude vision (`pdftoppm -r 150`, one page at a time).
-  3. Gemini (`aw ocr`) or Tesseract run only when the student chose that method for the item; with Gemini the pages go to Google. Pages Gemini returns empty are marked "blocked" and surfaced, not transcribed by another engine.
+  3. Gemini (`aw ocr`, Gemini 3.8 Flash, least thinking, paid, at most 20 pages per run id before it asks) or Tesseract run only when the student chose that method for the item; with Gemini the pages go to Google. Pages Gemini returns empty are marked "blocked" and surfaced, not transcribed by another engine.
 - Hebrew text layers are often reversed or garbled (JSTOR especially): never use `pdftotext` on them; pymupdf plus the page gate in `extract.py` decides, and a failing page goes to Claude vision.
 - Ingest of in-copyright library readings: the full text goes to Trove and NotebookLM with the printed page numbers exact, and the original PDF goes to the course Drive folder. Register it as a library source:
   ```bash

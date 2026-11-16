@@ -50,7 +50,7 @@ var init_thresholds = __esm({
   "../thresholds.json"() {
     thresholds_default = {
       $schema: "https://json-schema.org/draft/2020-12/schema",
-      description: "Single source of truth for all numeric quality gates (self-review, rewrite limits, paragraph/unit word bounds, style-fingerprint compliance, voice rule-coverage/corpus minimums, typography). Edit here; every skill and agent references this file. Gemini model/thinking-budget defaults and retry policy are NOT read from here \u2014 they live in SPEC_DEFAULTS in plugins/academic-writer/mcp/gemini-server/src/gemini-client.ts (overridable per-project via profile.md), and the retry constants are hardcoded in that same file. The antiAi block was REMOVED in 0.9.0: nothing computed that score, so it was the drafting model rating its own unrevised draft, and it measured a flat maximum on every paragraph of a live 13-unit run while the auditor failed several of the same paragraphs. Anti-AI patterns are now writing guidance (write/references/anti-ai-patterns-*.md), not a scored gate; the auditor's VERDICT is the per-paragraph gate.",
+      description: "Single source of truth for all numeric quality gates (self-review, rewrite limits, paragraph/unit word bounds, style-fingerprint compliance, voice rule-coverage/corpus minimums, typography). Edit here; every skill and agent references this file. Per-step model routes (provider, model, thinking_budget, output cap) are read from the models block below by src/cli/src/routing.ts; the retired MCP gemini-server (SPEC_DEFAULTS) is no longer used. The antiAi block was REMOVED in 0.9.0: nothing computed that score, so it was the drafting model rating its own unrevised draft, and it measured a flat maximum on every paragraph of a live 13-unit run while the auditor failed several of the same paragraphs. Anti-AI patterns are now writing guidance (write/references/anti-ai-patterns-*.md), not a scored gate; the auditor's VERDICT is the per-paragraph gate.",
       selfReview: {
         minScore: 40,
         maxScore: 60,
@@ -127,11 +127,13 @@ var init_thresholds = __esm({
         geminiBatchSize: 1,
         lowResDpi: 100,
         claudeModel: "claude-opus-5-5",
+        geminiConfirmPages: 20,
+        geminiUsdPerPage: 4e-3,
         freeAgreeMin: 0.98,
         shortAnswerRatio: 0.8,
         shortAnswerMinChars: 200,
         inlineSizeLimitBytes: 20971520,
-        _comment: "Ported from the retired MCP gemini_ocr tool (PER_CALL_PAGE_CAP, GEMINI_BATCH_SIZE, INLINE_SIZE_LIMIT_BYTES = 20*1024*1024). perCallPageCap bounds how many pages one `aw ocr` invocation processes before truncating (Files API upload path for pages over inlineSizeLimitBytes was not ported to the CLI -- see T15a handoff notes; oversized pages fail with a named ERROR instead of silently uploading). geminiBatchSize is 1 (the bake-off measured one page per call; the 2026-10-16 six-page batches dropped passages) and lowResDpi is 100 from the 2026-10-20 OCR bake-off: below 100 dpi Gemini read Hebrew more accurately than Claude, so the Claude and local tiers flag those pages. claudeModel is the Claude reader (Opus: Sonnet 5.5 tied it but twice answered a book page with a summary instead of the text, and Haiku 5.5 was 1.4 points worse on poor scans). Round 3 of the bake-off set the auto order, page by page: for an additional source only (`aw ocr --source additional`; a course's required readings never use free readers, user rule 2026-10-20), a free reading is kept when Surya and Tesseract agree at freeAgreeMin (letters-only similarity; 17 of 54 test pages passed, Surya median 0.3% letter error on them against 0.13% for Gemini and 0.0% for Opus, worst 1.1%), then Claude, then Gemini. A Claude answer whose letters are under shortAnswerRatio of Tesseract's reading goes to Gemini: every real Claude answer was at least 0.9 of it and every soft refusal under 0.35. Pages whose Tesseract reading has under shortAnswerMinChars letters skip that check."
+        _comment: "Cost policy (Yotam 2026-11-16: money first; measured 2026-11-16 on 12 Hebrew book pages of one scan, one page per call, same plain prompt as Claude): the paid Gemini fallback is gemini-3.8-flash with the least thinking it accepts (models.ocr.thinking_budget 0 -> thinkingLevel low; it reported 0 thinking tokens): median 0.25% letter difference from Opus, glossary columns kept in order, about $0.004 a page at the 2026 introductory price ($0.75/$3.75 per 1M), about $0.007 from 2027-01-01. gemini-2.5-flash with thinkingBudget 0 cost about $0.002 a page but differed from Opus by a median 1.2% and scrambled two-column glossary order, so it was not chosen. geminiConfirmPages caps Gemini pages per --run id (cumulative, read from the run ledger); pages past it come back blank as 'needs approval' and aw ocr exits 4 unless --confirm-cost; geminiUsdPerPage only feeds that estimate. --gemini-model/--claude-model (a stronger reader for named pages) also need --confirm-cost; nothing escalates on its own. claudeModel is the Claude reader, on the author's subscription (no per-page money): Opus, because in the 2026-10-20 bake-off Sonnet 5.5 tied it but answered 2 of 59 pages with a summary, and each such page would fall back to paid Gemini; Haiku 5.5 was 1.4 points worse on poor scans. geminiBatchSize is 1 (six-page batches dropped passages, 2026-10-16). lowResDpi is 100: below it Gemini read Hebrew more accurately than Claude. freeAgreeMin: for an additional source only (--source additional; required readings never use free readers, user rule 2026-10-20), a free reading is kept when Surya and Tesseract agree at this letters-only similarity. A Claude answer whose letters are under shortAnswerRatio of Tesseract's reading goes to Gemini (every real answer was at least 0.9, every soft refusal under 0.35); pages whose Tesseract reading has under shortAnswerMinChars letters skip that check. perCallPageCap bounds pages per aw ocr invocation; pages over inlineSizeLimitBytes fail with a named error."
       },
       citationFloor: {
         minSecondaryPer1000Words: 4,
@@ -211,6 +213,7 @@ var init_thresholds = __esm({
         ocr: {
           provider: "gemini",
           model: "gemini-3.8-flash",
+          thinking_budget: 0,
           maxOutputTokens: 8192,
           concurrency: 1,
           piModel: "openrouter/z-ai/glm-5.3"
@@ -338,7 +341,11 @@ var init_thresholds = __esm({
           verdictSettle: 3e3
         },
         shadow: {
-          ops: ["list", "toc", "read"],
+          ops: [
+            "list",
+            "toc",
+            "read"
+          ],
           maxConcurrent: 3,
           readAllMaxPages: 40,
           lockStaleMs: 12e4,
@@ -397,7 +404,10 @@ var init_thresholds = __esm({
           venvTimeoutMs: 18e4,
           healthTimeoutMs: 9e4,
           probeTimeoutMs: 15e3,
-          approxSizeMb: { core: 100, structure: 500 },
+          approxSizeMb: {
+            core: 100,
+            structure: 500
+          },
           _comment: "aw library install: pageindexCommit is the pinned PageIndex commit (its tarball sha256 lives in PINNED.json), minPython the least Python for the structure tier, minPythonCore the least for the core tier (index from the table of contents), pipTimeoutMs bounds one pip install (15 minutes), venvTimeoutMs the creation of the private Python folder, healthTimeoutMs the check after the install, probeTimeoutMs asking one Python what version it is. approxSizeMb is the rough disk size quoted to the researcher before an install (an estimate, not a measurement)."
         },
         eval: {
@@ -41491,20 +41501,32 @@ function budgetFor(pipeline2) {
 }
 
 // src/gemini.ts
+function thinkingConfigFor(model, budget) {
+  if (budget === void 0) return {};
+  if (/gemini-2\.5-flash/.test(model)) return { thinkingConfig: { thinkingBudget: budget } };
+  if (/gemini-3\./.test(model)) return { thinkingConfig: { thinkingLevel: budget < 512 ? ThinkingLevel.LOW : budget < 4096 ? ThinkingLevel.MEDIUM : ThinkingLevel.HIGH } };
+  return {};
+}
 var transport = async (request) => {
   const ai = new GoogleGenAI({ apiKey: request.key });
-  const result = await ai.models.generateContent({ model: request.model, contents: request.parts, config: { systemInstruction: request.system, responseMimeType: request.responseSchema ? "application/json" : void 0, responseSchema: request.responseSchema } });
-  return { text: result.text ?? "", finishReason: String(result.candidates?.[0]?.finishReason ?? ""), usage: { in: result.usageMetadata?.promptTokenCount ?? 0, out: result.usageMetadata?.candidatesTokenCount ?? 0 } };
+  const result = await ai.models.generateContent({ model: request.model, contents: request.parts, config: { systemInstruction: request.system, responseMimeType: request.responseSchema ? "application/json" : void 0, responseSchema: request.responseSchema, ...thinkingConfigFor(request.model, request.thinking_budget) } });
+  return { text: result.text ?? "", finishReason: String(result.candidates?.[0]?.finishReason ?? ""), usage: {
+    in: result.usageMetadata?.promptTokenCount ?? 0,
+    out: (result.usageMetadata?.candidatesTokenCount ?? 0) + (result.usageMetadata?.thoughtsTokenCount ?? 0)
+    /* thinking is billed as output, so the ledger counts it */
+  } };
 };
 async function callGemini(req) {
   const start = Date.now();
   const route = routeFor(req.step);
+  const model = req.model ?? route.model;
+  const thinking_budget = req.thinking_budget ?? route.thinking_budget;
   let usage = { in: 0, out: 0 };
   let exit = "ERROR";
   try {
     const key = (process.env.GOOGLE_API_KEY ?? "").trim();
     if (!key) throw new AwError("ERROR", req.step, "missing Google API key");
-    const response = await transport({ ...req, model: route.model, key });
+    const response = await transport({ ...req, model, thinking_budget, key });
     usage = response.usage;
     if (response.finishReason !== "STOP") throw new AwError("ERROR", req.step, response.finishReason || "missing finish reason");
     let json = null;
@@ -41527,7 +41549,7 @@ async function callGemini(req) {
     if (error instanceof AwError) throw error;
     throw new AwError("ERROR", req.step, error instanceof Error ? error.message : "unknown model error");
   } finally {
-    appendLedger({ run_id: req.runId, step: req.step, provider: "gemini", model: route.model, input_tokens: usage.in, output_tokens: usage.out, cost_usd: null, latency_ms: Date.now() - start, exit, same_family: false });
+    appendLedger({ run_id: req.runId, step: req.step, provider: "gemini", model, input_tokens: usage.in, output_tokens: usage.out, cost_usd: null, latency_ms: Date.now() - start, exit, same_family: false });
   }
 }
 
@@ -49027,13 +49049,69 @@ Return one JSON object with revised_text.`;
 }
 
 // src/ocr.ts
-import { existsSync as existsSync11, mkdtempSync, readFileSync as readFileSync14, readdirSync as readdirSync5, rmSync, statSync as statSync3, writeFileSync as writeFileSync8 } from "node:fs";
+import { appendFileSync as appendFileSync8, existsSync as existsSync11, mkdirSync as mkdirSync9, mkdtempSync, readFileSync as readFileSync14, readdirSync as readdirSync5, rmSync, statSync as statSync3, writeFileSync as writeFileSync8 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname as dirname6, extname, join as join17, resolve as resolve9 } from "node:path";
+import { dirname as dirname6, extname, isAbsolute as isAbsolute3, join as join17, resolve as resolve9 } from "node:path";
 import { spawnSync } from "node:child_process";
 init_thresholds();
 var schema2 = { type: "array", items: { type: "object", required: ["page_number", "text", "is_born_digital"], properties: { page_number: { type: "integer" }, text: { type: "string" }, is_born_digital: { type: "boolean" }, confidence: { type: "string", enum: ["high", "medium", "low"] }, notes: { type: "string" } } } };
 var cfg = thresholds_default.ocr;
+var HELD = "needs approval: Gemini";
+function pageSet(spec) {
+  const out = /* @__PURE__ */ new Set();
+  for (const part of spec.split(",").map((x2) => x2.trim()).filter(Boolean)) {
+    const m2 = /^(\d+)(?:-(\d+))?$/.exec(part);
+    if (!m2) throw new AwError("ERROR", "ocr", `invalid --pages: ${spec}`);
+    const a = Number(m2[1]), b = Number(m2[2] ?? m2[1]);
+    if (a < 1 || b < a) throw new AwError("ERROR", "ocr", `invalid --pages: ${spec}`);
+    for (let n = a; n <= b; n++) out.add(n);
+  }
+  return out;
+}
+function reserveFile(runId2) {
+  return join17(projectDir(), ".academic-helper", "runs", runId2, "gemini-ocr-reserved.jsonl");
+}
+function countGeminiOcr(runId2) {
+  const file = reserveFile(runId2);
+  if (!existsSync11(file)) return 0;
+  return readFileSync14(file, "utf8").split("\n").filter(Boolean).reduce((n, l) => {
+    try {
+      return n + Number(JSON.parse(l).pages ?? 1);
+    } catch {
+      return n + 1;
+    }
+  }, 0);
+}
+function reserve(runId2, pages) {
+  mkdirSync9(dirname6(reserveFile(runId2)), { recursive: true });
+  appendFileSync8(reserveFile(runId2), `${JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), pid: process.pid, pages: pages.length, page_numbers: pages })}
+`);
+}
+function checkRunId(runId2) {
+  if (!runId2 || isAbsolute3(runId2) || /[\\/]/.test(runId2) || runId2.includes("..")) throw new AwError("ERROR", "ocr", `invalid --run id: ${runId2}`);
+}
+function makeGate(options) {
+  const env = (process.env.AW_OCR_GEMINI_CAP ?? "").trim();
+  const cap = /^\d+$/.test(env) ? Math.min(Number(env), cfg.geminiConfirmPages) : cfg.geminiConfirmPages;
+  checkRunId(options.runId);
+  return { used: countGeminiOcr(options.runId), cap, confirm: options.confirmCost === true, held: 0 };
+}
+function heldPage(page_number, gate) {
+  gate.held += 1;
+  return { page_number, text: "", is_born_digital: false, confidence: "low", notes: `${HELD}, __N__ pages, est. $__USD__; rerun with --confirm-cost` };
+}
+function finishHeld(pages, gate) {
+  for (const p of pages) if (p.notes?.startsWith(HELD)) p.notes = p.notes.replace("__N__", String(gate.held)).replace("__USD__", (Math.ceil(gate.held * cfg.geminiUsdPerPage * 100) / 100).toFixed(2));
+}
+function summarize(pages) {
+  return { needs_approval: pages.filter((p) => p.notes?.startsWith(HELD)).map((p) => p.page_number), escalation_candidates: pages.filter((p) => p.confidence === "low" && p.text.trim() && !p.notes?.startsWith(HELD)).map((p) => p.page_number) };
+}
+function exitCodeFor(output) {
+  return output.summary.needs_approval.length ? 4 : 0;
+}
+function checkOverrides(options) {
+  if ((options.geminiModel || options.claudeModel) && !options.confirmCost) throw new AwError("ERROR", "ocr", "--gemini-model and --claude-model run a stronger model that needs the author's approval; add --confirm-cost to confirm");
+}
 function runScript(name, args2) {
   const plugin2 = resolve9(dirname6(process.argv[1] ?? ""), "..");
   const script = join17(plugin2, "scripts", "ocr", name);
@@ -49104,15 +49182,21 @@ function lowResNote(engine, dpi) {
   if (engine === "gemini" || engine === "none" || dpi === void 0 || dpi >= cfg.lowResDpi) return "";
   return `low resolution (${dpi} dpi): in the bake-off Gemini read pages under ${cfg.lowResDpi} dpi more accurately; verify against the image`;
 }
-async function readGemini(scans, options) {
+async function readGemini(scans, options, gate) {
   const pages = [];
   for (let offset = 0; offset < scans.length; offset += cfg.geminiBatchSize) {
     const batch = scans.slice(offset, offset + cfg.geminiBatchSize);
     const numbers = batch.map((s2) => s2.page_number);
+    if (!gate.confirm && gate.used + numbers.length > gate.cap) {
+      pages.push(...numbers.map((n) => heldPage(n, gate)));
+      continue;
+    }
+    reserve(options.runId, numbers);
+    gate.used += numbers.length;
     const parts = batch.map((s2) => ({ inlineData: { mimeType: mimeOf(s2.png), data: readFileSync14(s2.png).toString("base64") } }));
     let result;
     try {
-      result = await callGemini({ step: "ocr", system: prompt3(options.language, options.format, numbers), parts: [...parts, prompt3(options.language, options.format, numbers)], responseSchema: schema2, runId: options.runId, budget: new Budget(options.runId, budgetFor("write")) });
+      result = await callGemini({ step: "ocr", system: prompt3(options.language, options.format, numbers), parts: [...parts, prompt3(options.language, options.format, numbers)], responseSchema: schema2, runId: options.runId, model: options.geminiModel, budget: new Budget(options.runId, budgetFor("write")) });
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       const refusal = GEMINI_REFUSAL.exec(message)?.[0];
@@ -49123,6 +49207,8 @@ async function readGemini(scans, options) {
     const parsed = JSON.parse(stripFence(result.text));
     if (!Array.isArray(parsed) || parsed.some((p) => typeof p.page_number !== "number" || typeof p.text !== "string")) throw new AwError("ERROR", "ocr", "invalid OCR page response");
     if (batch.length === 1 && parsed.length === 1) parsed[0].page_number = batch[0].page_number;
+    const got = parsed.map((p) => p.page_number).sort((x2, y) => x2 - y);
+    if (got.length !== numbers.length || got.some((n, k) => n !== [...numbers].sort((x2, y) => x2 - y)[k])) throw new AwError("ERROR", "ocr", `Gemini answered pages [${got.join(", ")}] for pages [${numbers.join(", ")}]: missing, extra or duplicate pages`);
     for (const p of parsed) if (!p.text.trim()) {
       p.confidence = "low";
       p.notes = "blocked: Gemini returned no text (copyright/recitation block); not substituted from another engine";
@@ -49131,7 +49217,7 @@ async function readGemini(scans, options) {
   }
   return pages;
 }
-function readClaude(scan, language) {
+function readClaude(scan, language, model = cfg.claudeModel) {
   const message = { type: "user", message: { role: "user", content: [
     { type: "image", source: { type: "base64", media_type: mimeOf(scan.png), data: readFileSync14(scan.png).toString("base64") } },
     { type: "text", text: language === "en" ? PLAIN_PROMPT : `${PLAIN_PROMPT} Hebrew columns read right to left.` }
@@ -49139,7 +49225,7 @@ function readClaude(scan, language) {
   const run = spawnSync("claude", [
     "-p",
     "--model",
-    cfg.claudeModel,
+    model,
     "--setting-sources",
     "",
     "--strict-mcp-config",
@@ -49190,7 +49276,7 @@ function withNote(page, note, confidence) {
   if (!note) return page;
   return { ...page, notes: page.notes ? `${page.notes}; ${note}` : note, ...confidence ? { confidence } : {} };
 }
-async function readAuto(scan, options, have) {
+async function readAuto(scan, options, have, gate) {
   const failures = [];
   const tried = (read) => {
     try {
@@ -49214,11 +49300,13 @@ async function readAuto(scan, options, have) {
     }
     const lowRes = scan.dpi !== void 0 && scan.dpi < cfg.lowResDpi;
     let why = lowRes ? `under ${cfg.lowResDpi} dpi` : "";
+    let kept;
     if (have.claude && !(lowRes && have.gemini)) {
-      const claude = readClaude(scan, options.language);
+      const claude = readClaude(scan, options.language, options.claudeModel);
       const ref = tess ? lettersOnly(tess.text).length : 0;
       why = claude.refused ? "Claude refused the page" : SOFT_REFUSAL.test(claude.text.slice(0, 300)) ? "Claude declined to transcribe the page" : ref >= cfg.shortAnswerMinChars && lettersOnly(claude.text).length < cfg.shortAnswerRatio * ref ? SHORT : "";
       delete claude.refused;
+      if (why === SHORT) kept = { ...claude, engine: "claude" };
       if (!why) return withNote({ ...claude, engine: "claude" }, lowResNote("claude", scan.dpi), lowRes ? "low" : void 0);
       if (!have.gemini && why === SHORT) {
         return withNote({ ...claude, engine: "claude" }, `${why}; no Google API key for the Gemini fallback: check it against the image`, "low");
@@ -49229,9 +49317,10 @@ async function readAuto(scan, options, have) {
       }
     }
     if (have.gemini) {
-      const answer = await readGemini([scan], options);
+      const answer = await readGemini([scan], options, gate);
       if (answer.length !== 1) throw new AwError("ERROR", "ocr", `Gemini returned ${answer.length} pages for page ${scan.page_number}`);
       const page2 = { ...answer[0], page_number: scan.page_number };
+      if (page2.notes?.startsWith(HELD)) return kept ? { ...kept, confidence: "low", notes: `${page2.notes} (Claude's reading kept: ${SHORT})` } : page2;
       return why ? withNote({ ...page2, engine: "gemini" }, `read by Gemini: ${why}`) : { ...page2, engine: "gemini" };
     }
     if (!free) throw new AwError("ERROR", "ocr", `page ${scan.page_number}: no reader worked and no Claude or Gemini is available (${failures.join("; ") || "no free reader installed"})`);
@@ -49252,6 +49341,11 @@ function autoReason(have, source = "required") {
   return `${why}, page by page: ${steps.join(", then ")}`;
 }
 async function ocrDocument(options) {
+  checkOverrides(options);
+  const gate = makeGate(options);
+  return ocrRun(options, gate);
+}
+async function ocrRun(options, gate) {
   const input = resolve9(options.input);
   if (!existsSync11(input)) throw new AwError("ERROR", "ocr", `input does not exist: ${input}`);
   const isDir = statSync3(input).isDirectory();
@@ -49276,10 +49370,13 @@ async function ocrDocument(options) {
   } else {
     const files = imageFiles.length ? imageFiles : [input];
     if (isDir && files.length === 0) throw new AwError("ERROR", "ocr", "directory contains no supported image files");
-    const kept = files.slice(0, cfg.perCallPageCap);
-    scans.push(...kept.map((png, index) => ({ page_number: index + 1, png })));
-    truncated = files.length > kept.length;
-    if (truncated) truncation_message = `${kept.length} of ${files.length} images processed.`;
+    const wanted = options.pages ? pageSet(options.pages) : void 0;
+    const numbered = files.map((png, index) => ({ page_number: index + 1, png })).filter((f3) => !wanted || wanted.has(f3.page_number));
+    if (wanted && numbered.length === 0) throw new AwError("ERROR", "ocr", `--pages ${options.pages} selects none of the ${files.length} images`);
+    const kept = numbered.slice(0, cfg.perCallPageCap);
+    scans.push(...kept);
+    truncated = numbered.length > kept.length;
+    if (truncated) truncation_message = `${kept.length} of ${numbered.length} images processed.`;
   }
   const auto = (options.engine ?? "auto") === "auto";
   const have = auto && scans.length ? available(options.source) : void 0;
@@ -49288,9 +49385,9 @@ async function ocrDocument(options) {
   const { engine, reason } = !scans.length ? { engine: "none", reason: "no scanned pages: text extracted from the PDF text layer" } : have ? { engine: "auto", reason: autoReason(have, options.source) } : chooseEngine(options.engine);
   try {
     const read = [];
-    if (engine === "auto" && have) for (const s2 of scans) read.push(await readAuto(s2, options, have));
-    else if (engine === "gemini") read.push(...await readGemini(scans, options));
-    else if (engine !== "none") read.push(...scans.map((s2) => engine === "claude" ? readClaude(s2, options.language) : readLocal(s2, options.language)));
+    if (engine === "auto" && have) for (const s2 of scans) read.push(await readAuto(s2, options, have, gate));
+    else if (engine === "gemini") read.push(...await readGemini(scans, options, gate));
+    else if (engine !== "none") read.push(...scans.map((s2) => engine === "claude" ? readClaude(s2, options.language, options.claudeModel) : readLocal(s2, options.language)));
     for (const page of read) {
       const scan = scans.find((s2) => s2.page_number === page.page_number);
       const note = engine === "auto" ? "" : lowResNote(engine, scan?.dpi);
@@ -49305,7 +49402,8 @@ async function ocrDocument(options) {
     if (rasterDir) rmSync(rasterDir, { recursive: true, force: true });
   }
   pages.sort((a, b) => a.page_number - b.page_number);
-  const output = { pages, truncated, ...truncation_message ? { truncation_message } : {}, engine, engine_reason: reason };
+  finishHeld(pages, gate);
+  const output = { pages, summary: summarize(pages), truncated, ...truncation_message ? { truncation_message } : {}, engine, engine_reason: reason };
   const byPage = engine === "auto" ? ` (${pages.filter((p) => p.engine).map((p) => `page ${p.page_number}: ${p.engine}`).join(", ")})` : "";
   if (options.out) writeFileSync8(options.out, `OCR engine: ${engine}${byPage}
 
@@ -49314,7 +49412,7 @@ ${pages.map((p) => p.text).join("\n\n")}`, "utf8");
 }
 
 // src/docx.ts
-import { existsSync as existsSync12, mkdirSync as mkdirSync9, readFileSync as readFileSync15, writeFileSync as writeFileSync9 } from "node:fs";
+import { existsSync as existsSync12, mkdirSync as mkdirSync10, readFileSync as readFileSync15, writeFileSync as writeFileSync9 } from "node:fs";
 import { join as join18, resolve as resolve10 } from "node:path";
 import { spawnSync as spawnSync2 } from "node:child_process";
 function parseUnit(raw, unitId) {
@@ -49401,7 +49499,7 @@ function buildDocx(args2, project) {
   const outline = JSON.parse(readFileSync15(args2.outlinePath, "utf8"));
   const result = assembleArticle(outline, resolve10(args2.projectDir), args2.runId, args2);
   const runDir = join18(args2.projectDir, ".academic-helper", "runs", args2.runId);
-  mkdirSync9(runDir, { recursive: true });
+  mkdirSync10(runDir, { recursive: true });
   const jsonPath = join18(runDir, "article.json");
   writeFileSync9(jsonPath, `${JSON.stringify(result.article, null, 2)}
 `, "utf8");
@@ -50612,7 +50710,7 @@ async function runBackfill(indexer, request) {
 import { existsSync as existsSync20 } from "node:fs";
 import { readFile as readFile7, rm as rm6 } from "node:fs/promises";
 import { randomBytes as randomBytes6 } from "node:crypto";
-import { isAbsolute as isAbsolute4, join as join25, relative as relative3, resolve as resolve12 } from "node:path";
+import { isAbsolute as isAbsolute5, join as join25, relative as relative3, resolve as resolve12 } from "node:path";
 
 // src/library/eval/limits.ts
 init_thresholds();
@@ -51745,7 +51843,7 @@ async function buildPairs(options) {
 
 // src/library/eval/plan.ts
 import { existsSync as existsSync18, readFileSync as readFileSync18 } from "node:fs";
-import { isAbsolute as isAbsolute3, join as join23, relative as relative2, resolve as resolve11 } from "node:path";
+import { isAbsolute as isAbsolute4, join as join23, relative as relative2, resolve as resolve11 } from "node:path";
 
 // src/library/eval/claims.ts
 import { existsSync as existsSync17, readFileSync as readFileSync17, readdirSync as readdirSync6 } from "node:fs";
@@ -52222,7 +52320,7 @@ function emptySkips() {
 function articleFiles(project, article) {
   const drafts = join23(project, ".academic-helper", "drafts");
   if (!article) return { files: draftFiles(drafts), runFilter: null, label: null };
-  const asPath = isAbsolute3(article) ? article : resolve11(project, article);
+  const asPath = isAbsolute4(article) ? article : resolve11(project, article);
   if (existsSync18(asPath)) return { files: draftFiles(asPath), runFilter: null, label: relative2(project, asPath) || "." };
   if (EVAL_ID.test(article)) return { files: draftFiles(drafts), runFilter: article, label: `run ${article}` };
   throw new LibraryError("usage", `ERROR library eval plan: --article ${article} is neither a file or folder nor a run id`);
@@ -52267,7 +52365,7 @@ function candidatesFromDrafts(project, files, skips, unmatched) {
   return out;
 }
 function candidatesFromFile(project, file, skips) {
-  const path2 = isAbsolute3(file) ? file : resolve11(project, file);
+  const path2 = isAbsolute4(file) ? file : resolve11(project, file);
   let raw;
   try {
     raw = JSON.parse(readFileSync18(path2, "utf8"));
@@ -52691,7 +52789,7 @@ function wholeNumber(flags, name, fallback, max) {
   if (!/^[1-9]\d{0,5}$/u.test(raw) || Number(raw) > max) throw new LibraryError("usage", `ERROR library eval: ${name} must be a whole number from 1 to ${max}`);
   return Number(raw);
 }
-function exitCodeFor(error) {
+function exitCodeFor2(error) {
   if (!(error instanceof LibraryError)) return 4;
   if (error.code === "usage") return 2;
   if (error.code === "config") return 3;
@@ -52830,7 +52928,7 @@ async function runEvalCli(argv, io) {
       const payload = JSON.stringify(pairs2).replaceAll("<", "\\u003c").replaceAll("\u2028", "\\u2028").replaceAll("\u2029", "\\u2029");
       const out = text3(flags, "--out") ? resolve12(paths.root, text3(flags, "--out")) : paths.judgeHtml;
       const inside2 = relative3(paths.root, out);
-      if (inside2 === "" || inside2.startsWith("..") || isAbsolute4(inside2)) throw new LibraryError("usage", "ERROR library eval page: --out must be a file inside the evaluation folder");
+      if (inside2 === "" || inside2.startsWith("..") || isAbsolute5(inside2)) throw new LibraryError("usage", "ERROR library eval page: --out must be a file inside the evaluation folder");
       await writeText(out, html.replace(slot, (_whole, open4, _body, close) => `${open4}${payload}${close}`));
       print({ eval_id: evalId, out, pairs: pairs2.pairs.length });
       return 0;
@@ -52892,7 +52990,7 @@ async function runEvalCli(argv, io) {
   } catch (error) {
     io.err(`${errorMessage(error)}
 `);
-    return exitCodeFor(error);
+    return exitCodeFor2(error);
   }
 }
 
@@ -53415,7 +53513,7 @@ var processIo = { out: (text4) => {
 }, err: (text4) => {
   process.stderr.write(text4);
 } };
-function exitCodeFor2(error) {
+function exitCodeFor3(error) {
   if (!(error instanceof LibraryError)) return 4;
   if (error.code === "usage") return 2;
   if (error.code === "config") return 3;
@@ -53652,7 +53750,7 @@ ${entry.text}`).join("\n")}
   } catch (error) {
     io.err(`${errorMessage(error)}
 `);
-    return exitCodeFor2(error);
+    return exitCodeFor3(error);
   }
 }
 
@@ -53844,9 +53942,12 @@ Live model verification requires GOOGLE_API_KEY.
     const format = value("--format");
     const engine = value("--engine") ?? "auto";
     const source = value("--source") ?? "required";
-    if (!runId2 || !input || !["he", "en", "mixed"].includes(language ?? "") || format && !["concise", "detailed"].includes(format) || !["auto", "gemini", "claude", "local"].includes(engine) || !["required", "additional"].includes(source)) throw new Error("ERROR ocr: --input, --lang he|en|mixed, and --run are required; --format must be concise|detailed; --engine must be auto|gemini|claude|local; --source must be required|additional");
-    process.stdout.write(`${JSON.stringify(await ocrDocument({ runId: runId2, input, language, pages: value("--pages"), format, out: value("--out"), engine, source }))}
+    if (!runId2 || !input || !["he", "en", "mixed"].includes(language ?? "") || format && !["concise", "detailed"].includes(format) || !["auto", "gemini", "claude", "local"].includes(engine) || !["required", "additional"].includes(source)) throw new Error("ERROR ocr: --input, --lang he|en|mixed, and --run are required; --format must be concise|detailed; --engine must be auto|gemini|claude|local; --source must be required|additional; --confirm-cost lifts the Gemini page cap; --gemini-model and --claude-model (stronger model, one run) need --confirm-cost");
+    const confirmCost = args.includes("--confirm-cost");
+    const result = await ocrDocument({ confirmCost, geminiModel: value("--gemini-model"), claudeModel: value("--claude-model"), runId: runId2, input, language, pages: value("--pages"), format, out: value("--out"), engine, source });
+    process.stdout.write(`${JSON.stringify(result)}
 `);
+    if (exitCodeFor(result)) process.exitCode = exitCodeFor(result);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : "ERROR ocr: unknown failure"}
 `);

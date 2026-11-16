@@ -4,6 +4,15 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.22.3] — 2026-11-16
+### Changed
+- **OCR now spends as little money as possible.** Claude (Opus, on your Claude plan) still reads scanned pages first. The paid Gemini reader, used only for pages Claude refuses, answers with a summary, or that are under 100 dpi, is `gemini-3.8-flash` with the least thinking it accepts (thinking level low); before, Gemini OCR thought at its default level and billed it. On 12 Hebrew book pages it read within a median 0.25% of Opus's letters, at about $0.004 a page (2026 price; about $0.007 from 2027). `gemini-2.5-flash` without thinking was half the price but 1.2% off and scrambled two-column glossaries.
+- **No large Gemini run without asking.** One `aw ocr` run (one `--run` id, counted across every call from the pages it reserves before each Gemini request, so a run that is killed mid-call still counts them; run one `aw ocr` per run id at a time, so splitting a book into page ranges does not get around it) sends at most 20 pages to Gemini. Pages past that come back blank, marked "needs approval: Gemini, N pages, est. $X", listed in the new `summary.needs_approval`, and the command exits 4. The skill shows you the count and the estimate, and reruns those pages with `--confirm-cost` only after you say yes.
+- **A stronger model only when you approve it.** `--gemini-model` and `--claude-model` run a different reader for named pages, and they work only together with `--confirm-cost`. Nothing switches to a stronger model on its own; `summary.escalation_candidates` lists the low-confidence pages the skill may offer.
+- `--pages` now works on a folder of page images, and each image keeps its own page number (it used to read the first images whatever you asked for).
+- A Gemini answer that is missing a page, or has extra or duplicate pages, is now an error instead of silently dropping the page.
+- A page whose short Claude reading would have gone to Gemini, when the cost gate holds Gemini back, keeps Claude's reading, flagged, instead of coming back blank.
+
 ## [0.22.2] — 2026-11-08
 
 ### Fixed

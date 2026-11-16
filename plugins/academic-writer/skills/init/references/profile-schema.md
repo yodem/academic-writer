@@ -143,9 +143,9 @@ The profile outranks the environment: it is durable, reviewed configuration, whi
 exists so a machine can set a default before any profile exists. A per-tool entry may set only
 `thinking_budget` and inherit the model.
 
-Tool names are `write_section`, `synthesize`, `edit`, `calibrate_sample`, `raw`. **`gemini_ocr` is
-not configurable** — it is hard-pinned to `gemini-2.5-flash` because it needs `thinkingBudget: 0`,
-which the Pro models reject.
+Tool names are `write_section`, `synthesize`, `edit`, `calibrate_sample`, `raw`. **OCR (`aw ocr`) is set in `models.ocr`**,
+not here: `gemini-3.8-flash` with the least thinking it accepts (`thinking_budget: 0` -> `thinkingLevel: low`),
+behind a 20-page cost gate per run (see the ocr skill).
 
 `thinking_budget` keeps working across model generations: for `gemini-3.x` the client maps a budget
 onto the API's `thinkingLevel` (`<512` low, `<4096` medium, else high; `-1` is high), and passes it
