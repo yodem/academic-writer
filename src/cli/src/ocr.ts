@@ -1,6 +1,6 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, extname, join, resolve } from 'node:path';
+import { dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { allowedEnv } from './library/backends.ts';
 import { callGemini, type ImagePart } from './gemini.ts';
@@ -22,16 +22,35 @@ export function countGeminiOcr(runId: string): number {
   return readFileSync(file, 'utf8').split('\n').filter(Boolean).filter((l) => { try { const r = JSON.parse(l) as { step?: string; provider?: string }; return r.step === 'ocr' && r.provider === 'gemini'; } catch { return false; } }).length;
 }
 /** One cost gate for every Gemini OCR path: cumulative per run id (ledger rows plus calls made now), lifted by --confirm-cost. */
-export type Gate = { used: number; cap: number; confirm: boolean; held: number };
+export type Gate = { used: number; cap: number; confirm: boolean; held: number; lock: string };
+/** A run id names a folder under .academic-helper/runs: no path separators, no '..', not absolute. */
+function checkRunId(runId: string): void {
+  if (!runId || isAbsolute(runId) || /[\\/]/.test(runId) || runId.includes('..')) throw new AwError('ERROR', 'ocr', `invalid --run id: ${runId}`);
+}
+/** One aw ocr per run id at a time, so two processes cannot each spend a full cap: an exclusive lock file, stale after an hour. */
+function lockRun(runId: string): string {
+  checkRunId(runId);
+  const dir = join(projectDir(), '.academic-helper', 'runs', runId);
+  mkdirSync(dir, { recursive: true });
+  const lock = join(dir, 'ocr-gate.lock');
+  try { closeSync(openSync(lock, 'wx')); } catch {
+    if (Date.now() - statSync(lock).mtimeMs < 3_600_000) throw new AwError('ERROR', 'ocr', `another aw ocr is running with --run ${runId}; wait for it or use another run id`);
+    rmSync(lock, { force: true }); closeSync(openSync(lock, 'wx'));
+  }
+  return lock;
+}
+export function releaseGate(gate: Gate): void { rmSync(gate.lock, { force: true }); }
 export function makeGate(options: Pick<OcrOptions, 'runId' | 'confirmCost'>): Gate {
   const env = (process.env.AW_OCR_GEMINI_CAP ?? '').trim();
-  const cap = /^\d+$/.test(env) ? Number(env) : cfg.geminiConfirmPages;
-  return { used: countGeminiOcr(options.runId), cap, confirm: options.confirmCost === true, held: 0 };
+  // the env var can only lower the cap (tests, the live check); raising it needs --confirm-cost
+  const cap = /^\d+$/.test(env) ? Math.min(Number(env), cfg.geminiConfirmPages) : cfg.geminiConfirmPages;
+  const lock = lockRun(options.runId);
+  return { used: countGeminiOcr(options.runId), cap, confirm: options.confirmCost === true, held: 0, lock };
 }
 function heldPage(page_number: number, gate: Gate): Page { gate.held += 1; return { page_number, text: '', is_born_digital: false, confidence: 'low', notes: `${HELD}, __N__ pages, est. $__USD__; rerun with --confirm-cost` }; }
 /** Fills the page count and dollar estimate into held pages once the run knows how many there are. */
 function finishHeld(pages: Page[], gate: Gate): void {
-  for (const p of pages) if (p.notes?.startsWith(HELD)) p.notes = p.notes.replace('__N__', String(gate.held)).replace('__USD__', (gate.held * cfg.geminiUsdPerPage).toFixed(2));
+  for (const p of pages) if (p.notes?.startsWith(HELD)) p.notes = p.notes.replace('__N__', String(gate.held)).replace('__USD__', (Math.ceil(gate.held * cfg.geminiUsdPerPage * 100) / 100).toFixed(2));
 }
 export function summarize(pages: Page[]): { needs_approval: number[]; escalation_candidates: number[] } {
   return { needs_approval: pages.filter((p) => p.notes?.startsWith(HELD)).map((p) => p.page_number), escalation_candidates: pages.filter((p) => p.confidence === 'low' && p.text.trim() && !p.notes?.startsWith(HELD)).map((p) => p.page_number) };
@@ -276,6 +295,10 @@ function autoReason(have: Available, source: OcrOptions['source'] = 'required'):
 export async function ocrDocument(options: OcrOptions): Promise<{ pages: Page[]; summary: ReturnType<typeof summarize>; truncated: boolean; truncation_message?: string; engine: Engine | 'auto' | 'none'; engine_reason: string }> {
  checkOverrides(options);
  const gate = makeGate(options);
+ try { return await ocrRun(options, gate); } finally { releaseGate(gate); }
+}
+
+async function ocrRun(options: OcrOptions, gate: Gate): Promise<Awaited<ReturnType<typeof ocrDocument>>> {
  const input = resolve(options.input);
  if (!existsSync(input)) throw new AwError('ERROR', 'ocr', `input does not exist: ${input}`);
  const isDir = statSync(input).isDirectory();

@@ -29,7 +29,7 @@ test('ocr gate stops Gemini past the cap and exits 4', async () => {
     const out = await ocrDocument({ input: scans('cap', 5), language: 'en', runId: 'gate-cap', engine: 'gemini' });
     assert.equal(state.calls, 2);
     assert.deepEqual(out.pages.map((p) => p.text), ['text', 'text', '', '', '']);
-    assert.match(out.pages[2].notes ?? '', /^needs approval: Gemini, 3 pages, est\. \$0\.01; rerun with --confirm-cost$/);
+    assert.match(out.pages[2].notes ?? '', /^needs approval: Gemini, 3 pages, est\. \$0\.02; rerun with --confirm-cost$/);
     assert.equal(out.pages[2].confidence, 'low');
     assert.deepEqual(out.summary.needs_approval, [3, 4, 5]);
     assert.equal(exitCodeFor(out), 4);
@@ -65,4 +65,35 @@ test('ocr model override requires confirm-cost', async () => {
   __setTransport(async (r) => { seen.push(r.model); return { text: JSON.stringify([{ page_number: 1, text: 't', is_born_digital: false }]), finishReason: 'STOP', usage: { in: 1, out: 1 } }; });
   await ocrDocument({ input, language: 'en', runId: 'ov2', engine: 'gemini', geminiModel: 'gemini-2.5-pro', confirmCost: true });
   assert.deepEqual(seen, ['gemini-2.5-pro']);
+});
+
+test('ocr gate env var cannot raise the cap', async () => {
+  process.env.AW_OCR_GEMINI_CAP = '1000';
+  try {
+    const state = stub();
+    const out = await ocrDocument({ input: scans('raise', 22), language: 'he', runId: 'gate-raise', engine: 'gemini' });
+    assert.equal(state.calls, 20);
+    assert.equal(out.summary.needs_approval.length, 2);
+    assert.equal(exitCodeFor(out), 4);
+  } finally { delete process.env.AW_OCR_GEMINI_CAP; }
+});
+
+test('ocr gate refuses a second run with the same run id while one holds the lock', async () => {
+  const dir = join(root, '.academic-helper', 'runs', 'gate-busy'); mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'ocr-gate.lock'), '');
+  stub();
+  await assert.rejects(ocrDocument({ input: scans('busy', 1), language: 'he', runId: 'gate-busy', engine: 'gemini' }), /another aw ocr is running/);
+});
+
+test('ocr gate releases its lock when the run ends', async () => {
+  stub();
+  await ocrDocument({ input: scans('release', 1), language: 'he', runId: 'gate-release', engine: 'gemini' });
+  await ocrDocument({ input: scans('release2', 1), language: 'he', runId: 'gate-release', engine: 'gemini' });
+});
+
+test('ocr rejects a run id that is a path', async () => {
+  stub();
+  for (const runId of ['../escape', '/abs/run', 'a/b', 'a\\b']) {
+    await assert.rejects(ocrDocument({ input: scans('path', 1), language: 'he', runId, engine: 'gemini' }), /invalid --run id/);
+  }
 });

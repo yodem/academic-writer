@@ -49049,9 +49049,9 @@ Return one JSON object with revised_text.`;
 }
 
 // src/ocr.ts
-import { existsSync as existsSync11, mkdtempSync, readFileSync as readFileSync14, readdirSync as readdirSync5, rmSync, statSync as statSync3, writeFileSync as writeFileSync8 } from "node:fs";
+import { closeSync, existsSync as existsSync11, mkdirSync as mkdirSync9, mkdtempSync, openSync, readFileSync as readFileSync14, readdirSync as readdirSync5, rmSync, statSync as statSync3, writeFileSync as writeFileSync8 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname as dirname6, extname, join as join17, resolve as resolve9 } from "node:path";
+import { dirname as dirname6, extname, isAbsolute as isAbsolute3, join as join17, resolve as resolve9 } from "node:path";
 import { spawnSync } from "node:child_process";
 init_thresholds();
 var schema2 = { type: "array", items: { type: "object", required: ["page_number", "text", "is_born_digital"], properties: { page_number: { type: "integer" }, text: { type: "string" }, is_born_digital: { type: "boolean" }, confidence: { type: "string", enum: ["high", "medium", "low"] }, notes: { type: "string" } } } };
@@ -49069,17 +49069,38 @@ function countGeminiOcr(runId2) {
     }
   }).length;
 }
+function checkRunId(runId2) {
+  if (!runId2 || isAbsolute3(runId2) || /[\\/]/.test(runId2) || runId2.includes("..")) throw new AwError("ERROR", "ocr", `invalid --run id: ${runId2}`);
+}
+function lockRun(runId2) {
+  checkRunId(runId2);
+  const dir = join17(projectDir(), ".academic-helper", "runs", runId2);
+  mkdirSync9(dir, { recursive: true });
+  const lock = join17(dir, "ocr-gate.lock");
+  try {
+    closeSync(openSync(lock, "wx"));
+  } catch {
+    if (Date.now() - statSync3(lock).mtimeMs < 36e5) throw new AwError("ERROR", "ocr", `another aw ocr is running with --run ${runId2}; wait for it or use another run id`);
+    rmSync(lock, { force: true });
+    closeSync(openSync(lock, "wx"));
+  }
+  return lock;
+}
+function releaseGate(gate) {
+  rmSync(gate.lock, { force: true });
+}
 function makeGate(options) {
   const env = (process.env.AW_OCR_GEMINI_CAP ?? "").trim();
-  const cap = /^\d+$/.test(env) ? Number(env) : cfg.geminiConfirmPages;
-  return { used: countGeminiOcr(options.runId), cap, confirm: options.confirmCost === true, held: 0 };
+  const cap = /^\d+$/.test(env) ? Math.min(Number(env), cfg.geminiConfirmPages) : cfg.geminiConfirmPages;
+  const lock = lockRun(options.runId);
+  return { used: countGeminiOcr(options.runId), cap, confirm: options.confirmCost === true, held: 0, lock };
 }
 function heldPage(page_number, gate) {
   gate.held += 1;
   return { page_number, text: "", is_born_digital: false, confidence: "low", notes: `${HELD}, __N__ pages, est. $__USD__; rerun with --confirm-cost` };
 }
 function finishHeld(pages, gate) {
-  for (const p of pages) if (p.notes?.startsWith(HELD)) p.notes = p.notes.replace("__N__", String(gate.held)).replace("__USD__", (gate.held * cfg.geminiUsdPerPage).toFixed(2));
+  for (const p of pages) if (p.notes?.startsWith(HELD)) p.notes = p.notes.replace("__N__", String(gate.held)).replace("__USD__", (Math.ceil(gate.held * cfg.geminiUsdPerPage * 100) / 100).toFixed(2));
 }
 function summarize(pages) {
   return { needs_approval: pages.filter((p) => p.notes?.startsWith(HELD)).map((p) => p.page_number), escalation_candidates: pages.filter((p) => p.confidence === "low" && p.text.trim() && !p.notes?.startsWith(HELD)).map((p) => p.page_number) };
@@ -49318,6 +49339,13 @@ function autoReason(have, source = "required") {
 async function ocrDocument(options) {
   checkOverrides(options);
   const gate = makeGate(options);
+  try {
+    return await ocrRun(options, gate);
+  } finally {
+    releaseGate(gate);
+  }
+}
+async function ocrRun(options, gate) {
   const input = resolve9(options.input);
   if (!existsSync11(input)) throw new AwError("ERROR", "ocr", `input does not exist: ${input}`);
   const isDir = statSync3(input).isDirectory();
@@ -49381,7 +49409,7 @@ ${pages.map((p) => p.text).join("\n\n")}`, "utf8");
 }
 
 // src/docx.ts
-import { existsSync as existsSync12, mkdirSync as mkdirSync9, readFileSync as readFileSync15, writeFileSync as writeFileSync9 } from "node:fs";
+import { existsSync as existsSync12, mkdirSync as mkdirSync10, readFileSync as readFileSync15, writeFileSync as writeFileSync9 } from "node:fs";
 import { join as join18, resolve as resolve10 } from "node:path";
 import { spawnSync as spawnSync2 } from "node:child_process";
 function parseUnit(raw, unitId) {
@@ -49468,7 +49496,7 @@ function buildDocx(args2, project) {
   const outline = JSON.parse(readFileSync15(args2.outlinePath, "utf8"));
   const result = assembleArticle(outline, resolve10(args2.projectDir), args2.runId, args2);
   const runDir = join18(args2.projectDir, ".academic-helper", "runs", args2.runId);
-  mkdirSync9(runDir, { recursive: true });
+  mkdirSync10(runDir, { recursive: true });
   const jsonPath = join18(runDir, "article.json");
   writeFileSync9(jsonPath, `${JSON.stringify(result.article, null, 2)}
 `, "utf8");
@@ -50679,7 +50707,7 @@ async function runBackfill(indexer, request) {
 import { existsSync as existsSync20 } from "node:fs";
 import { readFile as readFile7, rm as rm6 } from "node:fs/promises";
 import { randomBytes as randomBytes6 } from "node:crypto";
-import { isAbsolute as isAbsolute4, join as join25, relative as relative3, resolve as resolve12 } from "node:path";
+import { isAbsolute as isAbsolute5, join as join25, relative as relative3, resolve as resolve12 } from "node:path";
 
 // src/library/eval/limits.ts
 init_thresholds();
@@ -51812,7 +51840,7 @@ async function buildPairs(options) {
 
 // src/library/eval/plan.ts
 import { existsSync as existsSync18, readFileSync as readFileSync18 } from "node:fs";
-import { isAbsolute as isAbsolute3, join as join23, relative as relative2, resolve as resolve11 } from "node:path";
+import { isAbsolute as isAbsolute4, join as join23, relative as relative2, resolve as resolve11 } from "node:path";
 
 // src/library/eval/claims.ts
 import { existsSync as existsSync17, readFileSync as readFileSync17, readdirSync as readdirSync6 } from "node:fs";
@@ -52289,7 +52317,7 @@ function emptySkips() {
 function articleFiles(project, article) {
   const drafts = join23(project, ".academic-helper", "drafts");
   if (!article) return { files: draftFiles(drafts), runFilter: null, label: null };
-  const asPath = isAbsolute3(article) ? article : resolve11(project, article);
+  const asPath = isAbsolute4(article) ? article : resolve11(project, article);
   if (existsSync18(asPath)) return { files: draftFiles(asPath), runFilter: null, label: relative2(project, asPath) || "." };
   if (EVAL_ID.test(article)) return { files: draftFiles(drafts), runFilter: article, label: `run ${article}` };
   throw new LibraryError("usage", `ERROR library eval plan: --article ${article} is neither a file or folder nor a run id`);
@@ -52334,7 +52362,7 @@ function candidatesFromDrafts(project, files, skips, unmatched) {
   return out;
 }
 function candidatesFromFile(project, file, skips) {
-  const path2 = isAbsolute3(file) ? file : resolve11(project, file);
+  const path2 = isAbsolute4(file) ? file : resolve11(project, file);
   let raw;
   try {
     raw = JSON.parse(readFileSync18(path2, "utf8"));
@@ -52897,7 +52925,7 @@ async function runEvalCli(argv, io) {
       const payload = JSON.stringify(pairs2).replaceAll("<", "\\u003c").replaceAll("\u2028", "\\u2028").replaceAll("\u2029", "\\u2029");
       const out = text3(flags, "--out") ? resolve12(paths.root, text3(flags, "--out")) : paths.judgeHtml;
       const inside2 = relative3(paths.root, out);
-      if (inside2 === "" || inside2.startsWith("..") || isAbsolute4(inside2)) throw new LibraryError("usage", "ERROR library eval page: --out must be a file inside the evaluation folder");
+      if (inside2 === "" || inside2.startsWith("..") || isAbsolute5(inside2)) throw new LibraryError("usage", "ERROR library eval page: --out must be a file inside the evaluation folder");
       await writeText(out, html.replace(slot, (_whole, open4, _body, close) => `${open4}${payload}${close}`));
       print({ eval_id: evalId, out, pairs: pairs2.pairs.length });
       return 0;
