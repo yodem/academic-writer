@@ -23359,6 +23359,51 @@ import { spawn as spawn3 } from "node:child_process";
 import { createHash } from "node:crypto";
 import { join as join4, resolve as resolve4 } from "node:path";
 
+// src/python.ts
+import { spawnSync } from "node:child_process";
+var MIN_PYTHON_MINOR = 9;
+var CANDIDATES = [
+  { command: "python3", args: [] },
+  { command: "python", args: [] },
+  { command: "py", args: ["-3"] }
+];
+var PROBE_TIMEOUT_MS = 15e3;
+function isSupportedPythonVersion(output) {
+  const match = output.match(/Python 3\.(\d+)/u);
+  return match !== null && Number(match[1]) >= MIN_PYTHON_MINOR;
+}
+function pythonEnv(env) {
+  return { ...env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" };
+}
+var cache = /* @__PURE__ */ new Map();
+function pathKey(env) {
+  return env.PATH ?? env.Path ?? "";
+}
+function discoverPython(env = process.env) {
+  const key = pathKey(env);
+  if (cache.has(key)) return cache.get(key) ?? null;
+  let found = null;
+  for (const candidate of CANDIDATES) {
+    const result = spawnSync(candidate.command, [...candidate.args, "--version"], { encoding: "utf8", env, timeout: PROBE_TIMEOUT_MS, windowsHide: true });
+    if (result.error || result.status !== 0) continue;
+    if (isSupportedPythonVersion(`${result.stdout ?? ""}${result.stderr ?? ""}`)) {
+      found = candidate;
+      break;
+    }
+  }
+  cache.set(key, found);
+  return found;
+}
+function requirePython(env = process.env) {
+  const found = discoverPython(env);
+  if (!found) throw new Error(`ERROR python: Python 3.${MIN_PYTHON_MINOR} or newer was not found on this computer. Run /academic-writer:setup to install it.`);
+  return found;
+}
+function pythonInvocation(script, args2, env = process.env) {
+  const python = requirePython(env);
+  return { command: python.command, args: [...python.args, script, ...args2] };
+}
+
 // node_modules/@google/genai/dist/node/index.mjs
 var import_p_retry = __toESM(require_p_retry(), 1);
 var import_google_auth_library = __toESM(require_src5(), 1);
@@ -41742,9 +41787,14 @@ function contractChange(change) {
   const idSeed = `${stage}\0${change.line}\0${change.before}${typeof change.occurrence === "number" ? `\0${change.occurrence}` : ""}`;
   return { change_id: createHash("sha256").update(idSeed).digest("hex").slice(0, 12), stage, line: change.line, type, level: ["typo", "punctuation", "typography"].includes(type) ? "letter" : type === "word" ? "word" : "sentence", before: change.before, after: change.after, rationale: typeof change.rationale === "string" ? change.rationale : "Proofread suggestion; compare with the surrounding context.", meaningRisk: change.meaningRisk, ...change.mustCatch ? { mustCatch: true } : {}, ...applied !== void 0 ? { applied } : {}, ...skipReason ? { skipReason } : {}, ...typeof change.occurrence === "number" ? { occurrence: change.occurrence } : {} };
 }
+async function pythonCommand(scriptAndArgs, cwd) {
+  const [script, ...args2] = scriptAndArgs;
+  const run = pythonInvocation(script, args2, allowedEnv(process.env, "script"));
+  return await command(run.command, run.args, cwd);
+}
 async function command(bin, args2, cwd) {
   return await new Promise((resolvePromise, reject) => {
-    const child = spawn3(bin, args2, { cwd, env: allowedEnv(process.env, "script"), stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn3(bin, args2, { cwd, env: pythonEnv(allowedEnv(process.env, "script")), stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8").on("data", (data) => {
@@ -41806,7 +41856,7 @@ async function proofreadRun(options) {
   const article = options.article ? resolve4(options.article) : "";
   const content = article ? readFileSync3(article, "utf8") : "";
   const numbered = Array.isArray(options.chunks) ? numberedChunks(options.chunks) : [];
-  const chunks = numbered.length ? numbered : content ? JSON.parse(await command("python3", [join4(root, "scripts/chunk-article.py"), "--input", article, "--numbered"])) : Array.from({ length: typeof options.chunks === "number" ? options.chunks : 0 }, (_, index) => ({ id: `chunk-${index}`, index, startLine: index + 1, endLine: index + 1, text: `L${index + 1}	x` }));
+  const chunks = numbered.length ? numbered : content ? JSON.parse(await pythonCommand([join4(root, "scripts/chunk-article.py"), "--input", article, "--numbered"])) : Array.from({ length: typeof options.chunks === "number" ? options.chunks : 0 }, (_, index) => ({ id: `chunk-${index}`, index, startLine: index + 1, endLine: index + 1, text: `L${index + 1}	x` }));
   const budget = new Budget(options.runId, budgetFor("proofread"));
   const act = project || void 0;
   startRunOnce(options.runId, "proofread", act);
@@ -41822,7 +41872,7 @@ async function proofreadRun(options) {
     if (actualTerms !== termsPath) writeFileSync(actualTerms, JSON.stringify({}));
     const tempText = join4(outDir, ".proofread-input.md");
     writeFileSync(tempText, content);
-    const result = await command("python3", [join4(root, "scripts/must-catch.py"), "--text", tempText, "--style-words", actualStyles, "--terms", actualTerms, "--hspell", "--json"]);
+    const result = await pythonCommand([join4(root, "scripts/must-catch.py"), "--text", tempText, "--style-words", actualStyles, "--terms", actualTerms, "--hspell", "--json"]);
     deterministic = JSON.parse(result).changes;
   }
   if (stubs.mustCatch) deterministic = await stubs.mustCatch();
@@ -41897,14 +41947,14 @@ ${content}`], runId: options.runId, budget })).text;
   const memoPath = join4(outDir, "memo.md");
   const contract = all.map(contractChange);
   writeFileSync(changesPath, JSON.stringify({ stage: "language", changes: contract }, null, 2));
-  if (article) await command("python3", [join4(root, "scripts/gate.py"), "changes-schema", changesPath, "--json"]);
+  if (article) await pythonCommand([join4(root, "scripts/gate.py"), "changes-schema", changesPath, "--json"]);
   if (article) {
     const candidateContract = contract.filter((change) => !change.mustCatch);
     if (candidateContract.length) {
       const guardInput = join4(outDir, ".proofread-before-guard.json");
       const guardOutput = join4(outDir, ".proofread-after-guard.json");
       writeFileSync(guardInput, JSON.stringify({ stage: "language", changes: candidateContract }));
-      const guardedText = await command("python3", [join4(root, "scripts/citation-guard.py"), "--changes", guardInput, "--proof-base", article, "--json"]);
+      const guardedText = await pythonCommand([join4(root, "scripts/citation-guard.py"), "--changes", guardInput, "--proof-base", article, "--json"]);
       writeFileSync(guardOutput, guardedText);
       const guarded = JSON.parse(guardedText).changes;
       const guardedById = new Map(guarded.map((change) => [change.change_id, change]));
@@ -41918,7 +41968,7 @@ ${content}`], runId: options.runId, budget })).text;
     const applyPath = join4(outDir, ".proofread-applicable.json");
     writeFileSync(applyPath, JSON.stringify({ stage: "language", changes: applicable }));
     if (applicable.length) {
-      const appliedText = await command("python3", [join4(root, "scripts/apply-changes.py"), "--changes", applyPath, "--proof-base", article, "--output", proofedPath, "--json"]);
+      const appliedText = await pythonCommand([join4(root, "scripts/apply-changes.py"), "--changes", applyPath, "--proof-base", article, "--output", proofedPath, "--json"]);
       const applied = JSON.parse(appliedText).changes;
       const appliedById = new Map(applied.map((change) => [change.change_id, change]));
       for (let index = 0; index < all.length; index += 1) {
@@ -41933,7 +41983,7 @@ ${content}`], runId: options.runId, budget })).text;
     if (article.toLowerCase().endsWith(".docx")) {
       const finalTextPath = join4(outDir, ".proofread-final-text.txt");
       writeFileSync(finalTextPath, proofed);
-      await command("python3", [join4(root, "scripts/build-tracked-docx.py"), "--original", article, "--final-text", finalTextPath, "--changes", changesPath, "--output", join4(outDir, "proofed.docx")]);
+      await pythonCommand([join4(root, "scripts/build-tracked-docx.py"), "--original", article, "--final-text", finalTextPath, "--changes", changesPath, "--output", join4(outDir, "proofed.docx")]);
     }
   } else writeFileSync(proofedPath, proofed);
   writeFileSync(memoPath, memo);
@@ -48810,7 +48860,7 @@ Return one JSON object with revised_text.`;
 import { appendFileSync as appendFileSync6, existsSync as existsSync11, mkdirSync as mkdirSync8, mkdtempSync, readFileSync as readFileSync13, readdirSync as readdirSync5, rmSync, statSync as statSync3, writeFileSync as writeFileSync8 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname as dirname6, extname, isAbsolute as isAbsolute3, join as join16, resolve as resolve9 } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawnSync as spawnSync2 } from "node:child_process";
 var schema2 = { type: "array", items: { type: "object", required: ["page_number", "text", "is_born_digital"], properties: { page_number: { type: "integer" }, text: { type: "string" }, is_born_digital: { type: "boolean" }, confidence: { type: "string", enum: ["high", "medium", "low"] }, notes: { type: "string" } } } };
 var cfg = thresholds_default.ocr;
 var HELD = "needs approval: Gemini";
@@ -48872,7 +48922,9 @@ function checkOverrides(options) {
 function runScript(name, args2) {
   const plugin2 = resolve9(dirname6(process.argv[1] ?? ""), "..");
   const script = join16(plugin2, "scripts", "ocr", name);
-  const result = spawnSync("python3", [script, ...args2], { encoding: "utf8", env: allowedEnv(process.env, "script") });
+  const env = pythonEnv(allowedEnv(process.env, "script"));
+  const run = pythonInvocation(script, args2, env);
+  const result = spawnSync2(run.command, run.args, { encoding: "utf8", env });
   if (result.status !== 0) throw new AwError("ERROR", "ocr", result.stderr.trim() || result.stdout.trim() || `${name} failed`);
   try {
     return JSON.parse(result.stdout);
@@ -48895,11 +48947,11 @@ function stripFence(value) {
   const match = /```(?:json)?\s*\n([\s\S]*?)\n```/i.exec(value);
   return match?.[1] ?? value;
 }
-var probe = (cmd) => cmd === "surya_ocr" ? suryaServer() : spawnSync(cmd, ["--version"], { encoding: "utf8" }).status === 0;
+var probe = (cmd) => cmd === "surya_ocr" ? suryaServer() : spawnSync2(cmd, ["--version"], { encoding: "utf8" }).status === 0;
 function suryaServer() {
   const url = (process.env.SURYA_INFERENCE_URL ?? "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
-  if (!url || spawnSync("surya_ocr", ["--help"], { encoding: "utf8" }).status !== 0) return false;
-  const health = spawnSync(process.execPath, ["-e", "fetch(process.argv[1]).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))", `${url}/health`], { timeout: 5e3 });
+  if (!url || spawnSync2("surya_ocr", ["--help"], { encoding: "utf8" }).status !== 0) return false;
+  const health = spawnSync2(process.execPath, ["-e", "fetch(process.argv[1]).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))", `${url}/health`], { timeout: 5e3 });
   return health.status === 0;
 }
 function lettersOnly(text4) {
@@ -48928,7 +48980,7 @@ function chooseEngine(requested) {
   return { engine: "local", reason: "requested" };
 }
 function nativeDpi(pdf, page) {
-  const out = spawnSync("pdfimages", ["-list", "-f", String(page), "-l", String(page), pdf], { encoding: "utf8" });
+  const out = spawnSync2("pdfimages", ["-list", "-f", String(page), "-l", String(page), pdf], { encoding: "utf8" });
   if (out.status !== 0) return void 0;
   const rows = out.stdout.split("\n").slice(2).map((l) => l.trim().split(/\s+/)).filter((r2) => r2.length > 12);
   const big = rows.sort((a, b) => Number(b[3]) * Number(b[4]) - Number(a[3]) * Number(a[4]))[0];
@@ -48979,7 +49031,7 @@ function readClaude(scan, language, model = cfg.claudeModel) {
     { type: "image", source: { type: "base64", media_type: mimeOf(scan.png), data: readFileSync13(scan.png).toString("base64") } },
     { type: "text", text: language === "en" ? PLAIN_PROMPT : `${PLAIN_PROMPT} Hebrew columns read right to left.` }
   ] } };
-  const run = spawnSync("claude", [
+  const run = spawnSync2("claude", [
     "-p",
     "--model",
     model,
@@ -49009,14 +49061,14 @@ function readClaude(scan, language, model = cfg.claudeModel) {
 }
 function readLocal(scan, language) {
   const langs = language === "en" ? "eng" : "heb+eng";
-  const run = spawnSync("tesseract", [scan.png, "-", "-l", langs], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+  const run = spawnSync2("tesseract", [scan.png, "-", "-l", langs], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
   if (run.status !== 0) throw new AwError("ERROR", "ocr", `tesseract failed: ${run.stderr.slice(-300)}`);
   return { page_number: scan.page_number, text: run.stdout, is_born_digital: false, confidence: "low", notes: "Tesseract: OCR, not image-verified (2-5% letter error on Hebrew scans, more on vowel marks)" };
 }
 function readSurya(scan) {
   const dir = mkdtempSync(join16(tmpdir(), "aw-surya-"));
   try {
-    const run = spawnSync("surya_ocr", [scan.png, "--output_dir", dir], { encoding: "utf8", env: process.env, maxBuffer: 16 * 1024 * 1024, timeout: 18e5 });
+    const run = spawnSync2("surya_ocr", [scan.png, "--output_dir", dir], { encoding: "utf8", env: process.env, maxBuffer: 16 * 1024 * 1024, timeout: 18e5 });
     const file = readdirSync5(dir).map((d) => join16(dir, d, "results.json")).find((f3) => existsSync11(f3));
     if (run.status !== 0 || !file) throw new AwError("ERROR", "ocr", `surya_ocr failed: ${(run.stderr || run.stdout || "").trim().split("\n").pop()?.slice(-300) ?? ""}`);
     const results = JSON.parse(readFileSync13(file, "utf8"));
@@ -49171,7 +49223,7 @@ ${pages.map((p) => p.text).join("\n\n")}`, "utf8");
 // src/docx.ts
 import { existsSync as existsSync12, mkdirSync as mkdirSync9, readFileSync as readFileSync14, writeFileSync as writeFileSync9 } from "node:fs";
 import { join as join17, resolve as resolve10 } from "node:path";
-import { spawnSync as spawnSync2 } from "node:child_process";
+import { spawnSync as spawnSync3 } from "node:child_process";
 function parseUnit(raw, unitId) {
   const definitions = /* @__PURE__ */ new Map();
   const body = [];
@@ -49261,7 +49313,9 @@ function buildDocx(args2, project) {
   writeFileSync9(jsonPath, `${JSON.stringify(result.article, null, 2)}
 `, "utf8");
   const script = join17(args2.pluginRoot, "scripts", "generate-docx.py");
-  const child = spawnSync2("python3", [script, "--input", jsonPath, "--output", args2.out], { stdio: "inherit", env: allowedEnv(process.env, "script") });
+  const env = pythonEnv(allowedEnv(process.env, "script"));
+  const run = pythonInvocation(script, ["--input", jsonPath, "--output", args2.out], env);
+  const child = spawnSync3(run.command, run.args, { stdio: "inherit", env });
   if (child.error) throw new Error(`ERROR docx: ${child.error.message}`);
   if (child.status !== 0) throw new Error(`ERROR docx: generate-docx.py exited ${child.status ?? 1}`);
   emit(args2.runId, "write", "file_written", { step: "word", path: args2.out }, project);

@@ -101,7 +101,7 @@ from datetime import datetime
 
 PROFILE_PATH = '.academic-helper/profile.md'
 
-with open(PROFILE_PATH) as f:
+with open(PROFILE_PATH, encoding="utf-8") as f:
     content = f.read()
 
 # Parse frontmatter scalars and lists
@@ -172,7 +172,7 @@ for k, heading in json_sections:
         lines.extend([f'## {heading}', '', '```json',
                       json.dumps(profile[k], indent=2, ensure_ascii=False), '```', ''])
 
-with open(PROFILE_PATH, 'w') as f:
+with open(PROFILE_PATH, 'w', encoding="utf-8") as f:
     f.write('\n'.join(lines))
 
 print("Tools updated successfully.")

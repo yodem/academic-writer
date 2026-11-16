@@ -42,7 +42,7 @@ When run as a step of `/academic-writer:write`, the article text is passed to yo
 The 6-dimension scorecard is defined in `references/scorecard.json` (machine-readable, versioned). Read that file at the start of every review:
 
 ```bash
-cat ${CLAUDE_PLUGIN_ROOT}/skills/review/references/scorecard.json
+cat "${CLAUDE_PLUGIN_ROOT}/skills/review/references/scorecard.json"
 ```
 
 For each dimension:
@@ -57,7 +57,7 @@ Also check the researcher's style fingerprint for Writing Quality (dimension 5):
 ```bash
 sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "
 import re, json
-content = open('.academic-helper/profile.md').read()
+content = open('.academic-helper/profile.md', encoding="utf-8").read()
 m = re.search(r'## Style Fingerprint\n+\x60\x60\x60json\n(.*?)\n\x60\x60\x60', content, re.DOTALL)
 print(m.group(1) if m else 'null')
 "
@@ -68,9 +68,9 @@ And load linking words reference (judge whether each connective states a real lo
 LANG_LOWER=$(grep -m1 '^targetLanguage:' .academic-helper/profile.md 2>/dev/null | sed 's/^targetLanguage:[[:space:]]*//' | tr '[:upper:]' '[:lower:]')
 LANG_LOWER=${LANG_LOWER:-hebrew}
 WORDS_FILE="${CLAUDE_PLUGIN_ROOT}/words-${LANG_LOWER}.md"
-if [ -f "$WORDS_FILE" ]; then cat "$WORDS_FILE"; else cat ${CLAUDE_PLUGIN_ROOT}/words-hebrew.md; fi
+if [ -f "$WORDS_FILE" ]; then cat "$WORDS_FILE"; else cat "${CLAUDE_PLUGIN_ROOT}/words-hebrew.md"; fi
 TERM_FILE="${CLAUDE_PLUGIN_ROOT}/skills/write/references/academic-terminology-${LANG_LOWER}.md"
-if [ -f "$TERM_FILE" ]; then cat "$TERM_FILE"; else cat ${CLAUDE_PLUGIN_ROOT}/skills/write/references/academic-terminology-hebrew.md; fi
+if [ -f "$TERM_FILE" ]; then cat "$TERM_FILE"; else cat "${CLAUDE_PLUGIN_ROOT}/skills/write/references/academic-terminology-hebrew.md"; fi
 ```
 
 Score the "Terminology register" criterion in dimension 6 by checking whether hedging, argumentation, citation-introduction, and transition vocabulary in the article matches the register modeled in that file rather than colloquial substitutes — see the table in `academic-terminology-{lang}.md § E` for common colloquial→academic swaps to watch for.

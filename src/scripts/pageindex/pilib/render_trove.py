@@ -202,8 +202,8 @@ def run(trove_id: str, book_id: str, title: str, author: str = "", pages_spec: s
     side = out.with_suffix(".pagemap.json")
     side.write_text(json.dumps({"trove_id": trove_id, "book_id": book_id, "title": title, "author": author,
                                 "trove_pages": [min(pages), max(pages)], "dropped_pages": dropped,
-                                "pdf_to_trove": mapping}, ensure_ascii=False))
+                                "pdf_to_trove": mapping}, ensure_ascii=False), encoding="utf-8")
     v = verify(out, pages, mapping)
-    out.with_suffix(".verify.json").write_text(json.dumps(v, ensure_ascii=False, indent=1))
+    out.with_suffix(".verify.json").write_text(json.dumps(v, ensure_ascii=False, indent=1), encoding="utf-8")
     v.pop("pages")
     return {"book_id": book_id, "pdf": str(out), "pagemap": str(side), "dropped_pages": dropped, **v}

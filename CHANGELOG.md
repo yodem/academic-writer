@@ -12,6 +12,12 @@ All notable changes to the academic-writer plugin are documented here.
 - **Setup starts with prerequisites** (Git, Node.js, Python, with the `winget` commands, the "Add python.exe to PATH" box and the restart) and has a connections step (Drive first, then NotebookLM, Trove, Kotar, Moodle; each optional). The README and the bundled guide have a Windows section in the same order, and troubleshooting covers a `/plugin marketplace add` that failed on missing Git and left a locked folder behind.
 - CI runs the Python resolver, the setup checks and the hook guard on `windows-latest`.
 
+### Fixed
+- **Shell scripts keep LF line endings on Windows.** Git for Windows turns files into CRLF by default, which broke `sh` on `bin/aw-python` and `hooks/bin/guard.sh`. A root `.gitattributes` pins every shell script and shebang file to LF, and a test checks it.
+- **The `aw` command finds Python the same way `aw-python` does** (`python3`, then `python`, then `py -3`, Python 3.9 or newer) instead of calling `python3`, which does not exist on a normal Windows install. `aw-python` and the setup check now share the same minimum version, and the Node.js row reports a failed version check instead of passing.
+- **Python runs in UTF-8 mode** (`PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`) through `aw-python` and `aw`, so Hebrew profiles and articles read and write correctly on Windows. Skill and script file reads and writes now name their encoding.
+- Every `${CLAUDE_PLUGIN_ROOT}` path in a command is quoted (Windows user folders often contain spaces), with a test that scans the skills and agents.
+
 ### Removed
 - **Jev (TypeSafe) is gone.** The optional experimental decision-scoring service is removed from the plugin: the `aw decide` command, every place that logged a Jev answer beside the model's, and the Jev API key. The setup screen no longer asks for that key, and nothing is sent to that service. Drafting, evidence, proofreading, synthesis and revision work exactly as before, since Jev only ever logged answers and never changed a result.
 

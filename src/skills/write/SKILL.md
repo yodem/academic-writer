@@ -48,7 +48,7 @@ AskUserQuestion(questions=[{
 
 ### Voice profile load (first step of every run)
 
-1. Only if the profile has Trove enabled (`tools.trove.enabled: true`, or `tools.candlekeep.enabled` in older profiles): run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh pull "${CLAUDE_PLUGIN_DATA}" "$PWD"` to fetch the latest voice store from Trove. Check its exit code and show its output: a non-zero exit is a real failure, so say so plainly before continuing with the local copy. Without Trove, skip this step; the local store is the only copy.
+1. Only if the profile has Trove enabled (`tools.trove.enabled: true`, or `tools.candlekeep.enabled` in older profiles): run `sh "${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh" pull "${CLAUDE_PLUGIN_DATA}" "$PWD"` to fetch the latest voice store from Trove. Check its exit code and show its output: a non-zero exit is a real failure, so say so plainly before continuing with the local copy. Without Trove, skip this step; the local store is the only copy.
 2. `aw draft` and `aw synthesize` load the voice bundle (chosen exemplars, rewrite pairs, writing rules, style words) from the store themselves — you do not paste voice text into a prompt.
 3. The drafting prompt (`aw draft`'s `write-draft.md`) is written to weight `## Academic-specific`
    rules higher when they conflict with `## Core voice` rules; everything else applies as written.
@@ -247,7 +247,7 @@ sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py"
 
 The gate must exit `0` before drafting. Once it exits `0`, close the outline stage: `activity step --run-id <run-id> --step outline --state end`. Exit `1` means revise the outline or approval state and rerun the gate. Exit `2` means the gate could not run; repair the inputs and rerun. See `references/write-intent-outline.md` for artifact examples and recovery details.
 
-Legacy v1 outlines remain supported for existing projects: `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py argument-graph <outline.json>` validates their argument graph, and `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py stale-evidence-ownership <outline.json> --evidence-ownership <evidence-ownership.json>` validates their ownership map. Do not proceed to W3 until every check for the outline version in use passes.
+Legacy v1 outlines remain supported for existing projects: `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" argument-graph <outline.json>` validates their argument graph, and `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" stale-evidence-ownership <outline.json> --evidence-ownership <evidence-ownership.json>` validates their ownership map. Do not proceed to W3 until every check for the outline version in use passes.
 
 ### W3: Draft the article
 
@@ -310,7 +310,7 @@ Re-audit only the redrafted unit (one more batched `auditor` call over just its 
 same `runId`), and repeat. Track rewrite attempts **per unit**, reading the ceiling at runtime rather than inlining it:
 
 ```bash
-sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "import json;print(json.load(open('${CLAUDE_PLUGIN_ROOT}/thresholds.json'))['rewriteCycles']['max'])"
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "import json;print(json.load(open('${CLAUDE_PLUGIN_ROOT}/thresholds.json', encoding='utf-8'))['rewriteCycles']['max'])"
 ```
 
 A unit that still has failing paragraphs after `rewriteCycles.max` attempts ships with those

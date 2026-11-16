@@ -262,7 +262,10 @@ def _node(which: Callable[[str], Optional[str]], run: Callable[[List[str]], Tupl
             return _check("node", label, False, found=out.strip(), required="%d+" % MIN_NODE,
                           reason_he="הגרסה ישנה מדי, נדרשת %d ומעלה" % MIN_NODE, fix=SETUP_FIX)
         return _check("node", label, True, found=out.strip(), required="%d+" % MIN_NODE)
-    return _check("node", label, True, found=path, required="%d+" % MIN_NODE)
+    # The version command failed or printed something unreadable: do not report a working Node.
+    return _check("node", label, False, found=path, required="%d+" % MIN_NODE,
+                  reason_he="Node.js נמצא (%s) אבל בדיקת הגרסה נכשלה או לא הובנה, ולכן אי אפשר לדעת אם הוא תקין" % path,
+                  fix=SETUP_FIX)
 
 
 _CHROME_NAMES = ("google-chrome", "google-chrome-stable", "chrome", "chromium", "chromium-browser")

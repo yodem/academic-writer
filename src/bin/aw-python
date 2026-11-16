@@ -3,18 +3,30 @@
 # Skills call it as: sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" <script> <args>
 # (through sh, because the executable bit does not survive a Windows checkout).
 # Tries python3, python, then the Windows launcher "py -3", in that order. A candidate counts only
-# when `--version` exits 0 and prints "Python 3": that skips the Microsoft Store stub that Windows
-# ships as python.exe (it exits non-zero and opens the Store) and an old Python 2.
+# when `--version` exits 0 and prints "Python 3.<minor>" with minor at least MIN_MINOR (the same
+# minimum as MIN_PYTHON in scripts/setup_checks.py): that skips the Microsoft Store stub that Windows
+# ships as python.exe (it exits non-zero and opens the Store), an old Python 2 and an obsolete Python 3.
+# The chosen Python runs in UTF-8 mode, so Hebrew text files read and write the same on Windows.
 # Nothing usable: one plain line on stderr, exit 127.
+
+MIN_MINOR=9
 
 works() {
   command -v "$1" >/dev/null 2>&1 || return 1
   out=$("$@" --version 2>&1) || return 1
   case "$out" in
-    *"Python 3"*) return 0 ;;
+    *"Python 3."*)
+      minor=${out#*Python 3.}
+      minor=${minor%%[!0-9]*}
+      [ -n "$minor" ] && [ "$minor" -ge "$MIN_MINOR" ] && return 0
+      ;;
   esac
   return 1
 }
+
+PYTHONUTF8=1
+PYTHONIOENCODING=utf-8
+export PYTHONUTF8 PYTHONIOENCODING
 
 if works python3; then
   exec python3 "$@"
@@ -23,5 +35,5 @@ elif works python; then
 elif works py -3; then
   exec py -3 "$@"
 fi
-echo "Python 3 was not found on this computer. Run /academic-writer:setup to install it." >&2
+echo "Python 3.$MIN_MINOR or newer was not found on this computer. Run /academic-writer:setup to install it." >&2
 exit 127

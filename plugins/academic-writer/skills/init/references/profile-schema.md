@@ -15,7 +15,7 @@ from datetime import datetime
 old_path = '.academic-writer/profile.json'
 new_path = '.academic-helper/profile.md'
 if os.path.exists(old_path) and not os.path.exists(new_path):
-    with open(old_path) as f:
+    with open(old_path, encoding="utf-8") as f:
         p = json.load(f)
     scalar_keys = ['name', 'author_key', 'fieldOfStudy', 'citationStyle', 'targetLanguage', 'updatedAt', 'createdAt']
     list_keys = ['abstractLanguages', 'analyzedArticles']
@@ -43,7 +43,7 @@ if os.path.exists(old_path) and not os.path.exists(new_path):
             lines.extend([f'## {heading}', '', '```json',
                           json.dumps(p[k], indent=2, ensure_ascii=False), '```', ''])
     os.makedirs('.academic-helper', exist_ok=True)
-    with open(new_path, 'w') as f:
+    with open(new_path, 'w', encoding="utf-8") as f:
         f.write('\n'.join(lines))
     print(f"Migrated profile to {new_path}")
 PYTHON

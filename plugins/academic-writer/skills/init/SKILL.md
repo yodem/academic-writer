@@ -65,7 +65,7 @@ Run `home.py show`, then `references/home-workspace.md`: inside home, ask "which
 
 ### Python add-ons check
 
-Style analysis needs a few Python add-ons. Check with `setup_checks.py --json` (the `python-addons` row) or `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/python-deps.md`. If Python itself is missing, give the numbered steps from `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/dependencies.md § Python 3` and note that style
+Style analysis needs a few Python add-ons. Check with `setup_checks.py --json` (the `python-addons` row) or `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/python-deps.md`. If Python itself is missing, give the numbered steps from `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/dependencies.md` § Python 3 and note that style
 analysis will be skipped until it is installed. If only add-ons are missing:
 
 ```python

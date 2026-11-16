@@ -79,7 +79,7 @@ the plugin's own command check (it changes nothing):
 ```
 
 If the profile's `## Gemini` block has `enabled: true` and the `gemini-key` row is ok, run the live key check
-from `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/gemini-key.md § Checking the key`.
+from `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/gemini-key.md` § Checking the key.
 
 | Result | Report as | To fix (say exactly this, in the researcher's language) |
 |---|---|---|

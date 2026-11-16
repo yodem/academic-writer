@@ -119,3 +119,43 @@ def test_guard_with_node_passes_arguments_and_stdin_through():
                            env=env, timeout=30)
         assert p.returncode == 3  # the hook's own exit status is kept
         assert json.loads(p.stdout) == {"args": ["lifecycle/x", "extra"], "stdin": '{"a":1}'}
+
+
+def test_obsolete_python3_is_skipped_for_a_supported_python(empty_candidates):
+    with tempfile.TemporaryDirectory() as old, tempfile.TemporaryDirectory() as good:
+        fake(old, "python3", 'if [ "$1" = "--version" ]; then echo "Python 3.6.15"; else echo "old:$*"; fi')
+        fake(good, "python", 'if [ "$1" = "--version" ]; then echo "Python 3.12.1"; else echo "ran:$*"; fi')
+        p = resolver([old, good, empty_candidates], "script.py")
+        assert p.returncode == 0, p.stderr
+        assert p.stdout.strip() == "ran:script.py"
+
+
+def test_only_an_obsolete_python_exits_127(empty_candidates):
+    with tempfile.TemporaryDirectory() as old:
+        fake(old, "python3", 'echo "Python 3.8.18"')
+        p = resolver([old, empty_candidates], "script.py")
+        assert p.returncode == 127
+        assert "3.9" in p.stderr
+
+
+def test_minimum_matches_setup_checks():
+    import re
+    script = AW_PYTHON.read_text()
+    checks = (ROOT / "src" / "scripts" / "setup_checks.py").read_text(encoding="utf-8")
+    shell_minor = int(re.search(r"^MIN_MINOR=(\d+)", script, re.M).group(1))
+    major, minor = re.search(r"^MIN_PYTHON = \((\d+), (\d+)\)", checks, re.M).groups()
+    assert (3, shell_minor) == (int(major), int(minor))
+    cli = (ROOT / "src" / "cli" / "src" / "python.ts").read_text(encoding="utf-8")
+    assert int(re.search(r"MIN_PYTHON_MINOR = (\d+)", cli).group(1)) == int(minor)
+
+
+def test_aw_python_runs_python_in_utf8_mode():
+    # A real interpreter is needed for sys.flags; the host PATH has one in CI and on a developer machine.
+    if shutil.which("python3") is None and shutil.which("python") is None:
+        pytest.skip("no Python on PATH")
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONUTF8", "PYTHONIOENCODING")}
+    p = subprocess.run([SH, str(AW_PYTHON), "-c",
+                        "import sys,os;print(os.environ.get('PYTHONUTF8'), sys.flags.utf8_mode, os.environ.get('PYTHONIOENCODING'))"],
+                       capture_output=True, text=True, env=env, timeout=30)
+    assert p.returncode == 0, p.stderr
+    assert p.stdout.strip() == "1 1 utf-8"

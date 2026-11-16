@@ -68,7 +68,7 @@ template and full rules: see `references/docx-generation.md#step-9a-markdown-out
 Before generating the DOCX, run the deterministic punctuation validator over the markdown file just written:
 
 ```bash
-sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" ${CLAUDE_PLUGIN_ROOT}/scripts/validate-hebrew-punctuation.py "$MD_PATH"
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/validate-hebrew-punctuation.py" "$MD_PATH"
 ```
 
 This checks logical bracket/paren/quote balance and flags mixed gershayim/straight-quote characters and likely-missing bidi marks around embedded Latin/digit runs — the exact class of defect that causes mismatched parentheses and quotation marks in the rendered DOCX.
@@ -83,7 +83,7 @@ This gate is mandatory for any article containing Hebrew text — it is not opti
 The per-paragraph auditor is a **presence** check — it verifies that claims which *are* cited are cited correctly. It is structurally blind to a paragraph that cites nothing, and the self-review scorecard's 1–10 "Citation Completeness" dimension cannot separate 15 footnotes from 30. Absence needs its own counting gate (`VER-18`), and the count is arithmetic, not judgement.
 
 ```bash
-sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py citation-floor "$MD_PATH" \
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" citation-floor "$MD_PATH" \
   --sources .academic-helper/sources.json --json
 ```
 
@@ -117,10 +117,10 @@ sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" - <<'PY'
 import json, pathlib
 p = pathlib.Path('.academic-helper/session-state.json')
 if p.exists():
-    d = json.loads(p.read_text())
+    d = json.loads(p.read_text(encoding="utf-8"))
     if isinstance(d.get('run'), dict):
         d['run']['completed'] = True
-        p.write_text(json.dumps(d, indent=2, ensure_ascii=False))
+        p.write_text(json.dumps(d, indent=2, ensure_ascii=False), encoding="utf-8")
 PY
 ```
 

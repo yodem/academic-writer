@@ -121,7 +121,7 @@ No results means `[NEEDS REVIEW: external_unverified]`. Check B only confirms th
 **Check D — Metadata integrity** (mandatory). Load the registry:
 
 ```bash
-cat .academic-helper/sources.json 2>/dev/null || sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "import json;print(json.dumps(json.load(open('.academic-helper/evidence.json')).get('sources', [])))" 2>/dev/null || echo "[]"
+cat .academic-helper/sources.json 2>/dev/null || sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "import json;print(json.dumps(json.load(open('.academic-helper/evidence.json', encoding='utf-8')).get('sources', [])))" 2>/dev/null || echo "[]"
 ```
 
 Match each citation's author and work title to a registry entry, then compare every field the citation asserts (year, journal, publisher, title spelling, volume, issue):
@@ -151,10 +151,10 @@ sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "
 import json, os
 path = '.academic-helper/sources.json'
 if os.path.exists(path):
-    raw = json.load(open(path))
+    raw = json.load(open(path, encoding="utf-8"))
     sources = raw if isinstance(raw, list) else raw.get('sources', [])
 else:
-    sources = json.load(open('.academic-helper/evidence.json')).get('sources', [])
+    sources = json.load(open('.academic-helper/evidence.json', encoding="utf-8")).get('sources', [])
 for s in sources:
     print(s.get('sourceId') or s.get('id'), '→', s.get('workTitle') or s.get('title'))
 "

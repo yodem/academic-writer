@@ -81,7 +81,7 @@ if [ -f .ctx/hebrew-linguistic-reference.md ]; then
 else
   BASELINE_ARGS=""
 fi
-sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" ${CLAUDE_PLUGIN_ROOT}/scripts/extract-style-metrics.py \
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/extract-style-metrics.py" \
   --input past-articles/ \
   --aggregate \
   $BASELINE_ARGS \

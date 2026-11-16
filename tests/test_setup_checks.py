@@ -128,6 +128,14 @@ class SetupChecks(unittest.TestCase):
                               run=lambda cmd: (0, "v16.20.0") if cmd[0].endswith("node") else fake_run()(cmd))
         self.assertIs(got["node"]["ok"], False)
 
+    def test_node_version_command_fails_or_is_unreadable(self):
+        for result in ((1, "boom"), (0, "not a version"), (0, "")):
+            got = self.run_checks(which={"python3": "/usr/bin/python3", "node": "/usr/bin/node"},
+                                  run=lambda cmd, result=result: result if cmd[0].endswith("node") else fake_run()(cmd))
+            self.assertIs(got["node"]["ok"], False, result)
+            self.assertIn("/usr/bin/node", got["node"]["reason_he"])
+            self.assertIn("winget install --id OpenJS.NodeJS.LTS", got["node"]["fix_windows"])
+
     def test_drive_and_moodle_are_manual(self):
         got = self.run_checks()
         for cid in ("drive", "moodle"):

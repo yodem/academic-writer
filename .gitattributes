@@ -1,1 +1,17 @@
+# Git for Windows defaults to core.autocrlf=true, which turns checked-out shell scripts into CRLF
+# and breaks `sh` ("\r: command not found", `env: node\r`). Everything the plugin runs through sh,
+# or by shebang, stays LF in every checkout.
+*.sh text eol=lf
+*.mjs text eol=lf
+*.py text eol=lf
+.githooks/* text eol=lf
+scripts/*.example text eol=lf
+
+# Extensionless scripts (source and the built copies under plugins/).
+src/bin/aw-python text eol=lf
+plugins/academic-writer/bin/aw-python text eol=lf
+plugins/academic-writer/bin/aw text eol=lf
+src/hooks/bin/guard.sh text eol=lf
+plugins/academic-writer/hooks/bin/guard.sh text eol=lf
+
 plugins/academic-writer/mcp/gemini-server/dist/index.js -diff linguist-generated=true
