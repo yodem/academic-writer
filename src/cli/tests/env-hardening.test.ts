@@ -17,6 +17,18 @@ test('script kind keeps interpreter and plugin variables, never a model key', ()
   assert.deepEqual(Object.keys(env).sort(), ['AW_FIXED_NOW', 'CLAUDE_PLUGIN_ROOT', 'CLAUDE_PROJECT_DIR', 'HOME', 'LANG', 'PATH', 'PYTHONPATH', 'VIRTUAL_ENV']);
 });
 
+test('Windows variable names are kept whatever their case, with their own key', () => {
+  assert.deepEqual(allowedEnv({ Path: 'x' }), { Path: 'x' });
+  assert.deepEqual(allowedEnv({ path: 'x' }), { path: 'x' });
+  const env = allowedEnv({ Path: 'x', SystemRoot: 'C:\\Windows', Temp: 't', ComSpec: 'c', PathExt: '.EXE', UserProfile: 'u', AppData: 'a', LocalAppData: 'l' });
+  assert.deepEqual(Object.keys(env).sort(), ['AppData', 'ComSpec', 'LocalAppData', 'Path', 'PathExt', 'SystemRoot', 'Temp', 'UserProfile']);
+});
+
+test('names outside the allow-list are still dropped, in any case', () => {
+  const env = allowedEnv({ Path: 'x', gemini_api_key: 'g', GEMINI_API_KEY: 'g', Home: 'h', RandomThing: 'r', MyPathVar: 'p' });
+  assert.deepEqual(Object.keys(env), ['Path']);
+});
+
 test('pi kind gets the OpenRouter key and no other model key', () => {
   const env = allowedEnv({ ...BASE, ...SECRETS, PI_HOME: '/pi' }, 'pi');
   assert.deepEqual(Object.keys(env).sort(), ['HOME', 'LANG', 'OPENROUTER_API_KEY', 'PATH', 'PI_HOME']);

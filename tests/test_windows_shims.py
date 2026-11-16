@@ -8,6 +8,8 @@ import pathlib
 import shutil
 import subprocess
 import tempfile
+import threading
+import time
 
 import pytest
 
@@ -162,7 +164,6 @@ def test_aw_python_runs_python_in_utf8_mode():
 
 
 def test_a_hung_candidate_is_skipped_within_the_probe_bound(empty_candidates):
-    import time
     with tempfile.TemporaryDirectory() as hung, tempfile.TemporaryDirectory() as good:
         # python3 never answers --version (and leaves a child behind holding its output); python works.
         fake(hung, "python3", 'if [ "$1" = "--version" ]; then sleep 40; echo "Python 3.12.0"; else echo "hung:$*"; fi')
@@ -203,3 +204,49 @@ def test_guard_concurrent_runs_print_once():
         assert all(p.returncode == 0 for p in procs)
         printed = sum((o + e).count("needs Node.js") for o, e in outs)
         assert printed == 1, outs
+
+
+def _run_with_stdin_held_open(cmd, env, payload, limit):
+    """Start cmd, write payload, never close its stdin; kill it after `limit` seconds. Returns (stdout, stderr, returncode, seconds)."""
+    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+    killer = threading.Timer(limit, p.kill)
+    killer.start()
+    start = time.monotonic()
+    try:
+        if payload:
+            p.stdin.write(payload)
+            p.stdin.flush()
+        out = p.stdout.read()  # ends when the guard exits
+        p.wait()
+        err = p.stderr.read()
+        return out, err, p.returncode, time.monotonic() - start
+    finally:
+        killer.cancel()
+        p.kill()
+        p.stdin.close()
+        p.stdout.close()
+        p.stderr.close()
+
+
+def test_guard_with_node_hands_stdin_straight_through_while_it_is_held_open():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    with tempfile.TemporaryDirectory() as root:
+        hooks_bin = pathlib.Path(root) / "hooks" / "bin"
+        hooks_bin.mkdir(parents=True)
+        # Stands in for run-hook.mjs: answers on the first chunk, as the real one's own timer answers without an end of input.
+        (hooks_bin / "run-hook.mjs").write_text("process.stdin.once('data',d=>{console.log('got:'+d);process.exit(0)})\n")
+        env = {"PATH": os.path.dirname(node) + ":/usr/bin:/bin", "CLAUDE_PLUGIN_ROOT": root}
+        out, _, code, secs = _run_with_stdin_held_open([SH, str(GUARD), "lifecycle/x"], env, '{"a":1}', 10)
+        assert code == 0 and out.strip() == 'got:{"a":1}' and secs < 10
+
+
+@pytest.mark.skipif(shutil.which("node", path="/usr/bin:/bin") is not None, reason="node is in /usr/bin here")
+def test_guard_without_node_returns_within_five_seconds_when_stdin_is_held_open():
+    with tempfile.TemporaryDirectory() as data:
+        env = {"PATH": "/usr/bin:/bin", "CLAUDE_PLUGIN_DATA": data}
+        for payload in ('{"session_id": "held"}', ""):  # with a session id, and with nothing written at all
+            out, err, code, secs = _run_with_stdin_held_open([SH, str(GUARD), "lifecycle/session-env"], env, payload, 5)
+            assert code == 0 and secs < 5, (code, secs, out, err)
+            assert (out + err).count("needs Node.js") == 1

@@ -17,6 +17,8 @@ export type EnvKind = 'pageindex' | 'trove' | 'install' | 'script' | 'pi';
 
 const BASE_NAMES = new Set(['PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'LANGUAGE', 'TMPDIR', 'TEMP', 'TMP', 'TERM', 'SHELL', 'TZ', 'SSH_AUTH_SOCK',
   'SYSTEMROOT', 'SystemRoot', 'WINDIR', 'COMSPEC', 'PATHEXT', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA']);
+// Windows spells these names in any case (Node on Windows exposes `Path`): they are matched case-insensitively, and the key keeps its own casing.
+const WINDOWS_NAMES = new Set(['PATH', 'TEMP', 'TMP', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA']);
 const BASE_PREFIXES = ['LC_', 'XDG_'];
 const TROVE_PREFIXES = ['TROVE_', 'CANDLEKEEP_', 'CK_'];
 const INSTALL_NAMES = new Set(['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'no_proxy', 'all_proxy', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'REQUESTS_CA_BUNDLE', 'CURL_CA_BUNDLE']);
@@ -42,7 +44,7 @@ export function allowedEnv(env: NodeJS.ProcessEnv, kind: EnvKind = 'pageindex'):
   const listed = new Set((env[PASS_ENV] ?? '').split(',').map((name) => name.trim()).filter((name) => VALID_NAME.test(name)));
   for (const [name, value] of Object.entries(env)) {
     if (value === undefined) continue;
-    const allowed = BASE_NAMES.has(name) || BASE_PREFIXES.some((prefix) => name.startsWith(prefix))
+    const allowed = BASE_NAMES.has(name) || WINDOWS_NAMES.has(name.toUpperCase()) || BASE_PREFIXES.some((prefix) => name.startsWith(prefix))
       || (name.startsWith('AW_') && !SECRET_NAME.test(name))
       || (kind === 'trove' && TROVE_PREFIXES.some((prefix) => name.startsWith(prefix)))
       || (kind === 'script' && (SCRIPT_NAMES.has(name) || (SCRIPT_PREFIXES.some((prefix) => name.startsWith(prefix)) && !SECRET_NAME.test(name))))

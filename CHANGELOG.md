@@ -21,6 +21,8 @@ All notable changes to the academic-writer plugin are documented here.
 - **The voice store sync runs with `bash`.** `voice-sync.sh` is a bash script, but the write and voice skills ran it with `sh`; a test now checks every `sh`/`bash` script call in the skills and agents against the script's own first line.
 - **`aw-python` no longer hangs on a Python that never answers.** Each `--version` probe gets 10 seconds; a stuck candidate is skipped and the next one tried.
 - **The "needs Node.js" line prints once even when several hooks start together.** The once-per-session marker is now claimed atomically.
+- **A hook can no longer hang on a stdin that never closes.** `guard.sh` does not read stdin when Node.js is present (it is handed straight to the hook, which has its own 2-second timer); without Node.js it reads it for at most about 2 seconds, only to find the session id.
+- **Library and script commands keep `Path` on Windows.** Windows spells environment names in any case, and Node exposes `Path`; the Windows names (`Path`, `SystemRoot`, `Temp`, `ComSpec`, and the rest of that list) are now kept whatever their case, so Python and `pdftoppm` can be found.
 
 ### Removed
 - **Jev (TypeSafe) is gone.** The optional experimental decision-scoring service is removed from the plugin: the `aw decide` command, every place that logged a Jev answer beside the model's, and the Jev API key. The setup screen no longer asks for that key, and nothing is sent to that service. Drafting, evidence, proofreading, synthesis and revision work exactly as before, since Jev only ever logged answers and never changed a result.

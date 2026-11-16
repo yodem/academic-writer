@@ -20,23 +20,31 @@
 
 ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
-input=""
-if [ ! -t 0 ]; then
-  input=$(cat)
-fi
-
-if command -v node >/dev/null 2>&1; then
-  case "$1" in
-    *.sh) printf '%s' "$input" | bash "$ROOT/$1" ;;
-    *)    printf '%s' "$input" | node "$ROOT/hooks/bin/run-hook.mjs" "$@" ;;
-  esac
-  exit $?
-fi
-
+# stdin is never read on a path that has a program to hand it to: a producer that leaves it open must not block the guard.
 # A .sh hook (voice-migrate.sh) needs bash and Python, not node, so it keeps working without node.
 case "$1" in
-  *.sh) if command -v bash >/dev/null 2>&1; then printf '%s' "$input" | bash "$ROOT/$1"; exit $?; fi ;;
+  *.sh) if command -v bash >/dev/null 2>&1; then exec bash "$ROOT/$1"; fi ;;
 esac
+
+if command -v node >/dev/null 2>&1; then
+  exec node "$ROOT/hooks/bin/run-hook.mjs" "$@"   # run-hook.mjs has its own 2-second stdin timer
+fi
+
+# No node: read stdin only to learn the session_id, for at most ~2 seconds (a producer may leave it open).
+input=""
+if [ ! -t 0 ]; then
+  tmpf="${TMPDIR:-/tmp}/aw-guard-$$"
+  exec 3<&0
+  dd bs=65536 count=1 <&3 >"$tmpf" 2>/dev/null &
+  rpid=$!
+  ( sleep 2; kill "$rpid" 2>/dev/null ) >/dev/null 2>&1 &
+  kpid=$!
+  wait "$rpid" 2>/dev/null
+  kill "$kpid" 2>/dev/null
+  exec 3<&-
+  input=$(cat "$tmpf" 2>/dev/null)
+  rm -f "$tmpf"
+fi
 
 sid=$(printf '%s' "$input" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1 | tr -c 'A-Za-z0-9_\n-' '_')
 [ -n "$sid" ] || sid="ppid-$PPID"
