@@ -4,6 +4,7 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-11-16
 ### Added
 - **Academic Writer now works for a Windows newcomer.** Every command the skills and agents run goes through `bin/aw-python`, which finds a working Python 3 (`python3`, then `python`, then `py -3`) and skips the Microsoft Store stand-in that Windows ships as `python.exe`. With no Python it prints one plain line and stops. Skills call it as `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python"`, so it does not depend on an executable bit that a Windows checkout loses.
 - **No more `node: command not found` at every session start.** Each hook runs through `hooks/bin/guard.sh`. With Node.js installed it behaves as before; without it, it prints "Academic Writer needs Node.js: run /academic-writer:setup" once per session and exits cleanly.
