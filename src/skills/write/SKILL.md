@@ -48,7 +48,7 @@ AskUserQuestion(questions=[{
 
 ### Voice profile load (first step of every run)
 
-1. Only if the profile has Trove enabled (`tools.trove.enabled: true`, or `tools.candlekeep.enabled` in older profiles): run `sh "${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh" pull "${CLAUDE_PLUGIN_DATA}" "$PWD"` to fetch the latest voice store from Trove. Check its exit code and show its output: a non-zero exit is a real failure, so say so plainly before continuing with the local copy. Without Trove, skip this step; the local store is the only copy.
+1. Only if the profile has Trove enabled (`tools.trove.enabled: true`, or `tools.candlekeep.enabled` in older profiles): run `bash "${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh" pull "${CLAUDE_PLUGIN_DATA}" "$PWD"` to fetch the latest voice store from Trove. Check its exit code and show its output: a non-zero exit is a real failure, so say so plainly before continuing with the local copy. Without Trove, skip this step; the local store is the only copy.
 2. `aw draft` and `aw synthesize` load the voice bundle (chosen exemplars, rewrite pairs, writing rules, style words) from the store themselves — you do not paste voice text into a prompt.
 3. The drafting prompt (`aw draft`'s `write-draft.md`) is written to weight `## Academic-specific`
    rules higher when they conflict with `## Core voice` rules; everything else applies as written.

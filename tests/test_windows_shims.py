@@ -159,3 +159,47 @@ def test_aw_python_runs_python_in_utf8_mode():
                        capture_output=True, text=True, env=env, timeout=30)
     assert p.returncode == 0, p.stderr
     assert p.stdout.strip() == "1 1 utf-8"
+
+
+def test_a_hung_candidate_is_skipped_within_the_probe_bound(empty_candidates):
+    import time
+    with tempfile.TemporaryDirectory() as hung, tempfile.TemporaryDirectory() as good:
+        # python3 never answers --version (and leaves a child behind holding its output); python works.
+        fake(hung, "python3", 'if [ "$1" = "--version" ]; then sleep 40; echo "Python 3.12.0"; else echo "hung:$*"; fi')
+        fake(good, "python", 'if [ "$1" = "--version" ]; then echo "Python 3.12.1"; else echo "ran:$*"; fi')
+        start = time.monotonic()
+        p = resolver([hung, good, empty_candidates], "script.py")
+        elapsed = time.monotonic() - start
+        assert p.returncode == 0, p.stderr
+        assert p.stdout.strip() == "ran:script.py"
+        assert elapsed < 15, f"resolver took {elapsed:.1f}s with a hung candidate"
+
+
+def test_a_working_python_is_not_slowed_by_the_probe_bound(empty_candidates):
+    import time
+    with tempfile.TemporaryDirectory() as good:
+        fake(good, "python3", 'if [ "$1" = "--version" ]; then echo "Python 3.12.0"; else echo "p3:$*"; fi')
+        start = time.monotonic()
+        p = resolver([good, empty_candidates], "x")
+        assert p.stdout.strip() == "p3:x"
+        assert time.monotonic() - start < 3
+
+
+@pytest.mark.skipif(shutil.which("node", path="/usr/bin:/bin") is not None, reason="node is in /usr/bin here")
+def test_guard_concurrent_runs_print_once():
+    with tempfile.TemporaryDirectory() as data:
+        env = {"PATH": "/usr/bin:/bin", "CLAUDE_PLUGIN_DATA": data}
+        stdin = json.dumps({"session_id": "race"})
+        procs = [subprocess.Popen([SH, str(GUARD), "lifecycle/session-env"], stdin=subprocess.PIPE,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+                 for _ in range(16)]
+        for p in procs:  # hand every run its input before reading any output, so they overlap
+            p.stdin.write(stdin)
+        for p in procs:
+            p.stdin.close()
+        outs = [(p.stdout.read(), p.stderr.read()) for p in procs]
+        for p in procs:
+            p.wait(timeout=30)
+        assert all(p.returncode == 0 for p in procs)
+        printed = sum((o + e).count("needs Node.js") for o, e in outs)
+        assert printed == 1, outs

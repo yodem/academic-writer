@@ -7,13 +7,34 @@
 # minimum as MIN_PYTHON in scripts/setup_checks.py): that skips the Microsoft Store stub that Windows
 # ships as python.exe (it exits non-zero and opens the Store), an old Python 2 and an obsolete Python 3.
 # The chosen Python runs in UTF-8 mode, so Hebrew text files read and write the same on Windows.
+# Each `--version` probe gets PROBE_SECONDS: a candidate that hangs (a stuck launcher or stub) is killed and
+# skipped, so the next one is tried. The probe writes to a temp file, not a pipe, so a child it leaves behind
+# cannot hold the answer open.
 # Nothing usable: one plain line on stderr, exit 127.
 
 MIN_MINOR=9
+PROBE_SECONDS=10
+probe_out=$(mktemp 2>/dev/null) || probe_out="${TMPDIR:-/tmp}/aw-python-probe.$$"
 
 works() {
   command -v "$1" >/dev/null 2>&1 || return 1
-  out=$("$@" --version 2>&1) || return 1
+  "$@" --version >"$probe_out" 2>&1 </dev/null &
+  probe_pid=$!
+  # Watchdog: after PROBE_SECONDS, kill the probe. Killed itself (TERM) once the probe ends, it stops its sleep.
+  (
+    sleep_pid=""
+    trap '[ -n "$sleep_pid" ] && kill "$sleep_pid" 2>/dev/null; exit 0' TERM
+    sleep "$PROBE_SECONDS" &
+    sleep_pid=$!
+    wait "$sleep_pid" && kill -9 "$probe_pid" 2>/dev/null
+  ) >/dev/null 2>&1 </dev/null &
+  watch_pid=$!
+  wait "$probe_pid"
+  probe_status=$?
+  kill "$watch_pid" 2>/dev/null
+  wait "$watch_pid" 2>/dev/null
+  [ "$probe_status" -eq 0 ] || return 1
+  out=$(cat "$probe_out" 2>/dev/null)
   case "$out" in
     *"Python 3."*)
       minor=${out#*Python 3.}
@@ -29,11 +50,15 @@ PYTHONIOENCODING=utf-8
 export PYTHONUTF8 PYTHONIOENCODING
 
 if works python3; then
+  rm -f "$probe_out"
   exec python3 "$@"
 elif works python; then
+  rm -f "$probe_out"
   exec python "$@"
 elif works py -3; then
+  rm -f "$probe_out"
   exec py -3 "$@"
 fi
+rm -f "$probe_out"
 echo "Python 3.$MIN_MINOR or newer was not found on this computer. Run /academic-writer:setup to install it." >&2
 exit 127

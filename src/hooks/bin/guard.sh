@@ -15,7 +15,8 @@
 # therefore a prerequisite of this plugin (setup installs it first); Node.js is checked here.
 #
 # Without node: print one line per session and exit 0 (a hook must never fail a session over this).
-# The once-per-session marker is keyed on session_id from the stdin JSON, read with sed (no node, no python).
+# The once-per-session marker is keyed on session_id from the stdin JSON, read with sed (no node, no python),
+# and claimed with mkdir, which is atomic: when several hooks start at once, only the one whose mkdir succeeds prints.
 
 ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
@@ -41,8 +42,10 @@ sid=$(printf '%s' "$input" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\
 [ -n "$sid" ] || sid="ppid-$PPID"
 dir="${CLAUDE_PLUGIN_DATA:-${TMPDIR:-/tmp}}"
 marker="$dir/node-missing-$sid"
-if [ ! -e "$marker" ]; then
-  mkdir -p "$dir" 2>/dev/null && : > "$marker" 2>/dev/null
-  echo "Academic Writer needs Node.js: run /academic-writer:setup"
+msg="Academic Writer needs Node.js: run /academic-writer:setup"
+if ! mkdir -p "$dir" 2>/dev/null; then
+  echo "$msg"   # nowhere to keep a marker: say it every time rather than never
+elif mkdir "$marker" 2>/dev/null; then
+  echo "$msg"
 fi
 exit 0

@@ -57,7 +57,7 @@ Also check the researcher's style fingerprint for Writing Quality (dimension 5):
 ```bash
 sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "
 import re, json
-content = open('.academic-helper/profile.md', encoding="utf-8").read()
+content = open('.academic-helper/profile.md', encoding='utf-8').read()
 m = re.search(r'## Style Fingerprint\n+\x60\x60\x60json\n(.*?)\n\x60\x60\x60', content, re.DOTALL)
 print(m.group(1) if m else 'null')
 "

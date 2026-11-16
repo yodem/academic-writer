@@ -20,7 +20,7 @@ First, check if a profile exists and load it:
 if [ -f .academic-helper/profile.md ]; then
   CURRENT_FIELD=$(sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "
 import re
-content = open('.academic-helper/profile.md', encoding="utf-8").read()
+content = open('.academic-helper/profile.md', encoding='utf-8').read()
 m = re.search(r'^fieldOfStudy: (.+)$', content, re.MULTILINE)
 print(m.group(1).strip() if m else 'Not set')
 ")
