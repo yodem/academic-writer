@@ -2,6 +2,25 @@
 
 > Loaded on demand by setup when an `aw` CLI operation fails or Python tools are missing.
 
+## Locked marketplace folder (Windows: `/plugin marketplace add` failed)
+
+Cause: Git was not installed, so `/plugin marketplace add yodem/academic-writer` failed and left a half-made folder in
+`.claude\plugins\marketplaces` (inside the user's folder, `C:\Users\<name>`). Windows keeps it locked while a leftover
+`git.exe` runs, so a second try says the folder is in use. Fix, in this order:
+
+1. Close Claude Code completely.
+2. Open Task Manager (Ctrl+Shift+Esc), open the **Details** tab, select any `git.exe`, click **End task**.
+3. In File Explorer open `C:\Users\<name>\.claude\plugins\marketplaces` and delete the half-made folder (the one named
+   for the marketplace, `yodem` or `academic-writer`). If Explorer says it is in use, restart the computer once.
+4. Install Git (`winget install --id Git.Git -e`), open a new PowerShell window, start Claude Code again and run
+   `/plugin marketplace add yodem/academic-writer`.
+
+## `node: command not found` at every session start
+
+Node.js is missing (older plugin versions printed this on every hook; this version prints one line a session:
+"Academic Writer needs Node.js"). Install it with `winget install --id OpenJS.NodeJS.LTS -e` (Windows) or from
+https://nodejs.org (Mac), then restart Claude Code.
+
 ## Gemini key and `aw` CLI failures
 
 The `aw` CLI at `plugins/academic-writer/bin/aw` reads `GOOGLE_API_KEY` from its environment. At
@@ -87,7 +106,7 @@ These apply when the helper was installed with `aw library install` (see `pagein
   Windows, reinstall Python from https://www.python.org/downloads/ (the official installer
   includes it); on Linux install `python3-pip` with the system package manager.
 - **`externally-managed-environment`** (common with Homebrew Python or recent Linux): ask the
-  researcher before retrying with `python3 -m pip install --user --break-system-packages ...`;
+  researcher before retrying with `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -m pip install --user --break-system-packages ...`;
   explain that this flag only means "install for my user account even though the system manages
   Python", and that it does not touch other users.
 - **Permission denied**: the command already uses `--user`; check the researcher is not in a

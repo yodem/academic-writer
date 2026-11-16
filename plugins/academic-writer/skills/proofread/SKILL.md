@@ -19,7 +19,7 @@ Record the run first, with the same run id the command below uses, and register 
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" activity start --flow proofread --run-id "proofread-<run-id>"
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" register --path "$CLAUDE_PROJECT_DIR" --type project
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" register --path "$CLAUDE_PROJECT_DIR" --type project
 ```
 
 If `home.py register` says no home folder is set, skip it and tell the researcher once.
@@ -39,7 +39,7 @@ For a Markdown article, run the plugin command with a run id and an output folde
 The command validates its list of changes before applying them. The same check can be run on its own:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" changes-schema "proofread-output/changes.json" --json
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" changes-schema "proofread-output/changes.json" --json
 ```
 
 For a Word document, convert it to Markdown with `pandoc` first, run `aw proofread` on that Markdown, then build a Word file with tracked changes from the original and the corrected text.
@@ -48,7 +48,7 @@ Check for pandoc first with `command -v pandoc`. If it is missing, explain in on
 
 ```bash
 pandoc "path/to/article.docx" -t markdown -o "proofread-output/article.md"
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build-tracked-docx.py" \
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/build-tracked-docx.py" \
   --original "path/to/article.docx" \
   --final-text "proofread-output/proofed.md" \
   --changes "proofread-output/changes.json" \

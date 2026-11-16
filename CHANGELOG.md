@@ -4,6 +4,32 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-11-16
+### Added
+- **Academic Writer now works for a Windows newcomer.** Every command the skills and agents run goes through `bin/aw-python`, which finds a working Python 3 (`python3`, then `python`, then `py -3`) and skips the Microsoft Store stand-in that Windows ships as `python.exe`. With no Python it prints one plain line and stops. Skills call it as `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python"`, so it does not depend on an executable bit that a Windows checkout loses.
+- **No more `node: command not found` at every session start.** Each hook runs through `hooks/bin/guard.sh`. With Node.js installed it behaves as before; without it, it prints "Academic Writer needs Node.js: run /academic-writer:setup" once per session and exits cleanly.
+- **Setup and health check every outside tool, with a Windows line and a Mac line each.** New rows: Git, Node.js, Google Drive (the Claude connector; shown as "check by hand" because no script can see it), Kotar (needs Chrome) and Moodle (signed in, in Chrome), beside Python, Trove, NotebookLM and the Gemini key. The Python row uses the same lookup as `aw-python`.
+- **Setup starts with prerequisites** (Git, Node.js, Python, with the `winget` commands, the "Add python.exe to PATH" box and the restart) and has a connections step (Drive first, then NotebookLM, Trove, Kotar, Moodle; each optional). The README and the bundled guide have a Windows section in the same order, and troubleshooting covers a `/plugin marketplace add` that failed on missing Git and left a locked folder behind.
+- CI runs the Python resolver, the setup checks and the hook guard on `windows-latest`.
+
+### Fixed
+
+- The hook guard's stdin capture uses a private `mktemp` file (no predictable name in the temp folder) and no longer prints a shell job notice.
+- The rewrite-cycles lookup in the write skill passes the thresholds path as an argument, so a Windows folder path no longer breaks the Python line.
+- **Shell scripts keep LF line endings on Windows.** Git for Windows turns files into CRLF by default, which broke `sh` on `bin/aw-python` and `hooks/bin/guard.sh`. A root `.gitattributes` pins every shell script and shebang file to LF, and a test checks it.
+- **The `aw` command finds Python the same way `aw-python` does** (`python3`, then `python`, then `py -3`, Python 3.9 or newer) instead of calling `python3`, which does not exist on a normal Windows install. `aw-python` and the setup check now share the same minimum version, and the Node.js row reports a failed version check instead of passing.
+- **Python runs in UTF-8 mode** (`PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`) through `aw-python` and `aw`, so Hebrew profiles and articles read and write correctly on Windows. Skill and script file reads and writes now name their encoding.
+- Every `${CLAUDE_PLUGIN_ROOT}` path in a command is quoted (Windows user folders often contain spaces), with a test that scans the skills and agents.
+- **Three Python snippets in the skills and agents no longer fail with `NameError: utf`.** The citation auditor's title check, the review's style-fingerprint read and the update-field profile read passed `encoding="utf-8"` inside a double-quoted `aw-python -c "..."`, where the shell strips the inner quotes. They now use single quotes, and a test splits every `-c` snippet and heredoc in the skills and agents the way the shell does and compiles it.
+- **The voice store sync runs with `bash`.** `voice-sync.sh` is a bash script, but the write and voice skills ran it with `sh`; a test now checks every `sh`/`bash` script call in the skills and agents against the script's own first line.
+- **`aw-python` no longer hangs on a Python that never answers.** Each `--version` probe gets 10 seconds; a stuck candidate is skipped and the next one tried.
+- **The "needs Node.js" line prints once even when several hooks start together.** The once-per-session marker is now claimed atomically.
+- **A hook can no longer hang on a stdin that never closes.** `guard.sh` does not read stdin when Node.js is present (it is handed straight to the hook, which has its own 2-second timer); without Node.js it reads it for at most about 2 seconds, only to find the session id.
+- **Library and script commands keep `Path` on Windows.** Windows spells environment names in any case, and Node exposes `Path`; the Windows names (`Path`, `SystemRoot`, `Temp`, `ComSpec`, and the rest of that list) are now kept whatever their case, so Python and `pdftoppm` can be found.
+
+### Removed
+- **Jev (TypeSafe) is gone.** The optional experimental decision-scoring service is removed from the plugin: the `aw decide` command, every place that logged a Jev answer beside the model's, and the Jev API key. The setup screen no longer asks for that key, and nothing is sent to that service. Drafting, evidence, proofreading, synthesis and revision work exactly as before, since Jev only ever logged answers and never changed a result.
+
 ## [0.22.3] — 2026-11-16
 ### Changed
 - **OCR now spends as little money as possible.** Claude (Opus, on your Claude plan) still reads scanned pages first. The paid Gemini reader, used only for pages Claude refuses, answers with a summary, or that are under 100 dpi, is `gemini-3.8-flash` with the least thinking it accepts (thinking level low); before, Gemini OCR thought at its default level and billed it. On 12 Hebrew book pages it read within a median 0.25% of Opus's letters, at about $0.004 a page (2026 price; about $0.007 from 2027). `gemini-2.5-flash` without thinking was half the price but 1.2% off and scrambled two-column glossaries.

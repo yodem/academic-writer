@@ -38,10 +38,6 @@ The architect writes this shape directly to `.academic-helper/outline.json`, fol
 
 Use one or more paragraphs in each unit. A paragraph's `move` describes its argument function; `bridgeTo` explains its transition. `dependsOn` names prerequisite unit or section IDs. A dependency cycle blocks the gate. The thesis hash is the lowercase hexadecimal SHA-256 of the exact UTF-8 bytes of `author-intent.json`'s `thesis` string.
 
-## Support signal and author label
-
-Store the claim, its evidence passages, and the architect's concise rationale in a project-local context file. Run `aw decide outline.support` for each claim. `--fallback` must be `supported` or `unsupported`, chosen from the architect's support note. After the author responds, set `--label` to `approved` or `rejected`. `decide()` logs the Jev/model result and label in the run ledger; the support answer never overrides the author or changes the gate verdict.
-
 ## Gate failures
 
 - `thesis-drift`: restore the author's exact wording or update the intent only after the author changes it, then regenerate the hash.

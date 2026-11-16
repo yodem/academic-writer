@@ -127,6 +127,14 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
     [[ -f "$SRC_DIR/hooks/package.json" ]] && cp "$SRC_DIR/hooks/package.json" "$PLUGIN_DIR/hooks/"
   fi
 
+  # Ship bin/aw-python (the Python resolver skills call as `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python"`).
+  # bin/aw itself is bundled by phase 5, into the same folder.
+  if [[ -d "$SRC_DIR/bin" ]]; then
+    mkdir -p "$PLUGIN_DIR/bin"
+    cp -R "$SRC_DIR/bin/." "$PLUGIN_DIR/bin/"
+    chmod +x "$PLUGIN_DIR/bin/"* 2>/dev/null || true
+  fi
+
   # Copy scripts
   if [[ -d "$SRC_DIR/scripts" ]]; then
     cp -R "$SRC_DIR/scripts" "$PLUGIN_DIR/"
@@ -191,7 +199,7 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
 done
 
 # Phase 5: Build the standalone academic-writer CLI (`aw`). Its tools (draft, synthesize,
-# edit, ocr, evidence, proofread, decide, voice, revise, ...) replace the retired bundled
+# edit, ocr, evidence, proofread, voice, revise, ...) replace the retired bundled
 # Gemini MCP server; skills invoke the built binary via Bash, not an MCP connection.
 echo -e "${BLUE}[5/7] Building aw CLI...${NC}"
 if [[ -f "$SRC_DIR/cli/package.json" ]]; then
@@ -232,6 +240,14 @@ for plugin_dir in "$PLUGINS_DIR"/*; do
   fi
   if [[ ! -f "$plugin_dir/mod/register.tsx" ]]; then
     echo -e "${RED}  $plugin_name: Missing mod/register.tsx${NC}"
+    errors=$((errors + 1))
+  fi
+  if [[ ! -f "$plugin_dir/bin/aw-python" ]]; then
+    echo -e "${RED}  $plugin_name: Missing bin/aw-python${NC}"
+    errors=$((errors + 1))
+  fi
+  if [[ ! -f "$plugin_dir/hooks/bin/guard.sh" ]]; then
+    echo -e "${RED}  $plugin_name: Missing hooks/bin/guard.sh${NC}"
     errors=$((errors + 1))
   fi
   if [[ ! -x "$plugin_dir/bin/aw" ]]; then

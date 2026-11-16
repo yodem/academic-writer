@@ -29,7 +29,7 @@ Run `aw --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" voice moves --ru
 
 Skip this section unless the profile has Trove enabled (`tools.trove.enabled: true`, or `tools.candlekeep.enabled` in older profiles); without it, the store in the plugin data folder is the only copy, and uninstalling the plugin without `--keep-data` deletes it — say so once.
 
-Run `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh push "${CLAUDE_PLUGIN_DATA}" "$PWD"` to save local changes to Trove. Run `voice-sync.sh pull "${CLAUDE_PLUGIN_DATA}" "$PWD"` only when the author explicitly asks for a pull, because a pull replaces local changes. The wrapper runs `aw --data-dir … --project-dir … voice push` / `voice pull` with both required paths.
+Run `bash "${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh" push "${CLAUDE_PLUGIN_DATA}" "$PWD"` to save local changes to Trove. Run `bash "${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh" pull "${CLAUDE_PLUGIN_DATA}" "$PWD"` only when the author explicitly asks for a pull, because a pull replaces local changes. The wrapper runs `aw --data-dir … --project-dir … voice push` / `voice pull` with both required paths.
 
 - Resolve conflicts by comparing `voiceVersion`, and keep both change histories by merging `CHANGELOG.jsonl`.
 - Report sync errors as errors.

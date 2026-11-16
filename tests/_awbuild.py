@@ -89,6 +89,6 @@ def make_plugin_folder(dest: pathlib.Path, aw: pathlib.Path) -> pathlib.Path:
 def clean_env(**extra: str) -> dict:
     """The caller's environment without any AW_*, Google or Gemini setting, plus `extra`."""
     env = {k: v for k, v in os.environ.items()
-           if not k.startswith("AW_") and k not in ("GOOGLE_API_KEY", "GEMINI_API_KEY", "JEV_API_KEY", "CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA")}
+           if not k.startswith("AW_") and k not in ("GOOGLE_API_KEY", "GEMINI_API_KEY", "CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA")}
     env.update(extra)
     return env

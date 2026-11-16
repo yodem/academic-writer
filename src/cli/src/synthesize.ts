@@ -2,7 +2,6 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { callGemini } from './gemini.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
-import { decide } from './decide.ts';
 import { projectDir } from './paths.ts';
 import { AwError, Budget, budgetFor } from './ledger.ts';
 import { emit, endRunOnError } from './activity.ts';
@@ -122,20 +121,6 @@ async function synthesizeUnits(options: SynthesizeOptions): Promise<SynthesizeRe
     const unit = byUnit.get(edit.unitId);
     const paragraphs = paragraphsByUnit.get(edit.unitId);
     if (!unit || !paragraphs || edit.paragraphIndex < 0 || edit.paragraphIndex >= paragraphs.length) continue;
-
-    // Jev point synthesize.needs_bridge, per boundary. The fallback is "the
-    // synthesize call decides" -- since a candidate edit only exists because
-    // the model proposed one, the fallback answer is to apply it.
-    const decision = await decide({
-      point: 'synthesize.needs_bridge',
-      question: 'Does this paragraph boundary need the proposed transition edit?',
-      options: ['bridge', 'no-bridge'],
-      context: JSON.stringify(edit),
-      runId: options.runId,
-      fallback: async () => 'bridge',
-      label: `${edit.unitId}:${edit.paragraphIndex}`,
-    });
-    if (decision.answer !== 'bridge') continue;
 
     // `before` must match the paragraph exactly, or the edit is skipped and
     // reported rather than applied against drifted text (never a whole-

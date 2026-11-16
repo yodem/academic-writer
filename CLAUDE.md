@@ -110,3 +110,4 @@ Auditor is the only mandatory hard gate — it must reject paragraphs whose cita
 - Don't call a model from library or eval code except through the author's own `claude`/`codex` (locating agents) and, for PageIndex summaries and OCR, Gemini with the plugin's key given only to that child process.
 - Don't track internal process notes (plans, handoffs, audits, `.team/`); `scripts/check-no-private-refs.sh` enforces it.
 - User-facing text is for researchers with no technical background: plain words, and ask (AskUserQuestion) before any install.
+- Every setup instruction covers Windows, and every external tool the plugin calls has a setup_checks.py row.

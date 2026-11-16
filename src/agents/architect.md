@@ -27,7 +27,7 @@ Read both files yourself. Work only from them: do not fetch sources and do not i
 1. **Coverage precheck.** If the evidence contains `chapter_coverage`, run the coverage gate first:
 
    ```bash
-   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" coverage <evidence.json> --json
+   sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" coverage <evidence.json> --json
    ```
 
    If it fails, reject the incomplete evidence and stop. Report the violations to the calling skill so it can rerun `aw evidence build`, and do not outline: an outline built on incomplete evidence would hide the gaps from the author.

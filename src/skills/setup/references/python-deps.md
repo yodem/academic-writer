@@ -17,7 +17,7 @@ and `pymupdf` is used as `fitz`.
 ## Check (changes nothing, safe to repeat)
 
 ```bash
-python3 -c "
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "
 import importlib
 mods = {'python-docx': 'docx', 'lxml': 'lxml', 'pdfplumber': 'pdfplumber', 'pymupdf': 'fitz', 'jsonschema': 'jsonschema'}
 missing = []

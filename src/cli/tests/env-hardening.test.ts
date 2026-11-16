@@ -9,12 +9,24 @@ import { voiceSync, __setDataDir } from '../src/voice.ts';
 import { voicePullEnv } from '../../hooks/src/lifecycle/voice-pull.ts';
 
 const SECRETS = { GEMINI_API_KEY: 'g', GOOGLE_API_KEY: 'g2', OPENAI_API_KEY: 'o', ANTHROPIC_API_KEY: 'a', ANTHROPIC_AUTH_TOKEN: 't', OPENROUTER_API_KEY: 'r',
-  CLAUDE_PLUGIN_OPTION_GOOGLE_API_KEY: 'p', AW_JEV_API_KEY: 'j', GITHUB_TOKEN: 'x' };
+  CLAUDE_PLUGIN_OPTION_GOOGLE_API_KEY: 'p', GITHUB_TOKEN: 'x' };
 const BASE = { PATH: '/bin', HOME: '/h', LANG: 'C' };
 
 test('script kind keeps interpreter and plugin variables, never a model key', () => {
   const env = allowedEnv({ ...BASE, ...SECRETS, PYTHONPATH: '/p', VIRTUAL_ENV: '/v', CLAUDE_PLUGIN_ROOT: '/r', CLAUDE_PROJECT_DIR: '/d', AW_FIXED_NOW: 'n' }, 'script');
   assert.deepEqual(Object.keys(env).sort(), ['AW_FIXED_NOW', 'CLAUDE_PLUGIN_ROOT', 'CLAUDE_PROJECT_DIR', 'HOME', 'LANG', 'PATH', 'PYTHONPATH', 'VIRTUAL_ENV']);
+});
+
+test('Windows variable names are kept whatever their case, with their own key', () => {
+  assert.deepEqual(allowedEnv({ Path: 'x' }), { Path: 'x' });
+  assert.deepEqual(allowedEnv({ path: 'x' }), { path: 'x' });
+  const env = allowedEnv({ Path: 'x', SystemRoot: 'C:\\Windows', Temp: 't', ComSpec: 'c', PathExt: '.EXE', UserProfile: 'u', AppData: 'a', LocalAppData: 'l' });
+  assert.deepEqual(Object.keys(env).sort(), ['AppData', 'ComSpec', 'LocalAppData', 'Path', 'PathExt', 'SystemRoot', 'Temp', 'UserProfile']);
+});
+
+test('names outside the allow-list are still dropped, in any case', () => {
+  const env = allowedEnv({ Path: 'x', gemini_api_key: 'g', GEMINI_API_KEY: 'g', Home: 'h', RandomThing: 'r', MyPathVar: 'p' });
+  assert.deepEqual(Object.keys(env), ['Path']);
 });
 
 test('pi kind gets the OpenRouter key and no other model key', () => {

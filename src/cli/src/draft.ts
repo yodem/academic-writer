@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { callGemini } from './gemini.ts';
-import { decide } from './decide.ts';
 import { projectDir } from './paths.ts';
 import { AwError, Budget, budgetFor } from './ledger.ts';
 import { voiceBundle } from './voice.ts';
@@ -522,27 +521,8 @@ async function draftUnits(outline: Outline, options: DraftAllOptions): Promise<D
     const paragraphs = splitParagraphs(text);
     for (let index = 0; index < paragraphs.length; index += 1) {
       const paragraph = paragraphs[index]!;
-      // Jev point write.audit_prescreen: logged only. Its answer never gates
-      // anything here -- every paragraph is always marked as requiring the
-      // Claude citation auditor, in every Jev mode including cascade.
-      await decide({
-        point: 'write.audit_prescreen',
-        question: 'Does this paragraph plausibly contain a citation the auditor should check?',
-        options: ['review', 'skip-likely'],
-        context: JSON.stringify({ unit: unit.id, paragraphIndex: index, excerpt: paragraph.slice(0, 200) }),
-        runId: options.runId,
-        fallback: async () => 'review',
-      });
+      // Every paragraph is always marked as requiring the Claude citation auditor.
       audit.push({ unit: unit.id, paragraphIndex: index, required: true });
-
-      await decide({
-        point: 'write.voice_check',
-        question: 'Does this paragraph meet the voice/style-fingerprint threshold?',
-        options: ['pass', 'fail'],
-        context: JSON.stringify({ unit: unit.id, paragraphIndex: index }),
-        runId: options.runId,
-        fallback: async () => voiceCheckFallback(paragraph, voice.styleWords),
-      });
     }
 
     const failure = runGates(unit, text, paragraphs, { sourceKeys, evidenceQuotes, styleWords: voice.styleWords, quoteCheckText: modelQuotesText });

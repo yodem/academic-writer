@@ -219,7 +219,7 @@ def test_setup_points_to_the_pageindex_setting_and_troubleshooting_covers_it():
     assert "pageindex_command" in setup and "references/pageindex.md" in setup
     # the install itself lives in the reference, behind AskUserQuestion and --yes; the SKILL text installs nothing
     assert "Never ask for a host" in (SKILLS / "setup" / "references" / "pageindex.md").read_text(encoding="utf-8")
-    assert not INSTALL_RE.search(setup.split("### 4g.")[1].split("## Step 5")[0])
+    assert not INSTALL_RE.search(setup.split("### 4f.")[1].split("## Step 5")[0])
     trouble = (SKILLS / "setup" / "references" / "troubleshooting.md").read_text(encoding="utf-8")
     for heading in ("PageIndex not reachable", "Wrong book list", "Shadow errors in the report"):
         assert f"**{heading}**" in trouble, heading
@@ -258,7 +258,7 @@ def test_library_route_detection_honours_an_existing_library_json_and_never_over
 def test_detection_snippet_reads_the_status_json_the_cli_prints(tmp_path):
     import subprocess
     section = REFERENCE.read_text(encoding="utf-8").split("## Library route")[1]
-    code = re.search(r"python3 - <<'PY'\n(.*?)\nPY", section, re.S).group(1)
+    code = re.search(r"aw-python\" - <<'PY'\n(.*?)\nPY", section, re.S).group(1)
     status_path = "/tmp/aw-library-status.json"
     assert status_path in section and status_path in code
 

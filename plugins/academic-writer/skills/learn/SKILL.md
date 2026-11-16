@@ -12,7 +12,7 @@ Keep the author's voice store current. Show every proposed change before saving 
 
 ## 1. Find new papers
 
-Compare the files in `past-articles/` with the `analyzedArticles` list in `.academic-helper/profile.md`. For each new paper, run `${CLAUDE_PLUGIN_ROOT}/scripts/extract-style-metrics.py` and show the author how the style metrics differ from the current fingerprint before you update it.
+Compare the files in `past-articles/` with the `analyzedArticles` list in `.academic-helper/profile.md`. For each new paper, run `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/extract-style-metrics.py"` and show the author how the style metrics differ from the current fingerprint before you update it.
 
 ## 2. Refresh exemplar paragraphs
 

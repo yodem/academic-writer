@@ -68,7 +68,7 @@ def test_setup_role_vocabulary_is_the_canonical_set():
 def test_setup_checks_python_before_the_first_home_py_call():
     first_home = SETUP.index("scripts/home.py")
     before = SETUP[:first_home]
-    assert "python3 --version" in before
+    assert 'bin/aw-python" --version' in before
     assert "setup_checks.py" in before or "Python 3" in before
     assert "Python is not installed" in before or "isn't installed" in before
 
@@ -134,7 +134,7 @@ def test_setup_field_question_offers_options():
 
 
 def test_trove_option_matches_the_installer_that_runs():
-    block = SETUP.split("### 4e", 1)[1].split("### 4f", 1)[0]
+    block = SETUP.split("### 4d", 1)[1].split("### 4e", 1)[0]
     assert "curl -fsSL https://heytrove.ai/install.sh | sh" in block
     assert "Homebrew" not in block
 

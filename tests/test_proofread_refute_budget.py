@@ -8,7 +8,7 @@ def test_verification_is_batched_per_chunk_and_refutations_are_retained():
     source = (ROOT / "src/cli/src/proofread.ts").read_text(encoding="utf-8")
     assert "stubs.verify(changes)" in source
     assert "missing verdict" in source
-    assert "status: decided.answer === 'refute' ? 'refuted' : 'verified'" in source
+    assert "status: answer === 'refute' ? 'refuted' : 'verified'" in source
     assert "candidates.map((change) => statusMap.get(change.id)" in source
 
 

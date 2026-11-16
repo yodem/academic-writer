@@ -65,7 +65,7 @@ Run `home.py show`, then `references/home-workspace.md`: inside home, ask "which
 
 ### Python add-ons check
 
-Style analysis needs a few Python add-ons. Check with `setup_checks.py --json` (the `python-addons` row) or `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/python-deps.md`. If Python itself is missing, give the numbered steps from `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/dependencies.md § Python 3` and note that style
+Style analysis needs a few Python add-ons. Check with `setup_checks.py --json` (the `python-addons` row) or `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/python-deps.md`. If Python itself is missing, give the numbered steps from `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/dependencies.md` § Python 3 and note that style
 analysis will be skipped until it is installed. If only add-ons are missing:
 
 ```python
@@ -83,7 +83,7 @@ AskUserQuestion(questions=[{
 Only on "Install":
 
 ```bash
-python3 -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema
 ```
 
 Re-run the check and report the result in one plain sentence. Failures: see
@@ -185,7 +185,7 @@ whitespace/punctuation with a single hyphen, strip leading/trailing hyphens. Exa
 "Dana Levi" → `dana-levi`.
 
 ```bash
-python3 -c "
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "
 import re, sys
 name = sys.argv[1]
 slug = re.sub(r'[^a-z0-9]+', '-', name.strip().lower()).strip('-')

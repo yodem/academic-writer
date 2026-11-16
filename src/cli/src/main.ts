@@ -7,7 +7,6 @@ import { runProofread } from './proofread.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
 import { buildEvidence } from './evidence.ts';
 import { voiceBundle, voiceCandidates, voiceMigrate, voiceMoves, voiceSync } from './voice.ts';
-import { runDecideCli } from './decide.ts';
 import { classify, applyPlan, type RevisePlan } from './revise.ts';
 import { draftAll } from './draft.ts';
 import { synthesizeAll } from './synthesize.ts';
@@ -81,14 +80,6 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
     process.stderr.write(`${error instanceof Error ? error.message : 'ERROR evidence.build: unknown failure'}\n`);
     process.exitCode = 1;
   }
-} else if (command === 'decide') {
-  try {
-    const result = await runDecideCli(args);
-    process.stdout.write(`${JSON.stringify(result)}\n`);
-  } catch (error) {
-    process.stderr.write(`${error instanceof Error ? error.message : 'ERROR decide: unknown failure'}\n`);
-    process.exitCode = 1;
-  }
 } else if (command === 'voice') {
   try {
     dataDir();
@@ -159,6 +150,6 @@ if (command === 'ledger' && subcommand === 'show' && runId) {
 } else if (command === 'library') {
   process.exitCode = await runLibraryCli(args.slice(1));
 } else {
-  process.stderr.write('ERROR: expected aw models check, aw ledger show <runId>, aw evidence build, aw decide <point>, or aw library <status|index|backfill|install|eval|...>\n');
+  process.stderr.write('ERROR: expected aw models check, aw ledger show <runId>, aw evidence build, or aw library <status|index|backfill|install|eval|...>\n');
   process.exitCode = 2;
 }

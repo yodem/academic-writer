@@ -38,7 +38,7 @@ Paragraph 2 text...
 
 ## Step 9b: DOCX Output — article JSON schema
 
-`aw docx` (W6 in SKILL.md) builds this JSON from the synthesized drafts in code, writes it to `.academic-helper/runs/<id>/article.json` and runs `scripts/generate-docx.py` for you. The schema below is what it writes; use it only to read or check that file, or when you must regenerate a Word file by hand with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/generate-docx.py" --input <article.json> --output <file.docx>`. Keep any hand-written JSON inside the project (never `/tmp`), so the run's files stay together.
+`aw docx` (W6 in SKILL.md) builds this JSON from the synthesized drafts in code, writes it to `.academic-helper/runs/<id>/article.json` and runs `scripts/generate-docx.py` for you. The schema below is what it writes; use it only to read or check that file, or when you must regenerate a Word file by hand with `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/generate-docx.py" --input <article.json> --output <file.docx>`. Keep any hand-written JSON inside the project (never `/tmp`), so the run's files stay together.
 
 1. **Article JSON schema**:
 
@@ -106,7 +106,7 @@ Paragraph 2 text...
 ```
 
 **Rules:**
-- Use the `Write` tool to write this file — never use Python heredoc or `python3 -c` to construct JSON (Hebrew text causes UTF-8 encoding errors in heredocs)
+- Use the `Write` tool to write this file — never use Python heredoc or `python -c` to construct JSON (Hebrew text causes UTF-8 encoding errors in heredocs)
 - `coverPage` is entirely optional — omit the key (or leave it `null`) for no cover page at all; when present, only its populated fields render, each skipped field renders nothing (no stray "None" or empty line). When present, a page break always separates the cover page from the article title, which starts fresh on the next page
 - Populate `sections` from the synthesized `drafts/<unitId>.md` files (W5 in SKILL.md) — each section's title and paragraph list
 - Paragraphs use the structured form `{text, footnotes[]}`. Strip the parenthetical citations out of `text` and move each citation into `footnotes[]` with `after` set to a unique substring in `text` where the marker should appear. The DOCX generator renders them as native Word footnotes (superscript in body, text at page bottom). Plain strings are still accepted for backward compatibility (no footnotes)

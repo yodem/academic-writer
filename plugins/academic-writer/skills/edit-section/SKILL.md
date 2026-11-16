@@ -14,7 +14,7 @@ Revise one focused section. For changes across the whole article, hand off to `/
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$PWD" --data-dir "${CLAUDE_PLUGIN_DATA}" activity start --flow edit-section --run-id <run-id>
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" register --path "$PWD" --type project
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" register --path "$PWD" --type project
 ```
 
 `activity start` writes its opening line once per run, so it is safe to repeat. If `home.py register` says no home folder is set, skip it and tell the researcher once.

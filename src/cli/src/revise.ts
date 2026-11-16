@@ -1,7 +1,6 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { callGemini } from './gemini.ts';
-import { decide } from './decide.ts';
 import { Budget } from './ledger.ts';
 import { dataDir, projectDir } from './paths.ts';
 import thresholds from '../../thresholds.json' with { type: 'json' };
@@ -31,8 +30,7 @@ async function classifyItems(items: unknown[], runId: string): Promise<{ items: 
     const result = await callGemini({ step: 'revise.classify', system: 'Classify review feedback accurately. Return JSON only.', parts: [JSON.stringify(items)], responseSchema: schema, runId, budget: new Budget(runId, caps) });
     return JSON.stringify(result.json);
   };
-  const result = await decide({ point: 'revise.classify', question: 'Classify each Word review item.', options: ['text_edit','argument','voice_signal','plugin_defect'], context: JSON.stringify(items), runId, fallback });
-  const parsed: unknown = JSON.parse(result.answer);
+  const parsed: unknown = JSON.parse(await fallback());
   if (typeof parsed !== 'object' || parsed === null || !Array.isArray((parsed as {items?: unknown}).items)) throw new Error('ERROR revise.classify: missing verdict');
   emit(runId, 'revise', 'step_end', { step: 'read' });
   return parsed as {items: ReviseItem[]};

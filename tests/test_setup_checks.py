@@ -13,8 +13,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 SCRIPT = REPO / "src" / "scripts" / "setup_checks.py"
 SECRET = "AIza-super-secret-value-12345"
-IDS = ["home", "profile", "python", "python-addons", "hspell", "trove", "gemini-key",
-       "notebooklm", "pageindex", "nightly-job"]
+IDS = ["home", "profile", "git", "node", "python", "python-addons", "hspell", "gemini-key", "drive",
+       "notebooklm", "trove", "kotar", "moodle", "pageindex", "nightly-job"]
 
 
 def load():
@@ -55,13 +55,16 @@ class SetupChecks(unittest.TestCase):
 
     def run_checks(self, which=None, run=None, platform="linux", env=None):
         which = which if which is not None else {"python3": "/usr/bin/python3"}
-        return by_id(self.mod.run_checks(env or self.env, fake_which(which), run or fake_run(), platform))
+        return by_id(self.mod.run_checks(env or self.env, fake_which(which), run or fake_run(), platform,
+                                         exists=lambda p: False))
 
     def test_ids_in_order(self):
         checks = self.mod.run_checks(self.env, fake_which({"python3": "/usr/bin/python3"}), fake_run(), "linux")
         self.assertEqual([c["id"] for c in checks], IDS)
         for c in checks:
-            self.assertEqual(set(c), {"id", "label_he", "ok", "optional", "found", "required", "reason_he", "fix"})
+            self.assertEqual(set(c), {"id", "label_he", "ok", "optional", "found", "required", "reason_he", "fix",
+                                      "fix_windows", "fix_mac"})
+            self.assertTrue(c["fix_windows"] and c["fix_mac"], c["id"])
 
     def test_python_too_old(self):
         c = self.run_checks(run=fake_run(version="Python 3.8.10"))["python"]
@@ -75,6 +78,87 @@ class SetupChecks(unittest.TestCase):
         c = self.run_checks()["python"]
         self.assertIs(c["ok"], True)
         self.assertEqual(c["found"], "3.12.1")
+
+    def test_python_store_stub_is_skipped_and_python_is_taken(self):
+        def run(cmd):
+            if cmd[0] == "C:/stub/python3.exe":  # the Microsoft Store alias: fails and prints no version
+                return 9009, "Python was not found; run without arguments to install from the Microsoft Store"
+            if "--version" in cmd:
+                return 0, "Python 3.12.4"
+            return 0, "ALL_PRESENT"
+        got = self.run_checks(which={"python3": "C:/stub/python3.exe", "python": "C:/py/python.exe"}, run=run)
+        self.assertIs(got["python"]["ok"], True)
+        self.assertEqual(got["python"]["found"], "3.12.4")
+        self.assertIs(got["python-addons"]["ok"], True)
+
+    def test_python_py_launcher_is_the_last_resort(self):
+        seen = []
+
+        def run(cmd):
+            seen.append(cmd)
+            return (0, "Python 3.11.9") if cmd[:2] == ["C:/py.exe", "-3"] else (1, "")
+        got = self.run_checks(which={"py": "C:/py.exe"}, run=run)
+        self.assertIs(got["python"]["ok"], True)
+        self.assertEqual(seen[0], ["C:/py.exe", "-3", "--version"])
+
+    def test_python_2_does_not_count(self):
+        got = self.run_checks(run=fake_run(version="Python 2.7.18"))["python"]
+        self.assertIs(got["ok"], False)
+
+    def test_python_only_a_store_stub_says_so(self):
+        got = self.run_checks(which={"python": "C:/stub/python.exe"}, run=lambda cmd: (9009, "Python was not found"))
+        self.assertIs(got["python"]["ok"], False)
+        self.assertIn("Store", got["python"]["reason_he"])
+
+    def test_git_and_node_rows(self):
+        got = self.run_checks(which={"python3": "/usr/bin/python3"})
+        for cid in ("git", "node"):
+            self.assertIs(got[cid]["ok"], False)
+            self.assertFalse(got[cid]["optional"])
+        self.assertIn("winget install --id Git.Git", got["git"]["fix_windows"])
+        self.assertIn("winget install --id OpenJS.NodeJS.LTS", got["node"]["fix_windows"])
+        got = self.run_checks(which={"python3": "/usr/bin/python3", "git": "/usr/bin/git", "node": "/usr/bin/node"},
+                              run=lambda cmd: (0, "v22.1.0") if cmd[0].endswith("node") else fake_run()(cmd))
+        self.assertIs(got["git"]["ok"], True)
+        self.assertIs(got["node"]["ok"], True)
+        self.assertEqual(got["node"]["found"], "v22.1.0")
+
+    def test_node_too_old(self):
+        got = self.run_checks(which={"python3": "/usr/bin/python3", "node": "/usr/bin/node"},
+                              run=lambda cmd: (0, "v16.20.0") if cmd[0].endswith("node") else fake_run()(cmd))
+        self.assertIs(got["node"]["ok"], False)
+
+    def test_node_version_command_fails_or_is_unreadable(self):
+        for result in ((1, "boom"), (0, "not a version"), (0, "")):
+            got = self.run_checks(which={"python3": "/usr/bin/python3", "node": "/usr/bin/node"},
+                                  run=lambda cmd, result=result: result if cmd[0].endswith("node") else fake_run()(cmd))
+            self.assertIs(got["node"]["ok"], False, result)
+            self.assertIn("/usr/bin/node", got["node"]["reason_he"])
+            self.assertIn("winget install --id OpenJS.NodeJS.LTS", got["node"]["fix_windows"])
+
+    def test_drive_and_moodle_are_manual(self):
+        got = self.run_checks()
+        for cid in ("drive", "moodle"):
+            self.assertIsNone(got[cid]["ok"])  # no script can see the Claude connector or a browser sign-in
+            self.assertTrue(got[cid]["optional"])
+        self.assertIn("10166901", got["drive"]["fix_windows"])
+        self.assertIn("Connectors", got["drive"]["fix_mac"])
+
+    def test_kotar_needs_chrome(self):
+        self.assertIs(self.run_checks(platform="win32")["kotar"]["ok"], False)
+        env = dict(self.env, ProgramFiles="C:\\Program Files")
+        seen = []
+
+        def exists(path):
+            seen.append(path)
+            return path.endswith("chrome.exe")
+        checks = by_id(self.mod.run_checks(env, fake_which({"python3": "/usr/bin/python3"}), fake_run(), "win32",
+                                           exists=exists))
+        self.assertIs(checks["kotar"]["ok"], True)
+        self.assertTrue(checks["kotar"]["optional"])
+        mac = by_id(self.mod.run_checks(self.env, fake_which({"python3": "/usr/bin/python3"}), fake_run(), "darwin",
+                                        exists=lambda p: p == "/Applications/Google Chrome.app"))
+        self.assertIs(mac["kotar"]["ok"], True)
 
     def test_python_missing(self):
         got = self.run_checks(which={})

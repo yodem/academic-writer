@@ -76,22 +76,27 @@ AskUserQuestion(questions=[{
 
 "Check my Gemini key" → jump to Step 5f. Otherwise continue.
 
-### Python first
+### Prerequisites first: Git, Node.js and Python
 
-Every script in this plugin, including the one that saves your home folder, needs Python 3.9 or newer. Check it
-before any step that runs `home.py`:
+Git downloads the plugin and, on Windows, is the shell Claude Code runs commands in; Node.js runs the plugin's own
+tool (`aw`) and its start-up checks; Python 3.9 or newer runs every script, including the one that saves your home
+folder. Check all three silently (nothing is changed):
 
 ```bash
-python3 --version
+git --version 2>&1 | head -1
+node --version 2>&1 | head -1
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" --version 2>&1 | head -1
 ```
 
-If that prints 3.9 or higher, carry on. If the command is not found or the version is older, say in plain words:
-"Python is not installed (or is too old). It is the free engine that saves your settings and builds your Word
-files, and I can't install it for you." Give the numbered steps for their system from
-`references/dependencies.md § Python 3` (print them, end your turn), and tell them to restart Claude Code and run
-`/academic-writer:setup` again. On a Mac that has never had developer tools, `python3 --version` may instead open an
-Apple window asking to install "command line developer tools": that is safe, and the same file has the plain
-words for it. Then stop. Do not run `home.py`, `home_migrate.py` or `setup_checks.py` without Python.
+`git version 2.x`, `v20` or higher and `Python 3.9` or higher pass (`aw-python` tries `python3`, `python`, `py -3` and
+skips the Microsoft Store stand-in for `python.exe`). For anything else say what it is for and that you cannot install
+it (Python: "Python is not installed (or is too old). It is the free engine that saves your settings and builds your
+Word files, and I can't install it for you."), print the steps from `references/dependencies.md § Git`, `§ Node.js`
+and `§ Python 3` for their system, and end your turn. Windows: `winget install --id Git.Git -e`,
+`winget install --id OpenJS.NodeJS.LTS -e`, `winget install --id Python.Python.3.12 -e` (or the python.org installer
+with **"Add python.exe to PATH"** ticked). Then they quit Claude Code completely, open it again in this folder
+(a program installed while it runs is not found) and type `/academic-writer:setup`; answers are saved. Stop: no
+`home.py`, `home_migrate.py` or `setup_checks.py` without Python.
 
 ---
 
@@ -183,7 +188,7 @@ course registry and the list of your workspaces (every project or course folder 
 see whether one is already chosen:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" show
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" show
 ```
 
 If it names a home that exists, say so in one sentence and keep it. Otherwise choose one:
@@ -206,14 +211,14 @@ Then save the pointer and your answers in one call. `home.py set` writes the poi
 only fills in the answers you pass. Pass every answer you collected in Step 2 (`--name` only if you asked for it):
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" set --path "CHOSEN_FOLDER" --role "ROLE" --field "FIELD_OF_STUDY" --target-language "TARGET_LANGUAGE" --citation-style "CITATION_STYLE"
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" set --path "CHOSEN_FOLDER" --role "ROLE" --field "FIELD_OF_STUDY" --target-language "TARGET_LANGUAGE" --citation-style "CITATION_STYLE"
 ```
 
 Other flags: `--name`, `--institution`, `--degree`. A non-zero exit prints a plain `error`; read it to the
 researcher and do not go on (the dashboard and setup's home check read `home.md`).
 
 If the researcher has courses in the older (legacy) registry `~/.academic-writer/courses`, say a one-time
-migration can move them and run it as a preview first: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home_migrate.py" --home "CHOSEN_FOLDER" --data-dir "${CLAUDE_PLUGIN_DATA}"`.
+migration can move them and run it as a preview first: `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/home_migrate.py" --home "CHOSEN_FOLDER" --data-dir "${CLAUDE_PLUGIN_DATA}"`.
 It deletes nothing; only on a yes in `AskUserQuestion` add `--apply`. After updating the plugin, restart
 Claude Code (quit it fully and open it again in the same folder): a running session keeps the old skills until then.
 
@@ -230,13 +235,16 @@ only passes the Gemini key on in a project that has this file, so it must exist 
 Run the one checks script (it changes nothing and never prints a key):
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup_checks.py" --data-dir "${CLAUDE_PLUGIN_DATA}" --json
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/setup_checks.py" --data-dir "${CLAUDE_PLUGIN_DATA}" --json
 ```
 
 Each row has an `id`, `ok`, `optional` and a plain-language reason; Steps 4 and 8 read them (the per-OS lines in
 `references/dependencies.md` are the fallback if the script cannot run). Show a short table — the tool, what it is for in
 one phrase, ✓ found / ✗ missing / optional — for: Python 3 (`python`), the Python packages (`python-addons`), hspell
-(`hspell`, Hebrew writers only), Trove (`trove`), NotebookLM (`notebooklm`) and the Gemini key (`gemini-key`).
+(`hspell`, Hebrew writers only), Git (`git`), Node.js (`node`), then the connections: Google Drive (`drive`),
+NotebookLM (`notebooklm`), Trove (`trove`), Kotar (`kotar`) and Moodle (`moodle`), and the Gemini key (`gemini-key`).
+`drive` and `moodle` always show "check by hand" (no script can see them). Every row also carries `fix_windows` and
+`fix_mac`: show the line for the researcher's system.
 
 > "Here's what I'll go through. Anything already ✓ we skip. For each missing piece I'll tell you
 > what it's for and ask before installing. Say 'go' when you're ready."
@@ -252,10 +260,10 @@ Handle each missing item in this order. For each: say what it is for in one sent
 sentences are in `references/dependencies.md`), ask, act, then re-run its detection line and report
 in plain words. A skipped or failed item never blocks setup; note it for the summary.
 
-### 4a. Python 3 (the researcher installs it)
+### 4a. Git, Node.js and Python 3 (the researcher installs them)
 
-If the `python` row is not ok, Claude cannot install it. Give the numbered steps for their system from
-`references/dependencies.md § Python 3`, then stop here: the rest of setup needs Python, and the
+If the `git`, `node` or `python` row is not ok, Claude cannot install it (the prerequisites step above already
+printed the steps; use the row's `fix_windows` or `fix_mac` line). Stop here: the rest of setup needs them, and the
 researcher must restart Claude Code after installing. Tell them: "Your answers so far are saved. Quit Claude Code
 completely, open it again in this same folder, and type `/academic-writer:setup`; I'll skip what is already done."
 
@@ -279,44 +287,35 @@ AskUserQuestion(questions=[{
 Only on "Install":
 
 ```bash
-python3 -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema
 ```
 
 Re-run `setup_checks.py --json` and read the `python-addons` row. On failure, read `references/troubleshooting.md § pip install failures`
 and explain the fix before offering a retry (any retry with a different command is asked again).
 
-### 4c. Homebrew (macOS, only if hspell is wanted)
+### 4c. Homebrew and hspell — Hebrew spelling checker (Hebrew writers on a Mac or Linux only)
 
-Homebrew is a free installer for Mac tools. It needs the Mac password, so the researcher installs it in the
-Terminal app: give the numbered steps from `references/dependencies.md § Homebrew` (print them, end your turn,
-verify with `brew --version` in the next turn). Offer this only for a Hebrew writer who wants hspell while `BREW_MISSING`
-(Trove and NotebookLM do not need Homebrew). If they decline, hspell is skipped; proofreading still works.
+Skip unless `targetLanguage` is Hebrew and hspell is missing. On Windows there is no installer (the row's `fix_windows`
+line points to WSL); proofreading skips that check. On Linux give the steps from the reference (they need a password,
+so the researcher runs them in a regular terminal window). On a Mac, if `BREW_MISSING`, Homebrew (a free installer for
+Mac tools, needing the Mac password) is installed by the researcher in Terminal: steps in `references/dependencies.md
+§ Homebrew`, verified with `brew --version` next turn; Trove and NotebookLM do not need it. Then ask with
+`AskUserQuestion` (header "Hebrew spell"; options "Install": uses Homebrew, about a minute / "Skip": proofreading
+still works with one fewer safety net): "hspell is a free Hebrew spelling dictionary that catches typos that are easy
+to miss. Install it?" Only on "Install": `brew install hspell`.
 
-### 4d. hspell — Hebrew spelling checker (Hebrew writers only)
+### Connections: the order (all optional, each skippable)
 
-Skip unless `targetLanguage` is Hebrew and hspell is missing. On Windows it does not exist; proofreading skips that check. On Linux, give the researcher the
-steps from the reference (it needs their password, so they run it in a regular terminal window). On macOS with
-Homebrew:
+One at a time, saying what each gives the student; a "Skip" never blocks the next. Details and the Windows and Mac
+lines: `references/dependencies.md § Google Drive, Kotar and Moodle` and each row's `fix_windows` / `fix_mac`.
 
-```python
-AskUserQuestion(questions=[{
-  "question": "hspell is a free Hebrew spelling dictionary. The proofreader uses it to catch typos that are easy to miss. Install it?",
-  "header": "Hebrew spell",
-  "options": [
-    {"label": "Install", "description": "Uses Homebrew; takes about a minute."},
-    {"label": "Skip", "description": "Proofreading still works, with one fewer safety net."}
-  ],
-  "multiSelect": false
-}])
-```
+1. **Google Drive** (`drive`, first): the Claude connector (Customize, Connectors, Google Drive; https://support.claude.com/en/articles/10166901). Keeps and finds course files. No script sees it: ask "Is Google Drive connected?".
+2. **NotebookLM** (`notebooklm`): step 4e. Answers questions about a set of sources.
+3. **Trove** (`trove`): step 4d. Your searchable source library, with exact pages.
+4. **Kotar** (`kotar`): `/academic-writer:kotar-fetch` downloads a Kotar book's cited pages as one PDF. Needs Chrome signed in to Kotar.
+5. **Moodle** (`moodle`, the course site): the courses command reads pages and readings. Needs Chrome with the Claude in Chrome extension, signed in; never ask for the password.
 
-Only on "Install":
-
-```bash
-brew install hspell
-```
-
-### 4e. Trove — your research library (optional)
+### 4d. Trove — your research library (optional)
 
 Skip if found. Explain it in one sentence (reference), then:
 
@@ -346,7 +345,7 @@ Then the researcher signs in themselves: give the numbered steps from `reference
 (sign-up, `! trove login`, how they know it worked), end your turn, and verify next turn with
 `trove auth whoami --no-session`.
 
-### 4f. NotebookLM — source Q&A (optional)
+### 4e. NotebookLM — source Q&A (optional)
 
 Skip if found, or if `npm` is missing (say it's optional and can be added later; `references/dependencies.md § NotebookLM` explains how to add Node.js if they want it now). Otherwise:
 
@@ -372,10 +371,10 @@ Then the researcher signs in themselves: give the numbered steps from `reference
 (`! nlm login`, a Google sign-in page, how they know it worked), end your turn, and verify next turn with
 `nlm login --check`.
 
-### 4g. PageIndex library (optional; Trove stays the default)
+### 4f. PageIndex library (optional; Trove stays the default)
 
 PageIndex is a second way to find pages in the researcher's books. Offer it once, in plain words, only after the
-Trove step. `references/pageindex.md` is the source for the question, the install plan and the "I run my own
+connections step. `references/pageindex.md` is the source for the question, the install plan and the "I run my own
 server" path: set it up here (dry-run plan first), connect their own server (the `pageindex_command` setting; never a
 host or password in chat), or not now (Trove only). Never install without a yes; failures are in `references/troubleshooting.md`.
 

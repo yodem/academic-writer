@@ -1,11 +1,11 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, appendFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { allowedEnv } from './library/backends.ts';
+import { pythonEnv, pythonInvocation } from './python.ts';
 import { callGemini } from './gemini.ts';
 import { judge } from './judge.ts';
-import { decide } from './decide.ts';
 import { routeFor } from './routing.ts';
 import { Budget, budgetFor } from './ledger.ts';
 import { pluginRoot } from './pi.ts';
@@ -41,29 +41,21 @@ function contractChange(change: Change): ContractChange {
 export type RunProofreadOptions = { article?: string; chunks?: number | Chunk[]; runId: string; venue?: string; only?: 'mechanical' | 'language' | 'editorial'; out?: string; dataDir?: string; projectDir?: string; voiceRules?: string; venueProfile?: string };
 export type ProofreadResult = { changes: Change[]; memo: string; proofed: string; report: string };
 
+/** Run one of the plugin's Python scripts: `pythonCommand([script, ...args])`, under the shared Python discovery and in UTF-8 mode. */
+async function pythonCommand(scriptAndArgs: string[], cwd?: string): Promise<string> {
+  const [script, ...args] = scriptAndArgs;
+  const run = pythonInvocation(script as string, args, allowedEnv(process.env, 'script'));
+  return await command(run.command, run.args, cwd);
+}
 async function command(bin: string, args: string[], cwd?: string): Promise<string> {
   return await new Promise((resolvePromise, reject) => {
-    const child = spawn(bin, args, { cwd, env: allowedEnv(process.env, 'script'), stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(bin, args, { cwd, env: pythonEnv(allowedEnv(process.env, 'script')), stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = ''; let stderr = '';
     child.stdout.setEncoding('utf8').on('data', (data: string) => { stdout += data; });
     child.stderr.setEncoding('utf8').on('data', (data: string) => { stderr += data; });
     child.on('error', reject);
     child.on('close', (code) => code === 0 ? resolvePromise(stdout) : reject(new Error(`ERROR proofread: ${stderr || `${bin} exited ${String(code)}`}`)));
   });
-}
-function importLegacyJev(runId: string, project: string): void {
-  const legacyPath = join(project, '.academic-helper', 'jev-shadow.jsonl');
-  const marker = join(project, '.academic-helper', 'jev-shadow-imported');
-  if (!existsSync(legacyPath) || existsSync(marker)) return;
-  const ledgerDir = join(project, '.academic-helper', 'runs', runId);
-  mkdirSync(ledgerDir, { recursive: true });
-  const rows = readFileSync(legacyPath, 'utf8').split('\n').filter((line) => line.trim());
-  for (const line of rows) {
-    let evidence: unknown;
-    try { evidence = JSON.parse(line) as unknown; } catch { throw new Error('ERROR proofread.risk: invalid legacy Jev shadow row'); }
-    appendFileSync(join(ledgerDir, 'jev.jsonl'), `${JSON.stringify({ point: 'proofread.risk', legacyEvidence: evidence, labelSource: 'llm', priorShadow: true })}\n`, 'utf8');
-  }
-  writeFileSync(marker, 'imported\n', 'utf8');
 }
 function numberedChunks(chunks: Chunk[]): Chunk[] { return chunks.map((chunk, index) => ({ ...chunk, index, text: chunk.text.split('\n').map((line, offset) => /^L\d+\t/.test(line) ? line : `L${chunk.startLine + offset}\t${line}`).join('\n') })); }
 async function mapLimit<T, R>(items: T[], limit: number, operation: (item: T) => Promise<R>): Promise<R[]> {
@@ -80,13 +72,9 @@ async function find(chunk: Chunk, options: RunProofreadOptions, budget: Budget, 
   let candidates = Array.isArray(raw) ? raw : raw.changes;
   const kept: Change[] = [];
   for (const candidate of candidates) {
-    const decision = await decide({ point: 'proofread.triage', question: 'Is this candidate a genuine proofread error?', options: ['keep','discard'], context: JSON.stringify(candidate), runId: options.runId, fallback: async () => 'keep' });
-    if (decision.answer === 'keep') {
-      const risk = await decide({ point: 'proofread.risk', question: 'What meaning risk does this candidate carry?', options: ['low','medium','high'], context: JSON.stringify(candidate), runId: options.runId, fallback: async () => candidate.meaningRisk });
-      // A convention suggestion is the author's call (never auto-applied), so no risk verdict lowers it below medium.
-      const meaningRisk = candidate.suggestion === true && risk.answer === 'low' ? 'medium' : risk.answer as Change['meaningRisk'];
-      kept.push({ ...candidate, meaningRisk });
-    } else kept.push({ ...candidate, status: 'triaged-out' });
+    // A convention suggestion is the author's call (never auto-applied), so it never sits below medium risk.
+    const meaningRisk = candidate.suggestion === true && candidate.meaningRisk === 'low' ? 'medium' : candidate.meaningRisk;
+    kept.push({ ...candidate, meaningRisk });
   }
   return kept;
 }
@@ -110,11 +98,10 @@ async function proofreadRun(options: RunProofreadOptions): Promise<ProofreadResu
   const root = options.article ? pluginRoot() : '';
   const outDir = resolve(options.out ?? '.'); mkdirSync(outDir, { recursive: true });
   const project = options.projectDir ?? process.env.CLAUDE_PROJECT_DIR ?? '';
-  if (project) importLegacyJev(options.runId, project);
   const article = options.article ? resolve(options.article) : '';
   const content = article ? readFileSync(article, 'utf8') : '';
   const numbered = Array.isArray(options.chunks) ? numberedChunks(options.chunks) : [];
-  const chunks = numbered.length ? numbered : content ? JSON.parse(await command('python3', [join(root, 'scripts/chunk-article.py'), '--input', article, '--numbered'])) as Chunk[] : Array.from({ length: typeof options.chunks === 'number' ? options.chunks : 0 }, (_, index) => ({ id: `chunk-${index}`, index, startLine: index + 1, endLine: index + 1, text: `L${index + 1}\tx` }));
+  const chunks = numbered.length ? numbered : content ? JSON.parse(await pythonCommand([join(root, 'scripts/chunk-article.py'), '--input', article, '--numbered'])) as Chunk[] : Array.from({ length: typeof options.chunks === 'number' ? options.chunks : 0 }, (_, index) => ({ id: `chunk-${index}`, index, startLine: index + 1, endLine: index + 1, text: `L${index + 1}\tx` }));
   const budget = new Budget(options.runId, budgetFor('proofread'));
   const act = project || undefined;
   startRunOnce(options.runId, 'proofread', act);
@@ -129,13 +116,10 @@ async function proofreadRun(options: RunProofreadOptions): Promise<ProofreadResu
     if (actualStyles !== stylesPath) writeFileSync(actualStyles, JSON.stringify({}));
     if (actualTerms !== termsPath) writeFileSync(actualTerms, JSON.stringify({}));
     const tempText = join(outDir, '.proofread-input.md'); writeFileSync(tempText, content);
-    const result = await command('python3', [join(root, 'scripts/must-catch.py'), '--text', tempText, '--style-words', actualStyles, '--terms', actualTerms, '--hspell', '--json']);
+    const result = await pythonCommand([join(root, 'scripts/must-catch.py'), '--text', tempText, '--style-words', actualStyles, '--terms', actualTerms, '--hspell', '--json']);
     deterministic = (JSON.parse(result) as { changes: Change[] }).changes;
   }
   if (stubs.mustCatch) deterministic = await stubs.mustCatch();
-  for (const hit of deterministic.filter((change) => change.class === 'style_words')) {
-    await decide({ point: 'style.filler', question: 'Is this capped style-word use filler?', options: ['flag','allow'], context: JSON.stringify(hit), runId: options.runId, fallback: async () => 'flag' });
-  }
   const voicePath = join(options.dataDir ?? process.env.CLAUDE_PLUGIN_DATA ?? '', 'voice', 'rules.md');
   const voiceRules = options.voiceRules ?? (existsSync(voicePath) ? readFileSync(voicePath, 'utf8') : '');
   const venueProfile = resolveVenueProfile(options.venue, project, root);
@@ -181,9 +165,9 @@ async function proofreadRun(options: RunProofreadOptions): Promise<ProofreadResu
       return verdictPromise;
     };
     return await Promise.all(changes.map(async (change) => {
-      const decided = await decide({ point: 'proofread.verify', question: 'Should this proposed correction be applied?', options: ['uphold','refute'], context: JSON.stringify(change), runId: options.runId, fallback: async () => (await getVerdicts()).get(change.id) ?? 'ERROR' });
-      if (!['uphold', 'refute'].includes(decided.answer)) throw new Error(`ERROR proofread.verify: invalid verdict for ${change.id}`);
-      return { ...change, status: decided.answer === 'refute' ? 'refuted' : 'verified' };
+      const answer = (await getVerdicts()).get(change.id) ?? 'ERROR';
+      if (!['uphold', 'refute'].includes(answer)) throw new Error(`ERROR proofread.verify: invalid verdict for ${change.id}`);
+      return { ...change, status: answer === 'refute' ? 'refuted' : 'verified' };
     }));
   });
   stepEnd('verify');
@@ -200,13 +184,13 @@ async function proofreadRun(options: RunProofreadOptions): Promise<ProofreadResu
   const changesPath = join(outDir, 'changes.json'); const proofedPath = join(outDir, 'proofed.md'); const reportPath = join(outDir, 'report.md'); const memoPath = join(outDir, 'memo.md');
   const contract = all.map(contractChange);
   writeFileSync(changesPath, JSON.stringify({ stage: 'language', changes: contract }, null, 2));
-  if (article) await command('python3', [join(root, 'scripts/gate.py'), 'changes-schema', changesPath, '--json']);
+  if (article) await pythonCommand([join(root, 'scripts/gate.py'), 'changes-schema', changesPath, '--json']);
   if (article) {
     const candidateContract = contract.filter((change) => !change.mustCatch);
     if (candidateContract.length) {
       const guardInput = join(outDir, '.proofread-before-guard.json'); const guardOutput = join(outDir, '.proofread-after-guard.json');
       writeFileSync(guardInput, JSON.stringify({ stage: 'language', changes: candidateContract }));
-      const guardedText = await command('python3', [join(root, 'scripts/citation-guard.py'), '--changes', guardInput, '--proof-base', article, '--json']);
+      const guardedText = await pythonCommand([join(root, 'scripts/citation-guard.py'), '--changes', guardInput, '--proof-base', article, '--json']);
       writeFileSync(guardOutput, guardedText);
       const guarded = (JSON.parse(guardedText) as { changes: ContractChange[] }).changes;
       const guardedById = new Map(guarded.map((change) => [change.change_id, change]));
@@ -219,7 +203,7 @@ async function proofreadRun(options: RunProofreadOptions): Promise<ProofreadResu
     const applicable = all.filter((change) => (change.mustCatch || change.status === 'verified') && change.meaningRisk === 'low' && change.after !== null).map(contractChange);
     const applyPath = join(outDir, '.proofread-applicable.json'); writeFileSync(applyPath, JSON.stringify({ stage: 'language', changes: applicable }));
     if (applicable.length) {
-      const appliedText = await command('python3', [join(root, 'scripts/apply-changes.py'), '--changes', applyPath, '--proof-base', article, '--output', proofedPath, '--json']);
+      const appliedText = await pythonCommand([join(root, 'scripts/apply-changes.py'), '--changes', applyPath, '--proof-base', article, '--output', proofedPath, '--json']);
       const applied = (JSON.parse(appliedText) as { changes: ContractChange[] }).changes;
       const appliedById = new Map(applied.map((change) => [change.change_id, change]));
       for (let index = 0; index < all.length; index += 1) {
@@ -233,7 +217,7 @@ async function proofreadRun(options: RunProofreadOptions): Promise<ProofreadResu
     writeFileSync(changesPath, JSON.stringify({ stage: 'language', changes: finalContract }, null, 2));
     if (article.toLowerCase().endsWith('.docx')) {
       const finalTextPath = join(outDir, '.proofread-final-text.txt'); writeFileSync(finalTextPath, proofed);
-      await command('python3', [join(root, 'scripts/build-tracked-docx.py'), '--original', article, '--final-text', finalTextPath, '--changes', changesPath, '--output', join(outDir, 'proofed.docx')]);
+      await pythonCommand([join(root, 'scripts/build-tracked-docx.py'), '--original', article, '--final-text', finalTextPath, '--changes', changesPath, '--output', join(outDir, 'proofed.docx')]);
     }
   } else writeFileSync(proofedPath, proofed);
   writeFileSync(memoPath, memo);

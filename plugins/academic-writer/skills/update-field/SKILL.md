@@ -18,9 +18,9 @@ First, check if a profile exists and load it:
 
 ```bash
 if [ -f .academic-helper/profile.md ]; then
-  CURRENT_FIELD=$(python3 -c "
+  CURRENT_FIELD=$(sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "
 import re
-content = open('.academic-helper/profile.md').read()
+content = open('.academic-helper/profile.md', encoding='utf-8').read()
 m = re.search(r'^fieldOfStudy: (.+)$', content, re.MULTILINE)
 print(m.group(1).strip() if m else 'Not set')
 ")
@@ -45,13 +45,13 @@ Record their answer.
 Update the profile's frontmatter (the header block between the `---` lines) with the new field, keeping every other setting intact. Replace `NEW_FIELD_HERE` with the author's answer:
 
 ```bash
-python3 << 'PYTHON'
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" << 'PYTHON'
 import re, json
 from datetime import datetime
 
 PROFILE_PATH = '.academic-helper/profile.md'
 
-with open(PROFILE_PATH) as f:
+with open(PROFILE_PATH, encoding="utf-8") as f:
     content = f.read()
 
 # Update fieldOfStudy and updatedAt in frontmatter
@@ -70,7 +70,7 @@ if re.search(r'^updatedAt: .+$', content, re.MULTILINE):
 else:
     content = content.replace('---\n', f'---\nupdatedAt: {now}\n', 1)
 
-with open(PROFILE_PATH, 'w') as f:
+with open(PROFILE_PATH, 'w', encoding="utf-8") as f:
     f.write(content)
 
 print(f"✓ Field updated to: {new_field}")

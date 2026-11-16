@@ -50,13 +50,12 @@ SERVER_KEY = "test-server-key-bbbb2222"   # the key a wrapper's own computer hol
 # key, so a command that received it would show up even where the plugin's own key was replaced.
 PARENT_GEMINI_KEY = "test-parent-gemini-cccc3333"
 ANTHROPIC_KEY = "test-anthropic-key-dddd4444"
-JEV_KEY = "test-jev-key-eeee5555"
 OPENAI_KEY = "test-openai-key-ffff6666"
 GITHUB_TOKEN = "test-github-token-gggg7777"
 AWS_SECRET = "test-aws-secret-hhhh8888"
-PARENT_SECRETS = {"GOOGLE_API_KEY": PLUGIN_KEY, "GEMINI_API_KEY": PARENT_GEMINI_KEY, "ANTHROPIC_API_KEY": ANTHROPIC_KEY, "JEV_API_KEY": JEV_KEY,
+PARENT_SECRETS = {"GOOGLE_API_KEY": PLUGIN_KEY, "GEMINI_API_KEY": PARENT_GEMINI_KEY, "ANTHROPIC_API_KEY": ANTHROPIC_KEY,
                   "OPENAI_API_KEY": OPENAI_KEY, "GITHUB_TOKEN": GITHUB_TOKEN, "AWS_SECRET_ACCESS_KEY": AWS_SECRET}
-ALL_KEYS = (PLUGIN_KEY, SERVER_KEY, PARENT_GEMINI_KEY, ANTHROPIC_KEY, JEV_KEY, OPENAI_KEY, GITHUB_TOKEN, AWS_SECRET)
+ALL_KEYS = (PLUGIN_KEY, SERVER_KEY, PARENT_GEMINI_KEY, ANTHROPIC_KEY, OPENAI_KEY, GITHUB_TOKEN, AWS_SECRET)
 SHADOW_TIMEOUT_MS = 120_000               # far above any scheduling delay: no test races it
 ROUTE_WORDS = re.compile(r"trove|page-?index", re.IGNORECASE)
 

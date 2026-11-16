@@ -59,7 +59,7 @@ def cmd_health(a):
     r = lib.root()
     r.mkdir(parents=True, exist_ok=True)
     probe_file = r / ".health"
-    probe_file.write_text("ok")
+    probe_file.write_text("ok", encoding="utf-8")
     probe_file.unlink()
     with contextlib.redirect_stdout(sys.stderr):
         has_litellm = distribution_version("litellm") is not None or probe("litellm") is not None
@@ -147,7 +147,7 @@ def cmd_render_trove(a):
 def shelf_ids(path: str | None) -> list[str] | None:
     if not path:
         return None
-    data = json.loads(Path(path).read_text())
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
     return data["books"] if isinstance(data, dict) else data
 
 

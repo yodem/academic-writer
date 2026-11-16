@@ -4,6 +4,10 @@
 
 set -euo pipefail
 
+# Python through the plugin resolver (python3, python or py -3): it lives at <plugin root>/bin, two folders up.
+AW_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/bin/aw-python"
+aw_py() { sh "$AW_PY" "$@"; }
+
 # Profile scope: silently no-op in any project without the academic-helper profile.
 # Matches the run-hook.mjs:54 directory guard so this hook never fires in unrelated repos.
 if [[ ! -f "${CLAUDE_PROJECT_DIR:-$PWD}/.academic-helper/profile.md" ]]; then
@@ -34,7 +38,7 @@ marker="$voice_dir/.migrated"
 gemini_profile="$root/.academic-helper/profile.md"
 gemini_marker="$voice_dir/.gemini-languages-migrated"
 if [[ -f "$gemini_profile" && ! -f "$gemini_marker" ]]; then
-  gemini_result="$(python3 - "$gemini_profile" <<'PYEOF'
+  gemini_result="$(aw_py - "$gemini_profile" <<'PYEOF'
 import json, re, sys
 
 path = sys.argv[1]
@@ -89,10 +93,10 @@ seeded=0
 aw_profile="$root/.academic-writer/profile.json"
 if [[ -f "$aw_profile" ]]; then
   cp "$aw_profile" "$voice_dir/legacy/profile.json"
-  python3 - <<'PYEOF' "$aw_profile" "$profile"
+  aw_py - <<'PYEOF' "$aw_profile" "$profile"
 import json, sys, datetime
 src, dst = sys.argv[1], sys.argv[2]
-with open(src) as f:
+with open(src, encoding="utf-8") as f:
     d = json.load(f)
 voice = d.get("voice", {}) or {}
 fp = d.get("style_fingerprint", {}) or {}
@@ -125,12 +129,12 @@ if fp.get("avg_sentence_len"):
 if fp.get("preferred_connectives"):
     lines.append("- Preferred connectives: " + ", ".join(fp["preferred_connectives"]))
 lines += ["", "## Non-fiction-book-specific", "", "_Empty — populated when same writer uses hebrew-book-producer._", ""]
-with open(dst, "w") as f:
+with open(dst, "w", encoding="utf-8") as f:
     f.write("\n".join(lines) + "\n")
 # Strip voice fields from original profile.json
 d["voice"] = "see ./AUTHOR_VOICE.md (migrated " + today + ")"
 d.pop("style_fingerprint", None)
-with open(src, "w") as f:
+with open(src, "w", encoding="utf-8") as f:
     json.dump(d, f, indent=2, ensure_ascii=False)
 PYEOF
   seeded=1
@@ -141,17 +145,17 @@ fi
 hb_profile="$root/AUTHOR_VOICE.md"
 if [[ -f "$hb_profile" && "$seeded" -eq 0 ]]; then
   cp "$hb_profile" "$voice_dir/legacy/AUTHOR_VOICE.md"
-  python3 - <<'PYEOF' "$hb_profile"
+  aw_py - <<'PYEOF' "$hb_profile"
 import sys, datetime, re
 path = sys.argv[1]
-text = open(path).read()
+text = open(path, encoding="utf-8").read()
 today = datetime.date.today().isoformat()
 # If already four-section structure, just stamp.
 if all(s in text for s in ("## Core voice", "## Terminology",
                             "## Academic-specific", "## Non-fiction-book-specific")):
     if not text.startswith("> Updated"):
         text = f"> Updated {today} by hebrew-book-producer (re-stamped)\n\n" + text
-    open(path, "w").write(text)
+    open(path, "w", encoding="utf-8").write(text)
     sys.exit(0)
 # Otherwise, wrap legacy content under "## Non-fiction-book-specific"
 writer = "<unknown>"
@@ -177,7 +181,7 @@ _Empty — populated when same writer uses Academic Helper._
 
 {text.strip()}
 """
-open(path, "w").write(new)
+open(path, "w", encoding="utf-8").write(new)
 PYEOF
   seeded=1
 fi

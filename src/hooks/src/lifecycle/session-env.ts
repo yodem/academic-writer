@@ -1,7 +1,7 @@
 import { appendFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-export type SessionEnvValues = { googleApiKey?: string; jevApiKey?: string; pageindexCommand?: string; pluginData?: string };
+export type SessionEnvValues = { googleApiKey?: string; pageindexCommand?: string; pluginData?: string };
 
 // An unset userConfig option can arrive as the literal placeholder text (observed for skills in
 // docs/refactor/runtime-facts.md); never export a placeholder as a key.
@@ -22,9 +22,7 @@ export function sessionEnv(projectDir: string, envFile: string | undefined, valu
   if (!existsSync(join(projectDir, '.academic-helper', 'profile.md')) || !envFile) return;
   const lines: string[] = [];
   const googleApiKey = 'googleApiKey' in values ? values.googleApiKey : pluginOption('google_api_key');
-  const jevApiKey = 'jevApiKey' in values ? values.jevApiKey : pluginOption('jev_api_key');
   if (usable(googleApiKey)) lines.push(`export GOOGLE_API_KEY='${shellQuote(googleApiKey)}'`);
-  if (usable(jevApiKey)) lines.push(`export JEV_API_KEY='${shellQuote(jevApiKey)}'`);
   // Not a secret: how to start the optional PageIndex library (read by `aw library`).
   const pageindex = 'pageindexCommand' in values ? values.pageindexCommand : pluginOption('pageindex_command');
   if (usable(pageindex)) lines.push(`export AW_PAGEINDEX_COMMAND='${shellQuote(pageindex.trim())}'`);

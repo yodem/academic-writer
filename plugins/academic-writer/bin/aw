@@ -40,398 +40,6 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// ../thresholds.json
-var thresholds_exports = {};
-__export(thresholds_exports, {
-  default: () => thresholds_default
-});
-var thresholds_default;
-var init_thresholds = __esm({
-  "../thresholds.json"() {
-    thresholds_default = {
-      $schema: "https://json-schema.org/draft/2020-12/schema",
-      description: "Single source of truth for all numeric quality gates (self-review, rewrite limits, paragraph/unit word bounds, style-fingerprint compliance, voice rule-coverage/corpus minimums, typography). Edit here; every skill and agent references this file. Per-step model routes (provider, model, thinking_budget, output cap) are read from the models block below by src/cli/src/routing.ts; the retired MCP gemini-server (SPEC_DEFAULTS) is no longer used. The antiAi block was REMOVED in 0.9.0: nothing computed that score, so it was the drafting model rating its own unrevised draft, and it measured a flat maximum on every paragraph of a live 13-unit run while the auditor failed several of the same paragraphs. Anti-AI patterns are now writing guidance (write/references/anti-ai-patterns-*.md), not a scored gate; the auditor's VERDICT is the per-paragraph gate.",
-      selfReview: {
-        minScore: 40,
-        maxScore: 60,
-        passThreshold: 40,
-        _comment: "Articles scoring below 40/60 trigger researcher review before final output. 6 dimensions x 10 points each."
-      },
-      rewriteCycles: {
-        max: 3,
-        _comment: "Maximum number of times a paragraph can be rewritten before being included with [NEEDS REVIEW]."
-      },
-      paragraph: {
-        wordCeiling: 220,
-        wordCeilingIntroConclusionBonus: 30,
-        _comment: "Soft word ceiling per paragraph. Introduction and conclusion paragraphs may exceed by wordCeilingIntroConclusionBonus words. wordFloor: minimum words for one drafted paragraph. The drafted-unit word gate is per planned paragraph (n x [wordFloor, wordCeiling]); writerUnit min/max bound the ARCHITECT's unit sizing, not a single draft (live run 2026-09-23: a 1-paragraph unit correctly drafted ~110 words failed a 300-word unit floor). quotedTermMaxWords: a quoted span of at most this many words is treated as a term (scare quotes, e.g. \u05F4\u05D9\u05E9 \u05DE\u05D0\u05D9\u05DF\u05F4), not a source quotation, by the draft quote gate.",
-        wordFloor: 40,
-        quotedTermMaxWords: 3
-      },
-      writerUnit: {
-        targetWords: 500,
-        minWords: 300,
-        maxWords: 800,
-        _comment: "Min/target/max word bounds for a 'writer unit' \u2014 the leaf-level chunk that gets exactly one section-writer subagent. Sections whose word count exceeds maxWords must be decomposed by the architect into multiple writer-unit subsections (an outline `units` array); adjacent subsections under minWords should be merged into one unit rather than left tiny."
-      },
-      write: {
-        outlineMaxAlternatives: 2,
-        _comment: "Architect may label up to this many thesis alternatives for discussion; none replaces author intent unless the author edits it."
-      },
-      styleFingerprint: {
-        passThreshold: 7,
-        maxScore: 10,
-        _comment: "Per-dimension style compliance score. Below 7 triggers paragraph adjustment."
-      },
-      voice: {
-        ruleCoverage: {
-          pass: 8,
-          warn: 6,
-          block: 6
-        },
-        corpus: {
-          minArticles: 3,
-          minTotalWords: 1500,
-          minWordsPerArticle: 800
-        },
-        exemplars: {
-          count: 4,
-          minWords: 40,
-          maxWords: 150,
-          maxPerFile: 1,
-          _comment: "src/scripts/extract-voice-exemplars.py: how many real paragraphs from past-articles/ are shown to Gemini as few-shot voice examples, their word bounds, and at most maxPerFile per source article so no single paper dominates the voice. Measured 2026-09-15 on the author's finished Hebrew papers: mean paragraph 97-134 words, so 40-150 keeps typical body paragraphs and drops headings and footnote-length fragments (a whole-folder corpus reads shorter because course reflections pull the mean down). Gemini guidance: 2-5 examples; more rarely helps."
-        },
-        bundle: {
-          exemplars: 6,
-          pairs: 2,
-          maxPerSource: 1,
-          maxRuleLines: 40
-        },
-        selection: {
-          min: 12,
-          max: 20
-        }
-      },
-      proofread: {
-        chunkWords: 1200,
-        maxPasses: 3,
-        dryRounds: 2,
-        concurrencyCap: 6,
-        refuteVotes: 3,
-        refuteMajority: 2,
-        refuteBudgetPerChunk: 12,
-        _comment: "Proofread chunk target; execution and call budgets are configured under models and budget."
-      },
-      ocr: {
-        perCallPageCap: 40,
-        geminiBatchSize: 1,
-        lowResDpi: 100,
-        claudeModel: "claude-opus-5-5",
-        geminiConfirmPages: 20,
-        geminiUsdPerPage: 4e-3,
-        freeAgreeMin: 0.98,
-        shortAnswerRatio: 0.8,
-        shortAnswerMinChars: 200,
-        inlineSizeLimitBytes: 20971520,
-        _comment: "Cost policy (Yotam 2026-11-16: money first; measured 2026-11-16 on 12 Hebrew book pages of one scan, one page per call, same plain prompt as Claude): the paid Gemini fallback is gemini-3.8-flash with the least thinking it accepts (models.ocr.thinking_budget 0 -> thinkingLevel low; it reported 0 thinking tokens): median 0.25% letter difference from Opus, glossary columns kept in order, about $0.004 a page at the 2026 introductory price ($0.75/$3.75 per 1M), about $0.007 from 2027-01-01. gemini-2.5-flash with thinkingBudget 0 cost about $0.002 a page but differed from Opus by a median 1.2% and scrambled two-column glossary order, so it was not chosen. geminiConfirmPages caps Gemini pages per --run id (cumulative, read from the run ledger); pages past it come back blank as 'needs approval' and aw ocr exits 4 unless --confirm-cost; geminiUsdPerPage only feeds that estimate. --gemini-model/--claude-model (a stronger reader for named pages) also need --confirm-cost; nothing escalates on its own. claudeModel is the Claude reader, on the author's subscription (no per-page money): Opus, because in the 2026-10-20 bake-off Sonnet 5.5 tied it but answered 2 of 59 pages with a summary, and each such page would fall back to paid Gemini; Haiku 5.5 was 1.4 points worse on poor scans. geminiBatchSize is 1 (six-page batches dropped passages, 2026-10-16). lowResDpi is 100: below it Gemini read Hebrew more accurately than Claude. freeAgreeMin: for an additional source only (--source additional; required readings never use free readers, user rule 2026-10-20), a free reading is kept when Surya and Tesseract agree at this letters-only similarity. A Claude answer whose letters are under shortAnswerRatio of Tesseract's reading goes to Gemini (every real answer was at least 0.9, every soft refusal under 0.35); pages whose Tesseract reading has under shortAnswerMinChars letters skip that check. perCallPageCap bounds pages per aw ocr invocation; pages over inlineSizeLimitBytes fail with a named error."
-      },
-      citationFloor: {
-        minSecondaryPer1000Words: 4,
-        minSecondaryTotal: 8,
-        _comment: "VER-18 absence gate, enforced by src/scripts/gate.py citation-floor. The per-paragraph auditor is a PRESENCE check \u2014 it verifies that claims which ARE cited are cited correctly, and is structurally blind to a paragraph that cites nothing. Absence needs its own counting gate, and the count is arithmetic, not judgement (TST-02). Only SECONDARY citations count toward the floor: primary sources stay inline in this field, so a raw citation count reads healthy on an article carrying almost no scholarly engagement. minSecondaryPer1000Words is the rate floor, minSecondaryTotal the absolute floor that keeps a very short article from passing on rate alone. The gate FAILS if EITHER floor is breached."
-      },
-      typography: {
-        dashReplacement: "em",
-        dashReplacementLatin: "hyphen",
-        styleMetrics: {
-          topFrequentTermsCount: 30,
-          minTermLength: 2,
-          furnitureMaxWords: 10,
-          furnitureShare: 0.8,
-          furnitureMinCount: 5,
-          furnitureCandidateMultiplier: 3
-        },
-        _comment: "dashReplacement is the dash convention used by detect-ai-typography.py (values: em|keep|hyphen|comma|colon|remove); overridable via --dash-replacement. em (default, author decision 2026-10-26) keeps the spaced em dash as the Hebrew dash for an aside and turns a spaced hyphen used as a dash into one; keep leaves every dash untouched; hyphen|comma|colon|remove are the legacy convention that replaces em dashes and non-numeric en dashes. dashReplacementLatin is used instead when a text is Latin-dominant (English articles): the em-dash decision covers Hebrew only, so English keeps the earlier hyphen convention. topFrequentTermsCount/minTermLength configure extract-style-metrics.py's frequentTerms extraction. furnitureMaxWords/furnitureShare/furnitureMinCount drop structural furniture (table-of-contents lines and section headers) from frequentTerms: a term is furniture when at least furnitureShare of its occurrences fall in paragraphs of at most furnitureMaxWords words and it occurs at least furnitureMinCount times. Calibrated on a real 10-file corpus of 857 paragraphs with a 38-word median: the author's own name sits in 5-word ToC lines and scores 96%, subject vocabulary scores 3%, and the highest-scoring term that is kept scores 73% \u2014 so the 0.8 cutoff has margin on both sides. Only terms in contention for the reported list are judged \u2014 the top topFrequentTermsCount * furnitureCandidateMultiplier by raw count \u2014 because a share computed over a handful of occurrences has no resolution: \u05D1\u05F3 and \u05D0\u05F3, the same token doing the same job in the same two files, scored 0.80 and 0.50 on five and seven observations and split. Replaces a front-matter rule that inspected the first N paragraphs of each file and never fired, because these headers repeat throughout a document rather than opening it."
-      },
-      models: {
-        "proofread.find": {
-          provider: "gemini",
-          model: "gemini-3.8-flash",
-          maxOutputTokens: 8192,
-          concurrency: 1,
-          piModel: "openrouter/z-ai/glm-5.3"
-        },
-        "proofread.verify": {
-          provider: "gemini",
-          model: "gemini-3.8-flash",
-          maxOutputTokens: 8192,
-          concurrency: 1,
-          piModel: "openrouter/z-ai/glm-5.3"
-        },
-        "proofread.memo": {
-          provider: "gemini",
-          model: "gemini-3.8-flash",
-          maxOutputTokens: 8192,
-          concurrency: 1,
-          piModel: "openrouter/z-ai/glm-5.3"
-        },
-        "evidence.extract": {
-          provider: "gemini",
-          model: "gemini-3.8-flash",
-          maxOutputTokens: 8192,
-          concurrency: 4,
-          piModel: "openrouter/z-ai/glm-5.3"
-        },
-        "write.draft": {
-          provider: "gemini",
-          model: "gemini-3.8-flash",
-          maxOutputTokens: 8192,
-          concurrency: 1,
-          piModel: "openrouter/z-ai/glm-5.3"
-        },
-        "write.synthesize": {
-          provider: "gemini",
-          model: "gemini-3.8-flash",
-          maxOutputTokens: 8192,
-          concurrency: 1,
-          piModel: "openrouter/z-ai/glm-5.3"
-        },
-        "voice.moves": {
-          provider: "gemini",
-          model: "gemini-3.8-flash",
-          maxOutputTokens: 8192,
-          concurrency: 1,
-          piModel: "openrouter/z-ai/glm-5.3"
-        },
-        "revise.classify": {
-          provider: "gemini",
-          model: "gemini-3.8-flash",
-          maxOutputTokens: 8192,
-          concurrency: 1,
-          piModel: "openrouter/z-ai/glm-5.3"
-        },
-        ocr: {
-          provider: "gemini",
-          model: "gemini-3.8-flash",
-          thinking_budget: 0,
-          maxOutputTokens: 8192,
-          concurrency: 1,
-          piModel: "openrouter/z-ai/glm-5.3"
-        },
-        edit: {
-          provider: "gemini",
-          model: "gemini-3.8-flash",
-          maxOutputTokens: 8192,
-          concurrency: 1,
-          piModel: "openrouter/z-ai/glm-5.3"
-        },
-        jev: {
-          model: "jev-1.13.0"
-        }
-      },
-      budget: {
-        proofread: {
-          maxTokens: 1e6,
-          maxUsd: 0.5,
-          summaryMaxBytes: 1024,
-          summaryMemoChars: 240,
-          summaryExcerptChars: 120,
-          _comment: "Token ceiling comfortably covers a long proofread run; the USD ceiling is the primary cost guard."
-        },
-        write: {
-          maxTokens: 5e6,
-          maxUsd: 3,
-          _comment: "Token ceiling covers multi-section drafting; the USD ceiling is the primary cost guard."
-        },
-        jev: {
-          maxTokens: 1e5,
-          maxUsd: 0.25
-        },
-        voiceMoves: {
-          maxTokens: 5e4,
-          maxUsd: 0.1,
-          _comment: "One call to derive qualitative voice moves."
-        },
-        revise: {
-          maxTokens: 1e5,
-          maxUsd: 0.25,
-          _comment: "One bounded classification pass for author review items."
-        }
-      },
-      jev: {
-        threshold: 0.75,
-        points: {
-          "proofread.verify": {
-            mode: "shadow"
-          },
-          "proofread.triage": {
-            mode: "shadow"
-          },
-          "proofread.risk": {
-            mode: "shadow"
-          },
-          "revise.classify": {
-            mode: "shadow"
-          },
-          "evidence.relevance": {
-            mode: "shadow"
-          },
-          "outline.support": {
-            mode: "shadow"
-          },
-          "write.audit_prescreen": {
-            mode: "shadow"
-          },
-          "write.voice_check": {
-            mode: "shadow"
-          },
-          "synthesize.needs_bridge": {
-            mode: "shadow"
-          },
-          "style.filler": {
-            mode: "shadow"
-          }
-        },
-        yesProbability: 0.5,
-        scoreMaximum: 3
-      },
-      judge: {
-        validationAttempts: 2
-      },
-      awImprove: {
-        defectSimilarity: 0.5,
-        clusterMinimum: 2,
-        maxExamples: 5,
-        jevRoster: {
-          labels: 100,
-          agreement: 0.8,
-          instability: 0.1
-        },
-        _comment: "Development-only defect clustering and Jev roster thresholds."
-      },
-      _piModelNote: "piModel = OpenRouter model for the isolated Pi judge. Must be a non-Claude, non-Gemini family (cross-family verification); taken from the author's Pi model roster (executor tier, machine-config/pi/model-roster.json). Runs in shadow until the Hebrew fixture shows parity.",
-      evidence: {
-        passagesPerSource: {
-          core: {
-            min: 12,
-            max: 30
-          },
-          other: {
-            min: 4,
-            max: 12
-          }
-        },
-        _comment: "aw evidence build coverage targets per source. Live rehearsal 2026-09-23: with no target, Gemini returned 5 passages for a 12-page core text and 0 for Sefer Yetzirah, missing the article's opening dilemma. The core text (author-intent coreTextSourceId) gets dense coverage; every other source a smaller floor. Concurrency for evidence.extract is 4 (sources in parallel)."
-      },
-      synthesis: {
-        openerWords: 3,
-        repeatedOpenerMin: 3,
-        _comment: "aw synthesize: a paragraph opener (first openerWords words) used at least repeatedOpenerMin times across the article is passed to the synthesizer as a required variation (live rehearsal 2026-09-23: 7 units opened with the same phrase, 0 edits proposed)."
-      },
-      activity: {
-        activeRunMaxAgeMinutes: 360,
-        _comment: "A run counts as active (hooks append to it, the reader shows it as running) while its activity.jsonl has a run_start, no run_end and was written within this many minutes; older, it reads as stalled."
-      },
-      library: {
-        timeoutMs: {
-          primary: 6e4,
-          readAll: 3e5,
-          check: 15e3,
-          shadow: 45e3,
-          verdictSettle: 3e3
-        },
-        shadow: {
-          ops: [
-            "list",
-            "toc",
-            "read"
-          ],
-          maxConcurrent: 3,
-          readAllMaxPages: 40,
-          lockStaleMs: 12e4,
-          reapGraceMs: 2e3,
-          pollMs: 100
-        },
-        spool: {
-          maxBytes: 1048576,
-          ttlHours: 72
-        },
-        ledger: {
-          maxRowBytes: 4096,
-          maxErrorChars: 300,
-          maxAgreePages: 25
-        },
-        agree: {
-          jaccardMin: 0.6
-        },
-        supports: {
-          tokenCoverageMin: 0.8,
-          minQuoteTokens: 4
-        },
-        report: {
-          minLookups: 5
-        },
-        maxBufferBytes: 67108864,
-        maxRequestPages: 5e3,
-        maxPageNumber: 1e5,
-        pageindex: {
-          readChunkPages: 10,
-          chunkConcurrency: 4,
-          metaScanMax: 60,
-          metaScanConcurrency: 4
-        },
-        tokens: {
-          hebrewCharsPerToken: 2,
-          otherCharsPerToken: 4,
-          _comment: "Rough token estimate for the retrieval ledger: characters divided by this (Hebrew text packs about 2 characters per token, other scripts about 4). An estimate for comparing routes, never a billing figure."
-        },
-        index: {
-          summaryModel: "gemini/gemini-3.8-flash",
-          maxCalls: 3e3,
-          concurrency: 16,
-          askAboveCalls: 400,
-          timeoutMs: 18e5,
-          verifyPages: 2,
-          minSummaryShare: 0.8,
-          probeTimeoutMs: 3e4,
-          _comment: "aw library index (PageIndex tree build): summaryModel is the LiteLLM model for page summaries, maxCalls the hard cap on model calls per run, concurrency the parallel calls, askAboveCalls the estimated call count above which the skill asks the researcher before starting (with a cost estimate) and the call cap a run without --yes gets, timeoutMs bounds one whole indexing run (30 minutes). verifyPages is how many pages the read-back compares with Trove, minSummaryShare the share of nodes that must carry a summary when summaries were asked for, probeTimeoutMs bounds the up-front check that the command can index at all."
-        },
-        install: {
-          pageindexCommit: "af92d9658a6a9c0ae31171b43198db28951af2f4",
-          minPython: "3.10",
-          minPythonCore: "3.9",
-          pipTimeoutMs: 9e5,
-          venvTimeoutMs: 18e4,
-          healthTimeoutMs: 9e4,
-          probeTimeoutMs: 15e3,
-          approxSizeMb: {
-            core: 100,
-            structure: 500
-          },
-          _comment: "aw library install: pageindexCommit is the pinned PageIndex commit (its tarball sha256 lives in PINNED.json), minPython the least Python for the structure tier, minPythonCore the least for the core tier (index from the table of contents), pipTimeoutMs bounds one pip install (15 minutes), venvTimeoutMs the creation of the private Python folder, healthTimeoutMs the check after the install, probeTimeoutMs asking one Python what version it is. approxSizeMb is the rough disk size quoted to the researcher before an install (an estimate, not a measurement)."
-        },
-        eval: {
-          maxClaims: 30,
-          minPairs: 8,
-          maxTurns: 12,
-          maxBudgetUsdPerRun: 1,
-          parallel: 2,
-          locateModel: "claude-sonnet-5-5",
-          expectedUsdPerRun: 0.1,
-          maxPagesPerRead: 5,
-          maxReads: 2,
-          runTimeoutMs: 6e5,
-          minClaimWords: 5,
-          maxAnswerPages: 3,
-          perSourceShare: 3,
-          _comment: "aw library eval (blind comparison of Trove and PageIndex): runTimeoutMs bounds one locate run, minClaimWords is the shortest sentence taken as a claim, maxAnswerPages the most pages one answer may name, perSourceShare the most sampled claims per cited source. maxClaims is the most claims sampled from an article, minPairs the fewest judged pairs before a verdict is shown, maxTurns, maxBudgetUsdPerRun, maxPagesPerRead and maxReads bound one locate run, parallel the runs at once, locateModel the model that locates a quote, expectedUsdPerRun the figure quoted to the researcher before running."
-        },
-        _comment: "aw library: one adapter in front of the Trove and PageIndex routes. timeoutMs.primary bounds each page-range lookup on the answering route, timeoutMs.readAll bounds a whole-book read (evidence builds, read all, get; a book of about 1,000 pages over a remote command) and timeoutMs.check each call of status --check. maxBufferBytes caps one command's output (a whole book). maxRequestPages caps one requested page list. maxPageNumber is the highest page number a request may name. pageindex.readChunkPages is pilib's per-call read cap, used only when pilib has no read --json; chunkConcurrency runs those chunks in parallel; metaScanMax is the most shelf books looked up one by one to find a Trove id (more than that needs an explicit shelf map). Retrieval ledger and shadow: timeoutMs.shadow bounds the quiet second lookup (the detached worker) and timeoutMs.verdictSettle is how long aw library verdict waits for a still-running shadow before it records shadow_pending. shadow.ops are the lookups that get a shadow; shadow.maxConcurrent caps live workers per project (more are skipped as busy); shadow.readAllMaxPages is the most pages one read may have and still be shadowed; shadow.lockStaleMs drops a worker slot nobody released and shadow.reapGraceMs is how long a slot must be idle before a dead holder's slot is taken over; shadow.pollMs is the file poll step. spool.maxBytes caps one spooled page set and spool.ttlHours deletes spool files. ledger.maxRowBytes, maxErrorChars and maxAgreePages keep each retrieval.jsonl row small. agree.jaccardMin is the word overlap at which two routes count as returning the same page; supports.tokenCoverageMin is the share of the auditor quote's words that must appear in the shadow page text, and minQuoteTokens the shortest quote that is tested. report.minLookups is the fewest lookups per route before the report stops calling its rates rough."
-      }
-    };
-  }
-});
-
 // node_modules/retry/lib/retry_operation.js
 var require_retry_operation = __commonJS({
   "node_modules/retry/lib/retry_operation.js"(exports, module) {
@@ -22783,8 +22391,339 @@ var require_websocket_server = __commonJS({
 import { spawn as spawn2 } from "node:child_process";
 import { basename, dirname, join, resolve as resolve2 } from "node:path";
 
-// src/library/backends.ts
-init_thresholds();
+// ../thresholds.json
+var thresholds_default = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  description: "Single source of truth for all numeric quality gates (self-review, rewrite limits, paragraph/unit word bounds, style-fingerprint compliance, voice rule-coverage/corpus minimums, typography). Edit here; every skill and agent references this file. Per-step model routes (provider, model, thinking_budget, output cap) are read from the models block below by src/cli/src/routing.ts; the retired MCP gemini-server (SPEC_DEFAULTS) is no longer used. The antiAi block was REMOVED in 0.9.0: nothing computed that score, so it was the drafting model rating its own unrevised draft, and it measured a flat maximum on every paragraph of a live 13-unit run while the auditor failed several of the same paragraphs. Anti-AI patterns are now writing guidance (write/references/anti-ai-patterns-*.md), not a scored gate; the auditor's VERDICT is the per-paragraph gate.",
+  selfReview: {
+    minScore: 40,
+    maxScore: 60,
+    passThreshold: 40,
+    _comment: "Articles scoring below 40/60 trigger researcher review before final output. 6 dimensions x 10 points each."
+  },
+  rewriteCycles: {
+    max: 3,
+    _comment: "Maximum number of times a paragraph can be rewritten before being included with [NEEDS REVIEW]."
+  },
+  paragraph: {
+    wordCeiling: 220,
+    wordCeilingIntroConclusionBonus: 30,
+    _comment: "Soft word ceiling per paragraph. Introduction and conclusion paragraphs may exceed by wordCeilingIntroConclusionBonus words. wordFloor: minimum words for one drafted paragraph. The drafted-unit word gate is per planned paragraph (n x [wordFloor, wordCeiling]); writerUnit min/max bound the ARCHITECT's unit sizing, not a single draft (live run 2026-09-23: a 1-paragraph unit correctly drafted ~110 words failed a 300-word unit floor). quotedTermMaxWords: a quoted span of at most this many words is treated as a term (scare quotes, e.g. \u05F4\u05D9\u05E9 \u05DE\u05D0\u05D9\u05DF\u05F4), not a source quotation, by the draft quote gate.",
+    wordFloor: 40,
+    quotedTermMaxWords: 3
+  },
+  writerUnit: {
+    targetWords: 500,
+    minWords: 300,
+    maxWords: 800,
+    _comment: "Min/target/max word bounds for a 'writer unit' \u2014 the leaf-level chunk that gets exactly one section-writer subagent. Sections whose word count exceeds maxWords must be decomposed by the architect into multiple writer-unit subsections (an outline `units` array); adjacent subsections under minWords should be merged into one unit rather than left tiny."
+  },
+  write: {
+    outlineMaxAlternatives: 2,
+    _comment: "Architect may label up to this many thesis alternatives for discussion; none replaces author intent unless the author edits it."
+  },
+  styleFingerprint: {
+    passThreshold: 7,
+    maxScore: 10,
+    _comment: "Per-dimension style compliance score. Below 7 triggers paragraph adjustment."
+  },
+  voice: {
+    ruleCoverage: {
+      pass: 8,
+      warn: 6,
+      block: 6
+    },
+    corpus: {
+      minArticles: 3,
+      minTotalWords: 1500,
+      minWordsPerArticle: 800
+    },
+    exemplars: {
+      count: 4,
+      minWords: 40,
+      maxWords: 150,
+      maxPerFile: 1,
+      _comment: "src/scripts/extract-voice-exemplars.py: how many real paragraphs from past-articles/ are shown to Gemini as few-shot voice examples, their word bounds, and at most maxPerFile per source article so no single paper dominates the voice. Measured 2026-09-15 on the author's finished Hebrew papers: mean paragraph 97-134 words, so 40-150 keeps typical body paragraphs and drops headings and footnote-length fragments (a whole-folder corpus reads shorter because course reflections pull the mean down). Gemini guidance: 2-5 examples; more rarely helps."
+    },
+    bundle: {
+      exemplars: 6,
+      pairs: 2,
+      maxPerSource: 1,
+      maxRuleLines: 40
+    },
+    selection: {
+      min: 12,
+      max: 20
+    }
+  },
+  proofread: {
+    chunkWords: 1200,
+    maxPasses: 3,
+    dryRounds: 2,
+    concurrencyCap: 6,
+    refuteVotes: 3,
+    refuteMajority: 2,
+    refuteBudgetPerChunk: 12,
+    _comment: "Proofread chunk target; execution and call budgets are configured under models and budget."
+  },
+  ocr: {
+    perCallPageCap: 40,
+    geminiBatchSize: 1,
+    lowResDpi: 100,
+    claudeModel: "claude-opus-5-5",
+    geminiConfirmPages: 20,
+    geminiUsdPerPage: 4e-3,
+    freeAgreeMin: 0.98,
+    shortAnswerRatio: 0.8,
+    shortAnswerMinChars: 200,
+    inlineSizeLimitBytes: 20971520,
+    _comment: "Cost policy (Yotam 2026-11-16: money first; measured 2026-11-16 on 12 Hebrew book pages of one scan, one page per call, same plain prompt as Claude): the paid Gemini fallback is gemini-3.8-flash with the least thinking it accepts (models.ocr.thinking_budget 0 -> thinkingLevel low; it reported 0 thinking tokens): median 0.25% letter difference from Opus, glossary columns kept in order, about $0.004 a page at the 2026 introductory price ($0.75/$3.75 per 1M), about $0.007 from 2027-01-01. gemini-2.5-flash with thinkingBudget 0 cost about $0.002 a page but differed from Opus by a median 1.2% and scrambled two-column glossary order, so it was not chosen. geminiConfirmPages caps Gemini pages per --run id (cumulative, read from the run ledger); pages past it come back blank as 'needs approval' and aw ocr exits 4 unless --confirm-cost; geminiUsdPerPage only feeds that estimate. --gemini-model/--claude-model (a stronger reader for named pages) also need --confirm-cost; nothing escalates on its own. claudeModel is the Claude reader, on the author's subscription (no per-page money): Opus, because in the 2026-10-20 bake-off Sonnet 5.5 tied it but answered 2 of 59 pages with a summary, and each such page would fall back to paid Gemini; Haiku 5.5 was 1.4 points worse on poor scans. geminiBatchSize is 1 (six-page batches dropped passages, 2026-10-16). lowResDpi is 100: below it Gemini read Hebrew more accurately than Claude. freeAgreeMin: for an additional source only (--source additional; required readings never use free readers, user rule 2026-10-20), a free reading is kept when Surya and Tesseract agree at this letters-only similarity. A Claude answer whose letters are under shortAnswerRatio of Tesseract's reading goes to Gemini (every real answer was at least 0.9, every soft refusal under 0.35); pages whose Tesseract reading has under shortAnswerMinChars letters skip that check. perCallPageCap bounds pages per aw ocr invocation; pages over inlineSizeLimitBytes fail with a named error."
+  },
+  citationFloor: {
+    minSecondaryPer1000Words: 4,
+    minSecondaryTotal: 8,
+    _comment: "VER-18 absence gate, enforced by src/scripts/gate.py citation-floor. The per-paragraph auditor is a PRESENCE check \u2014 it verifies that claims which ARE cited are cited correctly, and is structurally blind to a paragraph that cites nothing. Absence needs its own counting gate, and the count is arithmetic, not judgement (TST-02). Only SECONDARY citations count toward the floor: primary sources stay inline in this field, so a raw citation count reads healthy on an article carrying almost no scholarly engagement. minSecondaryPer1000Words is the rate floor, minSecondaryTotal the absolute floor that keeps a very short article from passing on rate alone. The gate FAILS if EITHER floor is breached."
+  },
+  typography: {
+    dashReplacement: "em",
+    dashReplacementLatin: "hyphen",
+    styleMetrics: {
+      topFrequentTermsCount: 30,
+      minTermLength: 2,
+      furnitureMaxWords: 10,
+      furnitureShare: 0.8,
+      furnitureMinCount: 5,
+      furnitureCandidateMultiplier: 3
+    },
+    _comment: "dashReplacement is the dash convention used by detect-ai-typography.py (values: em|keep|hyphen|comma|colon|remove); overridable via --dash-replacement. em (default, author decision 2026-10-26) keeps the spaced em dash as the Hebrew dash for an aside and turns a spaced hyphen used as a dash into one; keep leaves every dash untouched; hyphen|comma|colon|remove are the legacy convention that replaces em dashes and non-numeric en dashes. dashReplacementLatin is used instead when a text is Latin-dominant (English articles): the em-dash decision covers Hebrew only, so English keeps the earlier hyphen convention. topFrequentTermsCount/minTermLength configure extract-style-metrics.py's frequentTerms extraction. furnitureMaxWords/furnitureShare/furnitureMinCount drop structural furniture (table-of-contents lines and section headers) from frequentTerms: a term is furniture when at least furnitureShare of its occurrences fall in paragraphs of at most furnitureMaxWords words and it occurs at least furnitureMinCount times. Calibrated on a real 10-file corpus of 857 paragraphs with a 38-word median: the author's own name sits in 5-word ToC lines and scores 96%, subject vocabulary scores 3%, and the highest-scoring term that is kept scores 73% \u2014 so the 0.8 cutoff has margin on both sides. Only terms in contention for the reported list are judged \u2014 the top topFrequentTermsCount * furnitureCandidateMultiplier by raw count \u2014 because a share computed over a handful of occurrences has no resolution: \u05D1\u05F3 and \u05D0\u05F3, the same token doing the same job in the same two files, scored 0.80 and 0.50 on five and seven observations and split. Replaces a front-matter rule that inspected the first N paragraphs of each file and never fired, because these headers repeat throughout a document rather than opening it."
+  },
+  models: {
+    "proofread.find": {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1,
+      piModel: "openrouter/z-ai/glm-5.3"
+    },
+    "proofread.verify": {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1,
+      piModel: "openrouter/z-ai/glm-5.3"
+    },
+    "proofread.memo": {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1,
+      piModel: "openrouter/z-ai/glm-5.3"
+    },
+    "evidence.extract": {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 4,
+      piModel: "openrouter/z-ai/glm-5.3"
+    },
+    "write.draft": {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1,
+      piModel: "openrouter/z-ai/glm-5.3"
+    },
+    "write.synthesize": {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1,
+      piModel: "openrouter/z-ai/glm-5.3"
+    },
+    "voice.moves": {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1,
+      piModel: "openrouter/z-ai/glm-5.3"
+    },
+    "revise.classify": {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1,
+      piModel: "openrouter/z-ai/glm-5.3"
+    },
+    ocr: {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      thinking_budget: 0,
+      maxOutputTokens: 8192,
+      concurrency: 1,
+      piModel: "openrouter/z-ai/glm-5.3"
+    },
+    edit: {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      maxOutputTokens: 8192,
+      concurrency: 1,
+      piModel: "openrouter/z-ai/glm-5.3"
+    }
+  },
+  budget: {
+    proofread: {
+      maxTokens: 1e6,
+      maxUsd: 0.5,
+      summaryMaxBytes: 1024,
+      summaryMemoChars: 240,
+      summaryExcerptChars: 120,
+      _comment: "Token ceiling comfortably covers a long proofread run; the USD ceiling is the primary cost guard."
+    },
+    write: {
+      maxTokens: 5e6,
+      maxUsd: 3,
+      _comment: "Token ceiling covers multi-section drafting; the USD ceiling is the primary cost guard."
+    },
+    voiceMoves: {
+      maxTokens: 5e4,
+      maxUsd: 0.1,
+      _comment: "One call to derive qualitative voice moves."
+    },
+    revise: {
+      maxTokens: 1e5,
+      maxUsd: 0.25,
+      _comment: "One bounded classification pass for author review items."
+    }
+  },
+  judge: {
+    validationAttempts: 2
+  },
+  awImprove: {
+    defectSimilarity: 0.5,
+    clusterMinimum: 2,
+    maxExamples: 5,
+    _comment: "Development-only defect clustering thresholds."
+  },
+  _piModelNote: "piModel = OpenRouter model for the isolated Pi judge. Must be a non-Claude, non-Gemini family (cross-family verification); taken from the author's Pi model roster (executor tier, machine-config/pi/model-roster.json). Runs in shadow until the Hebrew fixture shows parity.",
+  evidence: {
+    passagesPerSource: {
+      core: {
+        min: 12,
+        max: 30
+      },
+      other: {
+        min: 4,
+        max: 12
+      }
+    },
+    _comment: "aw evidence build coverage targets per source. Live rehearsal 2026-09-23: with no target, Gemini returned 5 passages for a 12-page core text and 0 for Sefer Yetzirah, missing the article's opening dilemma. The core text (author-intent coreTextSourceId) gets dense coverage; every other source a smaller floor. Concurrency for evidence.extract is 4 (sources in parallel)."
+  },
+  synthesis: {
+    openerWords: 3,
+    repeatedOpenerMin: 3,
+    _comment: "aw synthesize: a paragraph opener (first openerWords words) used at least repeatedOpenerMin times across the article is passed to the synthesizer as a required variation (live rehearsal 2026-09-23: 7 units opened with the same phrase, 0 edits proposed)."
+  },
+  activity: {
+    activeRunMaxAgeMinutes: 360,
+    _comment: "A run counts as active (hooks append to it, the reader shows it as running) while its activity.jsonl has a run_start, no run_end and was written within this many minutes; older, it reads as stalled."
+  },
+  library: {
+    timeoutMs: {
+      primary: 6e4,
+      readAll: 3e5,
+      check: 15e3,
+      shadow: 45e3,
+      verdictSettle: 3e3
+    },
+    shadow: {
+      ops: [
+        "list",
+        "toc",
+        "read"
+      ],
+      maxConcurrent: 3,
+      readAllMaxPages: 40,
+      lockStaleMs: 12e4,
+      reapGraceMs: 2e3,
+      pollMs: 100
+    },
+    spool: {
+      maxBytes: 1048576,
+      ttlHours: 72
+    },
+    ledger: {
+      maxRowBytes: 4096,
+      maxErrorChars: 300,
+      maxAgreePages: 25
+    },
+    agree: {
+      jaccardMin: 0.6
+    },
+    supports: {
+      tokenCoverageMin: 0.8,
+      minQuoteTokens: 4
+    },
+    report: {
+      minLookups: 5
+    },
+    maxBufferBytes: 67108864,
+    maxRequestPages: 5e3,
+    maxPageNumber: 1e5,
+    pageindex: {
+      readChunkPages: 10,
+      chunkConcurrency: 4,
+      metaScanMax: 60,
+      metaScanConcurrency: 4
+    },
+    tokens: {
+      hebrewCharsPerToken: 2,
+      otherCharsPerToken: 4,
+      _comment: "Rough token estimate for the retrieval ledger: characters divided by this (Hebrew text packs about 2 characters per token, other scripts about 4). An estimate for comparing routes, never a billing figure."
+    },
+    index: {
+      summaryModel: "gemini/gemini-3.8-flash",
+      maxCalls: 3e3,
+      concurrency: 16,
+      askAboveCalls: 400,
+      timeoutMs: 18e5,
+      verifyPages: 2,
+      minSummaryShare: 0.8,
+      probeTimeoutMs: 3e4,
+      _comment: "aw library index (PageIndex tree build): summaryModel is the LiteLLM model for page summaries, maxCalls the hard cap on model calls per run, concurrency the parallel calls, askAboveCalls the estimated call count above which the skill asks the researcher before starting (with a cost estimate) and the call cap a run without --yes gets, timeoutMs bounds one whole indexing run (30 minutes). verifyPages is how many pages the read-back compares with Trove, minSummaryShare the share of nodes that must carry a summary when summaries were asked for, probeTimeoutMs bounds the up-front check that the command can index at all."
+    },
+    install: {
+      pageindexCommit: "af92d9658a6a9c0ae31171b43198db28951af2f4",
+      minPython: "3.10",
+      minPythonCore: "3.9",
+      pipTimeoutMs: 9e5,
+      venvTimeoutMs: 18e4,
+      healthTimeoutMs: 9e4,
+      probeTimeoutMs: 15e3,
+      approxSizeMb: {
+        core: 100,
+        structure: 500
+      },
+      _comment: "aw library install: pageindexCommit is the pinned PageIndex commit (its tarball sha256 lives in PINNED.json), minPython the least Python for the structure tier, minPythonCore the least for the core tier (index from the table of contents), pipTimeoutMs bounds one pip install (15 minutes), venvTimeoutMs the creation of the private Python folder, healthTimeoutMs the check after the install, probeTimeoutMs asking one Python what version it is. approxSizeMb is the rough disk size quoted to the researcher before an install (an estimate, not a measurement)."
+    },
+    eval: {
+      maxClaims: 30,
+      minPairs: 8,
+      maxTurns: 12,
+      maxBudgetUsdPerRun: 1,
+      parallel: 2,
+      locateModel: "claude-sonnet-5-5",
+      expectedUsdPerRun: 0.1,
+      maxPagesPerRead: 5,
+      maxReads: 2,
+      runTimeoutMs: 6e5,
+      minClaimWords: 5,
+      maxAnswerPages: 3,
+      perSourceShare: 3,
+      _comment: "aw library eval (blind comparison of Trove and PageIndex): runTimeoutMs bounds one locate run, minClaimWords is the shortest sentence taken as a claim, maxAnswerPages the most pages one answer may name, perSourceShare the most sampled claims per cited source. maxClaims is the most claims sampled from an article, minPairs the fewest judged pairs before a verdict is shown, maxTurns, maxBudgetUsdPerRun, maxPagesPerRead and maxReads bound one locate run, parallel the runs at once, locateModel the model that locates a quote, expectedUsdPerRun the figure quoted to the researcher before running."
+    },
+    _comment: "aw library: one adapter in front of the Trove and PageIndex routes. timeoutMs.primary bounds each page-range lookup on the answering route, timeoutMs.readAll bounds a whole-book read (evidence builds, read all, get; a book of about 1,000 pages over a remote command) and timeoutMs.check each call of status --check. maxBufferBytes caps one command's output (a whole book). maxRequestPages caps one requested page list. maxPageNumber is the highest page number a request may name. pageindex.readChunkPages is pilib's per-call read cap, used only when pilib has no read --json; chunkConcurrency runs those chunks in parallel; metaScanMax is the most shelf books looked up one by one to find a Trove id (more than that needs an explicit shelf map). Retrieval ledger and shadow: timeoutMs.shadow bounds the quiet second lookup (the detached worker) and timeoutMs.verdictSettle is how long aw library verdict waits for a still-running shadow before it records shadow_pending. shadow.ops are the lookups that get a shadow; shadow.maxConcurrent caps live workers per project (more are skipped as busy); shadow.readAllMaxPages is the most pages one read may have and still be shadowed; shadow.lockStaleMs drops a worker slot nobody released and shadow.reapGraceMs is how long a slot must be idle before a dead holder's slot is taken over; shadow.pollMs is the file poll step. spool.maxBytes caps one spooled page set and spool.ttlHours deletes spool files. ledger.maxRowBytes, maxErrorChars and maxAgreePages keep each retrieval.jsonl row small. agree.jaccardMin is the word overlap at which two routes count as returning the same page; supports.tokenCoverageMin is the share of the auditor quote's words that must appear in the shadow page text, and minQuoteTokens the shortest quote that is tested. report.minLookups is the fewest lookups per route before the report stops calling its rates rough."
+  }
+};
 
 // src/library/exec.ts
 import { spawn } from "node:child_process";
@@ -22928,7 +22867,6 @@ function splitCommand(text4) {
 }
 
 // src/library/pages.ts
-init_thresholds();
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 var maxRequestPages = thresholds_default.library.maxRequestPages;
@@ -23103,6 +23041,7 @@ var BASE_NAMES = /* @__PURE__ */ new Set([
   "LOCALAPPDATA",
   "PROGRAMDATA"
 ]);
+var WINDOWS_NAMES = /* @__PURE__ */ new Set(["PATH", "TEMP", "TMP", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA"]);
 var BASE_PREFIXES = ["LC_", "XDG_"];
 var TROVE_PREFIXES = ["TROVE_", "CANDLEKEEP_", "CK_"];
 var INSTALL_NAMES = /* @__PURE__ */ new Set(["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "no_proxy", "all_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"]);
@@ -23117,7 +23056,7 @@ function allowedEnv(env, kind = "pageindex") {
   const listed = new Set((env[PASS_ENV] ?? "").split(",").map((name) => name.trim()).filter((name) => VALID_NAME.test(name)));
   for (const [name, value] of Object.entries(env)) {
     if (value === void 0) continue;
-    const allowed = BASE_NAMES.has(name) || BASE_PREFIXES.some((prefix) => name.startsWith(prefix)) || name.startsWith("AW_") && !SECRET_NAME.test(name) || kind === "trove" && TROVE_PREFIXES.some((prefix) => name.startsWith(prefix)) || kind === "script" && (SCRIPT_NAMES.has(name) || SCRIPT_PREFIXES.some((prefix) => name.startsWith(prefix)) && !SECRET_NAME.test(name)) || kind === "pi" && (PI_NAMES.has(name) || name.startsWith("PI_")) || kind === "install" && (INSTALL_NAMES.has(name) || name.startsWith("PIP_")) || listed.has(name);
+    const allowed = BASE_NAMES.has(name) || WINDOWS_NAMES.has(name.toUpperCase()) || BASE_PREFIXES.some((prefix) => name.startsWith(prefix)) || name.startsWith("AW_") && !SECRET_NAME.test(name) || kind === "trove" && TROVE_PREFIXES.some((prefix) => name.startsWith(prefix)) || kind === "script" && (SCRIPT_NAMES.has(name) || SCRIPT_PREFIXES.some((prefix) => name.startsWith(prefix)) && !SECRET_NAME.test(name)) || kind === "pi" && (PI_NAMES.has(name) || name.startsWith("PI_")) || kind === "install" && (INSTALL_NAMES.has(name) || name.startsWith("PIP_")) || listed.has(name);
     if (allowed) out[name] = value;
   }
   return out;
@@ -23310,7 +23249,6 @@ var PageIndexBackend = class {
 };
 
 // src/pi.ts
-init_thresholds();
 var spawnRunner = async (args2, systemPrompt) => {
   const fullArgs = args2.map((arg) => arg === "__SYSTEM_PROMPT__" ? systemPrompt : arg);
   return await new Promise((resolve13, reject) => {
@@ -23404,11 +23342,10 @@ function projectDirOr() {
 }
 
 // src/main.ts
-import { readFileSync as readFileSync19 } from "node:fs";
-import { join as join28 } from "node:path";
+import { readFileSync as readFileSync18 } from "node:fs";
+import { join as join27 } from "node:path";
 
 // src/routing.ts
-init_thresholds();
 var stepIds = ["proofread.find", "proofread.verify", "proofread.memo", "evidence.extract", "write.draft", "write.synthesize", "voice.moves", "revise.classify", "ocr", "edit"];
 var modelTable = thresholds_default.models;
 function routeFor(step) {
@@ -23418,10 +23355,55 @@ function routeFor(step) {
 }
 
 // src/proofread.ts
-import { readFileSync as readFileSync4, writeFileSync, mkdirSync as mkdirSync4, existsSync as existsSync3, appendFileSync as appendFileSync4 } from "node:fs";
+import { readFileSync as readFileSync3, writeFileSync, mkdirSync as mkdirSync3, existsSync as existsSync3 } from "node:fs";
 import { spawn as spawn3 } from "node:child_process";
 import { createHash } from "node:crypto";
-import { join as join5, resolve as resolve4 } from "node:path";
+import { join as join4, resolve as resolve4 } from "node:path";
+
+// src/python.ts
+import { spawnSync } from "node:child_process";
+var MIN_PYTHON_MINOR = 9;
+var CANDIDATES = [
+  { command: "python3", args: [] },
+  { command: "python", args: [] },
+  { command: "py", args: ["-3"] }
+];
+var PROBE_TIMEOUT_MS = 15e3;
+function isSupportedPythonVersion(output) {
+  const match = output.match(/Python 3\.(\d+)/u);
+  return match !== null && Number(match[1]) >= MIN_PYTHON_MINOR;
+}
+function pythonEnv(env) {
+  return { ...env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" };
+}
+var cache = /* @__PURE__ */ new Map();
+function pathKey(env) {
+  return env.PATH ?? env.Path ?? "";
+}
+function discoverPython(env = process.env) {
+  const key = pathKey(env);
+  if (cache.has(key)) return cache.get(key) ?? null;
+  let found = null;
+  for (const candidate of CANDIDATES) {
+    const result = spawnSync(candidate.command, [...candidate.args, "--version"], { encoding: "utf8", env, timeout: PROBE_TIMEOUT_MS, windowsHide: true });
+    if (result.error || result.status !== 0) continue;
+    if (isSupportedPythonVersion(`${result.stdout ?? ""}${result.stderr ?? ""}`)) {
+      found = candidate;
+      break;
+    }
+  }
+  cache.set(key, found);
+  return found;
+}
+function requirePython(env = process.env) {
+  const found = discoverPython(env);
+  if (!found) throw new Error(`ERROR python: Python 3.${MIN_PYTHON_MINOR} or newer was not found on this computer. Run /academic-writer:setup to install it.`);
+  return found;
+}
+function pythonInvocation(script, args2, env = process.env) {
+  const python = requirePython(env);
+  return { command: python.command, args: [...python.args, script, ...args2] };
+}
 
 // node_modules/@google/genai/dist/node/index.mjs
 var import_p_retry = __toESM(require_p_retry(), 1);
@@ -41462,7 +41444,6 @@ function getApiKeyFromEnv() {
 // src/ledger.ts
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join as join2 } from "node:path";
-init_thresholds();
 var AwError = class extends Error {
   code;
   step;
@@ -41554,7 +41535,6 @@ async function callGemini(req) {
 }
 
 // src/judge.ts
-init_thresholds();
 function matchesSchema(value, schema3) {
   const rule = schema3;
   if (rule.enum && !rule.enum.some((entry) => JSON.stringify(entry) === JSON.stringify(value))) return false;
@@ -41610,100 +41590,9 @@ Validation error: ${lastError}. Return one corrected JSON object.`;
   return { json: result.json, sameFamily: req.finderProvider === "gemini" };
 }
 
-// src/decide.ts
-init_thresholds();
-import { appendFileSync as appendFileSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync2 } from "node:fs";
-import { join as join3 } from "node:path";
-
-// src/jev.ts
-async function askJev(input) {
-  const key = (process.env.JEV_API_KEY ?? "").trim();
-  if (!key) throw new Error("ERROR Jev: missing JEV_API_KEY");
-  const thresholds = (await Promise.resolve().then(() => (init_thresholds(), thresholds_exports))).default;
-  const response = await fetch("https://api.typesafe.ai/v1/systemone", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    // Request shape matches the working jev-ask client: choice questions carry `instructions` and a
-    // `criteria` map keyed by option (the API rejects `question`/`options`).
-    body: JSON.stringify({ state: input.context, questions: { q: jevQuestion(input) }, model: thresholds.models.jev.model })
-  });
-  if (!response.ok) throw new Error(`ERROR Jev: HTTP ${response.status}`);
-  const payload = await response.json();
-  const answer = payload.answers?.q;
-  if (!answer) throw new Error("ERROR Jev: missing answer");
-  const selected = typeof answer.choice === "string" ? answer.choice : typeof answer.noul === "number" ? answer.noul >= thresholds.jev.yesProbability ? "yes" : "no" : void 0;
-  const confidence = typeof answer.confidence === "number" ? answer.confidence : typeof answer.noul === "number" ? Math.max(answer.noul, 1 - answer.noul) : typeof answer.score === "number" ? answer.score / thresholds.jev.scoreMaximum : void 0;
-  if (selected === void 0) throw new Error("ERROR Jev: malformed answer");
-  if (confidence === void 0 || !Number.isFinite(confidence) || confidence < 0 || confidence > 1) throw new Error("ERROR Jev: missing or invalid confidence");
-  return { answer: selected, confidence };
-}
-function jevQuestion(input) {
-  return { type: "choice", instructions: input.question, criteria: Object.fromEntries(input.options.map((o) => [o, null])) };
-}
-
-// src/decide.ts
-var VALID_POINTS = new Set(Object.keys(thresholds_default.jev.points));
-var jevCall = askJev;
-var modeOverrides = /* @__PURE__ */ new Map();
-async function decide(req) {
-  const config = thresholds_default.jev;
-  const mode = modeOverrides.get(req.point) ?? config.points[req.point]?.mode ?? "off";
-  const enabled = Boolean((process.env.JEV_API_KEY ?? "").trim()) || jevCall !== askJev;
-  const activeMode = enabled ? mode : "off";
-  let jevResult = null;
-  let modelAnswer = null;
-  let answer;
-  let by = "model";
-  if (activeMode === "off") {
-    modelAnswer = await req.fallback();
-    answer = modelAnswer;
-  } else if (activeMode === "shadow") {
-    const [model, jev] = await Promise.all([req.fallback(), (jevCall?.(req) ?? Promise.resolve(null)).catch(() => null)]);
-    modelAnswer = model;
-    jevResult = jev;
-    answer = model;
-  } else {
-    jevResult = await (jevCall?.(req) ?? Promise.resolve(null)).catch(() => null);
-    if (jevResult && jevResult.confidence >= config.threshold && req.options.includes(jevResult.answer)) {
-      answer = jevResult.answer;
-      by = "jev";
-    } else {
-      modelAnswer = await req.fallback();
-      answer = modelAnswer;
-    }
-  }
-  const dir = join3(projectDir(), ".academic-helper", "runs", req.runId);
-  mkdirSync2(dir, { recursive: true });
-  appendFileSync2(join3(dir, "jev.jsonl"), `${JSON.stringify({ point: req.point, jevAnswer: jevResult?.answer ?? null, jevConfidence: jevResult?.confidence ?? null, modelAnswer, decidedBy: by, label: req.label ?? null })}
-`, "utf8");
-  return { answer, by, confidence: jevResult?.confidence ?? null };
-}
-async function runDecideCli(args2) {
-  const value = (name) => {
-    const position = args2.indexOf(name);
-    return position >= 0 ? args2[position + 1] : void 0;
-  };
-  const pointValue = args2[1];
-  const question = value("--question");
-  const rawOptions = value("--options");
-  const contextFile = value("--context-file");
-  const fallback = value("--fallback");
-  const runIdValue = value("--run");
-  const label = value("--label");
-  if (!pointValue || !VALID_POINTS.has(pointValue) || !question || !rawOptions || !contextFile || !fallback || !runIdValue) {
-    throw new Error("ERROR decide: expected aw decide <point> --question <text> --options a,b --context-file <file> --fallback <answer> --run <id>");
-  }
-  const options = rawOptions.split(",").map((item) => item.trim()).filter(Boolean);
-  if (options.length < 2) throw new Error("ERROR decide: --options requires at least two comma-separated answers");
-  if (!options.includes(fallback)) throw new Error("ERROR decide: --fallback must match one of --options");
-  const context = readFileSync2(contextFile, "utf8");
-  return decide({ point: pointValue, question, options, context, runId: runIdValue, fallback: async () => fallback, label });
-}
-
 // src/activity.ts
-import { appendFileSync as appendFileSync3, existsSync as existsSync2, mkdirSync as mkdirSync3, readdirSync, readFileSync as readFileSync3, statSync as statSync2 } from "node:fs";
-import { join as join4 } from "node:path";
-init_thresholds();
+import { appendFileSync as appendFileSync2, existsSync as existsSync2, mkdirSync as mkdirSync2, readdirSync, readFileSync as readFileSync2, statSync as statSync2 } from "node:fs";
+import { join as join3 } from "node:path";
 var FLOW_STEPS = {
   write: ["outline", "draft", "audit", "redraft", "synthesize", "word"],
   proofread: ["find", "verify", "memo", "apply"],
@@ -41712,16 +41601,16 @@ var FLOW_STEPS = {
   "edit-section": ["edit"]
 };
 function runsRoot(project) {
-  if (project) return join4(project, ".academic-helper", "runs");
+  if (project) return join3(project, ".academic-helper", "runs");
   try {
-    return join4(projectDir(), ".academic-helper", "runs");
+    return join3(projectDir(), ".academic-helper", "runs");
   } catch {
     return void 0;
   }
 }
 function activityFile(runId2, project) {
   const root = runsRoot(project);
-  return root ? join4(root, runId2, "activity.jsonl") : void 0;
+  return root ? join3(root, runId2, "activity.jsonl") : void 0;
 }
 function hasRunStarted(runId2, project) {
   const file = activityFile(runId2, project);
@@ -41732,12 +41621,12 @@ function appendEvent(runId2, ev, project) {
     const file = activityFile(runId2, project);
     if (!file) return;
     const event2 = ev.reason !== void 0 && ev.reason.length > 300 ? { ...ev, reason: ev.reason.slice(0, 300) } : ev;
-    mkdirSync3(join4(file, ".."), { recursive: true });
+    mkdirSync2(join3(file, ".."), { recursive: true });
     const torn = existsSync2(file) && (() => {
-      const text4 = readFileSync3(file, "utf8");
+      const text4 = readFileSync2(file, "utf8");
       return text4.length > 0 && !text4.endsWith("\n");
     })();
-    appendFileSync3(file, `${torn ? "\n" : ""}${JSON.stringify(event2)}
+    appendFileSync2(file, `${torn ? "\n" : ""}${JSON.stringify(event2)}
 `, "utf8");
   } catch (error) {
     process.stderr.write(`activity: could not record event (${error instanceof Error ? error.message : "unknown error"})
@@ -41755,7 +41644,7 @@ function startRunOnce(runId2, flow, project) {
 function readEvents(file) {
   let text4;
   try {
-    text4 = readFileSync3(file, "utf8");
+    text4 = readFileSync2(file, "utf8");
   } catch {
     return [];
   }
@@ -41835,7 +41724,7 @@ function latestRunId(project) {
   if (!root || !existsSync2(root)) return void 0;
   let best;
   for (const id of readdirSync(root)) {
-    const file = join4(root, id, "activity.jsonl");
+    const file = join3(root, id, "activity.jsonl");
     if (!existsSync2(file)) continue;
     const mtime = statSync2(file).mtimeMs;
     if (!best || mtime > best.mtime) best = { id, mtime };
@@ -41899,9 +41788,14 @@ function contractChange(change) {
   const idSeed = `${stage}\0${change.line}\0${change.before}${typeof change.occurrence === "number" ? `\0${change.occurrence}` : ""}`;
   return { change_id: createHash("sha256").update(idSeed).digest("hex").slice(0, 12), stage, line: change.line, type, level: ["typo", "punctuation", "typography"].includes(type) ? "letter" : type === "word" ? "word" : "sentence", before: change.before, after: change.after, rationale: typeof change.rationale === "string" ? change.rationale : "Proofread suggestion; compare with the surrounding context.", meaningRisk: change.meaningRisk, ...change.mustCatch ? { mustCatch: true } : {}, ...applied !== void 0 ? { applied } : {}, ...skipReason ? { skipReason } : {}, ...typeof change.occurrence === "number" ? { occurrence: change.occurrence } : {} };
 }
+async function pythonCommand(scriptAndArgs, cwd) {
+  const [script, ...args2] = scriptAndArgs;
+  const run = pythonInvocation(script, args2, allowedEnv(process.env, "script"));
+  return await command(run.command, run.args, cwd);
+}
 async function command(bin, args2, cwd) {
   return await new Promise((resolvePromise, reject) => {
-    const child = spawn3(bin, args2, { cwd, env: allowedEnv(process.env, "script"), stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn3(bin, args2, { cwd, env: pythonEnv(allowedEnv(process.env, "script")), stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8").on("data", (data) => {
@@ -41913,25 +41807,6 @@ async function command(bin, args2, cwd) {
     child.on("error", reject);
     child.on("close", (code) => code === 0 ? resolvePromise(stdout) : reject(new Error(`ERROR proofread: ${stderr || `${bin} exited ${String(code)}`}`)));
   });
-}
-function importLegacyJev(runId2, project) {
-  const legacyPath = join5(project, ".academic-helper", "jev-shadow.jsonl");
-  const marker = join5(project, ".academic-helper", "jev-shadow-imported");
-  if (!existsSync3(legacyPath) || existsSync3(marker)) return;
-  const ledgerDir = join5(project, ".academic-helper", "runs", runId2);
-  mkdirSync4(ledgerDir, { recursive: true });
-  const rows = readFileSync4(legacyPath, "utf8").split("\n").filter((line) => line.trim());
-  for (const line of rows) {
-    let evidence;
-    try {
-      evidence = JSON.parse(line);
-    } catch {
-      throw new Error("ERROR proofread.risk: invalid legacy Jev shadow row");
-    }
-    appendFileSync4(join5(ledgerDir, "jev.jsonl"), `${JSON.stringify({ point: "proofread.risk", legacyEvidence: evidence, labelSource: "llm", priorShadow: true })}
-`, "utf8");
-  }
-  writeFileSync(marker, "imported\n", "utf8");
 }
 function numberedChunks(chunks) {
   return chunks.map((chunk, index) => ({ ...chunk, index, text: chunk.text.split("\n").map((line, offset) => /^L\d+\t/.test(line) ? line : `L${chunk.startLine + offset}	${line}`).join("\n") }));
@@ -41959,19 +41834,15 @@ ${chunk.text}`], responseSchema: findSchema, runId: options.runId, budget })).js
   let candidates2 = Array.isArray(raw) ? raw : raw.changes;
   const kept = [];
   for (const candidate of candidates2) {
-    const decision = await decide({ point: "proofread.triage", question: "Is this candidate a genuine proofread error?", options: ["keep", "discard"], context: JSON.stringify(candidate), runId: options.runId, fallback: async () => "keep" });
-    if (decision.answer === "keep") {
-      const risk = await decide({ point: "proofread.risk", question: "What meaning risk does this candidate carry?", options: ["low", "medium", "high"], context: JSON.stringify(candidate), runId: options.runId, fallback: async () => candidate.meaningRisk });
-      const meaningRisk = candidate.suggestion === true && risk.answer === "low" ? "medium" : risk.answer;
-      kept.push({ ...candidate, meaningRisk });
-    } else kept.push({ ...candidate, status: "triaged-out" });
+    const meaningRisk = candidate.suggestion === true && candidate.meaningRisk === "low" ? "medium" : candidate.meaningRisk;
+    kept.push({ ...candidate, meaningRisk });
   }
   return kept;
 }
 function resolveVenueProfile(slug, project, root) {
   if (!slug || slug.trim() !== slug || /[\\/]/.test(slug) || slug.includes("..")) return "";
-  const candidates2 = [project ? join5(project, ".academic-helper", "venues", `${slug}.md`) : "", root ? join5(root, "venues", `${slug}.md`) : ""];
-  for (const path2 of candidates2) if (path2 && existsSync3(path2)) return readFileSync4(path2, "utf8");
+  const candidates2 = [project ? join4(project, ".academic-helper", "venues", `${slug}.md`) : "", root ? join4(root, "venues", `${slug}.md`) : ""];
+  for (const path2 of candidates2) if (path2 && existsSync3(path2)) return readFileSync3(path2, "utf8");
   return "";
 }
 async function runProofread(options) {
@@ -41981,13 +41852,12 @@ async function runProofread(options) {
 async function proofreadRun(options) {
   const root = options.article ? pluginRoot() : "";
   const outDir = resolve4(options.out ?? ".");
-  mkdirSync4(outDir, { recursive: true });
+  mkdirSync3(outDir, { recursive: true });
   const project = options.projectDir ?? process.env.CLAUDE_PROJECT_DIR ?? "";
-  if (project) importLegacyJev(options.runId, project);
   const article = options.article ? resolve4(options.article) : "";
-  const content = article ? readFileSync4(article, "utf8") : "";
+  const content = article ? readFileSync3(article, "utf8") : "";
   const numbered = Array.isArray(options.chunks) ? numberedChunks(options.chunks) : [];
-  const chunks = numbered.length ? numbered : content ? JSON.parse(await command("python3", [join5(root, "scripts/chunk-article.py"), "--input", article, "--numbered"])) : Array.from({ length: typeof options.chunks === "number" ? options.chunks : 0 }, (_, index) => ({ id: `chunk-${index}`, index, startLine: index + 1, endLine: index + 1, text: `L${index + 1}	x` }));
+  const chunks = numbered.length ? numbered : content ? JSON.parse(await pythonCommand([join4(root, "scripts/chunk-article.py"), "--input", article, "--numbered"])) : Array.from({ length: typeof options.chunks === "number" ? options.chunks : 0 }, (_, index) => ({ id: `chunk-${index}`, index, startLine: index + 1, endLine: index + 1, text: `L${index + 1}	x` }));
   const budget = new Budget(options.runId, budgetFor("proofread"));
   const act = project || void 0;
   startRunOnce(options.runId, "proofread", act);
@@ -41995,23 +41865,20 @@ async function proofreadRun(options) {
   const stepEnd = (step) => emit(options.runId, "proofread", "step_end", { step }, act);
   let deterministic = [];
   if (article) {
-    const stylesPath = join5(options.dataDir ?? process.env.CLAUDE_PLUGIN_DATA ?? "", "voice", "style-words.json");
-    const termsPath = join5(options.projectDir ?? process.env.CLAUDE_PROJECT_DIR ?? "", ".academic-helper", "terms.json");
-    const actualStyles = existsSync3(stylesPath) ? stylesPath : join5(outDir, ".empty-style-words.json");
-    const actualTerms = existsSync3(termsPath) ? termsPath : join5(outDir, ".empty-terms.json");
+    const stylesPath = join4(options.dataDir ?? process.env.CLAUDE_PLUGIN_DATA ?? "", "voice", "style-words.json");
+    const termsPath = join4(options.projectDir ?? process.env.CLAUDE_PROJECT_DIR ?? "", ".academic-helper", "terms.json");
+    const actualStyles = existsSync3(stylesPath) ? stylesPath : join4(outDir, ".empty-style-words.json");
+    const actualTerms = existsSync3(termsPath) ? termsPath : join4(outDir, ".empty-terms.json");
     if (actualStyles !== stylesPath) writeFileSync(actualStyles, JSON.stringify({}));
     if (actualTerms !== termsPath) writeFileSync(actualTerms, JSON.stringify({}));
-    const tempText = join5(outDir, ".proofread-input.md");
+    const tempText = join4(outDir, ".proofread-input.md");
     writeFileSync(tempText, content);
-    const result = await command("python3", [join5(root, "scripts/must-catch.py"), "--text", tempText, "--style-words", actualStyles, "--terms", actualTerms, "--hspell", "--json"]);
+    const result = await pythonCommand([join4(root, "scripts/must-catch.py"), "--text", tempText, "--style-words", actualStyles, "--terms", actualTerms, "--hspell", "--json"]);
     deterministic = JSON.parse(result).changes;
   }
   if (stubs.mustCatch) deterministic = await stubs.mustCatch();
-  for (const hit of deterministic.filter((change) => change.class === "style_words")) {
-    await decide({ point: "style.filler", question: "Is this capped style-word use filler?", options: ["flag", "allow"], context: JSON.stringify(hit), runId: options.runId, fallback: async () => "flag" });
-  }
-  const voicePath = join5(options.dataDir ?? process.env.CLAUDE_PLUGIN_DATA ?? "", "voice", "rules.md");
-  const voiceRules = options.voiceRules ?? (existsSync3(voicePath) ? readFileSync4(voicePath, "utf8") : "");
+  const voicePath = join4(options.dataDir ?? process.env.CLAUDE_PLUGIN_DATA ?? "", "voice", "rules.md");
+  const voiceRules = options.voiceRules ?? (existsSync3(voicePath) ? readFileSync3(voicePath, "utf8") : "");
   const venueProfile = resolveVenueProfile(options.venue, project, root);
   const stageOptions = { ...options, voiceRules, venueProfile };
   const hspell = deterministic.filter((change) => change.class === "typo" && change.after === null);
@@ -42053,16 +41920,16 @@ ${JSON.stringify(changes)}`, schema: verifySchema, runId: options.runId, finderP
       return verdictPromise;
     };
     return await Promise.all(changes.map(async (change) => {
-      const decided = await decide({ point: "proofread.verify", question: "Should this proposed correction be applied?", options: ["uphold", "refute"], context: JSON.stringify(change), runId: options.runId, fallback: async () => (await getVerdicts()).get(change.id) ?? "ERROR" });
-      if (!["uphold", "refute"].includes(decided.answer)) throw new Error(`ERROR proofread.verify: invalid verdict for ${change.id}`);
-      return { ...change, status: decided.answer === "refute" ? "refuted" : "verified" };
+      const answer = (await getVerdicts()).get(change.id) ?? "ERROR";
+      if (!["uphold", "refute"].includes(answer)) throw new Error(`ERROR proofread.verify: invalid verdict for ${change.id}`);
+      return { ...change, status: answer === "refute" ? "refuted" : "verified" };
     }));
   });
   stepEnd("verify");
   const statusMap = new Map(verified.flat().map((change) => [change.id, change]));
   const all = [...deterministic.map((change) => ({ ...change, status: change.status ?? (change.after === null ? "flag" : change.mustCatch === false ? "suggestion" : "must-catch"), applied: change.after !== null && change.mustCatch !== false })), ...candidates2.map((change) => statusMap.get(change.id) ?? { ...change, status: "unverified" })];
-  const editorialChecksPath = join5(root, "skills", "proofread", "references", "editorial-checks.md");
-  const editorialChecks = article && existsSync3(editorialChecksPath) ? readFileSync4(editorialChecksPath, "utf8") : "";
+  const editorialChecksPath = join4(root, "skills", "proofread", "references", "editorial-checks.md");
+  const editorialChecks = article && existsSync3(editorialChecksPath) ? readFileSync3(editorialChecksPath, "utf8") : "";
   stepStart("memo");
   const memo = options.only && options.only !== "editorial" ? "" : stubs.memo ? await stubs.memo() : (await callGemini({ step: "proofread.memo", system: prompt("proofread-memo.md"), parts: [`Global editorial checks (always apply):
 ${editorialChecks}
@@ -42075,20 +41942,20 @@ ${content}`], runId: options.runId, budget })).text;
   stepEnd("memo");
   stepStart("apply");
   let proofed = content;
-  const changesPath = join5(outDir, "changes.json");
-  const proofedPath = join5(outDir, "proofed.md");
-  const reportPath = join5(outDir, "report.md");
-  const memoPath = join5(outDir, "memo.md");
+  const changesPath = join4(outDir, "changes.json");
+  const proofedPath = join4(outDir, "proofed.md");
+  const reportPath = join4(outDir, "report.md");
+  const memoPath = join4(outDir, "memo.md");
   const contract = all.map(contractChange);
   writeFileSync(changesPath, JSON.stringify({ stage: "language", changes: contract }, null, 2));
-  if (article) await command("python3", [join5(root, "scripts/gate.py"), "changes-schema", changesPath, "--json"]);
+  if (article) await pythonCommand([join4(root, "scripts/gate.py"), "changes-schema", changesPath, "--json"]);
   if (article) {
     const candidateContract = contract.filter((change) => !change.mustCatch);
     if (candidateContract.length) {
-      const guardInput = join5(outDir, ".proofread-before-guard.json");
-      const guardOutput = join5(outDir, ".proofread-after-guard.json");
+      const guardInput = join4(outDir, ".proofread-before-guard.json");
+      const guardOutput = join4(outDir, ".proofread-after-guard.json");
       writeFileSync(guardInput, JSON.stringify({ stage: "language", changes: candidateContract }));
-      const guardedText = await command("python3", [join5(root, "scripts/citation-guard.py"), "--changes", guardInput, "--proof-base", article, "--json"]);
+      const guardedText = await pythonCommand([join4(root, "scripts/citation-guard.py"), "--changes", guardInput, "--proof-base", article, "--json"]);
       writeFileSync(guardOutput, guardedText);
       const guarded = JSON.parse(guardedText).changes;
       const guardedById = new Map(guarded.map((change) => [change.change_id, change]));
@@ -42099,10 +41966,10 @@ ${content}`], runId: options.runId, budget })).text;
     }
     writeFileSync(proofedPath, content);
     const applicable = all.filter((change) => (change.mustCatch || change.status === "verified") && change.meaningRisk === "low" && change.after !== null).map(contractChange);
-    const applyPath = join5(outDir, ".proofread-applicable.json");
+    const applyPath = join4(outDir, ".proofread-applicable.json");
     writeFileSync(applyPath, JSON.stringify({ stage: "language", changes: applicable }));
     if (applicable.length) {
-      const appliedText = await command("python3", [join5(root, "scripts/apply-changes.py"), "--changes", applyPath, "--proof-base", article, "--output", proofedPath, "--json"]);
+      const appliedText = await pythonCommand([join4(root, "scripts/apply-changes.py"), "--changes", applyPath, "--proof-base", article, "--output", proofedPath, "--json"]);
       const applied = JSON.parse(appliedText).changes;
       const appliedById = new Map(applied.map((change) => [change.change_id, change]));
       for (let index = 0; index < all.length; index += 1) {
@@ -42110,14 +41977,14 @@ ${content}`], runId: options.runId, budget })).text;
         const outcome = appliedById.get(contract[index].change_id);
         if (outcome) all[index] = { ...change, applied: outcome.applied, skipReason: outcome.skipReason ?? void 0 };
       }
-      proofed = readFileSync4(proofedPath, "utf8");
+      proofed = readFileSync3(proofedPath, "utf8");
     }
     const finalContract = all.map(contractChange);
     writeFileSync(changesPath, JSON.stringify({ stage: "language", changes: finalContract }, null, 2));
     if (article.toLowerCase().endsWith(".docx")) {
-      const finalTextPath = join5(outDir, ".proofread-final-text.txt");
+      const finalTextPath = join4(outDir, ".proofread-final-text.txt");
       writeFileSync(finalTextPath, proofed);
-      await command("python3", [join5(root, "scripts/build-tracked-docx.py"), "--original", article, "--final-text", finalTextPath, "--changes", changesPath, "--output", join5(outDir, "proofed.docx")]);
+      await pythonCommand([join4(root, "scripts/build-tracked-docx.py"), "--original", article, "--final-text", finalTextPath, "--changes", changesPath, "--output", join4(outDir, "proofed.docx")]);
     }
   } else writeFileSync(proofedPath, proofed);
   writeFileSync(memoPath, memo);
@@ -42132,14 +41999,10 @@ ${all.length} changes found; ${all.filter((change) => change.status === "refuted
   return { changes: all, memo, proofed, report: reportPath };
 }
 
-// src/main.ts
-init_thresholds();
-
 // src/evidence.ts
 import { createHash as createHash4 } from "node:crypto";
-import { appendFileSync as appendFileSync5, existsSync as existsSync7, mkdirSync as mkdirSync5, readFileSync as readFileSync8, readdirSync as readdirSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import { join as join12 } from "node:path";
-init_thresholds();
+import { appendFileSync as appendFileSync3, existsSync as existsSync7, mkdirSync as mkdirSync4, readFileSync as readFileSync7, readdirSync as readdirSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { join as join11 } from "node:path";
 
 // src/sefaria.ts
 async function fetchSefaria(reference) {
@@ -42155,12 +42018,11 @@ async function fetchSefaria(reference) {
 }
 
 // src/library/adapter.ts
-init_thresholds();
 import { randomBytes as randomBytes2 } from "node:crypto";
 
 // src/library/config.ts
-import { existsSync as existsSync5, readFileSync as readFileSync6 } from "node:fs";
-import { basename as basename5, dirname as dirname3, isAbsolute as isAbsolute2, join as join8, resolve as resolve6 } from "node:path";
+import { existsSync as existsSync5, readFileSync as readFileSync5 } from "node:fs";
+import { basename as basename5, dirname as dirname3, isAbsolute as isAbsolute2, join as join7, resolve as resolve6 } from "node:path";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -46206,15 +46068,13 @@ var NEVER = INVALID;
 // src/library/install.ts
 import { createHash as createHash2 } from "node:crypto";
 import { spawn as spawn4 } from "node:child_process";
-import { existsSync as existsSync4, lstatSync, readFileSync as readFileSync5, realpathSync as realpathSync2 } from "node:fs";
+import { existsSync as existsSync4, lstatSync, readFileSync as readFileSync4, realpathSync as realpathSync2 } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile as writeFile2 } from "node:fs/promises";
-import { basename as basename4, dirname as dirname2, join as join7, resolve as resolve5 } from "node:path";
-init_thresholds();
+import { basename as basename4, dirname as dirname2, join as join6, resolve as resolve5 } from "node:path";
 
 // src/library/python-discovery.ts
-init_thresholds();
 import { realpathSync } from "node:fs";
-import { join as join6 } from "node:path";
+import { join as join5 } from "node:path";
 var PYTHON_CANDIDATES = ["python3.13", "python3.12", "python3.11", "python3.10", "python3.9", "python3", "python"];
 var PROBE_CODE = 'import sys; print("%d.%d.%d" % sys.version_info[:3]); print(sys.executable)';
 function parseVersion(text4) {
@@ -46268,21 +46128,21 @@ function choosePython(found, minimum, lockedMinor) {
   return { python: ordered[0], exact: false };
 }
 function venvPython(venvDir, platform = process.platform) {
-  return platform === "win32" ? join6(venvDir, "Scripts", "python.exe") : join6(venvDir, "bin", "python");
+  return platform === "win32" ? join5(venvDir, "Scripts", "python.exe") : join5(venvDir, "bin", "python");
 }
 
 // src/library/install.ts
 var install = thresholds_default.library.install;
 function installPaths(home) {
-  const venv = join7(home, "venv");
-  return { home, venv, python: venvPython(venv), library: join7(home, "library"), installed: join7(home, "installed.json"), lock: join7(home, "install.lock") };
+  const venv = join6(home, "venv");
+  return { home, venv, python: venvPython(venv), library: join6(home, "library"), installed: join6(home, "installed.json"), lock: join6(home, "install.lock") };
 }
 function resolveHome(env, dataDirectory) {
   const named = env.AW_PAGEINDEX_HOME?.trim();
   if (named) return resolve5(named);
-  if (dataDirectory) return join7(resolve5(dataDirectory), "pageindex");
+  if (dataDirectory) return join6(resolve5(dataDirectory), "pageindex");
   const plugin2 = env.CLAUDE_PLUGIN_DATA?.trim();
-  return plugin2 ? join7(resolve5(plugin2), "pageindex") : null;
+  return plugin2 ? join6(resolve5(plugin2), "pageindex") : null;
 }
 var tierSchema = external_exports.object({
   requirements: external_exports.string().min(1),
@@ -46298,13 +46158,13 @@ var pinnedSchema = external_exports.object({
   tiers: external_exports.object({ core: tierSchema, structure: tierSchema })
 }).passthrough();
 function pilibSource(root) {
-  return join7(root, "scripts", "pageindex");
+  return join6(root, "scripts", "pageindex");
 }
 function readPinned(root) {
-  const file = join7(pilibSource(root), "PINNED.json");
+  const file = join6(pilibSource(root), "PINNED.json");
   let raw;
   try {
-    raw = JSON.parse(readFileSync5(file, "utf8"));
+    raw = JSON.parse(readFileSync4(file, "utf8"));
   } catch {
     throw new LibraryError("config", "ERROR library install: this copy of the plugin has no PageIndex helper files (scripts/pageindex/PINNED.json is missing or unreadable). Update or reinstall the plugin.");
   }
@@ -46328,7 +46188,7 @@ var installedSchema = external_exports.object({
 }).passthrough();
 function readInstalled(home) {
   try {
-    const parsed = installedSchema.safeParse(JSON.parse(readFileSync5(installPaths(home).installed, "utf8")));
+    const parsed = installedSchema.safeParse(JSON.parse(readFileSync4(installPaths(home).installed, "utf8")));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
@@ -46404,7 +46264,7 @@ async function chooseTier(options, pinned) {
   return { tier: "structure", requested: null, python: structure.python, exact: structure.exact, notes };
 }
 function requirementsFile(root, pinned, tier) {
-  return join7(pilibSource(root), pinned.tiers[tier].requirements);
+  return join6(pilibSource(root), pinned.tiers[tier].requirements);
 }
 async function sha256File(file) {
   return createHash2("sha256").update(await readFile(file)).digest("hex");
@@ -46478,14 +46338,14 @@ function guardHome(home, dataRoot, what) {
   } catch {
     throw refuse(`the plugin's data folder ${dataRoot} cannot be resolved; nothing was touched.`);
   }
-  const expected = join7(root, "pageindex");
+  const expected = join6(root, "pageindex");
   let actual;
   if (existsSync4(home) || isLink(home)) {
     if (isLink(home)) throw refuse(`${home} is a symbolic link; refusing to use it.`);
     actual = realpathSync2(home);
   } else {
     try {
-      actual = join7(realpathSync2(dirname2(home)), basename4(home));
+      actual = join6(realpathSync2(dirname2(home)), basename4(home));
     } catch {
       actual = resolve5(home);
     }
@@ -46659,7 +46519,7 @@ function isLink(path2) {
 }
 
 // src/library/config.ts
-var LIBRARY_CONFIG_FILE = join8(".academic-helper", "library.json");
+var LIBRARY_CONFIG_FILE = join7(".academic-helper", "library.json");
 var DEFAULT_PAGEINDEX_COMMAND = "pilib";
 var DEFAULT_TROVE_COMMAND = "trove";
 var libraryConfigSchema = external_exports.object({
@@ -46696,12 +46556,12 @@ function installedPageindex(env, options) {
   return root ? { command: installedCommand(home, root), home } : null;
 }
 function loadLibraryConfig(project, env = process.env, options = {}) {
-  const file = join8(project, LIBRARY_CONFIG_FILE);
+  const file = join7(project, LIBRARY_CONFIG_FILE);
   let parsed;
   if (existsSync5(file)) {
     let json;
     try {
-      json = JSON.parse(readFileSync6(file, "utf8"));
+      json = JSON.parse(readFileSync5(file, "utf8"));
     } catch {
       throw new LibraryError("config", `ERROR library: ${LIBRARY_CONFIG_FILE} is not valid JSON`);
     }
@@ -46755,9 +46615,9 @@ function loadLibraryConfig(project, env = process.env, options = {}) {
   };
 }
 function profileTroveEnabled(project) {
-  const file = join8(project, ".academic-helper", "profile.md");
+  const file = join7(project, ".academic-helper", "profile.md");
   if (!existsSync5(file)) return null;
-  const match = readFileSync6(file, "utf8").match(/^## Tools\s*\n+```json\n([\s\S]*?)\n```/mu);
+  const match = readFileSync5(file, "utf8").match(/^## Tools\s*\n+```json\n([\s\S]*?)\n```/mu);
   if (!match?.[1]) return null;
   try {
     const tools = JSON.parse(match[1]);
@@ -46772,7 +46632,7 @@ function profileTroveEnabled(project) {
 import { createHash as createHash3 } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir as mkdir2, open as open2, readFile as readFile2, readdir, realpath, rename as rename2, rm as rm2, stat as stat3 } from "node:fs/promises";
-import { basename as basename6, dirname as dirname4, join as join9, sep } from "node:path";
+import { basename as basename6, dirname as dirname4, join as join8, sep } from "node:path";
 
 // ../schemas/retrieval-row.schema.json
 var retrieval_row_schema_default = {
@@ -46936,9 +46796,6 @@ var retrieval_row_schema_default = {
   }
 };
 
-// src/library/ledger.ts
-init_thresholds();
-
 // src/library/jsonschema.ts
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -47040,8 +46897,8 @@ function redact(text4) {
 
 // src/library/ledger.ts
 var limits2 = thresholds_default.library;
-var RETRIEVAL_FILE = join9(".academic-helper", "retrieval.jsonl");
-var RETRIEVAL_DIR = join9(".academic-helper", "retrieval");
+var RETRIEVAL_FILE = join8(".academic-helper", "retrieval.jsonl");
+var RETRIEVAL_DIR = join8(".academic-helper", "retrieval");
 var TOKENS_BASIS = "estimate";
 function compareVerdictKeys(a, b) {
   const left = BigInt(a.verdict_at);
@@ -47069,10 +46926,10 @@ function clipError(message) {
   return redact(message).replace(/\s+/gu, " ").trim().slice(0, limits2.ledger.maxErrorChars);
 }
 function retrievalDir(project) {
-  return join9(project, RETRIEVAL_DIR);
+  return join8(project, RETRIEVAL_DIR);
 }
 function spoolDir(project) {
-  return join9(retrievalDir(project), "spool");
+  return join8(retrievalDir(project), "spool");
 }
 function inside(root, path2) {
   return path2 === root || path2.startsWith(`${root}${sep}`);
@@ -47080,10 +46937,10 @@ function inside(root, path2) {
 async function containedDir(project, segments2, create = false) {
   try {
     const root = await realpath(project);
-    let current = await realpath(join9(root, ".academic-helper"));
+    let current = await realpath(join8(root, ".academic-helper"));
     if (!inside(root, current) || !(await stat3(current)).isDirectory()) return null;
     for (const segment of segments2) {
-      const next = join9(current, segment);
+      const next = join8(current, segment);
       if (create) await mkdir2(next).catch((error) => {
         if (error.code !== "EEXIST") throw error;
       });
@@ -47108,7 +46965,7 @@ async function isSymlink(path2) {
 async function safeLedgerFile(project) {
   const dir = await containedDir(project, []);
   if (!dir) return null;
-  const file = join9(dir, basename6(RETRIEVAL_FILE));
+  const file = join8(dir, basename6(RETRIEVAL_FILE));
   return await isSymlink(file) ? null : file;
 }
 async function appendRow(project, row) {
@@ -47173,14 +47030,14 @@ async function rowsForLookup(project, lookupId) {
   return found;
 }
 function spoolFile(project, lookupId, kind) {
-  return join9(spoolDir(project), `${lookupId}.${kind}.json`);
+  return join8(spoolDir(project), `${lookupId}.${kind}.json`);
 }
 async function writeSpool(project, file, value) {
   try {
     if (dirname4(file) !== spoolDir(project)) return false;
     const dir = await containedDir(project, ["retrieval", "spool"], true);
     if (!dir) return false;
-    const target = join9(dir, basename6(file));
+    const target = join8(dir, basename6(file));
     const temp = `${target}.${process.pid}.${Date.now().toString(36)}.tmp`;
     const handle = await open2(temp, "wx", 420);
     try {
@@ -47197,7 +47054,7 @@ async function writeSpool(project, file, value) {
 async function readSpoolJson(project, file) {
   const dir = await containedDir(project, ["retrieval", "spool"]);
   if (!dir) throw new Error("no spool folder");
-  const target = join9(dir, basename6(file));
+  const target = join8(dir, basename6(file));
   if (await isSymlink(target)) throw new Error("spool file is a symlink");
   return JSON.parse(await readFile2(target, "utf8"));
 }
@@ -47214,14 +47071,14 @@ async function listSpool(project, keep) {
   const dir = await containedDir(project, ["retrieval", "spool"]);
   if (!dir) return [];
   try {
-    return (await readdir(dir)).filter(keep).map((name) => join9(spoolDir(project), name));
+    return (await readdir(dir)).filter(keep).map((name) => join8(spoolDir(project), name));
   } catch {
     return [];
   }
 }
 async function removeSpool(project, file) {
   const dir = await containedDir(project, ["retrieval", "spool"]);
-  if (dir) await rm2(join9(dir, basename6(file)), { force: true });
+  if (dir) await rm2(join8(dir, basename6(file)), { force: true });
 }
 function spoolValue(lookupId, extra, pages) {
   const size = pages.reduce((sum3, page) => sum3 + Buffer.byteLength(page.text, "utf8"), 0);
@@ -47234,7 +47091,7 @@ async function sweepSpool(project, now = Date.now()) {
     if (!dir) return;
     const cutoff = now - limits2.spool.ttlHours * 3600 * 1e3;
     for (const name of await readdir(dir)) {
-      const file = join9(dir, name);
+      const file = join8(dir, name);
       try {
         if ((await lstat(file)).mtimeMs < cutoff) await rm2(file, { force: true });
       } catch {
@@ -47248,8 +47105,7 @@ async function sweepSpool(project, now = Date.now()) {
 import { spawn as spawn5 } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdir as mkdir3, open as open3, readFile as readFile3, realpath as realpath2, rm as rm3, stat as stat4 } from "node:fs/promises";
-import { join as join10, resolve as resolve7 } from "node:path";
-init_thresholds();
+import { join as join9, resolve as resolve7 } from "node:path";
 
 // src/library/textmatch.ts
 var INVISIBLE = /[​-‏‪-‮⁠-⁩﻿]/gu;
@@ -47315,7 +47171,7 @@ function sleep2(ms2) {
     setTimeout(resolveSleep, ms2);
   });
 }
-var slotFile = (dir, slot) => join10(dir, `slot-${slot}.lock`);
+var slotFile = (dir, slot) => join9(dir, `slot-${slot}.lock`);
 function pidAlive(pid) {
   try {
     process.kill(pid, 0);
@@ -47345,7 +47201,7 @@ async function slotIsStale(file, now) {
   }
 }
 async function reapSlots(dir) {
-  const guard = join10(dir, ".reap");
+  const guard = join9(dir, ".reap");
   try {
     await mkdir3(guard);
   } catch {
@@ -47436,7 +47292,7 @@ async function startShadow(spec, mode, env, runner2) {
     if (slot === null) return idle("skipped:busy");
     const dir = await containedDir(spec.project, ["retrieval"], true);
     if (!dir) throw new Error("no retrieval folder");
-    specPath = join10(dir, `spec-${spec.lookup_id}.json`);
+    specPath = join9(dir, `spec-${spec.lookup_id}.json`);
     const handle = await open3(specPath, "wx", 420);
     try {
       await handle.writeFile(JSON.stringify({ ...spec, slot: slot.slot, slot_nonce: slot.nonce }), "utf8");
@@ -47460,7 +47316,7 @@ async function loadSpec(path2) {
     if (!parsed.success) return null;
     const dir = await containedDir(parsed.data.project, ["retrieval"]);
     if (!dir) return null;
-    const expected = join10(dir, `spec-${parsed.data.lookup_id}.json`);
+    const expected = join9(dir, `spec-${parsed.data.lookup_id}.json`);
     if (await realpath2(path2) !== expected) return null;
     await rm3(expected, { force: true });
     return parsed.data;
@@ -47558,18 +47414,18 @@ async function runShadowWorker(spec, runner2, settings) {
 }
 
 // src/library/registry.ts
-import { existsSync as existsSync6, readFileSync as readFileSync7 } from "node:fs";
-import { join as join11 } from "node:path";
+import { existsSync as existsSync6, readFileSync as readFileSync6 } from "node:fs";
+import { join as join10 } from "node:path";
 function stripFragment(id) {
   const index = id.indexOf("#");
   return index >= 0 ? id.slice(0, index) : id;
 }
 function findSource(project, sourceId) {
-  const file = join11(project, ".academic-helper", "sources.json");
+  const file = join10(project, ".academic-helper", "sources.json");
   if (!existsSync6(file)) return void 0;
   let raw;
   try {
-    raw = JSON.parse(readFileSync7(file, "utf8"));
+    raw = JSON.parse(readFileSync6(file, "utf8"));
   } catch {
     return void 0;
   }
@@ -47589,7 +47445,7 @@ function loadShelf(path2) {
   if (!existsSync6(path2)) throw bad("does not exist");
   let raw;
   try {
-    raw = JSON.parse(readFileSync7(path2, "utf8"));
+    raw = JSON.parse(readFileSync6(path2, "utf8"));
   } catch (error) {
     throw bad(error instanceof SyntaxError ? "is not valid JSON" : "cannot be read");
   }
@@ -48063,19 +47919,19 @@ function cacheKeyFor(route, id) {
 }
 function cachePath(id, text4) {
   const digest = createHash4("sha256").update(text4).digest("hex");
-  const directory = join12(dataDir(), "sources", `${encodeURIComponent(id)}@${digest}`);
-  mkdirSync5(directory, { recursive: true });
-  writeFileSync2(join12(directory, "text.md"), text4, "utf8");
-  return join12(directory, "text.md");
+  const directory = join11(dataDir(), "sources", `${encodeURIComponent(id)}@${digest}`);
+  mkdirSync4(directory, { recursive: true });
+  writeFileSync2(join11(directory, "text.md"), text4, "utf8");
+  return join11(directory, "text.md");
 }
 function cachedText(id) {
-  const root = join12(dataDir(), "sources");
+  const root = join11(dataDir(), "sources");
   if (!existsSync7(root)) return void 0;
   const prefix = `${encodeURIComponent(id)}@`;
   const entry = readdirSync2(root).find((name) => name.startsWith(prefix));
   if (!entry) return void 0;
-  const path2 = join12(root, entry, "text.md");
-  return existsSync7(path2) ? readFileSync8(path2, "utf8") : void 0;
+  const path2 = join11(root, entry, "text.md");
+  return existsSync7(path2) ? readFileSync7(path2, "utf8") : void 0;
 }
 function ckMetadata(text4) {
   const head = text4.slice(0, 4e3);
@@ -48120,9 +47976,9 @@ ${text4}`],
   return { passages: result.json.passages };
 }
 function event(runId2, record, reason) {
-  const path2 = join12(projectDir(), ".academic-helper", "runs", runId2, "events.jsonl");
-  mkdirSync5(join12(projectDir(), ".academic-helper", "runs", runId2), { recursive: true });
-  appendFileSync5(path2, `${JSON.stringify({ type: "evidence.quote_dropped", passageId: record.id, sourceId: record.sourceId, reason })}
+  const path2 = join11(projectDir(), ".academic-helper", "runs", runId2, "events.jsonl");
+  mkdirSync4(join11(projectDir(), ".academic-helper", "runs", runId2), { recursive: true });
+  appendFileSync3(path2, `${JSON.stringify({ type: "evidence.quote_dropped", passageId: record.id, sourceId: record.sourceId, reason })}
 `, "utf8");
 }
 async function buildEvidence(options) {
@@ -48131,7 +47987,7 @@ async function buildEvidence(options) {
   for (const id of options.sources) {
     if (!isPlainId(id)) throw new Error(`ERROR evidence.build: source id ${JSON.stringify(id)} is not a plain id (letters, digits and . _ # : - only); remove it from the source list`);
   }
-  const intent = options.intent ? readFileSync8(options.intent, "utf8") : "";
+  const intent = options.intent ? readFileSync7(options.intent, "utf8") : "";
   const intentJson = (() => {
     try {
       return JSON.parse(intent);
@@ -48185,23 +48041,15 @@ async function buildEvidence(options) {
         event(options.runId, passage, "quote_not_verbatim");
         continue;
       }
-      const rated = await decide({
-        point: "evidence.relevance",
-        question: "How relevant is this passage to the author thesis (0 = not relevant, 3 = central)?",
-        options: ["0", "1", "2", "3"],
-        context: JSON.stringify({ thesis: intent, quote: passage.quote, gloss: passage.gloss }),
-        runId: options.runId,
-        fallback: async () => String(passage.relevance)
-      });
       const id = stablePassageId(source.id, passage.quote);
       if (passages.some((p) => p.id === id)) continue;
-      passages.push({ ...passage, id, relevance: Number(rated.answer) });
+      passages.push({ ...passage, id, relevance: passage.relevance });
     }
   }
-  const previousPath = join12(projectDir(), ".academic-helper", "evidence.json");
+  const previousPath = join11(projectDir(), ".academic-helper", "evidence.json");
   if (existsSync7(previousPath)) {
     try {
-      const previous = JSON.parse(readFileSync8(previousPath, "utf8"));
+      const previous = JSON.parse(readFileSync7(previousPath, "utf8"));
       const texts = new Map(fetched.map((f3) => [f3.id, normalize(sourceCache.get(f3.key) ?? f3.text)]));
       for (const p of previous.passages ?? []) {
         if (passages.some((q) => q.id === p.id)) continue;
@@ -48213,8 +48061,8 @@ async function buildEvidence(options) {
     }
   }
   const output = { sources, passages };
-  const target = join12(projectDir(), ".academic-helper", "evidence.json");
-  mkdirSync5(join12(projectDir(), ".academic-helper"), { recursive: true });
+  const target = join11(projectDir(), ".academic-helper", "evidence.json");
+  mkdirSync4(join11(projectDir(), ".academic-helper"), { recursive: true });
   writeFileSync2(target, `${JSON.stringify(output, null, 2)}
 `, "utf8");
   appendLedger({ run_id: options.runId, step: "evidence.build", provider: "code", model: "code", input_tokens: 0, output_tokens: 0, cost_usd: 0, latency_ms: 0, exit: "OK", same_family: false });
@@ -48222,38 +48070,37 @@ async function buildEvidence(options) {
 }
 
 // src/voice.ts
-import { appendFileSync as appendFileSync6, existsSync as existsSync8, mkdirSync as mkdirSync6, readFileSync as readFileSync9, readdirSync as readdirSync3, writeFileSync as writeFileSync3 } from "node:fs";
+import { appendFileSync as appendFileSync4, existsSync as existsSync8, mkdirSync as mkdirSync5, readFileSync as readFileSync8, readdirSync as readdirSync3, writeFileSync as writeFileSync3 } from "node:fs";
 import { createHash as createHash5 } from "node:crypto";
-import { join as join13, resolve as resolve8, basename as basename7 } from "node:path";
+import { join as join12, resolve as resolve8, basename as basename7 } from "node:path";
 import { execFileSync } from "node:child_process";
-init_thresholds();
 var dataOverride;
 function store() {
-  return join13(dataOverride ?? dataDir(), "voice");
+  return join12(dataOverride ?? dataDir(), "voice");
 }
 function appendVoicePair(pair, dataRoot) {
-  const dir = join13(dataRoot ?? dataOverride ?? dataDir(), "voice");
-  mkdirSync6(dir, { recursive: true });
-  appendFileSync6(join13(dir, "pairs.jsonl"), `${JSON.stringify(pair)}
+  const dir = join12(dataRoot ?? dataOverride ?? dataDir(), "voice");
+  mkdirSync5(dir, { recursive: true });
+  appendFileSync4(join12(dir, "pairs.jsonl"), `${JSON.stringify(pair)}
 `, "utf8");
 }
 function writeVoiceStyleWords(value, dataRoot) {
-  const dir = join13(dataRoot ?? dataOverride ?? dataDir(), "voice");
-  mkdirSync6(dir, { recursive: true });
-  writeFileSync3(join13(dir, "style-words.json"), JSON.stringify(value, null, 2), "utf8");
+  const dir = join12(dataRoot ?? dataOverride ?? dataDir(), "voice");
+  mkdirSync5(dir, { recursive: true });
+  writeFileSync3(join12(dir, "style-words.json"), JSON.stringify(value, null, 2), "utf8");
 }
 function readJsonl(path2) {
   if (!existsSync8(path2)) return [];
-  return readFileSync9(path2, "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+  return readFileSync8(path2, "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
 }
 function sha(content) {
   return createHash5("sha256").update(content).digest("hex");
 }
 function refreshVersion(dir) {
-  const profilePath = join13(dir, "profile.json");
-  const profile = JSON.parse(readFileSync9(profilePath, "utf8"));
+  const profilePath = join12(dir, "profile.json");
+  const profile = JSON.parse(readFileSync8(profilePath, "utf8"));
   const names = ["exemplars.jsonl", "pairs.jsonl", "style-words.json", "rules.md"];
-  const version = sha(names.map((name) => existsSync8(join13(dir, name)) ? readFileSync9(join13(dir, name), "utf8") : "").join("\n"));
+  const version = sha(names.map((name) => existsSync8(join12(dir, name)) ? readFileSync8(join12(dir, name), "utf8") : "").join("\n"));
   profile.voiceVersion = version;
   writeFileSync3(profilePath, JSON.stringify(profile, null, 2));
   return version;
@@ -48263,8 +48110,8 @@ function paragraphs(text4) {
 }
 async function voiceBundle(options) {
   const dir = store();
-  if (!existsSync8(join13(dir, "profile.json"))) throw new AwError("ERROR", "voice.bundle", "exit 3 no voice store \u2014 run: aw voice pull (or /academic-writer:voice)");
-  const all = readJsonl(join13(dir, "exemplars.jsonl"));
+  if (!existsSync8(join12(dir, "profile.json"))) throw new AwError("ERROR", "voice.bundle", "exit 3 no voice store \u2014 run: aw voice pull (or /academic-writer:voice)");
+  const all = readJsonl(join12(dir, "exemplars.jsonl"));
   const chosen = [];
   const sources = /* @__PURE__ */ new Set();
   const perSource = thresholds_default.voice.bundle.maxPerSource;
@@ -48278,66 +48125,66 @@ async function voiceBundle(options) {
     sources.add(item.source);
     chosen.push(item);
   }
-  const pairs = readJsonl(join13(dir, "pairs.jsonl")).slice(-options.pairs);
-  const out = join13(dir, `bundle-${sha(options.runId).slice(0, 12)}.json`);
-  writeFileSync3(out, JSON.stringify({ exemplars: chosen, pairs, rules: readFileSync9(join13(dir, "rules.md"), "utf8"), styleWords: JSON.parse(readFileSync9(join13(dir, "style-words.json"), "utf8")) }, null, 2));
+  const pairs = readJsonl(join12(dir, "pairs.jsonl")).slice(-options.pairs);
+  const out = join12(dir, `bundle-${sha(options.runId).slice(0, 12)}.json`);
+  writeFileSync3(out, JSON.stringify({ exemplars: chosen, pairs, rules: readFileSync8(join12(dir, "rules.md"), "utf8"), styleWords: JSON.parse(readFileSync8(join12(dir, "style-words.json"), "utf8")) }, null, 2));
   return { exemplars: chosen, pairs, path: out };
 }
 function voiceMigrate(from) {
   const dir = store();
-  mkdirSync6(dir, { recursive: true });
+  mkdirSync5(dir, { recursive: true });
   const source = resolve8(from);
-  const authorPath = join13(source, "AUTHOR_VOICE.md");
-  const author = existsSync8(authorPath) ? readFileSync9(authorPath, "utf8") : "";
-  const fingerprintPath = join13(source, ".voice", "fingerprint.md");
-  const exemplarsPath = join13(source, ".academic-helper", "voice-exemplars.md");
-  const fingerprint = existsSync8(fingerprintPath) ? readFileSync9(fingerprintPath, "utf8") : "";
-  const rawExemplars = existsSync8(exemplarsPath) ? readFileSync9(exemplarsPath, "utf8") : "";
+  const authorPath = join12(source, "AUTHOR_VOICE.md");
+  const author = existsSync8(authorPath) ? readFileSync8(authorPath, "utf8") : "";
+  const fingerprintPath = join12(source, ".voice", "fingerprint.md");
+  const exemplarsPath = join12(source, ".academic-helper", "voice-exemplars.md");
+  const fingerprint = existsSync8(fingerprintPath) ? readFileSync8(fingerprintPath, "utf8") : "";
+  const rawExemplars = existsSync8(exemplarsPath) ? readFileSync8(exemplarsPath, "utf8") : "";
   const version = sha(author + fingerprint + rawExemplars);
-  writeFileSync3(join13(dir, "profile.json"), JSON.stringify({ schemaVersion: 1, voiceVersion: version, authorVoice: author, fingerprint }, null, 2));
+  writeFileSync3(join12(dir, "profile.json"), JSON.stringify({ schemaVersion: 1, voiceVersion: version, authorVoice: author, fingerprint }, null, 2));
   const rows = paragraphs(rawExemplars).filter((p) => p !== "# Voice exemplars").map((text4, index) => ({ id: `migrated-${index + 1}`, source: `migration-${index + 1}`, text: text4 }));
-  writeFileSync3(join13(dir, "exemplars.jsonl"), rows.map((r2) => JSON.stringify(r2)).join("\n") + (rows.length ? "\n" : ""));
-  for (const file of ["pairs.jsonl", "CHANGELOG.jsonl"]) if (!existsSync8(join13(dir, file))) writeFileSync3(join13(dir, file), "");
-  if (!existsSync8(join13(dir, "style-words.json"))) writeFileSync3(join13(dir, "style-words.json"), JSON.stringify({ banned: [], capped: [], filler: [] }, null, 2));
-  if (!existsSync8(join13(dir, "rules.md"))) writeFileSync3(join13(dir, "rules.md"), author.split("\n").slice(0, thresholds_default.voice.bundle.maxRuleLines).join("\n"));
+  writeFileSync3(join12(dir, "exemplars.jsonl"), rows.map((r2) => JSON.stringify(r2)).join("\n") + (rows.length ? "\n" : ""));
+  for (const file of ["pairs.jsonl", "CHANGELOG.jsonl"]) if (!existsSync8(join12(dir, file))) writeFileSync3(join12(dir, file), "");
+  if (!existsSync8(join12(dir, "style-words.json"))) writeFileSync3(join12(dir, "style-words.json"), JSON.stringify({ banned: [], capped: [], filler: [] }, null, 2));
+  if (!existsSync8(join12(dir, "rules.md"))) writeFileSync3(join12(dir, "rules.md"), author.split("\n").slice(0, thresholds_default.voice.bundle.maxRuleLines).join("\n"));
   return dir;
 }
 function voiceCandidates(corpus) {
   const files = readdirSync3(resolve8(corpus), { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".md"));
-  return files.flatMap((file) => paragraphs(readFileSync9(join13(resolve8(corpus), file.name), "utf8")).map((text4, i2) => ({ id: `${basename7(file.name)}-${i2 + 1}`, source: file.name, text: text4 }))).filter((e2) => e2.text.split(/\s+/).length >= thresholds_default.voice.exemplars.minWords);
+  return files.flatMap((file) => paragraphs(readFileSync8(join12(resolve8(corpus), file.name), "utf8")).map((text4, i2) => ({ id: `${basename7(file.name)}-${i2 + 1}`, source: file.name, text: text4 }))).filter((e2) => e2.text.split(/\s+/).length >= thresholds_default.voice.exemplars.minWords);
 }
 async function voiceMoves(runId2) {
   const dir = store();
-  const profile = readFileSync9(join13(dir, "profile.json"), "utf8");
-  const exemplars = readJsonl(join13(dir, "exemplars.jsonl"));
+  const profile = readFileSync8(join12(dir, "profile.json"), "utf8");
+  const exemplars = readJsonl(join12(dir, "exemplars.jsonl"));
   const result = await callGemini({ step: "voice.moves", system: `Describe concise reusable author writing moves. Return JSON with a rules string of no more than ${thresholds_default.voice.bundle.maxRuleLines} lines.`, parts: [profile, JSON.stringify(exemplars)], runId: runId2, budget: new Budget(runId2, thresholds_default.budget.voiceMoves), responseSchema: { type: "OBJECT", properties: { rules: { type: "STRING" } }, required: ["rules"] } });
   const parsed = result.json;
   if (typeof parsed.rules !== "string") throw new AwError("ERROR", "voice.moves", "missing rules verdict");
   const rules = parsed.rules.split("\n").slice(0, thresholds_default.voice.bundle.maxRuleLines).join("\n");
-  writeFileSync3(join13(dir, "rules.md"), rules + "\n");
+  writeFileSync3(join12(dir, "rules.md"), rules + "\n");
   refreshVersion(dir);
   return rules;
 }
 function voiceSync(direction) {
   const dir = store();
-  mkdirSync6(dir, { recursive: true });
+  mkdirSync5(dir, { recursive: true });
   try {
-    const profileText = readFileSync9(join13(projectDir(), ".academic-helper", "profile.md"), "utf8");
+    const profileText = readFileSync8(join12(projectDir(), ".academic-helper", "profile.md"), "utf8");
     const authorKey = /^author_key:\s*["']?([^\s"']+)/m.exec(profileText)?.[1];
     if (!authorKey) throw new AwError("ERROR", `voice.${direction}`, "author_key missing from project profile");
     const title = `Voice Store \u2014 ${authorKey}`;
     const names = ["profile.json", "exemplars.jsonl", "pairs.jsonl", "style-words.json", "rules.md", "CHANGELOG.jsonl"];
-    const readStore = () => Object.fromEntries(names.map((name) => [name, existsSync8(join13(dir, name)) ? readFileSync9(join13(dir, name), "utf8") : ""]));
+    const readStore = () => Object.fromEntries(names.map((name) => [name, existsSync8(join12(dir, name)) ? readFileSync8(join12(dir, name), "utf8") : ""]));
     const writeStore = (files) => {
-      for (const name of names) writeFileSync3(join13(dir, name), files[name] ?? "");
+      for (const name of names) writeFileSync3(join12(dir, name), files[name] ?? "");
     };
     const local = readStore();
     const previousVersion = (local["profile.json"] ? JSON.parse(local["profile.json"]) : {}).voiceVersion;
     const currentVersion = refreshVersion(dir);
-    if (currentVersion !== previousVersion) writeFileSync3(join13(dir, "CHANGELOG.jsonl"), `${local["CHANGELOG.jsonl"] ?? ""}${JSON.stringify({ voiceVersion: currentVersion, at: (/* @__PURE__ */ new Date()).toISOString() })}
+    if (currentVersion !== previousVersion) writeFileSync3(join12(dir, "CHANGELOG.jsonl"), `${local["CHANGELOG.jsonl"] ?? ""}${JSON.stringify({ voiceVersion: currentVersion, at: (/* @__PURE__ */ new Date()).toISOString() })}
 `);
-    local["profile.json"] = readFileSync9(join13(dir, "profile.json"), "utf8");
-    local["CHANGELOG.jsonl"] = readFileSync9(join13(dir, "CHANGELOG.jsonl"), "utf8");
+    local["profile.json"] = readFileSync8(join12(dir, "profile.json"), "utf8");
+    local["CHANGELOG.jsonl"] = readFileSync8(join12(dir, "CHANGELOG.jsonl"), "utf8");
     const localProfile = local["profile.json"] ? JSON.parse(local["profile.json"]) : {};
     const listingText = execFileSync("trove", ["items", "list", "--json"], { encoding: "utf8", env: allowedEnv(process.env, "trove") });
     const listing = JSON.parse(listingText);
@@ -48364,7 +48211,7 @@ function voiceSync(direction) {
     if (localProfile.voiceVersion && remoteProfile.voiceVersion && remoteProfile.voiceVersion > localProfile.voiceVersion && remote) {
       local["CHANGELOG.jsonl"] = [...new Set([...(remote["CHANGELOG.jsonl"] ?? "").split("\n"), ...(local["CHANGELOG.jsonl"] ?? "").split("\n")].filter(Boolean))].join("\n") + "\n";
     }
-    const file = join13(dir, ".trove-voice.md");
+    const file = join12(dir, ".trove-voice.md");
     writeFileSync3(file, body);
     if (item?.id) execFileSync("trove", ["items", "put", item.id, "-f", file], { encoding: "utf8", env: allowedEnv(process.env, "trove") });
     else execFileSync("trove", ["items", "import", file, "--title", title], { encoding: "utf8", env: allowedEnv(process.env, "trove") });
@@ -48376,17 +48223,16 @@ function voiceSync(direction) {
 }
 
 // src/revise.ts
-import { appendFileSync as appendFileSync7, mkdirSync as mkdirSync7, readFileSync as readFileSync10, writeFileSync as writeFileSync4 } from "node:fs";
-import { dirname as dirname5, join as join14 } from "node:path";
-init_thresholds();
+import { appendFileSync as appendFileSync5, mkdirSync as mkdirSync6, readFileSync as readFileSync9, writeFileSync as writeFileSync4 } from "node:fs";
+import { dirname as dirname5, join as join13 } from "node:path";
 var dataOverride2;
 var confirm = async () => false;
 function voiceDir() {
-  return dataOverride2 ?? join14(dataDir(), "voice");
+  return dataOverride2 ?? join13(dataDir(), "voice");
 }
 function append(file, row) {
-  mkdirSync7(dirname5(file), { recursive: true });
-  appendFileSync7(file, `${JSON.stringify(row)}
+  mkdirSync6(dirname5(file), { recursive: true });
+  appendFileSync5(file, `${JSON.stringify(row)}
 `, "utf8");
 }
 async function classify(items, runId2) {
@@ -48398,11 +48244,10 @@ async function classifyItems(items, runId2) {
   const schema3 = { type: "OBJECT", properties: { items: { type: "ARRAY", items: { type: "OBJECT", properties: { id: { type: "STRING" }, category: { type: "STRING", enum: ["text_edit", "argument", "voice_signal", "plugin_defect"] }, proposal: { type: "OBJECT" } }, required: ["id", "category", "proposal"] } } }, required: ["items"] };
   const fallback = async () => {
     const caps = thresholds_default.budget.revise;
-    const result2 = await callGemini({ step: "revise.classify", system: "Classify review feedback accurately. Return JSON only.", parts: [JSON.stringify(items)], responseSchema: schema3, runId: runId2, budget: new Budget(runId2, caps) });
-    return JSON.stringify(result2.json);
+    const result = await callGemini({ step: "revise.classify", system: "Classify review feedback accurately. Return JSON only.", parts: [JSON.stringify(items)], responseSchema: schema3, runId: runId2, budget: new Budget(runId2, caps) });
+    return JSON.stringify(result.json);
   };
-  const result = await decide({ point: "revise.classify", question: "Classify each Word review item.", options: ["text_edit", "argument", "voice_signal", "plugin_defect"], context: JSON.stringify(items), runId: runId2, fallback });
-  const parsed = JSON.parse(result.answer);
+  const parsed = JSON.parse(await fallback());
   if (typeof parsed !== "object" || parsed === null || !Array.isArray(parsed.items)) throw new Error("ERROR revise.classify: missing verdict");
   emit(runId2, "revise", "step_end", { step: "read" });
   return parsed;
@@ -48412,8 +48257,8 @@ function applyTextEdit(item) {
   const before = item.proposal.before;
   const after = item.proposal.after;
   if (typeof file !== "string" || typeof before !== "string" || typeof after !== "string") return;
-  const target = join14(projectDir(), file);
-  const body = readFileSync10(target, "utf8");
+  const target = join13(projectDir(), file);
+  const body = readFileSync9(target, "utf8");
   if (!body.includes(before)) throw new Error(`ERROR revise.apply: anchor not found for ${item.id}`);
   writeFileSync4(target, body.replace(before, after), "utf8");
 }
@@ -48424,26 +48269,26 @@ async function applyItems(plan2) {
   if (!dataOverride2) dataDir();
   const applied = [];
   const deferred = [];
-  const feedbackDir = join14(dataOverride2 ?? dataDir(), "feedback");
+  const feedbackDir = join13(dataOverride2 ?? dataDir(), "feedback");
   startRunOnce(plan2.runId, "revise");
   emit(plan2.runId, "revise", "step_start", { step: "update-draft" });
   for (const item of plan2.items) {
-    append(join14(dataOverride2 ?? dataDir(), "labels", "revise.classify.jsonl"), { point: "revise.classify", itemId: item.id, label: item.category });
+    append(join13(dataOverride2 ?? dataDir(), "labels", "revise.classify.jsonl"), { point: "revise.classify", itemId: item.id, label: item.category });
     if (typeof item.proposal.changeId === "string" && (item.proposal.label === "uphold" || item.proposal.label === "refute")) {
-      append(join14(dataOverride2 ?? dataDir(), "labels", "proofread.verify.jsonl"), { point: "proofread.verify", changeId: item.proposal.changeId, label: item.proposal.label });
+      append(join13(dataOverride2 ?? dataDir(), "labels", "proofread.verify.jsonl"), { point: "proofread.verify", changeId: item.proposal.changeId, label: item.proposal.label });
     }
     if (item.category === "text_edit") {
       applyTextEdit(item);
       applied.push(item.id);
     } else if (item.category === "argument") {
-      const file = join14(projectDir(), ".academic-helper", "revise-todo.md");
-      mkdirSync7(join14(projectDir(), ".academic-helper"), { recursive: true });
-      appendFileSync7(file, `
+      const file = join13(projectDir(), ".academic-helper", "revise-todo.md");
+      mkdirSync6(join13(projectDir(), ".academic-helper"), { recursive: true });
+      appendFileSync5(file, `
 - [ ] ${String(item.proposal.text ?? JSON.stringify(item.proposal))}
 `, "utf8");
       deferred.push(item.id);
     } else if (item.category === "plugin_defect") {
-      append(join14(feedbackDir, "ledger.jsonl"), { ts: (/* @__PURE__ */ new Date()).toISOString(), runId: plan2.runId, step: String(item.proposal.step ?? "unknown"), item: item.proposal, authorWords: String(item.proposal.authorWords ?? ""), pluginVersion: plan2.pluginVersion });
+      append(join13(feedbackDir, "ledger.jsonl"), { ts: (/* @__PURE__ */ new Date()).toISOString(), runId: plan2.runId, step: String(item.proposal.step ?? "unknown"), item: item.proposal, authorWords: String(item.proposal.authorWords ?? ""), pluginVersion: plan2.pluginVersion });
       applied.push(item.id);
     } else {
       const accepted = await confirm([item]);
@@ -48452,10 +48297,10 @@ async function applyItems(plan2) {
         continue;
       }
       const dir = voiceDir();
-      mkdirSync7(dir, { recursive: true });
+      mkdirSync6(dir, { recursive: true });
       appendVoicePair({ before: String(item.proposal.before ?? ""), after: String(item.proposal.after ?? ""), source: plan2.runId }, dataOverride2 ?? dataDir());
       if (item.proposal.styleWords !== void 0) writeVoiceStyleWords(item.proposal.styleWords, dataOverride2 ?? dataDir());
-      if (item.proposal.terms !== void 0) writeFileSync4(join14(projectDir(), ".academic-helper", "terms.json"), JSON.stringify(item.proposal.terms, null, 2), "utf8");
+      if (item.proposal.terms !== void 0) writeFileSync4(join13(projectDir(), ".academic-helper", "terms.json"), JSON.stringify(item.proposal.terms, null, 2), "utf8");
       applied.push(item.id);
     }
   }
@@ -48467,9 +48312,8 @@ async function applyItems(plan2) {
 }
 
 // src/draft.ts
-import { existsSync as existsSync9, mkdirSync as mkdirSync8, readFileSync as readFileSync11, writeFileSync as writeFileSync5 } from "node:fs";
-import { join as join15 } from "node:path";
-init_thresholds();
+import { existsSync as existsSync9, mkdirSync as mkdirSync7, readFileSync as readFileSync10, writeFileSync as writeFileSync5 } from "node:fs";
+import { join as join14 } from "node:path";
 
 // src/prompts/write-draft.md
 var write_draft_default = "You are writing one unit of a scholarly Humanities article as its author. The text you produce goes into the article under the author's name, so it must read as the author's own academic prose. Claude has already planned the argument and chosen the evidence, and a citation auditor will verify every citation after you. Your task is the prose for exactly one unit of the plan: unit {{unit_id}}.\n\nThis prompt gives you, in order: the rules for the unit, the output contract, and then the reference material inside tags (evidence passages, the finished text of earlier units, the outline, the author's voice, and any redraft feedback). The final line repeats the task.\n\n<rules>\nArgument\n- Follow the unit's paragraph plan in <outline>: each paragraph advances its assigned move and bridges toward its bridge target.\n- Continue from <predecessor_units>; build on what they established instead of restating it.\n- After each quotation, give the author's own analysis of it.\n- If <redraft_feedback> contains feedback, it is the citation auditor's rejection of your previous draft of this unit. Fix every issue it names.\n\nVoice\n- Reproduce the author's voice from <voice>: the rhythm, how a claim is introduced, how evidence is framed.\n- Where <voice> and your own instincts disagree, follow the author.\n- Hebrew editorial conventions (the spaced em dash ` \u2014 ` only for a true aside, never as a rhythm crutch; where you do mark a Hebrew term or title, a straight \", and curly \u201C\u2026\u201D for a Latin one, \u05F4 and \u05F3 only inside abbreviations; register suggestions; each connective states a real logical relation, with no quota): see `skills/write/references/hebrew-editorial-conventions.md`.\n\nCitations\n- Cite with a footnote marker `[^KEY]` placed immediately after the sentence it supports.\n- KEY is exactly the `id` of an evidence passage shown in <evidence_passages> (for example `[^p1]`). Code rejects every other key, including numbers, titles and ids you did not see.\n- Cite only passages you quoted or relied on.\n- At the end of the unit, after a blank line, add one footnote definition per marker you used: `[^KEY]: <locator> \u2014 <one-line gloss of what it supports>`.\n\nQuotations\n- Every quoted word comes through a placeholder. Where a quotation belongs, write only `\u27E6Q:ID\u27E7` (ID = the passage id, e.g. `\u27E6Q:p1\u27E7`) inside your sentence; code inserts the exact verbatim text with quotation marks (a straight \" for Hebrew, curly \u201C\u2026\u201D for Latin script; gershayim \u05F4 is never a quotation mark). Follow the sentence with its footnote marker as usual.\n- Paraphrase in your own words freely; quotation marks belong only to placeholders.\n- Quote only from <evidence_passages>; the other sections are context for you, not sources.\n</rules>\n\n<output_contract>\nReturn plain prose only: the unit's paragraphs separated by a single blank line, followed (if you used citations) by a blank line and the footnote definitions. Use no markdown formatting (no `*`, `_`, `#`, backticks, headings or bullet lists), no preamble, no commentary about what you wrote, and no JSON. The first character of your response is the first character of the unit's first paragraph.\n</output_contract>\n\n<evidence_passages>\nEach passage shows its id, source and locator. Use these ids in `\u27E6Q:ID\u27E7` placeholders and `[^KEY]` markers.\n{{evidence_passages}}\n</evidence_passages>\n\n<predecessor_units>\nThe finished text of every unit this one depends on (or, for the introduction and conclusion, every body unit already drafted).\n{{predecessor_text}}\n</predecessor_units>\n\n<outline>\nThesis: {{thesis}}\n\nThis unit: {{unit_id}} (role: {{unit_role}})\nClaim: {{unit_claim}}\nParagraph plan (move / evidence assignment / bridge target for each paragraph):\n{{unit_plan}}\n\nFull outline (id + claim per unit), for context only; write only the unit above:\n{{outline_summary}}\n</outline>\n\n<voice>\nExemplar paragraphs in the author's own words:\n{{voice_exemplars}}\n\nBefore/after pairs showing how the author's voice has been corrected in past drafts:\n{{voice_pairs}}\n\nVoice rules:\n{{voice_rules}}\n</voice>\n\n<redraft_feedback>\n{{feedback}}\n</redraft_feedback>\n\nNow write unit {{unit_id}}, following its paragraph plan, the rules and the output contract above. {{language_directive}}\n";
@@ -48677,20 +48521,20 @@ ${p.text}`).join("\n\n") : "(none \u2014 this is the first unit)",
   return result.text;
 }
 function draftDir() {
-  return join15(projectDir(), ".academic-helper", "drafts");
+  return join14(projectDir(), ".academic-helper", "drafts");
 }
 function draftPath(unitId) {
-  return join15(draftDir(), `${unitId}.md`);
+  return join14(draftDir(), `${unitId}.md`);
 }
 function writeDraft(unitId, text4) {
-  mkdirSync8(draftDir(), { recursive: true });
+  mkdirSync7(draftDir(), { recursive: true });
   writeFileSync5(draftPath(unitId), text4, "utf8");
 }
 function loadSourceKeys() {
-  const path2 = join15(projectDir(), ".academic-helper", "sources.json");
+  const path2 = join14(projectDir(), ".academic-helper", "sources.json");
   if (!existsSync9(path2)) return /* @__PURE__ */ new Set();
   try {
-    const raw = JSON.parse(readFileSync11(path2, "utf8"));
+    const raw = JSON.parse(readFileSync10(path2, "utf8"));
     const list = Array.isArray(raw) ? raw : Array.isArray(raw?.sources) ? raw.sources : [];
     return new Set(list.map((entry) => {
       const source = entry;
@@ -48702,10 +48546,10 @@ function loadSourceKeys() {
 }
 function withPassageKeys(given) {
   const sourceKeys = new Set(given);
-  const path2 = join15(projectDir(), ".academic-helper", "evidence.json");
+  const path2 = join14(projectDir(), ".academic-helper", "evidence.json");
   if (!existsSync9(path2)) return sourceKeys;
   try {
-    const raw = JSON.parse(readFileSync11(path2, "utf8"));
+    const raw = JSON.parse(readFileSync10(path2, "utf8"));
     for (const source of raw.sources ?? []) sourceKeys.add(source.id);
     const keys = new Set(sourceKeys);
     for (const passage of raw.passages ?? []) if (sourceKeys.has(passage.sourceId)) keys.add(passage.id);
@@ -48715,10 +48559,10 @@ function withPassageKeys(given) {
   }
 }
 function evidencePassagesFor(unit) {
-  const path2 = join15(projectDir(), ".academic-helper", "evidence.json");
+  const path2 = join14(projectDir(), ".academic-helper", "evidence.json");
   if (!existsSync9(path2)) return [];
   try {
-    const raw = JSON.parse(readFileSync11(path2, "utf8"));
+    const raw = JSON.parse(readFileSync10(path2, "utf8"));
     const ids = new Set((unit.paragraphs ?? []).flatMap((p) => p.evidenceIds ?? []));
     return (raw.passages ?? []).filter((passage) => ids.size === 0 || ids.has(passage.id));
   } catch {
@@ -48731,10 +48575,10 @@ function renderPassages(passages) {
   gloss: ${p.gloss}` : ""}`).join("\n") : "(none)";
 }
 function quoteIndex() {
-  const path2 = join15(projectDir(), ".academic-helper", "evidence.json");
+  const path2 = join14(projectDir(), ".academic-helper", "evidence.json");
   if (!existsSync9(path2)) return /* @__PURE__ */ new Map();
   try {
-    const raw = JSON.parse(readFileSync11(path2, "utf8"));
+    const raw = JSON.parse(readFileSync10(path2, "utf8"));
     return new Map((raw.passages ?? []).map((p) => [p.id, p.quote]));
   } catch {
     return /* @__PURE__ */ new Map();
@@ -48757,10 +48601,10 @@ function renderFootnotes(text4, meta) {
   });
 }
 function footnoteMeta() {
-  const path2 = join15(projectDir(), ".academic-helper", "evidence.json");
+  const path2 = join14(projectDir(), ".academic-helper", "evidence.json");
   if (!existsSync9(path2)) return /* @__PURE__ */ new Map();
   try {
-    const raw = JSON.parse(readFileSync11(path2, "utf8"));
+    const raw = JSON.parse(readFileSync10(path2, "utf8"));
     const src = new Map((raw.sources ?? []).map((x2) => [x2.id, x2]));
     return new Map((raw.passages ?? []).map((p) => [p.id, { author: src.get(p.sourceId)?.author ?? "", title: src.get(p.sourceId)?.title ?? "", locator: p.locator ?? "" }]));
   } catch {
@@ -48768,10 +48612,10 @@ function footnoteMeta() {
   }
 }
 function evidenceQuotesFor(unit) {
-  const path2 = join15(projectDir(), ".academic-helper", "evidence.json");
+  const path2 = join14(projectDir(), ".academic-helper", "evidence.json");
   if (!existsSync9(path2)) return [];
   try {
-    const raw = JSON.parse(readFileSync11(path2, "utf8"));
+    const raw = JSON.parse(readFileSync10(path2, "utf8"));
     const ids = new Set((unit.paragraphs ?? []).flatMap((p) => p.evidenceIds ?? []));
     return (raw.passages ?? []).filter((passage) => ids.size === 0 || ids.has(passage.id)).map((passage) => passage.quote);
   } catch {
@@ -48781,15 +48625,8 @@ function evidenceQuotesFor(unit) {
 async function loadVoiceBundle(runId2) {
   const cfg2 = thresholds_default.voice.bundle;
   const result = await voiceBundle({ n: cfg2.exemplars, pairs: cfg2.pairs, runId: runId2 });
-  const parsed = JSON.parse(readFileSync11(result.path, "utf8"));
+  const parsed = JSON.parse(readFileSync10(result.path, "utf8"));
   return { exemplars: parsed.exemplars ?? [], pairs: parsed.pairs ?? [], rules: parsed.rules ?? "", styleWords: parsed.styleWords ?? EMPTY_STYLE_WORDS };
-}
-async function voiceCheckFallback(paragraph, styleWords) {
-  const bannedHits = styleWords.banned.filter((b) => paragraph.includes(b.word)).length;
-  const fillerHits = styleWords.filler.filter((w) => paragraph.includes(w)).length;
-  const cfg2 = thresholds_default.styleFingerprint;
-  const score = Math.max(0, cfg2.maxScore - bannedHits * 2 - fillerHits);
-  return score >= cfg2.passThreshold ? "pass" : "fail";
 }
 var GATE_REASON = {
   "citation-not-in-sources": "unknown-source",
@@ -48819,12 +48656,12 @@ async function draftUnits(outline, options) {
   if (options.unit && !stubs2.gen) {
     for (const unit of ordered) {
       if (unit.id === options.unit) break;
-      if (existsSync9(draftPath(unit.id))) draftedText.set(unit.id, readFileSync11(draftPath(unit.id), "utf8"));
+      if (existsSync9(draftPath(unit.id))) draftedText.set(unit.id, readFileSync10(draftPath(unit.id), "utf8"));
     }
   }
   const voice = stubs2.voice ?? await loadVoiceBundle(options.runId);
   const sourceKeys = withPassageKeys(loadSourceKeys());
-  const feedback = options.feedbackFile && existsSync9(options.feedbackFile) ? readFileSync11(options.feedbackFile, "utf8") : void 0;
+  const feedback = options.feedbackFile && existsSync9(options.feedbackFile) ? readFileSync10(options.feedbackFile, "utf8") : void 0;
   const budget = new Budget(options.runId, budgetFor("write"));
   const drafted = [];
   const failures = [];
@@ -48851,23 +48688,7 @@ async function draftUnits(outline, options) {
     const paragraphs2 = splitParagraphs(text4);
     for (let index = 0; index < paragraphs2.length; index += 1) {
       const paragraph = paragraphs2[index];
-      await decide({
-        point: "write.audit_prescreen",
-        question: "Does this paragraph plausibly contain a citation the auditor should check?",
-        options: ["review", "skip-likely"],
-        context: JSON.stringify({ unit: unit.id, paragraphIndex: index, excerpt: paragraph.slice(0, 200) }),
-        runId: options.runId,
-        fallback: async () => "review"
-      });
       audit.push({ unit: unit.id, paragraphIndex: index, required: true });
-      await decide({
-        point: "write.voice_check",
-        question: "Does this paragraph meet the voice/style-fingerprint threshold?",
-        options: ["pass", "fail"],
-        context: JSON.stringify({ unit: unit.id, paragraphIndex: index }),
-        runId: options.runId,
-        fallback: async () => voiceCheckFallback(paragraph, voice.styleWords)
-      });
     }
     const failure = runGates(unit, text4, paragraphs2, { sourceKeys, evidenceQuotes, styleWords: voice.styleWords, quoteCheckText: modelQuotesText });
     if (failure) failures.push({ unit: unit.id, gate: failure.gate, detail: failure.detail });
@@ -48878,9 +48699,8 @@ async function draftUnits(outline, options) {
 }
 
 // src/synthesize.ts
-import { existsSync as existsSync10, readFileSync as readFileSync12, readdirSync as readdirSync4, writeFileSync as writeFileSync6 } from "node:fs";
-import { join as join16 } from "node:path";
-init_thresholds();
+import { existsSync as existsSync10, readFileSync as readFileSync11, readdirSync as readdirSync4, writeFileSync as writeFileSync6 } from "node:fs";
+import { join as join15 } from "node:path";
 
 // src/prompts/write-synthesize.md
 var write_synthesize_default = 'You are the final-pass editor of a scholarly Humanities article, working as its author. Every unit was drafted separately. Your task is to propose transition edits at paragraph boundaries, and nothing else. Citations and quotations have already been verified, so your edits leave them exactly as they are.\n\nYou never see or return the whole article at once. You are given every unit\'s paragraphs, numbered, and you propose a small set of surgical edits: one named paragraph\'s text, replaced with a version that bridges better to its neighbour. Everything else in the article stays untouched by construction.\n\n<instructions>\nPropose an edit only where a transition genuinely needs one: a paragraph boundary that reads abruptly, a phrase repeated heavily across two nearby paragraphs, or a voice drift within one paragraph. Leave a paragraph alone when the only reason to edit is that it could be phrased differently.\n\nEvery repeated opener listed in <repetition> must be varied: for each occurrence after the first, propose an edit that opens the paragraph differently while keeping its meaning. This takes priority over keeping the number of edits small.\n\nFor each edit:\n- `unitId` and `paragraphIndex` identify exactly one paragraph from <units>.\n- `before` is copied exactly, character for character, from that paragraph\'s text in <units>. This is how the edit is verified and applied; an edit whose `before` does not match is discarded.\n- `after` is the full replacement text for that paragraph.\n- `reason` is a one-line explanation.\n\nInside `after`, keep each of these exactly as it appears in `before`, even when you edit the sentence around it:\n- a parenthetical citation: text inside `(...)` naming a work, an author or a location, with or without a year (Hebrew citations normally carry no year, e.g. `(\u05DE\u05D7\u05D1\u05E8, \u05E2\u05DE\' 12)`);\n- a footnote marker `[^id]`, or a footnote definition line `[^id]: ...`;\n- quoted material: text inside `" "`, `\u05F4 \u05F4`, or `" "`.\n\nPropose at most one edit per paragraph. An empty `edits` array is the right answer when no boundary needs work, and that is the usual case (except for the repetitions above).\n</instructions>\n\n<output_format>\nReturn a single JSON object and nothing else:\n\n{\n  "edits": [\n    { "unitId": "<unit id>", "paragraphIndex": 0, "before": "<exact current paragraph text>", "after": "<replacement paragraph text>", "reason": "<one line>" }\n  ]\n}\n</output_format>\n\n<outline>\nThe approved thesis and section claims. Transitions must carry this argument forward.\n{{outline}}\n</outline>\n\n<repetition>\nParagraph openers that code found repeated word for word across the article.\n{{repetition}}\n</repetition>\n\n<units>\nEach unit\'s paragraphs, in draft order, with their 0-based paragraphIndex.\n{{units}}\n</units>\n\nNow propose the transition edits for the units above, following the instructions and returning only the JSON object.\n';
@@ -48925,7 +48745,7 @@ function repeatedOpeners(units, words, minCount) {
 function outlineOrder(path2) {
   if (!path2) return [];
   try {
-    const o = JSON.parse(readFileSync12(path2, "utf8"));
+    const o = JSON.parse(readFileSync11(path2, "utf8"));
     return (o.units ?? (o.sections ?? []).flatMap((x2) => x2.units ?? [])).map((u) => u.id);
   } catch {
     return [];
@@ -48934,7 +48754,7 @@ function outlineOrder(path2) {
 function outlineContext(path2) {
   if (!path2) return "(no outline)";
   try {
-    const o = JSON.parse(readFileSync12(path2, "utf8"));
+    const o = JSON.parse(readFileSync11(path2, "utf8"));
     return JSON.stringify({ thesis: o.thesis, sections: (o.sections ?? []).map((x2) => ({ id: x2.id, title: x2.title, claim: x2.claim })) }, null, 2);
   } catch {
     return "(no outline)";
@@ -48954,7 +48774,7 @@ async function realGenerate2(units, runId2, budget, outlinePath) {
   return json.edits;
 }
 function draftsDir() {
-  return join16(projectDir(), ".academic-helper", "drafts");
+  return join15(projectDir(), ".academic-helper", "drafts");
 }
 async function synthesizeAll(options) {
   return endRunOnError(options.runId, "write", () => synthesizeUnits(options));
@@ -48969,7 +48789,7 @@ async function synthesizeUnits(options) {
     const i2 = order.indexOf(id);
     return i2 < 0 ? order.length : i2;
   };
-  const units = files.map((file) => ({ id: file.replace(/\.md$/, ""), text: readFileSync12(join16(dir, file), "utf8") })).sort((a, b) => rank(a.id) - rank(b.id));
+  const units = files.map((file) => ({ id: file.replace(/\.md$/, ""), text: readFileSync11(join15(dir, file), "utf8") })).sort((a, b) => rank(a.id) - rank(b.id));
   const unitsWithParagraphs = units.map((u) => ({ id: u.id, paragraphs: splitParagraphs2(u.text) }));
   emit(options.runId, "write", "step_start", { step: "synthesize" });
   const budget = new Budget(options.runId, budgetFor("write"));
@@ -48982,16 +48802,6 @@ async function synthesizeUnits(options) {
     const unit = byUnit.get(edit.unitId);
     const paragraphs2 = paragraphsByUnit.get(edit.unitId);
     if (!unit || !paragraphs2 || edit.paragraphIndex < 0 || edit.paragraphIndex >= paragraphs2.length) continue;
-    const decision = await decide({
-      point: "synthesize.needs_bridge",
-      question: "Does this paragraph boundary need the proposed transition edit?",
-      options: ["bridge", "no-bridge"],
-      context: JSON.stringify(edit),
-      runId: options.runId,
-      fallback: async () => "bridge",
-      label: `${edit.unitId}:${edit.paragraphIndex}`
-    });
-    if (decision.answer !== "bridge") continue;
     if (paragraphs2[edit.paragraphIndex] !== edit.before) continue;
     paragraphs2[edit.paragraphIndex] = edit.after;
     appliedCount += 1;
@@ -48999,7 +48809,7 @@ async function synthesizeUnits(options) {
   for (const unit of units) {
     const paragraphs2 = paragraphsByUnit.get(unit.id);
     if (!paragraphs2) continue;
-    writeFileSync6(join16(dir, `${unit.id}.md`), `${paragraphs2.join("\n\n")}
+    writeFileSync6(join15(dir, `${unit.id}.md`), `${paragraphs2.join("\n\n")}
 `, "utf8");
   }
   emit(options.runId, "write", "step_end", { step: "synthesize" });
@@ -49007,8 +48817,7 @@ async function synthesizeUnits(options) {
 }
 
 // src/edit.ts
-import { readFileSync as readFileSync13, writeFileSync as writeFileSync7 } from "node:fs";
-init_thresholds();
+import { readFileSync as readFileSync12, writeFileSync as writeFileSync7 } from "node:fs";
 var schema = { type: "object", required: ["revised_text"], properties: { revised_text: { type: "string" } } };
 async function editText(options) {
   return endRunOnError(options.runId, options.section ? "edit-section" : "edit", () => editRun(options));
@@ -49017,7 +48826,7 @@ async function editRun(options) {
   const flow = options.section ? "edit-section" : "edit";
   startRunOnce(options.runId, flow);
   emit(options.runId, flow, "step_start", { step: "edit" });
-  const original = readFileSync13(options.textFile, "utf8");
+  const original = readFileSync12(options.textFile, "utf8");
   if (!original.trim()) throw new AwError("ERROR", "edit", "text file is empty");
   if (!options.instruction.trim()) throw new AwError("ERROR", "edit", "instruction is empty");
   const voice = await voiceBundle({ n: thresholds_default.voice.bundle.exemplars, pairs: thresholds_default.voice.bundle.pairs, runId: options.runId });
@@ -49049,11 +48858,10 @@ Return one JSON object with revised_text.`;
 }
 
 // src/ocr.ts
-import { appendFileSync as appendFileSync8, existsSync as existsSync11, mkdirSync as mkdirSync9, mkdtempSync, readFileSync as readFileSync14, readdirSync as readdirSync5, rmSync, statSync as statSync3, writeFileSync as writeFileSync8 } from "node:fs";
+import { appendFileSync as appendFileSync6, existsSync as existsSync11, mkdirSync as mkdirSync8, mkdtempSync, readFileSync as readFileSync13, readdirSync as readdirSync5, rmSync, statSync as statSync3, writeFileSync as writeFileSync8 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname as dirname6, extname, isAbsolute as isAbsolute3, join as join17, resolve as resolve9 } from "node:path";
-import { spawnSync } from "node:child_process";
-init_thresholds();
+import { dirname as dirname6, extname, isAbsolute as isAbsolute3, join as join16, resolve as resolve9 } from "node:path";
+import { spawnSync as spawnSync2 } from "node:child_process";
 var schema2 = { type: "array", items: { type: "object", required: ["page_number", "text", "is_born_digital"], properties: { page_number: { type: "integer" }, text: { type: "string" }, is_born_digital: { type: "boolean" }, confidence: { type: "string", enum: ["high", "medium", "low"] }, notes: { type: "string" } } } };
 var cfg = thresholds_default.ocr;
 var HELD = "needs approval: Gemini";
@@ -49069,12 +48877,12 @@ function pageSet(spec) {
   return out;
 }
 function reserveFile(runId2) {
-  return join17(projectDir(), ".academic-helper", "runs", runId2, "gemini-ocr-reserved.jsonl");
+  return join16(projectDir(), ".academic-helper", "runs", runId2, "gemini-ocr-reserved.jsonl");
 }
 function countGeminiOcr(runId2) {
   const file = reserveFile(runId2);
   if (!existsSync11(file)) return 0;
-  return readFileSync14(file, "utf8").split("\n").filter(Boolean).reduce((n, l) => {
+  return readFileSync13(file, "utf8").split("\n").filter(Boolean).reduce((n, l) => {
     try {
       return n + Number(JSON.parse(l).pages ?? 1);
     } catch {
@@ -49083,8 +48891,8 @@ function countGeminiOcr(runId2) {
   }, 0);
 }
 function reserve(runId2, pages) {
-  mkdirSync9(dirname6(reserveFile(runId2)), { recursive: true });
-  appendFileSync8(reserveFile(runId2), `${JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), pid: process.pid, pages: pages.length, page_numbers: pages })}
+  mkdirSync8(dirname6(reserveFile(runId2)), { recursive: true });
+  appendFileSync6(reserveFile(runId2), `${JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), pid: process.pid, pages: pages.length, page_numbers: pages })}
 `);
 }
 function checkRunId(runId2) {
@@ -49114,8 +48922,10 @@ function checkOverrides(options) {
 }
 function runScript(name, args2) {
   const plugin2 = resolve9(dirname6(process.argv[1] ?? ""), "..");
-  const script = join17(plugin2, "scripts", "ocr", name);
-  const result = spawnSync("python3", [script, ...args2], { encoding: "utf8", env: allowedEnv(process.env, "script") });
+  const script = join16(plugin2, "scripts", "ocr", name);
+  const env = pythonEnv(allowedEnv(process.env, "script"));
+  const run = pythonInvocation(script, args2, env);
+  const result = spawnSync2(run.command, run.args, { encoding: "utf8", env });
   if (result.status !== 0) throw new AwError("ERROR", "ocr", result.stderr.trim() || result.stdout.trim() || `${name} failed`);
   try {
     return JSON.parse(result.stdout);
@@ -49138,11 +48948,11 @@ function stripFence(value) {
   const match = /```(?:json)?\s*\n([\s\S]*?)\n```/i.exec(value);
   return match?.[1] ?? value;
 }
-var probe = (cmd) => cmd === "surya_ocr" ? suryaServer() : spawnSync(cmd, ["--version"], { encoding: "utf8" }).status === 0;
+var probe = (cmd) => cmd === "surya_ocr" ? suryaServer() : spawnSync2(cmd, ["--version"], { encoding: "utf8" }).status === 0;
 function suryaServer() {
   const url = (process.env.SURYA_INFERENCE_URL ?? "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
-  if (!url || spawnSync("surya_ocr", ["--help"], { encoding: "utf8" }).status !== 0) return false;
-  const health = spawnSync(process.execPath, ["-e", "fetch(process.argv[1]).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))", `${url}/health`], { timeout: 5e3 });
+  if (!url || spawnSync2("surya_ocr", ["--help"], { encoding: "utf8" }).status !== 0) return false;
+  const health = spawnSync2(process.execPath, ["-e", "fetch(process.argv[1]).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))", `${url}/health`], { timeout: 5e3 });
   return health.status === 0;
 }
 function lettersOnly(text4) {
@@ -49171,7 +48981,7 @@ function chooseEngine(requested) {
   return { engine: "local", reason: "requested" };
 }
 function nativeDpi(pdf, page) {
-  const out = spawnSync("pdfimages", ["-list", "-f", String(page), "-l", String(page), pdf], { encoding: "utf8" });
+  const out = spawnSync2("pdfimages", ["-list", "-f", String(page), "-l", String(page), pdf], { encoding: "utf8" });
   if (out.status !== 0) return void 0;
   const rows = out.stdout.split("\n").slice(2).map((l) => l.trim().split(/\s+/)).filter((r2) => r2.length > 12);
   const big = rows.sort((a, b) => Number(b[3]) * Number(b[4]) - Number(a[3]) * Number(a[4]))[0];
@@ -49193,7 +49003,7 @@ async function readGemini(scans, options, gate) {
     }
     reserve(options.runId, numbers);
     gate.used += numbers.length;
-    const parts = batch.map((s2) => ({ inlineData: { mimeType: mimeOf(s2.png), data: readFileSync14(s2.png).toString("base64") } }));
+    const parts = batch.map((s2) => ({ inlineData: { mimeType: mimeOf(s2.png), data: readFileSync13(s2.png).toString("base64") } }));
     let result;
     try {
       result = await callGemini({ step: "ocr", system: prompt3(options.language, options.format, numbers), parts: [...parts, prompt3(options.language, options.format, numbers)], responseSchema: schema2, runId: options.runId, model: options.geminiModel, budget: new Budget(options.runId, budgetFor("write")) });
@@ -49219,10 +49029,10 @@ async function readGemini(scans, options, gate) {
 }
 function readClaude(scan, language, model = cfg.claudeModel) {
   const message = { type: "user", message: { role: "user", content: [
-    { type: "image", source: { type: "base64", media_type: mimeOf(scan.png), data: readFileSync14(scan.png).toString("base64") } },
+    { type: "image", source: { type: "base64", media_type: mimeOf(scan.png), data: readFileSync13(scan.png).toString("base64") } },
     { type: "text", text: language === "en" ? PLAIN_PROMPT : `${PLAIN_PROMPT} Hebrew columns read right to left.` }
   ] } };
-  const run = spawnSync("claude", [
+  const run = spawnSync2("claude", [
     "-p",
     "--model",
     model,
@@ -49252,17 +49062,17 @@ function readClaude(scan, language, model = cfg.claudeModel) {
 }
 function readLocal(scan, language) {
   const langs = language === "en" ? "eng" : "heb+eng";
-  const run = spawnSync("tesseract", [scan.png, "-", "-l", langs], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+  const run = spawnSync2("tesseract", [scan.png, "-", "-l", langs], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
   if (run.status !== 0) throw new AwError("ERROR", "ocr", `tesseract failed: ${run.stderr.slice(-300)}`);
   return { page_number: scan.page_number, text: run.stdout, is_born_digital: false, confidence: "low", notes: "Tesseract: OCR, not image-verified (2-5% letter error on Hebrew scans, more on vowel marks)" };
 }
 function readSurya(scan) {
-  const dir = mkdtempSync(join17(tmpdir(), "aw-surya-"));
+  const dir = mkdtempSync(join16(tmpdir(), "aw-surya-"));
   try {
-    const run = spawnSync("surya_ocr", [scan.png, "--output_dir", dir], { encoding: "utf8", env: process.env, maxBuffer: 16 * 1024 * 1024, timeout: 18e5 });
-    const file = readdirSync5(dir).map((d) => join17(dir, d, "results.json")).find((f3) => existsSync11(f3));
+    const run = spawnSync2("surya_ocr", [scan.png, "--output_dir", dir], { encoding: "utf8", env: process.env, maxBuffer: 16 * 1024 * 1024, timeout: 18e5 });
+    const file = readdirSync5(dir).map((d) => join16(dir, d, "results.json")).find((f3) => existsSync11(f3));
     if (run.status !== 0 || !file) throw new AwError("ERROR", "ocr", `surya_ocr failed: ${(run.stderr || run.stdout || "").trim().split("\n").pop()?.slice(-300) ?? ""}`);
-    const results = JSON.parse(readFileSync14(file, "utf8"));
+    const results = JSON.parse(readFileSync13(file, "utf8"));
     const blocks = (Object.values(results)[0]?.[0]?.blocks ?? []).filter((b) => !b.skipped).sort((a, b) => (a.reading_order ?? 0) - (b.reading_order ?? 0));
     return { page_number: scan.page_number, text: blocks.map((b) => (b.html ?? "").replace(/<[^>]+>/g, "")).join("\n"), is_born_digital: false, confidence: "medium", notes: "" };
   } finally {
@@ -49349,7 +49159,7 @@ async function ocrRun(options, gate) {
   const input = resolve9(options.input);
   if (!existsSync11(input)) throw new AwError("ERROR", "ocr", `input does not exist: ${input}`);
   const isDir = statSync3(input).isDirectory();
-  const imageFiles = isDir ? readdirSync5(input).filter((name) => /\.(png|jpe?g|webp|tiff?)$/i.test(name)).sort().map((name) => join17(input, name)) : [];
+  const imageFiles = isDir ? readdirSync5(input).filter((name) => /\.(png|jpe?g|webp|tiff?)$/i.test(name)).sort().map((name) => join16(input, name)) : [];
   const pages = [];
   let truncated = false;
   let truncation_message;
@@ -49412,9 +49222,9 @@ ${pages.map((p) => p.text).join("\n\n")}`, "utf8");
 }
 
 // src/docx.ts
-import { existsSync as existsSync12, mkdirSync as mkdirSync10, readFileSync as readFileSync15, writeFileSync as writeFileSync9 } from "node:fs";
-import { join as join18, resolve as resolve10 } from "node:path";
-import { spawnSync as spawnSync2 } from "node:child_process";
+import { existsSync as existsSync12, mkdirSync as mkdirSync9, readFileSync as readFileSync14, writeFileSync as writeFileSync9 } from "node:fs";
+import { join as join17, resolve as resolve10 } from "node:path";
+import { spawnSync as spawnSync3 } from "node:child_process";
 function parseUnit(raw, unitId) {
   const definitions = /* @__PURE__ */ new Map();
   const body = [];
@@ -49457,9 +49267,9 @@ function assembleArticle(outline, project, runId2, options) {
   let footnoteCount = 0;
   const emit2 = (sectionTitle, units) => {
     const paragraphs2 = units.flatMap((unit) => {
-      const path2 = join18(project, ".academic-helper", "drafts", `${unit.id}.md`);
+      const path2 = join17(project, ".academic-helper", "drafts", `${unit.id}.md`);
       if (!existsSync12(path2)) throw new Error(`ERROR docx: missing draft ${unit.id}`);
-      return parseUnit(readFileSync15(path2, "utf8"), unit.id);
+      return parseUnit(readFileSync14(path2, "utf8"), unit.id);
     });
     paragraphCount += paragraphs2.length;
     footnoteCount += paragraphs2.reduce((sum3, p) => sum3 + p.footnotes.length, 0);
@@ -49480,7 +49290,7 @@ function assembleArticle(outline, project, runId2, options) {
   const words = sections.flatMap((s2) => s2.paragraphs.map((p) => p.text)).join(" ").trim().split(/\s+/u).filter(Boolean).length;
   const article = { title: options.title ?? outline.title ?? "", thesis: outline.thesis ?? null, sections, totalWords: words };
   for (const [key, path2] of [["coverPage", options.coverFile], ["abstract", options.abstractFile], ["format", options.formatFile]]) {
-    if (path2) article[key] = JSON.parse(readFileSync15(path2, "utf8"));
+    if (path2) article[key] = JSON.parse(readFileSync14(path2, "utf8"));
   }
   return { article, sections: sections.length, paragraphs: paragraphCount, footnotes: footnoteCount, words };
 }
@@ -49496,15 +49306,17 @@ function generateDocx(args2) {
   }
 }
 function buildDocx(args2, project) {
-  const outline = JSON.parse(readFileSync15(args2.outlinePath, "utf8"));
+  const outline = JSON.parse(readFileSync14(args2.outlinePath, "utf8"));
   const result = assembleArticle(outline, resolve10(args2.projectDir), args2.runId, args2);
-  const runDir = join18(args2.projectDir, ".academic-helper", "runs", args2.runId);
-  mkdirSync10(runDir, { recursive: true });
-  const jsonPath = join18(runDir, "article.json");
+  const runDir = join17(args2.projectDir, ".academic-helper", "runs", args2.runId);
+  mkdirSync9(runDir, { recursive: true });
+  const jsonPath = join17(runDir, "article.json");
   writeFileSync9(jsonPath, `${JSON.stringify(result.article, null, 2)}
 `, "utf8");
-  const script = join18(args2.pluginRoot, "scripts", "generate-docx.py");
-  const child = spawnSync2("python3", [script, "--input", jsonPath, "--output", args2.out], { stdio: "inherit", env: allowedEnv(process.env, "script") });
+  const script = join17(args2.pluginRoot, "scripts", "generate-docx.py");
+  const env = pythonEnv(allowedEnv(process.env, "script"));
+  const run = pythonInvocation(script, ["--input", jsonPath, "--output", args2.out], env);
+  const child = spawnSync3(run.command, run.args, { stdio: "inherit", env });
   if (child.error) throw new Error(`ERROR docx: ${child.error.message}`);
   if (child.status !== 0) throw new Error(`ERROR docx: generate-docx.py exited ${child.status ?? 1}`);
   emit(args2.runId, "write", "file_written", { step: "word", path: args2.out }, project);
@@ -49516,11 +49328,7 @@ function docxSummary(value, out) {
   return JSON.stringify({ docx: out, ...value });
 }
 
-// src/library/backfill.ts
-init_thresholds();
-
 // src/library/index-cmd.ts
-init_thresholds();
 import { spawn as spawn6 } from "node:child_process";
 import { randomBytes as randomBytes4 } from "node:crypto";
 
@@ -49528,7 +49336,7 @@ import { randomBytes as randomBytes4 } from "node:crypto";
 import { createHash as createHash6, randomBytes as randomBytes3 } from "node:crypto";
 import { existsSync as existsSync13, lstatSync as lstatSync2, realpathSync as realpathSync3 } from "node:fs";
 import { appendFile, chmod, lstat as lstat2, mkdir as mkdir4, readFile as readFile4, rename as rename3, rm as rm4, writeFile as writeFile3 } from "node:fs/promises";
-import { dirname as dirname8, join as join19, sep as sep2 } from "node:path";
+import { dirname as dirname8, join as join18, sep as sep2 } from "node:path";
 
 // ../schemas/ledger-row.schema.json
 var ledger_row_schema_default = {
@@ -50075,7 +49883,7 @@ var library_eval_run_schema_default = {
 };
 
 // src/library/eval/files.ts
-var EVAL_ROOT = join19(".academic-helper", "library-eval");
+var EVAL_ROOT = join18(".academic-helper", "library-eval");
 var EVAL_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,39}$/u;
 function guardEvalDirs(project, evalId) {
   const refuse = (what) => {
@@ -50087,7 +49895,7 @@ function guardEvalDirs(project, evalId) {
   } catch {
     return refuse("the project folder cannot be resolved");
   }
-  const helper = join19(project, ".academic-helper");
+  const helper = join18(project, ".academic-helper");
   if (!existsSync13(helper)) return;
   let helperReal;
   try {
@@ -50096,8 +49904,8 @@ function guardEvalDirs(project, evalId) {
     return refuse(".academic-helper cannot be resolved");
   }
   if (helperReal !== real && !helperReal.startsWith(`${real}${sep2}`)) refuse(".academic-helper points outside the project");
-  const evalRoot = join19(helperReal, "library-eval", evalId);
-  for (const dir of [join19(helperReal, "library-eval"), evalRoot, join19(evalRoot, "runs"), join19(evalRoot, "sealed"), join19(evalRoot, "archive")]) {
+  const evalRoot = join18(helperReal, "library-eval", evalId);
+  for (const dir of [join18(helperReal, "library-eval"), evalRoot, join18(evalRoot, "runs"), join18(evalRoot, "sealed"), join18(evalRoot, "archive")]) {
     let info;
     try {
       info = lstatSync2(dir);
@@ -50111,19 +49919,19 @@ function guardEvalDirs(project, evalId) {
 function evalPaths(project, evalId) {
   if (!EVAL_ID.test(evalId)) throw new LibraryError("usage", "ERROR library eval: --eval must be a plain id (letters, digits and hyphens, up to 40)");
   guardEvalDirs(project, evalId);
-  const root = join19(project, EVAL_ROOT, evalId);
+  const root = join18(project, EVAL_ROOT, evalId);
   return {
     root,
-    plan: join19(root, "plan.json"),
-    runsDir: join19(root, "runs"),
-    pairs: join19(root, "pairs.json"),
-    sealedDir: join19(root, "sealed"),
-    mapping: join19(root, "sealed", "mapping.json"),
-    judgments: join19(root, "judgments.json"),
-    reportJson: join19(root, "report.json"),
-    reportMd: join19(root, "report.md"),
-    judgeHtml: join19(root, "judge.html"),
-    archiveDir: join19(root, "archive")
+    plan: join18(root, "plan.json"),
+    runsDir: join18(root, "runs"),
+    pairs: join18(root, "pairs.json"),
+    sealedDir: join18(root, "sealed"),
+    mapping: join18(root, "sealed", "mapping.json"),
+    judgments: join18(root, "judgments.json"),
+    reportJson: join18(root, "report.json"),
+    reportMd: join18(root, "report.md"),
+    judgeHtml: join18(root, "judge.html"),
+    archiveDir: join18(root, "archive")
   };
 }
 async function fileSha(file) {
@@ -50134,10 +49942,10 @@ async function fileSha(file) {
   }
 }
 function runFile(paths, claimId, route) {
-  return join19(paths.runsDir, `${claimId}-${route}.json`);
+  return join18(paths.runsDir, `${claimId}-${route}.json`);
 }
 function requireProject(project) {
-  if (!existsSync13(join19(project, ".academic-helper"))) {
+  if (!existsSync13(join18(project, ".academic-helper"))) {
     throw new LibraryError("config", "ERROR library eval: this folder has no .academic-helper folder, so it is not an article project; open the article folder first");
   }
 }
@@ -50205,9 +50013,9 @@ async function readValid(name, file, what) {
 async function appendUsage(project, row) {
   if (checkSchema(ledger_row_schema_default, row).length > 0) return false;
   try {
-    const dir = join19(project, ".academic-helper", "runs", row.run_id);
+    const dir = join18(project, ".academic-helper", "runs", row.run_id);
     await mkdir4(dir, { recursive: true });
-    await appendFile(join19(dir, "usage.jsonl"), `${JSON.stringify(row)}
+    await appendFile(join18(dir, "usage.jsonl"), `${JSON.stringify(row)}
 `, "utf8");
     return true;
   } catch {
@@ -50710,10 +50518,9 @@ async function runBackfill(indexer, request) {
 import { existsSync as existsSync20 } from "node:fs";
 import { readFile as readFile7, rm as rm6 } from "node:fs/promises";
 import { randomBytes as randomBytes6 } from "node:crypto";
-import { isAbsolute as isAbsolute5, join as join25, relative as relative3, resolve as resolve12 } from "node:path";
+import { isAbsolute as isAbsolute5, join as join24, relative as relative3, resolve as resolve12 } from "node:path";
 
 // src/library/eval/limits.ts
-init_thresholds();
 var block = thresholds_default.library.eval;
 function number(key) {
   const value = block[key];
@@ -50915,10 +50722,9 @@ import { randomBytes as randomBytes5 } from "node:crypto";
 import { mkdir as mkdir6, mkdtemp, readFile as readFile6, realpath as realpath3, rm as rm5, writeFile as writeFile4 } from "node:fs/promises";
 import { existsSync as existsSync14 } from "node:fs";
 import { constants as osConstants, tmpdir as tmpdir2 } from "node:os";
-import { join as join20 } from "node:path";
+import { join as join19 } from "node:path";
 
 // src/library/eval/agent.ts
-init_thresholds();
 import { execFile, spawn as spawn7 } from "node:child_process";
 var ChildGroup = class {
   children = /* @__PURE__ */ new Set();
@@ -51269,9 +51075,9 @@ function wrapperScript(options) {
   ].join("\n");
 }
 async function writeWrapper(bin, options) {
-  const wrapper = join20(bin, "awlib");
-  const filter = join20(bin, "filter.cjs");
-  const errorLog = join20(bin, "lookup-errors.log");
+  const wrapper = join19(bin, "awlib");
+  const filter = join19(bin, "filter.cjs");
+  const errorLog = join19(bin, "lookup-errors.log");
   await writeFile4(filter, FILTER_SOURCE, { mode: 384 });
   await writeFile4(wrapper, wrapperScript({ ...options, work: bin, filter, errorLog }), { mode: 448 });
   return { wrapper, errorLog };
@@ -51413,7 +51219,7 @@ function commandViolations(calls, wrapper) {
 async function returnedFor(project, runId2, window2) {
   let text4;
   try {
-    text4 = await readFile6(join20(project, ".academic-helper", "retrieval.jsonl"), "utf8");
+    text4 = await readFile6(join19(project, ".academic-helper", "retrieval.jsonl"), "utf8");
   } catch {
     return { chars: null, est: null };
   }
@@ -51499,11 +51305,11 @@ async function locateOnce(options, claim, route, group) {
   const runId2 = runIdFor(options.plan.eval_id, route, claim.id);
   const tag = `${runId2}.${randomBytes5(6).toString("hex")}`;
   const base = await realpath3(tmpdir2());
-  const dir = await mkdtemp(join20(base, "aw-eval-"));
+  const dir = await mkdtemp(join19(base, "aw-eval-"));
   const started = options.now();
   try {
-    const cwd = join20(dir, "work");
-    const bin = join20(dir, "bin");
+    const cwd = join19(dir, "work");
+    const bin = join19(dir, "bin");
     await mkdir6(cwd);
     await mkdir6(bin);
     const { wrapper, errorLog } = await writeWrapper(bin, { awCommand: options.awCommand, project: options.project, route, runId: runId2, claimId: claim.id, env: options.env });
@@ -51842,16 +51648,16 @@ async function buildPairs(options) {
 }
 
 // src/library/eval/plan.ts
-import { existsSync as existsSync18, readFileSync as readFileSync18 } from "node:fs";
-import { isAbsolute as isAbsolute4, join as join23, relative as relative2, resolve as resolve11 } from "node:path";
+import { existsSync as existsSync18, readFileSync as readFileSync17 } from "node:fs";
+import { isAbsolute as isAbsolute4, join as join22, relative as relative2, resolve as resolve11 } from "node:path";
 
 // src/library/eval/claims.ts
-import { existsSync as existsSync17, readFileSync as readFileSync17, readdirSync as readdirSync6 } from "node:fs";
-import { join as join22 } from "node:path";
+import { existsSync as existsSync17, readFileSync as readFileSync16, readdirSync as readdirSync6 } from "node:fs";
+import { join as join21 } from "node:path";
 
 // src/library/eval/notes.ts
-import { existsSync as existsSync16, readFileSync as readFileSync16 } from "node:fs";
-import { join as join21 } from "node:path";
+import { existsSync as existsSync16, readFileSync as readFileSync15 } from "node:fs";
+import { join as join20 } from "node:path";
 var SPECIAL = { "\xF8": "o", "\u0111": "d", "\u0142": "l", "\xDF": "ss", "\xE6": "ae", "\u0153": "oe", "\u0131": "i", "\xF0": "d", "\xFE": "th" };
 var FINAL = { "\u05DA": "\u05DB", "\u05DD": "\u05DE", "\u05DF": "\u05E0", "\u05E3": "\u05E4", "\u05E5": "\u05E6" };
 function fold(text4) {
@@ -51963,13 +51769,13 @@ function listOf(raw, key) {
 function readQuiet(file) {
   if (!existsSync16(file)) return void 0;
   try {
-    return JSON.parse(readFileSync16(file, "utf8"));
+    return JSON.parse(readFileSync15(file, "utf8"));
   } catch {
     return void 0;
   }
 }
 function loadSourceCards(project) {
-  const dir = join21(project, ".academic-helper");
+  const dir = join20(project, ".academic-helper");
   const cards = /* @__PURE__ */ new Map();
   const add = (entry, idKeys, titleKeys) => {
     const id = textOf(idKeys.map((key) => entry[key]).find((value) => textOf(value) !== ""));
@@ -51984,8 +51790,8 @@ function loadSourceCards(project) {
       titleWords: [...new Set(titles.flatMap(distinctive))]
     });
   };
-  for (const entry of listOf(readQuiet(join21(dir, "sources.json")), "sources")) add(entry, ["sourceId", "id"], ["workTitle", "title", "shortTitle"]);
-  for (const entry of listOf(readQuiet(join21(dir, "evidence.json")), "sources")) add(entry, ["id", "sourceId"], ["title", "workTitle", "shortTitle"]);
+  for (const entry of listOf(readQuiet(join20(dir, "sources.json")), "sources")) add(entry, ["sourceId", "id"], ["workTitle", "title", "shortTitle"]);
+  for (const entry of listOf(readQuiet(join20(dir, "evidence.json")), "sources")) add(entry, ["id", "sourceId"], ["title", "workTitle", "shortTitle"]);
   return [...cards.values()];
 }
 var IBID = /* @__PURE__ */ new Set(["ibid", "ibidem", "idem", "\u05E9\u05DD", "\u05E9\u05DE"]);
@@ -52168,7 +51974,7 @@ function wordCount(text4) {
 function readJsonQuiet(file) {
   if (!existsSync17(file)) return void 0;
   try {
-    return JSON.parse(readFileSync17(file, "utf8"));
+    return JSON.parse(readFileSync16(file, "utf8"));
   } catch {
     return void 0;
   }
@@ -52179,9 +51985,9 @@ function listOf2(raw, key) {
 }
 function loadRegistry(project) {
   const registry = { loaded: false, sources: /* @__PURE__ */ new Map(), passages: /* @__PURE__ */ new Map() };
-  const dir = join22(project, ".academic-helper");
-  const sources = readJsonQuiet(join22(dir, "sources.json"));
-  const evidence = readJsonQuiet(join22(dir, "evidence.json"));
+  const dir = join21(project, ".academic-helper");
+  const sources = readJsonQuiet(join21(dir, "sources.json"));
+  const evidence = readJsonQuiet(join21(dir, "evidence.json"));
   for (const entry of listOf2(sources, "sources")) {
     const id = String(entry.sourceId ?? entry.id ?? "");
     if (id) {
@@ -52303,7 +52109,7 @@ function draftFiles(path2) {
   const unitOf = (file) => (file.split("/").pop() ?? file).replace(/\.md$/iu, "");
   if (!existsSync17(path2)) return [];
   if (!readdirSafe(path2)) return [{ file: path2, unit: unitOf(path2) }];
-  return (readdirSafe(path2) ?? []).filter((name) => name.toLowerCase().endsWith(".md")).sort().map((name) => ({ file: join22(path2, name), unit: unitOf(name) }));
+  return (readdirSafe(path2) ?? []).filter((name) => name.toLowerCase().endsWith(".md")).sort().map((name) => ({ file: join21(path2, name), unit: unitOf(name) }));
 }
 function readdirSafe(path2) {
   try {
@@ -52318,7 +52124,7 @@ function emptySkips() {
   return { too_short: 0, no_source: 0, multi_source: 0, unresolved: 0, over_cap: 0 };
 }
 function articleFiles(project, article) {
-  const drafts = join23(project, ".academic-helper", "drafts");
+  const drafts = join22(project, ".academic-helper", "drafts");
   if (!article) return { files: draftFiles(drafts), runFilter: null, label: null };
   const asPath = isAbsolute4(article) ? article : resolve11(project, article);
   if (existsSync18(asPath)) return { files: draftFiles(asPath), runFilter: null, label: relative2(project, asPath) || "." };
@@ -52331,7 +52137,7 @@ function candidatesFromDrafts(project, files, skips, unmatched) {
   const seen = /* @__PURE__ */ new Set();
   let order = 0;
   for (const { file, unit } of files) {
-    const draft = parseDraft(readFileSync18(file, "utf8"), unit);
+    const draft = parseDraft(readFileSync17(file, "utf8"), unit);
     const keysOf = new KeyResolver(project, registry, draft.definitions, unit, unmatched);
     const resolved = draft.sentences.map((sentence) => ({
       sentence,
@@ -52368,7 +52174,7 @@ function candidatesFromFile(project, file, skips) {
   const path2 = isAbsolute4(file) ? file : resolve11(project, file);
   let raw;
   try {
-    raw = JSON.parse(readFileSync18(path2, "utf8"));
+    raw = JSON.parse(readFileSync17(path2, "utf8"));
   } catch {
     throw new LibraryError("usage", `ERROR library eval plan: --claims ${file} is not a readable JSON file`);
   }
@@ -52482,13 +52288,13 @@ async function buildPlan(options) {
 // src/library/eval/reset.ts
 import { existsSync as existsSync19 } from "node:fs";
 import { mkdir as mkdir7, rename as rename4 } from "node:fs/promises";
-import { basename as basename8, join as join24 } from "node:path";
+import { basename as basename8, join as join23 } from "node:path";
 async function archiveGeneration(paths, now) {
   const parts = [paths.pairs, paths.sealedDir, paths.judgments, paths.runsDir, paths.reportJson, paths.reportMd, paths.judgeHtml].filter((part) => existsSync19(part));
   if (parts.length === 0) return null;
-  const target = join24(paths.archiveDir, now.toISOString().replace(/[:.]/gu, "-"));
+  const target = join23(paths.archiveDir, now.toISOString().replace(/[:.]/gu, "-"));
   await mkdir7(target, { recursive: true });
-  for (const part of parts) await rename4(part, join24(target, basename8(part)));
+  for (const part of parts) await rename4(part, join23(target, basename8(part)));
   return target;
 }
 
@@ -52817,7 +52623,7 @@ function newEvalId(project, now) {
   const stamp = now.toISOString().slice(0, 10).replaceAll("-", "");
   for (const letter of "abcdefghijklmnopqrstuvwxyz") {
     const id = `ev-${stamp}-${letter}`;
-    if (!existsSync20(join25(project, EVAL_ROOT, id))) return id;
+    if (!existsSync20(join24(project, EVAL_ROOT, id))) return id;
   }
   throw new LibraryError("usage", "ERROR library eval plan: 26 evaluations already exist today; pass --eval <id>");
 }
@@ -52861,7 +52667,7 @@ async function runEvalCli(argv, io) {
       if (plan3.claims.length === 0) throw new LibraryError("usage", `ERROR library eval plan: no usable claims found (skipped: ${JSON.stringify(plan3.skipped)}${unmatched.length > 0 ? `; ${unmatched.length} footnote${unmatched.length === 1 ? "" : "s"} matched no source, first: ${unmatched[0]?.reason}` : ""}); check that the draft has footnotes and the sources answer on both libraries`);
       if (flags.has("--force")) await rm6(paths2.runsDir, { recursive: true, force: true });
       await writeJson(paths2.plan, plan3);
-      const unmatchedFile = join25(paths2.root, "unmatched-notes.json");
+      const unmatchedFile = join24(paths2.root, "unmatched-notes.json");
       if (unmatched.length > 0) await writeJson(unmatchedFile, { eval_id: evalId2, unmatched });
       else await rm6(unmatchedFile, { force: true });
       print({
@@ -52917,7 +52723,7 @@ async function runEvalCli(argv, io) {
     }
     if (subcommand2 === "page") {
       const pairs2 = await readValid("pairs", paths.pairs, "pairs");
-      const template = text3(flags, "--template") ?? (env.CLAUDE_PLUGIN_ROOT ? join25(env.CLAUDE_PLUGIN_ROOT, "skills", "library-eval", "references", "judge-page.html") : null);
+      const template = text3(flags, "--template") ?? (env.CLAUDE_PLUGIN_ROOT ? join24(env.CLAUDE_PLUGIN_ROOT, "skills", "library-eval", "references", "judge-page.html") : null);
       if (!template || !existsSync20(template)) throw new LibraryError("config", "ERROR library eval page: no judging page template found; pass --template <file>");
       const html = await readFile7(template, "utf8");
       const slot = /(<script\b[^>]*\bid=["']pairs["'][^>]*>)([\s\S]*?)(<\/script>)/iu;
@@ -52996,8 +52802,7 @@ async function runEvalCli(argv, io) {
 
 // src/library/report.ts
 import { lstat as lstat3, readFile as readFile8, readdir as readdir2 } from "node:fs/promises";
-import { join as join26 } from "node:path";
-init_thresholds();
+import { join as join25 } from "node:path";
 var limits7 = thresholds_default.library;
 var LOCATE_STEP = "library.eval.locate";
 var INDEX_STEP2 = "library.index";
@@ -53222,9 +53027,9 @@ async function readUsageRows(project) {
   for (const name of names) {
     let text4;
     try {
-      const folder = join26(dir, name);
+      const folder = join25(dir, name);
       if (!(await lstat3(folder)).isDirectory()) continue;
-      const file = join26(folder, "usage.jsonl");
+      const file = join25(folder, "usage.jsonl");
       const info = await lstat3(file);
       if (!info.isFile() || info.size > limits7.maxBufferBytes) continue;
       text4 = await readFile8(file, "utf8");
@@ -53330,9 +53135,8 @@ function formatReport(report) {
 }
 
 // src/library/verdict.ts
-init_thresholds();
 import { randomBytes as randomBytes7 } from "node:crypto";
-import { join as join27 } from "node:path";
+import { join as join26 } from "node:path";
 var limits8 = thresholds_default.library;
 function sleep3(ms2) {
   return new Promise((resolveSleep) => {
@@ -53390,7 +53194,7 @@ function newKey() {
   return { verdict_at: nowNs(), pid: process.pid, nonce: randomBytes7(8).toString("hex") };
 }
 var pendingName = (lookupId, paragraph, nonce) => `pending-${lookupId}-${textSha(paragraph ?? "").slice(0, 8)}-${nonce}.json`;
-var pendingFile = (project, lookupId, paragraph, nonce) => join27(spoolDir(project), pendingName(lookupId, paragraph, nonce));
+var pendingFile = (project, lookupId, paragraph, nonce) => join26(spoolDir(project), pendingName(lookupId, paragraph, nonce));
 async function earlierVerdicts(project, lookup, paragraph) {
   return (await rowsForLookup(project, lookup)).filter((row) => row.row_type === "verdict" && row.paragraph_id === paragraph);
 }
@@ -53464,7 +53268,6 @@ async function settlePending(project) {
 }
 
 // src/library/cli.ts
-init_thresholds();
 var BOOLEAN_FLAGS2 = /* @__PURE__ */ new Set(["--json", "--check", "--text", "--all", "--settle", "--dry-run", "--yes", "--no-fallback", "--no-verify", "--shelf-current", "--skip-existing", "--purge-library"]);
 var VALUE_FLAGS2 = /* @__PURE__ */ new Set([
   "--source",
@@ -53760,8 +53563,8 @@ var [command2, subcommand, runId] = args;
 if (command2 === "ledger" && subcommand === "show" && runId) {
   try {
     dataDir();
-    const file = join28(projectDir(), ".academic-helper", "runs", runId, "usage.jsonl");
-    const rows = readFileSync19(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    const file = join27(projectDir(), ".academic-helper", "runs", runId, "usage.jsonl");
+    const rows = readFileSync18(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
     const totals = /* @__PURE__ */ new Map();
     for (const row of rows) {
       const total = totals.get(row.step) ?? { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
@@ -53816,7 +53619,7 @@ Live model verification requires GOOGLE_API_KEY.
     projectDir();
     const fileArg = args[args.indexOf(subcommand === "classify" ? "--items" : "--plan") + 1];
     if (!fileArg) throw new Error("ERROR revise: --items/--plan path required");
-    const input = JSON.parse(readFileSync19(fileArg, "utf8"));
+    const input = JSON.parse(readFileSync18(fileArg, "utf8"));
     if (subcommand === "classify") {
       if (!Array.isArray(input)) throw new Error("ERROR revise.classify: items must be an array");
       process.stdout.write(`${JSON.stringify(await classify(input, args[args.indexOf("--run") + 1] ?? "revise"))}
@@ -53843,16 +53646,6 @@ Live model verification requires GOOGLE_API_KEY.
 `);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : "ERROR evidence.build: unknown failure"}
-`);
-    process.exitCode = 1;
-  }
-} else if (command2 === "decide") {
-  try {
-    const result = await runDecideCli(args);
-    process.stdout.write(`${JSON.stringify(result)}
-`);
-  } catch (error) {
-    process.stderr.write(`${error instanceof Error ? error.message : "ERROR decide: unknown failure"}
 `);
     process.exitCode = 1;
   }
@@ -53890,7 +53683,7 @@ Live model verification requires GOOGLE_API_KEY.
     const flowArg = value("--flow");
     if (flowArg !== void 0 && !["write", "edit", "edit-section"].includes(flowArg)) throw new Error("ERROR draft: --flow must be write, edit or edit-section");
     if (!runId2 || !outlinePath) throw new Error("ERROR draft: --outline and --run are required");
-    const result = await draftAll(JSON.parse(readFileSync19(outlinePath, "utf8")), { runId: runId2, unit: value("--unit"), feedbackFile: value("--feedback-file"), flow: flowArg });
+    const result = await draftAll(JSON.parse(readFileSync18(outlinePath, "utf8")), { runId: runId2, unit: value("--unit"), feedbackFile: value("--feedback-file"), flow: flowArg });
     process.stdout.write(`${JSON.stringify({ drafted: result.drafted, failures: result.failures })}
 `);
     if (result.failures.length) process.exitCode = 2;
@@ -53921,7 +53714,7 @@ Live model verification requires GOOGLE_API_KEY.
     const runId2 = value("--run");
     const textFile = value("--text-file");
     const language = value("--lang");
-    const instruction = value("--instruction") ?? (value("--instruction-file") ? readFileSync19(value("--instruction-file"), "utf8") : void 0);
+    const instruction = value("--instruction") ?? (value("--instruction-file") ? readFileSync18(value("--instruction-file"), "utf8") : void 0);
     if (!runId2 || !textFile || !instruction || language !== "he" && language !== "en") throw new Error("ERROR edit: --text-file, --instruction or --instruction-file, --lang he|en, and --run are required");
     process.stdout.write(`${JSON.stringify(await editText({ runId: runId2, textFile, instruction, language, out: value("--out"), section: args.includes("--section") }))}
 `);
@@ -54002,7 +53795,7 @@ Live model verification requires GOOGLE_API_KEY.
 } else if (command2 === "library") {
   process.exitCode = await runLibraryCli(args.slice(1));
 } else {
-  process.stderr.write("ERROR: expected aw models check, aw ledger show <runId>, aw evidence build, aw decide <point>, or aw library <status|index|backfill|install|eval|...>\n");
+  process.stderr.write("ERROR: expected aw models check, aw ledger show <runId>, aw evidence build, or aw library <status|index|backfill|install|eval|...>\n");
   process.exitCode = 2;
 }
 /*! Bundled license information:

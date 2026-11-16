@@ -174,9 +174,6 @@
       "maxOutputTokens": 8192,
       "concurrency": 1,
       "piModel": "openrouter/z-ai/glm-5.3"
-    },
-    "jev": {
-      "model": "jev-1.13.0"
     }
   },
   "budget": {
@@ -193,10 +190,6 @@
       "maxUsd": 3.0,
       "_comment": "Token ceiling covers multi-section drafting; the USD ceiling is the primary cost guard."
     },
-    "jev": {
-      "maxTokens": 100000,
-      "maxUsd": 0.25
-    },
     "voiceMoves": {
       "maxTokens": 50000,
       "maxUsd": 0.1,
@@ -208,43 +201,6 @@
       "_comment": "One bounded classification pass for author review items."
     }
   },
-  "jev": {
-    "threshold": 0.75,
-    "points": {
-      "proofread.verify": {
-        "mode": "shadow"
-      },
-      "proofread.triage": {
-        "mode": "shadow"
-      },
-      "proofread.risk": {
-        "mode": "shadow"
-      },
-      "revise.classify": {
-        "mode": "shadow"
-      },
-      "evidence.relevance": {
-        "mode": "shadow"
-      },
-      "outline.support": {
-        "mode": "shadow"
-      },
-      "write.audit_prescreen": {
-        "mode": "shadow"
-      },
-      "write.voice_check": {
-        "mode": "shadow"
-      },
-      "synthesize.needs_bridge": {
-        "mode": "shadow"
-      },
-      "style.filler": {
-        "mode": "shadow"
-      }
-    },
-    "yesProbability": 0.5,
-    "scoreMaximum": 3
-  },
   "judge": {
     "validationAttempts": 2
   },
@@ -252,12 +208,7 @@
     "defectSimilarity": 0.5,
     "clusterMinimum": 2,
     "maxExamples": 5,
-    "jevRoster": {
-      "labels": 100,
-      "agreement": 0.8,
-      "instability": 0.1
-    },
-    "_comment": "Development-only defect clustering and Jev roster thresholds."
+    "_comment": "Development-only defect clustering thresholds."
   },
   "_piModelNote": "piModel = OpenRouter model for the isolated Pi judge. Must be a non-Claude, non-Gemini family (cross-family verification); taken from the author's Pi model roster (executor tier, machine-config/pi/model-roster.json). Runs in shadow until the Hebrew fixture shows parity.",
   "evidence": {
