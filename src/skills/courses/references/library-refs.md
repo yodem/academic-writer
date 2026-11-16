@@ -46,7 +46,7 @@ Inputs for each course, all under the registry:
 `refs.py extract` reads `.docx` and `.pptx` through `pandoc -t markdown`, so footnotes come out as `[^n]`. It skips `.pdf` because `pandoc` cannot read PDFs; check PDFs by hand. Transcript mentions are spoken, so every candidate from a transcript is recorded as `(transcript, unverified)`.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/refs.py" --term <term> extract <slug>
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/courses/refs.py" --term <term> extract <slug>
 ```
 
 The default run prints the candidates and one sanity line per file: its `עמ'` or `pp.` hit count next to the refs it produced. The two should roughly match; a large gap means a source was missed or a footnote was not parsed. Nothing is written until you re-run with `--write`, and `--only KEY` (repeatable) writes just the keys you confirmed. An existing ref's status is never overwritten.
@@ -140,7 +140,7 @@ Use Chrome only for the steps a script cannot do: a logged-in download, a terms 
    a.download = '<key>.pdf';
    a.click();
    ```
-4. Move each download into its own new, empty directory before you open it. Run any Python that reads it with `python3 -I`.
+4. Move each download into its own new, empty directory before you open it. Run any Python that reads it with `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -I`.
 5. Check the page count and that the text is readable before you record `downloaded`.
 6. After two failed tries, stop and make a `manual` chore (A8).
 
@@ -170,8 +170,8 @@ The browser tool may refuse output that contains query strings, so report counts
 - Hebrew text layers are often reversed or garbled (JSTOR especially): never use `pdftotext` on them; pymupdf plus the page gate in `extract.py` decides, and a failing page goes to Claude vision.
 - Ingest of in-copyright library readings: the full text goes to Trove and NotebookLM with the printed page numbers exact, and the original PDF goes to the course Drive folder. Register it as a library source:
   ```bash
-  python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" add-source <file> --course <slug> --origin library --origin-ref <key>
-  python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" check-source <slug> --sha <sha8>
+  sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" add-source <file> --course <slug> --origin library --origin-ref <key>
+  sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" check-source <slug> --sha <sha8>
   ```
   `check-source` must exit 0. Then follow `SKILL.md` (Course sources) for `source-done` and the Trove placement.
 - Record the ref as `ingested` with `--trove-url` pointing to its appendix page.
@@ -226,7 +226,7 @@ Each course book ends with a `מקורות נזכרים` section: an index page 
 2. Write the pages.
 3. `trove items enrich <id> --toc <snapshot plus the new entries>`.
 4. Run `assignment_toc.py` **without** `--base-toc`, and only if a task or spec changed. It reads the live ToC and strips only its own blocks.
-5. `python3 tools/toc_audit.py --course <slug> --keep-from <snapshot>`. It fails if a title in the snapshot is gone.
+5. `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" tools/toc_audit.py --course <slug> --keep-from <snapshot>`. It fails if a title in the snapshot is gone.
 
 **Other books.** Write the pages, then `toc_rebuild` (dry run, then `--apply`), then `assignment_toc.py`, then `toc_audit`.
 
@@ -279,11 +279,11 @@ To open a course's items, right-click its folder in Chrome's bookmarks bar and c
 Run these from the plugin checkout, against the registry:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/refs.py" --term <term> status --all   # 0 when nothing is pending
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" bookmarks --all --print-script > /dev/null   # 0; Chrome untouched
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" bookmarks --all --check   # 0 when up to date
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" check-source <slug> --sha <sha8>
-python3 tools/toc_audit.py --course <slug>
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/courses/refs.py" --term <term> status --all   # 0 when nothing is pending
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" bookmarks --all --print-script > /dev/null   # 0; Chrome untouched
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" bookmarks --all --check   # 0 when up to date
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/courses/courses.py" check-source <slug> --sha <sha8>
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" tools/toc_audit.py --course <slug>
 ```
 
 Pass means exit 0 on the command's own output. A `pending` ref, a changed Chrome folder or a failing audit is reported as a failure, not as work in progress.

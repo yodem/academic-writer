@@ -4,6 +4,13 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Academic Writer now works for a Windows newcomer.** Every command the skills and agents run goes through `bin/aw-python`, which finds a working Python 3 (`python3`, then `python`, then `py -3`) and skips the Microsoft Store stand-in that Windows ships as `python.exe`. With no Python it prints one plain line and stops. Skills call it as `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python"`, so it does not depend on an executable bit that a Windows checkout loses.
+- **No more `node: command not found` at every session start.** Each hook runs through `hooks/bin/guard.sh`. With Node.js installed it behaves as before; without it, it prints "Academic Writer needs Node.js: run /academic-writer:setup" once per session and exits cleanly.
+- **Setup and health check every outside tool, with a Windows line and a Mac line each.** New rows: Git, Node.js, Google Drive (the Claude connector; shown as "check by hand" because no script can see it), Kotar (needs Chrome) and Moodle (signed in, in Chrome), beside Python, Trove, NotebookLM and the Gemini key. The Python row uses the same lookup as `aw-python`.
+- **Setup starts with prerequisites** (Git, Node.js, Python, with the `winget` commands, the "Add python.exe to PATH" box and the restart) and has a connections step (Drive first, then NotebookLM, Trove, Kotar, Moodle; each optional). The README and the bundled guide have a Windows section in the same order, and troubleshooting covers a `/plugin marketplace add` that failed on missing Git and left a locked folder behind.
+- CI runs the Python resolver, the setup checks and the hook guard on `windows-latest`.
+
 ### Removed
 - **Jev (TypeSafe) is gone.** The optional experimental decision-scoring service is removed from the plugin: the `aw decide` command, every place that logged a Jev answer beside the model's, and the Jev API key. The setup screen no longer asks for that key, and nothing is sent to that service. Drafting, evidence, proofreading, synthesis and revision work exactly as before, since Jev only ever logged answers and never changed a result.
 

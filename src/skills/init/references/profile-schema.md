@@ -8,7 +8,7 @@ Migrates any legacy profile from `.academic-writer/profile.json` → `.academic-
 Run this in Phase 0 before checking for an existing profile:
 
 ```bash
-python3 << 'PYTHON'
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" << 'PYTHON'
 import os, json
 from datetime import datetime
 

@@ -52,7 +52,7 @@ Ask the plugin itself; it resolves the command in its own order (`AW_PAGEINDEX_C
 ```
 
 ```bash
-python3 - <<'PY'
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" - <<'PY'
 import json, shutil
 try:
     st = json.load(open('/tmp/aw-library-status.json', encoding='utf-8'))

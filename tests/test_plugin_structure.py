@@ -272,6 +272,41 @@ class TestHooks(unittest.TestCase):
         self.assertTrue(
             os.path.isfile(run_hook), "src/hooks/bin/run-hook.mjs not found"
         )
+        self.assertTrue(
+            os.path.isfile(os.path.join(self.BIN_DIR, "guard.sh")), "src/hooks/bin/guard.sh not found"
+        )
+
+    def test_every_hook_runs_through_guard(self):
+        """No hook command starts node (or bash) directly: guard.sh handles a missing Node.js."""
+        with open(self.HOOKS_JSON, "r") as f:
+            data = json.load(f)
+        for groups in data.get("hooks", {}).values():
+            for group in groups:
+                for hook in group.get("hooks", []):
+                    cmd = hook.get("command", "")
+                    self.assertTrue(
+                        cmd.startswith('sh "${CLAUDE_PLUGIN_ROOT}/hooks/bin/guard.sh"'),
+                        f"hook command does not go through guard.sh: {cmd}",
+                    )
+
+    def test_aw_python_resolver_exists_in_source(self):
+        """bin/aw-python is the Python resolver every skill command goes through."""
+        self.assertTrue(
+            os.path.isfile(os.path.join(SRC_DIR, "bin", "aw-python")), "src/bin/aw-python not found"
+        )
+
+    def test_no_bare_python3_commands_in_skills_and_agents(self):
+        pat = re.compile(r"(^|[ `(])python3 ")
+        for sub in ("skills", "agents"):
+            for dirpath, _, names in os.walk(os.path.join(SRC_DIR, sub)):
+                for n in names:
+                    path = os.path.join(dirpath, n)
+                    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                        for i, line in enumerate(fh, 1):
+                            self.assertFalse(
+                                pat.search(line),
+                                f"{path}:{i} calls python3 directly; use sh \"${{CLAUDE_PLUGIN_ROOT}}/bin/aw-python\"",
+                            )
 
 
 # ---------------------------------------------------------------------------

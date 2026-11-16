@@ -23,7 +23,7 @@ Drafts are written to sound like the author's voice store in `${CLAUDE_PLUGIN_DA
 V="${CLAUDE_PLUGIN_DATA}/voice"
 if [ -f "$V/profile.json" ] && [ -s "$V/exemplars.jsonl" ]; then echo VOICE_READY
 elif [ -f "$V/profile.json" ]; then echo VOICE_EMPTY
-elif [ -f AUTHOR_VOICE.md ] && python3 "${CLAUDE_PLUGIN_ROOT}/scripts/check-voice-populated.py" AUTHOR_VOICE.md; then echo VOICE_LEGACY
+elif [ -f AUTHOR_VOICE.md ] && sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/check-voice-populated.py" AUTHOR_VOICE.md; then echo VOICE_LEGACY
 else echo VOICE_MISSING; fi
 ```
 
@@ -100,7 +100,7 @@ If the profile has no `tools` key (legacy profile), assume all tools are enabled
 After computing the candidate slug from the user-supplied subject, check whether the article already exists:
 
 ```bash
-SLUG="$(echo "$SUBJECT" | python3 -c "import sys,re; t=sys.stdin.read().strip().lower(); print(re.sub(r'[^a-z0-9]+', '-', t).strip('-')[:60])")"
+SLUG="$(echo "$SUBJECT" | sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "import sys,re; t=sys.stdin.read().strip().lower(); print(re.sub(r'[^a-z0-9]+', '-', t).strip('-')[:60])")"
 MD_PATH="articles/${SLUG}.md"
 
 if [ -f "$MD_PATH" ]; then
@@ -125,7 +125,7 @@ Right after choosing the run ID, before any other step, record the run and regis
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" activity start --flow write --run-id <run-id>
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" activity step --run-id <run-id> --step outline --state start
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" register --path "$CLAUDE_PROJECT_DIR" --type project
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" register --path "$CLAUDE_PROJECT_DIR" --type project
 ```
 
 `activity start` writes its opening line only once per run, so repeating it is harmless. If `home.py register` says no home folder is set, skip it and tell the researcher once; the run then shows on the dashboard only after a home folder is set. The `activity` lines let the dashboard's Writing tab show the run while it works.
@@ -239,7 +239,7 @@ Spawn `architect` with the author-intent file and evidence file paths. The archi
 For every section, show its claim to the author and record explicit approval in that section's `approved` field. Only the author's approval sets `approved` and the gate decides whether writing may proceed.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" outline-v2 \
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" outline-v2 \
   --outline "$CLAUDE_PROJECT_DIR/.academic-helper/outline.json" \
   --intent "$CLAUDE_PROJECT_DIR/.academic-helper/author-intent.json" \
   --evidence "$CLAUDE_PROJECT_DIR/.academic-helper/evidence.json"
@@ -247,7 +247,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" outline-v2 \
 
 The gate must exit `0` before drafting. Once it exits `0`, close the outline stage: `activity step --run-id <run-id> --step outline --state end`. Exit `1` means revise the outline or approval state and rerun the gate. Exit `2` means the gate could not run; repair the inputs and rerun. See `references/write-intent-outline.md` for artifact examples and recovery details.
 
-Legacy v1 outlines remain supported for existing projects: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py argument-graph <outline.json>` validates their argument graph, and `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py stale-evidence-ownership <outline.json> --evidence-ownership <evidence-ownership.json>` validates their ownership map. Do not proceed to W3 until every check for the outline version in use passes.
+Legacy v1 outlines remain supported for existing projects: `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py argument-graph <outline.json>` validates their argument graph, and `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" ${CLAUDE_PLUGIN_ROOT}/scripts/gate.py stale-evidence-ownership <outline.json> --evidence-ownership <evidence-ownership.json>` validates their ownership map. Do not proceed to W3 until every check for the outline version in use passes.
 
 ### W3: Draft the article
 
@@ -310,7 +310,7 @@ Re-audit only the redrafted unit (one more batched `auditor` call over just its 
 same `runId`), and repeat. Track rewrite attempts **per unit**, reading the ceiling at runtime rather than inlining it:
 
 ```bash
-python3 -c "import json;print(json.load(open('${CLAUDE_PLUGIN_ROOT}/thresholds.json'))['rewriteCycles']['max'])"
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "import json;print(json.load(open('${CLAUDE_PLUGIN_ROOT}/thresholds.json'))['rewriteCycles']['max'])"
 ```
 
 A unit that still has failing paragraphs after `rewriteCycles.max` attempts ships with those

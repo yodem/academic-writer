@@ -152,3 +152,36 @@ jobs:
 
       - name: Gate — dashboard end-to-end suite
         run: npm run test:e2e
+
+  # A Windows newcomer's first minutes: the plugin's shell shims run under Git Bash (the shell Claude Code uses
+  # on Windows when Git for Windows is installed; https://code.claude.com/docs/en/hooks). Checks the Python
+  # resolver, the setup checks, and the hook guard on a machine where Node.js is not on PATH.
+  windows:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Gate — bin/aw-python finds Python 3 (skips the Store alias)
+        run: sh src/bin/aw-python --version | grep -q 'Python 3'
+
+      - name: Gate — setup checks run and print every row
+        run: |
+          sh src/bin/aw-python src/scripts/setup_checks.py --data-dir "$RUNNER_TEMP/aw" --json > "$RUNNER_TEMP/checks.json"
+          sh src/bin/aw-python -c "import json,sys; ids={c['id'] for c in json.load(open(sys.argv[1], encoding='utf-8'))}; need={'git','node','python','drive','notebooklm','trove','kotar','moodle','gemini-key'}; assert need <= ids, need-ids" "$RUNNER_TEMP/checks.json"
+
+      - name: Gate — hook guard prints the Node.js line and exits 0 with node absent
+        run: |
+          out=$(env PATH=/usr/bin sh src/hooks/bin/guard.sh lifecycle/session-env < /dev/null 2>&1); rc=$?
+          echo "$out"
+          test "$rc" = 0
+          printf %s "$out" | grep -q 'Academic Writer needs Node.js'

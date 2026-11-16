@@ -55,6 +55,11 @@ Your answers are saved in files in your folder, so nothing is lost.
 | Python packages (`python-docx`, `lxml`, `pdfplumber`, `pymupdf`, `jsonschema`) | Same as above — these are add-ons Python uses to open Word and PDF files | Yes | Claude, after asking |
 | Homebrew (macOS only) | A free installer for Mac tools; needed only to install hspell (Trove and NotebookLM do not need it) | Only for hspell | The researcher (steps below) |
 | hspell | A Hebrew spelling checker used by `/academic-writer:proofread` | Optional, Hebrew only | Claude on macOS/Linux, after asking |
+| Git (`git`) | Downloads the plugin when you add it; on Windows it also provides the shell (Git Bash) Claude Code runs commands in | Required | The researcher (steps below) |
+| Node.js (`node`) | Runs the plugin's own tool (`aw`) and its start-up checks | Required | The researcher (steps below) |
+| Google Drive connector (`drive`) | Lets Claude keep and find your course files in Google Drive | Optional | The researcher, in the Claude app |
+| Kotar (`kotar`) | Downloads cited book pages; needs Google Chrome signed in to Kotar | Optional | The researcher |
+| Moodle (`moodle`) | Reads your course site; needs Chrome with the Claude in Chrome extension | Optional | The researcher |
 | Trove (`trove`) | Your online research library — lets the plugin search and quote your sources | Optional | Claude (Trove's own installer), after asking; the researcher creates an account and signs in |
 | NotebookLM (`nlm`) | Google's source Q&A tool | Optional | Claude, after asking; the researcher signs in |
 | Gemini API key | Lets the plugin use Google's Gemini model for drafting and proofreading | Optional but recommended | The researcher (see `gemini-key.md`) |
@@ -63,7 +68,9 @@ Your answers are saved in files in your folder, so nothing is lost.
 
 ```bash
 uname -s 2>/dev/null || echo "Windows"
-command -v python3 >/dev/null 2>&1 && python3 --version || echo "PYTHON_MISSING"
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" --version || echo "PYTHON_MISSING"
+git --version >/dev/null 2>&1 && echo "GIT_OK" || echo "GIT_MISSING"
+node --version >/dev/null 2>&1 && echo "NODE_OK" || echo "NODE_MISSING"
 command -v brew >/dev/null 2>&1 && echo "BREW_OK" || echo "BREW_MISSING"
 command -v hspell >/dev/null 2>&1 && echo "HSPELL_OK" || echo "HSPELL_MISSING"
 command -v trove >/dev/null 2>&1 && echo "TROVE_OK" || echo "TROVE_MISSING"
@@ -75,6 +82,48 @@ command -v npm >/dev/null 2>&1 && echo "NPM_OK" || echo "NPM_MISSING"
 `MSYS` (or nothing) on Windows.
 
 The Python package check is in `python-deps.md`.
+
+## Git — the researcher installs it
+
+Say: "Git is a free program that downloads the plugin. On Windows, Claude Code also uses it to run commands, so
+without it adding the plugin fails." The steps:
+
+**Windows**
+1. Open **PowerShell** (Start menu, type `PowerShell`, press Enter) and run `winget install --id Git.Git -e`
+   (or download the installer from https://git-scm.com/download/win and click Next through it).
+2. Close Claude Code completely and open it again, then run `/academic-writer:setup`.
+
+If `/plugin marketplace add` already failed for lack of Git, it can leave a locked half-made folder; see
+`troubleshooting.md § Locked marketplace folder` first.
+
+**macOS**: in Terminal run `git --version`. If a window asks to install the **command line developer tools**, click
+**Install** (a large download), then restart Claude Code. Or install Homebrew's `git`.
+
+**Linux**: `sudo apt install git`.
+
+## Node.js — the researcher installs it
+
+Say: "Node.js is a free program the plugin's own tool runs on. Without it every session start prints `node: command
+not found`." The steps:
+
+**Windows**: in PowerShell run `winget install --id OpenJS.NodeJS.LTS -e` (or take the **LTS** download from
+https://nodejs.org), then close Claude Code completely and open it again.
+
+**macOS**: take the **LTS** installer from https://nodejs.org (double-click the `.pkg`, click Continue and Install), or
+`brew install node` if Homebrew is already there. Restart Claude Code.
+
+**Linux**: install `nodejs` with the system package manager, or use the nodejs.org LTS download.
+
+## Google Drive, Kotar and Moodle — the researcher connects them
+
+No script can see these, so ask the researcher whether each is done.
+
+- **Google Drive**: in the Claude app or on claude.ai open **Customize**, then **Connectors**, choose **Google Drive**
+  and sign in with Google (https://support.claude.com/en/articles/10166901). Same on Windows and Mac.
+- **Kotar**: install Google Chrome (https://www.google.com/chrome; Windows: `winget install --id Google.Chrome -e`),
+  then in Chrome sign in to Kotar through the university library. `/academic-writer:kotar-fetch` reads from that tab.
+- **Moodle** (the course site): in Chrome, with the Claude in Chrome extension installed, sign in to the course
+  site as usual. The plugin never asks for or stores the password.
 
 ## Python 3 — the researcher installs it
 
@@ -103,8 +152,12 @@ installer and it is safe. Either click **Install** and wait several minutes (it 
 4. When it finishes, close Claude Code completely and open it again.
 5. Run `/academic-writer:setup` again.
 
-**Linux**: install `python3` and `python3-pip` with your system's package manager (on Ubuntu:
-`sudo apt install python3 python3-pip`), then restart Claude Code.
+Or, in PowerShell: `winget install --id Python.Python.3.12 -e`, then restart Claude Code. If Windows opens the
+Microsoft Store when `python` is typed, that is only a shortcut named `python.exe`, not Python: the plugin skips it,
+so install the real one as above.
+
+**Linux**: install Python 3 and `python3-pip` with your system's package manager (on Ubuntu:
+`sudo apt install python3-pip` (it brings Python 3 with it)), then restart Claude Code.
 
 ## Homebrew (macOS only) — the researcher installs it
 

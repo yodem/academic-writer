@@ -48,7 +48,7 @@ split that stream at the anchors. Cheap tell, before you trust either layout:
 
 ```bash
 # an anchor at 85% of its file means most of that file belongs to the PREVIOUS unit
-python3 - <<'EOF'
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" - <<'EOF'
 import re, glob
 for p in sorted(glob.glob("OEBPS/*.html")):
     b = open(p, encoding='utf-8', errors='replace').read()

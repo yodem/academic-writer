@@ -81,7 +81,7 @@ if [ -f .ctx/hebrew-linguistic-reference.md ]; then
 else
   BASELINE_ARGS=""
 fi
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/extract-style-metrics.py \
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" ${CLAUDE_PLUGIN_ROOT}/scripts/extract-style-metrics.py \
   --input past-articles/ \
   --aggregate \
   $BASELINE_ARGS \
@@ -99,8 +99,8 @@ cat /tmp/style-metrics.json
 This gives you 30+ numerical metrics (sentence length, passive voice, transitions, etc.) and contrastive scores showing what's distinctive about this researcher vs. baseline academic Hebrew. It also includes a `frequentTerms` field — the researcher's own top-N high-frequency content vocabulary (count/length controlled by `thresholds.json > typography.styleMetrics.topFrequentTermsCount` / `minTermLength`). Keep `frequentTerms` in the fingerprint object as-is when you assemble the `## Style Fingerprint` JSON block in Phase 4 below — it steers the section-writer toward the researcher's own established terminology instead of generic phrasing (see `style-fingerprint-rubric.md § Preferred Terminology`).
 
 **Step 2: Text extraction for qualitative analysis** — For each file, extract text mechanically:
-- PDF: `python3 -c "import sys; import pdfplumber; [print(p.extract_text()) for p in pdfplumber.open(sys.argv[1]).pages]" past-articles/FILENAME`. **If this fails** (pdfplumber not installed, or extraction errors), do NOT fall back to a crude `strings`-style byte extraction — it produces garbled, unreliable text. Instead skip that file for the qualitative pass, note it as skipped, and continue with the rest of the corpus.
-- DOCX: `python3 -c "import docx; d=docx.Document('past-articles/FILENAME'); [print(p.text) for p in d.paragraphs]" 2>/dev/null`
+- PDF: `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "import sys; import pdfplumber; [print(p.extract_text()) for p in pdfplumber.open(sys.argv[1]).pages]" past-articles/FILENAME`. **If this fails** (pdfplumber not installed, or extraction errors), do NOT fall back to a crude `strings`-style byte extraction — it produces garbled, unreliable text. Instead skip that file for the qualitative pass, note it as skipped, and continue with the rest of the corpus.
+- DOCX: `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "import docx; d=docx.Document('past-articles/FILENAME'); [print(p.text) for p in d.paragraphs]" 2>/dev/null`
 
 **Step 3: Qualitative analysis** — Read the text and computational metrics. Analyze across the qualitative dimensions (C–I below) that the script cannot compute: paragraph formula, tone, rhetorical patterns, templates, representative excerpts.
 

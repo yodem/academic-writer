@@ -126,6 +126,7 @@ footer { margin-top: 48px; color: var(--muted); font-size: .9rem; border-top: 1p
   <ol>
     <li><a href="#what">What it does</a></li>
     <li><a href="#before">Before you start</a></li>
+    <li><a href="#windows">On Windows: first</a></li>
     <li><a href="#install">Install</a></li>
     <li><a href="#first-run">First run</a></li>
     <li><a href="#first-article">Your first article</a></li>
@@ -170,6 +171,28 @@ footer { margin-top: 48px; color: var(--muted); font-size: .9rem; border-top: 1p
   <li><strong>Your source texts</strong> as PDFs or Word files. The optional Trove library (an online bookshelf for your sources) lets the plugin search them page by page.</li>
   <li><strong>Python 3</strong>, a free program that reads and writes Word and PDF files. Some Macs and most Linux computers already have it; if yours does not, setup shows you how to install it from python.org, step by step. Setup also asks before installing the small helper packages it needs.</li>
 </ul>
+</section>
+
+<section id="windows">
+<h2>Windows: install three free programs first</h2>
+<p>Do this before section 3; it takes about 10 minutes. Open <strong>PowerShell</strong> (Start menu, type <code>PowerShell</code>, press <kbd>Enter</kbd>) and run each line, or use the download links.</p>
+<ol>
+  <li><strong>Git</strong>: Claude Code uses it to download the plugin and to run commands on Windows.
+    <div class="cmd"><pre><code>winget install --id Git.Git -e</code></pre></div></li>
+  <li><strong>Node.js</strong>: the plugin's own tool and its start-up checks run on it. Without it every session start prints <code>node: command not found</code>.
+    <div class="cmd"><pre><code>winget install --id OpenJS.NodeJS.LTS -e</code></pre></div></li>
+  <li><strong>Python 3</strong>: reads PDFs and builds Word files. Download it from <a href="https://www.python.org/downloads/">python.org/downloads</a> and <strong>tick "Add python.exe to PATH"</strong> on the installer's first screen, or run:
+    <div class="cmd"><pre><code>winget install --id Python.Python.3.12 -e</code></pre></div></li>
+  <li><strong>Close Claude Code completely and open it again</strong>, then any PowerShell window too. A program installed while Claude Code is open is not found until it restarts.</li>
+</ol>
+<p>Setup (<code>/academic-writer:setup</code>) checks these three first and shows the same lines for anything missing. Afterwards it offers the optional connections, in this order, each one skippable:</p>
+<ol>
+  <li><strong>Google Drive</strong>: in the Claude app or claude.ai open Customize, then Connectors, then Google Drive. It keeps and finds your course files.</li>
+  <li><strong>NotebookLM</strong>: asks questions about your sources. Needs Node.js.</li>
+  <li><strong>Trove</strong>: your searchable source library.</li>
+  <li><strong>Kotar</strong>: downloads cited book pages. Needs Chrome, signed in to Kotar through your library.</li>
+  <li><strong>Moodle</strong> (your course site): needs Chrome with the Claude in Chrome extension, signed in to your course site.</li>
+</ol>
 </section>
 
 <section id="install">
@@ -282,7 +305,7 @@ claude plugin install academic-writer@yodem</code></pre></div>
 <tr><td><code>/academic-writer:ingest-book</code></td><td>Upload a whole book (multi-volume, scanned or EPUB) to the source library with a navigable hinted table of contents and a citation guide.</td></tr>
 <tr><td><code>/academic-writer:library-eval</code></td><td>Compare Trove and PageIndex on your own article: anonymised pairs you judge yourself, then the unblinded results.</td></tr>
 <tr><td><code>/academic-writer:voice</code></td><td>Build or update the author&#x27;s voice profile: import older voice files, choose exemplar paragraphs from past papers, derive writing rules and sync them to Trove.</td></tr>
-<tr><td><code>/academic-writer:health</code></td><td>Check that Academic Writer is ready to use — your profile, the tools it needs (Python and its add-ons, Hebrew spelling, Trove, NotebookLM), the Gemini key and past articles — with a plain-language fix for anything missing.</td></tr>
+<tr><td><code>/academic-writer:health</code></td><td>Check that Academic Writer is ready to use — your profile, the tools it needs (Git, Node.js, Python and its add-ons, Hebrew spelling) and the connections (Google Drive, NotebookLM, Trove, Kotar, Moodle), the Gemini key and past articles — with a plain-language fix for anything missing.</td></tr>
 <tr><td><code>/academic-writer:help</code></td><td>A short list of every command and the three steps to get started.</td></tr>
 <tr><td><code>/academic-writer:courses</code></td><td>Use when setting up an academic term from a schedule, validating course resources, syncing your LMS (Moodle) materials, or running the daily course scan.</td></tr>
 <tr><td><code>/academic-writer:dashboard</code></td><td>Open the local course dashboard: one page that shows, for every course in the term, what is due next, whether its readings are ready, and what is new, with a week agenda and a page per course.</td></tr>
@@ -335,6 +358,14 @@ claude plugin install academic-writer@yodem</code></pre></div>
 <h2>9. Troubleshooting</h2>
 <div class="note"><p><strong>First, always:</strong> type <code>/academic-writer:health</code>. It checks your profile, key, tools and sources and tells you, in plain words, what to fix.</p></div>
 <details>
+  <summary>On Windows, adding the plugin failed and the folder is locked</summary>
+  <p>Git was missing, and the failed attempt left a half-made folder in <code>.claude\plugins\marketplaces</code> (in your user folder). Close Claude Code, open Task Manager (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Esc</kbd>), end any <code>git.exe</code> under Details, delete the half-made folder, install Git (see "Windows" above), then open Claude Code and run the command again.</p>
+</details>
+<details>
+  <summary>Every session start says <code>node: command not found</code></summary>
+  <p>Node.js is missing. Install it (<code>winget install --id OpenJS.NodeJS.LTS -e</code> on Windows, the LTS download from <a href="https://nodejs.org">nodejs.org</a> on a Mac) and restart Claude Code.</p>
+</details>
+<details>
   <summary>The <code>/academic-writer:</code> commands do not appear</summary>
   <p>Close Claude Code completely and open it again; new plugins load at start-up. If they still do not appear, type <code>/plugin</code> and check that <strong>academic-writer</strong> is listed and enabled. If it is missing, repeat the two install lines in section 3.</p>
 </details>
@@ -350,7 +381,7 @@ claude plugin install academic-writer@yodem</code></pre></div>
   <summary>"Missing Python package" or the Word file is not created</summary>
   <p>Run <code>/academic-writer:setup</code>; it checks the helper packages and offers to install them for you. If you prefer to do it yourself, paste this into a terminal:</p>
   <div class="cmd"><pre><code>python3 -m pip install python-docx lxml pdfplumber pymupdf jsonschema</code></pre></div>
-  <p>If the computer says <code>python3</code> was not found, install Python 3 from <a href="https://www.python.org/downloads/">python.org/downloads</a> (on Windows, tick "Add Python to PATH" during installation), then try again.</p>
+  <p>If the computer says <code>python3</code> was not found, install Python 3 from <a href="https://www.python.org/downloads/">python.org/downloads</a> (on Windows, tick "Add python.exe to PATH" during installation, or run <code>winget install --id Python.Python.3.12 -e</code>), then try again.</p>
 </details>
 <details>
   <summary>The PageIndex helper will not install, or PageIndex is "not reachable"</summary>

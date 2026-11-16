@@ -95,7 +95,7 @@ shown before any book text is sent to Google. Never ask for a key, host or passw
 Update ONLY the `tools` key and `updatedAt` in the profile. Preserve all other fields:
 
 ```bash
-python3 << 'PYTHON'
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" << 'PYTHON'
 import re, json
 from datetime import datetime
 

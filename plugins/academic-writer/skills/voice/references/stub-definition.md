@@ -38,7 +38,7 @@ the empty case for any consumer's purposes).
 `scripts/check-voice-populated.py` implements exactly the rule above.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/check-voice-populated.py" AUTHOR_VOICE.md
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/check-voice-populated.py" AUTHOR_VOICE.md
 ```
 
 - Exit code `0` → populated (real, usable voice profile).
@@ -51,7 +51,7 @@ Add `--json` for a machine-readable reason payload (used by callers that want to
 file was flagged, not just whether):
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/check-voice-populated.py" AUTHOR_VOICE.md --json
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/check-voice-populated.py" AUTHOR_VOICE.md --json
 ```
 
 ```json

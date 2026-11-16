@@ -18,7 +18,7 @@ First, check if a profile exists and load it:
 
 ```bash
 if [ -f .academic-helper/profile.md ]; then
-  CURRENT_FIELD=$(python3 -c "
+  CURRENT_FIELD=$(sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "
 import re
 content = open('.academic-helper/profile.md').read()
 m = re.search(r'^fieldOfStudy: (.+)$', content, re.MULTILINE)
@@ -45,7 +45,7 @@ Record their answer.
 Update the profile's frontmatter (the header block between the `---` lines) with the new field, keeping every other setting intact. Replace `NEW_FIELD_HERE` with the author's answer:
 
 ```bash
-python3 << 'PYTHON'
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" << 'PYTHON'
 import re, json
 from datetime import datetime
 

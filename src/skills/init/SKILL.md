@@ -83,7 +83,7 @@ AskUserQuestion(questions=[{
 Only on "Install":
 
 ```bash
-python3 -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema
 ```
 
 Re-run the check and report the result in one plain sentence. Failures: see
@@ -185,7 +185,7 @@ whitespace/punctuation with a single hyphen, strip leading/trailing hyphens. Exa
 "Dana Levi" → `dana-levi`.
 
 ```bash
-python3 -c "
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "
 import re, sys
 name = sys.argv[1]
 slug = re.sub(r'[^a-z0-9]+', '-', name.strip().lower()).strip('-')

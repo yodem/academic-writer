@@ -1,0 +1,27 @@
+#!/bin/sh
+# aw-python: run the first working Python 3 on this computer, with every argument passed through.
+# Skills call it as: sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" <script> <args>
+# (through sh, because the executable bit does not survive a Windows checkout).
+# Tries python3, python, then the Windows launcher "py -3", in that order. A candidate counts only
+# when `--version` exits 0 and prints "Python 3": that skips the Microsoft Store stub that Windows
+# ships as python.exe (it exits non-zero and opens the Store) and an old Python 2.
+# Nothing usable: one plain line on stderr, exit 127.
+
+works() {
+  command -v "$1" >/dev/null 2>&1 || return 1
+  out=$("$@" --version 2>&1) || return 1
+  case "$out" in
+    *"Python 3"*) return 0 ;;
+  esac
+  return 1
+}
+
+if works python3; then
+  exec python3 "$@"
+elif works python; then
+  exec python "$@"
+elif works py -3; then
+  exec py -3 "$@"
+fi
+echo "Python 3 was not found on this computer. Run /academic-writer:setup to install it." >&2
+exit 127

@@ -1,6 +1,6 @@
 # PageIndex: offer, install, or connect your own
 
-> Used by `setup` Step 4g, `init` Phase 3, `update-tools` and `health`. Trove stays the default library; PageIndex is optional and chosen per article (`.academic-helper/library.json`, see `${CLAUDE_PLUGIN_ROOT}/skills/init/references/integration-setup.md`). Nothing here installs or sends anything without a yes.
+> Used by `setup` Step 4f, `init` Phase 3, `update-tools` and `health`. Trove stays the default library; PageIndex is optional and chosen per article (`.academic-helper/library.json`, see `${CLAUDE_PLUGIN_ROOT}/skills/init/references/integration-setup.md`). Nothing here installs or sends anything without a yes.
 
 ## What to tell the researcher (plain words)
 

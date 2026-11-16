@@ -22,6 +22,25 @@ Also useful:
 
 ---
 
+## On Windows: install three free programs first
+
+Do this before the install steps below; it takes about 10 minutes. Open **PowerShell** (Start menu, type `PowerShell`, press Enter) and run the lines one at a time, or use the download links.
+
+1. **Git**, which Claude Code uses to download the plugin and to run commands on Windows: `winget install --id Git.Git -e` (or download it from [git-scm.com](https://git-scm.com/download/win)).
+2. **Node.js**, which the plugin's own tool (`aw`) and its start-up checks run on: `winget install --id OpenJS.NodeJS.LTS -e` (or the LTS download from [nodejs.org](https://nodejs.org)). Without it every session start prints `node: command not found`.
+3. **Python 3**, which reads PDFs and builds Word files: download it from [python.org/downloads](https://www.python.org/downloads/) and **tick "Add python.exe to PATH"** on the installer's first screen, or run `winget install --id Python.Python.3.12 -e`.
+4. **Close Claude Code completely and open it again** (and any open PowerShell window). A program installed while Claude Code is open is not found until it restarts.
+
+Then follow *Install* below. Setup (`/academic-writer:setup`) checks all three first and shows these same lines for anything missing. After the plugin is set up, it offers the optional connections, in this order, each skippable:
+
+1. **Google Drive** (in the Claude app or claude.ai: Customize, then Connectors, then Google Drive; [how](https://support.claude.com/en/articles/10166901)). Keeps and finds your course files.
+2. **NotebookLM**: asks questions about your sources. Needs Node.js.
+3. **Trove**: your searchable source library ([install](https://heytrove.ai/install)).
+4. **Kotar**: downloads cited book pages; needs Chrome signed in to Kotar through your library.
+5. **Moodle** (your course site): needs Chrome with the Claude in Chrome extension, signed in to your course site.
+
+---
+
 ## Install
 
 You install once. About 15 minutes if you have never used Claude Code. Each step says what you should see.
@@ -208,6 +227,9 @@ Your research folders, drafts and Word files are never touched by uninstalling.
 
 Start with **`/academic-writer:health`**. It checks your profile, key, tools and sources, and tells you in plain words what to fix. Its report contains no keys, so you can share it when asking for help.
 
+- **On Windows, `/plugin marketplace add` failed and now says the folder is in use, or `git` was not found.** Git was missing (see *On Windows* above) and the failed attempt left a half-made folder in `.claude\plugins\marketplaces` that Windows keeps locked. Close Claude Code, open Task Manager (Ctrl+Shift+Esc), end any `git.exe` under Details, delete the half-made folder inside `.claude\plugins\marketplaces` in your user folder, install Git, then open Claude Code and run the command again.
+- **Every session start prints `node: command not found`** (older versions), or `Academic Writer needs Node.js`. Install Node.js (`winget install --id OpenJS.NodeJS.LTS -e` on Windows, the LTS download from nodejs.org on a Mac), then restart Claude Code.
+- **Setup stops with "Python was not found" on Windows.** Install Python as above and tick "Add python.exe to PATH". The Microsoft Store shortcut named `python.exe` is not Python; the plugin skips it.
 - **The `/academic-writer:` commands do not appear.** Quit Claude Code completely and open it again. Then type `/plugin` and check that academic-writer is listed and enabled. If not, repeat the two install lines.
 - **"missing Google API key" or "API key not valid".** Run `/academic-writer:setup` again and choose to check the Gemini key. After saving a key, start a new Claude Code session in your research folder.
 - **"No profile found".** Make sure you started Claude Code inside your research folder. In a new folder, run `/academic-writer:setup` first.

@@ -121,7 +121,7 @@ No results means `[NEEDS REVIEW: external_unverified]`. Check B only confirms th
 **Check D — Metadata integrity** (mandatory). Load the registry:
 
 ```bash
-cat .academic-helper/sources.json 2>/dev/null || python3 -c "import json;print(json.dumps(json.load(open('.academic-helper/evidence.json')).get('sources', [])))" 2>/dev/null || echo "[]"
+cat .academic-helper/sources.json 2>/dev/null || sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "import json;print(json.dumps(json.load(open('.academic-helper/evidence.json')).get('sources', [])))" 2>/dev/null || echo "[]"
 ```
 
 Match each citation's author and work title to a registry entry, then compare every field the citation asserts (year, journal, publisher, title spelling, volume, issue):
@@ -147,7 +147,7 @@ If a passage in the assignment or the registry supports the claim, recommend tha
 **Check G — Trove title integrity.** When a citation cites a Trove source, its title must match the registry's `workTitle` for that source (not the Trove collection name or a generic label):
 
 ```bash
-python3 -c "
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "
 import json, os
 path = '.academic-helper/sources.json'
 if os.path.exists(path):

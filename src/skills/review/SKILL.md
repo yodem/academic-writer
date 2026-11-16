@@ -55,7 +55,7 @@ The scorecard is the single source of truth — do not score on dimensions not l
 Also check the researcher's style fingerprint for Writing Quality (dimension 5):
 
 ```bash
-python3 -c "
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "
 import re, json
 content = open('.academic-helper/profile.md').read()
 m = re.search(r'## Style Fingerprint\n+\x60\x60\x60json\n(.*?)\n\x60\x60\x60', content, re.DOTALL)

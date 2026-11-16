@@ -1,6 +1,6 @@
 ---
 name: health
-description: "Check that Academic Writer is ready to use — your profile, the tools it needs (Python and its add-ons, Hebrew spelling, Trove, NotebookLM), the Gemini key and past articles — with a plain-language fix for anything missing. Use when something stops working, after install or an update, or before a long writing session."
+description: "Check that Academic Writer is ready to use — your profile, the tools it needs (Git, Node.js, Python and its add-ons, Hebrew spelling) and the connections (Google Drive, NotebookLM, Trove, Kotar, Moodle), the Gemini key and past articles — with a plain-language fix for anything missing. Use when something stops working, after install or an update, or before a long writing session."
 user-invocable: true
 allowed-tools: [Bash, Read]
 metadata: {author: "Yotam Fromm", version: "0.4.0"}
@@ -31,10 +31,10 @@ Run the checks once; sections 1, 3, 4 and 5 read their rows from this output (th
 dashboard's Setup page shows). The script only reads: it installs and writes nothing, and never prints the Gemini key.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup_checks.py" --data-dir "${CLAUDE_PLUGIN_DATA}" --json
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/setup_checks.py" --data-dir "${CLAUDE_PLUGIN_DATA}" --json
 ```
 
-Each row is `{id, label_he, ok, optional, found, required, reason_he, fix}`; `ok: null` means "not applicable here".
+Each row is `{id, label_he, ok, optional, found, required, reason_he, fix, fix_windows, fix_mac}`; `ok: null` means "not applicable here".
 Use the `home` and `profile` rows for this section: if `profile` is not ok, report `FAIL` and suggest
 `/academic-writer:init`; if `home` is not ok, suggest `/academic-writer:setup`. Then read the profile itself:
 
@@ -70,8 +70,8 @@ Report:
 
 ## 3. Tools and Gemini key
 
-Use the rows `python` (found version against the required 3.9), `python-addons`, `hspell`, `gemini-key` and
-`nightly-job` from the section 1 output. Show each row's `reason_he` and `fix` as the plain "To fix" line. Then run
+Use the rows `git`, `node`, `python` (found version against the required 3.9), `python-addons`, `hspell`, `gemini-key` and
+`nightly-job` from the section 1 output. Show each row's `reason_he` and, for the researcher's system, `fix_windows` or `fix_mac` as the plain "To fix" line (`fix` names the plugin command that walks through it). Then run
 the plugin's own command check (it changes nothing):
 
 ```bash
@@ -83,12 +83,21 @@ from `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/gemini-key.md § Checking th
 
 | Result | Report as | To fix (say exactly this, in the researcher's language) |
 |---|---|---|
+| `git` row not ok | ✗ Git | the row's `fix_windows` or `fix_mac` line. On Windows say why: "Without Git, adding the plugin fails and Claude Code cannot run the plugin's commands." |
+| `node` row not ok | ✗ Node.js | the row's `fix_windows` or `fix_mac` line. Say why: "Without Node.js the plugin's own tool does not start." |
 | `python` row not ok | ✗ Python | "Python isn't installed. It's free; run `/academic-writer:setup` and I'll walk you through it." |
 | `python-addons` row not ok | ✗ Python add-ons | "Some Python add-ons are missing. Run `/academic-writer:setup` — it will ask before installing them." |
-| `hspell` row not ok (Hebrew profile only) | ⚠ Hebrew spelling | "The Hebrew spelling checker isn't installed; proofreading still works. Run `/academic-writer:setup` to add it (not available on Windows)." |
+| `hspell` row not ok (Hebrew profile only) | ⚠ Hebrew spelling | "The Hebrew spelling checker isn't installed; proofreading still works. Run `/academic-writer:setup` to add it (no Windows installer: use the row's `fix_windows` line, or skip it)." |
 | `gemini-key` row not ok with Gemini enabled | ✗ Gemini key | "Gemini is on but no key reached this session. Store it in `/plugin` → Installed → academic-writer → Configure → `google_api_key`, then restart Claude Code." |
 | live check not `HTTP 200` | ✗ Gemini key | the matching line from the table in `gemini-key.md` |
 | `AW_FAILED` | ✗ Plugin | "The plugin itself didn't start. Update or reinstall the plugin (see version check above)." |
+
+### Connections
+
+The same output has one row per outside connection; report each as optional, in this order, with `fix_windows` or
+`fix_mac` as its "To fix" line: `drive` (Google Drive in the Claude app; `ok` is always null, say "check by hand: in the
+Claude app, Customize, Connectors, Google Drive"), `notebooklm`, `trove`, `kotar` (Chrome for Kotar downloads) and
+`moodle` (signed in to the course site in Chrome; `ok` is always null). A missing optional connection is a note, never a failure.
 
 ## 4. Library (Trove, PageIndex)
 
@@ -171,10 +180,12 @@ Show a clean summary table:
 > | Profile | ✓ OK / ✗ MISSING | Field: [field], Citation: [style], Sources: [N] |
 > | Style Fingerprint | ✓ Full / ⚠ Old short version / ✗ Missing | [N] dimensions |
 > | Past Articles | ✓ [N] files / ✗ Empty | PDF: [n], DOCX: [n] |
+> | Git, Node.js | ✓ Ready / ✗ [which is missing] | Windows or Mac fix line |
 > | Python + add-ons | ✓ Ready / ✗ [what's missing] | Python [version] |
 > | Hebrew spelling | ✓ / ⚠ Missing / — Not needed | |
 > | Gemini key | ✓ Works / ✗ [problem] / — Not set up (needed to write, proofread, read scans) | |
 > | Library | ✓ Connected / ✗ Error / — Disabled | [Trove or PageIndex]: [N] items |
+> | Connections | ✓ / — Optional, not set up | Drive, Kotar, Moodle: check by hand |
 > | NotebookLM | ✓ Connected / ✗ Not found / — Disabled | [N] notebooks |
 > | Plugin agents | ✓ Both present / ✗ Missing [list] | 2/2 |
 >

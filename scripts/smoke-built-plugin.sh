@@ -13,6 +13,9 @@ fail=0; ok(){ echo "ok   $1"; }; bad(){ echo "FAIL $1"; fail=1; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT; mkdir -p "$T/data" "$T/proj/.academic-helper"; echo "# profile" > "$T/proj/.academic-helper/profile.md"
 
 [[ -x "$AW" ]] && ok "bin/aw exists" || bad "bin/aw missing"
+[[ -f "$P/bin/aw-python" ]] && ok "bin/aw-python exists" || bad "bin/aw-python missing"
+sh "$P/bin/aw-python" --version 2>&1 | grep -q "Python 3" && ok "bin/aw-python finds Python 3" || bad "bin/aw-python finds no Python 3"
+[[ -f "$P/hooks/bin/guard.sh" ]] && ok "hooks/bin/guard.sh exists" || bad "hooks/bin/guard.sh missing"
 [[ ! -d "$P/mcp" ]] && ok "no retired MCP server shipped" || bad "plugins/academic-writer/mcp still present"
 python3 - "$P" <<'PY' && ok "manifest has no mcpServers" || bad "manifest still declares mcpServers"
 import json,sys; sys.exit(1 if "mcpServers" in json.load(open(sys.argv[1]+"/.claude-plugin/plugin.json")) else 0)

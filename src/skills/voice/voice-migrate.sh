@@ -4,6 +4,10 @@
 
 set -euo pipefail
 
+# Python through the plugin resolver (python3, python or py -3): it lives at <plugin root>/bin, two folders up.
+AW_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/bin/aw-python"
+aw_py() { sh "$AW_PY" "$@"; }
+
 # Profile scope: silently no-op in any project without the academic-helper profile.
 # Matches the run-hook.mjs:54 directory guard so this hook never fires in unrelated repos.
 if [[ ! -f "${CLAUDE_PROJECT_DIR:-$PWD}/.academic-helper/profile.md" ]]; then
@@ -34,7 +38,7 @@ marker="$voice_dir/.migrated"
 gemini_profile="$root/.academic-helper/profile.md"
 gemini_marker="$voice_dir/.gemini-languages-migrated"
 if [[ -f "$gemini_profile" && ! -f "$gemini_marker" ]]; then
-  gemini_result="$(python3 - "$gemini_profile" <<'PYEOF'
+  gemini_result="$(aw_py - "$gemini_profile" <<'PYEOF'
 import json, re, sys
 
 path = sys.argv[1]
@@ -89,7 +93,7 @@ seeded=0
 aw_profile="$root/.academic-writer/profile.json"
 if [[ -f "$aw_profile" ]]; then
   cp "$aw_profile" "$voice_dir/legacy/profile.json"
-  python3 - <<'PYEOF' "$aw_profile" "$profile"
+  aw_py - <<'PYEOF' "$aw_profile" "$profile"
 import json, sys, datetime
 src, dst = sys.argv[1], sys.argv[2]
 with open(src) as f:
@@ -141,7 +145,7 @@ fi
 hb_profile="$root/AUTHOR_VOICE.md"
 if [[ -f "$hb_profile" && "$seeded" -eq 0 ]]; then
   cp "$hb_profile" "$voice_dir/legacy/AUTHOR_VOICE.md"
-  python3 - <<'PYEOF' "$hb_profile"
+  aw_py - <<'PYEOF' "$hb_profile"
 import sys, datetime, re
 path = sys.argv[1]
 text = open(path).read()

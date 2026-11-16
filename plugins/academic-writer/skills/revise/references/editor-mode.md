@@ -61,7 +61,7 @@ Rules:
 - Classify EVERY op id in your chunk. No skipping, no "and similar". Write the per-op results to
   {WORK}/analysis/{CHUNK}.json as a JSON array of {"id","category","pattern_key","explanation",
   "tier","mechanizable","confidence"}. category must be one of: {CATEGORIES}. After writing, run a
-  quick python3 check that every id in the .ids.json appears exactly once, and fix the file if not.
+  quick Python check that every id in the .ids.json appears exactly once, and fix the file if not.
 - Think like the editor. For word-choice, syntax and register edits name the principle (calque,
   over-nominalization, wrong preposition, redundant hedge, register, ambiguous antecedent). Quote
   exactly.
@@ -139,7 +139,7 @@ one with evidence, defaulting to "narrow" when unsure.
 
 Evidence: {WORK}/full-before.md (author text) and {WORK}/full-after.md (editor text, accepted);
 per-op classifications in {WORK}/analysis/*.json; chunk sources {WORK}/chunks/*.md; the author's
-past articles as plain text if available. Use python3 or grep to COUNT: for each rule, how many
+past articles as plain text if available. Use a short Python snippet or grep to COUNT: for each rule, how many
 times the editor applied it, and how many times the BEFORE form still survives in full-after.md
 (the editor left it, which weakens the rule). For mechanizable rules run the regex_hint over the
 paper and the past articles to estimate false positives. Check each plugin-conflict claim against
@@ -157,7 +157,7 @@ required for `narrow` and `reclassify`. The orchestrator concatenates every grou
 ## Merge, then the author
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/docx-editor-diff.py" merge --work .academic-helper/editor-review [--decisions decisions.json] --strict
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/docx-editor-diff.py" merge --work .academic-helper/editor-review [--decisions decisions.json] --strict
 ```
 
 `merge` offers only the skeptic's wording: `confirmed` keeps the synthesis rule, `narrow` and
