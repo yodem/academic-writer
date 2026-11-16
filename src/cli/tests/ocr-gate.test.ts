@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setPathArguments } from '../src/paths.ts';
 import { __setTransport } from '../src/gemini.ts';
-import { ocrDocument, exitCodeFor } from '../src/ocr.ts';
+import { ocrDocument, exitCodeFor, releaseGate } from '../src/ocr.ts';
 
 const root = mkdtempSync(join(tmpdir(), 'aw-ocr-gate-'));
 setPathArguments(['--data-dir', root, '--project-dir', root]);
@@ -78,11 +78,29 @@ test('ocr gate env var cannot raise the cap', async () => {
   } finally { delete process.env.AW_OCR_GEMINI_CAP; }
 });
 
-test('ocr gate refuses a second run with the same run id while one holds the lock', async () => {
+test('ocr gate reclaims a lock whose owner is dead', async () => {
+  const dir = join(root, '.academic-helper', 'runs', 'gate-dead'); mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'ocr-gate.lock'), JSON.stringify({ pid: 2147483646, token: 'stale' }));
+  stub();
+  const out = await ocrDocument({ input: scans('dead', 1), language: 'he', runId: 'gate-dead', engine: 'gemini' });
+  assert.equal(out.pages.length, 1);
+  assert.equal(existsSync(join(dir, 'ocr-gate.lock')), false);
+});
+
+test('ocr gate refuses a lock whose owner is alive', async () => {
   const dir = join(root, '.academic-helper', 'runs', 'gate-busy'); mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'ocr-gate.lock'), '');
+  writeFileSync(join(dir, 'ocr-gate.lock'), JSON.stringify({ pid: process.pid, token: 'someone-else' }));
   stub();
   await assert.rejects(ocrDocument({ input: scans('busy', 1), language: 'he', runId: 'gate-busy', engine: 'gemini' }), /another aw ocr is running/);
+  assert.equal(existsSync(join(dir, 'ocr-gate.lock')), true);
+});
+
+test('ocr gate never deletes another run\'s lock', () => {
+  const dir = join(root, '.academic-helper', 'runs', 'gate-foreign'); mkdirSync(dir, { recursive: true });
+  const path = join(dir, 'ocr-gate.lock');
+  writeFileSync(path, JSON.stringify({ pid: process.pid, token: 'theirs' }));
+  releaseGate({ used: 0, cap: 20, confirm: false, held: 0, lock: { path, token: 'mine' } });
+  assert.equal(existsSync(path), true);
 });
 
 test('ocr gate releases its lock when the run ends', async () => {

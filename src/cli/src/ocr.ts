@@ -1,4 +1,5 @@
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -22,30 +23,48 @@ export function countGeminiOcr(runId: string): number {
   return readFileSync(file, 'utf8').split('\n').filter(Boolean).filter((l) => { try { const r = JSON.parse(l) as { step?: string; provider?: string }; return r.step === 'ocr' && r.provider === 'gemini'; } catch { return false; } }).length;
 }
 /** One cost gate for every Gemini OCR path: cumulative per run id (ledger rows plus calls made now), lifted by --confirm-cost. */
-export type Gate = { used: number; cap: number; confirm: boolean; held: number; lock: string };
+export type Gate = { used: number; cap: number; confirm: boolean; held: number; lock: RunLock };
 /** A run id names a folder under .academic-helper/runs: no path separators, no '..', not absolute. */
 function checkRunId(runId: string): void {
   if (!runId || isAbsolute(runId) || /[\\/]/.test(runId) || runId.includes('..')) throw new AwError('ERROR', 'ocr', `invalid --run id: ${runId}`);
 }
-/** One aw ocr per run id at a time, so two processes cannot each spend a full cap: an exclusive lock file, stale after an hour. */
-function lockRun(runId: string): string {
+/** One aw ocr per run id at a time, so the Gemini page count has a single writer: the lock file holds its owner's pid and a
+ * random token. A lock is reclaimed only when its owner process is gone (never by age: a long OCR run keeps its lock), and a
+ * run deletes the lock only while it still holds its own token. */
+type RunLock = { path: string; token: string };
+function ownerAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try { process.kill(pid, 0); return true; } catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM'; }
+}
+function tryCreate(path: string, token: string): boolean {
+  try { const fd = openSync(path, 'wx'); writeFileSync(fd, JSON.stringify({ pid: process.pid, token })); closeSync(fd); return true; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false; throw error; }
+}
+function lockRun(runId: string): RunLock {
   checkRunId(runId);
   const dir = join(projectDir(), '.academic-helper', 'runs', runId);
   mkdirSync(dir, { recursive: true });
-  const lock = join(dir, 'ocr-gate.lock');
-  try { closeSync(openSync(lock, 'wx')); } catch {
-    if (Date.now() - statSync(lock).mtimeMs < 3_600_000) throw new AwError('ERROR', 'ocr', `another aw ocr is running with --run ${runId}; wait for it or use another run id`);
-    rmSync(lock, { force: true }); closeSync(openSync(lock, 'wx'));
-  }
-  return lock;
+  const path = join(dir, 'ocr-gate.lock');
+  const token = randomBytes(16).toString('hex');
+  if (tryCreate(path, token)) return { path, token };
+  let owner: { pid?: number } = {};
+  try { owner = JSON.parse(readFileSync(path, 'utf8')) as { pid?: number }; } catch { /* unreadable or half-written: treat as unowned */ }
+  if (ownerAlive(Number(owner.pid))) throw new AwError('ERROR', 'ocr', `another aw ocr is running with --run ${runId} (pid ${owner.pid}); wait for it or use another run id`);
+  rmSync(path, { force: true });
+  if (!tryCreate(path, token)) throw new AwError('ERROR', 'ocr', `another aw ocr took --run ${runId} at the same moment; retry`);
+  return { path, token };
 }
-export function releaseGate(gate: Gate): void { rmSync(gate.lock, { force: true }); }
+export function releaseGate(gate: Gate): void {
+  try { const owner = JSON.parse(readFileSync(gate.lock.path, 'utf8')) as { token?: string }; if (owner.token === gate.lock.token) rmSync(gate.lock.path, { force: true }); } catch { /* already gone */ }
+}
 export function makeGate(options: Pick<OcrOptions, 'runId' | 'confirmCost'>): Gate {
   const env = (process.env.AW_OCR_GEMINI_CAP ?? '').trim();
   // the env var can only lower the cap (tests, the live check); raising it needs --confirm-cost
   const cap = /^\d+$/.test(env) ? Math.min(Number(env), cfg.geminiConfirmPages) : cfg.geminiConfirmPages;
   const lock = lockRun(options.runId);
-  return { used: countGeminiOcr(options.runId), cap, confirm: options.confirmCost === true, held: 0, lock };
+  const gate: Gate = { used: 0, cap, confirm: options.confirmCost === true, held: 0, lock };
+  try { gate.used = countGeminiOcr(options.runId); } catch (error) { releaseGate(gate); throw error; }  // setup failed: give the lock back
+  return gate;
 }
 function heldPage(page_number: number, gate: Gate): Page { gate.held += 1; return { page_number, text: '', is_born_digital: false, confidence: 'low', notes: `${HELD}, __N__ pages, est. $__USD__; rerun with --confirm-cost` }; }
 /** Fills the page count and dollar estimate into held pages once the run knows how many there are. */
