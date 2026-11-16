@@ -182,7 +182,7 @@ def test_trove_env_is_an_allow_list_matching_the_cli():
                     "CANDLEKEEP_API_KEY": "k", "AW_LIBRARY_X": "1", "OPT_IN": "o", "AW_LIBRARY_PASS_ENV": "OPT_IN, bad name"}
     assert "MY_PROXY_PASS" not in kept and kept["OPT_IN"] == "o"
     gone = trove_env({"PATH": "/bin", "GEMINI_API_KEY": "g", "google_api_key": "g", "GITHUB_TOKEN": "x", "MY_API_KEY": "y", "ANTHROPIC_AUTH_TOKEN": "z",
-                      "AWS_SECRET_ACCESS_KEY": "s", "HF_TOKEN": "h", "AW_AUTH_HEADER": "a", "AW_JEV_API_KEY": "j", "EDITOR": "vi", "GIT_ASKPASS": "x"})
+                      "AWS_SECRET_ACCESS_KEY": "s", "HF_TOKEN": "h", "AW_AUTH_HEADER": "a", "EDITOR": "vi", "GIT_ASKPASS": "x"})
     assert gone == {"PATH": "/bin"}
 
 

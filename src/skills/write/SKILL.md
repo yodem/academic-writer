@@ -236,14 +236,9 @@ The command writes `.academic-helper/evidence.json` (source records plus verifie
 
 Spawn `architect` with the author-intent file and evidence file paths. The architect writes `.academic-helper/outline.json` directly using `${CLAUDE_PLUGIN_ROOT}/skills/write/references/outline.schema.json`; it preserves the intent thesis verbatim. It may offer up to `thresholds.json > write.outlineMaxAlternatives` clearly labelled alternatives for discussion, but never substitutes one into the artifact unless the author edits the intent first.
 
-For every section, show its claim to the author and record explicit approval in that section's `approved` field. For each claim, invoke `aw decide outline.support` with a focused question and context containing the claim and evidence support note. Use `supported` or `unsupported` as the fallback according to the architect's support assessment. Include `--label approved` or `--label rejected` after the author's response. This logged decision is advisory; only the author's approval sets `approved` and the gate decides whether writing may proceed.
+For every section, show its claim to the author and record explicit approval in that section's `approved` field. Only the author's approval sets `approved` and the gate decides whether writing may proceed.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" decide outline.support \
-  --question "Does this section claim follow from the cited passages and advance the thesis?" \
-  --options supported,unsupported --context-file <claim-context-file> \
-  --fallback <supported-or-unsupported> --run <run-id> --label <approved-or-rejected>
-
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" outline-v2 \
   --outline "$CLAUDE_PROJECT_DIR/.academic-helper/outline.json" \
   --intent "$CLAUDE_PROJECT_DIR/.academic-helper/author-intent.json" \
@@ -294,9 +289,7 @@ Put `runId: <run-id>` (the run ID chosen at the start of Phase 1, the same value
 every auditor prompt, so the auditor's page reads and verdicts are recorded under this run.
 
 The auditor is the only mandatory hard gate, and it always runs — nothing in this pipeline
-substitutes for it or skips it. (`aw draft` may separately run the `write.audit_prescreen` and
-`write.voice_check` Jev points per paragraph as logged-only signals; neither one gates or replaces
-the Claude auditor call here.)
+substitutes for it or skips it.
 
 For each unit's batch of `results`:
 - Every `PASS` paragraph: write its `taggedText` back into `drafts/<unitId>.md` at that paragraph's
@@ -340,9 +333,7 @@ only — it never rewrites a paragraph from scratch, and citations are untouched
 
 It prints `{"edits": [{unitId, paragraphIndex, before, after, reason}, ...], "applied": n}` and
 applies the edits to `drafts/*.md` itself — there is nothing further for you to write back. Non-zero
-exit is a real error; stop and report it. (`aw synthesize` may run the `synthesize.needs_bridge`
-Jev point per section boundary as an internal signal for which boundaries to consider; it does not
-change what you do here.)
+exit is a real error; stop and report it.
 
 ### W6: Output and handoff
 

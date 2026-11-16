@@ -1,11 +1,10 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, appendFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { allowedEnv } from './library/backends.ts';
 import { callGemini } from './gemini.ts';
 import { judge } from './judge.ts';
-import { decide } from './decide.ts';
 import { routeFor } from './routing.ts';
 import { Budget, budgetFor } from './ledger.ts';
 import { pluginRoot } from './pi.ts';
@@ -51,20 +50,6 @@ async function command(bin: string, args: string[], cwd?: string): Promise<strin
     child.on('close', (code) => code === 0 ? resolvePromise(stdout) : reject(new Error(`ERROR proofread: ${stderr || `${bin} exited ${String(code)}`}`)));
   });
 }
-function importLegacyJev(runId: string, project: string): void {
-  const legacyPath = join(project, '.academic-helper', 'jev-shadow.jsonl');
-  const marker = join(project, '.academic-helper', 'jev-shadow-imported');
-  if (!existsSync(legacyPath) || existsSync(marker)) return;
-  const ledgerDir = join(project, '.academic-helper', 'runs', runId);
-  mkdirSync(ledgerDir, { recursive: true });
-  const rows = readFileSync(legacyPath, 'utf8').split('\n').filter((line) => line.trim());
-  for (const line of rows) {
-    let evidence: unknown;
-    try { evidence = JSON.parse(line) as unknown; } catch { throw new Error('ERROR proofread.risk: invalid legacy Jev shadow row'); }
-    appendFileSync(join(ledgerDir, 'jev.jsonl'), `${JSON.stringify({ point: 'proofread.risk', legacyEvidence: evidence, labelSource: 'llm', priorShadow: true })}\n`, 'utf8');
-  }
-  writeFileSync(marker, 'imported\n', 'utf8');
-}
 function numberedChunks(chunks: Chunk[]): Chunk[] { return chunks.map((chunk, index) => ({ ...chunk, index, text: chunk.text.split('\n').map((line, offset) => /^L\d+\t/.test(line) ? line : `L${chunk.startLine + offset}\t${line}`).join('\n') })); }
 async function mapLimit<T, R>(items: T[], limit: number, operation: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);
@@ -80,13 +65,9 @@ async function find(chunk: Chunk, options: RunProofreadOptions, budget: Budget, 
   let candidates = Array.isArray(raw) ? raw : raw.changes;
   const kept: Change[] = [];
   for (const candidate of candidates) {
-    const decision = await decide({ point: 'proofread.triage', question: 'Is this candidate a genuine proofread error?', options: ['keep','discard'], context: JSON.stringify(candidate), runId: options.runId, fallback: async () => 'keep' });
-    if (decision.answer === 'keep') {
-      const risk = await decide({ point: 'proofread.risk', question: 'What meaning risk does this candidate carry?', options: ['low','medium','high'], context: JSON.stringify(candidate), runId: options.runId, fallback: async () => candidate.meaningRisk });
-      // A convention suggestion is the author's call (never auto-applied), so no risk verdict lowers it below medium.
-      const meaningRisk = candidate.suggestion === true && risk.answer === 'low' ? 'medium' : risk.answer as Change['meaningRisk'];
-      kept.push({ ...candidate, meaningRisk });
-    } else kept.push({ ...candidate, status: 'triaged-out' });
+    // A convention suggestion is the author's call (never auto-applied), so it never sits below medium risk.
+    const meaningRisk = candidate.suggestion === true && candidate.meaningRisk === 'low' ? 'medium' : candidate.meaningRisk;
+    kept.push({ ...candidate, meaningRisk });
   }
   return kept;
 }
@@ -110,7 +91,6 @@ async function proofreadRun(options: RunProofreadOptions): Promise<ProofreadResu
   const root = options.article ? pluginRoot() : '';
   const outDir = resolve(options.out ?? '.'); mkdirSync(outDir, { recursive: true });
   const project = options.projectDir ?? process.env.CLAUDE_PROJECT_DIR ?? '';
-  if (project) importLegacyJev(options.runId, project);
   const article = options.article ? resolve(options.article) : '';
   const content = article ? readFileSync(article, 'utf8') : '';
   const numbered = Array.isArray(options.chunks) ? numberedChunks(options.chunks) : [];
@@ -133,9 +113,6 @@ async function proofreadRun(options: RunProofreadOptions): Promise<ProofreadResu
     deterministic = (JSON.parse(result) as { changes: Change[] }).changes;
   }
   if (stubs.mustCatch) deterministic = await stubs.mustCatch();
-  for (const hit of deterministic.filter((change) => change.class === 'style_words')) {
-    await decide({ point: 'style.filler', question: 'Is this capped style-word use filler?', options: ['flag','allow'], context: JSON.stringify(hit), runId: options.runId, fallback: async () => 'flag' });
-  }
   const voicePath = join(options.dataDir ?? process.env.CLAUDE_PLUGIN_DATA ?? '', 'voice', 'rules.md');
   const voiceRules = options.voiceRules ?? (existsSync(voicePath) ? readFileSync(voicePath, 'utf8') : '');
   const venueProfile = resolveVenueProfile(options.venue, project, root);
@@ -181,9 +158,9 @@ async function proofreadRun(options: RunProofreadOptions): Promise<ProofreadResu
       return verdictPromise;
     };
     return await Promise.all(changes.map(async (change) => {
-      const decided = await decide({ point: 'proofread.verify', question: 'Should this proposed correction be applied?', options: ['uphold','refute'], context: JSON.stringify(change), runId: options.runId, fallback: async () => (await getVerdicts()).get(change.id) ?? 'ERROR' });
-      if (!['uphold', 'refute'].includes(decided.answer)) throw new Error(`ERROR proofread.verify: invalid verdict for ${change.id}`);
-      return { ...change, status: decided.answer === 'refute' ? 'refuted' : 'verified' };
+      const answer = (await getVerdicts()).get(change.id) ?? 'ERROR';
+      if (!['uphold', 'refute'].includes(answer)) throw new Error(`ERROR proofread.verify: invalid verdict for ${change.id}`);
+      return { ...change, status: answer === 'refute' ? 'refuted' : 'verified' };
     }));
   });
   stepEnd('verify');

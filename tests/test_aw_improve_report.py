@@ -6,15 +6,3 @@ def test_clusters_repeated_defects(tmp_path):
     out = json.loads(subprocess.check_output([sys.executable, ROOT/"scripts/aw-improve-report.py", "--ledger", f, "--json"]))
     top = max(out["clusters"], key=lambda c: c["count"])
     assert top["count"] == 2 and top["key"].startswith("evidence.extract")
-
-def test_jev_roster_promotes_120_agreeing_labels(tmp_path):
-    f = tmp_path/"jev.jsonl"
-    f.write_text("\n".join(json.dumps({"point":"proofread.verify","jevAnswer":"uphold","label":"uphold"}) for _ in range(120)))
-    out = json.loads(subprocess.check_output([sys.executable, ROOT/"scripts/aw-improve-report.py", "--ledger", f, "--jev", "--json"]))
-    assert out["agreement"]["proofread.verify"]["recommend"] == "promote"
-
-def test_jev_roster_holds_below_label_minimum(tmp_path):
-    f = tmp_path/"jev.jsonl"
-    f.write_text("\n".join(json.dumps({"point":"proofread.verify","jevAnswer":"uphold","label":"uphold"}) for _ in range(50)))
-    out = json.loads(subprocess.check_output([sys.executable, ROOT/"scripts/aw-improve-report.py", "--ledger", f, "--jev", "--json"]))
-    assert out["agreement"]["proofread.verify"]["recommend"] == "hold"

@@ -4,6 +4,9 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+### Removed
+- **Jev (TypeSafe) is gone.** The optional experimental decision-scoring service is removed from the plugin: the `aw decide` command, every place that logged a Jev answer beside the model's, and the Jev API key. The setup screen no longer asks for that key, and nothing is sent to that service. Drafting, evidence, proofreading, synthesis and revision work exactly as before, since Jev only ever logged answers and never changed a result.
+
 ## [0.22.3] — 2026-11-16
 ### Changed
 - **OCR now spends as little money as possible.** Claude (Opus, on your Claude plan) still reads scanned pages first. The paid Gemini reader, used only for pages Claude refuses, answers with a summary, or that are under 100 dpi, is `gemini-3.8-flash` with the least thinking it accepts (thinking level low); before, Gemini OCR thought at its default level and billed it. On 12 Hebrew book pages it read within a median 0.25% of Opus's letters, at about $0.004 a page (2026 price; about $0.007 from 2027). `gemini-2.5-flash` without thinking was half the price but 1.2% off and scrambled two-column glossaries.

@@ -11,7 +11,6 @@ import { Library } from './library/adapter.ts';
 import { shadowModeFrom } from './library/shadow.ts';
 import { isPlainId } from './library/backends.ts';
 import type { RouteName } from './library/types.ts';
-import { decide } from './decide.ts';
 import evidenceSchema from '../../schemas/evidence.schema.json' with { type: 'json' };
 
 type Passage = { id: string; sourceId: string; locator: string; quote: string; gloss: string; relevance: number };
@@ -164,14 +163,9 @@ export async function buildEvidence(options: BuildOptions): Promise<BuildResult>
     for (const passage of result.passages) {
       // An empty quote "occurs" in every text; reject it before the verbatim check.
       if (!normalize(passage.quote) || !normalize(cachedText).includes(normalize(passage.quote))) { event(options.runId, passage, 'quote_not_verbatim'); continue; }
-      // Jev point evidence.relevance (shadow-first): the Gemini relevance is the fallback and,
-      // in shadow mode, the answer; Jev's view is logged for later labels (passages the outline uses).
-      const rated = await decide({ point: 'evidence.relevance', question: 'How relevant is this passage to the author thesis (0 = not relevant, 3 = central)?',
-        options: ['0', '1', '2', '3'], context: JSON.stringify({ thesis: intent, quote: passage.quote, gloss: passage.gloss }), runId: options.runId,
-        fallback: async () => String(passage.relevance) });
       const id = stablePassageId(source.id, passage.quote);
       if (passages.some((p) => p.id === id)) continue; // same quote extracted twice
-      passages.push({ ...passage, id, relevance: Number(rated.answer) });
+      passages.push({ ...passage, id, relevance: passage.relevance });
     }
   }
   // Rebuilds MERGE into the existing evidence.json: extraction varies run to run, and an outline cites

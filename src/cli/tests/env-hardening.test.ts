@@ -9,7 +9,7 @@ import { voiceSync, __setDataDir } from '../src/voice.ts';
 import { voicePullEnv } from '../../hooks/src/lifecycle/voice-pull.ts';
 
 const SECRETS = { GEMINI_API_KEY: 'g', GOOGLE_API_KEY: 'g2', OPENAI_API_KEY: 'o', ANTHROPIC_API_KEY: 'a', ANTHROPIC_AUTH_TOKEN: 't', OPENROUTER_API_KEY: 'r',
-  CLAUDE_PLUGIN_OPTION_GOOGLE_API_KEY: 'p', AW_JEV_API_KEY: 'j', GITHUB_TOKEN: 'x' };
+  CLAUDE_PLUGIN_OPTION_GOOGLE_API_KEY: 'p', GITHUB_TOKEN: 'x' };
 const BASE = { PATH: '/bin', HOME: '/h', LANG: 'C' };
 
 test('script kind keeps interpreter and plugin variables, never a model key', () => {

@@ -644,7 +644,7 @@
         },
         {
           "id": "aw-improve",
-          "name": "Cluster plugin defects and report Jev agreement",
+          "name": "Cluster plugin defects",
           "status": "ok",
           "tested": "unit"
         }

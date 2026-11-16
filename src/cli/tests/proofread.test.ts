@@ -24,19 +24,6 @@ test('one find + one verify call per chunk; refute downgrades, never drops; must
   assert.ok(result.changes.find((change) => change.id === 'm1'));
 });
 
-test('cascade Jev confidence can skip a model verify fallback', async () => {
-  const { __setJev, __setMode } = await import('../src/decide.js');
-  __setJev(async () => ({ answer: 'uphold', confidence: 0.99 }));
-  __setMode('proofread.verify', 'cascade');
-  let verified = false;
-  __stubs({ find: async (chunk) => [{ id: `z${chunk.index}`, line: chunk.startLine, before: 'x', after: 'y', class: 'typo', meaningRisk: 'low' }], verify: async (items) => { verified = true; return items.map((item) => ({ id: item.id, verdict: 'refute' })); }, mustCatch: async () => [], memo: async () => '' });
-  const result = await runProofread({ chunks: [{ id: 'c', index: 0, startLine: 1, endLine: 1, text: 'x' }], runId: 't-cascade', out: paths() });
-  assert.equal(verified, false);
-  assert.equal(result.changes[0]?.status, 'verified');
-  __setJev(undefined);
-  __setMode('proofread.verify', 'shadow');
-});
-
 test('hspell null-after candidate merges with finder correction as must-catch', async () => {
   const verified: string[] = [];
   __stubs({

@@ -45,7 +45,7 @@ let boot = null;
 if (args[0] === '-c') { boot = args[1]; args = args.slice(2); }
 const key = process.env.GEMINI_API_KEY;
 const keyState = !key ? 'unset' : key === process.env.FAKE_EXPECT_KEY ? 'match' : 'other';
-if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify({ tool: 'pilib', env: Object.keys(process.env), cmd: args, boot, gemini: keyState, google: process.env.GOOGLE_API_KEY ? 'set' : 'unset', jev: process.env.JEV_API_KEY ? 'set' : 'unset', cwd: process.cwd() }) + '\\n');
+if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify({ tool: 'pilib', env: Object.keys(process.env), cmd: args, boot, gemini: keyState, google: process.env.GOOGLE_API_KEY ? 'set' : 'unset', cwd: process.cwd() }) + '\\n');
 ${SHARED}
 const state = process.env.FAKE_STATE;
 const indexed = (id) => (process.env.FAKE_INDEXED || '').split(',').includes(id) || (state && fs.existsSync(path.join(state, id)));
@@ -98,7 +98,7 @@ function writeFake(dir: string, name: string, body: string): string {
 }
 
 const SCRUB = ['AW_PAGEINDEX_COMMAND', 'AW_PAGEINDEX_HOME', 'AW_TROVE_COMMAND', 'AW_LIBRARY_ROUTE', 'AW_LIBRARY_SHADOW', 'AW_LIBRARY_TIMEOUT_MS', 'CLAUDE_PLUGIN_DATA', 'CLAUDE_PLUGIN_ROOT', 'CLAUDE_PROJECT_DIR',
-  'GOOGLE_API_KEY', 'GEMINI_API_KEY', 'JEV_API_KEY', 'FAKE_LOG', 'FAKE_STATE', 'FAKE_EXPECT_KEY'];
+  'GOOGLE_API_KEY', 'GEMINI_API_KEY', 'FAKE_LOG', 'FAKE_STATE', 'FAKE_EXPECT_KEY'];
 
 function fixture(source: Source, extra: Record<string, string> = {}, config?: unknown): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'aw-index-'));
@@ -111,7 +111,7 @@ function fixture(source: Source, extra: Record<string, string> = {}, config?: un
   const pluginRoot = join(root, 'plugin');
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const key of [...SCRUB, ...Object.keys(env).filter((name) => name.startsWith('FAKE_'))]) delete env[key];
-  Object.assign(env, { AW_TROVE_COMMAND: writeFake(bin, 'trove', TROVE_FAKE), FAKE_LOG: log, FAKE_STATE: state, FAKE_EXPECT_KEY: SECRET, GOOGLE_API_KEY: SECRET, JEV_API_KEY: 'jev-secret-value', ...extra });
+  Object.assign(env, { AW_TROVE_COMMAND: writeFake(bin, 'trove', TROVE_FAKE), FAKE_LOG: log, FAKE_STATE: state, FAKE_EXPECT_KEY: SECRET, GOOGLE_API_KEY: SECRET, ...extra });
   const pilib = writeFake(bin, 'pilib', PILIB_FAKE);
   // A wrapper reaches a computer that holds its own Gemini key: the fake there does not need ours.
   if (source === 'wrapper' || source === 'library.json') env.FAKE_NO_KEY_CHECK = '1';
@@ -147,7 +147,7 @@ async function cli(fx: Fixture, ...argv: string[]): Promise<{ code: number; out:
   }
 }
 
-type LogLine = { tool: string; env: string[]; cmd: string[]; boot?: string | null; gemini: string; google: string; jev?: string; cwd?: string };
+type LogLine = { tool: string; env: string[]; cmd: string[]; boot?: string | null; gemini: string; google: string; cwd?: string };
 function calls(fx: Fixture): LogLine[] { return existsSync(fx.log) ? readFileSync(fx.log, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line) as LogLine) : []; }
 function pilibCalls(fx: Fixture, name?: string): LogLine[] { return calls(fx).filter((line) => line.tool === 'pilib' && (name === undefined || line.cmd[0] === name)); }
 function usageRows(fx: Fixture, run: string): Array<Record<string, unknown>> {
@@ -179,9 +179,9 @@ test('index through a wrapper: a tree is built, read back against Trove, and one
     const rows = usageRows(fx, 'idx-1');
     assert.equal(rows.length, 1);
     assert.deepEqual([rows[0]?.step, rows[0]?.provider, rows[0]?.model, rows[0]?.input_tokens, rows[0]?.output_tokens, rows[0]?.cost_usd, rows[0]?.exit], ['library.index', 'gemini', 'gemini/test-model', 1200, 300, 0.0042, 'OK']);
-    // A wrapper keeps its own key: the plugin hands nothing over, and strips the Google key and the Jev key from its environment.
+    // A wrapper keeps its own key: the plugin hands nothing over, and strips the Google key from its environment.
     const index = pilibCalls(fx, 'index-trove').find((line) => !line.cmd.includes('--help'));
-    assert.deepEqual([index?.gemini, index?.google, index?.jev], ['unset', 'unset', 'unset']);
+    assert.deepEqual([index?.gemini, index?.google], ['unset', 'unset']);
     assert.ok(!JSON.stringify(calls(fx)).includes(SECRET));
     assert.ok(!result.out.includes(SECRET) && !result.err.includes(SECRET));
     assert.ok(!everyFileText(join(fx.project, '.academic-helper')).includes(SECRET));
@@ -196,7 +196,7 @@ test('index with the built-in helper: the key reaches the child only as GEMINI_A
     const out = JSON.parse(result.out) as { pageindex_source: string; read_back: { ok: boolean } };
     assert.deepEqual([out.pageindex_source, out.read_back.ok], ['installed', true]);
     const index = pilibCalls(fx, 'index-trove').find((line) => !line.cmd.includes('--help'));
-    assert.deepEqual([index?.gemini, index?.google, index?.jev], ['match', 'unset', 'unset']);
+    assert.deepEqual([index?.gemini, index?.google], ['match', 'unset']);
     // The command is the private Python with the bootstrap that points at the plugin's own pilib source and the data folder's library.
     assert.ok(index?.boot?.includes(JSON.stringify(join(fx.pluginRoot, 'scripts', 'pageindex'))), 'the bootstrap names the plugin source');
     assert.ok(index?.boot?.includes(JSON.stringify(join(fx.data, 'pageindex', 'library'))), 'the bootstrap names the library folder');
@@ -491,7 +491,7 @@ for (const source of ['installed', 'wrapper'] as const) {
   });
 }
 
-const SECRET_NAMES = ['GOOGLE_API_KEY', 'GEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GITHUB_TOKEN', 'AWS_SECRET_ACCESS_KEY', 'JEV_API_KEY', 'AW_SOME_API_KEY'];
+const SECRET_NAMES = ['GOOGLE_API_KEY', 'GEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GITHUB_TOKEN', 'AWS_SECRET_ACCESS_KEY', 'AW_SOME_API_KEY'];
 
 test('no lookup, index or backfill command ever sees a key, token or secret set where aw runs; an allow-list passes what a command needs', async () => {
   for (const source of ['wrapper', 'installed'] as const) {

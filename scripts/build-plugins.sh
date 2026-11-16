@@ -191,7 +191,7 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
 done
 
 # Phase 5: Build the standalone academic-writer CLI (`aw`). Its tools (draft, synthesize,
-# edit, ocr, evidence, proofread, decide, voice, revise, ...) replace the retired bundled
+# edit, ocr, evidence, proofread, voice, revise, ...) replace the retired bundled
 # Gemini MCP server; skills invoke the built binary via Bash, not an MCP connection.
 echo -e "${BLUE}[5/7] Building aw CLI...${NC}"
 if [[ -f "$SRC_DIR/cli/package.json" ]]; then

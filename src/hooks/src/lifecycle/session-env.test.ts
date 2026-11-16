@@ -5,9 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sessionEnv } from './session-env.js';
 
-test('the Google and Jev keys are read from CLAUDE_PLUGIN_OPTION_*, then the older USER_CONFIG_* names, quoted', () => {
+test('the Google key is read from CLAUDE_PLUGIN_OPTION_*, then the older USER_CONFIG_* names, quoted', () => {
   const root = mkdtempSync(join(tmpdir(), 'aw-session-env-'));
-  const names = ['CLAUDE_PLUGIN_OPTION_GOOGLE_API_KEY', 'USER_CONFIG_GOOGLE_API_KEY', 'CLAUDE_PLUGIN_OPTION_JEV_API_KEY', 'USER_CONFIG_JEV_API_KEY'] as const;
+  const names = ['CLAUDE_PLUGIN_OPTION_GOOGLE_API_KEY', 'USER_CONFIG_GOOGLE_API_KEY'] as const;
   const before = names.map((n) => process.env[n]);
   try {
     mkdirSync(join(root, '.academic-helper'));
@@ -16,10 +16,8 @@ test('the Google and Jev keys are read from CLAUDE_PLUGIN_OPTION_*, then the old
     writeFileSync(envFile, '');
     process.env['CLAUDE_PLUGIN_OPTION_GOOGLE_API_KEY'] = "g'k $HOME; x";
     process.env['USER_CONFIG_GOOGLE_API_KEY'] = 'old';
-    process.env['USER_CONFIG_JEV_API_KEY'] = 'jev-old';
-    delete process.env['CLAUDE_PLUGIN_OPTION_JEV_API_KEY'];
     sessionEnv(root, envFile, { pageindexCommand: '' });
-    assert.equal(readFileSync(envFile, 'utf8'), "export GOOGLE_API_KEY='g'\\''k $HOME; x'\nexport JEV_API_KEY='jev-old'\n");
+    assert.equal(readFileSync(envFile, 'utf8'), "export GOOGLE_API_KEY='g'\\''k $HOME; x'\n");
   } finally {
     names.forEach((n, i) => { const v = before[i]; if (v === undefined) delete process.env[n]; else process.env[n] = v; });
     rmSync(root, { recursive: true, force: true });
@@ -33,8 +31,8 @@ test('session env appends escaped configured keys only for profiled projects', (
     writeFileSync(join(root, '.academic-helper', 'profile.md'), 'profile');
     const envFile = join(root, 'claude.env');
     writeFileSync(envFile, 'existing\n');
-    sessionEnv(root, envFile, { googleApiKey: "g'key", jevApiKey: 'jev' });
-    assert.equal(readFileSync(envFile, 'utf8'), "existing\nexport GOOGLE_API_KEY='g'\\''key'\nexport JEV_API_KEY='jev'\n");
+    sessionEnv(root, envFile, { googleApiKey: "g'key" });
+    assert.equal(readFileSync(envFile, 'utf8'), "existing\nexport GOOGLE_API_KEY='g'\\''key'\n");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -45,7 +43,7 @@ test('an unset option arriving as its literal placeholder is never exported', ()
     writeFileSync(join(root, '.academic-helper', 'profile.md'), 'profile');
     const envFile = join(root, 'claude.env');
     writeFileSync(envFile, '');
-    sessionEnv(root, envFile, { googleApiKey: 'real', jevApiKey: '${user_config.jev_api_key}' });
+    sessionEnv(root, envFile, { googleApiKey: 'real', pageindexCommand: '${user_config.pageindex_command}' });
     assert.equal(readFileSync(envFile, 'utf8'), "export GOOGLE_API_KEY='real'\n");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -184,7 +182,7 @@ test('the activity pane turned off is exported as AW_ACTIVITY_PANE=off, and noth
     for (const [value, expected] of [['false', "export AW_ACTIVITY_PANE='off'\n"], ['true', ''], [undefined, '']] as const) {
       writeFileSync(envFile, '');
       if (value === undefined) delete process.env[name]; else process.env[name] = value;
-      sessionEnv(root, envFile, { googleApiKey: '', jevApiKey: '', pageindexCommand: '', pluginData: '' });
+      sessionEnv(root, envFile, { googleApiKey: '', pageindexCommand: '', pluginData: '' });
       assert.equal(readFileSync(envFile, 'utf8'), expected, String(value));
     }
   } finally {

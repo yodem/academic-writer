@@ -48,7 +48,7 @@ const VENV_FAKE = `
 const fs = require('node:fs');
 let args = process.argv.slice(2);
 if (args[0] === '-c' && String(args[1]).startsWith('import sys; print(')) { console.log('__VERSION__'); console.log(process.argv[1]); process.exit(0); }
-const log = (extra) => process.env.FAKE_LOG && fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify(Object.assign({ who: 'venv', args: args.map((a) => a.length > 200 ? a.slice(0, 40) + '...' : a), google: process.env.GOOGLE_API_KEY ? 'set' : 'unset', gemini: process.env.GEMINI_API_KEY ? 'set' : 'unset', jev: process.env.JEV_API_KEY ? 'set' : 'unset', pipNoInput: process.env.PIP_NO_INPUT || '' }, extra || {})) + '\\n');
+const log = (extra) => process.env.FAKE_LOG && fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify(Object.assign({ who: 'venv', args: args.map((a) => a.length > 200 ? a.slice(0, 40) + '...' : a), google: process.env.GOOGLE_API_KEY ? 'set' : 'unset', gemini: process.env.GEMINI_API_KEY ? 'set' : 'unset', pipNoInput: process.env.PIP_NO_INPUT || '' }, extra || {})) + '\\n');
 if (args[0] === '-c' && args[1] === 'pass') { log(); process.exit(0); }
 if (args[0] === '-m' && args[1] === 'pip') {
   log();
@@ -96,7 +96,7 @@ function fixture(pythons: string[], extra: Record<string, string> = {}): Fixture
   }
   const log = join(root, 'calls.log');
   const data = join(root, 'data');
-  const env: NodeJS.ProcessEnv = { PATH: bin, HOME: root, FAKE_LOG: log, FAKE_VENV_SCRIPT: venvScript, GOOGLE_API_KEY: SECRET, GEMINI_API_KEY: SECRET, JEV_API_KEY: 'jev-secret-value', FAKE_REAL_PYTHON: REAL_PYTHON, ...extra };
+  const env: NodeJS.ProcessEnv = { PATH: bin, HOME: root, FAKE_LOG: log, FAKE_VENV_SCRIPT: venvScript, GOOGLE_API_KEY: SECRET, GEMINI_API_KEY: SECRET, FAKE_REAL_PYTHON: REAL_PYTHON, ...extra };
   env.AW_LIBRARY_PASS_ENV = ['FAKE_LOG', 'FAKE_VENV_SCRIPT', 'FAKE_REAL_PYTHON', 'FAKE_TIER', 'FAKE_PILIB_VERSION', 'FAKE_PIP_FAIL', 'FAKE_VENV_FAIL', 'FAKE_NO_HEALTH', 'FAKE_PLANT_VENV'].join(',');
   return {
     root, bin, pluginRoot, data, home: join(data, 'pageindex'), log, env,
@@ -455,7 +455,7 @@ test('failures of pip and venv are put in plain words', () => {
 });
 
 test('the child environment never holds a secret unless the Gemini key is handed over by name', () => {
-  const base = { PATH: '/bin', GOOGLE_API_KEY: SECRET, GEMINI_API_KEY: 'other', JEV_API_KEY: 'j', HOME: '/h' };
+  const base = { PATH: '/bin', GOOGLE_API_KEY: SECRET, GEMINI_API_KEY: 'other', HOME: '/h' };
   assert.deepEqual(childEnv(base), { PATH: '/bin', HOME: '/h' });
   assert.deepEqual(childEnv(base, { gemini: SECRET }), { PATH: '/bin', HOME: '/h', GEMINI_API_KEY: SECRET });
   assert.equal(geminiKeyFrom({ GOOGLE_API_KEY: SECRET }), SECRET);

@@ -93,12 +93,10 @@ def test_every_manifest_option_is_read_by_the_session_hook():
         assert f"pluginOption('{key}')" in source, key
 
 
-def test_google_and_jev_keys_with_quote_dollar_and_semicolon_arrive_intact_and_are_not_printed():
+def test_google_key_with_quote_dollar_and_semicolon_arrive_intact_and_are_not_printed():
     g = "AIza'sy $HOME; echo pwned \"x\""
-    j = "jev'`id`;$(id)"
-    env = {"CLAUDE_PLUGIN_OPTION_GOOGLE_API_KEY": g, "CLAUDE_PLUGIN_OPTION_JEV_API_KEY": j}
+    env = {"CLAUDE_PLUGIN_OPTION_GOOGLE_API_KEY": g}
     assert _run_session_env("", env, var="GOOGLE_API_KEY") == g
-    assert _run_session_env("", env, var="JEV_API_KEY") == j
     # the older USER_CONFIG_ names still work, and the new names win
     assert _run_session_env("", {"USER_CONFIG_GOOGLE_API_KEY": "old"}, var="GOOGLE_API_KEY") == "old"
     both = {"USER_CONFIG_GOOGLE_API_KEY": "old", "CLAUDE_PLUGIN_OPTION_GOOGLE_API_KEY": "new"}

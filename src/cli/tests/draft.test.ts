@@ -99,23 +99,14 @@ test('gate: word-bounds is skipped for a unit whose outline entry has no paragra
   assert.deepEqual(r.failures, []);
 });
 
-// Jev point write.audit_prescreen: logged only; the auditor is always required,
-// even in cascade mode with a confident Jev answer.
-test('write.audit_prescreen: cascade mode never marks the citation auditor skippable', async () => {
-  freshProject('aw-draft-cascade-');
-  const { __setJev, __setMode } = await import('../src/decide.js');
-  __setMode('write.audit_prescreen', 'cascade');
-  __setJev(async () => ({ answer: 'skip-likely', confidence: 0.99 }));
-  try {
-    __stubs({ gen: async () => 'פסקה ראשונה.\n\nפסקה שנייה.', evidenceQuotes: [], voice: noVoice });
-    const outline = { units: [{ id: 'A', dependsOn: [] }] };
-    const r = await draftAll(outline, { runId: 'cascade-t' });
-    assert.equal(r.audit.length, 2);
-    assert.ok(r.audit.every((item) => item.required === true));
-  } finally {
-    __setMode('write.audit_prescreen', 'shadow');
-    __setJev(undefined);
-  }
+// The auditor is always required for every paragraph.
+test('every drafted paragraph is marked as requiring the citation auditor', async () => {
+  freshProject('aw-draft-audit-');
+  __stubs({ gen: async () => 'פסקה ראשונה.\n\nפסקה שנייה.', evidenceQuotes: [], voice: noVoice });
+  const outline = { units: [{ id: 'A', dependsOn: [] }] };
+  const r = await draftAll(outline, { runId: 'audit-t' });
+  assert.equal(r.audit.length, 2);
+  assert.ok(r.audit.every((item) => item.required === true));
 });
 
 // --unit redraft mode: only the named unit is drafted.
