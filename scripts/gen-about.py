@@ -45,13 +45,13 @@ ONBOARDING: Dict[str, List[str]] = {
         "הריצו /academic-writer:setup ובחרו תיקיית בית ותפקיד מרצה.",
         "הריצו /academic-writer:init בתיקיית הפרויקט כדי לתת לו פרופיל.",
         "הוסיפו מאמרים קודמים כדי שהתוסף ילמד את הסגנון שלכם.",
-        "כתבו מאמר חדש עם /academic-writer:write, או הגיהו קיים עם /academic-writer:proofread.",
+        "כתבו מאמר חדש עם /academic-writer:write, או הגיהו קיים עם /academic-writer:write proofread.",
     ],
     "researcher": [
         "הריצו /academic-writer:setup ובחרו תיקיית בית ותפקיד חוקר.",
         "הריצו /academic-writer:init בתיקיית המחקר כדי לתת לה פרופיל.",
         "הוסיפו מקורות לספרייה עם /academic-writer:ingest או /academic-writer:ingest-book.",
-        "נסחו שאלת מחקר עם /academic-writer:ideate וכתבו עם /academic-writer:write.",
+        "נסחו שאלת מחקר עם /academic-writer:write ideate וכתבו עם /academic-writer:write.",
         "פתחו את הלוח עם /academic-writer:dashboard כדי לעקוב אחרי הכתיבה.",
     ],
 }
@@ -96,7 +96,9 @@ def build_feature(root: Path, guide, node: Dict[str, Any]) -> Dict[str, Any]:
         if not description:
             description = guide.summary_for(fm)
         if fm.get("user-invocable"):
-            command = guide.PREFIX + name
+            meta = fm.get("metadata")
+            moved = str(meta.get("moved-to", "")).strip() if isinstance(meta, dict) else ""
+            command = guide.PREFIX + (moved or name)  # a stub's command is its router phase
     description = description or node.get("name") or node["id"]
     subs = [build_sub(sub) for sub in node.get("subfeatures") or []]
     return {"id": node["id"], "name_he": node.get("name_he") or node.get("name") or node["id"],

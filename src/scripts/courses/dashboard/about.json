@@ -116,7 +116,7 @@
       "id": "research",
       "name_he": "מחקר ואיסוף ראיות",
       "description_he": "שאלת מחקר ואיסוף קטעים מאומתים מהמקורות.",
-      "command": "/academic-writer:research",
+      "command": "/academic-writer:write research",
       "status": "ok",
       "tested": "manual",
       "subfeatures": [
@@ -264,7 +264,7 @@
         },
         {
           "id": "docx-handoff",
-          "name": "generate-docx.py creates Word output; author comments and runs /academic-writer:revise",
+          "name": "generate-docx.py creates Word output; author comments and runs /academic-writer:write revise",
           "status": "ok",
           "tested": "unit",
           "subfeatures": []
@@ -422,7 +422,7 @@
       "id": "editing",
       "name_he": "עריכה והגהה",
       "description_he": "עריכת מאמר או חלק ממנו, והגהה עם הערות ותיקונים.",
-      "command": "/academic-writer:edit-section",
+      "command": "/academic-writer:write edit-section",
       "status": "ok",
       "tested": "manual",
       "subfeatures": [
@@ -571,7 +571,7 @@
       "id": "docx-revise-loop",
       "name_he": "סבב הערות ב-Word",
       "description_he": "קריאת הערות ותיקונים ב-Word ועדכון הטיוטה.",
-      "command": "/academic-writer:revise",
+      "command": "/academic-writer:write revise",
       "status": "ok",
       "tested": "unit",
       "subfeatures": [
@@ -868,7 +868,7 @@
       "id": "activity-pane",
       "name_he": "חלון פעילות",
       "description_he": "חלון חי ב-Claude Code שמראה את שלבי הכתיבה.",
-      "command": "/academic-writer:watch",
+      "command": "/academic-writer:write watch",
       "status": "partial",
       "tested": "manual",
       "subfeatures": []
@@ -910,13 +910,13 @@
       "הריצו /academic-writer:setup ובחרו תיקיית בית ותפקיד מרצה.",
       "הריצו /academic-writer:init בתיקיית הפרויקט כדי לתת לו פרופיל.",
       "הוסיפו מאמרים קודמים כדי שהתוסף ילמד את הסגנון שלכם.",
-      "כתבו מאמר חדש עם /academic-writer:write, או הגיהו קיים עם /academic-writer:proofread."
+      "כתבו מאמר חדש עם /academic-writer:write, או הגיהו קיים עם /academic-writer:write proofread."
     ],
     "researcher": [
       "הריצו /academic-writer:setup ובחרו תיקיית בית ותפקיד חוקר.",
       "הריצו /academic-writer:init בתיקיית המחקר כדי לתת לה פרופיל.",
       "הוסיפו מקורות לספרייה עם /academic-writer:ingest או /academic-writer:ingest-book.",
-      "נסחו שאלת מחקר עם /academic-writer:ideate וכתבו עם /academic-writer:write.",
+      "נסחו שאלת מחקר עם /academic-writer:write ideate וכתבו עם /academic-writer:write.",
       "פתחו את הלוח עם /academic-writer:dashboard כדי לעקוב אחרי הכתיבה."
     ]
   },

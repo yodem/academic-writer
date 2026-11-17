@@ -103,7 +103,7 @@ class TestedField(unittest.TestCase):
         by_id = {f["id"]: f for f in about["features"]}
         self.assertIsNone(by_id["gemini-mcp-retirement"]["command"])
         self.assertIsNone(by_id["synthesis"]["command"])
-        self.assertEqual(by_id["editing"]["command"], "/academic-writer:edit-section")
+        self.assertEqual(by_id["editing"]["command"], "/academic-writer:write edit-section")
         self.assertEqual(by_id["section-writing"]["command"], "/academic-writer:write")
 
 

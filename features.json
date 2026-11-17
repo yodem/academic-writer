@@ -284,7 +284,7 @@
         },
         {
           "id": "docx-handoff",
-          "name": "generate-docx.py creates Word output; author comments and runs /academic-writer:revise",
+          "name": "generate-docx.py creates Word output; author comments and runs /academic-writer:write revise",
           "status": "ok",
           "tested": "unit"
         }
@@ -975,7 +975,7 @@
     },
     {
       "id": "activity-pane",
-      "name": "Claude Code mod pane for live agent activity (/academic-writer:watch)",
+      "name": "Claude Code mod pane for live agent activity (/academic-writer:write watch)",
       "sources": [
         "src/skills/watch/SKILL.md",
         "src/mod/"
