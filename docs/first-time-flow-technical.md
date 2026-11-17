@@ -8,7 +8,7 @@ What happens, in code, between installing the plugin and the first `.docx`. For 
 
 | Piece | Where | Role |
 |---|---|---|
-| Skills | `src/skills/<name>/SKILL.md` | The conversation. User-invocable skills become `/academic-writer:<name>` commands; `learn`, `present`, `update-field` and `update-tools` are `user-invocable: false` and are reached by plain-language requests. |
+| Skills | `src/skills/<name>/SKILL.md` | The conversation. User-invocable skills become `/academic-writer:<name>` commands; `learn`, `update-field` and `update-tools` are `user-invocable: false` and are reached by plain-language requests. The `write` skill is a phase router: `/academic-writer:write <phase>` reads one file from `src/skills/write/phases/` (`present` is one of its phases). |
 | `aw` CLI | `src/cli/src/*.ts`, shipped as `plugins/academic-writer/bin/aw` | Every model call and deterministic step, invoked from Bash. All model steps route to Gemini (`thresholds.json > models`) and need `GOOGLE_API_KEY`. |
 | Agents | `src/agents/architect.md`, `src/agents/auditor.md` | `architect` writes the outline; `auditor` is the citation hard gate. No other agents ship. |
 | Hooks | `src/hooks/hooks.json`, `src/hooks/src/lifecycle/*.ts` | Profile-scoped: each one is a no-op in a project without `.academic-helper/profile.md`. |
@@ -77,7 +77,7 @@ Voice gate      python3 scripts/check-voice-populated.py AUTHOR_VOICE.md
                 exit 0 → continue; exit 1 or 2 → STOP, ask for /academic-writer:voice
 Voice load      voice-sync.sh pull "${CLAUDE_PLUGIN_DATA}" "$PWD"
 Profile         cat .academic-helper/profile.md   (missing → ask for /academic-writer:init)
-Guard           articles/<slug>.md exists → hand off to /academic-writer:edit
+Guard           articles/<slug>.md exists → hand off to /academic-writer:write edit
 Steps 1–2       subject, language, length, optional user draft; source selection
                 (trove items list, shelf-scoped); optional NotebookLM background (never cited)
 W0 Intent       thesis in the author's words → .academic-helper/author-intent.json
@@ -95,7 +95,7 @@ W4 Audit        one auditor subagent per unit, in parallel; FAIL/PARTIAL →
 W5 Synthesize   aw synthesize: paragraph-level transition edits only, citations untouched
 W6 Output       abstract and self-review (references/write-completion.md);
                 aw docx → .academic-helper/runs/<id>/article.json → scripts/generate-docx.py
-Handoff         author comments in Word → /academic-writer:revise
+Handoff         author comments in Word → /academic-writer:write revise
 ```
 
 The auditor is the only mandatory hard gate and always runs. Nothing replaces the auditor or the author's approval.

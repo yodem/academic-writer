@@ -10,7 +10,7 @@
 >
 > Where the anti-ai and banned-terms files tell the writer what to strike, this file tells the
 > writer what to reach for instead — genuine, discipline-appropriate Humanities academic register
-> in English. It is loaded by `/academic-writer:review` (dimension 6, terminology register)
+> in English. It is loaded by `/academic-writer:write review` (dimension 6, terminology register)
 > for articles where `targetLanguage` is English. Consult it before and while drafting, not as a post-hoc find-and-replace pass.
 
 ---

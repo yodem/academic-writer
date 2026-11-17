@@ -2,12 +2,12 @@
 
 > **Historical record.** This page documents how the proofread feature was designed and built in
 > 2026-06 to 2026-09. It is not a description of the current code. Since 0.14.0,
-> `/academic-writer:proofread` runs the `aw proofread` pipeline (`src/cli/src/proofread.ts`): a
+> `/academic-writer:write proofread` runs the `aw proofread` pipeline (`src/cli/src/proofread.ts`): a
 > deterministic must-catch pass, a Gemini finder, a batched meaning check, and an editorial memo,
 > writing `proofed.md`, `report.md`, `memo.md` and `changes.json` to an output folder, plus
 > `proofed.docx` with real tracked changes for Word input (`src/scripts/build-tracked-docx.py`).
 > The `proofreader` and `section-writer` agents named below were removed in 0.14.0. For current
-> behaviour, read `src/skills/proofread/SKILL.md`.
+> behaviour, read `src/skills/write/phases/proofread.md`.
 
 **Date:** 2026-06-07 · **Version:** proofread skill v0.1.0
 **Decision:** Option A (markdown report) + mechanical-only, per user.
@@ -15,7 +15,7 @@
 
 ## What this adds
 
-A `/academic-writer:proofread` command that runs a **mechanical-only** proofreading pass over a finished article: it fixes typos, punctuation, spacing, Hebrew typography, and clear grammar errors, writes the corrected text to a new file, and produces a markdown report documenting **every change and why**. It never rewrites prose for style, tone, register, or voice — that stays with `/academic-writer:edit`.
+A `/academic-writer:write proofread` command that runs a **mechanical-only** proofreading pass over a finished article: it fixes typos, punctuation, spacing, Hebrew typography, and clear grammar errors, writes the corrected text to a new file, and produces a markdown report documenting **every change and why**. It never rewrites prose for style, tone, register, or voice — that stays with `/academic-writer:write edit`.
 
 ## Design decisions (what transferred, what didn't)
 
@@ -35,7 +35,7 @@ A `/academic-writer:proofread` command that runs a **mechanical-only** proofread
 | File | Change | Why |
 |---|---|---|
 | `src/agents/proofreader.md` | **New agent.** Suggestion-only מגיה. Reads text, returns a JSON change list (`typo`/`punctuation`/`word`/`grammar`/`typography`/`idea-flag` at four levels). Read-only tools (`Read, Grep, Glob`), `model: sonnet`. | The find step. Kept read-only so it can never edit a file or rewrite prose; it only proposes. Named failure modes ("Helpful Rewriter", "Citation Surgeon", "Silent Meaning Shift") fence it to mechanical scope. |
-| `src/skills/proofread/SKILL.md` | **New skill** (`user-invocable: true`). Orchestrates: load profile → resolve article to a text `PROOF_BASE` (`.md`/`.docx`) → spawn `proofreader` → deterministic citation-integrity guard → apply mechanical fixes to `*.proofed.md` (ordered, overlap-aware, no-match-safe) → write `*.proofread.md` report → summarize. | The orchestrator. Applies only guard-passing mechanical changes; idea-flags and citation-touching changes are reported, never applied. |
+| `src/skills/write/phases/proofread.md` | **New skill** (`user-invocable: true`). Orchestrates: load profile → resolve article to a text `PROOF_BASE` (`.md`/`.docx`) → spawn `proofreader` → deterministic citation-integrity guard → apply mechanical fixes to `*.proofed.md` (ordered, overlap-aware, no-match-safe) → write `*.proofread.md` report → summarize. | The orchestrator. Applies only guard-passing mechanical changes; idea-flags and citation-touching changes are reported, never applied. |
 | `CLAUDE.md` | Added rows to the **slash-command table** and the **agents table**. | Project doc convention — both tables are the registry of commands/agents. |
 | `src/skills/help/SKILL.md` | Added a `proofread` row to the slash-command list. | Enforced by `tests/test_plugin_structure.py::test_help_lists_all_slash_commands` — help must list every user-invocable command. |
 

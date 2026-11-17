@@ -329,3 +329,46 @@ def test_baseline_fixture_is_well_formed():
     data = json.loads(BASELINE.read_text())
     assert set(data) == {"listed_chars", "listed_skills", "stubs"}
     assert data["listed_chars"] > 1000
+
+
+# ---- check-routers: plugin-root path rules ---------------------------------
+
+def _phase_with(tmp_path, text):
+    d = router(tmp_path)
+    (d / "phases" / "ideate.md").write_text(text)
+    return d
+
+
+def test_plugin_root_build_generated_bin_aw_is_allowed(run, tmp_path):
+    _phase_with(tmp_path, "Run `${CLAUDE_PLUGIN_ROOT}/bin/aw` now.\n")
+    assert run("check-routers", tmp_path).returncode == 0
+
+
+def test_plugin_root_other_bin_file_still_checked(run, tmp_path):
+    _phase_with(tmp_path, "Run `${CLAUDE_PLUGIN_ROOT}/bin/other` now.\n")
+    r = run("check-routers", tmp_path)
+    assert r.returncode == 1 and "bin/other does not resolve" in r.stdout
+
+
+def test_runtime_variable_path_with_existing_dir_is_allowed(run, tmp_path):
+    skills = tmp_path / "plugin" / "skills"
+    skills.mkdir(parents=True)
+    router(skills)
+    (tmp_path / "plugin" / "refs").mkdir()
+    (skills / "write" / "phases" / "ideate.md").write_text('F="${CLAUDE_PLUGIN_ROOT}/refs/words-${LANG}.md"\n')
+    assert run("check-routers", skills).returncode == 0
+
+
+def test_runtime_variable_path_with_missing_dir_fails(run, tmp_path):
+    skills = tmp_path / "plugin" / "skills"
+    skills.mkdir(parents=True)
+    router(skills)
+    (skills / "write" / "phases" / "ideate.md").write_text('F="${CLAUDE_PLUGIN_ROOT}/nodir/words-${LANG}.md"\n')
+    r = run("check-routers", skills)
+    assert r.returncode == 1 and "nodir/words-${LANG}.md does not resolve" in r.stdout
+
+
+def test_skill_dir_link_still_verified(run, tmp_path):
+    _phase_with(tmp_path, "See ${CLAUDE_SKILL_DIR}/references/none.md\n")
+    r = run("check-routers", tmp_path)
+    assert r.returncode == 1 and "references/none.md does not resolve" in r.stdout

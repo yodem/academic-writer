@@ -2,7 +2,9 @@
 """Regenerate the command lists in the HTML guide and the help skill from skill frontmatter.
 
 Sources of truth:
-  - src/skills/*/SKILL.md frontmatter (name, user-invocable, description, metadata.summary)
+  - src/skills/*/SKILL.md frontmatter (name, user-invocable, description, metadata.summary);
+    a router skill (has phases/) contributes one row per `## Phases` table row; a stub
+    (metadata.moved-to) contributes none
   - manifests/academic-writer.json (version)
 
 Targets (only the text between the markers is rewritten):
@@ -31,9 +33,11 @@ PREFIX = "/academic-writer:"
 
 # Recommended order: first-run commands first, then the writing loop, then tools.
 # Anything not listed here is appended alphabetically.
+# A router's phases are listed as "<router> <phase>".
 ORDER = [
-    "intro", "setup", "init", "write", "revise", "edit", "edit-section",
-    "proofread", "review", "research", "ideate", "ocr",
+    "intro", "setup", "init", "write new", "write revise", "write edit", "write edit-section",
+    "write proofread", "write review", "write research", "write ideate", "write present",
+    "write watch", "ocr",
     "ingest", "ingest-book", "library-eval", "voice", "health", "help",
 ]
 
@@ -170,13 +174,39 @@ def summary_for(fm: dict) -> str:
     return first_sentence(fm.get("description", ""))
 
 
+def phase_rows(skill_text: str) -> list[tuple[str, str]]:
+    """(phase, when-to-use) for each data row of a router's `## Phases` table."""
+    rows, in_table = [], False
+    for line in skill_text.splitlines():
+        if re.match(r"^##\s+Phases\s*$", line):
+            in_table = True
+        elif in_table and line.startswith("|"):
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            m = re.match(r"^`([a-z0-9-]+)`$", cells[0])
+            if m and len(cells) > 1:
+                rows.append((m.group(1), " ".join(cells[1].replace("`", "").split())))
+        elif in_table and rows:
+            break
+    return rows
+
+
 def load_commands(root: Path) -> list[tuple[str, str]]:
     cmds = []
     for path in sorted((root / "src/skills").glob("*/SKILL.md")):
-        fm = parse_frontmatter(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        fm = parse_frontmatter(text)
         if not fm.get("user-invocable"):  # parser yields actual bools (true/false only)
             continue
+        meta = fm.get("metadata")
+        if isinstance(meta, dict) and str(meta.get("moved-to", "")).strip():
+            continue  # a stub: the command now lives on a router phase
         name = str(fm.get("name") or path.parent.name)
+        if (path.parent / "phases").is_dir():
+            rows = phase_rows(text)
+            if not rows:
+                raise SystemExit(f"gen-guide: router {name} has no rows in its '## Phases' table")
+            cmds.extend((f"{name} {phase}", when) for phase, when in rows)
+            continue
         cmds.append((name, summary_for(fm)))
     rank = {n: i for i, n in enumerate(ORDER)}
     cmds.sort(key=lambda c: (rank.get(c[0], len(ORDER)), c[0]))

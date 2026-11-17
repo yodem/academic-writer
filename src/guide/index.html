@@ -276,9 +276,9 @@ claude plugin install academic-writer@yodem</code></pre></div>
   <li><strong>Citation check.</strong> A separate checker compares every footnote with your sources. Paragraphs that fail are rewritten; if one still fails, it is named for you to look at.</li>
   <li><strong>Word file.</strong> You receive a <code>.docx</code> with real Word footnotes and a bibliography. Claude tells you where it saved it.</li>
   <li><strong>Your comments.</strong> Open it in Word. Add comments or tracked changes anywhere you want something changed. Save and close it.</li>
-  <li><strong>Revise.</strong> Run <code>/academic-writer:revise</code>. It reads your comments, groups them, asks you to confirm each group, updates the text and makes a new Word file. Repeat 9 and 10 as often as you like.</li>
+  <li><strong>Revise.</strong> Run <code>/academic-writer:write revise</code>. It reads your comments, groups them, asks you to confirm each group, updates the text and makes a new Word file. Repeat 9 and 10 as often as you like.</li>
 </ol>
-<div class="ok"><p><strong>Before you submit:</strong> run <code>/academic-writer:proofread</code> for a final typo and language pass (you get a marked-up copy and a short report), and <code>/academic-writer:review</code> for a scorecard of the article's structure, argument and citations.</p></div>
+<div class="ok"><p><strong>Before you submit:</strong> run <code>/academic-writer:write proofread</code> for a final typo and language pass (you get a marked-up copy and a short report), and <code>/academic-writer:write review</code> for a scorecard of the article's structure, argument and citations.</p></div>
 </section>
 
 <section id="commands">
@@ -292,14 +292,16 @@ claude plugin install academic-writer@yodem</code></pre></div>
 <tr><td><code>/academic-writer:intro</code></td><td>Open the full guide in your web browser: what the plugin does, setup, your first article, privacy and troubleshooting.</td></tr>
 <tr><td><code>/academic-writer:setup</code></td><td>Friendly first-run setup for researchers with no technical background: checks each tool Academic Writer needs, explains it in one sentence, asks before installing anything, walks you through getting and safely storing a free Gemini key, and ends with a sample paragraph.</td></tr>
 <tr><td><code>/academic-writer:init</code></td><td>Full onboarding for Academic Writer: builds your researcher profile, learns your writing style from past articles, connects your research library, and offers Gemini.</td></tr>
-<tr><td><code>/academic-writer:write</code></td><td>Write a new academic article with the author, step by step: topic, sources, verified evidence, the author&#x27;s thesis, an approved outline, drafting, a citation audit and a Word file.</td></tr>
-<tr><td><code>/academic-writer:revise</code></td><td>Read the Word comments and tracked changes the author left on a generated draft, group them, confirm each group, then update the article and the voice and feedback stores.</td></tr>
-<tr><td><code>/academic-writer:edit</code></td><td>Revise an article you already drafted: several passages at once, tone, structure, argument order or evidence.</td></tr>
-<tr><td><code>/academic-writer:edit-section</code></td><td>Quick revision of one section of an existing article: rewrite, expand, shorten, fix its citations or adjust its style.</td></tr>
-<tr><td><code>/academic-writer:proofread</code></td><td>Proofread a finished article (Markdown or Word) for typos, wrong words, grammar and editorial issues, producing a corrected copy, a report and an editorial memo without touching the original.</td></tr>
-<tr><td><code>/academic-writer:review</code></td><td>Score a completed article on six dimensions (structure, argument logic, citation completeness, source coverage, writing quality, academic conventions) and show a scorecard with concrete findings.</td></tr>
-<tr><td><code>/academic-writer:research</code></td><td>Investigate a topic or check a claim against the author&#x27;s indexed sources, returning only passages whose quotations were verified word for word.</td></tr>
-<tr><td><code>/academic-writer:ideate</code></td><td>Guided brainstorming that turns a vague topic into a sharp research question, using who/what/when/where/why/how, a gap check against the author&#x27;s sources and a choice of approach; saves a research brief that /academic-writer:write reads.</td></tr>
+<tr><td><code>/academic-writer:write new</code></td><td>Write a new article from scratch: topic, sources, evidence, thesis, outline, drafting, citation audit, Word file</td></tr>
+<tr><td><code>/academic-writer:write revise</code></td><td>Read Word comments and tracked changes on a generated draft and update the article: &lt;file.docx&gt; [--editor [original.docx]]</td></tr>
+<tr><td><code>/academic-writer:write edit</code></td><td>Revise a drafted article across several passages: tone, structure, argument order or evidence</td></tr>
+<tr><td><code>/academic-writer:write edit-section</code></td><td>Quick revision of one section or passage of an existing article</td></tr>
+<tr><td><code>/academic-writer:write proofread</code></td><td>Proofread a finished article for typos, wrong words and grammar, with a corrected copy and a report</td></tr>
+<tr><td><code>/academic-writer:write review</code></td><td>Score a completed article on six dimensions before submission</td></tr>
+<tr><td><code>/academic-writer:write research</code></td><td>Check a claim or ask what the author&#x27;s sources say, with verified quotations only</td></tr>
+<tr><td><code>/academic-writer:write ideate</code></td><td>Brainstorm: turn a vague topic into a sharp research question and save a research brief</td></tr>
+<tr><td><code>/academic-writer:write present</code></td><td>Turn a finished article into a talk outline, abstract with keywords, chapter proposal or study materials</td></tr>
+<tr><td><code>/academic-writer:write watch</code></td><td>Show what Academic Writer is doing right now: current step, progress and anything rejected</td></tr>
 <tr><td><code>/academic-writer:ocr</code></td><td>Turn a scan or photo into plain text: free readers when they agree, then Claude, then Gemini for the pages Claude cannot read.</td></tr>
 <tr><td><code>/academic-writer:ingest</code></td><td>Upload one article or chapter to the source library with printed page numbers, hinted contents and a citation guide.</td></tr>
 <tr><td><code>/academic-writer:ingest-book</code></td><td>Upload a whole book (multi-volume, scanned or EPUB) to the source library with a navigable hinted table of contents and a citation guide.</td></tr>
@@ -311,7 +313,6 @@ claude plugin install academic-writer@yodem</code></pre></div>
 <tr><td><code>/academic-writer:dashboard</code></td><td>Open the local course dashboard: one page that shows, for every course in the term, what is due next, whether its readings are ready, and what is new, with a week agenda and a page per course.</td></tr>
 <tr><td><code>/academic-writer:kotar-fetch</code></td><td>Download the cited pages of a book on Kotar (CET, through the Bar-Ilan OpenAthens proxy) as one PDF in printed-page order, for the author&#x27;s own study.</td></tr>
 <tr><td><code>/academic-writer:lesson-notes</code></td><td>Use when processing a course recording into a structured Hebrew lesson note, or when resuming queued NotebookLM lesson transcripts with --pending.</td></tr>
-<tr><td><code>/academic-writer:watch</code></td><td>Show what Academic Writer is doing right now: the current step of the article run, how far it has got, and anything the checker rejected.</td></tr>
 </tbody>
 </table>
 <!-- guide:commands:end -->
@@ -337,7 +338,7 @@ claude plugin install academic-writer@yodem</code></pre></div>
   <p>Folders whose names start with a dot, like <code>.academic-helper</code>, are <em>hidden</em> by default. To see them: on a Mac, press <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>.</kbd> in Finder; on Windows, open File Explorer, choose <strong>View</strong>, then <strong>Show</strong>, then <strong>Hidden items</strong>.</p>
 </div>
 <h3>In the plugin's own data folder (shared by all your projects)</h3>
-<p>Your <strong>voice data</strong> (the passages you chose as examples of your style, the writing habits the plugin learned, your preferred terms, and the before-and-after pairs from your own corrections) lives in one place so every project benefits. It is inside your home folder under <code>.claude/plugins/data/</code>, in a folder whose name starts with <code>academic-writer</code>. The same folder keeps a small log of plugin mistakes you flagged during <code>/academic-writer:revise</code>, so they can be fixed. If you chose to install the plugin's own PageIndex helper (section 11), it lives here too, in a folder called <code>pageindex</code>, together with the books you prepared for it.</p>
+<p>Your <strong>voice data</strong> (the passages you chose as examples of your style, the writing habits the plugin learned, your preferred terms, and the before-and-after pairs from your own corrections) lives in one place so every project benefits. It is inside your home folder under <code>.claude/plugins/data/</code>, in a folder whose name starts with <code>academic-writer</code>. The same folder keeps a small log of plugin mistakes you flagged during <code>/academic-writer:write revise</code>, so they can be fixed. If you chose to install the plugin's own PageIndex helper (section 11), it lives here too, in a folder called <code>pageindex</code>, together with the books you prepared for it.</p>
 <p>This folder survives plugin updates. It is removed if you uninstall the plugin, unless you ask to keep it (see section 10).</p>
 </section>
 

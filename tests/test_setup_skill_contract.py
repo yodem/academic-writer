@@ -152,7 +152,7 @@ def test_manual_commands_have_a_typing_recipe_and_restart_steps():
 
 def test_what_you_can_do_now_names_researcher_next_steps():
     block = FINISH.split("## Step 8", 1)[1]
-    for token in ("past-articles", "/academic-writer:init", "/academic-writer:write", "/academic-writer:research"):
+    for token in ("past-articles", "/academic-writer:init", "/academic-writer:write", "/academic-writer:write research"):
         assert token in block
 
 

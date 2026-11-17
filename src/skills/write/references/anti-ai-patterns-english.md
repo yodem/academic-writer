@@ -133,4 +133,4 @@ Use these dimensions to **read** the paragraph, not to score it. **Do not assign
 1. **Typography Tier 1** (auto-fix em-dashes, straight quotes).
 2. **Per-paragraph scan** (when reviewing or editing a draft) — catch formulaic openers, inflated language, and structural tells in the paragraph in isolation.
 3. **Per-paragraph cross-scan** — check named patterns against the already-written sections so the cap is enforced across the article.
-4. **Full-article sweep** (`aw synthesize` for repeated openers; `/academic-writer:review` for the rest) — count every named pattern across the finished article. For each pattern exceeding its cap, rewrite the overflow instances.
+4. **Full-article sweep** (`aw synthesize` for repeated openers; `/academic-writer:write review` for the rest) — count every named pattern across the finished article. For each pattern exceeding its cap, rewrite the overflow instances.

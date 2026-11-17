@@ -25,7 +25,7 @@
 // does not need chunking, multi-round convergence, or refute-verify — the fixture is
 // one chunk of test prose). It is a faithful single-pass check of finder RECALL, not
 // a rehearsal of the full multi-stage workflow; running the real
-// `/academic-writer:proofread --venue <slug>` skill against this fixture inside an
+// `/academic-writer:write proofread --venue <slug>` skill against this fixture inside an
 // actual Claude Code session is the complementary, closer-to-production check.
 //
 // Usage:

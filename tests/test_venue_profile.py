@@ -17,7 +17,7 @@ BUILD = os.path.join(REPO, "scripts", "build-plugins.sh")
 PROOFREAD_TS = os.path.join(REPO, "src", "cli", "src", "proofread.ts")
 FIND_PROMPT = os.path.join(REPO, "src", "cli", "src", "prompts", "proofread-find.md")
 EDITORIAL_CHECKS = os.path.join(REPO, "src", "skills", "proofread", "references", "editorial-checks.md")
-PROOFREAD_SKILL = os.path.join(REPO, "src", "skills", "proofread", "SKILL.md")
+PROOFREAD_SKILL = os.path.join(REPO, "src", "skills", "write", "phases", "proofread.md")
 
 # Rule ids routed to "plugin guidance" (the conventions file) and "venue profile" (the bundled profile),
 # plus R-42 (part a in the conventions file, part b in the profile). R-32 and R-01/R-02/R-08 are plugin

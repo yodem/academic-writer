@@ -376,6 +376,8 @@ def measure(skills_dir, commands_dir=None):
 # check-routers
 # --------------------------------------------------------------------------
 
+# Files that exist only in the built plugin (produced by `npm run build`), not in src/.
+BUILD_GENERATED = {"bin/aw"}
 _ROW_PHASE = re.compile(r"^`([^`\s|]+)`$")
 _VAR_PATH = re.compile(r"\$\{(CLAUDE_SKILL_DIR|CLAUDE_PLUGIN_ROOT)\}/([^\s`)\]\"'>]+)")
 _MD_LINK = re.compile(r"\]\(([^)\s]+)\)")
@@ -461,6 +463,15 @@ def check_routers(skills_dir, commands_dir=None):
             for var, rel in _VAR_PATH.findall(text):
                 rel = rel.rstrip(".,;:!?")
                 base = d if var == "CLAUDE_SKILL_DIR" else plugin_root
+                if "$" in rel:
+                    # A runtime shell variable (e.g. ${LANG_LOWER}) cannot be resolved statically:
+                    # verify the static directory prefix instead.
+                    prefix = os.path.dirname(rel.split("$", 1)[0])
+                    if prefix and not os.path.isdir(os.path.join(base, prefix)):
+                        problems.append("%s: phases/%s.md: ${%s}/%s does not resolve" % (label, f, var, rel))
+                    continue
+                if var == "CLAUDE_PLUGIN_ROOT" and _strip_target(rel) in BUILD_GENERATED:
+                    continue
                 if not os.path.exists(os.path.join(base, _strip_target(rel))):
                     problems.append("%s: phases/%s.md: ${%s}/%s does not resolve" % (label, f, var, rel))
             rels = set()

@@ -63,7 +63,7 @@ Before your first article, `/academic-writer:write` checks that your voice profi
 
 1. Describe the topic and choose the language.
 2. Pick the sources for this article.
-3. State your thesis in your own words. If you used `/academic-writer:ideate` first, its research brief is the starting point.
+3. State your thesis in your own words. If you used `/academic-writer:write ideate` first, its research brief is the starting point.
 4. The plugin extracts **verified evidence**: passages whose quotations match the source word for word. You can mark passages that must appear.
 5. Shape the outline together. You approve each section's claim; drafting does not start until every claim is approved.
 
@@ -76,7 +76,7 @@ Before your first article, `/academic-writer:write` checks that your voice profi
 
 **Then:**
 
-10. Open it in Word, add comments or tracked changes, save, and run `/academic-writer:revise`. It groups your comments, asks you to confirm each group, updates the article and makes a new Word file.
+10. Open it in Word, add comments or tracked changes, save, and run `/academic-writer:write revise`. It groups your comments, asks you to confirm each group, updates the article and makes a new Word file.
 
 ---
 
@@ -85,12 +85,12 @@ Before your first article, `/academic-writer:write` checks that your voice profi
 | Command | When to use it |
 |---|---|
 | `/academic-writer:write` | Start another article. |
-| `/academic-writer:revise` | Fold your Word comments back into the article. |
-| `/academic-writer:edit` | Larger revisions: several passages, tone, structure, evidence. |
-| `/academic-writer:edit-section` | A quick fix to one section. |
-| `/academic-writer:proofread` | A final typo, language and editorial pass before submission. |
-| `/academic-writer:review` | A six-dimension scorecard of the finished article. |
-| `/academic-writer:research` | Check a claim or explore a topic in your sources. |
+| `/academic-writer:write revise` | Fold your Word comments back into the article. |
+| `/academic-writer:write edit` | Larger revisions: several passages, tone, structure, evidence. |
+| `/academic-writer:write edit-section` | A quick fix to one section. |
+| `/academic-writer:write proofread` | A final typo, language and editorial pass before submission. |
+| `/academic-writer:write review` | A six-dimension scorecard of the finished article. |
+| `/academic-writer:write research` | Check a claim or explore a topic in your sources. |
 | `/academic-writer:health` | Check that everything still works, with a fix for anything missing. |
 | `/academic-writer:help` | The short command list. |
 

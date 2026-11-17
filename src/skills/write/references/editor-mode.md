@@ -1,6 +1,6 @@
 # Editor mode: prompts, schemas and categories
 
-Used by `/academic-writer:revise <file.docx> --editor`. `SKILL.md` has the steps; this file has the
+Used by `/academic-writer:write revise <file.docx> --editor`. `phases/revise.md` has the steps; this file has the
 text each agent receives. Replace the `{PLACEHOLDERS}` before sending: `{WORK}` is the working
 folder (`.academic-helper/editor-review`), `{PAPER}` is one line about the paper (language, field,
 venue), `{PLUGIN}` is `${CLAUDE_PLUGIN_ROOT}`, `{TOTAL}` is the op count from `extract`.

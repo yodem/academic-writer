@@ -330,8 +330,8 @@
       "sources": [
         "src/cli/src/synthesize.ts",
         "src/cli/src/prompts/write-synthesize.md",
-        "src/skills/review/SKILL.md",
-        "src/skills/review/references/scorecard.json"
+        "src/skills/write/phases/review.md",
+        "src/skills/write/references/scorecard.json"
       ],
       "status": "partial",
       "subfeatures": [
@@ -361,7 +361,7 @@
           "tested": "not tested yet"
         }
       ],
-      "notes": "No automated test exercises src/skills/review/SKILL.md's scorecard logic; the synthesizer agent was replaced in 0.14.0 by aw synthesize (paragraph-level transition edits), whose coherence checks beyond transitions are unverified.",
+      "notes": "No automated test exercises src/skills/write/phases/review.md's scorecard logic; the synthesizer agent was replaced in 0.14.0 by aw synthesize (paragraph-level transition edits), whose coherence checks beyond transitions are unverified.",
       "tested": "not tested yet",
       "name_he": "חיבור וסקירה",
       "description_he": "בדיקת רצף בין חלקים, מחקר של חזרות, תקציר וציון עצמי."

@@ -1,0 +1,51 @@
+# Proofread an article
+
+Run `aw proofread` on the article and show its summary. The command does all the work: it finds typos and term errors, suggests language fixes, checks that each fix keeps the meaning, writes an editorial memo, and saves the output files. It never edits the source article, so the author always keeps their original.
+
+## Run
+
+Record the run first, with the same run id the command below uses, and register the workspace. This runs on every path, including a Word file:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" activity start --flow proofread --run-id "proofread-<run-id>"
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/home.py" --data-dir "${CLAUDE_PLUGIN_DATA}" register --path "$CLAUDE_PROJECT_DIR" --type project
+```
+
+If `home.py register` says no home folder is set, skip it and tell the researcher once.
+
+For a Markdown article, run the plugin command with a run id and an output folder. Always pass the plugin data directory and the project directory. `aw proofread` records its own `find`, `verify`, `memo` and `apply` steps and ends the run:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" proofread "path/to/article.md" \
+  --run "proofread-<run-id>" --out "proofread-output" \
+  --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$CLAUDE_PROJECT_DIR"
+```
+
+- Add `--venue <slug>` when the author names a journal or venue. The project's `.academic-helper/venues/<slug>.md` is used when it exists; otherwise a venue bundled with the plugin is used. The one bundled profile is `bar-ilan-seminar-apa-he` (hybrid citation style for a Hebrew seminar paper); use it only when the author asks for that style.
+- Add `--only mechanical`, `--only language` or `--only editorial` when the author wants just one pass (mechanical = typos and punctuation; language = wording and grammar; editorial = the memo on clarity and flow).
+- Do not read or print the article into the conversation. The command writes the detailed results to the output folder; copying the article here would only cost time and tokens.
+
+The command validates its list of changes before applying them. The same check can be run on its own:
+
+```bash
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/gate.py" changes-schema "proofread-output/changes.json" --json
+```
+
+For a Word document, convert it to Markdown with `pandoc` first, run `aw proofread` on that Markdown, then build a Word file with tracked changes from the original and the corrected text.
+
+Check for pandoc first with `command -v pandoc`. If it is missing, explain in one sentence that pandoc is a free converter that reads Word files, then ask with AskUserQuestion ("Install pandoc now?" — "Yes, install it" / "Skip — I'll give you a .md or .txt file instead"). Only on yes, install it: macOS `brew install pandoc` (needs Homebrew; if `brew` is missing, give the researcher the download link https://pandoc.org/installing.html instead), Windows `winget install --id JohnMacFarlane.Pandoc -e`, Linux `sudo apt install pandoc`. Report the result in plain words.
+
+```bash
+pandoc "path/to/article.docx" -t markdown -o "proofread-output/article.md"
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/build-tracked-docx.py" \
+  --original "path/to/article.docx" \
+  --final-text "proofread-output/proofed.md" \
+  --changes "proofread-output/changes.json" \
+  --output "proofread-output/proofed.docx"
+```
+
+## Show the result
+
+Show the short JSON summary that `aw proofread` prints, then links to `proofed.md`, `report.md` and `memo.md` in the output folder (and `proofed.docx` for Word input). Remind the author the original is untouched. Explain that suggestions the checker rejected ("refuted") are still listed in `changes.json` and the report, so the author can review them too.
+
+If the Word path's `pandoc` or `build-tracked-docx.py` step fails, end the run as failed: `"${CLAUDE_PLUGIN_ROOT}/bin/aw" --project-dir "$CLAUDE_PROJECT_DIR" --data-dir "${CLAUDE_PLUGIN_DATA}" activity end --run-id "proofread-<run-id>" --exit ERROR`. After a successful run, `aw proofread` has already ended it, so no call is needed.

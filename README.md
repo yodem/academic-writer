@@ -109,9 +109,9 @@ Running setup or init again later is safe: they update your profile and never er
 8. **Citation check.** Claude then checks every paragraph's citations against your sources. A paragraph that fails is rewritten. If it still fails after the allowed number of attempts, it is marked `[NEEDS REVIEW]` and named in the final report so you know exactly what to check.
 9. **Word file.** You get a `.docx` with real Word footnotes. Claude tells you where it saved it.
 10. **Your comments.** Open it in Word, add comments or tracked changes wherever you want something changed, save and close.
-11. **Revise.** Run `/academic-writer:revise`. It reads your comments and tracked changes, groups them, asks you to confirm each group, updates the text and makes a new Word file. With your agreement, it also learns from your rewrites so later drafts sound more like you. Repeat steps 10 and 11 as often as you like.
+11. **Revise.** Run `/academic-writer:write revise`. It reads your comments and tracked changes, groups them, asks you to confirm each group, updates the text and makes a new Word file. With your agreement, it also learns from your rewrites so later drafts sound more like you. Repeat steps 10 and 11 as often as you like.
 
-Before you submit, run `/academic-writer:proofread` for a typo, language and editorial pass (the original is never changed; you get a corrected copy, a report and an editorial memo), and `/academic-writer:review` for a scorecard of the article's structure, argument and citations.
+Before you submit, run `/academic-writer:write proofread` for a typo, language and editorial pass (the original is never changed; you get a corrected copy, a report and an editorial memo), and `/academic-writer:write review` for a scorecard of the article's structure, argument and citations.
 
 ---
 
@@ -125,15 +125,15 @@ Type any of these in Claude Code. You can also describe what you want in your ow
 | `/academic-writer:setup` | First-run setup: tools, Gemini key, a sample paragraph. Asks before installing anything. |
 | `/academic-writer:init` | Full onboarding: your profile, your writing style from past articles, your source library. |
 | `/academic-writer:write` | Write a new article, step by step, ending with a Word file. |
-| `/academic-writer:revise` | Read your Word comments and tracked changes and update the article. |
-| `/academic-writer:edit` | Revise an article you already drafted: several passages, tone, structure, argument order or evidence. |
-| `/academic-writer:edit-section` | Quick revision of one section: rewrite, expand, shorten, fix citations or style. |
-| `/academic-writer:proofread` | Proofread a finished article (Markdown or Word): a corrected copy, a report and an editorial memo. |
-| `/academic-writer:review` | Score a finished article on six dimensions and show concrete findings. |
-| `/academic-writer:research` | Investigate a topic or check a claim against your sources; only word-for-word verified quotations come back. |
+| `/academic-writer:write revise` | Read your Word comments and tracked changes and update the article. |
+| `/academic-writer:write edit` | Revise an article you already drafted: several passages, tone, structure, argument order or evidence. |
+| `/academic-writer:write edit-section` | Quick revision of one section: rewrite, expand, shorten, fix citations or style. |
+| `/academic-writer:write proofread` | Proofread a finished article (Markdown or Word): a corrected copy, a report and an editorial memo. |
+| `/academic-writer:write review` | Score a finished article on six dimensions and show concrete findings. |
+| `/academic-writer:write research` | Investigate a topic or check a claim against your sources; only word-for-word verified quotations come back. |
 | `/academic-writer:ingest` | Upload a single article or chapter to your source library, keeping its printed page numbers and adding a citation guide. |
 | `/academic-writer:ingest-book` | Upload a whole book (multi-volume, scanned or EPUB) with a clickable table of contents that jumps to the right page. |
-| `/academic-writer:ideate` | Turn a vague topic into a sharp research question; saves a research brief that write reads. |
+| `/academic-writer:write ideate` | Turn a vague topic into a sharp research question; saves a research brief that write reads. |
 | `/academic-writer:ocr` | Turn a scanned PDF or photographed page (or a folder of them) into plain text, with Gemini, Claude, Codex or local Tesseract, your choice. |
 | `/academic-writer:library-eval` | Compare Trove and PageIndex on your own article: you judge anonymous A and B answers, then see which library was which. |
 | `/academic-writer:voice` | Build or update your voice profile: exemplar paragraphs you choose and your writing habits. |

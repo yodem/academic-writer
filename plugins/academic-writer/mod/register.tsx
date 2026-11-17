@@ -11,7 +11,7 @@ import { activeRunMaxAgeMinutes, pickActiveRun, type RunFile } from './active.ts
 import { type PaneView, parseEvents, viewOf } from './model.ts'
 
 const PANE_ID = 'aw-activity'
-// Not 'watch': that name belongs to the plugin's /academic-writer:watch skill, and the engine refuses a second owner.
+// Not 'watch': that name belongs to the plugin's /academic-writer:write watch skill, and the engine refuses a second owner.
 const COMMAND = 'activity'
 const TICK_MS = 2000
 

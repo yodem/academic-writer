@@ -25,7 +25,7 @@ Store the abstract(s) for inclusion in the DOCX output.
 ### Step 8.7: Self-Review (Quality Gate)
 
 
-Run the self-review checklist from `/academic-writer:review`. Score the article on 6 dimensions (each 1–10):
+Run the self-review checklist from `/academic-writer:write review`. Score the article on 6 dimensions (each 1–10):
 
 1. **Structure** — Intro/conclusion conventions, logical section order
 2. **Argument Logic** — Each section advances thesis, no gaps

@@ -51,14 +51,16 @@ This table is generated from the plugin itself, so it is always complete.
 | `/academic-writer:intro` | Open the full guide in your web browser: what the plugin does, setup, your first article, privacy and troubleshooting. |
 | `/academic-writer:setup` | Friendly first-run setup for researchers with no technical background: checks each tool Academic Writer needs, explains it in one sentence, asks before installing anything, walks you through getting and safely storing a free Gemini key, and ends with a sample paragraph. |
 | `/academic-writer:init` | Full onboarding for Academic Writer: builds your researcher profile, learns your writing style from past articles, connects your research library, and offers Gemini. |
-| `/academic-writer:write` | Write a new academic article with the author, step by step: topic, sources, verified evidence, the author's thesis, an approved outline, drafting, a citation audit and a Word file. |
-| `/academic-writer:revise` | Read the Word comments and tracked changes the author left on a generated draft, group them, confirm each group, then update the article and the voice and feedback stores. |
-| `/academic-writer:edit` | Revise an article you already drafted: several passages at once, tone, structure, argument order or evidence. |
-| `/academic-writer:edit-section` | Quick revision of one section of an existing article: rewrite, expand, shorten, fix its citations or adjust its style. |
-| `/academic-writer:proofread` | Proofread a finished article (Markdown or Word) for typos, wrong words, grammar and editorial issues, producing a corrected copy, a report and an editorial memo without touching the original. |
-| `/academic-writer:review` | Score a completed article on six dimensions (structure, argument logic, citation completeness, source coverage, writing quality, academic conventions) and show a scorecard with concrete findings. |
-| `/academic-writer:research` | Investigate a topic or check a claim against the author's indexed sources, returning only passages whose quotations were verified word for word. |
-| `/academic-writer:ideate` | Guided brainstorming that turns a vague topic into a sharp research question, using who/what/when/where/why/how, a gap check against the author's sources and a choice of approach; saves a research brief that /academic-writer:write reads. |
+| `/academic-writer:write new` | Write a new article from scratch: topic, sources, evidence, thesis, outline, drafting, citation audit, Word file |
+| `/academic-writer:write revise` | Read Word comments and tracked changes on a generated draft and update the article: <file.docx> [--editor [original.docx]] |
+| `/academic-writer:write edit` | Revise a drafted article across several passages: tone, structure, argument order or evidence |
+| `/academic-writer:write edit-section` | Quick revision of one section or passage of an existing article |
+| `/academic-writer:write proofread` | Proofread a finished article for typos, wrong words and grammar, with a corrected copy and a report |
+| `/academic-writer:write review` | Score a completed article on six dimensions before submission |
+| `/academic-writer:write research` | Check a claim or ask what the author's sources say, with verified quotations only |
+| `/academic-writer:write ideate` | Brainstorm: turn a vague topic into a sharp research question and save a research brief |
+| `/academic-writer:write present` | Turn a finished article into a talk outline, abstract with keywords, chapter proposal or study materials |
+| `/academic-writer:write watch` | Show what Academic Writer is doing right now: current step, progress and anything rejected |
 | `/academic-writer:ocr` | Turn a scan or photo into plain text: free readers when they agree, then Claude, then Gemini for the pages Claude cannot read. |
 | `/academic-writer:ingest` | Upload one article or chapter to the source library with printed page numbers, hinted contents and a citation guide. |
 | `/academic-writer:ingest-book` | Upload a whole book (multi-volume, scanned or EPUB) to the source library with a navigable hinted table of contents and a citation guide. |
@@ -70,15 +72,14 @@ This table is generated from the plugin itself, so it is always complete.
 | `/academic-writer:dashboard` | Open the local course dashboard: one page that shows, for every course in the term, what is due next, whether its readings are ready, and what is new, with a week agenda and a page per course. |
 | `/academic-writer:kotar-fetch` | Download the cited pages of a book on Kotar (CET, through the Bar-Ilan OpenAthens proxy) as one PDF in printed-page order, for the author's own study. |
 | `/academic-writer:lesson-notes` | Use when processing a course recording into a structured Hebrew lesson note, or when resuming queued NotebookLM lesson transcripts with --pending. |
-| `/academic-writer:watch` | Show what Academic Writer is doing right now: the current step of the article run, how far it has got, and anything the checker rejected. |
 <!-- help:commands:end -->
 
 ## The usual cycle
 
 1. `/academic-writer:write` gives you a Word file.
 2. You open it in Word and add comments or tracked changes wherever you want something changed.
-3. `/academic-writer:revise` reads your comments, asks you to confirm, and updates the article.
-4. `/academic-writer:proofread` does a final typo and language pass before you submit.
+3. `/academic-writer:write revise` reads your comments, asks you to confirm, and updates the article.
+4. `/academic-writer:write proofread` does a final typo and language pass before you submit.
 
 ## If something goes wrong
 

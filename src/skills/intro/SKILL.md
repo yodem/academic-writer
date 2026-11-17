@@ -57,5 +57,5 @@ in Hebrew):
 1. Academic Writer drafts a scholarly article in your voice, using only the sources you choose.
 2. First run `/academic-writer:setup`: it gets you a free Gemini key and checks the tools it needs.
 3. Then `/academic-writer:write`: you agree on topic, sources, thesis and outline, and get a Word file.
-4. Mark up the Word file with comments, then `/academic-writer:revise` folds them back in.
+4. Mark up the Word file with comments, then `/academic-writer:write revise` folds them back in.
 5. Stuck? `/academic-writer:health` checks everything, and `/academic-writer:help` lists every command.

@@ -476,7 +476,7 @@ every existing field. Show:
 Re-run `setup_checks.py --json` once more, then print the short block in `references/finish.md § Step 8` for the
 researcher's `role` (at most 8 lines, plain words, in `targetLanguage`). Researchers get three concrete next steps: put
 5 to 10 past articles in the `past-articles` folder and run `/academic-writer:init`; `/academic-writer:write`; and
-`/academic-writer:research`. List only commands whose prerequisites passed, and always end with
+`/academic-writer:write research`. List only commands whose prerequisites passed, and always end with
 `/academic-writer:intro`. End your turn after the block and ask Step 9 in the next turn.
 
 ## Step 9 — What next

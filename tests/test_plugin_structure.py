@@ -380,6 +380,9 @@ class TestClaudeMD(unittest.TestCase):
             fm = _parse_skill_frontmatter(skill_path)
             if fm and fm.get("user-invocable"):
                 name = fm["name"]
+                moved = (fm.get("metadata") or {}).get("moved-to")
+                if moved:  # a stub: CLAUDE.md lists the router phase it points to
+                    name = moved
                 # Commands use namespace format: /academic-writer:{name}
                 slash = f"/academic-writer:{name}"
                 self.assertIn(slash, text, f"CLAUDE.md missing slash command: {slash}")
@@ -455,9 +458,9 @@ class TestCrossReferences(unittest.TestCase):
     """Validate references between skills, agents, and CLAUDE.md."""
 
     def test_write_skill_contract_and_auditor_batch_schema(self):
-        text = _read(os.path.join(SRC_DIR, "skills", "write", "SKILL.md"))
+        text = _read(os.path.join(SRC_DIR, "skills", "write", "phases", "new.md"))
         self.assertLessEqual(len(text.splitlines()), 450)
-        for contract in ("aw draft", "auditor", "taggedText", "aw synthesize", "generate-docx.py", "/academic-writer:revise"):
+        for contract in ("aw draft", "auditor", "taggedText", "aw synthesize", "generate-docx.py", "/academic-writer:write revise"):
             self.assertIn(contract, text, f"write skill missing: {contract}")
         auditor = _read(os.path.join(SRC_DIR, "agents", "auditor.md"))
         for contract in ("single batched call", '"results"', '"taggedText"', '"paragraphIndex"'):
@@ -465,7 +468,8 @@ class TestCrossReferences(unittest.TestCase):
 
     def test_aw_edit_and_ocr_skill_contracts(self):
         for name, command in (("edit", "edit"), ("edit-section", "edit"), ("ocr", "ocr")):
-            text = _read(os.path.join(SRC_DIR, "skills", name, "SKILL.md"))
+            path = ("write", "phases", name + ".md") if name != "ocr" else (name, "SKILL.md")
+            text = _read(os.path.join(SRC_DIR, "skills", *path))
             self.assertIn(f" {command} \\", text)
             self.assertIn('--data-dir "${CLAUDE_PLUGIN_DATA}"', text)
             self.assertIn('--project-dir "$PWD"', text)
@@ -483,7 +487,7 @@ class TestCrossReferences(unittest.TestCase):
             fm = _parse_skill_frontmatter(skill_path)
             if fm and fm.get("user-invocable"):
                 # Commands use namespace format: /academic-writer:{name}
-                slash = f"/academic-writer:{fm['name']}"
+                slash = f"/academic-writer:{(fm.get('metadata') or {}).get('moved-to') or fm['name']}"
                 self.assertTrue(
                     slash in help_text or slash in command_index,
                     f"Help and command index missing command: {slash}",

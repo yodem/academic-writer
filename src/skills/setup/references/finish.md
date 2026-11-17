@@ -59,7 +59,7 @@ Always end with `/academic-writer:intro`. This block is the last thing printed b
 >    folder inside this project folder (open it in Finder: Cmd+Space, or right-click the folder), then type
 >    `/academic-writer:init`. It reads them and shows you what it learned so you can correct it.
 > 2. **Write an article:** type `/academic-writer:write`; I ask one question at a time and you decide the thesis and outline. (Needs the Gemini key.)
-> 3. **Research your sources:** add them to Trove with `/academic-writer:ingest`, then ask with `/academic-writer:research`. (Needs Trove.)
+> 3. **Research your sources:** add them to Trove with `/academic-writer:ingest`, then ask with `/academic-writer:write research`. (Needs Trove.)
 > 4. Illustrated guide: `/academic-writer:intro`.
 
 Drop step 2 if `gemini-key` failed and step 3 if `trove` is missing, and add one line naming the missing step

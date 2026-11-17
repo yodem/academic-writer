@@ -1,11 +1,3 @@
----
-name: present
-description: "Turn a finished article into follow-on materials: a conference talk outline, a journal submission abstract with keywords, a book chapter proposal, and (with NotebookLM) an audio overview or study guide. Use when the author asks for a talk, abstract, proposal or study materials based on an article they completed."
-user-invocable: false
-allowed-tools: [Bash, Read, Write, Glob, Grep, AskUserQuestion, mcp__notebooklm-mcp__notebook_create, mcp__notebooklm-mcp__source_add, mcp__notebooklm-mcp__studio_create, mcp__notebooklm-mcp__studio_status, mcp__notebooklm-mcp__download_artifact]
-metadata: {author: "Yotam Fromm", version: "0.2.23"}
----
-
 # Academic Writer — Post-Article Deliverables
 
 Generate presentation materials and submission documents from a completed article. Everything you write must come from the article itself: do not add claims, sources or findings the article does not contain, because the author will present these materials under their name.
