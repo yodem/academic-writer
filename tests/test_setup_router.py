@@ -75,7 +75,6 @@ def test_bare_setup_defaults_to_setup_phase():
     step = next(l for l in body.splitlines() if l.startswith("2. "))
     assert re.search(r"no arguments at all[^\n]*`/academic-writer:setup`[^\n]*run `setup`, always", step, re.I)
     assert "without asking" in step
-    assert step.index("run `setup`, always") < step.index("Arguments but no phase word")
     assert "${CLAUDE_SKILL_DIR}/phases/<phase>.md" in body
     assert (SETUP / "phases" / "setup.md").read_text(encoding="utf-8").startswith("# Academic Writer")
 
@@ -102,3 +101,18 @@ def test_old_names_are_hidden_stubs():
         # the three model-only skills had no slash command, so their stubs add none
         assert fm["disable-model-invocation"] is True
         assert fm["user-invocable"] is (phase not in ("update-tools", "update-field", "learn"))
+
+
+def _steps(body):
+    return [l for l in body.splitlines() if re.match(r"^[1-5]\. ", l)]
+
+
+def test_routing_steps_decision_order():
+    _, body = _parts()
+    s = _steps(body)
+    assert len(s) == 5
+    assert "first word" in s[0] and "phase in the table" in s[0] and "wins" in s[0]
+    assert "No arguments at all" in s[1] and "without asking" in s[1]
+    assert "single bare word" in s[2] and "print the table and stop" in s[2]
+    assert "first word is not a phase" in s[3] and "infer" in s[3] and "ask the author" in s[3]
+    assert s[4].startswith("5. Read exactly one file")

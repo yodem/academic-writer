@@ -28,10 +28,11 @@ This skill is a router. Pick one phase, read its file, and follow it. Never load
 
 ## How to run
 
-1. The first word of the arguments is the phase. Everything after it is the phase's arguments.
-2. No arguments at all (a bare `/academic-writer:write`): run `new`, always, without asking or inferring. Arguments but no phase word: infer the phase from the request (a request for a new article runs `new`). If two phases fit, ask the author which one. Do not guess.
-3. A first word that is not in the table: print the table and stop.
-4. Read exactly one file, `${CLAUDE_SKILL_DIR}/phases/<phase>.md`, and follow it as if it were this skill's body. The paths inside it that start with `${CLAUDE_SKILL_DIR}` or `${CLAUDE_PLUGIN_ROOT}` are already correct.
+1. If the first word of the arguments is a phase in the table, that is the phase. Everything after it is the phase's arguments. This rule wins over every rule below.
+2. No arguments at all (a bare `/academic-writer:write`): run `new`, always, without asking or inferring.
+3. The arguments are a single bare word that is not in the table: print the table and stop.
+4. Anything else is a request in the author's words, whose first word is not a phase: infer the phase from the request. If two phases fit, ask the author which one. Do not guess.
+5. Read exactly one file, `${CLAUDE_SKILL_DIR}/phases/<phase>.md`, and follow it as if it were this skill's body. The paths inside it that start with `${CLAUDE_SKILL_DIR}` or `${CLAUDE_PLUGIN_ROOT}` are already correct.
 
 ## Forked phases
 
