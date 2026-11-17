@@ -53,6 +53,16 @@ test("setup: required first, optional apart; incomplete says what is missing", (
   assert.match(el.innerHTML, /חסר/);
 });
 
+test("setup: a manual check says check by hand and keeps its fix line; a not-relevant row does not", () => {
+  const { view, el } = load("setup");
+  const drive = { id: "drive", label_he: "Google Drive", ok: null, optional: true, found: null, required: null, reason_he: "אי אפשר לבדוק מכאן", fix: "/academic-writer:setup" };
+  view({ setup: { complete: true, checks: [CHECKS[0], drive, CHECKS[3]] }, home: HOME, today: "2026-10-16" }, el);
+  assert.match(el.innerHTML, /בדיקה ידנית/);
+  assert.equal((el.innerHTML.match(/לא רלוונטי/g) || []).length, 1);
+  assert.equal((el.innerHTML.match(/data-copy/g) || []).length, 1);
+  assert.match(el.innerHTML, /הכול מוכן/);
+});
+
 test("setup: complete state and unreachable home and empty checks", () => {
   let t = load("setup");
   t.view({ setup: { complete: true, checks: [CHECKS[0]] }, home: HOME, today: "2026-10-16" }, t.el);

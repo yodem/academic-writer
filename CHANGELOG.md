@@ -4,6 +4,11 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.23.1] — 2026-11-17
+### Fixed
+- **The dashboard's Setup page names a manual check as one.** Google Drive and Moodle (optional connections no script can see) now read "בדיקה ידנית" (check by hand) with their line saying what to ask Claude, instead of "לא רלוונטי" (not relevant). They never make setup incomplete.
+- **The dashboard end-to-end fixtures simulate a complete machine again.** The fake machine answered `node --version` with a Python version and offered the Windows `py` launcher, so the Node.js row failed and the "no Python" fixture still found Python; Setup then came first in the nav and the overview changed. The fixture now states Node.js 22 and no `py` explicitly, so the expected nav no longer depends on the CI host.
+
 ## [0.23.0] — 2026-11-16
 ### Added
 - **Academic Writer now works for a Windows newcomer.** Every command the skills and agents run goes through `bin/aw-python`, which finds a working Python 3 (`python3`, then `python`, then `py -3`) and skips the Microsoft Store stand-in that Windows ships as `python.exe`. With no Python it prints one plain line and stops. Skills call it as `sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python"`, so it does not depend on an executable bit that a Windows checkout loses.

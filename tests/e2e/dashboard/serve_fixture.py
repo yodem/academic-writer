@@ -115,12 +115,16 @@ def _checks(tmp: Path, home, project, python: bool = True):
         env["ACADEMIC_HOME"] = str(home)
 
     def which(cmd):
-        if cmd in ("python3", "python"):
-            return "/usr/bin/python3" if python else None
+        if cmd in ("python3", "python", "py"):  # `py` is the Windows launcher candidate; absent on this machine
+            return "/usr/bin/python3" if python and cmd != "py" else None
         return None if cmd in ("nlm", "pilib") else f"/usr/bin/{cmd}"
 
     def run(cmd):
-        return (0, "ALL_PRESENT") if "-c" in cmd else (0, "Python 3.12.1")
+        if "-c" in cmd:
+            return (0, "ALL_PRESENT")
+        if cmd and cmd[0].endswith("node"):  # the Node check reads `node --version`; without this it reads as broken
+            return (0, "v22.11.0")
+        return (0, "Python 3.12.1")
 
     return lambda: setup_checks.run_checks(env, which=which, run=run, platform="linux")
 
