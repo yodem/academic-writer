@@ -7,12 +7,14 @@ const {esc, b, auto, status, toast} = A;
 
 const many = (n, one, plural) => n === 1 ? one : plural.replace('#', n);
 const isReq = c => !c.optional;
+/* a connection no script can see (Drive, Moodle): optional, unknown, with a line saying how to check it by hand */
+const isManual = c => c.ok === null && c.optional && !!c.fix;
 
-/* ok true = ready; false = missing (an optional gap is "waiting", not an error); null = not relevant here */
+/* ok true = ready; false = missing (an optional gap is "waiting", not an error); null = cannot be checked from here (a manual check) or not relevant here */
 function mark(c){
   if (c.ok === true) return status('ok');
   if (c.ok === false) return c.optional ? status('waiting', 'לא חובה') : status('missing');
-  return status('unknown', 'לא רלוונטי');
+  return isManual(c) ? status('unknown', 'בדיקה ידנית') : status('unknown', 'לא רלוונטי');
 }
 function detail(c){
   const bits = [];
@@ -23,8 +25,8 @@ function detail(c){
   return bits.length ? `<p class="meta">${bits.join(' · ')}</p>` : '';
 }
 function fixLine(c){
-  if (c.ok !== false || !c.fix) return '';
-  return `<p class="fix"><span class="meta">לבקש מ־Claude לתקן:</span> <code>${esc(c.fix)}</code>
+  if (!c.fix || (c.ok !== false && !isManual(c))) return '';
+  return `<p class="fix"><span class="meta">${c.ok === null ? 'לבקש מ־Claude לעזור לבדוק:' : 'לבקש מ־Claude לתקן:'}</span> <code>${esc(c.fix)}</code>
     <button class="copy" data-copy="${esc(c.fix)}">העתקת הפקודה</button></p>`;
 }
 function row(c){
