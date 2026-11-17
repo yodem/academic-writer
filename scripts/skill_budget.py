@@ -225,7 +225,11 @@ def _fallback_parse(fm):
     def collect(start, parent_indent):
         j = start
         buf = []
-        while j < n and (not lines[j].strip() or _indent(lines[j]) > parent_indent):
+        while j < n and (
+            not lines[j].strip()
+            or _indent(lines[j]) > parent_indent
+            or (parent_indent == 0 and lines[j].startswith("- "))  # unindented block list
+        ):
             buf.append(lines[j])
             j += 1
         return buf, j
@@ -419,6 +423,11 @@ def check_routers(skills_dir, commands_dir=None):
         if os.path.isdir(os.path.join(d, "phases")) and os.path.isfile(os.path.join(d, "SKILL.md")):
             routers[name] = d
 
+    for name in sorted(os.listdir(skills_dir)):
+        d = os.path.join(skills_dir, name)
+        if os.path.isdir(os.path.join(d, "phases")) and not os.path.isfile(os.path.join(d, "SKILL.md")):
+            problems.append("router %s: has phases/ but no SKILL.md" % name)
+
     for name, d in routers.items():
         item = next(it for it in items if it.kind == "skill" and os.path.dirname(it.path) == d)
         label = "router %s" % name
@@ -426,9 +435,9 @@ def check_routers(skills_dir, commands_dir=None):
         n_lines = len(lines) - 1 if item.text.endswith("\n") else len(lines)
         if n_lines > MAX_SKILL_LINES:
             problems.append("%s: SKILL.md has %d lines (max %d)" % (label, n_lines, MAX_SKILL_LINES))
-        desc_len = len(str(item.fm.get("description") or ""))
+        desc_len = item.chars  # description + when_to_use
         if desc_len > MAX_DESCRIPTION_CHARS:
-            problems.append("%s: description is %d chars (max %d)" % (label, desc_len, MAX_DESCRIPTION_CHARS))
+            problems.append("%s: description + when_to_use is %d chars (max %d)" % (label, desc_len, MAX_DESCRIPTION_CHARS))
         if not item.fm.get("argument-hint"):
             problems.append("%s: missing argument-hint" % label)
 
@@ -450,6 +459,7 @@ def check_routers(skills_dir, commands_dir=None):
             pf = os.path.join(phase_dir, f + ".md")
             text = _read(pf)
             for var, rel in _VAR_PATH.findall(text):
+                rel = rel.rstrip(".,;:!?")
                 base = d if var == "CLAUDE_SKILL_DIR" else plugin_root
                 if not os.path.exists(os.path.join(base, _strip_target(rel))):
                     problems.append("%s: phases/%s.md: ${%s}/%s does not resolve" % (label, f, var, rel))
@@ -595,6 +605,9 @@ def _run(args):
 
     if args.cmd == "reads":
         data = sys.stdin.read().splitlines()
+        if not any(True for _ in _events(data)):
+            sys.stderr.write("skill_budget: empty or non-JSON stream\n")
+            return 2
         if args.require_success:
             res = stream_result(data)
             if not res or res.get("subtype") != "success":

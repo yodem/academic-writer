@@ -184,6 +184,59 @@ def test_phase_file_unresolved_paths(run, tmp_path):
     assert out.count("\n") == 3
 
 
+def test_description_plus_when_to_use_over_1536(run, tmp_path):
+    d = router(tmp_path, extra_fm='when_to_use: "%s"' % ("w" * 1530))
+    r = run("check-routers", tmp_path)
+    assert r.returncode == 1
+    assert "description + when_to_use is" in r.stdout and "(max 1536)" in r.stdout
+
+
+def test_trailing_punctuation_not_part_of_path(run, tmp_path):
+    d = router(tmp_path)
+    (d / "refs").mkdir()
+    (d / "refs" / "x.md").write_text("x")
+    (d / "phases" / "ideate.md").write_text(
+        "Read ${CLAUDE_SKILL_DIR}/refs/x.md. Also ${CLAUDE_SKILL_DIR}/refs/x.md, and (${CLAUDE_SKILL_DIR}/refs/x.md); "
+        "and ${CLAUDE_SKILL_DIR}/refs/x.md: ok\n")
+    r = run("check-routers", tmp_path)
+    assert r.returncode == 0, r.stdout
+
+
+def test_phases_dir_without_skill_md(run, tmp_path):
+    (tmp_path / "orphan" / "phases").mkdir(parents=True)
+    r = run("check-routers", tmp_path)
+    assert r.returncode == 1
+    assert "orphan: has phases/ but no SKILL.md" in r.stdout
+
+
+def test_check_routers_commands_dir(run, tmp_path):
+    sk = tmp_path / "skills"
+    cm = tmp_path / "commands"
+    cm.mkdir()
+    router(sk)
+    (cm / "good.md").write_text('---\ndescription: x\ndisable-model-invocation: true\nmetadata: {moved-to: "write ideate"}\n---\n$ARGUMENTS\n')
+    assert run("check-routers", sk, "--commands", cm).returncode == 0
+    (cm / "bad.md").write_text('---\ndescription: x\ndisable-model-invocation: true\nmetadata: {moved-to: "write nope"}\n---\nno args\n')
+    r = run("check-routers", sk, "--commands", cm)
+    assert r.returncode == 1
+    assert "bad.md" in r.stdout and "does not exist" in r.stdout and "no $ARGUMENTS" in r.stdout
+
+
+def test_measure_field_stubs(run, tmp_path):
+    stub(tmp_path, "a", "write ideate")
+    stub(tmp_path, "b", "write draft", fm_style="block")
+    skill(tmp_path, "c", 'name: c\ndescription: "x"')
+    assert run("measure", tmp_path, "--field", "stubs").stdout.strip() == "2"
+    assert run("measure", tmp_path, "--field", "listed_skills").stdout.strip() == "1"
+
+
+def test_fallback_unindented_block_list(run, tmp_path):
+    skill(tmp_path, "a", 'name: a\nallowed-tools:\n- Read\n- Bash\ndescription: "abc"\nargument-hint: x')
+    r = run("measure", tmp_path, "--field", "listed_chars")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "3"
+
+
 # ---- gate ----------------------------------------------------------------
 
 def test_gate_passes_at_60_fails_at_59(run, tmp_path):
@@ -243,6 +296,11 @@ def test_final_text(run):
     r = run("final-text", stdin=_stream())
     assert r.returncode == 0 and r.stdout.strip() == "Academic Writer final"
     assert run("final-text", stdin="nothing\n").returncode == 2
+
+
+def test_reads_empty_stdin_exits_2(run):
+    assert run("reads", stdin="").returncode == 2
+    assert run("reads", "--require-success", stdin="").returncode == 2
 
 
 # ---- errors --------------------------------------------------------------
