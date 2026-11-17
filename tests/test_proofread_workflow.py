@@ -11,6 +11,7 @@ def test_workflow_is_retired_and_skill_invokes_cli():
     router = (ROOT / "src/skills/write/SKILL.md").read_text(encoding="utf-8")
     assert "ONE subagent" in router and "`proofread` and `research`" in router
     assert "model: sonnet" in router
+    assert "effort: medium" in router
     assert "aw proofread" in skill
     assert "build-tracked-docx.py" in skill
     assert len(skill.splitlines()) <= 200

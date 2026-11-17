@@ -29,13 +29,13 @@ This skill is a router. Pick one phase, read its file, and follow it. Never load
 ## How to run
 
 1. The first word of the arguments is the phase. Everything after it is the phase's arguments.
-2. No phase word: infer the phase from the request (a request for a new article, or a bare `/academic-writer:write` with a new-article request, runs `new`). If two phases fit, ask the author which one. Do not guess.
+2. No arguments at all (a bare `/academic-writer:write`): run `new`, always, without asking or inferring. Arguments but no phase word: infer the phase from the request (a request for a new article runs `new`). If two phases fit, ask the author which one. Do not guess.
 3. A first word that is not in the table: print the table and stop.
 4. Read exactly one file, `${CLAUDE_SKILL_DIR}/phases/<phase>.md`, and follow it as if it were this skill's body. The paths inside it that start with `${CLAUDE_SKILL_DIR}` or `${CLAUDE_PLUGIN_ROOT}` are already correct.
 
 ## Forked phases
 
-`proofread` and `research` ran in their own context before. Run each as one subagent, not inline: dispatch ONE subagent with the Agent tool and `model: sonnet`, whose prompt gives the absolute path `${CLAUDE_SKILL_DIR}/phases/<phase>.md` (tell it to read and follow that file) and the arguments, then relay its result to the author. Every other phase runs inline.
+`proofread` and `research` ran in their own context before. Run each as one subagent, not inline: dispatch ONE subagent with the Agent tool, `model: sonnet` and `effort: medium`, whose prompt gives the absolute path `${CLAUDE_SKILL_DIR}/phases/<phase>.md` (tell it to read and follow that file) and the arguments, then relay its result to the author. Every other phase runs inline.
 
 ## Before `new` (short form, full text in `phases/new.md`)
 

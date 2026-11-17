@@ -60,7 +60,10 @@ def test_forked_phases_dispatch_sonnet():
 
 def test_bare_write_defaults_to_new():
     _, body = _parts()
-    assert re.search(r"(no phase word|bare)[^\n]*`new`", body, re.I)
+    step = next(l for l in body.splitlines() if l.startswith("2. "))
+    assert re.search(r"no arguments at all[^\n]*`/academic-writer:write`[^\n]*run `new`, always", step, re.I)
+    assert "without asking" in step
+    assert step.index("run `new`, always") < step.index("Arguments but no phase word")
     assert "${CLAUDE_SKILL_DIR}/phases/<phase>.md" in body
 
 
