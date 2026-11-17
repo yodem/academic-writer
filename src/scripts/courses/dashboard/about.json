@@ -5,7 +5,7 @@
       "id": "onboarding",
       "name_he": "התחלה והגדרה",
       "description_he": "הגדרה ראשונה, פרופיל ובדיקת הכלים שהתוסף צריך.",
-      "command": "/academic-writer:init",
+      "command": null,
       "status": "ok",
       "tested": "manual",
       "subfeatures": [
@@ -57,7 +57,7 @@
       "id": "voice",
       "name_he": "הקול שלי",
       "description_he": "מאגר אחד של סגנון הכתיבה שלך, משותף לכל הפרויקטים.",
-      "command": "/academic-writer:voice",
+      "command": null,
       "status": "partial",
       "tested": "manual",
       "subfeatures": [
@@ -908,17 +908,17 @@
     ],
     "lecturer": [
       "הריצו /academic-writer:setup ובחרו תיקיית בית ותפקיד מרצה.",
-      "הריצו /academic-writer:init בתיקיית הפרויקט כדי לתת לו פרופיל.",
+      "הריצו /academic-writer:setup init בתיקיית הפרויקט כדי לתת לו פרופיל.",
       "הוסיפו מאמרים קודמים כדי שהתוסף ילמד את הסגנון שלכם.",
       "כתבו מאמר חדש עם /academic-writer:write, או הגיהו קיים עם /academic-writer:write proofread."
     ],
     "researcher": [
       "הריצו /academic-writer:setup ובחרו תיקיית בית ותפקיד חוקר.",
-      "הריצו /academic-writer:init בתיקיית המחקר כדי לתת לה פרופיל.",
+      "הריצו /academic-writer:setup init בתיקיית המחקר כדי לתת לה פרופיל.",
       "הוסיפו מקורות לספרייה עם /academic-writer:ingest או /academic-writer:ingest-book.",
       "נסחו שאלת מחקר עם /academic-writer:write ideate וכתבו עם /academic-writer:write.",
       "פתחו את הלוח עם /academic-writer:dashboard כדי לעקוב אחרי הכתיבה."
     ]
   },
-  "guide": "/academic-writer:intro"
+  "guide": "/academic-writer:setup intro"
 }

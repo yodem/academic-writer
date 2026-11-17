@@ -39,6 +39,6 @@ This skill is a router. Pick one phase, read its file, and follow it. Never load
 
 ## Before `new` (short form, full text in `phases/new.md`)
 
-- Voice gate: before Step 1, check the author's voice store in `${CLAUDE_PLUGIN_DATA}/voice/`. When it is missing or empty, ask whether to build it first with `/academic-writer:voice`; on "Build my voice first" stop. The exact check and answers are in the "Voice precondition gate" section of `phases/new.md`.
+- Voice gate: before Step 1, check the author's voice store in `${CLAUDE_PLUGIN_DATA}/voice/`. When it is missing or empty, ask whether to build it first with `/academic-writer:setup voice`; on "Build my voice first" stop. The exact check and answers are in the "Voice precondition gate" section of `phases/new.md`.
 - Existing-article guard: compute the article's slug, and if `articles/<slug>.md` already exists, stop and point the author to `/academic-writer:write edit articles/<slug>.md` (or `edit-section`). The check is in the "existing-article guard" section of `phases/new.md`.
 - Preflight: if the author has not run `/academic-writer:setup`, ask them to run it first.

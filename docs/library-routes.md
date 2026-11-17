@@ -19,7 +19,7 @@ Contents:
 
 ## The three choices
 
-Setup (`/academic-writer:init`) and `/academic-writer:update-tools` ask which library this article project should use. The answer is saved for that project only, in `.academic-helper/library.json`.
+Setup (`/academic-writer:setup init`) and `/academic-writer:setup update-tools` ask which library this article project should use. The answer is saved for that project only, in `.academic-helper/library.json`.
 
 | Choice | What it means |
 |---|---|
@@ -27,7 +27,7 @@ Setup (`/academic-writer:init`) and `/academic-writer:update-tools` ask which li
 | **PageIndex** | Your books are read from a PageIndex library instead. PageIndex is optional: it is a second library with a short outline of every book, which the plugin can install for you or reach through a command of your own. |
 | **Both** | One library answers, and the other is tested quietly in the background on the same request. You choose which one answers; Trove is the usual choice. |
 
-You can change the choice later with `/academic-writer:update-tools`. The choice is per article project, so one article can use PageIndex while another stays on Trove.
+You can change the choice later with `/academic-writer:setup update-tools`. The choice is per article project, so one article can use PageIndex while another stays on Trove.
 
 ### What "tested quietly in the background" does
 
@@ -76,7 +76,7 @@ What is **not** sent anywhere:
 
 PageIndex gives each book a short outline (a "tree") with a summary per section, so Claude can go straight to the likely page. It is optional. You have two ways to get it, and Trove stays your main library either way.
 
-Both ways are offered, in plain words and with a yes/no for each step, by `/academic-writer:setup`, `/academic-writer:init` and `/academic-writer:update-tools`. The commands below are what those skills run for you. In a terminal you can run them yourself from your research folder; `aw` is the plugin's own command-line tool, found at `${CLAUDE_PLUGIN_ROOT}/bin/aw` inside Claude Code sessions.
+Both ways are offered, in plain words and with a yes/no for each step, by `/academic-writer:setup`, `/academic-writer:setup init` and `/academic-writer:setup update-tools`. The commands below are what those skills run for you. In a terminal you can run them yourself from your research folder; `aw` is the plugin's own command-line tool, found at `${CLAUDE_PLUGIN_ROOT}/bin/aw` inside Claude Code sessions.
 
 ### Option A: the built-in helper
 
@@ -120,7 +120,7 @@ If you (or someone you work with) already run a PageIndex library, for example o
    - a program on your computer's path, for example `pilib`;
    - the full path to a small script that reaches your library for you, for example `/path/to/pilib-wrapper`.
 3. Start a new Claude Code session (the setting is picked up at the start of a session).
-4. Run `/academic-writer:update-tools` in your research folder and choose **PageIndex** or **Both**.
+4. Run `/academic-writer:setup update-tools` in your research folder and choose **PageIndex** or **Both**.
 
 Notes:
 
@@ -138,7 +138,7 @@ Notes:
 ```
 
   `shelf` is optional. It is a small file in your research folder that lists which PageIndex books correspond to which Trove books, so a book is looked up under the right name. Books prepared by `aw library index` are stored under the Trove id and need no shelf entry. Set `"route": "trove"` to go back to Trove only, or add `"shadow": { "enabled": false }` to keep **Both** but stop the background test.
-- If `aw library status` says PageIndex is not reachable, `/academic-writer:health` and the troubleshooting list in `/academic-writer:setup` have the matching steps.
+- If `aw library status` says PageIndex is not reachable, `/academic-writer:setup health` and the troubleshooting list in `/academic-writer:setup` have the matching steps.
 
 ### Which command runs
 

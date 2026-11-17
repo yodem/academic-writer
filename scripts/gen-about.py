@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 OUT = "src/scripts/courses/dashboard/about.json"
-GUIDE = "/academic-writer:intro"
+GUIDE = "/academic-writer:setup intro"
 TESTED = ("e2e", "unit", "manual", "not tested yet")
 
 # Short first steps by role, plain words, at most five each. Hebrew first; the guide has the detail.
@@ -43,13 +43,13 @@ ONBOARDING: Dict[str, List[str]] = {
     ],
     "lecturer": [
         "הריצו /academic-writer:setup ובחרו תיקיית בית ותפקיד מרצה.",
-        "הריצו /academic-writer:init בתיקיית הפרויקט כדי לתת לו פרופיל.",
+        "הריצו /academic-writer:setup init בתיקיית הפרויקט כדי לתת לו פרופיל.",
         "הוסיפו מאמרים קודמים כדי שהתוסף ילמד את הסגנון שלכם.",
         "כתבו מאמר חדש עם /academic-writer:write, או הגיהו קיים עם /academic-writer:write proofread.",
     ],
     "researcher": [
         "הריצו /academic-writer:setup ובחרו תיקיית בית ותפקיד חוקר.",
-        "הריצו /academic-writer:init בתיקיית המחקר כדי לתת לה פרופיל.",
+        "הריצו /academic-writer:setup init בתיקיית המחקר כדי לתת לה פרופיל.",
         "הוסיפו מקורות לספרייה עם /academic-writer:ingest או /academic-writer:ingest-book.",
         "נסחו שאלת מחקר עם /academic-writer:write ideate וכתבו עם /academic-writer:write.",
         "פתחו את הלוח עם /academic-writer:dashboard כדי לעקוב אחרי הכתיבה.",

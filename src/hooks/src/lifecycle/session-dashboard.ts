@@ -69,7 +69,7 @@ export function sessionDashboard(input: HookInput): HookResult {
       const unanalyzed = total - analyzed;
       if (unanalyzed > 0) {
         lines.push(`║  New past articles: ${String(unanalyzed).padEnd(33)}║`);
-        lines.push(`║  → Run /academic-writer:voice to update style          ║`);
+        lines.push(`║  → Run /academic-writer:setup voice to update style    ║`);
       }
     } catch {
       // ignore
@@ -80,7 +80,7 @@ export function sessionDashboard(input: HookInput): HookResult {
   lines.push('║  /academic-writer:write          — Write new article   ║');
   lines.push('║  /academic-writer:write ideate   — Brainstorm ideas    ║');
   lines.push('║  /academic-writer:write research — Investigate a topic ║');
-  lines.push('║  /academic-writer:health         — Check integrations  ║');
+  lines.push('║  /academic-writer:setup health   — Check integrations  ║');
   lines.push('╚════════════════════════════════════════════════════════╝');
 
   return {

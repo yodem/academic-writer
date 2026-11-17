@@ -13,7 +13,7 @@ Score a completed article on six dimensions and show the researcher a scorecard.
 cat .academic-helper/profile.md
 ```
 
-If no profile, tell the researcher to run `/academic-writer:init` first.
+If no profile, tell the researcher to run `/academic-writer:setup init` first.
 
 ## Input
 

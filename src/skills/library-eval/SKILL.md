@@ -1,6 +1,6 @@
 ---
 name: library-eval
-description: "Compare Trove and PageIndex on your own article: pick claims from a draft, let each library find the supporting pages, then judge anonymised A/B pairs yourself on a private page, and see the unblinded results (win rate, cost, time, agreement with the citation checker). Use when the author wants to know which library finds the right pages better for their own sources, after a draft with footnotes exists and the sources are in both libraries. Do NOT use to change which library an article reads from (use /academic-writer:update-tools) or to add books (use /academic-writer:ingest or /academic-writer:ingest-book)."
+description: "Compare Trove and PageIndex on your own article: pick claims from a draft, let each library find the supporting pages, then judge anonymised A/B pairs yourself on a private page, and see the unblinded results (win rate, cost, time, agreement with the citation checker). Use when the author wants to know which library finds the right pages better for their own sources, after a draft with footnotes exists and the sources are in both libraries. Do NOT use to change which library an article reads from (use /academic-writer:setup update-tools) or to add books (use /academic-writer:ingest or /academic-writer:ingest-book)."
 user-invocable: true
 allowed-tools: [Bash, Read, Write, AskUserQuestion]
 metadata: {author: "Yotam Fromm", version: "0.1.0", summary: "Compare Trove and PageIndex on your own article: anonymised pairs you judge yourself, then the unblinded results."}
@@ -14,7 +14,7 @@ The rule the whole skill serves: **the author never sees which library is A or B
 
 ## 1. Pre-flight
 
-1. Read `.academic-helper/profile.md`. If it does not exist, say nothing is set up yet and point at `/academic-writer:setup` or `/academic-writer:init`; stop.
+1. Read `.academic-helper/profile.md`. If it does not exist, say nothing is set up yet and point at `/academic-writer:setup` or `/academic-writer:setup init`; stop.
 2. Check both libraries answer:
 
 ```bash
@@ -24,7 +24,7 @@ The rule the whole skill serves: **the author never sees which library is A or B
    In the JSON, `check.trove.ok` and `check.pageindex.ok` must both be `true`. If PageIndex is not set up, point at `/academic-writer:setup` (it offers the built-in helper) and stop. If Trove or PageIndex fails, show its `error` in plain words and stop.
 3. There must be a draft with footnotes under `.academic-helper/drafts/` (or the author gives a list of claims with `--claims`). Without one, say so and point at `/academic-writer:write`; stop.
 4. The helper that locates pages is the `claude` program (Claude Code), or `codex` if the author prefers it. If neither is on the path (`command -v claude`, `command -v codex`), say this comparison needs Claude Code or Codex and stop.
-5. The sources of the claims must be in **both** libraries. A source that is only in Trove is skipped with a reason; if that leaves no claims, offer to prepare the books for PageIndex (`/academic-writer:update-tools`, "prepare existing books") and stop.
+5. The sources of the claims must be in **both** libraries. A source that is only in Trove is skipped with a reason; if that leaves no claims, offer to prepare the books for PageIndex (`/academic-writer:setup update-tools`, "prepare existing books") and stop.
 
 ## 2. Plan: pick the claims
 
@@ -91,4 +91,4 @@ Never add `--force`: unblinding before the judgments are in is refused on purpos
 - Agreement with the citation checker: how often each library found the page the checker had confirmed, and whether the author's choices agree with that.
 - A list of the pairs with the author's own notes, now with the libraries named.
 
-State limits honestly: the blinding protects the author as a judge; the helper's answers are for this article's sources only; a small number of pairs is a hint, not proof. Offer to repeat on another article, or to change which library an article reads from (`/academic-writer:update-tools`). The retrieval report (`aw library report --eval <eval_id>`) adds returned-text sizes and per-library timing from the same runs.
+State limits honestly: the blinding protects the author as a judge; the helper's answers are for this article's sources only; a small number of pairs is a hint, not proof. Offer to repeat on another article, or to change which library an article reads from (`/academic-writer:setup update-tools`). The retrieval report (`aw library report --eval <eval_id>`) adds returned-text sizes and per-library timing from the same runs.

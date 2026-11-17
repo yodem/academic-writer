@@ -8,7 +8,7 @@ Help the researcher turn a topic into a clear, answerable research question befo
 cat .academic-helper/profile.md
 ```
 
-If no profile, tell the researcher to run `/academic-writer:init` first.
+If no profile, tell the researcher to run `/academic-writer:setup init` first.
 
 Extract `fieldOfStudy`, `targetLanguage`, and `tools` configuration.
 

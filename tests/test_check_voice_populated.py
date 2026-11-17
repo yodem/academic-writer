@@ -18,8 +18,8 @@ SCRIPT = os.path.join(ROOT_DIR, "src", "scripts", "check-voice-populated.py")
 
 TEMPLATE_STUB = (
     "> Updated <YYYY-MM-DD> by <plugin>\n"
-    "> Status: empty (run `/academic-writer:init` to seed Stage 1, then "
-    "`/academic-writer:voice` for Stage 2)\n\n"
+    "> Status: empty (run `/academic-writer:setup init` to seed Stage 1, then "
+    "`/academic-writer:setup voice` for Stage 2)\n\n"
     "# Voice Profile — <writer name>\n\n"
     "## Core voice (cross-project)\n\n"
     "_Empty. Populated by Stage 1 miner and Stage 2 interview._\n\n"

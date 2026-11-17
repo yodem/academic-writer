@@ -476,7 +476,7 @@ class TestCrossReferences(unittest.TestCase):
 
     def test_help_lists_all_slash_commands(self):
         """Help or the command index must list every user-invocable skill."""
-        help_path = os.path.join(SRC_DIR, "skills", "help", "SKILL.md")
+        help_path = os.path.join(SRC_DIR, "skills", "setup", "phases", "help.md")
         help_text = _read(help_path)
         command_index = _read(os.path.join(ROOT, "CLAUDE.md"))
         skills_dir = os.path.join(SRC_DIR, "skills")

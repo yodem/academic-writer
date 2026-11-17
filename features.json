@@ -8,12 +8,12 @@
       "id": "onboarding",
       "name": "Onboarding / profile setup",
       "sources": [
-        "src/skills/init/SKILL.md",
-        "src/skills/setup/SKILL.md",
+        "src/skills/setup/phases/init.md",
+        "src/skills/setup/phases/setup.md",
         "src/skills/setup/references/gemini-key.md",
         "src/skills/setup/references/dependencies.md",
-        "src/skills/init/references/profile-schema.md",
-        "src/skills/init/references/integration-setup.md"
+        "src/skills/setup/references/profile-schema.md",
+        "src/skills/setup/references/integration-setup.md"
       ],
       "status": "ok",
       "subfeatures": [
@@ -65,7 +65,7 @@
       "id": "voice",
       "name": "Voice subsystem (one shared author voice store)",
       "sources": [
-        "src/skills/voice/SKILL.md",
+        "src/skills/setup/phases/voice.md",
         "src/skills/voice/voice-sync.sh",
         "src/skills/voice/voice-migrate.sh",
         "src/cli/src/voice.ts",
@@ -114,7 +114,7 @@
           "id": "write-voice-gate",
           "name": "write stops unless check-voice-populated.py passes on AUTHOR_VOICE.md",
           "status": "partial",
-          "notes": "unverified — needs an owner to confirm: the write gate checks a project-root AUTHOR_VOICE.md, while the voice skill writes its store to ${CLAUDE_PLUGIN_DATA}/voice and voiceMigrate reads AUTHOR_VOICE.md as input; it is not confirmed that a first-time author with no AUTHOR_VOICE.md can pass the gate by running /academic-writer:voice.",
+          "notes": "unverified — needs an owner to confirm: the write gate checks a project-root AUTHOR_VOICE.md, while the voice skill writes its store to ${CLAUDE_PLUGIN_DATA}/voice and voiceMigrate reads AUTHOR_VOICE.md as input; it is not confirmed that a first-time author with no AUTHOR_VOICE.md can pass the gate by running /academic-writer:setup voice.",
           "tested": "unit"
         }
       ],
@@ -468,8 +468,8 @@
         "src/skills/edit/SKILL.md",
         "src/skills/proofread/SKILL.md",
         "src/skills/proofread/references/changes-schema.json",
-        "src/skills/update-field/SKILL.md",
-        "src/skills/update-tools/SKILL.md",
+        "src/skills/setup/phases/update-field.md",
+        "src/skills/setup/phases/update-tools.md",
         "src/cli/src/proofread.ts",
         "src/cli/src/prompts/proofread-find.md",
         "src/cli/src/prompts/proofread-verify.md",
@@ -797,8 +797,8 @@
         "src/schemas/retrieval-row.schema.json",
         "src/agents/auditor.md",
         "src/cli/src/evidence.ts",
-        "src/skills/init/references/integration-setup.md",
-        "src/skills/update-tools/SKILL.md",
+        "src/skills/setup/references/integration-setup.md",
+        "src/skills/setup/phases/update-tools.md",
         "docs/library-routes.md",
         "tests/test_library_e2e.py",
         "src/cli/src/library/install.ts",
@@ -991,7 +991,7 @@
       "name": "Setup checks script shared by health, setup and the dashboard Setup page",
       "sources": [
         "src/scripts/setup_checks.py",
-        "src/skills/health/SKILL.md"
+        "src/skills/setup/phases/health.md"
       ],
       "status": "ok",
       "tested": "e2e",

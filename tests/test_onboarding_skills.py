@@ -22,8 +22,23 @@ HEADING_RE = re.compile(r"^#{2,6}\s")
 ASK = "AskUserQuestion"
 
 
+SETUP_PHASES = {"setup", "init", "health", "update-tools", "update-field", "voice", "learn", "help", "intro"}
+
+
+def _file(skill: str) -> pathlib.Path:
+    """The file holding a skill's instructions: a phase of the `setup` router, or the skill itself."""
+    if skill in SETUP_PHASES:
+        return SKILLS / "setup" / "phases" / (skill + ".md")
+    return SKILLS / skill / "SKILL.md"
+
+
+def _refs(skill: str) -> pathlib.Path:
+    """The references folder of a skill: the `setup` router owns those of its phases."""
+    return (SKILLS / "setup" if skill in SETUP_PHASES else SKILLS / skill) / "references"
+
+
 def _text(skill: str) -> str:
-    return (SKILLS / skill / "SKILL.md").read_text(encoding="utf-8")
+    return _file(skill).read_text(encoding="utf-8")
 
 
 def _steps(text: str) -> list[list[str]]:
@@ -107,7 +122,7 @@ def test_setup_never_asks_for_the_key_in_chat():
     text = _text("setup")
     assert "Never ask for the Gemini key in the chat" in text
     for skill in ("setup", "init"):
-        for path in [SKILLS / skill / "SKILL.md", *(SKILLS / skill / "references").glob("*.md")]:
+        for path in [_file(skill), *_refs(skill).glob("*.md")]:
             body = path.read_text(encoding="utf-8")
             # The old flow said "ask them to paste the key" (into chat); pasting into the
             # /plugin Configure field is fine.
@@ -127,7 +142,7 @@ def test_setup_has_no_developer_known_gap_note():
 
 def test_setup_and_init_offer_the_intro_guide():
     for skill in ("setup", "init"):
-        assert "/academic-writer:intro" in _text(skill), skill
+        assert "/academic-writer:setup intro" in _text(skill), skill
 
 
 def test_onboarding_skills_stay_under_500_lines():
@@ -137,7 +152,7 @@ def test_onboarding_skills_stay_under_500_lines():
 
 
 def test_no_removed_gemini_mcp_tool_in_onboarding():
-    for skill in ("setup", "init", "health"):
+    for skill in ("setup",):  # the router folder holds the setup, init and health phases and their references
         for path in (SKILLS / skill).rglob("*.md"):
             assert "gemini_raw" not in path.read_text(encoding="utf-8"), path
 
@@ -154,7 +169,7 @@ def test_write_voice_gate_lets_a_first_time_author_through():
 
 # --- Library route (Trove | PageIndex | both) and the PageIndex plugin setting -------------------
 
-REFERENCE = SKILLS / "init" / "references" / "integration-setup.md"
+REFERENCE = SKILLS / "setup" / "references" / "integration-setup.md"
 ROUTE_LABELS = (
     "Trove (your current library)",
     "PageIndex (a second library: on this computer or your own server)",
@@ -186,7 +201,8 @@ def test_init_and_update_tools_ask_the_library_route_question():
     # update-tools never touches the profile for this step, and its description keeps its trigger phrase
     text = _text("update-tools")
     assert "does not touch `profile.md`" in text
-    assert re.search(r"\bUse when\b", text.split("---")[1])
+    router_fm = (SKILLS / "setup" / "SKILL.md").read_text(encoding="utf-8").split("---")[1]
+    assert re.search(r"\bUse when\b", router_fm) and "update-tools" in router_fm
 
 
 def test_library_route_examples_match_the_config_schema():
@@ -342,7 +358,7 @@ def test_onboarding_and_ingest_skills_stay_under_500_lines():
 
 def test_no_skill_text_inlines_a_threshold_or_a_key():
     for skill in ("setup", "init", "update-tools", "library-eval", "ingest", "ingest-book", "ocr"):
-        for path in [SKILLS / skill / "SKILL.md", *(SKILLS / skill / "references").glob("*.md")]:
+        for path in [_file(skill), *_refs(skill).glob("*.md")]:
             body = path.read_text(encoding="utf-8")
             assert not re.search(r"AIza[0-9A-Za-z_-]{10,}", body), path
             assert "--api-key" not in body, path
@@ -364,7 +380,7 @@ def test_library_eval_skill_is_invocable_and_registered():
     assert "AskUserQuestion" in fm["allowed-tools"]
     gen = (ROOT / "scripts" / "gen-guide.py").read_text(encoding="utf-8")
     assert '"library-eval"' in gen
-    assert "/academic-writer:library-eval" in (SKILLS / "help" / "SKILL.md").read_text(encoding="utf-8")
+    assert "/academic-writer:library-eval" in (SKILLS / "setup" / "phases" / "help.md").read_text(encoding="utf-8")
     assert "/academic-writer:library-eval" in (ROOT / "src" / "guide" / "index.html").read_text(encoding="utf-8")
 
 

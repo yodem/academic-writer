@@ -10,7 +10,7 @@ Sources of truth:
 Targets (only the text between the markers is rewritten):
   - src/guide/index.html      <!-- guide:commands:start --> ... <!-- guide:commands:end -->
                               <!-- guide:version:start --> ... <!-- guide:version:end -->
-  - src/skills/help/SKILL.md  <!-- help:commands:start --> ... <!-- help:commands:end -->
+  - src/skills/setup/phases/help.md  <!-- help:commands:start --> ... <!-- help:commands:end -->
 
 Usage:
   python3 scripts/gen-guide.py            # rewrite in place (idempotent)
@@ -35,10 +35,10 @@ PREFIX = "/academic-writer:"
 # Anything not listed here is appended alphabetically.
 # A router's phases are listed as "<router> <phase>".
 ORDER = [
-    "intro", "setup", "init", "write new", "write revise", "write edit", "write edit-section",
+    "setup intro", "setup", "setup init", "write new", "write revise", "write edit", "write edit-section",
     "write proofread", "write review", "write research", "write ideate", "write present",
     "write watch", "ocr",
-    "ingest", "ingest-book", "library-eval", "voice", "health", "help",
+    "ingest", "ingest-book", "library-eval", "setup voice", "setup health", "setup help",
 ]
 
 
@@ -205,7 +205,8 @@ def load_commands(root: Path) -> list[tuple[str, str]]:
             rows = phase_rows(text)
             if not rows:
                 raise SystemExit(f"gen-guide: router {name} has no rows in its '## Phases' table")
-            cmds.extend((f"{name} {phase}", when) for phase, when in rows)
+            # a router's phase named like the router is its bare command
+            cmds.extend((name if phase == name else f"{name} {phase}", when) for phase, when in rows)
             continue
         cmds.append((name, summary_for(fm)))
     rank = {n: i for i, n in enumerate(ORDER)}
@@ -247,7 +248,7 @@ def render(root: Path) -> dict[Path, str]:
         raise SystemExit(f"gen-guide: cannot read plugin version from manifest: {exc}") from exc
     cmds = load_commands(root)
     guide = root / "src/guide/index.html"
-    help_md = root / "src/skills/help/SKILL.md"
+    help_md = root / "src/skills/setup/phases/help.md"
     g = guide.read_text(encoding="utf-8")
     g = replace_between(g, "<!-- guide:commands:start -->", "<!-- guide:commands:end -->",
                         guide_block(cmds), str(guide))

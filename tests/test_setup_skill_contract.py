@@ -4,8 +4,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = ROOT / "src" / "skills"
-SETUP = (SKILLS / "setup" / "SKILL.md").read_text(encoding="utf-8")
-INIT = (SKILLS / "init" / "SKILL.md").read_text(encoding="utf-8")
+SETUP = (SKILLS / "setup" / "phases" / "setup.md").read_text(encoding="utf-8")
+INIT = (SKILLS / "setup" / "phases" / "init.md").read_text(encoding="utf-8")
 FINISH = (SKILLS / "setup" / "references" / "finish.md").read_text(encoding="utf-8")
 
 
@@ -16,7 +16,7 @@ def test_setup_uses_setup_checks_and_home_set():
 
 def test_setup_has_what_you_can_do_now_section():
     assert re.search(r"^#+ .*What you can do now", SETUP, re.M)
-    assert "/academic-writer:intro" in SETUP.split("What you can do now", 1)[1]
+    assert "/academic-writer:setup intro" in SETUP.split("What you can do now", 1)[1]
 
 
 def test_setup_home_folder_choice_paths():
@@ -34,7 +34,7 @@ def test_init_registers_workspace_inside_and_outside_home():
 
 
 def test_profile_schema_documents_home_and_workspace_fields():
-    text = (SKILLS / "init" / "references" / "profile-schema.md").read_text(encoding="utf-8")
+    text = (SKILLS / "setup" / "references" / "profile-schema.md").read_text(encoding="utf-8")
     for token in ("home.md", "workspace", "course", "term"):
         assert token in text
 
@@ -106,7 +106,7 @@ def test_no_ask_user_question_block_has_empty_or_missing_options():
 
 def test_ask_user_question_blocks_have_two_to_four_options():
     bad = []
-    for path in sorted(SKILLS.rglob("SKILL.md")):
+    for path in sorted([*SKILLS.rglob("SKILL.md"), *SKILLS.rglob("phases/*.md")]):
         for block in _ask_blocks(path.read_text(encoding="utf-8")):
             n = len(re.findall(r'\{"label"', block))
             if n and not 2 <= n <= 4:
@@ -152,7 +152,7 @@ def test_manual_commands_have_a_typing_recipe_and_restart_steps():
 
 def test_what_you_can_do_now_names_researcher_next_steps():
     block = FINISH.split("## Step 8", 1)[1]
-    for token in ("past-articles", "/academic-writer:init", "/academic-writer:write", "/academic-writer:write research"):
+    for token in ("past-articles", "/academic-writer:setup init", "/academic-writer:write", "/academic-writer:write research"):
         assert token in block
 
 

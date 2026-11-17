@@ -22,7 +22,7 @@ AskUserQuestion(questions=[{
     {
       "label": "Skip for now",
       "description": "Profile will be saved without a style fingerprint. Articles will use generic academic style.",
-      "markdown": "```\nSkip Style Analysis\n───────────────────\n⚠ Articles won't match your voice yet\n→ Add papers to past-articles/ anytime\n→ Re-run: /academic-writer:init\n   (choose 'Update' → 'Style Analysis')\n```"
+      "markdown": "```\nSkip Style Analysis\n───────────────────\n⚠ Articles won't match your voice yet\n→ Add papers to past-articles/ anytime\n→ Re-run: /academic-writer:setup init\n   (choose 'Update' → 'Style Analysis')\n```"
     }
   ],
   "multiSelect": false
@@ -136,7 +136,7 @@ After past-articles are scanned, invoke the `voice-miner` agent:
    If `STUB`: skip steps 3–5 below entirely and tell the user: "Not enough past articles yet for a
    voice fingerprint (need at least `thresholds.json: voice.corpus.minArticles` articles /
    `voice.corpus.minTotalWords` words — see `${CLAUDE_PLUGIN_ROOT}/thresholds.json`). Add more to `past-articles/` and
-   re-run `/academic-writer:init`, or skip voice for now." Then continue to Phase 3.5/Phase 3
+   re-run `/academic-writer:setup init`, or skip voice for now." Then continue to Phase 3.5/Phase 3
    without a voice fingerprint.
 3. If `VALID`: run `voice-distiller --from-fingerprint` to seed the four-section
    `AUTHOR_VOICE.md` at root.
@@ -151,6 +151,6 @@ After past-articles are scanned, invoke the `voice-miner` agent:
    `.academic-helper/profile.md` — see Phase 4 below; run Phase 4 first if needed, or rely on
    voice-sync's own loud failure if `author_key` is missing).
 6. Print: "✓ Voice fingerprint created from N past articles. You can write articles now, or run
-   `/academic-writer:voice` for a deeper profile (recommended)."
+   `/academic-writer:setup voice` for a deeper profile (recommended)."
 
 The user is not required to run Stage 2. They can start writing immediately with the fingerprint.

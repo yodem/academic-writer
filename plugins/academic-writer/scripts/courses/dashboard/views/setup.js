@@ -1,5 +1,5 @@
 /* Setup: the checklist of what the plugin needs, read-only. The rows come from the same deterministic checks as
-   /academic-writer:health (st.setup.checks, run by setup_checks.py). Nothing is fixed here: each row names the
+   /academic-writer:setup health (st.setup.checks, run by setup_checks.py). Nothing is fixed here: each row names the
    command to ask Claude for. Required checks first, optional ones apart. Look: brand file §4, "ברוכים הבאים". */
 (() => {
 const A = window.AW;
@@ -52,7 +52,7 @@ A.views.setup = (st, el) => {
     <h1>הגדרה</h1><p class="lede">${esc(lede)} העמוד הזה רק קורא ומראה: הוא לא מתקין ולא משנה שום דבר.</p></section>`;
   if (st.home && st.home.missing) html += `<p class="banner"><span>${status('missing', 'תיקיית הבית לא נמצאה')}</span><span>התיקייה זזה או נמחקה. לבקש מ־Claude לבחור תיקייה מחדש: <code>/academic-writer:setup</code></span></p>`;
   if (!checks.length){
-    html += `<section class="empty" aria-label="אין בדיקות"><div><p>עוד לא נבדק דבר.</p><p>אפשר להריץ <code>/academic-writer:health</code> בטרמינל.</p></div></section>`;
+    html += `<section class="empty" aria-label="אין בדיקות"><div><p>עוד לא נבדק דבר.</p><p>אפשר להריץ <code>/academic-writer:setup health</code> בטרמינל.</p></div></section>`;
   } else {
     html += group('חובה', checks.filter(isReq)) + group('לא חובה', checks.filter(c => c.optional));
     if (s.complete) html += `<section class="section" aria-label="מה עכשיו"><h2>מה עכשיו</h2><p>אפשר להתחיל: <a class="lnk" href="#about">מה אפשר לעשות עם התוסף</a>.</p></section>`;

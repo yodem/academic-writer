@@ -62,7 +62,7 @@ variable by the start-up hook at the start of each session, in projects that hav
 4. Make sure `.academic-helper/profile.md` exists (write the Phase 2 fields now if Phase 4 has not
    run yet), so the start-up hook passes the key on after the restart.
 5. Ask the researcher to quit and reopen Claude Code in this folder, then run
-   `/academic-writer:setup` and choose **Check my Gemini key**, or re-run `/academic-writer:init`
+   `/academic-writer:setup` and choose **Check my Gemini key**, or re-run `/academic-writer:setup init`
    and choose Update. Finish the remaining init phases first if they prefer; the key check can
    wait.
 

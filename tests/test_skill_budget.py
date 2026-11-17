@@ -344,6 +344,17 @@ def test_plugin_root_build_generated_bin_aw_is_allowed(run, tmp_path):
     assert run("check-routers", tmp_path).returncode == 0
 
 
+def test_plugin_root_build_generated_plugin_json_is_allowed(run, tmp_path):
+    _phase_with(tmp_path, "grep version `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json`\n")
+    assert run("check-routers", tmp_path).returncode == 0
+
+
+def test_plugin_root_other_dotdir_file_still_checked(run, tmp_path):
+    _phase_with(tmp_path, "See `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/other.json`\n")
+    r = run("check-routers", tmp_path)
+    assert r.returncode == 1 and "other.json does not resolve" in r.stdout
+
+
 def test_plugin_root_other_bin_file_still_checked(run, tmp_path):
     _phase_with(tmp_path, "Run `${CLAUDE_PLUGIN_ROOT}/bin/other` now.\n")
     r = run("check-routers", tmp_path)

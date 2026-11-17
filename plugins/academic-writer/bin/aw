@@ -48110,7 +48110,7 @@ function paragraphs(text4) {
 }
 async function voiceBundle(options) {
   const dir = store();
-  if (!existsSync8(join12(dir, "profile.json"))) throw new AwError("ERROR", "voice.bundle", "exit 3 no voice store \u2014 run: aw voice pull (or /academic-writer:voice)");
+  if (!existsSync8(join12(dir, "profile.json"))) throw new AwError("ERROR", "voice.bundle", "exit 3 no voice store \u2014 run: aw voice pull (or /academic-writer:setup voice)");
   const all = readJsonl(join12(dir, "exemplars.jsonl"));
   const chosen = [];
   const sources = /* @__PURE__ */ new Set();

@@ -1,6 +1,6 @@
 # PageIndex: offer, install, or connect your own
 
-> Used by `setup` Step 4f, `init` Phase 3, `update-tools` and `health`. Trove stays the default library; PageIndex is optional and chosen per article (`.academic-helper/library.json`, see `${CLAUDE_PLUGIN_ROOT}/skills/init/references/integration-setup.md`). Nothing here installs or sends anything without a yes.
+> Used by `setup` Step 4f, `init` Phase 3, `update-tools` and `health`. Trove stays the default library; PageIndex is optional and chosen per article (`.academic-helper/library.json`, see `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/integration-setup.md`). Nothing here installs or sends anything without a yes.
 
 ## What to tell the researcher (plain words)
 
@@ -59,7 +59,7 @@ To remove it later: `"${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_
 
 ## "I run my own PageIndex on a server"
 
-Nothing is installed. Tell the researcher: open `/plugin`, choose academic-writer, then Configure, and fill in `pageindex_command` with the command that reaches the server (for example `pilib`, or the full path of a helper script such as `/path/to/pilib-wrapper` that reaches it for them). Then start a new Claude Code session and run `/academic-writer:update-tools`. Never ask for a host, address, key or password in chat, and never put one in a file.
+Nothing is installed. Tell the researcher: open `/plugin`, choose academic-writer, then Configure, and fill in `pageindex_command` with the command that reaches the server (for example `pilib`, or the full path of a helper script such as `/path/to/pilib-wrapper` that reaches it for them). Then start a new Claude Code session and run `/academic-writer:setup update-tools`. Never ask for a host, address, key or password in chat, and never put one in a file.
 
 Two things to say honestly:
 
@@ -68,7 +68,7 @@ Two things to say honestly:
 
 ## "Not now"
 
-Say in one line that Trove is used as before and that `/academic-writer:update-tools` or `/academic-writer:setup` offers this again.
+Say in one line that Trove is used as before and that `/academic-writer:setup update-tools` or `/academic-writer:setup` offers this again.
 
 ## Many existing books (backfill)
 

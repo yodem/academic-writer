@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic setup checks: one source for /academic-writer:health, setup and the dashboard's Setup page.
+"""Deterministic setup checks: one source for /academic-writer:setup health, setup and the dashboard's Setup page.
 
 Read-only: no installs, no writes, no model calls. The Gemini key is only tested for presence and its value
 is never read into any output.
@@ -45,8 +45,8 @@ PIP_ADDONS = "-m pip install --user python-docx lxml pdfplumber pymupdf jsonsche
 FIX_LINES = {
     "home": ("Run /academic-writer:setup and pick a folder for your work.",
              "Run /academic-writer:setup and pick a folder for your work."),
-    "profile": ("Run /academic-writer:init in your project folder.",
-                "Run /academic-writer:init in your project folder."),
+    "profile": ("Run /academic-writer:setup init in your project folder.",
+                "Run /academic-writer:setup init in your project folder."),
     "git": ("Open PowerShell and run: winget install --id Git.Git -e. Then close Claude Code completely and open it again.",
             "In Terminal run: xcode-select --install (or brew install git). Then restart Claude Code."),
     "node": ("Open PowerShell and run: winget install --id OpenJS.NodeJS.LTS -e. Then close Claude Code completely and open it again.",
@@ -76,8 +76,8 @@ FIX_LINES = {
               "then sign in to Kotar through your university library."),
     "moodle": ("Sign in to your course site (Moodle) in Chrome with the Claude in Chrome extension; the plugin never asks for your password.",
                "Sign in to your course site (Moodle) in Chrome with the Claude in Chrome extension; the plugin never asks for your password."),
-    "pageindex": ("Optional. Run /academic-writer:update-tools to add it.",
-                  "Optional. Run /academic-writer:update-tools to add it."),
+    "pageindex": ("Optional. Run /academic-writer:setup update-tools to add it.",
+                  "Optional. Run /academic-writer:setup update-tools to add it."),
     "nightly-job": ("Not available on Windows yet; run the course scan by hand with /academic-writer:courses.",
                     "Run /academic-writer:courses to set the nightly time."),
 }
@@ -156,7 +156,7 @@ def _check_profile(env: Mapping[str, str], cwd: Optional[str] = None) -> Check:
     profile = folder / ".academic-helper" / "profile.md"
     if profile.is_file():
         return _check("profile", label, True, found=str(profile))
-    return _check("profile", label, False, reason_he="בתיקייה הזו אין פרופיל", fix="/academic-writer:init")
+    return _check("profile", label, False, reason_he="בתיקייה הזו אין פרופיל", fix="/academic-writer:setup init")
 
 
 def _target_language(env: Mapping[str, str], home: Optional[Path], cwd: Optional[str]) -> Optional[str]:

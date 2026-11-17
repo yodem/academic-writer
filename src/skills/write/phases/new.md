@@ -9,7 +9,7 @@ Talk to the researcher in plain language. When you mention a technical step (for
 <!-- BEGIN voice-precondition-gate -->
 ### Voice precondition gate (run before Step 1)
 
-Drafts are written to sound like the author's voice store in `${CLAUDE_PLUGIN_DATA}/voice/` (built by `/academic-writer:voice`, shared by all projects). Check it in code before anything else:
+Drafts are written to sound like the author's voice store in `${CLAUDE_PLUGIN_DATA}/voice/` (built by `/academic-writer:setup voice`, shared by all projects). Check it in code before anything else:
 
 ```bash
 V="${CLAUDE_PLUGIN_DATA}/voice"
@@ -28,7 +28,7 @@ AskUserQuestion(questions=[{
   "question": "I don't have your writing voice yet, so drafts would sound generic. Build it first?",
   "header": "Your voice",
   "options": [
-    {"label": "Build my voice first", "description": "Run /academic-writer:voice (about 10 minutes; uses 3 or more of your past articles in past-articles/). Then run /academic-writer:write again."},
+    {"label": "Build my voice first", "description": "Run /academic-writer:setup voice (about 10 minutes; uses 3 or more of your past articles in past-articles/). Then run /academic-writer:write again."},
     {"label": "Write without it for now", "description": "Drafts use a neutral scholarly voice. You can build your voice later and revise."}
   ],
   "multiSelect": false
@@ -55,7 +55,7 @@ Start by loading the researcher's profile:
 cat .academic-helper/profile.md
 ```
 
-If the profile doesn't exist, tell them: "Please run `/academic-writer:init` first to set up your profile."
+If the profile doesn't exist, tell them: "Please run `/academic-writer:setup init` first to set up your profile."
 
 Store the profile values — you'll use them throughout.
 
@@ -184,7 +184,7 @@ running it across the whole library would overwrite it.
 
 **If the library is NOT enabled**, use the `sources` array from the profile (indexed during init) to present available sources. If the sources array is empty, ask the researcher to describe their sources manually.
 
-If a source the author wants to use is **not yet in the library**, stop and point them at the ingest skills instead of working from an unindexed file (the ingest skills add to Trove; when the library route is PageIndex only, ask the researcher to add the book to their PageIndex library or to switch routes with `/academic-writer:update-tools`): a single article or chapter → `/academic-writer:ingest`, a whole book (multi-volume, scanned, EPUB, 100+ pages) → `/academic-writer:ingest-book`. They upload it with its printed page numbers preserved so citations can name the printed page.
+If a source the author wants to use is **not yet in the library**, stop and point them at the ingest skills instead of working from an unindexed file (the ingest skills add to Trove; when the library route is PageIndex only, ask the researcher to add the book to their PageIndex library or to switch routes with `/academic-writer:setup update-tools`): a single article or chapter → `/academic-writer:ingest`, a whole book (multi-volume, scanned, EPUB, 100+ pages) → `/academic-writer:ingest-book`. They upload it with its printed page numbers preserved so citations can name the printed page.
 
 Present them clearly and ask:
 > "Which of these sources should I focus on? You can name them by number, by title, or say 'all'."

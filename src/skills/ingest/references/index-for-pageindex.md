@@ -25,11 +25,11 @@ Tell the author in plain words, then ask with `AskUserQuestion`:
 
 > "To keep a short outline of this book for PageIndex, its text is sent to Google (Gemini), with your Gemini key: about [expected_calls] short calls, [input_chars] characters. I can't promise the price ahead of time (it depends on Google's current Gemini prices; on Google's free tier Google may use what you send to improve its products), so I'll tell you the exact amount afterwards. The Trove copy is already safe either way."
 
-Options: **Index with Gemini summaries**, **Index without summaries (free, nothing is sent to Google)** (`--summaries hints`: each outline entry carries the hint already written for Trove), **Not now** (Trove only; it can be done later with `aw library index`, or for many books with `/academic-writer:update-tools`). Never ask for or show a key here; the plugin passes its Gemini key to the helper itself.
+Options: **Index with Gemini summaries**, **Index without summaries (free, nothing is sent to Google)** (`--summaries hints`: each outline entry carries the hint already written for Trove), **Not now** (Trove only; it can be done later with `aw library index`, or for many books with `/academic-writer:setup update-tools`). Never ask for or show a key here; the plugin passes its Gemini key to the helper itself.
 
 - A large book (`expected_calls` above the limit `library.index.askAboveCalls` in `src/thresholds.json`) is stopped by the command unless `--yes` is given: that is why the author is asked first. Add `--yes` only after the author said yes.
 - If `fallback` is true (no hinted table of contents), say so: the helper has to find the structure itself with Gemini, the number of calls cannot be counted ahead, and it needs the full helper (the "structure" level). Offer to repair the table of contents first with `/academic-writer:ingest-book`, which is cheaper and gives the same outline as Trove.
-- If the key is missing, offer `--summaries hints`, or point at `/academic-writer:health`.
+- If the key is missing, offer `--summaries hints`, or point at `/academic-writer:setup health`.
 
 ## 3. Index and read back
 
@@ -47,6 +47,6 @@ Do not claim PageIndex has the book unless `ok` is `true` and `read_back` passed
 Each failure prints a plain sentence; show it, do not hide it. The Trove upload is complete.
 
 - **"needs --yes"**: ask again with the figures above, then run once more with `--yes`.
-- **No Gemini key** or a Google error: use `--summaries hints`, or fix the key with `/academic-writer:health` and run the same command again.
+- **No Gemini key** or a Google error: use `--summaries hints`, or fix the key with `/academic-writer:setup health` and run the same command again.
 - **No hinted table of contents and the full helper is not installed**: repair the table of contents (`/academic-writer:ingest-book`), or install the full helper through `/academic-writer:setup`.
 - **Anything else**: run the same command again. Indexing is repeatable: the same book id replaces the old index, and summaries already paid for are reused.

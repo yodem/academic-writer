@@ -85,7 +85,7 @@ AskUserQuestion(questions=[{
 
 "Keep it as it is" is the default: leave the file unchanged unless the researcher explicitly picks "Switch to Trove" (then write `{ "route": "trove" }`, keeping the other keys). Either way, point to the "PageIndex" entries in `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/troubleshooting.md`.
 
-**PageIndex not configured** (and no existing route to keep): do not offer it as a route yet. Say, in one sentence: "Your books will be read from Trove. PageIndex is an optional second library; I can set it up for you now, or you can do it later with `/academic-writer:update-tools`." If the researcher wants it, follow `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/pageindex.md` (its own question, plan and yes; "Not now" is the default), then run the detection again. If it is still not configured, use route `trove`, and write it only when there is no `library.json` yet.
+**PageIndex not configured** (and no existing route to keep): do not offer it as a route yet. Say, in one sentence: "Your books will be read from Trove. PageIndex is an optional second library; I can set it up for you now, or you can do it later with `/academic-writer:setup update-tools`." If the researcher wants it, follow `${CLAUDE_PLUGIN_ROOT}/skills/setup/references/pageindex.md` (its own question, plan and yes; "Not now" is the default), then run the detection again. If it is still not configured, use route `trove`, and write it only when there is no `library.json` yet.
 
 **PageIndex configured**:
 

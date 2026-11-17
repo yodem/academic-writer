@@ -14,9 +14,9 @@ Throughout: preserve the ORIGINAL printed page numbers (**cite the printed page,
 
 ## 0. Pre-flight
 
-1. Read `.academic-helper/profile.md`. If it does not exist, say nothing is set up yet and point at `/academic-writer:setup` or `/academic-writer:init`; stop.
-2. If the profile's Tools section has `"trove": { "enabled": false }` (or the older `"candlekeep"` key), say the source library is disabled and it can be enabled with `/academic-writer:update-tools`; stop.
-3. Check the library CLI: run `trove items list --json` (some installations call the same CLI `trove`). If missing, point at `/academic-writer:health`; stop.
+1. Read `.academic-helper/profile.md`. If it does not exist, say nothing is set up yet and point at `/academic-writer:setup` or `/academic-writer:setup init`; stop.
+2. If the profile's Tools section has `"trove": { "enabled": false }` (or the older `"candlekeep"` key), say the source library is disabled and it can be enabled with `/academic-writer:setup update-tools`; stop.
+3. Check the library CLI: run `trove items list --json` (some installations call the same CLI `trove`). If missing, point at `/academic-writer:setup health`; stop.
 
 ## Critical: the ToC is metadata, not page content
 

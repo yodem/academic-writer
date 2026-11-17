@@ -28,8 +28,8 @@ ALLOWED = {
     "src/scripts/pageindex/pilib/trove_source.py": "pilib reads a Trove book to index it (read-only)",
     "src/scripts/pageindex/pilib/render_trove.py": "pilib reads a Trove book to index it (read-only)",
     "src/skills/lesson-notes/SKILL.md": "lesson notes are written into Trove pages",
-    "src/skills/init/SKILL.md": "init lists the Trove shelf to seed the profile (setup, before any route exists)",
-    "src/skills/init/references/style-analysis.md": "init fetches one named baseline book from Trove",
+    "src/skills/setup/phases/init.md": "init lists the Trove shelf to seed the profile (setup, before any route exists)",
+    "src/skills/setup/references/style-analysis.md": "init fetches one named baseline book from Trove",
     "src/skills/setup/references/troubleshooting.md": "troubleshooting text that names the Trove command for a person to run",
     "src/cli/src/voice.ts": "the voice store is synced to Trove (a write path)",
     "src/scripts/build_crosswalk.py": "a maintenance script for a book uploaded to Trove",
@@ -46,7 +46,7 @@ RETRIEVAL_FILES = [
     "src/skills/write/phases/edit-section.md",
     "src/skills/write/phases/research.md",
     "src/skills/write/phases/ideate.md",
-    "src/skills/health/SKILL.md",
+    "src/skills/setup/phases/health.md",
     "src/cli/src/evidence.ts",
 ]
 
@@ -56,6 +56,8 @@ def _skill_file(name):
     phase = {"write": "new"}.get(name, name)
     if name in ("write", "edit", "edit-section", "research", "ideate"):
         return f"src/skills/write/phases/{phase}.md"
+    if name == "health":
+        return "src/skills/setup/phases/health.md"
     return f"src/skills/{name}/SKILL.md"
 
 
@@ -243,7 +245,7 @@ class TestSkillsUseTheLibraryAndAbsoluteAwPath(unittest.TestCase):
         self.assertIn("library list", read("src/skills/write/phases/new.md"))
         self.assertIn("library status", read("src/skills/write/phases/new.md"))
         self.assertIn("library list", read("src/skills/write/phases/ideate.md"))
-        health = read("src/skills/health/SKILL.md")
+        health = read("src/skills/setup/phases/health.md")
         self.assertIn("library status --check", health)
 
     def test_library_commands_in_code_blocks_use_the_absolute_path(self):
@@ -271,7 +273,7 @@ class TestSkillsUseTheLibraryAndAbsoluteAwPath(unittest.TestCase):
 
 class TestPageMapIsDocumented(unittest.TestCase):
     def test_profile_schema_documents_each_page_map_kind(self):
-        text = read("src/skills/init/references/profile-schema.md")
+        text = read("src/skills/setup/references/profile-schema.md")
         self.assertIn("`pageMap`", text)
         for kind in ("identity", "offset", "crosswalk"):
             self.assertIn(f"`{kind}`", text)
