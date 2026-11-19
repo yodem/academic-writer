@@ -127,8 +127,8 @@
       "id": "research",
       "name": "Research / evidence gathering",
       "sources": [
-        "src/skills/research/SKILL.md",
-        "src/skills/ideate/SKILL.md",
+        "src/skills/write/phases/research.md",
+        "src/skills/write/phases/ideate.md",
         "src/cli/src/evidence.ts"
       ],
       "status": "ok",
@@ -450,7 +450,7 @@
       "sources": [
         "src/cli/src/edit.ts",
         "src/cli/src/ocr.ts",
-        "src/skills/edit/SKILL.md",
+        "src/skills/write/phases/edit.md",
         "src/skills/library/phases/ocr.md",
         "scripts/build-plugins.sh"
       ],
@@ -464,9 +464,9 @@
       "id": "editing",
       "name": "Editing / revision",
       "sources": [
-        "src/skills/edit-section/SKILL.md",
-        "src/skills/edit/SKILL.md",
-        "src/skills/proofread/SKILL.md",
+        "src/skills/write/phases/edit-section.md",
+        "src/skills/write/phases/edit.md",
+        "src/skills/write/phases/proofread.md",
         "src/skills/write/references/changes-schema.json",
         "src/skills/setup/phases/update-field.md",
         "src/skills/setup/phases/update-tools.md",
@@ -623,7 +623,7 @@
       "id": "docx-revise-loop",
       "name": "Word review loop and feedback learning",
       "sources": [
-        "src/skills/revise/SKILL.md",
+        "src/skills/write/phases/revise.md",
         "src/cli/src/revise.ts",
         "src/scripts/docx-read-review.py",
         "scripts/aw-improve-report.py"
@@ -977,7 +977,7 @@
       "id": "activity-pane",
       "name": "Claude Code mod pane for live agent activity (/academic-writer:write watch)",
       "sources": [
-        "src/skills/watch/SKILL.md",
+        "src/skills/write/phases/watch.md",
         "src/mod/"
       ],
       "status": "partial",

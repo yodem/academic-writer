@@ -94,13 +94,9 @@ def test_phase_files_have_no_frontmatter():
         assert not text.lstrip().startswith("---"), phase
 
 
-def test_old_names_are_hidden_stubs():
+def test_old_names_have_no_skill_folder():
     for phase in PHASES[1:]:
-        fm = yaml.safe_load((ROOT / "src" / "skills" / phase / "SKILL.md").read_text(encoding="utf-8").split("---")[1])
-        assert fm["metadata"]["moved-to"] == "setup " + phase
-        # the three model-only skills had no slash command, so their stubs add none
-        assert fm["disable-model-invocation"] is True
-        assert fm["user-invocable"] is (phase not in ("update-tools", "update-field", "learn"))
+        assert not (ROOT / "src" / "skills" / phase).exists(), phase
 
 
 def _steps(body):

@@ -1,5 +1,5 @@
 > Updated <YYYY-MM-DD> by <plugin>
-> Status: empty (run `/academic-writer:init` to seed Stage 1, then `/academic-writer:voice` for Stage 2)
+> Status: empty (run `/academic-writer:setup init` to seed Stage 1, then `/academic-writer:setup voice` for Stage 2)
 
 # Voice Profile — <writer name>
 

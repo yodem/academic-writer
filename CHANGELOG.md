@@ -3,6 +3,8 @@
 All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
+### Removed
+- **The 23 forwarding stubs are gone.** The `/` menu now shows four commands: `/academic-writer:write`, `setup`, `library` and `courses`. Old names such as `/academic-writer:ingest` or `/academic-writer:init` no longer exist; use the router form (`/academic-writer:library ingest`, `/academic-writer:setup init`). A test fails on any other `/academic-writer:<name>` in the repo.
 
 ## [0.23.1] — 2026-11-17
 ### Fixed

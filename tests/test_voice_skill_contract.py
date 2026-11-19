@@ -10,8 +10,7 @@ def test_skill_frontmatter_and_store_workflow():
     fm = yaml.safe_load(ROUTER.read_text().split("---")[1])
     assert fm["name"] == "setup"
     assert "Use when" in fm["description"]
-    stub = yaml.safe_load((ROOT / "src" / "skills" / "voice" / "SKILL.md").read_text().split("---")[1])
-    assert stub["metadata"]["moved-to"] == "setup voice"
+    assert not (ROOT / "src" / "skills" / "voice").exists()
     assert "${CLAUDE_PLUGIN_DATA}" in text
     for action in ("migrate", "exemplars", "moves", "push", "pull"):
         assert f"voice {action}" in text
