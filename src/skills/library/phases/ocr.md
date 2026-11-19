@@ -1,11 +1,3 @@
----
-name: ocr
-description: "Turn a scanned PDF or photographed page (or a folder of them) into plain text. Each page goes to the cheapest reader that works: free readers on this computer when two of them agree, else Claude on the author's plan, else Gemini 3.8 Flash (least thinking; paid, about $0.004 a page) when a Google key is set, only for pages Claude refuses, answers with a summary, or that are under 100 dpi; Codex on request. Pages that already contain text are extracted directly. Use when the author has a scan, photo or screenshot of a source and needs its text before research or writing. Takes a file or folder path."
-user-invocable: true
-allowed-tools: [Bash, Read, Write, Glob, AskUserQuestion]
-metadata: {author: "Yotam Fromm", version: "0.3.0", summary: "Turn a scan or photo into plain text: free readers when they agree, then Claude, then Gemini for the pages Claude cannot read."}
----
-
 # Academic Writer — OCR
 
 OCR (optical character recognition) reads the text out of a scanned or photographed page. Transcribe a PDF, an image, or a folder of them. OCR copies the source text exactly: it never corrects, modernises or paraphrases it, because the text may later be quoted as evidence.
@@ -23,7 +15,7 @@ OCR (optical character recognition) reads the text out of a scanned or photograp
 
 **Required or additional source.** Pass `--source additional` only for a source the author added on their own. A course's required readings (the primary and secondary sources of a course task) and anything the author will quote get the default, `--source required`: Claude reads every page and Gemini covers the pages Claude cannot, with no free readers, because those texts must be as close to 100% accurate as possible (user rule 2026-10-20). When unsure, use `required`.
 
-With a Google key set, only the pages in step 3 go to Google; without one, a page Claude refused or declined comes back blank and marked "blocked" (the free readings of such pages were mostly wrong), and a page under 100 dpi keeps Claude's reading, marked low confidence. The measured numbers, the two-column findings and the Codex option are in `${CLAUDE_PLUGIN_ROOT}/skills/ocr/references/engines.md`. Tell the author, in plain words, which reader read which pages and where they went (Gemini: Google; Claude: Anthropic; Surya and Tesseract: nowhere). If the author asks for one reader for every page, pass `--engine gemini|claude|local`.
+With a Google key set, only the pages in step 3 go to Google; without one, a page Claude refused or declined comes back blank and marked "blocked" (the free readings of such pages were mostly wrong), and a page under 100 dpi keeps Claude's reading, marked low confidence. The measured numbers, the two-column findings and the Codex option are in `${CLAUDE_SKILL_DIR}/references/engines.md`. Tell the author, in plain words, which reader read which pages and where they went (Gemini: Google; Claude: Anthropic; Surya and Tesseract: nowhere). If the author asks for one reader for every page, pass `--engine gemini|claude|local`.
 
 Course readings are extracted by the nightly run (user rule 2026-11-09, method `auto`: text layers by python, scans by Claude vision); the student can also ask on the dashboard ("חילוץ טקסט") and choose another reader. Beyond the steps above, never move a page to another reader on your own: a page that comes back "blocked" or "low confidence" stays as it is until the author says otherwise. Ask with `AskUserQuestion` before sending it anywhere else, saying where it goes (with Gemini, its text goes to Google). A page Gemini refused is never filled in from another reader without asking. Record which engine produced the text (`OCR engine: <name>`).
 

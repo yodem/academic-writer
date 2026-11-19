@@ -33,8 +33,8 @@ logs/
 !plugins/academic-writer/guide/
 !plugins/academic-writer/guide/**
 # The blind-evaluation judging page template IS shipped too
-!src/skills/library-eval/references/judge-page.html
-!plugins/academic-writer/skills/library-eval/references/judge-page.html
+!src/skills/library/references/judge-page.html
+!plugins/academic-writer/skills/library/references/judge-page.html
 # The course dashboard page IS shipped too
 !src/scripts/courses/dashboard/index.html
 !plugins/academic-writer/scripts/courses/dashboard/index.html

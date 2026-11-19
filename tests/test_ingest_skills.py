@@ -12,9 +12,9 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).parent.parent
-INGEST = ROOT / "src/skills/ingest/SKILL.md"
-INGEST_BOOK = ROOT / "src/skills/ingest-book/SKILL.md"
-TEMPLATE = ROOT / "src/skills/ingest/references/reading-page-template.md"
+INGEST = ROOT / "src/skills/library/phases/ingest.md"
+INGEST_BOOK = ROOT / "src/skills/library/phases/ingest-book.md"
+TEMPLATE = ROOT / "src/skills/library/references/reading-page-template.md"
 
 
 def _read(path):
@@ -22,18 +22,20 @@ def _read(path):
 
 
 def test_skills_exist_with_metadata():
+    """The ingest phases live under the `library` router: its frontmatter carries the metadata and triggers."""
     import re
     import yaml
 
+    router = _read(ROOT / "src/skills/library/SKILL.md")
+    match = re.match(r"---\n(.*?)\n---\n", router, re.S)
+    assert match, "library router has no frontmatter"
+    fm = yaml.safe_load(match.group(1))
+    assert (fm.get("metadata") or {}).get("version")
+    assert "Use when" in str(fm.get("description", ""))
     for path in (INGEST, INGEST_BOOK):
         text = _read(path)
-        match = re.match(r"---\n(.*?)\n---\n", text, re.S)
-        assert match, f"{path} has no frontmatter"
-        fm = yaml.safe_load(match.group(1))
-        meta = fm.get("metadata") or {}
-        assert meta.get("version"), f"{path} metadata.version missing"
-        assert "Use when" in str(fm.get("description", ""))
-        assert "Do NOT use" in str(fm.get("description", ""))
+        assert not text.startswith("---"), f"{path} is a phase file and carries no frontmatter"
+        assert "Boundary with /academic-writer:library" in text
 
 
 def test_reading_page_template_has_three_citation_styles():
@@ -77,7 +79,7 @@ def test_ingest_skill_contracts():
     # page-number vs footnote-number disambiguation
     assert "footnote" in text
     # boundary with the sibling skill
-    assert "/academic-writer:ingest-book" in text
+    assert "/academic-writer:library ingest-book" in text
     # profile scoping
     assert "profile.md" in text
     assert "trove" in text
@@ -99,19 +101,19 @@ def test_ingest_book_skill_contracts():
     assert "Read-back" in text
     assert "Never delete or overwrite" in text
     # boundary with the sibling skill
-    assert "/academic-writer:ingest" in text
+    assert "/academic-writer:library ingest" in text
     # scripts referenced by the skill exist and are runnable
     for script in ("extract_pdf.py", "build_crosswalk.py", "build_toc_enrich.py"):
         assert f"scripts/{script}" in text
         assert (ROOT / "src/scripts" / script).is_file()
     # references exist
     for ref in ("toc-mechanism.md", "epub-sources.md"):
-        assert (ROOT / "src/skills/ingest-book/references" / ref).is_file()
+        assert (ROOT / "src/skills/library/references" / ref).is_file()
 
 
 def test_skills_cross_reference_and_do_not_contradict():
     ingest, book = _read(INGEST), _read(INGEST_BOOK)
-    assert "/academic-writer:ingest" in book and "/academic-writer:ingest-book" in ingest
+    assert "/academic-writer:library ingest" in book and "/academic-writer:library ingest-book" in ingest
     # both state the same boundary rule
     for text in (ingest, book):
         assert "article" in text.lower() and "chapter" in text.lower()
@@ -199,9 +201,9 @@ def test_build_crosswalk_splits_volumes_on_number_reset():
 
 import re  # noqa: E402
 
-REFS = ROOT / "src/skills/ingest/references"
-OCR = ROOT / "src/skills/ocr/SKILL.md"
-ENGINES = ROOT / "src/skills/ocr/references/engines.md"
+REFS = ROOT / "src/skills/library/references"
+OCR = ROOT / "src/skills/library/phases/ocr.md"
+ENGINES = ROOT / "src/skills/library/references/engines.md"
 CLI = ROOT / "src/cli/src/library/cli.ts"
 EVAL_CLI = ROOT / "src/cli/src/library/eval/cli.ts"
 ABS_AW = '"${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD"'
@@ -209,7 +211,7 @@ ABS_AW = '"${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --pr
 # Skills and references that tell Claude to run `aw library ...`; every command in a code block is checked.
 LIBRARY_COMMAND_FILES = [
     INGEST, INGEST_BOOK, REFS / "index-for-pageindex.md", REFS / "existing-item.md",
-    ROOT / "src/skills/setup/references/pageindex.md", ROOT / "src/skills/library-eval/SKILL.md",
+    ROOT / "src/skills/setup/references/pageindex.md", ROOT / "src/skills/library/phases/library-eval.md",
     ROOT / "src/skills/setup/references/troubleshooting.md",
 ]
 
@@ -344,12 +346,12 @@ def test_ocr_options_cover_the_four_engines_in_both_ingest_skills_and_the_ocr_sk
 
 
 def test_ocr_skill_may_ask_the_engine_question():
-    match = re.match(r"---\n(.*?)\n---\n", _read(OCR), re.S)
     import yaml
+    match = re.match(r"---\n(.*?)\n---\n", _read(ROOT / "src/skills/library/SKILL.md"), re.S)
     fm = yaml.safe_load(match.group(1))
     assert "AskUserQuestion" in fm["allowed-tools"]
-    assert "Use when" in fm["description"]
-    assert fm["metadata"].get("summary")
+    assert "ocr" in fm["description"]
+    assert "AskUserQuestion" in _read(OCR)
 
 
 def test_existing_item_read_back_compares_page_one_with_the_intended_text():

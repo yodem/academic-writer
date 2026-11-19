@@ -11,7 +11,7 @@ import unittest
 from html.parser import HTMLParser
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TEMPLATE = os.path.join(REPO, "src", "skills", "library-eval", "references", "judge-page.html")
+TEMPLATE = os.path.join(REPO, "src", "skills", "library", "references", "judge-page.html")
 FIXTURES = os.path.join(REPO, "tests", "fixtures", "library-eval")
 HARNESS = os.path.join(FIXTURES, "judge-harness.cjs")
 SCHEMAS = os.path.join(REPO, "src", "schemas")

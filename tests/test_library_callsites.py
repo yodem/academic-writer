@@ -21,10 +21,10 @@ DIRECT = re.compile(
 
 # Files that may still call Trove directly, and why. Everything else must go through `aw library`.
 ALLOWED = {
-    "src/skills/ingest/SKILL.md": "ingest writes to Trove and checks the upload it just made",
-    "src/skills/ingest-book/SKILL.md": "ingest-book writes to Trove and checks the upload it just made",
-    "src/skills/ingest-book/references/toc-mechanism.md": "ingest-book repairs the table of contents of a book it uploaded",
-    "src/skills/ingest/references/existing-item.md": "adding a reading to an existing Trove item: snapshot, append, merged table of contents, read-back (a write path)",
+    "src/skills/library/phases/ingest.md": "ingest writes to Trove and checks the upload it just made",
+    "src/skills/library/phases/ingest-book.md": "ingest-book writes to Trove and checks the upload it just made",
+    "src/skills/library/references/toc-mechanism.md": "ingest-book repairs the table of contents of a book it uploaded",
+    "src/skills/library/references/existing-item.md": "adding a reading to an existing Trove item: snapshot, append, merged table of contents, read-back (a write path)",
     "src/scripts/pageindex/pilib/trove_source.py": "pilib reads a Trove book to index it (read-only)",
     "src/scripts/pageindex/pilib/render_trove.py": "pilib reads a Trove book to index it (read-only)",
     "src/skills/lesson-notes/SKILL.md": "lesson notes are written into Trove pages",

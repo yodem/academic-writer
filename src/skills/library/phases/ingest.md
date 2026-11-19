@@ -1,11 +1,3 @@
----
-name: ingest
-description: "Upload a single academic article or book chapter into the author's Trove library with its printed page numbers preserved, a hinted table of contents, and a page-1 reading-and-citation guide, so research and writing can cite it by the printed page. Use when the author says 'upload this article', 'ingest this paper or chapter', shares a source that is not yet in Trove, or hands you a file with printed page markers or footnotes. Do NOT use for a whole book, a multi-volume set, an EPUB, a 100+ page PDF, or repairing a flat table of contents — use /academic-writer:ingest-book."
-user-invocable: true
-allowed-tools: [Bash, Read, Write, AskUserQuestion]
-metadata: {author: "Yotam Fromm", version: "0.2.0", summary: "Upload one article or chapter to the source library with printed page numbers, hinted contents and a citation guide."}
----
-
 # Ingest an article or chapter
 
 Academic articles and chapters have their own printed page numbers (e.g. 409–415 in a journal). Trove numbers pages sequentially from 1, so without care a reader would cite the wrong page. This skill uploads the source with every printed page number preserved, a hinted contents list, and a **page-1 "How to read and cite this book" guide** with ready-made footnote templates in three citation styles. The rule the whole skill serves: **cite the printed page, never the Trove page.**
@@ -45,7 +37,7 @@ Take `--lang` from the profile's `targetLanguage` when the source language is un
 | **Codex** | OpenAI, on your Codex plan (only if Codex is installed) | sparing your Claude or Gemini quota |
 | **On this computer (Tesseract)** | nothing leaves your computer; free | clean print, privacy; weaker on scans, vowel marks and mixed Hebrew and English |
 
-The steps for Claude, Codex and Tesseract are in `${CLAUDE_PLUGIN_ROOT}/skills/ocr/references/engines.md`. Whatever the engine, the same rules below apply, and the reading page records which engine produced the text (`OCR engine: <name>`) next to the "OCR, not image-verified" warning.
+The steps for Claude, Codex and Tesseract are in `${CLAUDE_SKILL_DIR}/references/engines.md`. Whatever the engine, the same rules below apply, and the reading page records which engine produced the text (`OCR engine: <name>`) next to the "OCR, not image-verified" warning.
 
 **OCR failure handling** (each of these has happened on real runs):
 
@@ -67,7 +59,7 @@ Identify the printed page boundaries in the text. Page markers can appear as `pa
 
 One `# ` header per Trove page.
 
-- **Page 1** is the "How to read and cite this book" guide, built from `${CLAUDE_PLUGIN_ROOT}/skills/ingest/references/reading-page-template.md` (English or Hebrew variant as fits the source). It carries the full bibliographic record, the marker rule (`page NNN:` / `(orig. N)` — cite the printed page, never the Trove page), the covered pages and gaps, and footnote templates in **three** citation styles: Chicago notes-bibliography (first note + short note), the Hebrew academic convention (שם המחבר, שם הספר, מקום תשנ״ה, עמ׳ N; short form for subsequent notes), and a third style chosen from the profile's `citationStyle` (MLA or APA) so the author's own style always appears. For a primary text it also carries the structural-locus form (chapter/premise/paragraph). OCR pages not verified against the image get the exact `OCR, not image-verified` warning named in the template.
+- **Page 1** is the "How to read and cite this book" guide, built from `${CLAUDE_SKILL_DIR}/references/reading-page-template.md` (English or Hebrew variant as fits the source). It carries the full bibliographic record, the marker rule (`page NNN:` / `(orig. N)` — cite the printed page, never the Trove page), the covered pages and gaps, and footnote templates in **three** citation styles: Chicago notes-bibliography (first note + short note), the Hebrew academic convention (שם המחבר, שם הספר, מקום תשנ״ה, עמ׳ N; short form for subsequent notes), and a third style chosen from the profile's `citationStyle` (MLA or APA) so the author's own style always appears. For a primary text it also carries the structural-locus form (chapter/premise/paragraph). OCR pages not verified against the image get the exact `OCR, not image-verified` warning named in the template.
 - **Pages 2+** are the content pages, one per printed page:
 
 ```markdown
@@ -120,7 +112,7 @@ Any failed check is a failed upload: report it plainly with what you found, fix 
 
 ## 7. Index for PageIndex (only when the author uses it)
 
-After the read-back passes, when a PageIndex helper is ready, index the same text so PageIndex can find pages in it too. Ask first, with the Gemini estimate; skip silently when PageIndex is not set up. The Trove upload is already complete and a failure here never undoes it. Details, the question to ask and the failure list: `${CLAUDE_PLUGIN_ROOT}/skills/ingest/references/index-for-pageindex.md`. The command, after the author agreed:
+After the read-back passes, when a PageIndex helper is ready, index the same text so PageIndex can find pages in it too. Ask first, with the Gemini estimate; skip silently when PageIndex is not set up. The Trove upload is already complete and a failure here never undoes it. Details, the question to ask and the failure list: `${CLAUDE_SKILL_DIR}/references/index-for-pageindex.md`. The command, after the author agreed:
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" library index \
@@ -129,8 +121,8 @@ After the read-back passes, when a PageIndex helper is ready, index the same tex
 
 ## Adding to a book you already have
 
-When the author wants this reading added to an item that already exists in Trove (a course book, a collected volume), do not create a new book. Follow `${CLAUDE_PLUGIN_ROOT}/skills/ingest/references/existing-item.md`: snapshot the table of contents, append the new pages with `trove items append`, re-apply the merged table of contents last, run the read-back there, then step 7 for the whole item. Never write new content with `trove items put`; it resets the table of contents.
+When the author wants this reading added to an item that already exists in Trove (a course book, a collected volume), do not create a new book. Follow `${CLAUDE_SKILL_DIR}/references/existing-item.md`: snapshot the table of contents, append the new pages with `trove items append`, re-apply the merged table of contents last, run the read-back there, then step 7 for the whole item. Never write new content with `trove items put`; it resets the table of contents.
 
-## Boundary with /academic-writer:ingest-book
+## Boundary with /academic-writer:library ingest-book
 
-This skill is for **one article, paper or chapter** (any length up to a full issue-length article). For a whole book, a multi-volume set, an EPUB, a 100+ page PDF, or repairing an existing book's flat table of contents, use `/academic-writer:ingest-book` — it builds a nested navigable ToC and handles volume merging.
+This skill is for **one article, paper or chapter** (any length up to a full issue-length article). For a whole book, a multi-volume set, an EPUB, a 100+ page PDF, or repairing an existing book's flat table of contents, use `/academic-writer:library ingest-book` — it builds a nested navigable ToC and handles volume merging.
