@@ -1,11 +1,3 @@
----
-name: dashboard
-description: "Open the local course dashboard: one page that shows, for every course in the term, what is due next, whether its readings are ready, and what is new, with a week agenda and a page per course. Use when the student asks to see their courses at a glance, what is due this week, which readings are missing, or to open the dashboard. Runs on 127.0.0.1 only. Not for setting up courses or syncing Lemida (use /academic-writer:courses)."
-user-invocable: true
-allowed-tools: [Bash, Read]
-metadata: {author: "Academic Writer", version: "0.1.0"}
----
-
 # Academic Writer — Course dashboard
 
 A local page for the course registry that `/academic-writer:courses` maintains. The server is `courses.py dashboard` (`${CLAUDE_PLUGIN_ROOT}/scripts/courses/dashboard.py`): Python standard library only, listening on `127.0.0.1` and nowhere else.

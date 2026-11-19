@@ -1,4 +1,4 @@
-"""The `library` (and, in step 3, `courses`) skills are phase routers like `write` and `setup`."""
+"""The `library` and `courses` skills are phase routers like `write` and `setup`."""
 import re
 from pathlib import Path
 
@@ -10,7 +10,10 @@ SKILLS = ROOT / "src" / "skills"
 # router -> (phases in table order, default phase or None)
 ROUTERS = {
     "library": (["ingest", "ingest-book", "ocr", "kotar-fetch", "library-eval"], None),
+    "courses": (["term", "dashboard", "lesson-notes"], "term"),
 }
+# arguments the default phase of a router handles itself (not phases of their own)
+DEFAULT_PHASE_STEPS = {"courses": {"extract-handoff", "trove-notes", "calendar-sync", "validate"}}
 ADDRESS = re.compile(r"/academic-writer:([a-z-]+)(?: ([a-z-]+))?")
 SIBLING = re.compile(r"\$\{CLAUDE_SKILL_DIR\}/phases/([a-z-]+)\.md")
 
@@ -48,6 +51,12 @@ def test_routers_list_their_phases_and_files():
         assert not fm.get("disable-model-invocation")
 
 
+def test_courses_defaults_to_term():
+    fm, body = _parts("courses")
+    step = next(l for l in body.splitlines() if l.startswith("2. "))
+    assert "run `term`" in step and "always" in step
+
+
 def test_library_has_no_default_phase():
     _, body = _parts("library")
     step = next(l for l in body.splitlines() if l.startswith("2. "))
@@ -65,7 +74,7 @@ def test_phase_files_have_no_frontmatter_and_old_folders_are_gone():
     for router, (phases, _) in ROUTERS.items():
         for ph in phases:
             assert not (SKILLS / router / "phases" / (ph + ".md")).read_text(encoding="utf-8").startswith("---")
-    for old in ("ingest", "ingest-book", "ocr", "kotar-fetch", "library-eval"):
+    for old in ("ingest", "ingest-book", "ocr", "kotar-fetch", "library-eval", "dashboard", "lesson-notes"):
         assert not (SKILLS / old).exists(), old
 
 
@@ -78,6 +87,6 @@ def test_cross_phase_references_are_siblings_or_router_addresses():
             for name, phase in ADDRESS.findall(text):
                 if name in ("write", "setup", "library", "courses"):
                     if phase and name == router:
-                        assert phase in phases, "%s: bad address %s %s" % (path.name, name, phase)
+                        assert phase in phases or phase in DEFAULT_PHASE_STEPS.get(router, ()), "%s: bad address %s %s" % (path.name, name, phase)
                 else:
                     raise AssertionError("%s: address to a name that no longer exists: %s" % (path.name, name))
