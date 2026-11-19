@@ -185,7 +185,7 @@ print(slug)
 ```
 
 Confirm the derived slug with the user before saving — this key is stable across projects and used
-to key cross-project Trove voice-profile lookups (see `${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh`), so it
+to key cross-project Trove voice-profile lookups (see `${CLAUDE_PLUGIN_ROOT}/skills/setup/voice-sync.sh`), so it
 should not change casually later:
 
 ```python

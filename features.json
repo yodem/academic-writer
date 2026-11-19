@@ -66,8 +66,8 @@
       "name": "Voice subsystem (one shared author voice store)",
       "sources": [
         "src/skills/setup/phases/voice.md",
-        "src/skills/voice/voice-sync.sh",
-        "src/skills/voice/voice-migrate.sh",
+        "src/skills/setup/voice-sync.sh",
+        "src/skills/setup/voice-migrate.sh",
         "src/cli/src/voice.ts",
         "src/scripts/check-voice-populated.py",
         "src/hooks/src/lifecycle/voice-pull.ts"
@@ -467,7 +467,7 @@
         "src/skills/edit-section/SKILL.md",
         "src/skills/edit/SKILL.md",
         "src/skills/proofread/SKILL.md",
-        "src/skills/proofread/references/changes-schema.json",
+        "src/skills/write/references/changes-schema.json",
         "src/skills/setup/phases/update-field.md",
         "src/skills/setup/phases/update-tools.md",
         "src/cli/src/proofread.ts",
@@ -546,7 +546,7 @@
       "id": "venues",
       "name": "Venue profiles",
       "sources": [
-        "src/skills/proofread/references/editorial-checks.md",
+        "src/skills/write/references/editorial-checks.md",
         "tests/fixtures/proofread/hebrew-recall/venue-example.md",
         "tests/test_venue_agnostic.py"
       ],

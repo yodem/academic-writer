@@ -2,7 +2,7 @@
 # Created: 2026-09-02
 
 """Coverage for scripts/chunk-article.py and scripts/spellcheck-candidates.py
-(Phase 1 script inventory). Schema/plan context: src/skills/proofread/
+(Phase 1 script inventory). Schema/plan context: src/skills/write/
 references/changes-schema.json and the plan's Phase 0 RESULT (hspell
 encoding constraints).
 
@@ -24,7 +24,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHUNKER = os.path.join(ROOT_DIR, "src", "scripts", "chunk-article.py")
 SPELLCHECK = os.path.join(ROOT_DIR, "src", "scripts", "spellcheck-candidates.py")
 ALLOWLIST = os.path.join(
-    ROOT_DIR, "src", "skills", "proofread", "references", "hspell-allowlist.txt"
+    ROOT_DIR, "src", "skills", "write", "references", "hspell-allowlist.txt"
 )
 
 

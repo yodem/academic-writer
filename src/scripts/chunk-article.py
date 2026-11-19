@@ -10,7 +10,7 @@ finder agent can work over, first on `##` headings, then on paragraph
 boundaries, packed greedily into windows of at most `proofread.chunkWords`
 words (src/thresholds.json -- never inlined, per CLAUDE.md convention).
 
-Every downstream change record (src/skills/proofread/references/
+Every downstream change record (src/skills/write/references/
 changes-schema.json) carries an absolute, 1-based `line` number in
 PROOF_BASE, so this script's `startLine`/`endLine` are 1-based and absolute
 in the *source* file, not relative to the chunk or the section.

@@ -1,7 +1,7 @@
 {
   "_provenance": "The nine errors are the ones the journal's editor quoted verbatim in the rejection letter. Three corrections (err-06, err-07, err-09) were derived from the source article's real sentences after an earlier reconstruction guessed them wrong: לארוס had been read as 'betroth' rather than a typo for להרוס, התרי as 'the other' rather than a typo for הטרי, and קנה as 'bought' rather than the typo for כן that the editor named. The letter itself is deliberately NOT committed — it is unpublished correspondence about an unpublished article.",
   "_note": "Per the Phase 0 RESULT (measured 2026-09-02): hspell scored 0 of these 9 as flaggable non-words -- four of them (לארוס, התרי, למלות, לאוהב) are valid Hebrew morphology used in the wrong context, a wrong-word/semantic error class no spell-checker of any kind can reach. The spell-check stage therefore contributes ZERO of the nine finds below; recall on all nine depends entirely on the mechanical-LLM finder plus the chunking/convergence loop (plan Phase 1.2). Every entry's `finder` is set to 'mechanical-llm' for this reason, and a regression that starts crediting the spell-check stage for any of these nine must fail the corresponding pytest assertion.",
-  "schemaRef": "src/skills/proofread/references/changes-schema.json",
+  "schemaRef": "src/skills/write/references/changes-schema.json",
   "spellcheckStageContribution": 0,
   "errors": [
     {

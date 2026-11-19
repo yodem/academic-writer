@@ -25,7 +25,7 @@ def test_stage1_seeds_author_voice(tmp_path):
     )
     # Run migration — should produce AUTHOR_VOICE.md from legacy profile
     subprocess.run(
-        ["bash", str(ROOT / "src/skills/voice/voice-migrate.sh")],
+        ["bash", str(ROOT / "src/skills/setup/voice-migrate.sh")],
         cwd=str(tmp_path),
         check=True,
     )
@@ -39,7 +39,7 @@ def test_stage1_seeds_author_voice(tmp_path):
 
 def test_voice_sync_usage_and_legacy_form(tmp_path):
     """voice-sync.sh: bad args -> exit 2; legacy 1-arg form resolves defaults and reaches aw."""
-    script = ROOT / "plugins/academic-writer/skills/voice/voice-sync.sh"
+    script = ROOT / "plugins/academic-writer/skills/setup/voice-sync.sh"
     bad = subprocess.run(["bash", str(script), "sideways"], capture_output=True, text=True)
     assert bad.returncode == 2 and "usage" in bad.stderr
     ok = subprocess.run(["bash", str(script), "pull", str(tmp_path / "data"), str(tmp_path)],

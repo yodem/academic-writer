@@ -53,7 +53,7 @@ PYTHON
 
 `author_key`: kebab-case slug derived from the researcher's full name, stable across projects for
 the same author, used to key cross-project Trove voice-profile lookups (see
-`${CLAUDE_PLUGIN_ROOT}/skills/voice/voice-sync.sh`). Derived once during `init` Phase 2 Step 1 and confirmed with the
+`${CLAUDE_PLUGIN_ROOT}/skills/setup/voice-sync.sh`). Derived once during `init` Phase 2 Step 1 and confirmed with the
 user; should not be changed casually afterward since it identifies the author's Trove
 `Voice Profile — <author_key>` book across every project.
 

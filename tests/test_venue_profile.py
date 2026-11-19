@@ -16,7 +16,7 @@ CONVENTIONS = os.path.join(REPO, "src", "skills", "write", "references", "hebrew
 BUILD = os.path.join(REPO, "scripts", "build-plugins.sh")
 PROOFREAD_TS = os.path.join(REPO, "src", "cli", "src", "proofread.ts")
 FIND_PROMPT = os.path.join(REPO, "src", "cli", "src", "prompts", "proofread-find.md")
-EDITORIAL_CHECKS = os.path.join(REPO, "src", "skills", "proofread", "references", "editorial-checks.md")
+EDITORIAL_CHECKS = os.path.join(REPO, "src", "skills", "write", "references", "editorial-checks.md")
 PROOFREAD_SKILL = os.path.join(REPO, "src", "skills", "write", "phases", "proofread.md")
 
 # Rule ids routed to "plugin guidance" (the conventions file) and "venue profile" (the bundled profile),

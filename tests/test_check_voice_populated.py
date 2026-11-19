@@ -2,7 +2,7 @@
 # Created: 2026-08-09
 
 """Smoke tests for scripts/check-voice-populated.py — the deterministic stub-vs-real
-check for AUTHOR_VOICE.md. See src/skills/voice/references/stub-definition.md for the
+check for AUTHOR_VOICE.md. See src/skills/setup/references/stub-definition.md for the
 definition this script implements.
 """
 

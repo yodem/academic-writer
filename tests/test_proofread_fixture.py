@@ -3,7 +3,7 @@
 
 """Deterministic coverage for tests/fixtures/proofread/hebrew-recall/*, the regression
 fixture for the hebrew-recall rejection letter's nine quoted mechanical errors and five
-editorial categories. Schema contract: src/skills/proofread/references/changes-schema.json.
+editorial categories. Schema contract: src/skills/write/references/changes-schema.json.
 See the 0.7.0 plan of record (local, not committed to this repo), Phase 1.6 (regression
 fixture + tests) and the Phase 0 RESULT block (measured spell-check-vs-LLM-finder finding)
 for what this fixture is built to honour.

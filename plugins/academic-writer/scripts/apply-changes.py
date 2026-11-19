@@ -5,9 +5,9 @@
 """
 apply-changes.py
 
-Deterministic change-applier for the proofread pipeline (src/skills/proofread/
-SKILL.md Step 5, as code). Reads a changes-schema.json payload
-(src/skills/proofread/references/changes-schema.json) plus the text file the
+Deterministic change-applier for the proofread pipeline (src/skills/write/
+phases/proofread.md Step 5, as code). Reads a changes-schema.json payload
+(src/skills/write/references/changes-schema.json) plus the text file the
 changes were found against (PROOF_BASE), applies every eligible change to
 that file, and emits the full annotated change list on stdout as JSON so
 nothing is silently discarded -- every change comes back either

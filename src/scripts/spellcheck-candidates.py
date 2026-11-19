@@ -32,7 +32,7 @@ rather than re-derived:
       measured flags before the fix.
 
   (c) Tokens matched by the allowlist
-      (src/skills/proofread/references/hspell-allowlist.txt, seeded with
+      (src/skills/write/references/hspell-allowlist.txt, seeded with
       the measured ktiv-male false-positive class) are dropped before
       candidates are emitted, unioned with an optional per-project
       extension file at .academic-helper/hspell-allowlist.txt.
@@ -51,7 +51,7 @@ Usage:
 
 --input               Path to the PROOF_BASE text/markdown file.
 --allowlist           Path to the shipped allowlist (default:
-                       src/skills/proofread/references/hspell-allowlist.txt).
+                       src/skills/write/references/hspell-allowlist.txt).
 --project-allowlist   Path to a per-project extension allowlist (default:
                        .academic-helper/hspell-allowlist.txt relative to the
                        current working directory; silently skipped if
@@ -81,7 +81,7 @@ from typing import List, Optional, Set
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_ALLOWLIST_PATH = os.path.join(
-    REPO_ROOT, "src", "skills", "proofread", "references", "hspell-allowlist.txt"
+    REPO_ROOT, "src", "skills", "write", "references", "hspell-allowlist.txt"
 )
 DEFAULT_PROJECT_ALLOWLIST_PATH = os.path.join(
     os.getcwd(), ".academic-helper", "hspell-allowlist.txt"

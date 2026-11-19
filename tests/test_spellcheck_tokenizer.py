@@ -22,7 +22,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SCRIPT = REPO / "src" / "scripts" / "spellcheck-candidates.py"
-ALLOWLIST = REPO / "src" / "skills" / "proofread" / "references" / "hspell-allowlist.txt"
+ALLOWLIST = REPO / "src" / "skills" / "write" / "references" / "hspell-allowlist.txt"
 
 _spec = importlib.util.spec_from_file_location("spellcheck_candidates", SCRIPT)
 sc = importlib.util.module_from_spec(_spec)

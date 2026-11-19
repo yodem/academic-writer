@@ -41928,7 +41928,7 @@ ${JSON.stringify(changes)}`, schema: verifySchema, runId: options.runId, finderP
   stepEnd("verify");
   const statusMap = new Map(verified.flat().map((change) => [change.id, change]));
   const all = [...deterministic.map((change) => ({ ...change, status: change.status ?? (change.after === null ? "flag" : change.mustCatch === false ? "suggestion" : "must-catch"), applied: change.after !== null && change.mustCatch !== false })), ...candidates2.map((change) => statusMap.get(change.id) ?? { ...change, status: "unverified" })];
-  const editorialChecksPath = join4(root, "skills", "proofread", "references", "editorial-checks.md");
+  const editorialChecksPath = join4(root, "skills", "write", "references", "editorial-checks.md");
   const editorialChecks = article && existsSync3(editorialChecksPath) ? readFileSync3(editorialChecksPath, "utf8") : "";
   stepStart("memo");
   const memo = options.only && options.only !== "editorial" ? "" : stubs.memo ? await stubs.memo() : (await callGemini({ step: "proofread.memo", system: prompt("proofread-memo.md"), parts: [`Global editorial checks (always apply):

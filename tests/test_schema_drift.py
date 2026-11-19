@@ -5,7 +5,7 @@ import os
 import unittest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCHEMA = os.path.join(REPO, "src", "skills", "proofread", "references", "changes-schema.json")
+SCHEMA = os.path.join(REPO, "src", "skills", "write", "references", "changes-schema.json")
 CLI = os.path.join(REPO, "src", "cli", "src", "proofread.ts")
 
 
