@@ -9,7 +9,7 @@ metadata: {author: "Yotam Fromm", version: "0.2.0"}
 
 # Academic Writer: setup and care
 
-This skill is a router. Pick one phase, read its file, and follow it. Never load more than one phase file per run.
+This skill is a router. Pick one phase, read its file, and follow it. Load one phase file at a time; a phase may hand off to a sibling phase as rule 5 says.
 
 ## Phases
 
@@ -31,7 +31,7 @@ This skill is a router. Pick one phase, read its file, and follow it. Never load
 2. No arguments at all (a bare `/academic-writer:setup`): run `setup`, always, without asking or inferring.
 3. The arguments are a single bare word that is not in the table: print the table and stop.
 4. Anything else is a request in the author's words, whose first word is not a phase: infer the phase from the request. If two phases fit, ask the author which one. Do not guess.
-5. Read exactly one file, `${CLAUDE_SKILL_DIR}/phases/<phase>.md`, and follow it as if it were this skill's body. The paths inside it that start with `${CLAUDE_SKILL_DIR}` or `${CLAUDE_PLUGIN_ROOT}` are already correct.
+5. Read exactly one file, `${CLAUDE_SKILL_DIR}/phases/<phase>.md`, and follow it as if it were this skill's body. The one exception: when that phase names a sibling phase file of this router to continue with, read that file too, only at that point. The paths inside it that start with `${CLAUDE_SKILL_DIR}` or `${CLAUDE_PLUGIN_ROOT}` are already correct.
 
 ## Light phases
 

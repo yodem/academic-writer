@@ -27,7 +27,7 @@ ALLOWED = {
     "src/skills/library/references/existing-item.md": "adding a reading to an existing Trove item: snapshot, append, merged table of contents, read-back (a write path)",
     "src/scripts/pageindex/pilib/trove_source.py": "pilib reads a Trove book to index it (read-only)",
     "src/scripts/pageindex/pilib/render_trove.py": "pilib reads a Trove book to index it (read-only)",
-    "src/skills/lesson-notes/SKILL.md": "lesson notes are written into Trove pages",
+    "src/skills/courses/phases/lesson-notes.md": "lesson notes are written into Trove pages",
     "src/skills/setup/phases/init.md": "init lists the Trove shelf to seed the profile (setup, before any route exists)",
     "src/skills/setup/references/style-analysis.md": "init fetches one named baseline book from Trove",
     "src/skills/setup/references/troubleshooting.md": "troubleshooting text that names the Trove command for a person to run",

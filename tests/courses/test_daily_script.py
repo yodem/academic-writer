@@ -153,7 +153,7 @@ def test_nothing_drains_queue_sources_directly():
     script = SCRIPT.read_text(encoding="utf-8")
     code = "\n".join(ln for ln in script.splitlines() if not ln.lstrip().startswith("#"))
     assert "queue/sources" not in code and "queue/\\*" not in code
-    skill = (SCRIPT.parents[1] / "src" / "skills" / "courses" / "SKILL.md").read_text(encoding="utf-8")
+    skill = (SCRIPT.parents[1] / "src" / "skills" / "courses" / "phases" / "term.md").read_text(encoding="utf-8")
     watch = (SCRIPT.parents[1] / "src" / "skills" / "courses" / "references" / "lemida-watch.md").read_text(encoding="utf-8")
     for text in (skill, watch):
         assert "queue/sources" in text  # documented ...
@@ -199,7 +199,7 @@ def test_coverage_is_unscoped_without_courses_only(tmp_path):
 
 
 def test_coverage_contract_documents_run_id_and_complete_notifications():
-    skill = (SCRIPT.parents[1] / "src" / "skills" / "courses" / "SKILL.md").read_text(encoding="utf-8")
+    skill = (SCRIPT.parents[1] / "src" / "skills" / "courses" / "phases" / "term.md").read_text(encoding="utf-8")
     watch = (SCRIPT.parents[1] / "src" / "skills" / "courses" / "references" / "lemida-watch.md").read_text(encoding="utf-8")
     assert '"run_id"' in skill and "--run-id" in skill
     assert '"complete": true' in skill and "notifications.complete" in skill

@@ -184,7 +184,7 @@ running it across the whole library would overwrite it.
 
 **If the library is NOT enabled**, use the `sources` array from the profile (indexed during init) to present available sources. If the sources array is empty, ask the researcher to describe their sources manually.
 
-If a source the author wants to use is **not yet in the library**, stop and point them at the ingest skills instead of working from an unindexed file (the ingest skills add to Trove; when the library route is PageIndex only, ask the researcher to add the book to their PageIndex library or to switch routes with `/academic-writer:setup update-tools`): a single article or chapter → `/academic-writer:ingest`, a whole book (multi-volume, scanned, EPUB, 100+ pages) → `/academic-writer:ingest-book`. They upload it with its printed page numbers preserved so citations can name the printed page.
+If a source the author wants to use is **not yet in the library**, stop and point them at the library router instead of working from an unindexed file (the library phases add to Trove; when the library route is PageIndex only, ask the researcher to add the book to their PageIndex library or to switch routes with `/academic-writer:setup update-tools`): a single article or chapter → `/academic-writer:library ingest`, a whole book (multi-volume, scanned, EPUB, 100+ pages) → `/academic-writer:library ingest-book`. They upload it with its printed page numbers preserved so citations can name the printed page.
 
 Present them clearly and ask:
 > "Which of these sources should I focus on? You can name them by number, by title, or say 'all'."

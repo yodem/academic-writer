@@ -1,11 +1,3 @@
----
-name: kotar-fetch
-description: "Download the cited pages of a book on Kotar (CET, through the Bar-Ilan OpenAthens proxy) as one PDF in printed-page order, for the author's own study. Use when a course reading, an assignment's core text or a `kotar-source` chore points at a Kotar book (`kotar` in the URL, `nBookID=`), or a Primo record links to Kotar. Needs a Chrome tab signed in to the Kotar viewer. Not for books on disk (use /academic-writer:ingest-book) or other publisher readers."
-user-invocable: true
-allowed-tools: [Bash, Read, Write]
-metadata: {author: "Yotam Fromm", version: "0.1.0"}
----
-
 # Academic Writer — Kotar Fetch
 
 Kotar shows a book as page images, one per page token. A token can only be read from a signed-in viewer tab, so the browser does exactly one thing: list the tokens. Everything else is a script: `${CLAUDE_PLUGIN_ROOT}/scripts/kotar/kotar_fetch.py` (below, `kf`).
@@ -49,8 +41,8 @@ sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" "${CLAUDE_PLUGIN_ROOT}/scripts/kotar/ko
 
 - Report: ref, book id, printed pages, PDF path, any plates and any failed pages.
 - **Transcription and upload (the author's rule for library and Kotar readings, which are in copyright and fetched under the author's own licence):**
-  - The text comes from Gemini OCR with `/academic-writer:ocr`, not from Claude transcribing the page images. Tesseract runs only as a silent similarity check and its text never enters a source; pages past the gate are flagged for the user, and pages where Gemini returns empty are marked "blocked" and surfaced (no Claude-vision or Tesseract fallback).
-  - It goes to the course's Trove book (with `/academic-writer:ingest`) and to its NotebookLM notebook with exact printed pagination: one marker per printed page, or per column for an encyclopedia.
+  - The text comes from Gemini OCR by reading the sibling phase file `${CLAUDE_SKILL_DIR}/phases/ocr.md` (the same as `/academic-writer:library ocr`), not from Claude transcribing the page images. Tesseract runs only as a silent similarity check and its text never enters a source; pages past the gate are flagged for the user, and pages where Gemini returns empty are marked "blocked" and surfaced (no Claude-vision or Tesseract fallback).
+  - It goes to the course's Trove book (by reading the sibling phase file `${CLAUDE_SKILL_DIR}/phases/ingest.md`, the same as `/academic-writer:library ingest`) and to its NotebookLM notebook with exact printed pagination: one marker per printed page, or per column for an encyclopedia.
   - The original PDF goes to the course's Drive folder.
   - If a tool or the classifier still blocks a step, stop that item and report it. Never work around the block.
 - Course-book writes go through the book's writer lock (the term's `WRITERS.md`), at the reading's place in the `חומרי קריאה` section.

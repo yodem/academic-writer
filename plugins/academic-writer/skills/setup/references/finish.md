@@ -49,9 +49,9 @@ Always end with `/academic-writer:setup intro`. This block is the last thing pri
 
 | Role | Candidate commands | Needs |
 |---|---|---|
-| Student | `/academic-writer:courses` (set up a term), `/academic-writer:lesson-notes`, `/academic-writer:dashboard`, `/academic-writer:write` | `courses` and `dashboard`: home folder; `lesson-notes`: `trove`; `write`: `gemini-key` |
+| Student | `/academic-writer:courses` (set up a term), `/academic-writer:courses lesson-notes`, `/academic-writer:courses dashboard`, `/academic-writer:write` | `courses` and `dashboard`: home folder; `lesson-notes`: `trove`; `write`: `gemini-key` |
 | Researcher | the three steps below | see below |
-| Lecturer | `/academic-writer:courses`, `/academic-writer:dashboard`, then the researcher list | as above |
+| Lecturer | `/academic-writer:courses`, `/academic-writer:courses dashboard`, then the researcher list | as above |
 
 **Researcher block (use this wording, translated to `targetLanguage`):**
 
@@ -59,7 +59,7 @@ Always end with `/academic-writer:setup intro`. This block is the last thing pri
 >    folder inside this project folder (open it in Finder: Cmd+Space, or right-click the folder), then type
 >    `/academic-writer:setup init`. It reads them and shows you what it learned so you can correct it.
 > 2. **Write an article:** type `/academic-writer:write`; I ask one question at a time and you decide the thesis and outline. (Needs the Gemini key.)
-> 3. **Research your sources:** add them to Trove with `/academic-writer:ingest`, then ask with `/academic-writer:write research`. (Needs Trove.)
+> 3. **Research your sources:** add them to Trove with `/academic-writer:library ingest`, then ask with `/academic-writer:write research`. (Needs Trove.)
 > 4. Illustrated guide: `/academic-writer:setup intro`.
 
 Drop step 2 if `gemini-key` failed and step 3 if `trove` is missing, and add one line naming the missing step

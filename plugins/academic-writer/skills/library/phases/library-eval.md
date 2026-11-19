@@ -1,11 +1,3 @@
----
-name: library-eval
-description: "Compare Trove and PageIndex on your own article: pick claims from a draft, let each library find the supporting pages, then judge anonymised A/B pairs yourself on a private page, and see the unblinded results (win rate, cost, time, agreement with the citation checker). Use when the author wants to know which library finds the right pages better for their own sources, after a draft with footnotes exists and the sources are in both libraries. Do NOT use to change which library an article reads from (use /academic-writer:setup update-tools) or to add books (use /academic-writer:ingest or /academic-writer:ingest-book)."
-user-invocable: true
-allowed-tools: [Bash, Read, Write, AskUserQuestion]
-metadata: {author: "Yotam Fromm", version: "0.1.0", summary: "Compare Trove and PageIndex on your own article: anonymised pairs you judge yourself, then the unblinded results."}
----
-
 # Compare the two libraries on your article
 
 The author decides which library finds the right pages better by judging real results **without knowing which library produced which**. The plugin picks claims from the article's draft, asks a separate Claude (or Codex) helper to find the supporting pages in each library, shows the two answers side by side as "A" and "B" in random order, and only after the author has judged every pair reveals which was which, with the numbers.

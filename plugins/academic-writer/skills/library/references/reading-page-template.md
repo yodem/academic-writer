@@ -1,6 +1,6 @@
 # Reading-page template — "How to read and cite this book"
 
-Every book uploaded by `/academic-writer:ingest` or `/academic-writer:ingest-book`
+Every book uploaded by `/academic-writer:library ingest` or `/academic-writer:library ingest-book`
 starts with this page as its **page 1**. Fill in every bracket; never leave a
 placeholder. Write the page in the document's primary language (use the Hebrew
 template for Hebrew sources).

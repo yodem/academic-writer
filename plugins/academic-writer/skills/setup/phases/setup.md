@@ -303,7 +303,7 @@ lines: `${CLAUDE_SKILL_DIR}/references/dependencies.md § Google Drive, Kotar an
 1. **Google Drive** (`drive`, first): the Claude connector (Customize, Connectors, Google Drive; https://support.claude.com/en/articles/10166901). Keeps and finds course files. No script sees it: ask "Is Google Drive connected?".
 2. **NotebookLM** (`notebooklm`): step 4e. Answers questions about a set of sources.
 3. **Trove** (`trove`): step 4d. Your searchable source library, with exact pages.
-4. **Kotar** (`kotar`): `/academic-writer:kotar-fetch` downloads a Kotar book's cited pages as one PDF. Needs Chrome signed in to Kotar.
+4. **Kotar** (`kotar`): `/academic-writer:library kotar-fetch` downloads a Kotar book's cited pages as one PDF. Needs Chrome signed in to Kotar.
 5. **Moodle** (`moodle`, the course site): the courses command reads pages and readings. Needs Chrome with the Claude in Chrome extension, signed in; never ask for the password.
 
 ### 4d. Trove — your research library (optional)

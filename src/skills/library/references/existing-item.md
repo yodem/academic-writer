@@ -1,6 +1,6 @@
 # Add a reading to an existing Trove item
 
-Used by `/academic-writer:ingest` and `/academic-writer:ingest-book` when the author says "add this to the book I already have" (a course book of readings, a collected volume, a book that gained a chapter). The new text is **appended** to the item; nothing that is already there is changed.
+Used by `/academic-writer:library ingest` and `/academic-writer:library ingest-book` when the author says "add this to the book I already have" (a course book of readings, a collected volume, a book that gained a chapter). The new text is **appended** to the item; nothing that is already there is changed.
 
 Why this has its own flow: replacing a page with `trove items put <id>:<page>` resets the whole table of contents and loses every hint and every level. So new content is never written with `put`, and the table of contents is always re-applied last.
 
@@ -16,7 +16,7 @@ trove items toc <ITEM_ID> --json --no-session > /tmp/toc-before.json
 
 The saved file holds the entries under `items[0].toc` (each `{"title","page","level"}`, the title in the form `Title - hint`). Also read two old pages with `trove items read <ITEM_ID>:1 --no-session` and `trove items read <ITEM_ID>:2 --no-session` and keep their text for the comparison in step 4.
 
-If the item already has a table of contents but without hints, say so; the new entries still carry hints and the old ones stay as they are (offer `/academic-writer:ingest-book` repair separately).
+If the item already has a table of contents but without hints, say so; the new entries still carry hints and the old ones stay as they are (offer `/academic-writer:library ingest-book` repair separately).
 
 ## 2. Build only the new pages
 

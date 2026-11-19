@@ -52,17 +52,17 @@ This table is generated from the plugin itself, so it is always complete.
 | `/academic-writer:write ideate` | Brainstorm: turn a vague topic into a sharp research question and save a research brief |
 | `/academic-writer:write present` | Turn a finished article into a talk outline, abstract with keywords, chapter proposal or study materials |
 | `/academic-writer:write watch` | Show what Academic Writer is doing right now: current step, progress and anything rejected |
-| `/academic-writer:ocr` | Turn a scan or photo into plain text: free readers when they agree, then Claude, then Gemini for the pages Claude cannot read. |
-| `/academic-writer:ingest` | Upload one article or chapter to the source library with printed page numbers, hinted contents and a citation guide. |
-| `/academic-writer:ingest-book` | Upload a whole book (multi-volume, scanned or EPUB) to the source library with a navigable hinted table of contents and a citation guide. |
-| `/academic-writer:library-eval` | Compare Trove and PageIndex on your own article: anonymised pairs you judge yourself, then the unblinded results. |
 | `/academic-writer:setup voice` | Build or update the voice profile: import old voice files, choose exemplar paragraphs, derive writing rules, sync to Trove (by name only) |
 | `/academic-writer:setup health` | Check that Academic Writer is ready: profile, tools, connections, Gemini key and past articles, with a plain fix for anything missing |
 | `/academic-writer:setup help` | Short overview of Academic Writer and its commands, with the three first steps for a new user |
-| `/academic-writer:courses` | Use when setting up an academic term from a schedule, validating course resources, syncing your LMS (Moodle) materials, or running the daily course scan. |
-| `/academic-writer:dashboard` | Open the local course dashboard: one page that shows, for every course in the term, what is due next, whether its readings are ready, and what is new, with a week agenda and a page per course. |
-| `/academic-writer:kotar-fetch` | Download the cited pages of a book on Kotar (CET, through the Bar-Ilan OpenAthens proxy) as one PDF in printed-page order, for the author's own study. |
-| `/academic-writer:lesson-notes` | Use when processing a course recording into a structured Hebrew lesson note, or when resuming queued NotebookLM lesson transcripts with --pending. |
+| `/academic-writer:courses dashboard` | Open the local course dashboard: what is due next, whether readings are ready, what is new, a week agenda and a page per course |
+| `/academic-writer:courses lesson-notes` | Turn a course recording's NotebookLM transcript into a structured Hebrew Trove lesson note; --pending resumes queued transcripts |
+| `/academic-writer:courses term` | Set up a term from a schedule, validate course resources, sync the LMS (Moodle), run the daily scan and its steps such as extract-handoff, trove-notes and calendar-sync (the default) |
+| `/academic-writer:library ingest` | Upload one article, paper or chapter to Trove with printed page numbers, a hinted table of contents and a citation guide |
+| `/academic-writer:library ingest-book` | Upload a whole book (100+ pages, multi-volume, EPUB or scanned PDF) with a nested navigable table of contents, or repair a flat one |
+| `/academic-writer:library kotar-fetch` | Download the cited pages of a Kotar book as one PDF in printed-page order, for the author's own study |
+| `/academic-writer:library library-eval` | Compare Trove and PageIndex on the author's own article, judging anonymised A/B pairs |
+| `/academic-writer:library ocr` | Turn a scanned PDF, photo or screenshot (or a folder of them) into plain text: <file or folder> |
 | `/academic-writer:setup learn` | Refresh the voice store from newly added past articles and from the author's own rewrites of drafts |
 | `/academic-writer:setup update-field` | Change the research field in the profile, keeping every other setting |
 | `/academic-writer:setup update-tools` | Turn Trove or NotebookLM on or off, change the library route (Trove, PageIndex or both), set up PageIndex, without redoing the full setup |

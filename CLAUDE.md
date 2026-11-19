@@ -62,18 +62,18 @@ Slash commands are auto-generated from skills with `user-invocable: true`. The `
 | `/academic-writer:write edit` | write (phase `edit`) | Revise a drafted article |
 | `/academic-writer:write edit-section` | write (phase `edit-section`) | Revise one section only |
 | `/academic-writer:write proofread` | write (phase `proofread`) | Run the `aw proofread` find, verify, memo, and apply pipeline |
-| `/academic-writer:ocr` | ocr | OCR a scanned PDF/image (or directory) into clean text, page by page: free readers when Surya and Tesseract agree, then Claude, then Gemini for pages Claude cannot read |
+| `/academic-writer:library ocr` | ocr | OCR a scanned PDF/image (or directory) into clean text, page by page: free readers when Surya and Tesseract agree, then Claude, then Gemini for pages Claude cannot read |
 | `/academic-writer:setup intro` | setup (phase `intro`) | Open the bundled HTML guide (`src/guide/index.html`) in the browser |
 | `/academic-writer:courses` | courses | Set up terms and course resources, validate them, sync LMS readings, and run the daily scan |
-| `/academic-writer:dashboard` | dashboard | Serve the local course dashboard (127.0.0.1 only): overview, week agenda and a page per course, live over SSE |
-| `/academic-writer:lesson-notes` | lesson-notes | Turn course recordings and NotebookLM transcripts into structured Trove lesson pages |
-| `/academic-writer:kotar-fetch` | kotar-fetch | Download a Kotar book's cited pages as one PDF (one browser step for page tokens, the rest scripted) |
+| `/academic-writer:courses dashboard` | dashboard | Serve the local course dashboard (127.0.0.1 only): overview, week agenda and a page per course, live over SSE |
+| `/academic-writer:courses lesson-notes` | lesson-notes | Turn course recordings and NotebookLM transcripts into structured Trove lesson pages |
+| `/academic-writer:library kotar-fetch` | kotar-fetch | Download a Kotar book's cited pages as one PDF (one browser step for page tokens, the rest scripted) |
 | `/academic-writer:setup init` | setup (phase `init`) | Full onboarding (first install); pass `--quick` for fast onboarding |
 | `/academic-writer:setup` | setup (phase `setup`; bare `setup` runs it) | Guided first-run wizard (Gemini key, Python tools, sample paragraph) — by name only: the `setup` router does not advertise this phase and tells Claude not to start it from a loose request |
 | `/academic-writer:write research` | write (phase `research`) | Investigate a topic |
-| `/academic-writer:ingest` | ingest | Upload one article or chapter to the source library with printed page numbers and a citation guide |
-| `/academic-writer:ingest-book` | ingest-book | Upload a whole book (multi-volume, scanned, EPUB) with a navigable hinted table of contents |
-| `/academic-writer:library-eval` | library-eval | Compare Trove and PageIndex on the author's own article: anonymised A/B pairs judged on a private page, then the unblinded report |
+| `/academic-writer:library ingest` | ingest | Upload one article or chapter to the source library with printed page numbers and a citation guide |
+| `/academic-writer:library ingest-book` | ingest-book | Upload a whole book (multi-volume, scanned, EPUB) with a navigable hinted table of contents |
+| `/academic-writer:library library-eval` | library-eval | Compare Trove and PageIndex on the author's own article: anonymised A/B pairs judged on a private page, then the unblinded report |
 | `/academic-writer:write ideate` | write (phase `ideate`) | Frame a research question |
 | `/academic-writer:write review` | write (phase `review`) | Score an article before submission |
 | `/academic-writer:setup health` | setup (phase `health`) | Check integration health |

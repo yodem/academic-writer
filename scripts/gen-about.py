@@ -37,8 +37,8 @@ ONBOARDING: Dict[str, List[str]] = {
     "student": [
         "הריצו /academic-writer:setup ובחרו תיקיית בית: שם יישמרו הפרופיל והסמסטר שלכם.",
         "הריצו /academic-writer:courses כדי להגדיר את הסמסטר ואת הקורסים.",
-        "פתחו את הלוח עם /academic-writer:dashboard וראו את השבוע שלפניכם.",
-        "הוסיפו מאמר או ספר לספרייה עם /academic-writer:ingest.",
+        "פתחו את הלוח עם /academic-writer:courses dashboard וראו את השבוע שלפניכם.",
+        "הוסיפו מאמר או ספר לספרייה עם /academic-writer:library ingest.",
         "התחילו לכתוב עם /academic-writer:write; כל שלב ייראה בלשונית כתיבה.",
     ],
     "lecturer": [
@@ -50,9 +50,9 @@ ONBOARDING: Dict[str, List[str]] = {
     "researcher": [
         "הריצו /academic-writer:setup ובחרו תיקיית בית ותפקיד חוקר.",
         "הריצו /academic-writer:setup init בתיקיית המחקר כדי לתת לה פרופיל.",
-        "הוסיפו מקורות לספרייה עם /academic-writer:ingest או /academic-writer:ingest-book.",
+        "הוסיפו מקורות לספרייה עם /academic-writer:library ingest או /academic-writer:library ingest-book.",
         "נסחו שאלת מחקר עם /academic-writer:write ideate וכתבו עם /academic-writer:write.",
-        "פתחו את הלוח עם /academic-writer:dashboard כדי לעקוב אחרי הכתיבה.",
+        "פתחו את הלוח עם /academic-writer:courses dashboard כדי לעקוב אחרי הכתיבה.",
     ],
 }
 
@@ -75,7 +75,16 @@ def skill_for(root: Path, guide, sources: List[str]) -> Optional[Tuple[str, Dict
         return None
     m = re.fullmatch(r"src/skills/([^/]+)/SKILL\.md", sources[0])
     path = root / sources[0]
-    if not m or not path.is_file():
+    if not m:
+        # A router phase file: the command is "<router> <phase>", the text comes from the router's frontmatter.
+        pm = re.fullmatch(r"src/skills/([^/]+)/phases/([^/]+)\.md", sources[0])
+        router = root / "src" / "skills" / pm.group(1) / "SKILL.md" if pm else None
+        if not pm or not path.is_file() or not router.is_file():
+            return None
+        fm = dict(guide.parse_frontmatter(router.read_text(encoding="utf-8")))
+        fm.pop("metadata", None)
+        return f"{pm.group(1)} {pm.group(2)}", fm
+    if not path.is_file():
         return None
     fm = guide.parse_frontmatter(path.read_text(encoding="utf-8"))
     return str(fm.get("name") or m.group(1)), fm

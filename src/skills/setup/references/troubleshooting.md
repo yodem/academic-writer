@@ -83,7 +83,7 @@ These apply when the helper was installed with `aw library install` (see `pagein
   no table of contents, needs a newer Python. Install one from https://www.python.org/downloads/ (or
   Homebrew), then run the install again. Until then the basic helper (any Python 3.9 or newer) is
   enough for books that have a table of contents, which is every book uploaded with
-  `/academic-writer:ingest-book`.
+  `/academic-writer:library ingest-book`.
 - **The install stopped or timed out**: it needs the network and gives up after a time limit. Check the
   connection and run it again; a half-finished install is replaced, nothing else is touched. For pip
   errors see "pip install failures" below.
@@ -97,7 +97,7 @@ These apply when the helper was installed with `aw library install` (see `pagein
 - **Indexing a book failed, Trove upload is fine**: run the same `aw library index --trove-id <id>`
   command again. It is repeatable and reuses summaries already paid for. A missing or refused Gemini
   key: use `--summaries hints` (no Gemini), or fix the key with `/academic-writer:setup health`.
-- **A book has no table of contents**: repair it with `/academic-writer:ingest-book` (cheaper and the
+- **A book has no table of contents**: repair it with `/academic-writer:library ingest-book` (cheaper and the
   same outline as Trove), or install the full helper.
 
 ## pip install failures

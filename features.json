@@ -166,11 +166,11 @@
       "id": "ingest",
       "name": "Source ingestion into Trove",
       "sources": [
-        "src/skills/ingest/SKILL.md",
-        "src/skills/ingest/references/reading-page-template.md",
-        "src/skills/ingest-book/SKILL.md",
-        "src/skills/ingest-book/references/toc-mechanism.md",
-        "src/skills/ingest-book/references/epub-sources.md",
+        "src/skills/library/phases/ingest.md",
+        "src/skills/library/references/reading-page-template.md",
+        "src/skills/library/phases/ingest-book.md",
+        "src/skills/library/references/toc-mechanism.md",
+        "src/skills/library/references/epub-sources.md",
         "src/scripts/extract_pdf.py",
         "src/scripts/build_crosswalk.py",
         "src/scripts/build_toc_enrich.py"
@@ -179,13 +179,13 @@
       "subfeatures": [
         {
           "id": "ingest-article",
-          "name": "/academic-writer:ingest — single article or chapter with printed page numbers preserved, hinted contents, page-1 reading-and-citation guide (Chicago + Hebrew + profile style), aw ocr with orientation/truncation handling, mandatory read-back",
+          "name": "/academic-writer:library ingest — single article or chapter with printed page numbers preserved, hinted contents, page-1 reading-and-citation guide (Chicago + Hebrew + profile style), aw ocr with orientation/truncation handling, mandatory read-back",
           "status": "ok",
           "tested": "manual"
         },
         {
           "id": "ingest-book",
-          "name": "/academic-writer:ingest-book — whole book/multi-volume/scanned PDF/EPUB as one book with nested navigable ToC metadata (hints on every entry), crosswalk from printed pages, mandatory read-back; repairs a flat ToC",
+          "name": "/academic-writer:library ingest-book — whole book/multi-volume/scanned PDF/EPUB as one book with nested navigable ToC metadata (hints on every entry), crosswalk from printed pages, mandatory read-back; repairs a flat ToC",
           "status": "ok",
           "tested": "manual"
         }
@@ -451,7 +451,7 @@
         "src/cli/src/edit.ts",
         "src/cli/src/ocr.ts",
         "src/skills/edit/SKILL.md",
-        "src/skills/ocr/SKILL.md",
+        "src/skills/library/phases/ocr.md",
         "scripts/build-plugins.sh"
       ],
       "status": "ok",
@@ -705,7 +705,7 @@
       "id": "lesson-transcription",
       "name": "Structured lesson notes",
       "sources": [
-        "src/skills/lesson-notes/SKILL.md",
+        "src/skills/courses/phases/lesson-notes.md",
         "src/scripts/courses/courses.py",
         "tests/courses/"
       ],
@@ -732,7 +732,7 @@
       "id": "course-dashboard",
       "name": "Local course dashboard (overview, week agenda, course pages; live over SSE)",
       "sources": [
-        "src/skills/dashboard/SKILL.md",
+        "src/skills/courses/phases/dashboard.md",
         "src/scripts/courses/dashboard.py",
         "src/scripts/courses/dashboard/index.html",
         "src/scripts/courses/tasks.py",
@@ -808,11 +808,11 @@
         "src/cli/src/library/eval/",
         "src/scripts/pageindex/",
         "src/schemas/library-eval-plan.schema.json",
-        "src/skills/library-eval/SKILL.md",
-        "src/skills/library-eval/references/judge-page.html",
-        "src/skills/ingest/references/index-for-pageindex.md",
-        "src/skills/ingest/references/existing-item.md",
-        "src/skills/ocr/references/engines.md",
+        "src/skills/library/phases/library-eval.md",
+        "src/skills/library/references/judge-page.html",
+        "src/skills/library/references/index-for-pageindex.md",
+        "src/skills/library/references/existing-item.md",
+        "src/skills/library/references/engines.md",
         "src/skills/setup/references/pageindex.md",
         "tests/test_pageindex_e2e.py",
         "tests/test_pageindex_index.py",
@@ -882,7 +882,7 @@
           "id": "ocr-engines",
           "name": "OCR choice in the ocr skill: the plugin's Gemini OCR, Claude or Codex reading page images, or local Tesseract",
           "status": "partial",
-          "notes": "Only the Gemini engine (aw ocr) is code; Claude, Codex and Tesseract are written procedures in the skill (src/skills/ocr/references/engines.md) that no automated test runs.",
+          "notes": "Only the Gemini engine (aw ocr) is code; Claude, Codex and Tesseract are written procedures in the skill (src/skills/library/references/engines.md) that no automated test runs.",
           "tested": "manual"
         },
         {
@@ -893,7 +893,7 @@
         },
         {
           "id": "library-eval",
-          "name": "/academic-writer:library-eval and aw library eval plan|run|pairs|page|import|unblind|status: claims from a draft, locating agents (claude or codex) per route, anonymised A/B pairs with a sealed key, a private judging page (local file), unblinded report with win rate, interval and sign test",
+          "name": "/academic-writer:library library-eval and aw library eval plan|run|pairs|page|import|unblind|status: claims from a draft, locating agents (claude or codex) per route, anonymised A/B pairs with a sealed key, a private judging page (local file), unblinded report with win rate, interval and sign test",
           "status": "partial",
           "notes": "Tested end to end with a fake claude. Not yet run with a real claude or codex on a real article. The judging page saves to the browser and a downloaded file; the shared-store back-end for a published private page is a stub that returns null until it is wired to the artifact capability, so the claude.ai page option in the skill depends on that. The codex flags were checked only against its --help output. Blinding holds for the human judge; the locating agent can still see the structural difference between a table of contents and an outline tree.",
           "tested": "e2e"
@@ -908,7 +908,7 @@
       "id": "kotar-fetch",
       "name": "Kotar cited-pages fetch",
       "sources": [
-        "src/skills/kotar-fetch/SKILL.md",
+        "src/skills/library/phases/kotar-fetch.md",
         "src/scripts/kotar/kotar_fetch.py",
         "tests/kotar/"
       ],

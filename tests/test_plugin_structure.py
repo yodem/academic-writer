@@ -468,7 +468,7 @@ class TestCrossReferences(unittest.TestCase):
 
     def test_aw_edit_and_ocr_skill_contracts(self):
         for name, command in (("edit", "edit"), ("edit-section", "edit"), ("ocr", "ocr")):
-            path = ("write", "phases", name + ".md") if name != "ocr" else (name, "SKILL.md")
+            path = ("library" if name == "ocr" else "write", "phases", name + ".md")
             text = _read(os.path.join(SRC_DIR, "skills", *path))
             self.assertIn(f" {command} \\", text)
             self.assertIn('--data-dir "${CLAUDE_PLUGIN_DATA}"', text)

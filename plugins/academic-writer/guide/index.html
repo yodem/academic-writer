@@ -302,17 +302,17 @@ claude plugin install academic-writer@yodem</code></pre></div>
 <tr><td><code>/academic-writer:write ideate</code></td><td>Brainstorm: turn a vague topic into a sharp research question and save a research brief</td></tr>
 <tr><td><code>/academic-writer:write present</code></td><td>Turn a finished article into a talk outline, abstract with keywords, chapter proposal or study materials</td></tr>
 <tr><td><code>/academic-writer:write watch</code></td><td>Show what Academic Writer is doing right now: current step, progress and anything rejected</td></tr>
-<tr><td><code>/academic-writer:ocr</code></td><td>Turn a scan or photo into plain text: free readers when they agree, then Claude, then Gemini for the pages Claude cannot read.</td></tr>
-<tr><td><code>/academic-writer:ingest</code></td><td>Upload one article or chapter to the source library with printed page numbers, hinted contents and a citation guide.</td></tr>
-<tr><td><code>/academic-writer:ingest-book</code></td><td>Upload a whole book (multi-volume, scanned or EPUB) to the source library with a navigable hinted table of contents and a citation guide.</td></tr>
-<tr><td><code>/academic-writer:library-eval</code></td><td>Compare Trove and PageIndex on your own article: anonymised pairs you judge yourself, then the unblinded results.</td></tr>
 <tr><td><code>/academic-writer:setup voice</code></td><td>Build or update the voice profile: import old voice files, choose exemplar paragraphs, derive writing rules, sync to Trove (by name only)</td></tr>
 <tr><td><code>/academic-writer:setup health</code></td><td>Check that Academic Writer is ready: profile, tools, connections, Gemini key and past articles, with a plain fix for anything missing</td></tr>
 <tr><td><code>/academic-writer:setup help</code></td><td>Short overview of Academic Writer and its commands, with the three first steps for a new user</td></tr>
-<tr><td><code>/academic-writer:courses</code></td><td>Use when setting up an academic term from a schedule, validating course resources, syncing your LMS (Moodle) materials, or running the daily course scan.</td></tr>
-<tr><td><code>/academic-writer:dashboard</code></td><td>Open the local course dashboard: one page that shows, for every course in the term, what is due next, whether its readings are ready, and what is new, with a week agenda and a page per course.</td></tr>
-<tr><td><code>/academic-writer:kotar-fetch</code></td><td>Download the cited pages of a book on Kotar (CET, through the Bar-Ilan OpenAthens proxy) as one PDF in printed-page order, for the author&#x27;s own study.</td></tr>
-<tr><td><code>/academic-writer:lesson-notes</code></td><td>Use when processing a course recording into a structured Hebrew lesson note, or when resuming queued NotebookLM lesson transcripts with --pending.</td></tr>
+<tr><td><code>/academic-writer:courses dashboard</code></td><td>Open the local course dashboard: what is due next, whether readings are ready, what is new, a week agenda and a page per course</td></tr>
+<tr><td><code>/academic-writer:courses lesson-notes</code></td><td>Turn a course recording&#x27;s NotebookLM transcript into a structured Hebrew Trove lesson note; --pending resumes queued transcripts</td></tr>
+<tr><td><code>/academic-writer:courses term</code></td><td>Set up a term from a schedule, validate course resources, sync the LMS (Moodle), run the daily scan and its steps such as extract-handoff, trove-notes and calendar-sync (the default)</td></tr>
+<tr><td><code>/academic-writer:library ingest</code></td><td>Upload one article, paper or chapter to Trove with printed page numbers, a hinted table of contents and a citation guide</td></tr>
+<tr><td><code>/academic-writer:library ingest-book</code></td><td>Upload a whole book (100+ pages, multi-volume, EPUB or scanned PDF) with a nested navigable table of contents, or repair a flat one</td></tr>
+<tr><td><code>/academic-writer:library kotar-fetch</code></td><td>Download the cited pages of a Kotar book as one PDF in printed-page order, for the author&#x27;s own study</td></tr>
+<tr><td><code>/academic-writer:library library-eval</code></td><td>Compare Trove and PageIndex on the author&#x27;s own article, judging anonymised A/B pairs</td></tr>
+<tr><td><code>/academic-writer:library ocr</code></td><td>Turn a scanned PDF, photo or screenshot (or a folder of them) into plain text: &lt;file or folder&gt;</td></tr>
 <tr><td><code>/academic-writer:setup learn</code></td><td>Refresh the voice store from newly added past articles and from the author&#x27;s own rewrites of drafts</td></tr>
 <tr><td><code>/academic-writer:setup update-field</code></td><td>Change the research field in the profile, keeping every other setting</td></tr>
 <tr><td><code>/academic-writer:setup update-tools</code></td><td>Turn Trove or NotebookLM on or off, change the library route (Trove, PageIndex or both), set up PageIndex, without redoing the full setup</td></tr>
@@ -332,7 +332,7 @@ claude plugin install academic-writer@yodem</code></pre></div>
   <tbody>
     <tr><td><code>past-articles/</code></td><td>Your published articles, for learning your style.</td></tr>
     <tr><td><code>.academic-helper/</code></td><td>The project's working files: your profile (<code>profile.md</code>), the list of sources and their citation details, the outline, the drafts of each paragraph, and a log of each run.</td></tr>
-    <tr><td><code>ocr-output/</code></td><td>Text extracted from scanned pages by <code>/academic-writer:ocr</code>.</td></tr>
+    <tr><td><code>ocr-output/</code></td><td>Text extracted from scanned pages by <code>/academic-writer:library ocr</code>.</td></tr>
     <tr><td>Your <code>.docx</code> files</td><td>The finished articles. Claude tells you the file name each time.</td></tr>
     <tr><td><code>.academic-helper/library-eval/</code></td><td>Only if you run a library comparison (section 11): its plan, the anonymous answers, your judgments, a sealed key that says which side was which, and the final report.</td></tr>
   </tbody>
@@ -439,14 +439,14 @@ claude plugin update academic-writer@yodem</code></pre></div>
 <p>Say you want PageIndex and choose <strong>Set it up on this computer</strong>. Then run <code>/academic-writer:setup health</code> to see which helper is in use and that it is ready.</p>
 
 <h3>Preparing your books</h3>
-<p>A book must be prepared once before PageIndex can read it. When you add a book with <code>/academic-writer:ingest</code> or <code>/academic-writer:ingest-book</code>, the plugin writes it to Trove first, checks it, and then offers to prepare it for PageIndex too. It uses the same table of contents and the same page numbers, so a citation means the same page in both libraries. For each book it tells you how much text would be sent to Google for the summaries, and you choose: <strong>Gemini summaries</strong>, the <strong>free option</strong> that sends nothing, or <strong>not now</strong>. A problem here never undoes the Trove upload.</p>
+<p>A book must be prepared once before PageIndex can read it. When you add a book with <code>/academic-writer:library ingest</code> or <code>/academic-writer:library ingest-book</code>, the plugin writes it to Trove first, checks it, and then offers to prepare it for PageIndex too. It uses the same table of contents and the same page numbers, so a citation means the same page in both libraries. For each book it tells you how much text would be sent to Google for the summaries, and you choose: <strong>Gemini summaries</strong>, the <strong>free option</strong> that sends nothing, or <strong>not now</strong>. A problem here never undoes the Trove upload.</p>
 <p>You can also add a reading to a book you already have, and prepare the books already in Trove in one go (a "backfill"). Both are safe to repeat: summaries already paid for are reused, and Trove is never changed.</p>
 
 <h3>Measuring the libraries</h3>
 <p>Every lookup and every citation check is noted on your computer, in <code>.academic-helper/retrieval.jsonl</code>: how long it took, an estimate of how much text came back, and the citation checker's verdict. Ask Claude to "show me the library report" for a plain-language comparison on your real articles: speed, failures, how often the two libraries return the same page, how often the citation checker passes, the size of the text returned and the cost of any preparation or comparison runs. The size figures are estimates, not a bill. Nothing in that log is uploaded.</p>
 
 <h3>The blind comparison: judge it yourself</h3>
-<p><code>/academic-writer:library-eval</code> answers a sharper question on your own sources: for the claims in this article, which library finds the better pages?</p>
+<p><code>/academic-writer:library library-eval</code> answers a sharper question on your own sources: for the claims in this article, which library finds the better pages?</p>
 <ol class="steps">
   <li><strong>Plan.</strong> The plugin picks claims from one of your drafts and tells you how many helper runs this needs and what they are likely to cost. Nothing is spent until you say yes.</li>
   <li><strong>Find.</strong> For each claim, a separate Claude (or Codex) looks up the supporting pages in each library, one library at a time.</li>

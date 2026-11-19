@@ -86,8 +86,8 @@ class TestedField(unittest.TestCase):
     def test_commands_come_from_user_invocable_skills(self):
         about = json.loads(ABOUT.read_text(encoding="utf-8"))
         by_id = {f["id"]: f for f in about["features"]}
-        self.assertEqual(by_id["ingest"]["command"], "/academic-writer:ingest")
-        self.assertEqual(by_id["course-dashboard"]["command"], "/academic-writer:dashboard")
+        self.assertEqual(by_id["ingest"]["command"], "/academic-writer:library ingest")
+        self.assertEqual(by_id["course-dashboard"]["command"], "/academic-writer:courses dashboard")
         self.assertIsNone(by_id["citation-audit"]["command"])  # an agent, not a command
 
     def test_descriptions_are_hebrew_and_authored(self):

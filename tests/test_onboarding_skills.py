@@ -25,16 +25,22 @@ ASK = "AskUserQuestion"
 SETUP_PHASES = {"setup", "init", "health", "update-tools", "update-field", "voice", "learn", "help", "intro"}
 
 
+LIBRARY_PHASES = {"ingest", "ingest-book", "ocr", "kotar-fetch", "library-eval"}
+
+
 def _file(skill: str) -> pathlib.Path:
-    """The file holding a skill's instructions: a phase of the `setup` router, or the skill itself."""
+    """The file holding a skill's instructions: a phase of the `setup` or `library` router, or the skill itself."""
     if skill in SETUP_PHASES:
         return SKILLS / "setup" / "phases" / (skill + ".md")
+    if skill in LIBRARY_PHASES:
+        return SKILLS / "library" / "phases" / (skill + ".md")
     return SKILLS / skill / "SKILL.md"
 
 
 def _refs(skill: str) -> pathlib.Path:
     """The references folder of a skill: the `setup` router owns those of its phases."""
-    return (SKILLS / "setup" if skill in SETUP_PHASES else SKILLS / skill) / "references"
+    router = "setup" if skill in SETUP_PHASES else "library" if skill in LIBRARY_PHASES else skill
+    return SKILLS / router / "references"
 
 
 def _text(skill: str) -> str:
@@ -365,23 +371,24 @@ def test_no_skill_text_inlines_a_threshold_or_a_key():
             assert not re.search(r"\b(?:askAboveCalls|maxCalls|minPairs)\b\s*[:=]\s*\d", body), path
 
 
-LIBRARY_EVAL = SKILLS / "library-eval" / "SKILL.md"
+LIBRARY_EVAL = SKILLS / "library" / "phases" / "library-eval.md"
+LIBRARY_ROUTER = SKILLS / "library" / "SKILL.md"
 
 
-def test_library_eval_skill_is_invocable_and_registered():
+def test_library_eval_phase_is_routed_and_registered():
     import yaml
 
-    text = LIBRARY_EVAL.read_text(encoding="utf-8")
+    text = LIBRARY_ROUTER.read_text(encoding="utf-8")
     fm = yaml.safe_load(re.match(r"---\n(.*?)\n---\n", text, re.S).group(1))
-    assert fm["name"] == "library-eval" and fm["user-invocable"] is True
-    assert "Use when" in fm["description"] and len(fm["description"]) <= 1024
-    meta = fm["metadata"]
-    assert meta.get("author") and meta.get("version") and meta.get("summary")
+    assert fm["name"] == "library" and fm["user-invocable"] is True
+    assert "library-eval" in fm["description"] and len(fm["description"]) <= 1024
     assert "AskUserQuestion" in fm["allowed-tools"]
+    assert "`library-eval`" in text and "phases/library-eval.md" in text
+    assert LIBRARY_EVAL.is_file()
     gen = (ROOT / "scripts" / "gen-guide.py").read_text(encoding="utf-8")
     assert '"library-eval"' in gen
-    assert "/academic-writer:library-eval" in (SKILLS / "setup" / "phases" / "help.md").read_text(encoding="utf-8")
-    assert "/academic-writer:library-eval" in (ROOT / "src" / "guide" / "index.html").read_text(encoding="utf-8")
+    assert "/academic-writer:library library-eval" in (SKILLS / "setup" / "phases" / "help.md").read_text(encoding="utf-8")
+    assert "/academic-writer:library library-eval" in (ROOT / "src" / "guide" / "index.html").read_text(encoding="utf-8")
 
 
 def test_library_eval_runs_the_steps_in_order_and_keeps_the_blinding():
@@ -406,8 +413,8 @@ def test_library_eval_runs_the_steps_in_order_and_keeps_the_blinding():
 
 
 def test_no_skill_moves_pages_to_another_ocr_engine_without_asking():
-    engines = (SKILLS / "ocr" / "references" / "engines.md").read_text(encoding="utf-8")
-    for path in (SKILLS / "ocr" / "SKILL.md", SKILLS / "ingest-book" / "SKILL.md", SKILLS / "ocr" / "references" / "engines.md", SKILLS / "courses" / "SKILL.md"):
+    engines = (SKILLS / "library" / "references" / "engines.md").read_text(encoding="utf-8")
+    for path in (SKILLS / "library" / "phases" / "ocr.md", SKILLS / "library" / "phases" / "ingest-book.md", SKILLS / "library" / "references" / "engines.md", SKILLS / "courses" / "phases" / "term.md"):
         body = path.read_text(encoding="utf-8")
         assert not re.search(r"escalat\w* (?:those |these |the )?pages? to Gemini", body, re.I), path
         assert not re.search(r"escalate to (?:the bundled )?Gemini", body, re.I), path

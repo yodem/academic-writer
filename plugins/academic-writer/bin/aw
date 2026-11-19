@@ -52723,7 +52723,7 @@ async function runEvalCli(argv, io) {
     }
     if (subcommand2 === "page") {
       const pairs2 = await readValid("pairs", paths.pairs, "pairs");
-      const template = text3(flags, "--template") ?? (env.CLAUDE_PLUGIN_ROOT ? join24(env.CLAUDE_PLUGIN_ROOT, "skills", "library-eval", "references", "judge-page.html") : null);
+      const template = text3(flags, "--template") ?? (env.CLAUDE_PLUGIN_ROOT ? join24(env.CLAUDE_PLUGIN_ROOT, "skills", "library", "references", "judge-page.html") : null);
       if (!template || !existsSync20(template)) throw new LibraryError("config", "ERROR library eval page: no judging page template found; pass --template <file>");
       const html = await readFile7(template, "utf8");
       const slot = /(<script\b[^>]*\bid=["']pairs["'][^>]*>)([\s\S]*?)(<\/script>)/iu;

@@ -35,7 +35,7 @@ AskUserQuestion(questions=[{
 
 The JSON names the `tier` it would install, the Python it found (`python.version`), the rough size (`approx_size_mb`) and, for the larger tier, a system library to add first (`system_library`). Say it in plain words:
 
-- **Basic helper** (`core`, the smaller one, any Python 3.9 or newer): prepares books that have a table of contents, which is every book uploaded with `/academic-writer:ingest-book`.
+- **Basic helper** (`core`, the smaller one, any Python 3.9 or newer): prepares books that have a table of contents, which is every book uploaded with `/academic-writer:library ingest-book`.
 - **Full helper** (`structure`, much larger, needs Python 3.10 or newer): also prepares a book that has no table of contents, by letting Gemini find its structure. On a Mac it needs the `pango` system library first (`brew install pango`); ask before installing it, as for any other tool.
 - If only an older Python exists, the basic helper is chosen and the output says so. Do not install Python for the researcher: point at the Python steps of this setup, then offer to run the install again.
 

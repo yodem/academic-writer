@@ -121,7 +121,7 @@ No script can see these, so ask the researcher whether each is done.
 - **Google Drive**: in the Claude app or on claude.ai open **Customize**, then **Connectors**, choose **Google Drive**
   and sign in with Google (https://support.claude.com/en/articles/10166901). Same on Windows and Mac.
 - **Kotar**: install Google Chrome (https://www.google.com/chrome; Windows: `winget install --id Google.Chrome -e`),
-  then in Chrome sign in to Kotar through the university library. `/academic-writer:kotar-fetch` reads from that tab.
+  then in Chrome sign in to Kotar through the university library. `/academic-writer:library kotar-fetch` reads from that tab.
 - **Moodle** (the course site): in Chrome, with the Claude in Chrome extension installed, sign in to the course
   site as usual. The plugin never asks for or stores the password.
 

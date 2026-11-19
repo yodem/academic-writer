@@ -1,6 +1,6 @@
 # OCR engines: who reads the pages
 
-Used by `/academic-writer:ocr`, `/academic-writer:ingest` and `/academic-writer:ingest-book` when the source is a scan or a photo. All four engines follow the same rules, so the text can be quoted as evidence later:
+Used by `/academic-writer:library ocr`, `/academic-writer:library ingest` and `/academic-writer:library ingest-book` when the source is a scan or a photo. All four engines follow the same rules, so the text can be quoted as evidence later:
 
 - Copy the text exactly. Never correct, modernise, paraphrase or summarise it.
 - Check the orientation of the first page before anything else; rotate a **copy**, never the source.

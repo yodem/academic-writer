@@ -1,11 +1,3 @@
----
-name: lesson-notes
-description: "Use when processing a course recording into a structured Hebrew lesson note, or when resuming queued NotebookLM lesson transcripts with --pending."
-user-invocable: true
-allowed-tools: [Bash, Read, Write, AskUserQuestion]
-metadata: {author: "Academic Writer", version: "0.1.0"}
----
-
 # Academic Writer — Lesson Notes
 
 Turn NotebookLM's transcript of a course recording into one concise, structured Trove page. This is a lesson note, not a transcript. Read the whole transcript in one pass because arguments and references can recur across the lesson.
@@ -25,7 +17,7 @@ Resolve the registry as described in `/academic-writer:courses`. Resolve the scr
 
    **Zoom transcript without a download.** When the host shares a Zoom transcript (speaker names and timestamps) but disabled recording download, save it as a `.txt` file and run `courses.py add-source <file> --transcript --course <slug> --date <YYYY-MM-DD> [--time <HHMM>] --json` (a source like any other: snapshot, Drive, notebook, then the lesson); it needs no recording-time mapping, uploads the text itself to the course notebook, and uses the file as the transcript (`transcript_source: file` in meta.json). Such transcripts do carry timestamps and named speakers, so the page may use `[HH:MM:SS]` anchors in the flow and claims, but treat its speaker names as device labels, not people: the classroom microphone is usually logged under the lecturer's name, so students in the room appear as the lecturer. Attribute by content (the lecturer leads, explains, assigns; questions, objections and self-introductions come from students), name a student only when the name is said aloud, and say so in the page's transcript-quality line; every other rule is unchanged.
 2. If no course matches, multiple courses match, or the semester/slot is unclear, ask the user to choose. In `--pending` or unattended mode, skip and log the ambiguity; never guess.
-3. For each queue job, read `transcript.txt` completely, its `meta.json`, the course JSON, the course-book rules (`../courses/references/course-book.md`), the book ToC (`trove items toc <book_id> --no-session`), and the course index page. Follow those rules and the existing changelog conventions.
+3. For each queue job, read `transcript.txt` completely, its `meta.json`, the course JSON, the course-book rules (`${CLAUDE_SKILL_DIR}/references/course-book.md`), the book ToC (`trove items toc <book_id> --no-session`), and the course index page. Follow those rules and the existing changelog conventions.
 4. If transcript passages cannot be understood, mark them `[לא ברור]`; never reconstruct them. NotebookLM transcripts may lack speaker labels, so attribute only what the audio/transcript supports.
 
 ## Wispr Flow lectures
