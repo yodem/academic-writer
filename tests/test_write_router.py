@@ -85,3 +85,18 @@ def test_routing_steps_decision_order():
     assert "single bare word" in s[2] and "print the table and stop" in s[2]
     assert "first word is not a phase" in s[3] and "infer" in s[3] and "ask the author" in s[3]
     assert s[4].startswith("5. Read exactly one file")
+
+
+def test_forked_phases_collect_input_in_the_parent_and_resume():
+    _, body = _parts()
+    forked = body.split("## Forked phases", 1)[1].split("## Before `new`", 1)[0]
+    assert "cannot talk to the author" in forked and "not to ask anything" in forked
+    assert "`Question: <answer>`" in forked and "author-intent.json" in forked
+    assert "command -v pandoc" in forked and "AskUserQuestion" in forked and "`Pandoc: installed`" in forked
+    assert "`NEEDS INPUT: <question>`" in forked and "dispatch it again" in forked
+    assert "AskUserQuestion" in _parts()[0]["allowed-tools"]
+    research = (WRITE / "phases" / "research.md").read_text(encoding="utf-8")
+    assert "`Question: <answer>`" in research and "`NEEDS INPUT: What do you want to find out?`" in research
+    assert "ask the author what they want to find out" not in research
+    proofread = (WRITE / "phases" / "proofread.md").read_text(encoding="utf-8")
+    assert "`Pandoc: installed`" in proofread and "`NEEDS INPUT: Install pandoc now?`" in proofread

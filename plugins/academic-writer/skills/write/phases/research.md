@@ -5,7 +5,7 @@ Run `aw evidence build` and summarise the verified passages it returns. Do not a
 ## 1. Prepare
 
 1. Read `.academic-helper/profile.md` and, if it exists, `.academic-helper/author-intent.json`.
-2. If there is no intent file and no question, ask the author what they want to find out.
+2. If the prompt that started this phase says `Question: <answer>`, that is the question. If there is no intent file and no question, you cannot ask the author from a subagent: stop and return exactly `NEEDS INPUT: What do you want to find out?` and nothing else.
 3. When needed, write `.academic-helper/author-intent.json` with the thesis (in the author's words) and any passages the author says must be used.
 4. Take the indexed source ids from the project profile. For a Sefaria text, pass its reference with `--sefaria`. If a source the author wants is not yet in the library, point them at the library router before continuing: a single article or chapter → `/academic-writer:library ingest`, a whole book (multi-volume, scanned, EPUB, 100+ pages) → `/academic-writer:library ingest-book`; they upload it with its printed page numbers preserved.
 

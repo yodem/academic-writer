@@ -47,7 +47,14 @@ When a phase shows a shell command, replace those four names with the values abo
 
 ## Forked phases
 
-`proofread` and `research` ran in their own context before. Run each as one subagent, not inline: dispatch ONE subagent with the Agent tool, `model: sonnet` and `effort: medium`, whose prompt gives the absolute path `${CLAUDE_SKILL_DIR}/phases/<phase>.md` (tell it to read and follow that file) and the arguments, then relay its result to the author. Every other phase runs inline.
+`proofread` and `research` ran in their own context before. Run each as one subagent, not inline: dispatch ONE subagent with the Agent tool, `model: sonnet` and `effort: medium`, whose prompt gives the absolute path `${CLAUDE_SKILL_DIR}/phases/<phase>.md` (tell it to read and follow that file), the four resolved paths and the arguments, then relay its result to the author. Every other phase runs inline.
+
+A subagent cannot talk to the author, so collect every answer here first and tell the subagent not to ask anything:
+
+- `research`: if the arguments hold no question and `.academic-helper/author-intent.json` does not exist, ask the author in this conversation what they want to find out, then put it in the subagent prompt as `Question: <answer>`.
+- `proofread`: when the file is a Word document (`.docx`), run `command -v pandoc` here. If it is missing, explain in one sentence that pandoc is a free converter that reads Word files and ask with AskUserQuestion ("Install pandoc now?" — "Yes, install it" / "Skip — I'll give you a .md or .txt file instead"). On yes, install it here as `phases/proofread.md` says and put `Pandoc: installed` in the subagent prompt; on skip, do not dispatch: ask the author for a .md or .txt file instead.
+
+If the subagent still returns `NEEDS INPUT: <question>` (something it could not decide alone), ask the author that question here, then dispatch it again with the same prompt plus the answer. Relay only a finished result.
 
 ## Before `new` (short form, full text in `phases/new.md`)
 
