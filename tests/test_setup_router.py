@@ -112,3 +112,13 @@ def test_routing_steps_decision_order():
     assert "single bare word" in s[2] and "print the table and stop" in s[2]
     assert "first word is not a phase" in s[3] and "infer" in s[3] and "ask the author" in s[3]
     assert s[4].startswith("5. Read exactly one file")
+
+
+def test_update_field_collects_the_answer_in_the_parent_and_verifies():
+    _, body = _parts()
+    light = body.split("## Light phases", 1)[1].split("## Phases that were", 1)[0]
+    assert "cannot talk to the author" in light
+    assert "New field: <answer>" in light and "not to ask anything" in light
+    assert "fieldOfStudy:" in light and "check" in light
+    phase = (SETUP / "phases" / "update-field.md").read_text(encoding="utf-8")
+    assert "`New field: <answer>`" in phase and "do not ask anything" in phase

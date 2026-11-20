@@ -23,7 +23,7 @@ fi
 
 ## Get New Field
 
-Ask the researcher:
+If the prompt that started this phase already says `New field: <answer>`, use that answer, do not ask anything, and go on to "Update Profile". Otherwise ask the researcher:
 > "What's your new field of study and area of specialization?"
 >
 > (Current: `$CURRENT_FIELD`)

@@ -46,7 +46,9 @@ When a phase shows a shell command, replace those four names with the values abo
 
 ## Light phases
 
-`update-field` and `help` ran on a small, fast model before. Run each as one subagent, not inline: dispatch ONE subagent with the Agent tool, `model: haiku` (add `effort: low` for `update-field`), whose prompt gives the absolute path `${CLAUDE_SKILL_DIR}/phases/<phase>.md` (tell it to read and follow that file) and the arguments, then relay its result to the author. Every other phase runs inline.
+`update-field` and `help` ran on a small, fast model before. Run each as one subagent, not inline: dispatch ONE subagent with the Agent tool, `model: haiku` (add `effort: low` for `update-field`), whose prompt gives the absolute path `${CLAUDE_SKILL_DIR}/phases/<phase>.md` (tell it to read and follow that file), the four resolved paths and the arguments, then relay its result to the author. Every other phase runs inline.
+
+A subagent cannot talk to the author, so collect every answer here first. For `update-field`: ask the author for the new field of study in this conversation (if the arguments after the phase already hold it, use that), confirm it back in one line, then put it in the subagent prompt as `New field: <answer>` and tell it not to ask anything. When it returns, read `.academic-helper/profile.md` yourself and check that `fieldOfStudy:` holds the new field; if it does not, say so and fix it rather than relaying a success.
 
 ## Phases that were by name only
 
