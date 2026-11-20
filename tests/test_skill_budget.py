@@ -285,6 +285,37 @@ def test_reads_lists_only_read_tool_calls(run):
     assert r.stdout.split("\n")[:-1] == ["/a/one.md", "/b/two.md"]
 
 
+def _bash_stream(*cmds):
+    events = [json.dumps({"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Bash", "input": {"command": c}}]}}) for c in cmds]
+    events.append(json.dumps({"type": "result", "subtype": "success", "result": "x"}))
+    return "\n".join(events) + "\n"
+
+
+def test_reads_bash_cat_with_echo_separator(run):
+    r = run("reads", stdin=_bash_stream("cat /abs/p/phases/proof.md; echo ---; ls"))
+    assert r.returncode == 0 and r.stdout.split("\n")[:-1] == ["/abs/p/phases/proof.md"]
+
+
+def test_reads_bash_sed_n(run):
+    r = run("reads", stdin=_bash_stream("sed -n '1,40p' /abs/p/phases/x.md"))
+    assert r.stdout.split("\n")[:-1] == ["/abs/p/phases/x.md"]
+
+
+def test_reads_bash_ls_not_counted(run):
+    r = run("reads", stdin=_bash_stream("ls /abs/p/phases/x.md", "ls -la /abs/p && echo done"))
+    assert r.returncode == 0 and r.stdout == ""
+
+
+def test_reads_read_and_bash_keep_order(run):
+    lines = [json.dumps({"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Read", "input": {"file_path": "/a/one.md"}},
+        {"type": "tool_use", "name": "Bash", "input": {"command": "head -20 /b/two.md | tail -5"}}]}}),
+        json.dumps({"type": "result", "subtype": "success", "result": "x"})]
+    r = run("reads", stdin="\n".join(lines) + "\n")
+    assert r.stdout.split("\n")[:-1] == ["/a/one.md", "/b/two.md"]
+
+
 def test_reads_require_success_exits_2_on_error_stream(run):
     assert run("reads", "--require-success", stdin=_stream("error_max_turns")).returncode == 2
     assert run("reads", "--require-success", stdin="garbage\n").returncode == 2

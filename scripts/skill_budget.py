@@ -15,6 +15,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import sys
 
 MAX_SKILL_LINES = 150
@@ -523,6 +524,28 @@ def _events(stream):
             yield ev
 
 
+_READERS = ("cat", "head", "tail", "sed", "less")
+_PATH_TOKEN = re.compile(r"^(?:~|\.{0,2}/)?[\w@%+=:,.~/-]*[\w-]\.[A-Za-z0-9]{1,8}$")
+
+
+def bash_read_paths(command):
+    """File paths that a Bash command reads with cat, head, tail, sed -n or less."""
+    out = []
+    for seg in re.split(r"&&|\|\||[;|\n]", command):
+        try:
+            words = shlex.split(seg)
+        except ValueError:
+            words = seg.split()
+        if not words or words[0] not in _READERS:
+            continue
+        if words[0] == "sed" and "-n" not in words[1:]:
+            continue
+        for w in words[1:]:
+            if not w.startswith("-") and "/" in w and _PATH_TOKEN.match(w):
+                out.append(w)
+    return out
+
+
 def stream_reads(stream):
     out = []
     for ev in _events(stream):
@@ -538,6 +561,11 @@ def stream_reads(stream):
                 fp = inp.get("file_path") if isinstance(inp, dict) else None
                 if fp:
                     out.append(fp)
+            elif isinstance(c, dict) and c.get("type") == "tool_use" and c.get("name") == "Bash":
+                inp = c.get("input")
+                cmd = inp.get("command") if isinstance(inp, dict) else None
+                if isinstance(cmd, str):
+                    out.extend(bash_read_paths(cmd))
     return out
 
 
