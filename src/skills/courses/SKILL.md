@@ -19,13 +19,24 @@ This skill is a router. Pick one phase, read its file, and follow it. Load one p
 | `dashboard` | Open the local course dashboard: what is due next, whether readings are ready, what is new, a week agenda and a page per course | `phases/dashboard.md` |
 | `lesson-notes` | Turn a course recording's NotebookLM transcript into a structured Hebrew Trove lesson note; `--pending` resumes queued transcripts | `phases/lesson-notes.md` |
 
+## Resolved paths
+
+These values are filled in when this skill loads. A phase file's own `${CLAUDE_SKILL_DIR}`, `${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}` and `$CLAUDE_PROJECT_DIR` are NOT filled in, and the shell may not define them.
+
+- Skill directory: `${CLAUDE_SKILL_DIR}`
+- Plugin root: `${CLAUDE_PLUGIN_ROOT}`
+- Plugin data: `${CLAUDE_PLUGIN_DATA}`
+- Project directory: the session's working directory (run `pwd` once to get it)
+
+When a phase shows a shell command, replace those four names with the values above before running it (or `export` them in the same command). When you dispatch a subagent, give it these four values in the prompt.
+
 ## How to run
 
 1. If the first word of the arguments is a phase in the table, that is the phase. Everything after it is the phase's arguments. This rule wins over every rule below.
 2. No arguments at all (a bare `/academic-writer:courses`): run `term`, always, without asking or inferring.
 3. The arguments start with a word that is not a phase and name one of the term's own steps (`extract-handoff`, `trove-notes`, `calendar-sync`, `validate`): run `term` with all the arguments.
 4. Anything else is a request in the student's words: infer the phase from the request (seeing courses at a glance is `dashboard`, a recording or transcript is `lesson-notes`, anything else is `term`). If two phases fit, ask the student which one. Do not guess.
-5. Read exactly one file, `${CLAUDE_SKILL_DIR}/phases/<phase>.md`, and follow it as if it were this skill's body. The one exception: when that phase names a sibling phase file of this router to continue with, read that file too, only at that point. The paths inside it that start with `${CLAUDE_SKILL_DIR}` or `${CLAUDE_PLUGIN_ROOT}` are already correct.
+5. Read exactly one file, `${CLAUDE_SKILL_DIR}/phases/<phase>.md`, and follow it as if it were this skill's body. The one exception: when that phase names a sibling phase file of this router to continue with, read that file too, only at that point. A phase file is read as plain text, so the `${...}` variables inside it are not filled in for you: use the values under "Resolved paths" below.
 
 ## Shared by the phases
 
