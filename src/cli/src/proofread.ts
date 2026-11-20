@@ -173,7 +173,7 @@ async function proofreadRun(options: RunProofreadOptions): Promise<ProofreadResu
   stepEnd('verify');
   const statusMap = new Map(verified.flat().map((change) => [change.id, change]));
   const all: Change[] = [...deterministic.map((change) => ({ ...change, status: change.status ?? (change.after === null ? 'flag' : change.mustCatch === false ? 'suggestion' : 'must-catch'), applied: change.after !== null && change.mustCatch !== false })), ...candidates.map((change) => statusMap.get(change.id) ?? { ...change, status: 'unverified' })];
-  const editorialChecksPath = join(root, 'skills', 'proofread', 'references', 'editorial-checks.md');
+  const editorialChecksPath = join(root, 'skills', 'write', 'references', 'editorial-checks.md');
   const editorialChecks = article && existsSync(editorialChecksPath) ? readFileSync(editorialChecksPath, 'utf8') : '';
   stepStart('memo');
   // The editorial memo is its own pass: --only mechanical|language skips it (it was always billed).

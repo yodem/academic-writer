@@ -8,7 +8,7 @@ What happens, in code, between installing the plugin and the first `.docx`. For 
 
 | Piece | Where | Role |
 |---|---|---|
-| Skills | `src/skills/<name>/SKILL.md` | The conversation. User-invocable skills become `/academic-writer:<name>` commands; `learn`, `present`, `update-field` and `update-tools` are `user-invocable: false` and are reached by plain-language requests. |
+| Skills | `src/skills/<name>/SKILL.md` | The conversation. User-invocable skills become `/academic-writer:<name>` commands; `learn`, `update-field` and `update-tools` are `user-invocable: false` and are reached by plain-language requests. The `write` skill is a phase router: `/academic-writer:write <phase>` reads one file from `src/skills/write/phases/` (`present` is one of its phases). |
 | `aw` CLI | `src/cli/src/*.ts`, shipped as `plugins/academic-writer/bin/aw` | Every model call and deterministic step, invoked from Bash. All model steps route to Gemini (`thresholds.json > models`) and need `GOOGLE_API_KEY`. |
 | Agents | `src/agents/architect.md`, `src/agents/auditor.md` | `architect` writes the outline; `auditor` is the citation hard gate. No other agents ship. |
 | Hooks | `src/hooks/hooks.json`, `src/hooks/src/lifecycle/*.ts` | Profile-scoped: each one is a no-op in a project without `.academic-helper/profile.md`. |
@@ -51,18 +51,18 @@ Other hooks: `SubagentStart` → `subagent-start` (adds the citation-verificatio
 | 4 Tools | For each missing item: one-sentence explanation, `AskUserQuestion`, install only on "Install", re-detect. `python3 -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema`; `brew install hspell` (Hebrew, macOS); `curl -fsSL https://heytrove.ai/install.sh | sh`; `npm install -g notebooklm-mcp-cli`. Python and Homebrew get per-OS steps for the researcher; sign-ins (`! trove login`, `! nlm login`) are typed by the researcher. | none |
 | 5 Gemini | Explains the key and the data flow, asks. Storage: plugin settings (`/plugin` → Installed → academic-writer → Configure → `google_api_key`, OS keychain) or a shell/user environment variable. Then restart. 5f runs `aw models check` (no network) and a `curl` to the Gemini models list with the key in the `x-goog-api-key` header (never printed, no article text). | `## Gemini` block |
 | 6 Sample | 2 to 4 sentences written by Claude in the researcher's register. | none |
-| 7–8 | Summary table; offers `/academic-writer:intro`, `/academic-writer:write`, `/academic-writer:init`. | profile |
+| 7–8 | Summary table; offers `/academic-writer:setup intro`, `/academic-writer:write`, `/academic-writer:setup init`. | profile |
 
 Reference files: `src/skills/setup/references/{dependencies,python-deps,gemini-key,troubleshooting}.md`.
 
 ---
 
-## `/academic-writer:init` (`src/skills/init/SKILL.md`)
+## `/academic-writer:setup init` (`src/skills/init/SKILL.md`)
 
 `disable-model-invocation: true`. Phases: 0 Preflight (incl. the Python add-ons check) → 1 Integration detection (Trove, NotebookLM) → 2 Profile (full name and `author_key`, field, language, citation style, abstract languages, writing style) → 3.5 Gemini onboarding (same reference as setup) → 3 Research sources (Trove, shelf-scoped) → 4 Save profile.
 
 - Style analysis: `extract-style-metrics.py` for computed metrics, then a qualitative pass; the researcher confirms the fingerprint before it is saved (`references/style-analysis.md`).
-- Voice: reuses `${CLAUDE_PLUGIN_DATA}/voice/` when its `author_key` matches; otherwise runs `/academic-writer:voice`.
+- Voice: reuses `${CLAUDE_PLUGIN_DATA}/voice/` when its `author_key` matches; otherwise runs `/academic-writer:setup voice`.
 - `--quick` runs phases 0, 1, 2 and 3.5; style analysis becomes narrative-only, and sources are saved as `[]`.
 - Profile format: YAML frontmatter (`name`, `author_key`, `fieldOfStudy`, `citationStyle`, `targetLanguage`, `abstractLanguages`, `analyzedArticles`, `createdAt`, `updatedAt`) plus `## Tools`, `## Output Format Preferences`, `## Style Fingerprint`, `## Article Structure`, `## Sources` and `## Gemini` JSON sections. Field-by-field: `src/skills/init/references/profile-schema.md`.
 
@@ -74,10 +74,10 @@ Every `aw` call takes `--project-dir` and `--data-dir "${CLAUDE_PLUGIN_DATA}"` (
 
 ```text
 Voice gate      python3 scripts/check-voice-populated.py AUTHOR_VOICE.md
-                exit 0 → continue; exit 1 or 2 → STOP, ask for /academic-writer:voice
+                exit 0 → continue; exit 1 or 2 → STOP, ask for /academic-writer:setup voice
 Voice load      voice-sync.sh pull "${CLAUDE_PLUGIN_DATA}" "$PWD"
-Profile         cat .academic-helper/profile.md   (missing → ask for /academic-writer:init)
-Guard           articles/<slug>.md exists → hand off to /academic-writer:edit
+Profile         cat .academic-helper/profile.md   (missing → ask for /academic-writer:setup init)
+Guard           articles/<slug>.md exists → hand off to /academic-writer:write edit
 Steps 1–2       subject, language, length, optional user draft; source selection
                 (trove items list, shelf-scoped); optional NotebookLM background (never cited)
 W0 Intent       thesis in the author's words → .academic-helper/author-intent.json
@@ -95,7 +95,7 @@ W4 Audit        one auditor subagent per unit, in parallel; FAIL/PARTIAL →
 W5 Synthesize   aw synthesize: paragraph-level transition edits only, citations untouched
 W6 Output       abstract and self-review (references/write-completion.md);
                 aw docx → .academic-helper/runs/<id>/article.json → scripts/generate-docx.py
-Handoff         author comments in Word → /academic-writer:revise
+Handoff         author comments in Word → /academic-writer:write revise
 ```
 
 The auditor is the only mandatory hard gate and always runs. Nothing replaces the auditor or the author's approval.
@@ -122,11 +122,11 @@ The auditor is the only mandatory hard gate and always runs. Nothing replaces th
 |---|---|---|
 | No profile | Setup never ran in this folder, or Claude Code was started elsewhere | `/academic-writer:setup` in the research folder |
 | `missing Google API key` from `aw` | No key stored, no restart since storing it, or no profile when the session started | `/academic-writer:setup` → "Check my Gemini key"; restart in the research folder |
-| Write stops at the voice gate | `AUTHOR_VOICE.md` missing, a stub, or unreadable | `/academic-writer:voice` |
+| Write stops at the voice gate | `AUTHOR_VOICE.md` missing, a stub, or unreadable | `/academic-writer:setup voice` |
 | `gate.py outline-v2` exit 1 | An unapproved claim or an outline that does not match intent or evidence | Revise the outline or approvals, rerun the gate |
 | `aw draft` exit 2 | A unit failed a code gate | Redraft that unit with a feedback file (counts as a rewrite cycle) |
 | Paragraph tagged `[NEEDS REVIEW]` | Still failed the audit after `rewriteCycles.max` attempts | Check it by hand; named in the W6 report |
 | Missing Python package | Add-ons not installed | `/academic-writer:setup`, or the pip line above |
 | Trove not signed in | CLI installed, no login | `! trove login` |
 
-`/academic-writer:health` checks the profile, key, tools and sources and prints a fix line for each.
+`/academic-writer:setup health` checks the profile, key, tools and sources and prints a fix line for each.

@@ -4,7 +4,7 @@ src/scripts/apply-changes.py honours it to disambiguate which instance to
 touch instead of reporting skipReason="ambiguous-match" (the previous
 behaviour, still exercised here as the "absent" fallback).
 
-Schema contract: src/skills/proofread/references/changes-schema.json
+Schema contract: src/skills/write/references/changes-schema.json
 `$defs.change.properties.occurrence`.
 
 Owns only this test file plus the `occurrence` handling inside

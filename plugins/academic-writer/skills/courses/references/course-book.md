@@ -1,7 +1,7 @@
 # The course book
 
 Each course has one plain Trove book (the course JSON's `book_id`), and no manuscript. Course books are read and
-written only by `/academic-writer:courses` and `/academic-writer:lesson-notes`, through the registry's `book_id`;
+written only by `/academic-writer:courses` and `/academic-writer:courses lesson-notes`, through the registry's `book_id`;
 other sessions are not told about them. These are the rules every write follows.
 
 ## Layout
@@ -11,7 +11,7 @@ other sessions are not told about them. These are the rules every write follows.
   lines that `tools/book_audit.py` checks: `תיקיית Drive: <link>`, `מחברת NotebookLM: <id>` and
   `למדה: מזהה <id>` (or `למדה: אין` when the course has no Lemida id).
 - **`תמלולי שיעורים`:** the lesson entry page, which explains the course. Each lesson page
-  (`שיעור NN · <date>`, written by `/academic-writer:lesson-notes`) sits under it in the sidebar.
+  (`שיעור NN · <date>`, written by `/academic-writer:courses lesson-notes`) sits under it in the sidebar.
 - **`Course · Changelog`:** dated entries (new uploads, assignment deadlines, changes), newest first. Never delete
   an earlier entry.
 - **`חומרי קריאה`:** the list of readings and where each one sits in the book. One chapter per unit or lesson,
@@ -40,7 +40,7 @@ its ToC title and a real hint after it.
 Every downloaded source or reading is turned into text by the nightly run (`refs.py extract-enqueue`, user rule
 2026-11-09); the student can also ask on the dashboard ("חילוץ טקסט"; see `../SKILL.md`, "Extract on request"). `auto` reads a docx with python-docx (or pandoc) and a PDF
 text layer with pymupdf per page, keeping printed page numbers (never `pdftotext` on Hebrew); a scan is read with Claude
-vision. Gemini OCR (`/academic-writer:ocr`) and Tesseract run only when the student chose them for that item. Google Docs are
+vision. Gemini OCR (`/academic-writer:library ocr`) and Tesseract run only when the student chose them for that item. Google Docs are
 exported natively.
 
 ## Creating a book for a new course

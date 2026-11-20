@@ -12,14 +12,14 @@ Contents:
 - [Preparing books for PageIndex](#preparing-books-for-pageindex): [at ingest](#when-you-add-a-book-ingest-writes-to-both), [backfill](#books-you-already-have-backfill)
 - [Where the log lives, and what it records](#where-the-log-lives-and-what-it-records)
 - [Reading `aw library report`](#reading-aw-library-report)
-- [Blind evaluation: `/academic-writer:library-eval`](#blind-evaluation-academic-writerlibrary-eval)
+- [Blind evaluation: `/academic-writer:library library-eval`](#blind-evaluation-academic-writerlibrary-library-eval)
 - [Known limits and accepted risks](#known-limits-and-accepted-risks)
 
 ---
 
 ## The three choices
 
-Setup (`/academic-writer:init`) and `/academic-writer:update-tools` ask which library this article project should use. The answer is saved for that project only, in `.academic-helper/library.json`.
+Setup (`/academic-writer:setup init`) and `/academic-writer:setup update-tools` ask which library this article project should use. The answer is saved for that project only, in `.academic-helper/library.json`.
 
 | Choice | What it means |
 |---|---|
@@ -27,7 +27,7 @@ Setup (`/academic-writer:init`) and `/academic-writer:update-tools` ask which li
 | **PageIndex** | Your books are read from a PageIndex library instead. PageIndex is optional: it is a second library with a short outline of every book, which the plugin can install for you or reach through a command of your own. |
 | **Both** | One library answers, and the other is tested quietly in the background on the same request. You choose which one answers; Trove is the usual choice. |
 
-You can change the choice later with `/academic-writer:update-tools`. The choice is per article project, so one article can use PageIndex while another stays on Trove.
+You can change the choice later with `/academic-writer:setup update-tools`. The choice is per article project, so one article can use PageIndex while another stays on Trove.
 
 ### What "tested quietly in the background" does
 
@@ -58,8 +58,8 @@ Reading the library, and the quiet background test, send nothing to any AI servi
 | What | Where it goes | When | You can say no |
 |---|---|---|---|
 | **Gemini section summaries for PageIndex.** To prepare a book, the built-in helper asks Gemini for a short summary of each section. **The book's text (the pages of each section) is sent to Google.** | Google, with your own Gemini key | Only when you prepare a book and choose Gemini summaries. Setup, ingest and backfill show the number of calls and the amount of text and ask first. | Yes. Choose the free option `--summaries hints`: it sends nothing and writes each outline entry from the hint already stored for Trove. |
-| **Locating the pages for a blind evaluation.** A separate Claude Code (or Codex) helper reads claims from your draft and the pages it finds in each library. | Anthropic (Claude), or OpenAI if you choose Codex, on your own plan | Only when you run `/academic-writer:library-eval` and say yes to the estimate. | Yes. |
-| **OCR of scanned pages with Gemini.** (Unchanged.) | Google | Only when you run `/academic-writer:ocr` with the Gemini engine. | Yes. Choose Claude, Codex or local Tesseract instead. |
+| **Locating the pages for a blind evaluation.** A separate Claude Code (or Codex) helper reads claims from your draft and the pages it finds in each library. | Anthropic (Claude), or OpenAI if you choose Codex, on your own plan | Only when you run `/academic-writer:library library-eval` and say yes to the estimate. | Yes. |
+| **OCR of scanned pages with Gemini.** (Unchanged.) | Google | Only when you run `/academic-writer:library ocr` with the Gemini engine. | Yes. Choose Claude, Codex or local Tesseract instead. |
 
 On Google's free tier, Google may use what you send to improve its products. Check Google's current terms, and consider a paid key for unpublished or sensitive work.
 
@@ -76,7 +76,7 @@ What is **not** sent anywhere:
 
 PageIndex gives each book a short outline (a "tree") with a summary per section, so Claude can go straight to the likely page. It is optional. You have two ways to get it, and Trove stays your main library either way.
 
-Both ways are offered, in plain words and with a yes/no for each step, by `/academic-writer:setup`, `/academic-writer:init` and `/academic-writer:update-tools`. The commands below are what those skills run for you. In a terminal you can run them yourself from your research folder; `aw` is the plugin's own command-line tool, found at `${CLAUDE_PLUGIN_ROOT}/bin/aw` inside Claude Code sessions.
+Both ways are offered, in plain words and with a yes/no for each step, by `/academic-writer:setup`, `/academic-writer:setup init` and `/academic-writer:setup update-tools`. The commands below are what those skills run for you. In a terminal you can run them yourself from your research folder; `aw` is the plugin's own command-line tool, found at `${CLAUDE_PLUGIN_ROOT}/bin/aw` inside Claude Code sessions.
 
 ### Option A: the built-in helper
 
@@ -84,7 +84,7 @@ The plugin installs a small Python program (`pilib`) and its packages into a pri
 
 | Level | What it gives you | Needs | Size |
 |---|---|---|---|
-| **Basic** (`core`) | Prepares books that have a table of contents (every book uploaded with `/academic-writer:ingest-book`), with Gemini summaries or the free hints. | Python 3.9 or newer | about 100 MB |
+| **Basic** (`core`) | Prepares books that have a table of contents (every book uploaded with `/academic-writer:library ingest-book`), with Gemini summaries or the free hints. | Python 3.9 or newer | about 100 MB |
 | **Full** (`structure`) | Also prepares a book that has **no** table of contents, by letting PageIndex and Gemini find its structure. | Python 3.10 or newer, and on a Mac the `pango` system library (`brew install pango`) | about 500 MB |
 
 If your Python is 3.9, or the full level cannot start (for example `pango` is missing), the install ends as the basic helper and says why. The plugin never installs Python or `pango` for you; setup shows numbered steps and asks first. The sizes are rough figures quoted before the install, not measurements.
@@ -120,7 +120,7 @@ If you (or someone you work with) already run a PageIndex library, for example o
    - a program on your computer's path, for example `pilib`;
    - the full path to a small script that reaches your library for you, for example `/path/to/pilib-wrapper`.
 3. Start a new Claude Code session (the setting is picked up at the start of a session).
-4. Run `/academic-writer:update-tools` in your research folder and choose **PageIndex** or **Both**.
+4. Run `/academic-writer:setup update-tools` in your research folder and choose **PageIndex** or **Both**.
 
 Notes:
 
@@ -138,7 +138,7 @@ Notes:
 ```
 
   `shelf` is optional. It is a small file in your research folder that lists which PageIndex books correspond to which Trove books, so a book is looked up under the right name. Books prepared by `aw library index` are stored under the Trove id and need no shelf entry. Set `"route": "trove"` to go back to Trove only, or add `"shadow": { "enabled": false }` to keep **Both** but stop the background test.
-- If `aw library status` says PageIndex is not reachable, `/academic-writer:health` and the troubleshooting list in `/academic-writer:setup` have the matching steps.
+- If `aw library status` says PageIndex is not reachable, `/academic-writer:setup health` and the troubleshooting list in `/academic-writer:setup` have the matching steps.
 
 ### Which command runs
 
@@ -168,7 +168,7 @@ Each run:
 
 ### When you add a book: ingest writes to both
 
-`/academic-writer:ingest` and `/academic-writer:ingest-book` always write to Trove first and read it back. If a PageIndex helper is ready (`aw library status --check` shows `pilib.index_trove: true`), they then offer to prepare the same text for PageIndex, show the plan, and ask you to choose: **Gemini summaries**, **free hints (nothing sent to Google)**, or **not now**. A failure here never undoes the Trove upload; it is reported and can be repeated.
+`/academic-writer:library ingest` and `/academic-writer:library ingest-book` always write to Trove first and read it back. If a PageIndex helper is ready (`aw library status --check` shows `pilib.index_trove: true`), they then offer to prepare the same text for PageIndex, show the plan, and ask you to choose: **Gemini summaries**, **free hints (nothing sent to Google)**, or **not now**. A failure here never undoes the Trove upload; it is reported and can be repeated.
 
 The same skills can also **add a reading to a book you already have**: the new pages are appended, every old page, hint and level stays, and a merged table of contents is applied last and read back. Then PageIndex is prepared again for that book, reusing the summaries already paid for.
 
@@ -286,7 +286,7 @@ Time is the wall-clock time the plugin measured. Cost is shown only when the too
 
 ---
 
-## Blind evaluation: `/academic-writer:library-eval`
+## Blind evaluation: `/academic-writer:library library-eval`
 
 The report above compares libraries from your day-to-day lookups. The blind evaluation answers a sharper question on your own sources: **for the claims in this article, which library finds the better pages?** You judge real results without knowing which library produced which.
 

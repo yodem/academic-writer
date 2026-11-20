@@ -23,7 +23,7 @@
 # text, c4 reads text layers with python and c5 reads scans with Claude vision and places each source in Trove.
 # The watch (c) also reads Lemida's upcoming events (a dated chore each), marks the notifications read once every one
 # was opened, and writes course-page notes to queue/trove-notes/.
-#   d. queued lesson jobs          /academic-writer:lesson-notes --pending
+#   d. queued lesson jobs          /academic-writer:courses lesson-notes --pending
 #   d2. claude -p trove-notes      /academic-writer:courses trove-notes   (only when queue/trove-notes/*.json exist)
 #   e. tools/toc_audit.py --all    failure -> a manual chore (the job is not failed by it)
 #   e2. calendar                   calendar-pending.py list; Chrome running -> claude -p --chrome /academic-writer:courses calendar-sync
@@ -265,8 +265,8 @@ run_job() {
     echo "no queued lessons"
   else
     echo "queued lessons: ${#JOBS[@]}"
-    if ! dry_plan "printf '%s' '/academic-writer:lesson-notes --pending' | claude -p --model sonnet --plugin-dir $REPO/plugins/academic-writer --allowedTools \"$LESSON_TOOLS\""; then
-      printf '%s' "/academic-writer:lesson-notes --pending" | claude -p --model sonnet \
+    if ! dry_plan "printf '%s' '/academic-writer:courses lesson-notes --pending' | claude -p --model sonnet --plugin-dir $REPO/plugins/academic-writer --allowedTools \"$LESSON_TOOLS\""; then
+      printf '%s' "/academic-writer:courses lesson-notes --pending" | claude -p --model sonnet \
         --plugin-dir "$REPO/plugins/academic-writer" --allowedTools "$LESSON_TOOLS"
       rc=$?
       echo "-- lesson-notes exit=$rc $(stamp)"

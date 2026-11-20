@@ -6,7 +6,7 @@
 write-proof-report.py
 
 Renders `<name>.proofread.md` for the proofread pipeline (today's
-src/skills/proofread/SKILL.md Step 6 shape, generalized to the 3-stage
+src/skills/write/phases/proofread.md Step 6 shape, generalized to the 3-stage
 editorial/language/mechanical pipeline in the v0.7.0 plan of record).
 
 The report has four parts, in order:

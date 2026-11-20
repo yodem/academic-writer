@@ -153,6 +153,14 @@ jobs:
       - name: Gate — dashboard end-to-end suite
         run: npm run test:e2e
 
+      - name: Upload e2e results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: test-results/
+          retention-days: 3
+
   # A Windows newcomer's first minutes: the plugin's shell shims run under Git Bash (the shell Claude Code uses
   # on Windows when Git for Windows is installed; https://code.claude.com/docs/en/hooks). Checks the Python
   # resolver, the setup checks, and the hook guard on a machine where Node.js is not on PATH.

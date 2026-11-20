@@ -2,8 +2,8 @@
 # Created: 2026-09-02
 
 """Coverage for src/scripts/apply-changes.py, the deterministic change-
-applier for the proofread pipeline (src/skills/proofread/SKILL.md Step 5).
-Schema contract: src/skills/proofread/references/changes-schema.json. See
+applier for the proofread pipeline (src/skills/write/phases/proofread.md Step 5).
+Schema contract: src/skills/write/references/changes-schema.json. See
 the 0.7.0 plan of record (local, not committed to this repo) Phase 1.3 for the
 script inventory this belongs to, and the Phase 0 RESULT / Research digest
 Q4 sections for the measured findings (bottom-to-top ordering, NFC

@@ -44,7 +44,7 @@ export const S5: React.FC<{dur: number}> = ({dur}) => {
       </div>
       {/* confirmation */}
       <div style={{position: 'absolute', left: 1345, top: 170, width: 330, opacity: done, transform: `translateY(${(1 - done) * 14}px)`}}>
-        <div style={{fontFamily: mono, fontSize: 21, color: C.ink2, marginBottom: 14}}>/academic-writer:revise</div>
+        <div style={{fontFamily: mono, fontSize: 21, color: C.ink2, marginBottom: 14}}>/academic-writer:write revise</div>
         <div style={{background: C.verifiedSoft, border: `1px solid ${C.verified}`, borderRadius: 10, padding: '22px 24px', color: C.verifiedText, fontSize: 28, lineHeight: 1.3, fontWeight: 500, boxShadow: shadow}}>
           <svg width="30" height="30" viewBox="0 0 16 16" fill="none" stroke={C.verified} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display: 'block', marginBottom: 10}}><path d="M3 8.5l3.2 3L13 4.5" /></svg>
           3 changes confirmed — new draft saved

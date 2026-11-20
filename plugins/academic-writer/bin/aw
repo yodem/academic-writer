@@ -41928,7 +41928,7 @@ ${JSON.stringify(changes)}`, schema: verifySchema, runId: options.runId, finderP
   stepEnd("verify");
   const statusMap = new Map(verified.flat().map((change) => [change.id, change]));
   const all = [...deterministic.map((change) => ({ ...change, status: change.status ?? (change.after === null ? "flag" : change.mustCatch === false ? "suggestion" : "must-catch"), applied: change.after !== null && change.mustCatch !== false })), ...candidates2.map((change) => statusMap.get(change.id) ?? { ...change, status: "unverified" })];
-  const editorialChecksPath = join4(root, "skills", "proofread", "references", "editorial-checks.md");
+  const editorialChecksPath = join4(root, "skills", "write", "references", "editorial-checks.md");
   const editorialChecks = article && existsSync3(editorialChecksPath) ? readFileSync3(editorialChecksPath, "utf8") : "";
   stepStart("memo");
   const memo = options.only && options.only !== "editorial" ? "" : stubs.memo ? await stubs.memo() : (await callGemini({ step: "proofread.memo", system: prompt("proofread-memo.md"), parts: [`Global editorial checks (always apply):
@@ -48110,7 +48110,7 @@ function paragraphs(text4) {
 }
 async function voiceBundle(options) {
   const dir = store();
-  if (!existsSync8(join12(dir, "profile.json"))) throw new AwError("ERROR", "voice.bundle", "exit 3 no voice store \u2014 run: aw voice pull (or /academic-writer:voice)");
+  if (!existsSync8(join12(dir, "profile.json"))) throw new AwError("ERROR", "voice.bundle", "exit 3 no voice store \u2014 run: aw voice pull (or /academic-writer:setup voice)");
   const all = readJsonl(join12(dir, "exemplars.jsonl"));
   const chosen = [];
   const sources = /* @__PURE__ */ new Set();
@@ -52723,7 +52723,7 @@ async function runEvalCli(argv, io) {
     }
     if (subcommand2 === "page") {
       const pairs2 = await readValid("pairs", paths.pairs, "pairs");
-      const template = text3(flags, "--template") ?? (env.CLAUDE_PLUGIN_ROOT ? join24(env.CLAUDE_PLUGIN_ROOT, "skills", "library-eval", "references", "judge-page.html") : null);
+      const template = text3(flags, "--template") ?? (env.CLAUDE_PLUGIN_ROOT ? join24(env.CLAUDE_PLUGIN_ROOT, "skills", "library", "references", "judge-page.html") : null);
       if (!template || !existsSync20(template)) throw new LibraryError("config", "ERROR library eval page: no judging page template found; pass --template <file>");
       const html = await readFile7(template, "utf8");
       const slot = /(<script\b[^>]*\bid=["']pairs["'][^>]*>)([\s\S]*?)(<\/script>)/iu;

@@ -2,13 +2,15 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-SKILL = ROOT / "src" / "skills" / "voice" / "SKILL.md"
+ROUTER = ROOT / "src" / "skills" / "setup" / "SKILL.md"
+SKILL = ROOT / "src" / "skills" / "setup" / "phases" / "voice.md"
 
 def test_skill_frontmatter_and_store_workflow():
     text = SKILL.read_text()
-    fm = yaml.safe_load(text.split("---")[1])
-    assert fm["name"] == "voice"
+    fm = yaml.safe_load(ROUTER.read_text().split("---")[1])
+    assert fm["name"] == "setup"
     assert "Use when" in fm["description"]
+    assert not (ROOT / "src" / "skills" / "voice").exists()
     assert "${CLAUDE_PLUGIN_DATA}" in text
     for action in ("migrate", "exemplars", "moves", "push", "pull"):
         assert f"voice {action}" in text

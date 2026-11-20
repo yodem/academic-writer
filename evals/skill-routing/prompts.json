@@ -1,0 +1,56 @@
+{
+  "description": "Routing eval: each prompt should select the named router skill and its phase. Pass target 9 of 10.",
+  "target": 9,
+  "cases": [
+    {
+      "prompt": "Upload this single journal article to my Trove library with its printed page numbers",
+      "skill": "library",
+      "phase": "ingest"
+    },
+    {
+      "prompt": "I have a 600-page scanned two-volume book PDF; put it in Trove with a clickable table of contents",
+      "skill": "library",
+      "phase": "ingest-book"
+    },
+    {
+      "prompt": "Turn this photographed page of a scan into text",
+      "skill": "library",
+      "phase": "ocr"
+    },
+    {
+      "prompt": "Download the cited pages of this Kotar book as one PDF",
+      "skill": "library",
+      "phase": "kotar-fetch"
+    },
+    {
+      "prompt": "Compare Trove and PageIndex on my own article",
+      "skill": "library",
+      "phase": "library-eval"
+    },
+    {
+      "prompt": "Set up my academic term from this schedule",
+      "skill": "courses",
+      "phase": "term"
+    },
+    {
+      "prompt": "Show me what is due this week and which readings are missing",
+      "skill": "courses",
+      "phase": "dashboard"
+    },
+    {
+      "prompt": "Turn this lecture recording into a Hebrew lesson note",
+      "skill": "courses",
+      "phase": "lesson-notes"
+    },
+    {
+      "prompt": "Start a new academic article on medieval Hebrew poetry",
+      "skill": "write",
+      "phase": "new"
+    },
+    {
+      "prompt": "Check that Academic Writer is ready to use and fix anything missing",
+      "skill": "setup",
+      "phase": "health"
+    }
+  ]
+}

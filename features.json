@@ -2,18 +2,18 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Feature inventory for the academic-writer plugin. A checklist for future audits: each top-level feature lists its subfeatures, the source of truth, runtime status, and known issues. status: ok | partial | broken | missing. Regenerate/extend this file whenever features are added or removed.",
   "generatedAt": "2026-10-01T00:00:00Z",
-  "pluginVersion": "0.23.1",
+  "pluginVersion": "0.24.0",
   "features": [
     {
       "id": "onboarding",
       "name": "Onboarding / profile setup",
       "sources": [
-        "src/skills/init/SKILL.md",
-        "src/skills/setup/SKILL.md",
+        "src/skills/setup/phases/init.md",
+        "src/skills/setup/phases/setup.md",
         "src/skills/setup/references/gemini-key.md",
         "src/skills/setup/references/dependencies.md",
-        "src/skills/init/references/profile-schema.md",
-        "src/skills/init/references/integration-setup.md"
+        "src/skills/setup/references/profile-schema.md",
+        "src/skills/setup/references/integration-setup.md"
       ],
       "status": "ok",
       "subfeatures": [
@@ -65,9 +65,9 @@
       "id": "voice",
       "name": "Voice subsystem (one shared author voice store)",
       "sources": [
-        "src/skills/voice/SKILL.md",
-        "src/skills/voice/voice-sync.sh",
-        "src/skills/voice/voice-migrate.sh",
+        "src/skills/setup/phases/voice.md",
+        "src/skills/setup/voice-sync.sh",
+        "src/skills/setup/voice-migrate.sh",
         "src/cli/src/voice.ts",
         "src/scripts/check-voice-populated.py",
         "src/hooks/src/lifecycle/voice-pull.ts"
@@ -114,7 +114,7 @@
           "id": "write-voice-gate",
           "name": "write stops unless check-voice-populated.py passes on AUTHOR_VOICE.md",
           "status": "partial",
-          "notes": "unverified — needs an owner to confirm: the write gate checks a project-root AUTHOR_VOICE.md, while the voice skill writes its store to ${CLAUDE_PLUGIN_DATA}/voice and voiceMigrate reads AUTHOR_VOICE.md as input; it is not confirmed that a first-time author with no AUTHOR_VOICE.md can pass the gate by running /academic-writer:voice.",
+          "notes": "unverified — needs an owner to confirm: the write gate checks a project-root AUTHOR_VOICE.md, while the voice skill writes its store to ${CLAUDE_PLUGIN_DATA}/voice and voiceMigrate reads AUTHOR_VOICE.md as input; it is not confirmed that a first-time author with no AUTHOR_VOICE.md can pass the gate by running /academic-writer:setup voice.",
           "tested": "unit"
         }
       ],
@@ -127,8 +127,8 @@
       "id": "research",
       "name": "Research / evidence gathering",
       "sources": [
-        "src/skills/research/SKILL.md",
-        "src/skills/ideate/SKILL.md",
+        "src/skills/write/phases/research.md",
+        "src/skills/write/phases/ideate.md",
         "src/cli/src/evidence.ts"
       ],
       "status": "ok",
@@ -166,11 +166,11 @@
       "id": "ingest",
       "name": "Source ingestion into Trove",
       "sources": [
-        "src/skills/ingest/SKILL.md",
-        "src/skills/ingest/references/reading-page-template.md",
-        "src/skills/ingest-book/SKILL.md",
-        "src/skills/ingest-book/references/toc-mechanism.md",
-        "src/skills/ingest-book/references/epub-sources.md",
+        "src/skills/library/phases/ingest.md",
+        "src/skills/library/references/reading-page-template.md",
+        "src/skills/library/phases/ingest-book.md",
+        "src/skills/library/references/toc-mechanism.md",
+        "src/skills/library/references/epub-sources.md",
         "src/scripts/extract_pdf.py",
         "src/scripts/build_crosswalk.py",
         "src/scripts/build_toc_enrich.py"
@@ -179,13 +179,13 @@
       "subfeatures": [
         {
           "id": "ingest-article",
-          "name": "/academic-writer:ingest — single article or chapter with printed page numbers preserved, hinted contents, page-1 reading-and-citation guide (Chicago + Hebrew + profile style), aw ocr with orientation/truncation handling, mandatory read-back",
+          "name": "/academic-writer:library ingest — single article or chapter with printed page numbers preserved, hinted contents, page-1 reading-and-citation guide (Chicago + Hebrew + profile style), aw ocr with orientation/truncation handling, mandatory read-back",
           "status": "ok",
           "tested": "manual"
         },
         {
           "id": "ingest-book",
-          "name": "/academic-writer:ingest-book — whole book/multi-volume/scanned PDF/EPUB as one book with nested navigable ToC metadata (hints on every entry), crosswalk from printed pages, mandatory read-back; repairs a flat ToC",
+          "name": "/academic-writer:library ingest-book — whole book/multi-volume/scanned PDF/EPUB as one book with nested navigable ToC metadata (hints on every entry), crosswalk from printed pages, mandatory read-back; repairs a flat ToC",
           "status": "ok",
           "tested": "manual"
         }
@@ -284,7 +284,7 @@
         },
         {
           "id": "docx-handoff",
-          "name": "generate-docx.py creates Word output; author comments and runs /academic-writer:revise",
+          "name": "generate-docx.py creates Word output; author comments and runs /academic-writer:write revise",
           "status": "ok",
           "tested": "unit"
         }
@@ -330,8 +330,8 @@
       "sources": [
         "src/cli/src/synthesize.ts",
         "src/cli/src/prompts/write-synthesize.md",
-        "src/skills/review/SKILL.md",
-        "src/skills/review/references/scorecard.json"
+        "src/skills/write/phases/review.md",
+        "src/skills/write/references/scorecard.json"
       ],
       "status": "partial",
       "subfeatures": [
@@ -361,7 +361,7 @@
           "tested": "not tested yet"
         }
       ],
-      "notes": "No automated test exercises src/skills/review/SKILL.md's scorecard logic; the synthesizer agent was replaced in 0.14.0 by aw synthesize (paragraph-level transition edits), whose coherence checks beyond transitions are unverified.",
+      "notes": "No automated test exercises src/skills/write/phases/review.md's scorecard logic; the synthesizer agent was replaced in 0.14.0 by aw synthesize (paragraph-level transition edits), whose coherence checks beyond transitions are unverified.",
       "tested": "not tested yet",
       "name_he": "חיבור וסקירה",
       "description_he": "בדיקת רצף בין חלקים, מחקר של חזרות, תקציר וציון עצמי."
@@ -450,8 +450,8 @@
       "sources": [
         "src/cli/src/edit.ts",
         "src/cli/src/ocr.ts",
-        "src/skills/edit/SKILL.md",
-        "src/skills/ocr/SKILL.md",
+        "src/skills/write/phases/edit.md",
+        "src/skills/library/phases/ocr.md",
         "scripts/build-plugins.sh"
       ],
       "status": "ok",
@@ -464,12 +464,12 @@
       "id": "editing",
       "name": "Editing / revision",
       "sources": [
-        "src/skills/edit-section/SKILL.md",
-        "src/skills/edit/SKILL.md",
-        "src/skills/proofread/SKILL.md",
-        "src/skills/proofread/references/changes-schema.json",
-        "src/skills/update-field/SKILL.md",
-        "src/skills/update-tools/SKILL.md",
+        "src/skills/write/phases/edit-section.md",
+        "src/skills/write/phases/edit.md",
+        "src/skills/write/phases/proofread.md",
+        "src/skills/write/references/changes-schema.json",
+        "src/skills/setup/phases/update-field.md",
+        "src/skills/setup/phases/update-tools.md",
         "src/cli/src/proofread.ts",
         "src/cli/src/prompts/proofread-find.md",
         "src/cli/src/prompts/proofread-verify.md",
@@ -546,7 +546,7 @@
       "id": "venues",
       "name": "Venue profiles",
       "sources": [
-        "src/skills/proofread/references/editorial-checks.md",
+        "src/skills/write/references/editorial-checks.md",
         "tests/fixtures/proofread/hebrew-recall/venue-example.md",
         "tests/test_venue_agnostic.py"
       ],
@@ -623,7 +623,7 @@
       "id": "docx-revise-loop",
       "name": "Word review loop and feedback learning",
       "sources": [
-        "src/skills/revise/SKILL.md",
+        "src/skills/write/phases/revise.md",
         "src/cli/src/revise.ts",
         "src/scripts/docx-read-review.py",
         "scripts/aw-improve-report.py"
@@ -705,7 +705,7 @@
       "id": "lesson-transcription",
       "name": "Structured lesson notes",
       "sources": [
-        "src/skills/lesson-notes/SKILL.md",
+        "src/skills/courses/phases/lesson-notes.md",
         "src/scripts/courses/courses.py",
         "tests/courses/"
       ],
@@ -732,7 +732,7 @@
       "id": "course-dashboard",
       "name": "Local course dashboard (overview, week agenda, course pages; live over SSE)",
       "sources": [
-        "src/skills/dashboard/SKILL.md",
+        "src/skills/courses/phases/dashboard.md",
         "src/scripts/courses/dashboard.py",
         "src/scripts/courses/dashboard/index.html",
         "src/scripts/courses/tasks.py",
@@ -797,8 +797,8 @@
         "src/schemas/retrieval-row.schema.json",
         "src/agents/auditor.md",
         "src/cli/src/evidence.ts",
-        "src/skills/init/references/integration-setup.md",
-        "src/skills/update-tools/SKILL.md",
+        "src/skills/setup/references/integration-setup.md",
+        "src/skills/setup/phases/update-tools.md",
         "docs/library-routes.md",
         "tests/test_library_e2e.py",
         "src/cli/src/library/install.ts",
@@ -808,11 +808,11 @@
         "src/cli/src/library/eval/",
         "src/scripts/pageindex/",
         "src/schemas/library-eval-plan.schema.json",
-        "src/skills/library-eval/SKILL.md",
-        "src/skills/library-eval/references/judge-page.html",
-        "src/skills/ingest/references/index-for-pageindex.md",
-        "src/skills/ingest/references/existing-item.md",
-        "src/skills/ocr/references/engines.md",
+        "src/skills/library/phases/library-eval.md",
+        "src/skills/library/references/judge-page.html",
+        "src/skills/library/references/index-for-pageindex.md",
+        "src/skills/library/references/existing-item.md",
+        "src/skills/library/references/engines.md",
         "src/skills/setup/references/pageindex.md",
         "tests/test_pageindex_e2e.py",
         "tests/test_pageindex_index.py",
@@ -882,7 +882,7 @@
           "id": "ocr-engines",
           "name": "OCR choice in the ocr skill: the plugin's Gemini OCR, Claude or Codex reading page images, or local Tesseract",
           "status": "partial",
-          "notes": "Only the Gemini engine (aw ocr) is code; Claude, Codex and Tesseract are written procedures in the skill (src/skills/ocr/references/engines.md) that no automated test runs.",
+          "notes": "Only the Gemini engine (aw ocr) is code; Claude, Codex and Tesseract are written procedures in the skill (src/skills/library/references/engines.md) that no automated test runs.",
           "tested": "manual"
         },
         {
@@ -893,7 +893,7 @@
         },
         {
           "id": "library-eval",
-          "name": "/academic-writer:library-eval and aw library eval plan|run|pairs|page|import|unblind|status: claims from a draft, locating agents (claude or codex) per route, anonymised A/B pairs with a sealed key, a private judging page (local file), unblinded report with win rate, interval and sign test",
+          "name": "/academic-writer:library library-eval and aw library eval plan|run|pairs|page|import|unblind|status: claims from a draft, locating agents (claude or codex) per route, anonymised A/B pairs with a sealed key, a private judging page (local file), unblinded report with win rate, interval and sign test",
           "status": "partial",
           "notes": "Tested end to end with a fake claude. Not yet run with a real claude or codex on a real article. The judging page saves to the browser and a downloaded file; the shared-store back-end for a published private page is a stub that returns null until it is wired to the artifact capability, so the claude.ai page option in the skill depends on that. The codex flags were checked only against its --help output. Blinding holds for the human judge; the locating agent can still see the structural difference between a table of contents and an outline tree.",
           "tested": "e2e"
@@ -908,7 +908,7 @@
       "id": "kotar-fetch",
       "name": "Kotar cited-pages fetch",
       "sources": [
-        "src/skills/kotar-fetch/SKILL.md",
+        "src/skills/library/phases/kotar-fetch.md",
         "src/scripts/kotar/kotar_fetch.py",
         "tests/kotar/"
       ],
@@ -975,9 +975,9 @@
     },
     {
       "id": "activity-pane",
-      "name": "Claude Code mod pane for live agent activity (/academic-writer:watch)",
+      "name": "Claude Code mod pane for live agent activity (/academic-writer:write watch)",
       "sources": [
-        "src/skills/watch/SKILL.md",
+        "src/skills/write/phases/watch.md",
         "src/mod/"
       ],
       "status": "partial",
@@ -991,7 +991,7 @@
       "name": "Setup checks script shared by health, setup and the dashboard Setup page",
       "sources": [
         "src/scripts/setup_checks.py",
-        "src/skills/health/SKILL.md"
+        "src/skills/setup/phases/health.md"
       ],
       "status": "ok",
       "tested": "e2e",

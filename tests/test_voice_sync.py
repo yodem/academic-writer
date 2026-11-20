@@ -2,7 +2,7 @@ from pathlib import Path
 import os
 
 ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = ROOT / "src" / "skills" / "voice" / "voice-sync.sh"
+SCRIPT = ROOT / "src" / "skills" / "setup" / "voice-sync.sh"
 
 def test_sync_wrapper_exists_and_is_executable():
     assert SCRIPT.is_file()

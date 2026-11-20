@@ -70,7 +70,7 @@ def make_plugin_folder(dest: pathlib.Path, aw: pathlib.Path) -> pathlib.Path:
     """A plugin folder `<dest>` around a bundled aw: bin/aw plus what aw reads next to itself.
 
     `aw` finds its own folder from `<root>/bin/aw`, then reads `<root>/scripts/pageindex` (the pilib source and
-    PINNED.json) and, for the evaluation page, `<root>/skills/library-eval/references/judge-page.html`.
+    PINNED.json) and, for the evaluation page, `<root>/skills/library/references/judge-page.html`.
     The files come from src/, never from plugins/.
     """
     dest = pathlib.Path(dest)
@@ -79,10 +79,10 @@ def make_plugin_folder(dest: pathlib.Path, aw: pathlib.Path) -> pathlib.Path:
     (dest / "bin" / "aw").chmod(0o755)
     shutil.copytree(ROOT / "src" / "scripts" / "pageindex", dest / "scripts" / "pageindex", dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    page = ROOT / "src" / "skills" / "library-eval" / "references" / "judge-page.html"
+    page = ROOT / "src" / "skills" / "library" / "references" / "judge-page.html"
     if page.exists():
-        (dest / "skills" / "library-eval" / "references").mkdir(parents=True, exist_ok=True)
-        shutil.copy2(page, dest / "skills" / "library-eval" / "references" / "judge-page.html")
+        (dest / "skills" / "library" / "references").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(page, dest / "skills" / "library" / "references" / "judge-page.html")
     return dest
 
 

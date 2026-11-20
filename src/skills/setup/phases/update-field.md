@@ -1,0 +1,76 @@
+# Academic Writer — Update Field of Study
+
+Change the `fieldOfStudy` in `.academic-helper/profile.md` without re-running the full setup. The field steers terminology and examples in later drafts, so record it in the author's own words.
+
+## Load Current Profile
+
+First, check if a profile exists and load it:
+
+```bash
+if [ -f .academic-helper/profile.md ]; then
+  CURRENT_FIELD=$(sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" -c "
+import re
+content = open('.academic-helper/profile.md', encoding='utf-8').read()
+m = re.search(r'^fieldOfStudy: (.+)$', content, re.MULTILINE)
+print(m.group(1).strip() if m else 'Not set')
+")
+  echo "Current field: $CURRENT_FIELD"
+else
+  echo "No profile found. Run /academic-writer:setup init first."
+  exit 1
+fi
+```
+
+## Get New Field
+
+If the prompt that started this phase already says `New field: <answer>`, use that answer, do not ask anything, and go on to "Update Profile". Otherwise ask the researcher:
+> "What's your new field of study and area of specialization?"
+>
+> (Current: `$CURRENT_FIELD`)
+
+Record their answer.
+
+## Update Profile
+
+Update the profile's frontmatter (the header block between the `---` lines) with the new field, keeping every other setting intact. Replace `NEW_FIELD_HERE` with the author's answer:
+
+```bash
+sh "${CLAUDE_PLUGIN_ROOT}/bin/aw-python" << 'PYTHON'
+import re, json
+from datetime import datetime
+
+PROFILE_PATH = '.academic-helper/profile.md'
+
+with open(PROFILE_PATH, encoding="utf-8") as f:
+    content = f.read()
+
+# Update fieldOfStudy and updatedAt in frontmatter
+new_field = 'NEW_FIELD_HERE'
+now = datetime.now().isoformat()
+
+# Replace fieldOfStudy in frontmatter
+if re.search(r'^fieldOfStudy: .+$', content, re.MULTILINE):
+    content = re.sub(r'^fieldOfStudy: .+$', f'fieldOfStudy: {new_field}', content, flags=re.MULTILINE)
+else:
+    # Insert after first ---
+    content = content.replace('---\n', f'---\nfieldOfStudy: {new_field}\n', 1)
+
+if re.search(r'^updatedAt: .+$', content, re.MULTILINE):
+    content = re.sub(r'^updatedAt: .+$', f'updatedAt: {now}', content, flags=re.MULTILINE)
+else:
+    content = content.replace('---\n', f'---\nupdatedAt: {now}\n', 1)
+
+with open(PROFILE_PATH, 'w', encoding="utf-8") as f:
+    f.write(content)
+
+print(f"✓ Field updated to: {new_field}")
+PYTHON
+```
+
+## Confirm
+
+Tell the author:
+> "Done! Your field is now: **[new field]**
+>
+> Your citation style and writing style remain unchanged.
+> Run `/academic-writer:write` anytime to start writing."

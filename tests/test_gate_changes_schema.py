@@ -7,7 +7,7 @@ write-sections.js, free to drift from the on-disk contract). Design spec:
 docs/audits/2026-09-04-determinism-audit.md, sections 3.1, 5.
 
 Validates against the canonical on-disk
-src/skills/proofread/references/changes-schema.json using `jsonschema`
+src/skills/write/references/changes-schema.json using `jsonschema`
 (Draft 2020-12), read fresh every run -- never an inline copy.
 
 Most tests here invoke gate.py as a real subprocess (matching
@@ -37,7 +37,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GATE = os.path.join(ROOT_DIR, "src", "scripts", "gate.py")
 VALID_CHANGES_PATH = os.path.join(ROOT_DIR, "tests", "fixtures", "gate", "changes-valid.json")
 SCHEMA_PATH = os.path.join(
-    ROOT_DIR, "src", "skills", "proofread", "references", "changes-schema.json"
+    ROOT_DIR, "src", "skills", "write", "references", "changes-schema.json"
 )
 
 

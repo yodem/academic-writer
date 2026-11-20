@@ -6,15 +6,15 @@
 citation-guard.py
 
 Deterministic differential citation-integrity guard for the proofread pipeline
-(src/skills/proofread/SKILL.md Step 4). Reads a changes-schema.json payload
-(src/skills/proofread/references/changes-schema.json) plus the PROOF_BASE text
+(src/skills/write/phases/proofread.md Step 4). Reads a changes-schema.json payload
+(src/skills/write/references/changes-schema.json) plus the PROOF_BASE text
 file the changes were found against, and for every change whose `before` or
 `after` span overlaps a citation, quotation, page-reference, or footnote
 token, downgrades that change to `applied: false` with
 `skipReason: "citation-guard"` -- it is never dropped from the output.
 
 Token categories are the ones described in prose in
-src/skills/proofread/SKILL.md:73-78 (footnote markers, parenthetical
+src/skills/write/phases/proofread.md:73-78 (footnote markers, parenthetical
 citations incl. Hebrew forms and traditional source refs, quotations,
 page numbers / locators); that section states the categories but does not
 ship literal regexes, so the patterns below are this script's own
@@ -67,7 +67,7 @@ from pathlib import Path
 from typing import Optional
 
 # --- Citation / quotation / footnote token patterns -------------------------
-# Derived from the prose categories in proofread/SKILL.md:73-78. Compiled once.
+# Derived from the prose categories in write/phases/proofread.md:73-78. Compiled once.
 
 FOOTNOTE_RE = re.compile(r"\[\^[^\]\n]+\]:?")
 

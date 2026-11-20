@@ -21,15 +21,15 @@ DIRECT = re.compile(
 
 # Files that may still call Trove directly, and why. Everything else must go through `aw library`.
 ALLOWED = {
-    "src/skills/ingest/SKILL.md": "ingest writes to Trove and checks the upload it just made",
-    "src/skills/ingest-book/SKILL.md": "ingest-book writes to Trove and checks the upload it just made",
-    "src/skills/ingest-book/references/toc-mechanism.md": "ingest-book repairs the table of contents of a book it uploaded",
-    "src/skills/ingest/references/existing-item.md": "adding a reading to an existing Trove item: snapshot, append, merged table of contents, read-back (a write path)",
+    "src/skills/library/phases/ingest.md": "ingest writes to Trove and checks the upload it just made",
+    "src/skills/library/phases/ingest-book.md": "ingest-book writes to Trove and checks the upload it just made",
+    "src/skills/library/references/toc-mechanism.md": "ingest-book repairs the table of contents of a book it uploaded",
+    "src/skills/library/references/existing-item.md": "adding a reading to an existing Trove item: snapshot, append, merged table of contents, read-back (a write path)",
     "src/scripts/pageindex/pilib/trove_source.py": "pilib reads a Trove book to index it (read-only)",
     "src/scripts/pageindex/pilib/render_trove.py": "pilib reads a Trove book to index it (read-only)",
-    "src/skills/lesson-notes/SKILL.md": "lesson notes are written into Trove pages",
-    "src/skills/init/SKILL.md": "init lists the Trove shelf to seed the profile (setup, before any route exists)",
-    "src/skills/init/references/style-analysis.md": "init fetches one named baseline book from Trove",
+    "src/skills/courses/phases/lesson-notes.md": "lesson notes are written into Trove pages",
+    "src/skills/setup/phases/init.md": "init lists the Trove shelf to seed the profile (setup, before any route exists)",
+    "src/skills/setup/references/style-analysis.md": "init fetches one named baseline book from Trove",
     "src/skills/setup/references/troubleshooting.md": "troubleshooting text that names the Trove command for a person to run",
     "src/cli/src/voice.ts": "the voice store is synced to Trove (a write path)",
     "src/scripts/build_crosswalk.py": "a maintenance script for a book uploaded to Trove",
@@ -41,14 +41,24 @@ ALLOWED = {
 # Files that look books up for an article and so must use the adapter.
 RETRIEVAL_FILES = [
     "src/agents/auditor.md",
-    "src/skills/write/SKILL.md",
-    "src/skills/edit/SKILL.md",
-    "src/skills/edit-section/SKILL.md",
-    "src/skills/research/SKILL.md",
-    "src/skills/ideate/SKILL.md",
-    "src/skills/health/SKILL.md",
+    "src/skills/write/phases/new.md",
+    "src/skills/write/phases/edit.md",
+    "src/skills/write/phases/edit-section.md",
+    "src/skills/write/phases/research.md",
+    "src/skills/write/phases/ideate.md",
+    "src/skills/setup/phases/health.md",
     "src/cli/src/evidence.ts",
 ]
+
+
+def _skill_file(name):
+    """The file holding a skill's instructions: a phase file of the `write` router, or the skill itself."""
+    phase = {"write": "new"}.get(name, name)
+    if name in ("write", "edit", "edit-section", "research", "ideate"):
+        return f"src/skills/write/phases/{phase}.md"
+    if name == "health":
+        return "src/skills/setup/phases/health.md"
+    return f"src/skills/{name}/SKILL.md"
 
 
 def read(rel):
@@ -199,7 +209,7 @@ class TestAuditorChecksIdsBeforeBuildingCommands(unittest.TestCase):
 
 class TestRunIdReachesTheAuditor(unittest.TestCase):
     def test_write_edit_and_edit_section_pass_run_id(self):
-        for rel in ("src/skills/write/SKILL.md", "src/skills/edit/SKILL.md", "src/skills/edit-section/SKILL.md"):
+        for rel in ("src/skills/write/phases/new.md", "src/skills/write/phases/edit.md", "src/skills/write/phases/edit-section.md"):
             self.assertIn("runId", read(rel), f"{rel} must put runId in the auditor prompt")
 
 
@@ -213,7 +223,7 @@ class TestRunIdIsAPlainId(unittest.TestCase):
         return re.compile(match.group(1))
 
     def test_write_edit_and_edit_section_say_how_to_build_the_run_id(self):
-        for rel in ("src/skills/write/SKILL.md", "src/skills/edit/SKILL.md", "src/skills/edit-section/SKILL.md"):
+        for rel in ("src/skills/write/phases/new.md", "src/skills/write/phases/edit.md", "src/skills/write/phases/edit-section.md"):
             text = read(rel)
             self.assertIn("Latin letters, digits and hyphens", text, rel)
             self.assertIn("transliterate", text, rel)
@@ -222,7 +232,7 @@ class TestRunIdIsAPlainId(unittest.TestCase):
     def test_documented_run_id_examples_match_the_cli_id_pattern(self):
         plain = self.pattern()
         seen = 0
-        for rel in ("src/skills/write/SKILL.md", "src/skills/edit/SKILL.md", "src/skills/edit-section/SKILL.md"):
+        for rel in ("src/skills/write/phases/new.md", "src/skills/write/phases/edit.md", "src/skills/write/phases/edit-section.md"):
             for example in re.findall(r"e\.g\. `((?:write|edit)-[^`]+)`", read(rel)):
                 seen += 1
                 self.assertRegex(example, plain, f"{rel}: {example}")
@@ -232,15 +242,15 @@ class TestRunIdIsAPlainId(unittest.TestCase):
 
 class TestSkillsUseTheLibraryAndAbsoluteAwPath(unittest.TestCase):
     def test_source_listing_and_health_use_aw_library(self):
-        self.assertIn("library list", read("src/skills/write/SKILL.md"))
-        self.assertIn("library status", read("src/skills/write/SKILL.md"))
-        self.assertIn("library list", read("src/skills/ideate/SKILL.md"))
-        health = read("src/skills/health/SKILL.md")
+        self.assertIn("library list", read("src/skills/write/phases/new.md"))
+        self.assertIn("library status", read("src/skills/write/phases/new.md"))
+        self.assertIn("library list", read("src/skills/write/phases/ideate.md"))
+        health = read("src/skills/setup/phases/health.md")
         self.assertIn("library status --check", health)
 
     def test_library_commands_in_code_blocks_use_the_absolute_path(self):
         pattern = re.compile(r"\blibrary\s+(?:status|list|toc|read|get|verdict|report)\b")
-        files = ["src/agents/auditor.md"] + [f"src/skills/{name}/SKILL.md" for name in ("write", "edit", "edit-section", "research", "ideate", "health")]
+        files = ["src/agents/auditor.md"] + [_skill_file(name) for name in ("write", "edit", "edit-section", "research", "ideate", "health")]
         seen = 0
         for rel in files:
             for line in code_lines(read(rel)):
@@ -250,20 +260,20 @@ class TestSkillsUseTheLibraryAndAbsoluteAwPath(unittest.TestCase):
         self.assertGreaterEqual(seen, 6)
 
     def test_no_bare_aw_command_in_the_routed_skills(self):
-        files = ["src/agents/auditor.md"] + [f"src/skills/{name}/SKILL.md" for name in ("write", "edit", "edit-section", "research", "ideate", "health")]
+        files = ["src/agents/auditor.md"] + [_skill_file(name) for name in ("write", "edit", "edit-section", "research", "ideate", "health")]
         for rel in files:
             for line in code_lines(read(rel)):
                 self.assertIsNone(re.match(r"\s*aw\s", line), f"{rel}: bare `aw` in a code block: {line.strip()}")
 
     def test_research_runs_evidence_build_by_absolute_path(self):
-        research = read("src/skills/research/SKILL.md")
+        research = read("src/skills/write/phases/research.md")
         self.assertIn(f"{ABS_AW} evidence build", research)
         self.assertNotRegex(research, r"(?m)^aw evidence build")
 
 
 class TestPageMapIsDocumented(unittest.TestCase):
     def test_profile_schema_documents_each_page_map_kind(self):
-        text = read("src/skills/init/references/profile-schema.md")
+        text = read("src/skills/setup/references/profile-schema.md")
         self.assertIn("`pageMap`", text)
         for kind in ("identity", "offset", "crosswalk"):
             self.assertIn(f"`{kind}`", text)

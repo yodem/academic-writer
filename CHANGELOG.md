@@ -4,6 +4,12 @@ All notable changes to the academic-writer plugin are documented here.
 
 ## [Unreleased]
 
+## [0.24.0] — 2026-11-19
+### Changed
+- **Academic Writer lists four skills: write, setup, library, courses.** `library` and `courses` are routers like `write` and `setup`; the old command names are removed (see Removed). Listing budget before and after is in `docs/skill-budget.md`; a 10-prompt routing eval is in `evals/skill-routing/prompts.json`.
+### Removed
+- **The 23 forwarding stubs are gone.** The `/` menu now shows four commands: `/academic-writer:write`, `setup`, `library` and `courses`. Old names such as `/academic-writer:ingest` or `/academic-writer:init` no longer exist; use the router form (`/academic-writer:library ingest`, `/academic-writer:setup init`). A test fails on any other `/academic-writer:<name>` in the repo.
+
 ## [0.23.1] — 2026-11-17
 ### Fixed
 - **The dashboard's Setup page names a manual check as one.** Google Drive and Moodle (optional connections no script can see) now read "בדיקה ידנית" (check by hand) with their line saying what to ask Claude, instead of "לא רלוונטי" (not relevant). They never make setup incomplete.

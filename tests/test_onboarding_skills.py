@@ -22,8 +22,29 @@ HEADING_RE = re.compile(r"^#{2,6}\s")
 ASK = "AskUserQuestion"
 
 
+SETUP_PHASES = {"setup", "init", "health", "update-tools", "update-field", "voice", "learn", "help", "intro"}
+
+
+LIBRARY_PHASES = {"ingest", "ingest-book", "ocr", "kotar-fetch", "library-eval"}
+
+
+def _file(skill: str) -> pathlib.Path:
+    """The file holding a skill's instructions: a phase of the `setup` or `library` router, or the skill itself."""
+    if skill in SETUP_PHASES:
+        return SKILLS / "setup" / "phases" / (skill + ".md")
+    if skill in LIBRARY_PHASES:
+        return SKILLS / "library" / "phases" / (skill + ".md")
+    return SKILLS / skill / "SKILL.md"
+
+
+def _refs(skill: str) -> pathlib.Path:
+    """The references folder of a skill: the `setup` router owns those of its phases."""
+    router = "setup" if skill in SETUP_PHASES else "library" if skill in LIBRARY_PHASES else skill
+    return SKILLS / router / "references"
+
+
 def _text(skill: str) -> str:
-    return (SKILLS / skill / "SKILL.md").read_text(encoding="utf-8")
+    return _file(skill).read_text(encoding="utf-8")
 
 
 def _steps(text: str) -> list[list[str]]:
@@ -107,7 +128,7 @@ def test_setup_never_asks_for_the_key_in_chat():
     text = _text("setup")
     assert "Never ask for the Gemini key in the chat" in text
     for skill in ("setup", "init"):
-        for path in [SKILLS / skill / "SKILL.md", *(SKILLS / skill / "references").glob("*.md")]:
+        for path in [_file(skill), *_refs(skill).glob("*.md")]:
             body = path.read_text(encoding="utf-8")
             # The old flow said "ask them to paste the key" (into chat); pasting into the
             # /plugin Configure field is fine.
@@ -127,7 +148,7 @@ def test_setup_has_no_developer_known_gap_note():
 
 def test_setup_and_init_offer_the_intro_guide():
     for skill in ("setup", "init"):
-        assert "/academic-writer:intro" in _text(skill), skill
+        assert "/academic-writer:setup intro" in _text(skill), skill
 
 
 def test_onboarding_skills_stay_under_500_lines():
@@ -137,7 +158,7 @@ def test_onboarding_skills_stay_under_500_lines():
 
 
 def test_no_removed_gemini_mcp_tool_in_onboarding():
-    for skill in ("setup", "init", "health"):
+    for skill in ("setup",):  # the router folder holds the setup, init and health phases and their references
         for path in (SKILLS / skill).rglob("*.md"):
             assert "gemini_raw" not in path.read_text(encoding="utf-8"), path
 
@@ -145,7 +166,7 @@ def test_no_removed_gemini_mcp_tool_in_onboarding():
 def test_write_voice_gate_lets_a_first_time_author_through():
     """A new author has no voice store and no AUTHOR_VOICE.md. /write must check the
     store /voice actually writes, and offer to continue rather than dead-end."""
-    text = (ROOT / "src" / "skills" / "write" / "SKILL.md").read_text(encoding="utf-8")
+    text = (ROOT / "src" / "skills" / "write" / "phases" / "new.md").read_text(encoding="utf-8")
     gate = text.split("<!-- BEGIN voice-precondition-gate -->")[1].split("<!-- END voice-precondition-gate -->")[0]
     assert "${CLAUDE_PLUGIN_DATA}/voice" in gate
     assert "VOICE_MISSING" in gate and "AskUserQuestion" in gate
@@ -154,7 +175,7 @@ def test_write_voice_gate_lets_a_first_time_author_through():
 
 # --- Library route (Trove | PageIndex | both) and the PageIndex plugin setting -------------------
 
-REFERENCE = SKILLS / "init" / "references" / "integration-setup.md"
+REFERENCE = SKILLS / "setup" / "references" / "integration-setup.md"
 ROUTE_LABELS = (
     "Trove (your current library)",
     "PageIndex (a second library: on this computer or your own server)",
@@ -186,7 +207,8 @@ def test_init_and_update_tools_ask_the_library_route_question():
     # update-tools never touches the profile for this step, and its description keeps its trigger phrase
     text = _text("update-tools")
     assert "does not touch `profile.md`" in text
-    assert re.search(r"\bUse when\b", text.split("---")[1])
+    router_fm = (SKILLS / "setup" / "SKILL.md").read_text(encoding="utf-8").split("---")[1]
+    assert re.search(r"\bUse when\b", router_fm) and "update-tools" in router_fm
 
 
 def test_library_route_examples_match_the_config_schema():
@@ -342,30 +364,31 @@ def test_onboarding_and_ingest_skills_stay_under_500_lines():
 
 def test_no_skill_text_inlines_a_threshold_or_a_key():
     for skill in ("setup", "init", "update-tools", "library-eval", "ingest", "ingest-book", "ocr"):
-        for path in [SKILLS / skill / "SKILL.md", *(SKILLS / skill / "references").glob("*.md")]:
+        for path in [_file(skill), *_refs(skill).glob("*.md")]:
             body = path.read_text(encoding="utf-8")
             assert not re.search(r"AIza[0-9A-Za-z_-]{10,}", body), path
             assert "--api-key" not in body, path
             assert not re.search(r"\b(?:askAboveCalls|maxCalls|minPairs)\b\s*[:=]\s*\d", body), path
 
 
-LIBRARY_EVAL = SKILLS / "library-eval" / "SKILL.md"
+LIBRARY_EVAL = SKILLS / "library" / "phases" / "library-eval.md"
+LIBRARY_ROUTER = SKILLS / "library" / "SKILL.md"
 
 
-def test_library_eval_skill_is_invocable_and_registered():
+def test_library_eval_phase_is_routed_and_registered():
     import yaml
 
-    text = LIBRARY_EVAL.read_text(encoding="utf-8")
+    text = LIBRARY_ROUTER.read_text(encoding="utf-8")
     fm = yaml.safe_load(re.match(r"---\n(.*?)\n---\n", text, re.S).group(1))
-    assert fm["name"] == "library-eval" and fm["user-invocable"] is True
-    assert "Use when" in fm["description"] and len(fm["description"]) <= 1024
-    meta = fm["metadata"]
-    assert meta.get("author") and meta.get("version") and meta.get("summary")
+    assert fm["name"] == "library" and fm["user-invocable"] is True
+    assert "library-eval" in fm["description"] and len(fm["description"]) <= 1024
     assert "AskUserQuestion" in fm["allowed-tools"]
+    assert "`library-eval`" in text and "phases/library-eval.md" in text
+    assert LIBRARY_EVAL.is_file()
     gen = (ROOT / "scripts" / "gen-guide.py").read_text(encoding="utf-8")
     assert '"library-eval"' in gen
-    assert "/academic-writer:library-eval" in (SKILLS / "help" / "SKILL.md").read_text(encoding="utf-8")
-    assert "/academic-writer:library-eval" in (ROOT / "src" / "guide" / "index.html").read_text(encoding="utf-8")
+    assert "/academic-writer:library library-eval" in (SKILLS / "setup" / "phases" / "help.md").read_text(encoding="utf-8")
+    assert "/academic-writer:library library-eval" in (ROOT / "src" / "guide" / "index.html").read_text(encoding="utf-8")
 
 
 def test_library_eval_runs_the_steps_in_order_and_keeps_the_blinding():
@@ -390,8 +413,8 @@ def test_library_eval_runs_the_steps_in_order_and_keeps_the_blinding():
 
 
 def test_no_skill_moves_pages_to_another_ocr_engine_without_asking():
-    engines = (SKILLS / "ocr" / "references" / "engines.md").read_text(encoding="utf-8")
-    for path in (SKILLS / "ocr" / "SKILL.md", SKILLS / "ingest-book" / "SKILL.md", SKILLS / "ocr" / "references" / "engines.md", SKILLS / "courses" / "SKILL.md"):
+    engines = (SKILLS / "library" / "references" / "engines.md").read_text(encoding="utf-8")
+    for path in (SKILLS / "library" / "phases" / "ocr.md", SKILLS / "library" / "phases" / "ingest-book.md", SKILLS / "library" / "references" / "engines.md", SKILLS / "courses" / "phases" / "term.md"):
         body = path.read_text(encoding="utf-8")
         assert not re.search(r"escalat\w* (?:those |these |the )?pages? to Gemini", body, re.I), path
         assert not re.search(r"escalate to (?:the bundled )?Gemini", body, re.I), path

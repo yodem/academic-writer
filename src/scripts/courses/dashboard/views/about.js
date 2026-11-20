@@ -32,7 +32,7 @@ function onboarding(data, role){
   const blocks = order.map(([k, word], i) => `<details class="role"${i === 0 ? ' open' : ''}><summary><strong>${esc(word)}</strong>${k === role ? ' <span class="meta">(התפקיד שלכם)</span>' : ''}</summary>
     <ol class="first">${all[k].map(s => `<li>${auto(s)}</li>`).join('')}</ol></details>`).join('');
   return `<section class="section" aria-label="צעדים ראשונים"><h2>צעדים ראשונים</h2>${blocks}
-    <p class="meta guide">למדריך המלא: <code>${esc(data.guide || '/academic-writer:intro')}</code></p></section>`;
+    <p class="meta guide">למדריך המלא: <code>${esc(data.guide || '/academic-writer:setup intro')}</code></p></section>`;
 }
 const dateText = st => { if (!st.today) return ''; const d = A.D(st.today); return `יום ${A.DN[d.getDay()]}, ${b(d.getDate())} ${A.MONTH[d.getMonth()]} ${b(d.getFullYear())}`; };
 

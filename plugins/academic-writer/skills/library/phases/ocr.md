@@ -1,0 +1,39 @@
+# Academic Writer — OCR
+
+OCR (optical character recognition) reads the text out of a scanned or photographed page. Transcribe a PDF, an image, or a folder of them. OCR copies the source text exactly: it never corrects, modernises or paraphrases it, because the text may later be quoted as evidence.
+
+**Step 0 — Anna's Archive first, for a published work.** Before any OCR, search Anna's Archive for the work: use the `annas-archive-ebooks` skill when it is installed, otherwise search by title, author and ISBN. For a chapter or article, look for the whole book or journal issue. If a copy of the **same edition** exists (same publisher, year and printed pagination), use its text layer or EPUB text, keep the printed page numbers exactly, and skip OCR. OCR only when there is no matching copy or the copy has no usable text. Record the outcome for each item: `annas: found-used`, `annas: found-wrong-edition` or `annas: not-found`.
+
+**Who reads the pages: the cheapest reader that works, page by page (measured 2026-10-20; the Gemini fallback re-measured 2026-11-16).** `aw ocr` picks the reader for each page unless the author named one, and every page says which one read it (`engine`):
+
+| Step | Reader | When | Why |
+|---|---|---|---|
+| 1 | **On this computer** (Surya and Tesseract) | an additional source (`--source additional`), and Surya is installed and its server is running (`SURYA_INFERENCE_URL`; it needs an NVIDIA graphics card) | when the two free readers agree on 98% of the letters, Surya's text is kept: close to Gemini (0.3% of letters wrong against 0.13%) but behind Opus (0.0%); free, and nothing leaves the computer |
+| 2 | **Claude** (Opus) | the free readers disagree or Surya is not installed | as accurate as Gemini from 100 dpi up, on the author's Claude plan |
+| 3 | **Gemini** (`gemini-3.8-flash`, thinking low) | a Google API key is set, and Claude refused the page, answered far shorter than the page, or the page is under 100 dpi | paid, about $0.004 a page (2026 price; about $0.007 from 2027); the only reader of the vocalized Bible (Claude refuses it); median 0.25% letter difference from Opus on 12 Hebrew book pages (2026-11-16), where `gemini-2.5-flash` without thinking was half the price but 1.2% and scrambled two-column glossaries |
+| 4 | **Tesseract only** | an additional source, with no Claude and no Google key (a required reading stops instead; the author can accept Tesseract with `--engine local`) | free and private, but 2-5% letter errors on Hebrew |
+
+**Required or additional source.** Pass `--source additional` only for a source the author added on their own. A course's required readings (the primary and secondary sources of a course task) and anything the author will quote get the default, `--source required`: Claude reads every page and Gemini covers the pages Claude cannot, with no free readers, because those texts must be as close to 100% accurate as possible (user rule 2026-10-20). When unsure, use `required`.
+
+With a Google key set, only the pages in step 3 go to Google; without one, a page Claude refused or declined comes back blank and marked "blocked" (the free readings of such pages were mostly wrong), and a page under 100 dpi keeps Claude's reading, marked low confidence. The measured numbers, the two-column findings and the Codex option are in `${CLAUDE_SKILL_DIR}/references/engines.md`. Tell the author, in plain words, which reader read which pages and where they went (Gemini: Google; Claude: Anthropic; Surya and Tesseract: nowhere). If the author asks for one reader for every page, pass `--engine gemini|claude|local`.
+
+Course readings are extracted by the nightly run (user rule 2026-11-09, method `auto`: text layers by python, scans by Claude vision); the student can also ask on the dashboard ("חילוץ טקסט") and choose another reader. Beyond the steps above, never move a page to another reader on your own: a page that comes back "blocked" or "low confidence" stays as it is until the author says otherwise. Ask with `AskUserQuestion` before sending it anywhere else, saying where it goes (with Gemini, its text goes to Google). A page Gemini refused is never filled in from another reader without asking. Record which engine produced the text (`OCR engine: <name>`).
+
+1. If the author gave no path, ask for the file or folder.
+2. Choose the language: `he`, `en` or `mixed`. Take it from `.academic-helper/profile.md`, or ask when the source language is unclear.
+3. Write the output under a project folder named `ocr-output/`, and run:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/aw" --data-dir "${CLAUDE_PLUGIN_DATA}" --project-dir "$PWD" ocr \
+  --input <pdf|image|directory> --lang <he|en|mixed> --run <run-id> \
+  [--engine auto|gemini|claude|local] [--source required|additional] [--confirm-cost] [--gemini-model <id>] [--claude-model <id>] --format concise --out <project-local-output.md>
+```
+
+- Add `--pages <range>` to process only some pages.
+- **Cost gate.** One `--run` id sends at most 20 pages to Gemini, counted across the whole run id (looping page ranges with the same `--run` does not get around it; the pages are recorded before each request, so a run that is killed still counts them). Run one `aw ocr` per run id at a time: never start two with the same `--run` in parallel. Pages past the cap come back blank with the note "needs approval: Gemini, N pages, est. $X; rerun with --confirm-cost", are listed in the JSON `summary.needs_approval`, and the command exits 4. On exit 4, tell the author the page count and the estimate and ask with `AskUserQuestion`; only on yes, rerun those pages (`--pages <range>`) with `--confirm-cost`.
+- **Stronger models, only for crucial pages.** `summary.escalation_candidates` lists low-confidence pages to offer. Never escalate on your own. `--gemini-model <id>` or `--claude-model <id>` (each requires `--confirm-cost`) is used only for pages the author names, after an `AskUserQuestion` that names the model, the pages and the cost.
+- Use `--format detailed` when the author wants notes on layout, footnotes and tables.
+- For a folder, process one file at a time and write a separate output file for each document.
+
+4. The command returns the reader it used (`engine`, `engine_reason`) and one record per page with whether the page already had digital text, a confidence level and notes. Report these faithfully: tell the author which pages were low-confidence, skipped or failed, so they know which pages to check against the original.
+5. Never overwrite the source file.

@@ -92,7 +92,7 @@ Subcommands:
 
   changes-schema <changes.json>
       Validates against the canonical on-disk
-      src/skills/proofread/references/changes-schema.json (Draft 2020-12,
+      src/skills/write/references/changes-schema.json (Draft 2020-12,
       via the `jsonschema` package already in requirements-dev.txt) --
       closing the "two copies of one contract, free to drift" risk the
       audit found in proofread.js/write-sections.js's inline schema
@@ -146,7 +146,7 @@ _SCRIPT_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
 # Built plugin: <plugin>/scripts/ with <plugin>/thresholds.json and <plugin>/skills/...; repo: src/scripts/.
 _ROOT = _SCRIPT_DIR.parent  # <plugin>/ or src/
 DEFAULT_THRESHOLDS_PATH = _ROOT / "thresholds.json"
-CHANGES_SCHEMA_PATH = _ROOT / "skills" / "proofread" / "references" / "changes-schema.json"
+CHANGES_SCHEMA_PATH = _ROOT / "skills" / "write" / "references" / "changes-schema.json"
 REPO_ROOT = _ROOT.parent if _ROOT.name == "src" else _ROOT
 _SCHEMA_ROOT = _ROOT / "schemas"
 AUTHOR_INTENT_SCHEMA_PATH = _SCHEMA_ROOT / "author-intent.schema.json"

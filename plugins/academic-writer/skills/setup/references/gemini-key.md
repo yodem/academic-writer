@@ -135,7 +135,7 @@ fi
 ## Saving the choice
 
 Record the result in the `## Gemini` block of `profile.md` (field-by-field format:
-`${CLAUDE_PLUGIN_ROOT}/skills/init/references/profile-schema.md`): `enabled: true` with
+`${CLAUDE_PLUGIN_ROOT}/skills/setup/references/profile-schema.md`): `enabled: true` with
 `approvedLanguages: ["<targetLanguage>"]` when the researcher wants Gemini, otherwise
 `enabled: false` and `approvedLanguages: []`. A key that failed the check still leaves
 `enabled: true` if they want to fix it later; mention it in the summary.

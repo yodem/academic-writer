@@ -2,8 +2,8 @@
 # Created: 2026-09-02
 
 """Coverage for src/scripts/build-tracked-docx.py, the tracked-changes/
-comments builder for the proofread pipeline (src/skills/proofread/SKILL.md).
-Schema contract: src/skills/proofread/references/changes-schema.json. See
+comments builder for the proofread pipeline (src/skills/write/phases/proofread.md).
+Schema contract: src/skills/write/references/changes-schema.json. See
 the project plan's tracked-docx section and its measured Phase 0 results for
 the findings (lxml-only revision handling, positional token pairing with
 nearest-kept-neighbour rPr fallback, max-existing-id+1 allocation, real

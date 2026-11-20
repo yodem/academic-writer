@@ -56,7 +56,7 @@ These apply only to projects whose `.academic-helper/library.json` has `"route":
   `pageindex_command` is filled in (no quotation marks) or `pilib` works in your terminal; the
   computer or server that hosts the library is on and you can reach it; then start a new Claude
   Code session. `AW_PAGEINDEX_COMMAND`, when set, wins over the command in `library.json`. If you
-  cannot fix it now, run `/academic-writer:update-tools`, which asks whether to switch this article to Trove (answer "Switch to Trove"; "Keep it as it is" changes nothing), or write
+  cannot fix it now, run `/academic-writer:setup update-tools`, which asks whether to switch this article to Trove (answer "Switch to Trove"; "Keep it as it is" changes nothing), or write
   `{ "route": "trove" }` in `.academic-helper/library.json`; your articles read from Trove as before.
 - **Wrong book list**: with PageIndex answering, the list shows the PageIndex library's books,
   narrowed to the shelf file named by `pageindex.shelf` in `library.json` when there is one
@@ -83,7 +83,7 @@ These apply when the helper was installed with `aw library install` (see `pagein
   no table of contents, needs a newer Python. Install one from https://www.python.org/downloads/ (or
   Homebrew), then run the install again. Until then the basic helper (any Python 3.9 or newer) is
   enough for books that have a table of contents, which is every book uploaded with
-  `/academic-writer:ingest-book`.
+  `/academic-writer:library ingest-book`.
 - **The install stopped or timed out**: it needs the network and gives up after a time limit. Check the
   connection and run it again; a half-finished install is replaced, nothing else is touched. For pip
   errors see "pip install failures" below.
@@ -96,8 +96,8 @@ These apply when the helper was installed with `aw library install` (see `pagein
   still works.
 - **Indexing a book failed, Trove upload is fine**: run the same `aw library index --trove-id <id>`
   command again. It is repeatable and reuses summaries already paid for. A missing or refused Gemini
-  key: use `--summaries hints` (no Gemini), or fix the key with `/academic-writer:health`.
-- **A book has no table of contents**: repair it with `/academic-writer:ingest-book` (cheaper and the
+  key: use `--summaries hints` (no Gemini), or fix the key with `/academic-writer:setup health`.
+- **A book has no table of contents**: repair it with `/academic-writer:library ingest-book` (cheaper and the
   same outline as Trove), or install the full helper.
 
 ## pip install failures

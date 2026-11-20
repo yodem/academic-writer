@@ -65,7 +65,7 @@ class TestedField(unittest.TestCase):
     def test_about_shape(self):
         about = json.loads(ABOUT.read_text(encoding="utf-8"))
         self.assertEqual(set(about), {"version", "features", "onboarding", "guide"})
-        self.assertEqual(about["guide"], "/academic-writer:intro")
+        self.assertEqual(about["guide"], "/academic-writer:setup intro")
         self.assertEqual(set(about["onboarding"]), {"student", "lecturer", "researcher"})
         for role, steps in about["onboarding"].items():
             self.assertTrue(1 <= len(steps) <= 5, role)
@@ -86,8 +86,8 @@ class TestedField(unittest.TestCase):
     def test_commands_come_from_user_invocable_skills(self):
         about = json.loads(ABOUT.read_text(encoding="utf-8"))
         by_id = {f["id"]: f for f in about["features"]}
-        self.assertEqual(by_id["ingest"]["command"], "/academic-writer:ingest")
-        self.assertEqual(by_id["course-dashboard"]["command"], "/academic-writer:dashboard")
+        self.assertEqual(by_id["ingest"]["command"], "/academic-writer:library ingest")
+        self.assertEqual(by_id["course-dashboard"]["command"], "/academic-writer:courses dashboard")
         self.assertIsNone(by_id["citation-audit"]["command"])  # an agent, not a command
 
     def test_descriptions_are_hebrew_and_authored(self):
@@ -103,7 +103,7 @@ class TestedField(unittest.TestCase):
         by_id = {f["id"]: f for f in about["features"]}
         self.assertIsNone(by_id["gemini-mcp-retirement"]["command"])
         self.assertIsNone(by_id["synthesis"]["command"])
-        self.assertEqual(by_id["editing"]["command"], "/academic-writer:edit-section")
+        self.assertEqual(by_id["editing"]["command"], "/academic-writer:write edit-section")
         self.assertEqual(by_id["section-writing"]["command"], "/academic-writer:write")
 
 
@@ -113,12 +113,11 @@ class HealthSkillPlainWords(unittest.TestCase):
     JARGON = re.compile(r"\b(venv|PATH|pip|CLI|JSON|exit code|stderr|stdout|latency|deterministic|on the path)\b")
 
     def test_prose_has_no_jargon(self):
-        text = (REPO / "src" / "skills" / "health" / "SKILL.md").read_text(encoding="utf-8")
-        text = text.split("---", 2)[2]  # skip the frontmatter
+        text = (REPO / "src" / "skills" / "setup" / "phases" / "health.md").read_text(encoding="utf-8")
         text = re.sub(r"```.*?```", "", text, flags=re.S)
         text = re.sub(r"`[^`\n]*`", "", text)
         hits = sorted({m.group(0) for m in self.JARGON.finditer(text)})
-        self.assertEqual(hits, [], "jargon in src/skills/health/SKILL.md prose: %s" % hits)
+        self.assertEqual(hits, [], "jargon in src/skills/setup/phases/health.md prose: %s" % hits)
 
 
 if __name__ == "__main__":

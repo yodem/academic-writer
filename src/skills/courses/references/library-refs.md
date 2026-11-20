@@ -148,7 +148,7 @@ Record each result with `refs.py --term <term> lookup <slug> --set <key> --statu
 
 ### A6. Kotar: fetch the cited pages
 
-Fetching Kotar pages is the job of the `kotar-fetch` skill (`/academic-writer:kotar-fetch`). A ref keeps status `kotar` until that skill reports. Add no Kotar chore unless it fails.
+Fetching Kotar pages is the job of the `kotar-fetch` phase of the library router (`/academic-writer:library kotar-fetch`). A ref keeps status `kotar` until that skill reports. Add no Kotar chore unless it fails.
 
 Kotar items are read through the user's own BIU licence, for their own study, and only the cited pages are fetched. The route the skill relies on, for reference:
 
@@ -182,7 +182,7 @@ The browser tool may refuse output that contains query strings, so report counts
 
 | Ref status | Chore kind | What the chore asks for |
 |---|---|---|
-| `kotar` | `kotar-source` | Only when `/academic-writer:kotar-fetch` failed: download the cited pages from Kotar |
+| `kotar` | `kotar-source` | Only when `/academic-writer:library kotar-fetch` failed: download the cited pages from Kotar |
 | `print-only` | `manual` | Get the print copy from the library, with the call number |
 | `not-found` | `manual` | Find the work; the citation is in the text |
 
@@ -204,7 +204,7 @@ Chores are deduplicated on course, kind and `ref` (`refs:<slug>:<key>`), so a re
 
 0. Anna's Archive (skipped for Kotar). With `ANNAS_ARCHIVE_KEY` unset it records `annas: not-checked` and goes on; with a key it searches through the global skill's `annas.py`, and when it prints the DDoS-Guard page or no JSON the outcome is `annas: blocked` ("Anna's Archive asked for a browser check; search it in Chrome") and the ref gets a `manual` chore to search it in Chrome; any other failure is `annas: error`. A hit is only `annas: candidates` (with `annas_candidates`); a person confirms the edition (A4a).
 1. BIU lookup (Primo + CTO), for a pending ref. Several hits are never auto-picked: the log says `needs-choice`; re-run with `--hit N`.
-2. By status: `online` with a PDF in hand (`--file`, `sources/<slug>/<key>.pdf` or `~/Downloads/<key>.pdf`) becomes `downloaded` with `download_path` (nothing is queued for OCR); without a PDF the step is `needs-browser-download` (A5). `kotar` adds a `kotar-source` chore that points to `/academic-writer:kotar-fetch`. `print-only` stays `print-only`.
+2. By status: `online` with a PDF in hand (`--file`, `sources/<slug>/<key>.pdf` or `~/Downloads/<key>.pdf`) becomes `downloaded` with `download_path` (nothing is queued for OCR); without a PDF the step is `needs-browser-download` (A5). `kotar` adds a `kotar-source` chore that points to `/academic-writer:library kotar-fetch`. `print-only` stays `print-only`.
 
 `--dry-run` runs the read-only steps and writes nothing. The fetch command never runs or queues OCR or extraction; text comes only from the dashboard's "חילוץ טקסט" request (`refs.py extract-queue`).
 

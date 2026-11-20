@@ -16,15 +16,15 @@ export function sessionDashboard(input: HookInput): HookResult {
     lines.push(`Home folder not found: ${profile.homeMissing}. Using this folder's own settings only.`);
   }
   lines.push('');
-  lines.push('╔══════════════════════════════════════════════════╗');
-  lines.push('║         ACADEMIC WRITER — SESSION START          ║');
-  lines.push('╠══════════════════════════════════════════════════╣');
+  lines.push('╔════════════════════════════════════════════════════════╗');
+  lines.push('║         ACADEMIC WRITER — SESSION START                ║');
+  lines.push('╠════════════════════════════════════════════════════════╣');
 
   // Profile status
-  lines.push(`║  Field: ${(profile.fieldOfStudy ?? 'Not set').padEnd(38)}║`);
-  lines.push(`║  Language: ${(profile.targetLanguage ?? 'Not set').padEnd(36)}║`);
-  lines.push(`║  Citation: ${(profile.citationStyle ?? 'Not set').padEnd(36)}║`);
-  lines.push(`║  Fingerprint: ${(profile.styleFingerprint ? 'Loaded' : 'Missing').padEnd(33)}║`);
+  lines.push(`║  Field: ${(profile.fieldOfStudy ?? 'Not set').padEnd(44)}║`);
+  lines.push(`║  Language: ${(profile.targetLanguage ?? 'Not set').padEnd(42)}║`);
+  lines.push(`║  Citation: ${(profile.citationStyle ?? 'Not set').padEnd(42)}║`);
+  lines.push(`║  Fingerprint: ${(profile.styleFingerprint ? 'Loaded' : 'Missing').padEnd(39)}║`);
 
   // Articles count
   const articlesDir = join(projectDir, 'articles');
@@ -37,11 +37,11 @@ export function sessionDashboard(input: HookInput): HookResult {
       // ignore
     }
   }
-  lines.push(`║  Articles: ${String(articleCount).padEnd(36)}║`);
+  lines.push(`║  Articles: ${String(articleCount).padEnd(42)}║`);
 
   // Source count
   const sourceCount = profile.sources?.length ?? 0;
-  lines.push(`║  Sources indexed: ${String(sourceCount).padEnd(29)}║`);
+  lines.push(`║  Sources indexed: ${String(sourceCount).padEnd(35)}║`);
 
   // Tools status
   const tools = profile.tools ?? {};
@@ -51,12 +51,12 @@ export function sessionDashboard(input: HookInput): HookResult {
       enabledTools.push(name);
     }
   }
-  lines.push(`║  Tools: ${(enabledTools.length > 0 ? enabledTools.join(', ') : 'None').substring(0, 38).padEnd(38)}║`);
+  lines.push(`║  Tools: ${(enabledTools.length > 0 ? enabledTools.join(', ') : 'None').substring(0, 38).padEnd(44)}║`);
 
   // Research brief
   const briefPath = join(projectDir, '.academic-helper', 'research-brief.md');
   if (existsSync(briefPath)) {
-    lines.push(`║  Research brief: Available                       ║`);
+    lines.push(`║  Research brief: Available                             ║`);
   }
 
   // Past articles for learning
@@ -68,20 +68,20 @@ export function sessionDashboard(input: HookInput): HookResult {
       const total = pastFiles.filter(f => f.endsWith('.pdf') || f.endsWith('.docx')).length;
       const unanalyzed = total - analyzed;
       if (unanalyzed > 0) {
-        lines.push(`║  New past articles: ${String(unanalyzed).padEnd(27)}║`);
-        lines.push(`║  → Run /academic-writer:voice to update style    ║`);
+        lines.push(`║  New past articles: ${String(unanalyzed).padEnd(33)}║`);
+        lines.push(`║  → Run /academic-writer:setup voice to update style    ║`);
       }
     } catch {
       // ignore
     }
   }
 
-  lines.push('╠══════════════════════════════════════════════════╣');
-  lines.push('║  /academic-writer:write    — Write new article   ║');
-  lines.push('║  /academic-writer:ideate   — Brainstorm ideas    ║');
-  lines.push('║  /academic-writer:research — Investigate a topic ║');
-  lines.push('║  /academic-writer:health   — Check integrations  ║');
-  lines.push('╚══════════════════════════════════════════════════╝');
+  lines.push('╠════════════════════════════════════════════════════════╣');
+  lines.push('║  /academic-writer:write          — Write new article   ║');
+  lines.push('║  /academic-writer:write ideate   — Brainstorm ideas    ║');
+  lines.push('║  /academic-writer:write research — Investigate a topic ║');
+  lines.push('║  /academic-writer:setup health   — Check integrations  ║');
+  lines.push('╚════════════════════════════════════════════════════════╝');
 
   return {
     continue: true,

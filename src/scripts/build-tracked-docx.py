@@ -6,7 +6,7 @@
 build-tracked-docx.py
 
 Deterministic tracked-changes/comments builder for the proofread pipeline
-(src/skills/proofread/SKILL.md, the "Deterministic scripts" section of the
+(src/skills/write/phases/proofread.md, the "Deterministic scripts" section of the
 0.7.0 proofread-pipeline project plan). Takes the
 ORIGINAL `.docx`, the final corrected text, an attribution map (the `stage`
 field already carried on every change in changes-schema.json), and the

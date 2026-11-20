@@ -5,7 +5,7 @@ import subprocess, json, shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = ROOT / "src" / "skills" / "voice" / "voice-migrate.sh"
+SCRIPT = ROOT / "src" / "skills" / "setup" / "voice-migrate.sh"
 FIXTURE = ROOT / "tests" / "fixtures" / "voice" / "legacy-profile.json"
 
 

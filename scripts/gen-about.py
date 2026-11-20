@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 OUT = "src/scripts/courses/dashboard/about.json"
-GUIDE = "/academic-writer:intro"
+GUIDE = "/academic-writer:setup intro"
 TESTED = ("e2e", "unit", "manual", "not tested yet")
 
 # Short first steps by role, plain words, at most five each. Hebrew first; the guide has the detail.
@@ -37,22 +37,22 @@ ONBOARDING: Dict[str, List[str]] = {
     "student": [
         "הריצו /academic-writer:setup ובחרו תיקיית בית: שם יישמרו הפרופיל והסמסטר שלכם.",
         "הריצו /academic-writer:courses כדי להגדיר את הסמסטר ואת הקורסים.",
-        "פתחו את הלוח עם /academic-writer:dashboard וראו את השבוע שלפניכם.",
-        "הוסיפו מאמר או ספר לספרייה עם /academic-writer:ingest.",
+        "פתחו את הלוח עם /academic-writer:courses dashboard וראו את השבוע שלפניכם.",
+        "הוסיפו מאמר או ספר לספרייה עם /academic-writer:library ingest.",
         "התחילו לכתוב עם /academic-writer:write; כל שלב ייראה בלשונית כתיבה.",
     ],
     "lecturer": [
         "הריצו /academic-writer:setup ובחרו תיקיית בית ותפקיד מרצה.",
-        "הריצו /academic-writer:init בתיקיית הפרויקט כדי לתת לו פרופיל.",
+        "הריצו /academic-writer:setup init בתיקיית הפרויקט כדי לתת לו פרופיל.",
         "הוסיפו מאמרים קודמים כדי שהתוסף ילמד את הסגנון שלכם.",
-        "כתבו מאמר חדש עם /academic-writer:write, או הגיהו קיים עם /academic-writer:proofread.",
+        "כתבו מאמר חדש עם /academic-writer:write, או הגיהו קיים עם /academic-writer:write proofread.",
     ],
     "researcher": [
         "הריצו /academic-writer:setup ובחרו תיקיית בית ותפקיד חוקר.",
-        "הריצו /academic-writer:init בתיקיית המחקר כדי לתת לה פרופיל.",
-        "הוסיפו מקורות לספרייה עם /academic-writer:ingest או /academic-writer:ingest-book.",
-        "נסחו שאלת מחקר עם /academic-writer:ideate וכתבו עם /academic-writer:write.",
-        "פתחו את הלוח עם /academic-writer:dashboard כדי לעקוב אחרי הכתיבה.",
+        "הריצו /academic-writer:setup init בתיקיית המחקר כדי לתת לה פרופיל.",
+        "הוסיפו מקורות לספרייה עם /academic-writer:library ingest או /academic-writer:library ingest-book.",
+        "נסחו שאלת מחקר עם /academic-writer:write ideate וכתבו עם /academic-writer:write.",
+        "פתחו את הלוח עם /academic-writer:courses dashboard כדי לעקוב אחרי הכתיבה.",
     ],
 }
 
@@ -75,7 +75,16 @@ def skill_for(root: Path, guide, sources: List[str]) -> Optional[Tuple[str, Dict
         return None
     m = re.fullmatch(r"src/skills/([^/]+)/SKILL\.md", sources[0])
     path = root / sources[0]
-    if not m or not path.is_file():
+    if not m:
+        # A router phase file: the command is "<router> <phase>", the text comes from the router's frontmatter.
+        pm = re.fullmatch(r"src/skills/([^/]+)/phases/([^/]+)\.md", sources[0])
+        router = root / "src" / "skills" / pm.group(1) / "SKILL.md" if pm else None
+        if not pm or not path.is_file() or not router.is_file():
+            return None
+        fm = dict(guide.parse_frontmatter(router.read_text(encoding="utf-8")))
+        fm.pop("metadata", None)
+        return f"{pm.group(1)} {pm.group(2)}", fm
+    if not path.is_file():
         return None
     fm = guide.parse_frontmatter(path.read_text(encoding="utf-8"))
     return str(fm.get("name") or m.group(1)), fm
@@ -96,7 +105,9 @@ def build_feature(root: Path, guide, node: Dict[str, Any]) -> Dict[str, Any]:
         if not description:
             description = guide.summary_for(fm)
         if fm.get("user-invocable"):
-            command = guide.PREFIX + name
+            meta = fm.get("metadata")
+            moved = str(meta.get("moved-to", "")).strip() if isinstance(meta, dict) else ""
+            command = guide.PREFIX + (moved or name)  # a stub's command is its router phase
     description = description or node.get("name") or node["id"]
     subs = [build_sub(sub) for sub in node.get("subfeatures") or []]
     return {"id": node["id"], "name_he": node.get("name_he") or node.get("name") or node["id"],

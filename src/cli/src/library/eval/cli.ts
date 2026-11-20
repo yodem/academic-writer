@@ -167,7 +167,7 @@ export async function runEvalCli(argv: string[], io: EvalIo): Promise<number> {
 
     if (subcommand === 'page') {
       const pairs = await readValid<Pairs>('pairs', paths.pairs, 'pairs');
-      const template = text(flags, '--template') ?? (env.CLAUDE_PLUGIN_ROOT ? join(env.CLAUDE_PLUGIN_ROOT, 'skills', 'library-eval', 'references', 'judge-page.html') : null);
+      const template = text(flags, '--template') ?? (env.CLAUDE_PLUGIN_ROOT ? join(env.CLAUDE_PLUGIN_ROOT, 'skills', 'library', 'references', 'judge-page.html') : null);
       if (!template || !existsSync(template)) throw new LibraryError('config', 'ERROR library eval page: no judging page template found; pass --template <file>');
       const html = await readFile(template, 'utf8');
       const slot = /(<script\b[^>]*\bid=["']pairs["'][^>]*>)([\s\S]*?)(<\/script>)/iu;

@@ -1,6 +1,6 @@
 {
   "name": "academic-writer",
-  "version": "0.23.1",
+  "version": "0.24.0",
   "description": "AI-first academic writing assistant for Humanities researchers. Produces rigorously cited, style-matched academic articles as .docx files.",
   "author": {
     "name": "Yotam Fromm",
@@ -36,7 +36,7 @@
     "activity_pane": {
       "type": "boolean",
       "title": "Live activity pane",
-      "description": "Show a live pane in Claude Code that follows each article run step by step: which step is running, which sections are drafted, and what the checker rejected and why. It only reads the run's record and never changes anything. Needs a terminal at least 144 columns wide to open by itself; /academic-writer:watch opens it on request. Takes effect in a new Claude Code session.",
+      "description": "Show a live pane in Claude Code that follows each article run step by step: which step is running, which sections are drafted, and what the checker rejected and why. It only reads the run's record and never changes anything. Needs a terminal at least 144 columns wide to open by itself; /academic-writer:write watch opens it on request. Takes effect in a new Claude Code session.",
       "default": true,
       "required": false
     }

@@ -54,7 +54,7 @@ Your answers are saved in files in your folder, so nothing is lost.
 | Python 3 | Reading Word/PDF files, building the final `.docx`, proofreading checks | Yes | The researcher (steps below) |
 | Python packages (`python-docx`, `lxml`, `pdfplumber`, `pymupdf`, `jsonschema`) | Same as above — these are add-ons Python uses to open Word and PDF files | Yes | Claude, after asking |
 | Homebrew (macOS only) | A free installer for Mac tools; needed only to install hspell (Trove and NotebookLM do not need it) | Only for hspell | The researcher (steps below) |
-| hspell | A Hebrew spelling checker used by `/academic-writer:proofread` | Optional, Hebrew only | Claude on macOS/Linux, after asking |
+| hspell | A Hebrew spelling checker used by `/academic-writer:write proofread` | Optional, Hebrew only | Claude on macOS/Linux, after asking |
 | Git (`git`) | Downloads the plugin when you add it; on Windows it also provides the shell (Git Bash) Claude Code runs commands in | Required | The researcher (steps below) |
 | Node.js (`node`) | Runs the plugin's own tool (`aw`) and its start-up checks | Required | The researcher (steps below) |
 | Google Drive connector (`drive`) | Lets Claude keep and find your course files in Google Drive | Optional | The researcher, in the Claude app |
@@ -121,7 +121,7 @@ No script can see these, so ask the researcher whether each is done.
 - **Google Drive**: in the Claude app or on claude.ai open **Customize**, then **Connectors**, choose **Google Drive**
   and sign in with Google (https://support.claude.com/en/articles/10166901). Same on Windows and Mac.
 - **Kotar**: install Google Chrome (https://www.google.com/chrome; Windows: `winget install --id Google.Chrome -e`),
-  then in Chrome sign in to Kotar through the university library. `/academic-writer:kotar-fetch` reads from that tab.
+  then in Chrome sign in to Kotar through the university library. `/academic-writer:library kotar-fetch` reads from that tab.
 - **Moodle** (the course site): in Chrome, with the Claude in Chrome extension installed, sign in to the course
   site as usual. The plugin never asks for or stores the password.
 

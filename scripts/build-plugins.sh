@@ -81,7 +81,7 @@ for manifest in "$MANIFESTS_DIR"/*.json; do
   if [[ -d "$SRC_DIR/skills" ]]; then
     cp -R "$SRC_DIR/skills" "$PLUGIN_DIR/"
   fi
-  # Ship the offline HTML guide opened by /academic-writer:intro.
+  # Ship the offline HTML guide opened by /academic-writer:setup intro.
   if [[ -d "$SRC_DIR/guide" ]]; then
     cp -R "$SRC_DIR/guide" "$PLUGIN_DIR/"
   fi

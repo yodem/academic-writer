@@ -76,11 +76,11 @@ test("setup: complete state and unreachable home and empty checks", () => {
 });
 
 const ABOUT = {
-  version: "0.17.1", guide: "/academic-writer:intro",
+  version: "0.17.1", guide: "/academic-writer:setup intro",
   features: [
     { id: "f1", name_he: "כתיבה", description_he: "כותב <מאמר>", command: "/academic-writer:write", status: "ok", tested: "e2e",
       subfeatures: [{ id: "s1", name: "Draft gate", status: "partial", tested: "not tested yet", subfeatures: [] }] },
-    { id: "f2", name_he: "קול", description_he: "סגנון", command: "/academic-writer:voice", status: "partial", tested: "manual", subfeatures: [] },
+    { id: "f2", name_he: "קול", description_he: "סגנון", command: "/academic-writer:setup voice", status: "partial", tested: "manual", subfeatures: [] },
   ],
   onboarding: { student: ["צעד <א>"], lecturer: ["צעד ב"], researcher: ["צעד ג"] },
 };
@@ -101,7 +101,7 @@ test("about puts the viewer's role first in onboarding and links the guide", asy
   view({ home: { ...HOME, role: "lecturer" }, today: "2026-10-16" }, el); await tick();
   const h = el.innerHTML;
   assert.ok(h.indexOf("צעד ב") !== -1 && h.indexOf("צעד ב") < h.indexOf("צעד ג"));
-  assert.match(h, /\/academic-writer:intro/);
+  assert.match(h, /\/academic-writer:setup intro/);
 });
 
 test("about: failed load says so in plain words", async () => {

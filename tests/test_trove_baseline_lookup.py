@@ -11,8 +11,8 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "tests/fixtures/trove/items-list.json"
 DOCS = [
-    ROOT / "src/skills/init/references/style-analysis.md",
-    ROOT / "plugins/academic-writer/skills/init/references/style-analysis.md",
+    ROOT / "src/skills/setup/references/style-analysis.md",
+    ROOT / "plugins/academic-writer/skills/setup/references/style-analysis.md",
 ]
 EXPECTED_ID = "cmomjonvy0fdmk30zwef79c48"
 

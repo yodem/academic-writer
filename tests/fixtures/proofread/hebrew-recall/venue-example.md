@@ -6,7 +6,7 @@
 > shape a profile takes and to give the regression fixture something to run against.
 >
 > The conventions below are generalized from one real pre-submission rejection, which is
-> also where `src/skills/proofread/references/editorial-checks.md` came from. That letter
+> also where `src/skills/write/references/editorial-checks.md` came from. That letter
 > is not committed. No named journal is implied — treat this as a plausible composite.
 
 - **Name:** *(example)* a Hebrew-language humanities journal

@@ -1,5 +1,5 @@
 {
-  "schemaRef": "src/skills/proofread/references/changes-schema.json",
+  "schemaRef": "src/skills/write/references/changes-schema.json",
   "categories": [
     {
       "id": "cat-01",

@@ -4,7 +4,7 @@
 """Coverage for the two research-independent deterministic proofread scripts:
 scripts/citation-guard.py (differential citation-integrity guard, SKILL.md
 Step 4) and scripts/write-proof-report.py (renders <name>.proofread.md,
-SKILL.md Step 6). Schema contract: src/skills/proofread/references/
+SKILL.md Step 6). Schema contract: src/skills/write/references/
 changes-schema.json. See the 0.7.0 plan of record (local, not committed to this repo)
 Phase 1.3 for the script inventory this belongs to.
 

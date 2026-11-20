@@ -1,6 +1,6 @@
 # Academic Writer: your first session
 
-A step-by-step walkthrough for a researcher using Academic Writer for the first time, from install to a first Word draft. The same steps, with more detail on each, are in the offline guide: type `/academic-writer:intro` in Claude Code.
+A step-by-step walkthrough for a researcher using Academic Writer for the first time, from install to a first Word draft. The same steps, with more detail on each, are in the offline guide: type `/academic-writer:setup intro` in Claude Code.
 
 ---
 
@@ -42,18 +42,18 @@ Gemini is technically optional, but in this version drafting, evidence extractio
 
 ---
 
-## 3. Your style and sources: `/academic-writer:init`
+## 3. Your style and sources: `/academic-writer:setup init`
 
-Put your published papers into the `past-articles` folder that setup created, then run `/academic-writer:init`.
+Put your published papers into the `past-articles` folder that setup created, then run `/academic-writer:setup init`.
 
 - It asks your full name (used as the key for your voice profile), confirms field, language and citation style, and which languages you want abstracts in.
 - It reads your papers and builds a **style fingerprint**: sentence length and structure, vocabulary and register, how you build paragraphs, your tone and stance, preferred transitions, citation density, and how you open and close. **You review it and correct anything** before it is saved.
 - It sets up your **voice profile** (a set of 12 to 20 paragraphs from your papers that you pick as examples of your writing), or reuses the one you already have. The voice profile is shared by all your projects.
 - If you use Trove, it helps you add and list your sources.
 
-`/academic-writer:init --quick` does a faster version: no computed style analysis, no voice setup, no sources.
+`/academic-writer:setup init --quick` does a faster version: no computed style analysis, no voice setup, no sources.
 
-Before your first article, `/academic-writer:write` checks that your voice profile exists. If it does not, it asks you to run `/academic-writer:voice`.
+Before your first article, `/academic-writer:write` checks that your voice profile exists. If it does not, it asks you to run `/academic-writer:setup voice`.
 
 ---
 
@@ -63,7 +63,7 @@ Before your first article, `/academic-writer:write` checks that your voice profi
 
 1. Describe the topic and choose the language.
 2. Pick the sources for this article.
-3. State your thesis in your own words. If you used `/academic-writer:ideate` first, its research brief is the starting point.
+3. State your thesis in your own words. If you used `/academic-writer:write ideate` first, its research brief is the starting point.
 4. The plugin extracts **verified evidence**: passages whose quotations match the source word for word. You can mark passages that must appear.
 5. Shape the outline together. You approve each section's claim; drafting does not start until every claim is approved.
 
@@ -76,7 +76,7 @@ Before your first article, `/academic-writer:write` checks that your voice profi
 
 **Then:**
 
-10. Open it in Word, add comments or tracked changes, save, and run `/academic-writer:revise`. It groups your comments, asks you to confirm each group, updates the article and makes a new Word file.
+10. Open it in Word, add comments or tracked changes, save, and run `/academic-writer:write revise`. It groups your comments, asks you to confirm each group, updates the article and makes a new Word file.
 
 ---
 
@@ -85,14 +85,14 @@ Before your first article, `/academic-writer:write` checks that your voice profi
 | Command | When to use it |
 |---|---|
 | `/academic-writer:write` | Start another article. |
-| `/academic-writer:revise` | Fold your Word comments back into the article. |
-| `/academic-writer:edit` | Larger revisions: several passages, tone, structure, evidence. |
-| `/academic-writer:edit-section` | A quick fix to one section. |
-| `/academic-writer:proofread` | A final typo, language and editorial pass before submission. |
-| `/academic-writer:review` | A six-dimension scorecard of the finished article. |
-| `/academic-writer:research` | Check a claim or explore a topic in your sources. |
-| `/academic-writer:health` | Check that everything still works, with a fix for anything missing. |
-| `/academic-writer:help` | The short command list. |
+| `/academic-writer:write revise` | Fold your Word comments back into the article. |
+| `/academic-writer:write edit` | Larger revisions: several passages, tone, structure, evidence. |
+| `/academic-writer:write edit-section` | A quick fix to one section. |
+| `/academic-writer:write proofread` | A final typo, language and editorial pass before submission. |
+| `/academic-writer:write review` | A six-dimension scorecard of the finished article. |
+| `/academic-writer:write research` | Check a claim or explore a topic in your sources. |
+| `/academic-writer:setup health` | Check that everything still works, with a fix for anything missing. |
+| `/academic-writer:setup help` | The short command list. |
 
 To change your field or turn Trove or NotebookLM on or off, ask in plain words ("change my field to ...", "turn on Trove"); Claude updates the profile.
 

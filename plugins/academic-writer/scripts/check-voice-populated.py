@@ -6,7 +6,7 @@
 check-voice-populated.py
 
 Deterministic check for whether AUTHOR_VOICE.md is a real, usable voice profile
-or an unpopulated stub. See src/skills/voice/references/stub-definition.md for
+or an unpopulated stub. See src/skills/setup/references/stub-definition.md for
 the full rationale — this script is the enforceable implementation of that
 definition, not a separate heuristic.
 

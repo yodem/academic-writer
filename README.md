@@ -2,7 +2,7 @@
 
 Academic Writer is a plugin (an add-on) for Claude Code that helps humanities researchers write scholarly articles in Hebrew or English. You talk with Claude in plain language. The plugin takes you from a rough topic to a footnoted Word file: it reads the sources you choose, helps you settle a thesis and an outline, drafts in your own style, checks every citation against your sources, and then folds your Word comments back into the text.
 
-See it in action on the **[Academic Writer site](https://yodem.github.io/academic-writer/)** (English and Hebrew). A fuller, step-by-step version of this page is the **[Academic Writer guide](https://yodem.github.io/academic-writer/guide/)**, which you can read online with no install. It also ships with the plugin as an offline guide: after installing, type `/academic-writer:intro` to open it in your browser.
+See it in action on the **[Academic Writer site](https://yodem.github.io/academic-writer/)** (English and Hebrew). A fuller, step-by-step version of this page is the **[Academic Writer guide](https://yodem.github.io/academic-writer/guide/)**, which you can read online with no install. It also ships with the plugin as an offline guide: after installing, type `/academic-writer:setup intro` to open it in your browser.
 
 ---
 
@@ -86,9 +86,9 @@ claude plugin install academic-writer@yodem
 
 Run these inside Claude Code, started in your research folder (not your main home folder).
 
-1. **`/academic-writer:intro`** opens the full guide in your web browser.
+1. **`/academic-writer:setup intro`** opens the full guide in your web browser.
 2. **`/academic-writer:setup`** is a short guided conversation, one question at a time, about ten minutes. It asks your field, article language and citation style; checks the tools the plugin needs and **asks your permission before installing anything**; walks you through getting and safely storing a free Gemini key, then tests it; and writes one short sample paragraph. After you store the key, setup asks you to quit Claude Code completely, open it again in the same folder, type `/academic-writer:setup` and choose **Check my Gemini key**; your answers are saved.
-3. **`/academic-writer:init`** (recommended) builds your full profile. First copy 5 to 10 of your published articles (PDF or Word) into the `past-articles` folder inside your research folder (setup created it). Init reads them, shows you what it learned about your style so you can correct it, and helps you connect your source library.
+3. **`/academic-writer:setup init`** (recommended) builds your full profile. First copy 5 to 10 of your published articles (PDF or Word) into the `past-articles` folder inside your research folder (setup created it). Init reads them, shows you what it learned about your style so you can correct it, and helps you connect your source library.
 4. **`/academic-writer:write`** starts your first article.
 
 Running setup or init again later is safe: they update your profile and never erase it.
@@ -99,7 +99,7 @@ Running setup or init again later is safe: they update your profile and never er
 
 `/academic-writer:write` has a conversation part, where you make every decision about the argument, and a drafting part the plugin runs on its own.
 
-1. **Your voice.** Before anything else, write checks that your voice profile (the examples and writing habits drafts should follow) exists. If it does not, it asks whether to build it first with `/academic-writer:voice` (about 10 minutes, using 3 or more of your past articles) or to write in a neutral scholarly voice for now.
+1. **Your voice.** Before anything else, write checks that your voice profile (the examples and writing habits drafts should follow) exists. If it does not, it asks whether to build it first with `/academic-writer:setup voice` (about 10 minutes, using 3 or more of your past articles) or to write in a neutral scholarly voice for now.
 2. **Topic and language.** Say what you want to write about and in which language.
 3. **Sources.** You pick the sources for this article from the ones you made available.
 4. **Your thesis.** You state the thesis in your own words; the plugin records it exactly as you wrote it.
@@ -109,9 +109,9 @@ Running setup or init again later is safe: they update your profile and never er
 8. **Citation check.** Claude then checks every paragraph's citations against your sources. A paragraph that fails is rewritten. If it still fails after the allowed number of attempts, it is marked `[NEEDS REVIEW]` and named in the final report so you know exactly what to check.
 9. **Word file.** You get a `.docx` with real Word footnotes. Claude tells you where it saved it.
 10. **Your comments.** Open it in Word, add comments or tracked changes wherever you want something changed, save and close.
-11. **Revise.** Run `/academic-writer:revise`. It reads your comments and tracked changes, groups them, asks you to confirm each group, updates the text and makes a new Word file. With your agreement, it also learns from your rewrites so later drafts sound more like you. Repeat steps 10 and 11 as often as you like.
+11. **Revise.** Run `/academic-writer:write revise`. It reads your comments and tracked changes, groups them, asks you to confirm each group, updates the text and makes a new Word file. With your agreement, it also learns from your rewrites so later drafts sound more like you. Repeat steps 10 and 11 as often as you like.
 
-Before you submit, run `/academic-writer:proofread` for a typo, language and editorial pass (the original is never changed; you get a corrected copy, a report and an editorial memo), and `/academic-writer:review` for a scorecard of the article's structure, argument and citations.
+Before you submit, run `/academic-writer:write proofread` for a typo, language and editorial pass (the original is never changed; you get a corrected copy, a report and an editorial memo), and `/academic-writer:write review` for a scorecard of the article's structure, argument and citations.
 
 ---
 
@@ -121,24 +121,24 @@ Type any of these in Claude Code. You can also describe what you want in your ow
 
 | Command | What it does |
 |---|---|
-| `/academic-writer:intro` | Open the full guide in your web browser. |
+| `/academic-writer:setup intro` | Open the full guide in your web browser. |
 | `/academic-writer:setup` | First-run setup: tools, Gemini key, a sample paragraph. Asks before installing anything. |
-| `/academic-writer:init` | Full onboarding: your profile, your writing style from past articles, your source library. |
+| `/academic-writer:setup init` | Full onboarding: your profile, your writing style from past articles, your source library. |
 | `/academic-writer:write` | Write a new article, step by step, ending with a Word file. |
-| `/academic-writer:revise` | Read your Word comments and tracked changes and update the article. |
-| `/academic-writer:edit` | Revise an article you already drafted: several passages, tone, structure, argument order or evidence. |
-| `/academic-writer:edit-section` | Quick revision of one section: rewrite, expand, shorten, fix citations or style. |
-| `/academic-writer:proofread` | Proofread a finished article (Markdown or Word): a corrected copy, a report and an editorial memo. |
-| `/academic-writer:review` | Score a finished article on six dimensions and show concrete findings. |
-| `/academic-writer:research` | Investigate a topic or check a claim against your sources; only word-for-word verified quotations come back. |
-| `/academic-writer:ingest` | Upload a single article or chapter to your source library, keeping its printed page numbers and adding a citation guide. |
-| `/academic-writer:ingest-book` | Upload a whole book (multi-volume, scanned or EPUB) with a clickable table of contents that jumps to the right page. |
-| `/academic-writer:ideate` | Turn a vague topic into a sharp research question; saves a research brief that write reads. |
-| `/academic-writer:ocr` | Turn a scanned PDF or photographed page (or a folder of them) into plain text, with Gemini, Claude, Codex or local Tesseract, your choice. |
-| `/academic-writer:library-eval` | Compare Trove and PageIndex on your own article: you judge anonymous A and B answers, then see which library was which. |
-| `/academic-writer:voice` | Build or update your voice profile: exemplar paragraphs you choose and your writing habits. |
-| `/academic-writer:health` | Check that everything is ready, with a plain-language fix for anything missing. |
-| `/academic-writer:help` | A short list of every command and the three steps to get started. |
+| `/academic-writer:write revise` | Read your Word comments and tracked changes and update the article. |
+| `/academic-writer:write edit` | Revise an article you already drafted: several passages, tone, structure, argument order or evidence. |
+| `/academic-writer:write edit-section` | Quick revision of one section: rewrite, expand, shorten, fix citations or style. |
+| `/academic-writer:write proofread` | Proofread a finished article (Markdown or Word): a corrected copy, a report and an editorial memo. |
+| `/academic-writer:write review` | Score a finished article on six dimensions and show concrete findings. |
+| `/academic-writer:write research` | Investigate a topic or check a claim against your sources; only word-for-word verified quotations come back. |
+| `/academic-writer:library ingest` | Upload a single article or chapter to your source library, keeping its printed page numbers and adding a citation guide. |
+| `/academic-writer:library ingest-book` | Upload a whole book (multi-volume, scanned or EPUB) with a clickable table of contents that jumps to the right page. |
+| `/academic-writer:write ideate` | Turn a vague topic into a sharp research question; saves a research brief that write reads. |
+| `/academic-writer:library ocr` | Turn a scanned PDF or photographed page (or a folder of them) into plain text, with Gemini, Claude, Codex or local Tesseract, your choice. |
+| `/academic-writer:library library-eval` | Compare Trove and PageIndex on your own article: you judge anonymous A and B answers, then see which library was which. |
+| `/academic-writer:setup voice` | Build or update your voice profile: exemplar paragraphs you choose and your writing habits. |
+| `/academic-writer:setup health` | Check that everything is ready, with a plain-language fix for anything missing. |
+| `/academic-writer:setup help` | A short list of every command and the three steps to get started. |
 
 A few more things the plugin can do have no command of their own. Ask for them in plain words:
 
@@ -153,25 +153,25 @@ A few more things the plugin can do have no command of their own. Ask for them i
 
 Your books are read from **Trove** unless you choose otherwise. Nothing here changes how the plugin works for you today, and you can skip this whole section.
 
-**What the choices are.** Each article project can read its books from Trove (the default), from **PageIndex**, or from both, where one library answers and the other is tested quietly in the background without ever changing, slowing or failing your result. PageIndex is a second library that keeps a short outline of every book, with a few lines on each section, so Claude can go straight to the likely page. You choose per article, and you can change your mind with `/academic-writer:update-tools`.
+**What the choices are.** Each article project can read its books from Trove (the default), from **PageIndex**, or from both, where one library answers and the other is tested quietly in the background without ever changing, slowing or failing your result. PageIndex is a second library that keeps a short outline of every book, with a few lines on each section, so Claude can go straight to the likely page. You choose per article, and you can change your mind with `/academic-writer:setup update-tools`.
 
 **Two ways to get PageIndex.** Setup, init and update-tools offer both, in plain words, and ask before doing anything:
 
 1. **The plugin's own helper.** The plugin sets up a small helper in its own data folder (not in your system). The basic helper is about 100 MB and needs Python 3.9 or newer; a larger one (about 500 MB, Python 3.10 or newer and, on a Mac, the `pango` library) can also prepare a book that has no table of contents. You can remove it again. The steps are below.
 2. **Your own PageIndex.** If you already run PageIndex yourself, for example on a server, you type its command into the plugin's `pageindex_command` setting (`/plugin`, then **Installed**, then **academic-writer**, then **Configure**). A command you set yourself always wins over the built-in helper.
 
-**Preparing your books.** A book must be prepared once before PageIndex can read it. When you add a book with `/academic-writer:ingest` or `/academic-writer:ingest-book`, the plugin writes it to Trove first, checks it, and then offers to prepare it for PageIndex too, with the same table of contents and the same page numbers, so a citation means the same page in both. You can also add a reading to a book you already have, and prepare the books already in Trove (a "backfill") in one go. For each preparation the plugin tells you in advance how much text would be sent to Google and asks you; the free choice sends nothing (see Privacy).
+**Preparing your books.** A book must be prepared once before PageIndex can read it. When you add a book with `/academic-writer:library ingest` or `/academic-writer:library ingest-book`, the plugin writes it to Trove first, checks it, and then offers to prepare it for PageIndex too, with the same table of contents and the same page numbers, so a citation means the same page in both. You can also add a reading to a book you already have, and prepare the books already in Trove (a "backfill") in one go. For each preparation the plugin tells you in advance how much text would be sent to Google and asks you; the free choice sends nothing (see Privacy).
 
 **What is measured.** Every lookup and every citation check is logged on your computer in `.academic-helper/retrieval.jsonl`, with the time it took, an estimate of how many tokens of text it returned, and the citation checker's verdict. `aw library report` turns that into a comparison on your real articles: speed, failures, how often the two libraries return the same page, the citation checker's pass rate, tokens, and the cost of any preparation and evaluation runs. Token figures from the log are estimates, not a bill.
 
-**Judge it yourself: a blind evaluation.** `/academic-writer:library-eval` picks claims from one of your drafts, has a separate Claude (or Codex) look up the supporting pages in each library, and shows you the two answers side by side as "A" and "B" in random order on a private page that works offline, in Hebrew and English. You mark each pair better A, better B, same or neither, with a note. Only after you finish does the plugin reveal which library was which, with win rates, a confidence range, time, cost and how often each found the page the citation checker had confirmed. With too few pairs it tells you it is only a first look.
+**Judge it yourself: a blind evaluation.** `/academic-writer:library library-eval` picks claims from one of your drafts, has a separate Claude (or Codex) look up the supporting pages in each library, and shows you the two answers side by side as "A" and "B" in random order on a private page that works offline, in Hebrew and English. You mark each pair better A, better B, same or neither, with a note. Only after you finish does the plugin reveal which library was which, with win rates, a confidence range, time, cost and how often each found the page the citation checker had confirmed. With too few pairs it tells you it is only a first look.
 
 **Install steps for the built-in helper.** Run these in Claude Code, started in your research folder, and answer the questions it asks:
 
-1. Type `/academic-writer:update-tools` (or `/academic-writer:setup`, the first time) and say you want PageIndex. Among the choices it offers, pick **Set it up on this computer**.
+1. Type `/academic-writer:setup update-tools` (or `/academic-writer:setup`, the first time) and say you want PageIndex. Among the choices it offers, pick **Set it up on this computer**.
 2. Read the plan it shows (which size, how much disk space, where it goes) and say yes if you want it. Nothing is installed before that.
 3. If it says your Python is too old or `pango` is missing for the larger helper, you can accept the basic helper or follow the short steps it gives for your system. It never installs Python for you.
-4. Type `/academic-writer:health` to confirm it is ready. It shows which helper is in use.
+4. Type `/academic-writer:setup health` to confirm it is ready. It shows which helper is in use.
 
 Full details, commands, the report explained line by line and the known limits are in [docs/library-routes.md](docs/library-routes.md).
 
@@ -199,7 +199,7 @@ Either way, the key is picked up only when a **new** Claude Code session starts.
 - **Anthropic (Claude).** Your conversation with Claude, and the text Claude reads to help you (your drafts, the source passages it checks), go to Anthropic, as with any use of Claude Code.
 - **Google (Gemini).** With a Gemini key, the text being drafted, edited, proofread or summarised, the source passages it relies on, and any scanned pages you ask it to read are sent to Google. On Google's free tier, Google may use what you send to improve its products. Check Google's current terms, and consider a paid key for unpublished work you consider sensitive.
 - **Google (Gemini) and PageIndex.** If you prepare books for PageIndex and choose **Gemini summaries**, the text of each section of the book is sent to Google, with your Gemini key, so Gemini can write the short outline. The plugin tells you how much text, and asks first, every time. The free option (`--summaries hints`, offered alongside) sends nothing: it reuses the hints already written for Trove. The same Google terms as above apply. Nothing is ever sent to PageIndex Cloud: the plugin has no code for it and needs no PageIndex account.
-- **Anthropic (or OpenAI) and the blind evaluation.** `/academic-writer:library-eval` runs a separate Claude Code (or Codex, if you choose it) to find supporting pages. The claims from your draft and the page text it reads go to Anthropic (or OpenAI), on your own plan, after you have seen an estimate and said yes. The quiet background test of a second library uses no AI model at all.
+- **Anthropic (or OpenAI) and the blind evaluation.** `/academic-writer:library library-eval` runs a separate Claude Code (or Codex, if you choose it) to find supporting pages. The claims from your draft and the page text it reads go to Anthropic (or OpenAI), on your own plan, after you have seen an estimate and said yes. The quiet background test of a second library uses no AI model at all.
 - **Trove (optional).** Only the sources you choose to upload are stored there. If you use Trove, your voice profile is also synced there so it follows you between computers.
 - **Your keys.** Saved through the plugin settings, the key is kept in your keychain. The plugin never prints it or writes it into your research folder.
 
@@ -225,7 +225,7 @@ Your research folders, drafts and Word files are never touched by uninstalling.
 
 ## Troubleshooting
 
-Start with **`/academic-writer:health`**. It checks your profile, key, tools and sources, and tells you in plain words what to fix. Its report contains no keys, so you can share it when asking for help.
+Start with **`/academic-writer:setup health`**. It checks your profile, key, tools and sources, and tells you in plain words what to fix. Its report contains no keys, so you can share it when asking for help.
 
 - **On Windows, `/plugin marketplace add` failed and now says the folder is in use, or `git` was not found.** Git was missing (see *On Windows* above) and the failed attempt left a half-made folder in `.claude\plugins\marketplaces` that Windows keeps locked. Close Claude Code, open Task Manager (Ctrl+Shift+Esc), end any `git.exe` under Details, delete the half-made folder inside `.claude\plugins\marketplaces` in your user folder, install Git, then open Claude Code and run the command again.
 - **Every session start prints `node: command not found`** (older versions), or `Academic Writer needs Node.js`. Install Node.js (`winget install --id OpenJS.NodeJS.LTS -e` on Windows, the LTS download from nodejs.org on a Mac), then restart Claude Code.
@@ -233,13 +233,13 @@ Start with **`/academic-writer:health`**. It checks your profile, key, tools and
 - **The `/academic-writer:` commands do not appear.** Quit Claude Code completely and open it again. Then type `/plugin` and check that academic-writer is listed and enabled. If not, repeat the two install lines.
 - **"missing Google API key" or "API key not valid".** Run `/academic-writer:setup` again and choose to check the Gemini key. After saving a key, start a new Claude Code session in your research folder.
 - **"No profile found".** Make sure you started Claude Code inside your research folder. In a new folder, run `/academic-writer:setup` first.
-- **Write asks about your voice profile.** Choose "Build my voice first" and run `/academic-writer:voice`, or continue without it and build it later.
+- **Write asks about your voice profile.** Choose "Build my voice first" and run `/academic-writer:setup voice`, or continue without it and build it later.
 - **The Word file is not created, or a "missing Python package" message.** Run `/academic-writer:setup`; it offers to install the add-ons. To do it yourself: `python3 -m pip install --user python-docx lxml pdfplumber pymupdf jsonschema`.
 - **Proofreading a Word file fails.** The proofread command converts `.docx` files with `pandoc`, a free document converter, which setup does not install. Install it from [pandoc.org/installing.html](https://pandoc.org/installing.html), or proofread a Markdown copy.
-- **The PageIndex helper will not install, or `aw library status` says PageIndex is not reachable.** Run `/academic-writer:health`; it names the cause (Python older than 3.10 for the larger helper, a missing `pango` library on a Mac, no network, or an old command in `pageindex_command`). The basic helper works with Python 3.9. Trove keeps working either way.
+- **The PageIndex helper will not install, or `aw library status` says PageIndex is not reachable.** Run `/academic-writer:setup health`; it names the cause (Python older than 3.10 for the larger helper, a missing `pango` library on a Mac, no network, or an old command in `pageindex_command`). The basic helper works with Python 3.9. Trove keeps working either way.
 - **Hebrew looks reversed in the Claude Code window.** That is only the display; the Word file is laid out right to left.
 
-Still stuck? Open an issue at [github.com/yodem/academic-writer/issues](https://github.com/yodem/academic-writer/issues) and include the output of `/academic-writer:health`.
+Still stuck? Open an issue at [github.com/yodem/academic-writer/issues](https://github.com/yodem/academic-writer/issues) and include the output of `/academic-writer:setup health`.
 
 ---
 
@@ -276,7 +276,7 @@ npm run hooks:install                   # once: pre-commit version check and a p
 ```
 
 - **Privacy gate.** The repository is public. `scripts/check-no-private-refs.sh` fails if a tracked file carries a personal identifier (home paths, private emails, internal host names) or if internal dev-state paths are tracked. It runs in CI and in pytest.
-- **Generated guide blocks.** The command table and version stamp in `src/guide/index.html` and the command list in `src/skills/help/SKILL.md` are generated from skill frontmatter by `scripts/gen-guide.py`, which the build runs. Edit the text around the `guide:` markers, never inside them; `python3 scripts/gen-guide.py --check` reports drift.
+- **Generated guide blocks.** The command table and version stamp in `src/guide/index.html` and the command list in `src/skills/setup/phases/help.md` are generated from skill frontmatter by `scripts/gen-guide.py`, which the build runs. Edit the text around the `guide:` markers, never inside them; `python3 scripts/gen-guide.py --check` reports drift.
 - **CI.** The CI and release workflows install the dependencies of `src/hooks` and `src/cli`, then run the version, privacy and test gates, `npm run test:cli` and both typechecks. They do not install the larger PageIndex helper, so the tests use fakes for it.
 - **PageIndex helper.** `src/scripts/pageindex/` holds `pilib`, the helper the plugin installs on request (pinned version and hashes in `PINNED.json`; third-party licences in `THIRD_PARTY_NOTICES.md`). Its tests run on Python 3.9 or newer.
 - **Thresholds.** Numeric limits live only in `src/thresholds.json`.

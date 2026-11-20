@@ -565,7 +565,7 @@ def fetch_ref(reg: Path, slug: str, key: str, *, task: str | None = None, dry_ru
             # downloading is all a fetch does: no OCR, no Gemini call, no text extraction (extract on request: extract.py)
     elif status == "kotar":
         plan = {"kind": "kotar-source", "ref": f"refs:{slug}:{key}", "title": " ".join(citation.split())[:80],
-                "text": f"run /academic-writer:kotar-fetch for: {' '.join(citation.split())}"}
+                "text": f"run /academic-writer:library kotar-fetch for: {' '.join(citation.split())}"}
         if dry_run:
             step("kotar", "chore-would-be-created", plan["ref"])
         else:

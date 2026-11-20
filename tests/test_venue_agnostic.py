@@ -5,7 +5,7 @@ legitimate source for the CHECKS, and an illegitimate source for a shipped venue
 researcher submits to their own journals, not the one that happened to reject the article
 this feature was built from. So the venue-specific list lives in the researcher's own
 `.academic-helper/venues/<slug>.md`, and everything venue-independent lives in
-src/skills/proofread/references/editorial-checks.md, which is always loaded.
+src/skills/write/references/editorial-checks.md, which is always loaded.
 
 One exception is allow-listed below: `bar-ilan-seminar-apa-he`, an opt-in citation and layout
 house style (not a journal) bundled in src/venues/. It loads only with `--venue`, and a project
@@ -18,7 +18,7 @@ import subprocess
 import unittest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CHECKS = os.path.join(REPO, "src", "skills", "proofread", "references", "editorial-checks.md")
+CHECKS = os.path.join(REPO, "src", "skills", "write", "references", "editorial-checks.md")
 MEMO = os.path.join(REPO, "src", "cli", "src", "prompts", "proofread-memo.md")
 
 

@@ -37,7 +37,7 @@ function refreshVersion(dir: string): string {
 function paragraphs(text: string): string[] { return text.split(/\n\s*\n/).map(p => p.replace(/^#+\s*/, '').trim()).filter(Boolean); }
 export async function voiceBundle(options: { n: number; pairs: number; runId: string }): Promise<{ exemplars: Exemplar[]; pairs: Pair[]; path: string }> {
   const dir = store();
-  if (!existsSync(join(dir, 'profile.json'))) throw new AwError('ERROR', 'voice.bundle', 'exit 3 no voice store — run: aw voice pull (or /academic-writer:voice)');
+  if (!existsSync(join(dir, 'profile.json'))) throw new AwError('ERROR', 'voice.bundle', 'exit 3 no voice store — run: aw voice pull (or /academic-writer:setup voice)');
   const all = readJsonl<Exemplar>(join(dir, 'exemplars.jsonl'));
   const chosen: Exemplar[] = [];
   const sources = new Set<string>();

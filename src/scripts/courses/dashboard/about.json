@@ -1,11 +1,11 @@
 {
-  "version": "0.23.1",
+  "version": "0.24.0",
   "features": [
     {
       "id": "onboarding",
       "name_he": "התחלה והגדרה",
       "description_he": "הגדרה ראשונה, פרופיל ובדיקת הכלים שהתוסף צריך.",
-      "command": "/academic-writer:init",
+      "command": "/academic-writer:setup init",
       "status": "ok",
       "tested": "manual",
       "subfeatures": [
@@ -57,7 +57,7 @@
       "id": "voice",
       "name_he": "הקול שלי",
       "description_he": "מאגר אחד של סגנון הכתיבה שלך, משותף לכל הפרויקטים.",
-      "command": "/academic-writer:voice",
+      "command": "/academic-writer:setup voice",
       "status": "partial",
       "tested": "manual",
       "subfeatures": [
@@ -116,7 +116,7 @@
       "id": "research",
       "name_he": "מחקר ואיסוף ראיות",
       "description_he": "שאלת מחקר ואיסוף קטעים מאומתים מהמקורות.",
-      "command": "/academic-writer:research",
+      "command": "/academic-writer:write research",
       "status": "ok",
       "tested": "manual",
       "subfeatures": [
@@ -154,20 +154,20 @@
       "id": "ingest",
       "name_he": "הוספת מקורות",
       "description_he": "העלאת מאמר או ספר שלם לספרייה עם מספרי עמודים מודפסים.",
-      "command": "/academic-writer:ingest",
+      "command": "/academic-writer:library ingest",
       "status": "ok",
       "tested": "manual",
       "subfeatures": [
         {
           "id": "ingest-article",
-          "name": "/academic-writer:ingest — single article or chapter with printed page numbers preserved, hinted contents, page-1 reading-and-citation guide (Chicago + Hebrew + profile style), aw ocr with orientation/truncation handling, mandatory read-back",
+          "name": "/academic-writer:library ingest — single article or chapter with printed page numbers preserved, hinted contents, page-1 reading-and-citation guide (Chicago + Hebrew + profile style), aw ocr with orientation/truncation handling, mandatory read-back",
           "status": "ok",
           "tested": "manual",
           "subfeatures": []
         },
         {
           "id": "ingest-book",
-          "name": "/academic-writer:ingest-book — whole book/multi-volume/scanned PDF/EPUB as one book with nested navigable ToC metadata (hints on every entry), crosswalk from printed pages, mandatory read-back; repairs a flat ToC",
+          "name": "/academic-writer:library ingest-book — whole book/multi-volume/scanned PDF/EPUB as one book with nested navigable ToC metadata (hints on every entry), crosswalk from printed pages, mandatory read-back; repairs a flat ToC",
           "status": "ok",
           "tested": "manual",
           "subfeatures": []
@@ -264,7 +264,7 @@
         },
         {
           "id": "docx-handoff",
-          "name": "generate-docx.py creates Word output; author comments and runs /academic-writer:revise",
+          "name": "generate-docx.py creates Word output; author comments and runs /academic-writer:write revise",
           "status": "ok",
           "tested": "unit",
           "subfeatures": []
@@ -422,7 +422,7 @@
       "id": "editing",
       "name_he": "עריכה והגהה",
       "description_he": "עריכת מאמר או חלק ממנו, והגהה עם הערות ותיקונים.",
-      "command": "/academic-writer:edit-section",
+      "command": "/academic-writer:write edit-section",
       "status": "ok",
       "tested": "manual",
       "subfeatures": [
@@ -571,7 +571,7 @@
       "id": "docx-revise-loop",
       "name_he": "סבב הערות ב-Word",
       "description_he": "קריאת הערות ותיקונים ב-Word ועדכון הטיוטה.",
-      "command": "/academic-writer:revise",
+      "command": "/academic-writer:write revise",
       "status": "ok",
       "tested": "unit",
       "subfeatures": [
@@ -647,7 +647,7 @@
       "id": "lesson-transcription",
       "name_he": "סיכומי שיעורים",
       "description_he": "הקלטות ותמלולים הופכים לדפי שיעור מסודרים.",
-      "command": "/academic-writer:lesson-notes",
+      "command": "/academic-writer:courses lesson-notes",
       "status": "ok",
       "tested": "unit",
       "subfeatures": [
@@ -671,7 +671,7 @@
       "id": "course-dashboard",
       "name_he": "לוח הקורסים",
       "description_he": "לוח מקומי עם השבוע, הקורסים והמטלות.",
-      "command": "/academic-writer:dashboard",
+      "command": "/academic-writer:courses dashboard",
       "status": "ok",
       "tested": "e2e",
       "subfeatures": [
@@ -806,7 +806,7 @@
         },
         {
           "id": "library-eval",
-          "name": "/academic-writer:library-eval and aw library eval plan|run|pairs|page|import|unblind|status: claims from a draft, locating agents (claude or codex) per route, anonymised A/B pairs with a sealed key, a private judging page (local file), unblinded report with win rate, interval and sign test",
+          "name": "/academic-writer:library library-eval and aw library eval plan|run|pairs|page|import|unblind|status: claims from a draft, locating agents (claude or codex) per route, anonymised A/B pairs with a sealed key, a private judging page (local file), unblinded report with win rate, interval and sign test",
           "status": "partial",
           "tested": "e2e",
           "subfeatures": []
@@ -817,7 +817,7 @@
       "id": "kotar-fetch",
       "name_he": "הורדה מכותר",
       "description_he": "הורדת העמודים המצוטטים מספר בכותר כקובץ PDF אחד.",
-      "command": "/academic-writer:kotar-fetch",
+      "command": "/academic-writer:library kotar-fetch",
       "status": "ok",
       "tested": "manual",
       "subfeatures": [
@@ -868,7 +868,7 @@
       "id": "activity-pane",
       "name_he": "חלון פעילות",
       "description_he": "חלון חי ב-Claude Code שמראה את שלבי הכתיבה.",
-      "command": "/academic-writer:watch",
+      "command": "/academic-writer:write watch",
       "status": "partial",
       "tested": "manual",
       "subfeatures": []
@@ -902,23 +902,23 @@
     "student": [
       "הריצו /academic-writer:setup ובחרו תיקיית בית: שם יישמרו הפרופיל והסמסטר שלכם.",
       "הריצו /academic-writer:courses כדי להגדיר את הסמסטר ואת הקורסים.",
-      "פתחו את הלוח עם /academic-writer:dashboard וראו את השבוע שלפניכם.",
-      "הוסיפו מאמר או ספר לספרייה עם /academic-writer:ingest.",
+      "פתחו את הלוח עם /academic-writer:courses dashboard וראו את השבוע שלפניכם.",
+      "הוסיפו מאמר או ספר לספרייה עם /academic-writer:library ingest.",
       "התחילו לכתוב עם /academic-writer:write; כל שלב ייראה בלשונית כתיבה."
     ],
     "lecturer": [
       "הריצו /academic-writer:setup ובחרו תיקיית בית ותפקיד מרצה.",
-      "הריצו /academic-writer:init בתיקיית הפרויקט כדי לתת לו פרופיל.",
+      "הריצו /academic-writer:setup init בתיקיית הפרויקט כדי לתת לו פרופיל.",
       "הוסיפו מאמרים קודמים כדי שהתוסף ילמד את הסגנון שלכם.",
-      "כתבו מאמר חדש עם /academic-writer:write, או הגיהו קיים עם /academic-writer:proofread."
+      "כתבו מאמר חדש עם /academic-writer:write, או הגיהו קיים עם /academic-writer:write proofread."
     ],
     "researcher": [
       "הריצו /academic-writer:setup ובחרו תיקיית בית ותפקיד חוקר.",
-      "הריצו /academic-writer:init בתיקיית המחקר כדי לתת לה פרופיל.",
-      "הוסיפו מקורות לספרייה עם /academic-writer:ingest או /academic-writer:ingest-book.",
-      "נסחו שאלת מחקר עם /academic-writer:ideate וכתבו עם /academic-writer:write.",
-      "פתחו את הלוח עם /academic-writer:dashboard כדי לעקוב אחרי הכתיבה."
+      "הריצו /academic-writer:setup init בתיקיית המחקר כדי לתת לה פרופיל.",
+      "הוסיפו מקורות לספרייה עם /academic-writer:library ingest או /academic-writer:library ingest-book.",
+      "נסחו שאלת מחקר עם /academic-writer:write ideate וכתבו עם /academic-writer:write.",
+      "פתחו את הלוח עם /academic-writer:courses dashboard כדי לעקוב אחרי הכתיבה."
     ]
   },
-  "guide": "/academic-writer:intro"
+  "guide": "/academic-writer:setup intro"
 }
