@@ -504,6 +504,15 @@ def _is_id(value: Any) -> bool:
     return isinstance(value, (str, int)) and not isinstance(value, bool)
 
 
+def _is_pos_id(value: Any) -> bool:
+    """A positive integer, or a string of ASCII digits that is one."""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return value > 0
+    return isinstance(value, str) and value.isascii() and value.isdigit() and int(value) > 0
+
+
 def row_problem(row: Any) -> str | None:
     """Why this `submissions.checked` row is malformed, or None when it is well formed (types only, no registry)."""
     if not isinstance(row, dict):
@@ -512,19 +521,20 @@ def row_problem(row: Any) -> str | None:
         return "task is not a non-empty string"
     if not isinstance(row.get("course"), str):
         return "course is not a string"
-    if not _is_id(row.get("cmid")):
-        return "cmid is not a string or integer"
+    if not _is_pos_id(row.get("cmid")):
+        return "cmid is not a positive integer or a string of digits"
     if row.get("type") not in ROW_TYPES:
         return f"type {row.get('type')!r} is not one of {', '.join(ROW_TYPES)}"
     for key in ("status", "team_status"):
         if key in row and not isinstance(row[key], str):
             return f"{key} is not a string"
-    if "quiz_review_links" in row and (not isinstance(row["quiz_review_links"], int) or isinstance(row["quiz_review_links"], bool)):
-        return "quiz_review_links is not an integer"
-    if "my_user_id" in row and not _is_id(row["my_user_id"]):
-        return "my_user_id is not a string or integer"
-    if "author_ids" in row and (not isinstance(row["author_ids"], list) or not all(_is_id(a) for a in row["author_ids"])):
-        return "author_ids is not a list of strings or integers"
+    if "quiz_review_links" in row and (not isinstance(row["quiz_review_links"], int) or isinstance(row["quiz_review_links"], bool)
+                                        or row["quiz_review_links"] < 0):
+        return "quiz_review_links is not an integer >= 0"
+    if "my_user_id" in row and not _is_pos_id(row["my_user_id"]):
+        return "my_user_id is not a positive integer or a string of digits"
+    if "author_ids" in row and (not isinstance(row["author_ids"], list) or not all(_is_pos_id(a) for a in row["author_ids"])):
+        return "author_ids is not a list of positive integers or strings of digits"
     if "error" in row and (not isinstance(row["error"], str) or not row["error"]):
         return "error is not a non-empty string"
     return None
@@ -567,7 +577,7 @@ def sync_submissions(directory: Path, day: str, run_id: str) -> dict[str, Any]:
     """Close every open hand-in the coverage file's `submissions.checked` rows prove submitted. Idempotent.
 
     Raises TaskError (nothing closed) when the file is missing, belongs to another run, is dated another day or its
-    `submissions` section or any row is malformed. A row is trusted only when it equals an open hand-in
+    `submissions` section or any row is malformed, or two rows name the same task. A row is trusted only when it equals an open hand-in
     (`open_handins`) in task id, course, cmid and type; a row naming a task already submitted is skipped, any other
     row is an error and closes nothing."""
     import lemida_coverage
@@ -593,15 +603,14 @@ def sync_submissions(directory: Path, day: str, run_id: str) -> dict[str, Any]:
         problem = row_problem(row)
         if problem:
             raise TaskError(f"submissions.checked[{index}]: {problem}")
+    names = [row["task"] for row in rows]
+    dupes = sorted({n for n in names if names.count(n) > 1})
+    if dupes:
+        raise TaskError(f"submissions.checked has more than one row for task {', '.join(dupes)}")
     handins = {h["task"]: h for h in open_handins(directory)["handins"]}
     report: dict[str, Any] = {"date": day, "closed": [], "kept_open": [], "errors": []}
-    seen: set[str] = set()
     for row in rows:
         ident, slug = row["task"], row["course"]
-        if ident in seen:
-            report["errors"].append({"task": ident, "course": slug, "reason": "duplicate row for this task"})
-            continue
-        seen.add(ident)
         handin = handins.get(ident)
         if handin is None:
             known = registry.courses.get(slug)

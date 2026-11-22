@@ -87,7 +87,7 @@ After the courses are walked, check which open hand-ins Lemida already shows as 
 4. Record per `type`, with no Hebrew text matched (classes, ids and `href` parts only):
    - `assign`: the suffix of the status cell's class in `.submissionstatustable` (`submissionstatussubmitted` gives `status: "submitted"`; draft, new and reopened likewise; no such class gives `status: ""`), and the second such cell, the team row, as `team_status` when present.
    - `quiz`: `quiz_review_links`, the number of attempt review links on the quiz page (`#region-main a[href*="/mod/quiz/review.php"][href*="attempt="]`; 0 when there is none).
-   - `forum`: `my_user_id` (`M.cfg.userId`) and `author_ids`, the `user/view.php` `id` of the first post's author in each discussion of that forum. The forum list carries no author ids, so fetch each discussion's `discuss.php` page.
+   - `forum`: `my_user_id` (`M.cfg.userId`) and `author_ids`. The forum page lists each discussion once as `[data-region="discussion-list-item"][data-discussionid]`; fetch `/mod/forum/discuss.php?d=<id>` for each, and take, for every `[data-region="post"]` on it (a reply counts, so a hand-in made as a reply is found), the `id` of that post's first `a[href*="user/view.php"]` (a post without one is skipped; no header or sidebar link counts). If the forum page shows `.pagination` (more than one page of discussions) or lists more than 60 discussions, set `row.error = 'incomplete scan'` instead of a partial `author_ids`.
 
 From a signed-in Lemida tab (`javascript_tool`, keep the leading `await`), paste the `handins` array into `H`. It returns one row per hand-in, without the url (copy `url` from the list into each row when you write the file):
 
@@ -117,11 +117,16 @@ await (async () => {
         row.quiz_review_links = d.querySelectorAll('#region-main a[href*="/mod/quiz/review.php"][href*="attempt="]').length;
       } else if (h.type === 'forum') {
         row.my_user_id = String(M.cfg.userId);
-        const ds = [...new Set([...d.querySelectorAll('a[href*="discuss.php"]')].map(a => a.href))].slice(0, 40);
-        row.author_ids = [];
-        for (const u of ds) {
-          const a = uid((await get(u)).querySelector('a[href*="user/view.php"]'));
-          if (a) row.author_ids.push(a);
+        const ids = [...new Set([...d.querySelectorAll('[data-region="discussion-list-item"][data-discussionid]')].map(r => r.dataset.discussionid))];
+        if (d.querySelector('.pagination') || ids.length > 60) row.error = 'incomplete scan';
+        else {
+          row.author_ids = [];
+          for (const id of ids) {
+            for (const p of (await get(location.origin + '/mod/forum/discuss.php?d=' + id)).querySelectorAll('[data-region="post"]')) {
+              const a = uid(p.querySelector('a[href*="user/view.php"]'));
+              if (a) row.author_ids.push(a);
+            }
+          }
         }
       } else row.error = 'unknown type';
     } catch (e) { row.error = e.name === 'AbortError' ? 'timeout' : String(e.message).slice(0, 60); }

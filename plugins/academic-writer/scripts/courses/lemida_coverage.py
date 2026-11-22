@@ -136,8 +136,8 @@ def _event_gaps(events: Any) -> list[str]:
 
 def _submission_gaps(registry: courses.Registry, section: Any, only: Iterable[str] | None) -> list[str]:
     """`submissions` is the watch's read of what Lemida shows for each open hand-in (`tasks.open_handins`): every one
-    must have a well-formed row that equals it (task, course, cmid, type) and carries an `error` or its type's evidence,
-    and a row that proves a hand-in submitted must already have closed its task."""
+    must have a well-formed row that equals it (task, course, cmid, type); every row, whatever its task, must be
+    well formed and carry an `error` or its type's evidence; two rows for one task are a gap; and a row that proves a hand-in submitted must already have closed its task."""
     import tasks
     if not isinstance(section, dict):
         return ["submissions section missing or not an object"]
@@ -156,6 +156,9 @@ def _submission_gaps(registry: courses.Registry, section: Any, only: Iterable[st
             gaps.append(f"submissions.checked[{index}]{f' (task {name})' if isinstance(name, str) and name else ''}: {problem}")
         else:
             good.setdefault(row["task"], []).append(row)
+            if not tasks.row_evidence(row):
+                gaps.append(f"submissions.checked[{index}] (task {row['task']}): row has neither an error nor the {row['type']} evidence fields")
+    gaps.extend(f"submissions.checked has {len(rows)} rows for task {task}" for task, rows in sorted(good.items()) if len(rows) > 1)
     for handin in tasks.open_handins(registry.directory, only)["handins"]:
         rows = good.get(handin["task"], [])
         exact = [r for r in rows if tasks.row_matches(r, handin)]

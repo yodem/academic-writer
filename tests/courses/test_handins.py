@@ -117,7 +117,7 @@ def test_sync_submissions_forum_author_match_closes_mismatch_stays(tmp_path):
     write_cov(reg, [row(ids[0], "720", type="forum", my_user_id=55, author_ids=["9", "55"]),
                     row(ids[1], "721", type="forum", my_user_id="55", author_ids=[9, 8]),
                     row(ids[2], "722", type="forum", author_ids=[55]),
-                    row(ids[3], "723", type="forum", my_user_id="", author_ids=[""])])
+                    row(ids[3], "723", type="forum", my_user_id="55", author_ids=[])])
     tasks.sync_submissions(reg.directory, DATE, RUN_ID)
     assert [status_of(reg, "kane", t) for t in ids] == ["submitted", "open", "open", "open"]
 
@@ -146,15 +146,16 @@ def test_sync_submissions_quiz_row_for_wrong_task_cmid_type_or_prefix_closes_not
     reading = add(reg, "kane", "reading", "704", "Reading")
     asg = add(reg, "kane", "assignment", "701", "Essay")
     quiz = add(reg, "kane", "exam", "801", "Quiz 1")
+    quiz2 = add(reg, "kane", "exam", "803", "Quiz 2")
     rows = [row(reading, "704", type="quiz", quiz_review_links=2),                 # not a hand-in
             row(asg, "999", status="submitted"),                                   # wrong cmid
             row(asg[:6], "701", status="submitted"),                               # prefix id
             row(quiz, "801", type="assign", status="submitted"),                   # wrong type
-            {**row(quiz, "801", type="quiz", quiz_review_links=1), "course": "cohen"}]  # wrong course
+            {**row(quiz2, "803", type="quiz", quiz_review_links=1), "course": "cohen"}]  # wrong course
     write_cov(reg, rows)
     report = tasks.sync_submissions(reg.directory, DATE, RUN_ID)
     assert report["closed"] == [] and len(report["errors"]) == 5
-    assert [status_of(reg, "kane", t) for t in (reading, asg, quiz)] == ["open"] * 3
+    assert [status_of(reg, "kane", t) for t in (reading, asg, quiz, quiz2)] == ["open"] * 4
     args = type("A", (), {"task_command": "sync-submissions", "date": DATE, "run_id": RUN_ID, "json": False})()
     assert tasks.run_task_command(reg.directory, args) == 1
     assert "5 errors" in capsys.readouterr().out
@@ -230,3 +231,32 @@ def test_sync_submissions_is_idempotent_and_handles_midnight_rollover(tmp_path):
     second = tasks.sync_submissions(reg.directory, DATE, RUN_ID)
     assert len(first["closed"]) == 1 and second["closed"] == [] and status_of(reg, "kane", a) == "submitted"
     assert lemida_coverage.resolve_coverage_path(reg, DATE, RUN_ID)[1] == "2026-10-25"
+
+
+@pytest.mark.parametrize("rows_for", [("submitted", "error"), ("error", "submitted")])
+def test_sync_submissions_duplicate_rows_raise_before_any_close(tmp_path, rows_for):
+    reg = make_reg(tmp_path)
+    a, b = add(reg, "kane", "assignment", "701"), add(reg, "kane", "assignment", "702")
+    made = {"submitted": row(a, status="submitted"), "error": row(a, error="timeout")}
+    write_cov(reg, [row(b, "702", status="submitted"), made[rows_for[0]], made[rows_for[1]]])
+    with pytest.raises(tasks.TaskError, match="more than one row"):
+        tasks.sync_submissions(reg.directory, DATE, RUN_ID)
+    assert status_of(reg, "kane", a) == status_of(reg, "kane", b) == "open"
+
+
+def test_submission_row_ids_must_be_positive_digits(tmp_path):
+    base = row("t1", status="submitted")
+    forum = {"task": "t2", "course": "kane", "cmid": "750", "type": "forum", "my_user_id": "55", "author_ids": ["55"]}
+    assert tasks.row_problem(forum) is None
+    assert "my_user_id" in tasks.row_problem({**forum, "my_user_id": "undefined"})
+    assert "author_ids" in tasks.row_problem({**forum, "author_ids": ["55", ""]})
+    assert "author_ids" in tasks.row_problem({**forum, "author_ids": [0]})
+    assert "cmid" in tasks.row_problem({**base, "cmid": "abc"})
+    quiz = {"task": "t3", "course": "kane", "cmid": "801", "type": "quiz", "quiz_review_links": 0}
+    assert tasks.row_problem(quiz) is None
+    assert "quiz_review_links" in tasks.row_problem({**quiz, "quiz_review_links": -1})
+    reg = make_reg(tmp_path)
+    a = add(reg, "kane", "assignment", "701")
+    write_cov(reg, [{"task": a, "course": "kane", "cmid": "750", "type": "forum", "my_user_id": "undefined", "author_ids": []}])
+    with pytest.raises(tasks.TaskError, match="my_user_id"):
+        tasks.sync_submissions(reg.directory, DATE, RUN_ID)
