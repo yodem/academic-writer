@@ -116,7 +116,7 @@ def test_sync_submissions_forum_author_match_closes_mismatch_stays(tmp_path):
     ids = [add(reg, "kane", "forum-post", str(720 + i)) for i in range(4)]
     write_cov(reg, [row(ids[0], "720", type="forum", my_user_id=55, author_ids=["9", "55"]),
                     row(ids[1], "721", type="forum", my_user_id="55", author_ids=[9, 8]),
-                    row(ids[2], "722", type="forum", author_ids=[55]),
+                    row(ids[2], "722", type="forum", my_user_id="56", author_ids=[55]),
                     row(ids[3], "723", type="forum", my_user_id="55", author_ids=[])])
     tasks.sync_submissions(reg.directory, DATE, RUN_ID)
     assert [status_of(reg, "kane", t) for t in ids] == ["submitted", "open", "open", "open"]
@@ -260,3 +260,26 @@ def test_submission_row_ids_must_be_positive_digits(tmp_path):
     write_cov(reg, [{"task": a, "course": "kane", "cmid": "750", "type": "forum", "my_user_id": "undefined", "author_ids": []}])
     with pytest.raises(tasks.TaskError, match="my_user_id"):
         tasks.sync_submissions(reg.directory, DATE, RUN_ID)
+
+
+@pytest.mark.parametrize("bad", [{}, {"team_status": "submitted"}])
+def test_sync_submissions_evidence_free_assign_row_raises_before_any_close(tmp_path, bad):
+    reg = make_reg(tmp_path)
+    a, b = add(reg, "kane", "assignment", "701"), add(reg, "kane", "assignment", "702")
+    write_cov(reg, [row(b, "702", status="submitted"), row(a, **bad)])
+    with pytest.raises(tasks.TaskError, match="evidence"):
+        tasks.sync_submissions(reg.directory, DATE, RUN_ID)
+    assert status_of(reg, "kane", a) == status_of(reg, "kane", b) == "open"
+
+
+def test_sync_submissions_unknown_task_does_not_block_valid_rows_and_exits_1(tmp_path, capsys):
+    reg = make_reg(tmp_path)
+    a = add(reg, "kane", "assignment", "701")
+    write_cov(reg, [row("nosuchtask", status="submitted"), row(a, status="submitted")])
+    report = tasks.sync_submissions(reg.directory, DATE, RUN_ID)
+    assert [r["task"] for r in report["closed"]] == [a] and len(report["errors"]) == 1
+    assert status_of(reg, "kane", a) == "submitted"
+    write_cov(reg, [row("nosuchtask", status="submitted"), row(add(reg, "kane", "assignment", "702"), "702", status="submitted")])
+    args = type("A", (), {"task_command": "sync-submissions", "date": DATE, "run_id": RUN_ID, "json": False})()
+    assert tasks.run_task_command(reg.directory, args) == 1
+    assert "closed" in capsys.readouterr().out

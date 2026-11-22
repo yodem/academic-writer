@@ -577,9 +577,11 @@ def sync_submissions(directory: Path, day: str, run_id: str) -> dict[str, Any]:
     """Close every open hand-in the coverage file's `submissions.checked` rows prove submitted. Idempotent.
 
     Raises TaskError (nothing closed) when the file is missing, belongs to another run, is dated another day or its
-    `submissions` section or any row is malformed, or two rows name the same task. A row is trusted only when it equals an open hand-in
-    (`open_handins`) in task id, course, cmid and type; a row naming a task already submitted is skipped, any other
-    row is an error and closes nothing."""
+    `submissions` section or any row is malformed or evidence-free (the gate's `row_evidence` rule: an `error`, or the type's
+    evidence fields; for assign that is `status`, which may be ""; `team_status` alone is not evidence), or two rows name the same task.
+    A row is trusted only when it equals an open hand-in (`open_handins`) in task id, course, cmid and type; a row naming a task
+    already submitted is skipped. Identity errors (a well-formed row naming an unknown or non-hand-in task, or a mismatched
+    course, cmid or type) do not block valid rows: valid confirmed rows still close, the errors are reported and the CLI exits 1."""
     import lemida_coverage
     registry = courses.Registry(directory)
     path, day = lemida_coverage.resolve_coverage_path(registry, day, run_id)
@@ -603,6 +605,8 @@ def sync_submissions(directory: Path, day: str, run_id: str) -> dict[str, Any]:
         problem = row_problem(row)
         if problem:
             raise TaskError(f"submissions.checked[{index}]: {problem}")
+        if not row_evidence(row):
+            raise TaskError(f"submissions.checked[{index}] (task {row['task']}): row has neither an error nor the {row['type']} evidence fields")
     names = [row["task"] for row in rows]
     dupes = sorted({n for n in names if names.count(n) > 1})
     if dupes:
