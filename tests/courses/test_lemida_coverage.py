@@ -39,6 +39,7 @@ def clean_payload(**overrides):
             "marked_read": [1, 2, 3],
         },
         "events": {"complete": True, "listed": [501, 502], "handled": [502, 501]},
+        "submissions": {"complete": True, "checked": []},
     }
     payload.update(overrides)
     return payload
@@ -414,3 +415,59 @@ def test_missing_or_incomplete_events_section_is_a_gap(tmp_path):
     assert check(reg) == ["events section missing or not an object"]
     write_coverage(reg, clean_payload(events={"complete": False, "listed": [], "handled": []}))
     assert any("events.complete" in g for g in check(reg))
+
+
+def add_open_assignment(reg, slug="kane", ref="701"):
+    chore = chores.add_chore(reg, course=slug, kind="assignment", ref=ref, title="Essay 1", due_at="2026-11-01T00:00:00+02:00")
+    return chore["id"]
+
+
+def test_submission_section_missing_is_a_gap(tmp_path):
+    reg = make_registry(tmp_path)
+    payload = clean_payload()
+    del payload["submissions"]
+    write_coverage(reg, payload)
+    gaps = check(reg)
+    assert len(gaps) == 1 and "submissions section missing" in gaps[0]
+
+
+def test_submission_incomplete_or_malformed_checked_is_a_gap(tmp_path):
+    reg = make_registry(tmp_path)
+    write_coverage(reg, clean_payload(submissions={"complete": False, "checked": "x"}))
+    gaps = check(reg)
+    assert any("submissions.complete" in g for g in gaps) and any("submissions.checked" in g for g in gaps)
+
+
+def test_submission_unchecked_open_handin_is_a_gap(tmp_path):
+    reg = make_registry(tmp_path)
+    tid = add_open_assignment(reg)
+    write_coverage(reg, clean_payload())
+    gaps = check(reg)
+    assert len(gaps) == 1 and tid in gaps[0] and "kane" in gaps[0] and "not checked" in gaps[0]
+    assert check(reg, only=["cohen"]) == []  # the other course's hand-in is out of scope
+
+
+def test_submission_confirmed_but_still_open_is_a_gap(tmp_path):
+    reg = make_registry(tmp_path)
+    tid = add_open_assignment(reg)
+    row = {"task": tid, "course": "kane", "cmid": "701", "type": "assign", "status": "submitted"}
+    write_coverage(reg, clean_payload(submissions={"complete": True, "checked": [row]}))
+    gaps = check(reg)
+    assert len(gaps) == 1 and "confirmed but not closed: run sync-submissions" in gaps[0]
+
+
+def test_submission_draft_and_error_rows_count_as_checked(tmp_path):
+    reg = make_registry(tmp_path)
+    a = add_open_assignment(reg, ref="701")
+    b = add_open_assignment(reg, ref="702")
+    rows = [{"task": a, "course": "kane", "cmid": "701", "type": "assign", "status": "draft"},
+            {"task": b, "course": "kane", "cmid": "702", "type": "assign", "error": "page did not load", "status": "submitted"}]
+    write_coverage(reg, clean_payload(submissions={"complete": True, "checked": rows}))
+    assert check(reg) == []
+
+
+def test_submission_skipped_task_never_gaps(tmp_path):
+    reg = make_registry(tmp_path)
+    chores.add_chore(reg, course="kane", kind="exam", ref="ev123", title="Exam")
+    write_coverage(reg, clean_payload())
+    assert check(reg) == []
