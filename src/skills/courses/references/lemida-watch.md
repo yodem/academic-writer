@@ -1,6 +1,6 @@
 # Nightly Lemida watcher (Chrome): procedure
 
-Read this when running the nightly watch of the user's LMS (Moodle, "Lemida"). The summary is in `../SKILL.md`. Reader: the agent running the watch, in the user's signed-in Chrome through `claude-in-chrome` (load its tools with ToolSearch first; invoke the `claude-in-chrome` skill before using them).
+Read this when running the nightly watch of the user's LMS (Moodle, "Lemida"). The summary is in `../SKILL.md`; the coverage file shape is in `../phases/term.md`. Reader: the agent running the watch, in the user's signed-in Chrome through `claude-in-chrome` (load its tools with ToolSearch first; invoke the `claude-in-chrome` skill before using them).
 
 ## Why Chrome
 
@@ -77,6 +77,63 @@ await (async () => {
 
 Record the ids Lemida accepted as `notifications.marked_read` (a list). Mark nothing while any listed notification is unopened; the coverage check fails the run for every listed id that is not in `marked_read`.
 
+## Hand-ins already submitted
+
+After the courses are walked, check which open hand-ins Lemida already shows as submitted, so the dashboard stops listing them. Python closes them; the watch only reports what it read.
+
+1. Run `courses.py task open-handins --json` (add the same `--courses` filter as the run, if any). It lists `handins` (`task`, `course`, `kind`, `title`, `due_at`, `cmid`, `type`, `url`) and `skipped` (a hand-in with no Lemida course or no numeric cmid; skipped ones need nothing). Check every listed hand-in and nothing else.
+2. **Read-only.** The watch only reads pages with GET fetches. Never open `startattempt.php` or `attempt.php`, never press a submit, save, attempt or post button, never fill a form. (User rule 2026-11-22: verify only, never do the quizzes or tasks.)
+3. One fetch per page, each with a 20-second timeout (`AbortController`), no retry loop. A page that fails, times out or shows a login page gets the row's `error` field (a short reason) and stays open; it still counts as checked.
+4. Record per `type`, with no Hebrew text matched (classes, ids and `href` parts only):
+   - `assign`: the suffix of the status cell's class in `.submissionstatustable` (`submissionstatussubmitted` gives `status: "submitted"`; draft, new and reopened likewise; no such class gives `status: ""`), and the second such cell, the team row, as `team_status` when present.
+   - `quiz`: `quiz_review_links`, the number of attempt review links on the quiz page (`#region-main a[href*="/mod/quiz/review.php"][href*="attempt="]`; 0 when there is none).
+   - `forum`: `my_user_id` (`M.cfg.userId`) and `author_ids`, the `user/view.php` `id` of the first post's author in each discussion of that forum. The forum list carries no author ids, so fetch each discussion's `discuss.php` page.
+
+From a signed-in Lemida tab (`javascript_tool`, keep the leading `await`), paste the `handins` array into `H`. It returns one row per hand-in, without the url (copy `url` from the list into each row when you write the file):
+
+```js
+await (async () => {
+  const H = [/* the handins array */];
+  const get = async (u) => {
+    const c = new AbortController(), t = setTimeout(() => c.abort(), 20000);
+    try {
+      const r = await fetch(u, {credentials: 'include', signal: c.signal});
+      if (!r.ok) throw new Error('http ' + r.status);
+      if (/\/login\//.test(r.url)) throw new Error('login page');
+      return new DOMParser().parseFromString(await r.text(), 'text/html');
+    } finally { clearTimeout(t); }
+  };
+  const uid = (a) => a && new URL(a.href, location.href).searchParams.get('id');
+  const out = [];
+  for (const h of H) {
+    const row = {task: h.task, course: h.course, cmid: h.cmid, type: h.type};
+    try {
+      const d = await get(h.url);
+      if (h.type === 'assign') {
+        const s = [...d.querySelectorAll('.submissionstatustable td')].map(td => (td.className.match(/submissionstatus(\w+)/) || [])[1]).filter(Boolean);
+        row.status = s[0] || '';
+        if (s[1]) row.team_status = s[1];
+      } else if (h.type === 'quiz') {
+        row.quiz_review_links = d.querySelectorAll('#region-main a[href*="/mod/quiz/review.php"][href*="attempt="]').length;
+      } else if (h.type === 'forum') {
+        row.my_user_id = String(M.cfg.userId);
+        const ds = [...new Set([...d.querySelectorAll('a[href*="discuss.php"]')].map(a => a.href))].slice(0, 40);
+        row.author_ids = [];
+        for (const u of ds) {
+          const a = uid((await get(u)).querySelector('a[href*="user/view.php"]'));
+          if (a) row.author_ids.push(a);
+        }
+      } else row.error = 'unknown type';
+    } catch (e) { row.error = e.name === 'AbortError' ? 'timeout' : String(e.message).slice(0, 60); }
+    out.push(row);
+  }
+  return JSON.stringify(out);
+})()
+```
+
+5. Write the rows to the coverage file as `"submissions": {"complete": true, "checked": [rows]}`: each row is the snippet's row plus `url` from the list. `complete` is true only when every listed hand-in has a row (an `error` row counts). Then run `courses.py task sync-submissions --date <day> --run-id <run_id>` (the same `<day>` and `<run_id>` as the coverage file). It closes the tasks the rows prove submitted and prints what it closed and kept open. Report both in the run summary, and name every overdue hand-in that is still not submitted.
+6. A hand-in whose page errors three nights running gets a chore: `courses.py chores add --course <slug> --kind manual --ref handin-<task> --title "Lemida: cannot read hand-in <title>" --text "<reason>"` (a rerun updates the same chore).
+
 ## Course-page notes for Trove
 
 For each course, write what this run found that is not a file to `REG/queue/trove-notes/<slug>-<run_id>.json`: `{"course": "<slug>", "run_id": "...", "notes": [{"kind": "announcement" | "assignment" | "event" | "link" | "zoom", "date": "YYYY-MM-DD", "title": "...", "text": "<a short summary, 300 characters at most>", "url": "<Lemida link>"}]}`. Skip a course with nothing new. The nightly's Trove step (`/academic-writer:courses trove-notes`) places these on the book's `Course · Changelog` page; the watch never writes to Trove itself.
@@ -127,6 +184,6 @@ Unattended runs (`claude -p`, the nightly job): nobody can answer, so never end 
 
 ## Ending a run
 
-Before the digest, clear the notifications ("Clear the notifications" above; never before every one was opened), then write `REG/logs/lemida-coverage-<YYYY-MM-DD>.json` as `../SKILL.md` describes (the `run_id` from your prompt, visited courses, new assignments and their handling, notifications read to the end (`complete`), listed, opened and marked-read notifications, and the `events` section). `courses.py lemida-coverage-check` turns any gap into a failed run, so an unwritten file is a failed run.
+Before the digest, clear the notifications ("Clear the notifications" above; never before every one was opened), then write `REG/logs/lemida-coverage-<YYYY-MM-DD>.json` as `../phases/term.md` describes (the `run_id` from your prompt, visited courses, new assignments and their handling, notifications read to the end (`complete`), listed, opened and marked-read notifications, the `events` section, and the `submissions` section from "Hand-ins already submitted"). Order: walk the courses, run the hand-in check, write the coverage file, then run `sync-submissions`. `courses.py lemida-coverage-check` turns any gap into a failed run, so an unwritten file is a failed run.
 
 `courses.py chores digest` writes the digest of open chores. Report: new announcements, items routed (with `check-source` results), chores added, courses that errored or were `suspect`. A failure for one course never stops the others.
