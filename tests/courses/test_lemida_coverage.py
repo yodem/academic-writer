@@ -471,3 +471,32 @@ def test_submission_skipped_task_never_gaps(tmp_path):
     chores.add_chore(reg, course="kane", kind="exam", ref="ev123", title="Exam")
     write_coverage(reg, clean_payload())
     assert check(reg) == []
+
+
+def test_submission_row_with_only_a_task_is_a_gap(tmp_path):
+    reg = make_registry(tmp_path)
+    tid = add_open_assignment(reg)
+    write_coverage(reg, clean_payload(submissions={"complete": True, "checked": [{"task": tid}]}))
+    gaps = check(reg)
+    assert gaps and any(tid in g for g in gaps)
+
+
+def test_submission_row_without_evidence_or_with_mismatch_is_a_gap(tmp_path):
+    reg = make_registry(tmp_path)
+    a = add_open_assignment(reg, ref="701")
+    b = add_open_assignment(reg, ref="702")
+    rows = [{"task": a, "course": "kane", "cmid": "701", "type": "assign"},
+            {"task": b, "course": "kane", "cmid": "999", "type": "assign", "status": "draft"}]
+    write_coverage(reg, clean_payload(submissions={"complete": True, "checked": rows}))
+    gaps = check(reg)
+    assert any(a in g and "evidence" in g for g in gaps) and any(b in g and "does not match" in g for g in gaps)
+
+
+def test_submission_well_formed_error_row_is_fine_but_empty_error_is_not(tmp_path):
+    reg = make_registry(tmp_path)
+    tid = add_open_assignment(reg)
+    ok = {"task": tid, "course": "kane", "cmid": "701", "type": "assign", "error": "page did not load"}
+    write_coverage(reg, clean_payload(submissions={"complete": True, "checked": [ok]}))
+    assert check(reg) == []
+    write_coverage(reg, clean_payload(submissions={"complete": True, "checked": [{**ok, "error": "", "status": "submitted"}]}))
+    assert any("error is not a non-empty string" in g for g in check(reg))

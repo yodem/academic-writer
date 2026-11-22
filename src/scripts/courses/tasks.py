@@ -453,7 +453,9 @@ def open_handins(directory: Path, only: Any = None) -> dict[str, list[dict[str, 
     """The open tasks the nightly watch must look at in Lemida, and the open ones it cannot.
 
     A hand-in is an open assignment or forum-post task, or an exam task whose module is a quiz in the course's
-    `watch_seen`; its chore ref must be a numeric cmid and its course active with a `lemida_course_id`.
+    `watch_seen`; its chore ref must be a numeric cmid and its course active with a `lemida_course_id`. A forum-post
+    ref counts only when `watch_seen` knows it as a forum cmid (it may be a discussion id); an assignment ref whose
+    known module type is neither assign nor quiz is skipped.
     Reads the registry only (derive is not written back) and never contacts Lemida. `only` limits the courses."""
     registry = courses.Registry(directory)
     base = str(registry.term.get("lemida", {}).get("base_url", "")).rstrip("/")
@@ -483,15 +485,68 @@ def open_handins(directory: Path, only: Any = None) -> dict[str, list[dict[str, 
             mod = str(seen.get("type") or courses.CHORE_MODULE_TYPE.get(kind, ""))
             if kind == "exam" and mod != "quiz":
                 continue  # an exam that is not a Lemida quiz is not handed in there
+            if kind == "forum-post" and seen.get("type") != "forum":
+                out["skipped"].append({**skip, "reason": "ref is not a known forum cmid (may be a discussion id)"})
+                continue
+            if kind == "assignment" and mod not in ("assign", "quiz"):
+                out["skipped"].append({**skip, "reason": f"module {ref} is a {mod or 'unknown'!r}, not an assign or quiz"})
+                continue
             out["handins"].append({"task": task["id"], "course": slug, "kind": kind, "title": task.get("title", ""),
                                    "due_at": task.get("due_at"), "cmid": ref, "type": mod,
                                    "url": courses.lemida_module_url(base, course, ref, kind)})
     return out
 
 
+ROW_TYPES = ("assign", "quiz", "forum")
+
+
+def _is_id(value: Any) -> bool:
+    return isinstance(value, (str, int)) and not isinstance(value, bool)
+
+
+def row_problem(row: Any) -> str | None:
+    """Why this `submissions.checked` row is malformed, or None when it is well formed (types only, no registry)."""
+    if not isinstance(row, dict):
+        return "row is not an object"
+    if not isinstance(row.get("task"), str) or not row["task"]:
+        return "task is not a non-empty string"
+    if not isinstance(row.get("course"), str):
+        return "course is not a string"
+    if not _is_id(row.get("cmid")):
+        return "cmid is not a string or integer"
+    if row.get("type") not in ROW_TYPES:
+        return f"type {row.get('type')!r} is not one of {', '.join(ROW_TYPES)}"
+    for key in ("status", "team_status"):
+        if key in row and not isinstance(row[key], str):
+            return f"{key} is not a string"
+    if "quiz_review_links" in row and (not isinstance(row["quiz_review_links"], int) or isinstance(row["quiz_review_links"], bool)):
+        return "quiz_review_links is not an integer"
+    if "my_user_id" in row and not _is_id(row["my_user_id"]):
+        return "my_user_id is not a string or integer"
+    if "author_ids" in row and (not isinstance(row["author_ids"], list) or not all(_is_id(a) for a in row["author_ids"])):
+        return "author_ids is not a list of strings or integers"
+    if "error" in row and (not isinstance(row["error"], str) or not row["error"]):
+        return "error is not a non-empty string"
+    return None
+
+
+def row_matches(row: dict[str, Any], handin: dict[str, Any]) -> bool:
+    """Does a well-formed row name exactly this hand-in (task id, course, cmid and module type)?"""
+    return (row.get("task") == handin["task"] and row.get("course") == handin["course"]
+            and str(row.get("cmid")) == str(handin["cmid"]) and row.get("type") == handin["type"])
+
+
+def row_evidence(row: dict[str, Any]) -> bool:
+    """Does the row carry what its type needs to count as checked: an `error`, or the type's evidence field(s)?"""
+    if "error" in row:
+        return True
+    need = {"assign": ("status",), "quiz": ("quiz_review_links",), "forum": ("my_user_id", "author_ids")}[row["type"]]
+    return all(key in row for key in need)
+
+
 def confirmed(row: Any) -> bool:
     """Does this `submissions.checked` row show Lemida holding the student's hand-in? Python decides, not the watch."""
-    if not isinstance(row, dict) or row.get("error"):
+    if not isinstance(row, dict) or "error" in row:
         return False
     kind = row.get("type")
     if kind == "assign":
@@ -509,9 +564,12 @@ def confirmed(row: Any) -> bool:
 
 
 def sync_submissions(directory: Path, day: str, run_id: str) -> dict[str, Any]:
-    """Close every open task the coverage file's `submissions.checked` rows prove submitted. Idempotent.
+    """Close every open hand-in the coverage file's `submissions.checked` rows prove submitted. Idempotent.
 
-    Raises TaskError (nothing closed) when the file is missing, belongs to another run or its section is malformed."""
+    Raises TaskError (nothing closed) when the file is missing, belongs to another run, is dated another day or its
+    `submissions` section or any row is malformed. A row is trusted only when it equals an open hand-in
+    (`open_handins`) in task id, course, cmid and type; a row naming a task already submitted is skipped, any other
+    row is an error and closes nothing."""
     import lemida_coverage
     registry = courses.Registry(directory)
     path, day = lemida_coverage.resolve_coverage_path(registry, day, run_id)
@@ -525,29 +583,43 @@ def sync_submissions(directory: Path, day: str, run_id: str) -> dict[str, Any]:
         raise TaskError(f"coverage file is not a JSON object: {path}")
     if data.get("run_id") != run_id:
         raise TaskError(f"stale report: run_id {data.get('run_id')!r} is not this run ({run_id})")
+    if data.get("date") != day:
+        raise TaskError(f"coverage file dated {data.get('date')!r}, expected {day} (stale report)")
     section = data.get("submissions")
-    rows = section.get("checked") if isinstance(section, dict) else None
-    if not isinstance(rows, list) or not all(isinstance(r, dict) and r.get("task") for r in rows):
-        raise TaskError("submissions.checked is missing or not a list of objects with a task")
+    if not isinstance(section, dict) or section.get("complete") is not True or not isinstance(section.get("checked"), list):
+        raise TaskError("submissions must be an object with complete true and checked a list")
+    rows = section["checked"]
+    for index, row in enumerate(rows):
+        problem = row_problem(row)
+        if problem:
+            raise TaskError(f"submissions.checked[{index}]: {problem}")
+    handins = {h["task"]: h for h in open_handins(directory)["handins"]}
     report: dict[str, Any] = {"date": day, "closed": [], "kept_open": [], "errors": []}
+    seen: set[str] = set()
     for row in rows:
-        ident, slug = str(row["task"]), row.get("course")
-        if slug not in registry.courses:
-            report["errors"].append({"task": ident, "reason": f"unknown course {slug!r}"})
+        ident, slug = row["task"], row["course"]
+        if ident in seen:
+            report["errors"].append({"task": ident, "course": slug, "reason": "duplicate row for this task"})
             continue
-        try:
-            task = resolve_task(sync_tasks(directory, slug, write=False), ident)
-        except TaskError as exc:
-            report["errors"].append({"task": ident, "course": slug, "reason": str(exc)})
-            continue
-        if task.get("status") != "open":
+        seen.add(ident)
+        handin = handins.get(ident)
+        if handin is None:
+            known = registry.courses.get(slug)
+            already = known is not None and any(
+                t["id"] == ident and t.get("status") != "open" for t in sync_tasks(directory, slug, write=False))
+            if not already:
+                report["errors"].append({"task": ident, "course": slug, "reason": "not an open hand-in"})
             continue  # already closed: a rerun does nothing
-        if confirmed(row):
-            task_submit(directory, slug, task["id"])
-            report["closed"].append({"task": task["id"], "course": slug, "title": task.get("title", "")})
+        if not row_matches(row, handin):
+            report["errors"].append({"task": ident, "course": slug, "reason": (
+                f"row does not match the hand-in (course {handin['course']}, cmid {handin['cmid']}, type {handin['type']})")})
+            continue
+        if confirmed({**row, "type": handin["type"]}):
+            task_submit(directory, handin["course"], ident)
+            report["closed"].append({"task": ident, "course": slug, "title": handin.get("title", "")})
         else:
             raw = row.get("error") and f"error: {row['error']}" or row.get("status") or row.get("team_status") or ""
-            report["kept_open"].append({"task": task["id"], "course": slug, "status": raw})
+            report["kept_open"].append({"task": ident, "course": slug, "status": raw})
     return report
 
 
@@ -613,7 +685,7 @@ def run_task_command(directory: Path, args) -> int:
                 for r in report["errors"]:
                     print(f"error {r['task']}: {r['reason']}")
                 print(f"submissions {report['date']}: {len(report['closed'])} closed, {len(report['kept_open'])} kept open, {len(report['errors'])} errors")
-            return 0
+            return 1 if report["errors"] else 0
         if args.task_command == "list":
             print(json.dumps(task_list(directory, args.course), ensure_ascii=False, indent=2))
         elif args.task_command == "show":
