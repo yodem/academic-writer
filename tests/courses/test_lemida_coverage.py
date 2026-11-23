@@ -6,16 +6,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src" / "scripts" /
 import chores
 import courses
 import lemida_coverage
+import tasks
 
 DATE = "2026-10-24"
 RUN_ID = "2026-10-24T030000-4242"
 NOTIFICATIONS_URL = "https://lemida.biu.ac.il/message/output/popup/notifications.php"
 
 
+BASE = "https://lemida.example.org"
+
+
+def U(cmid, type_):
+    return f"{BASE}/mod/{type_}/view.php?id={cmid}"
+
+
 def make_registry(tmp_path, extra=()):
     d = tmp_path / "term"
     d.mkdir()
-    (d / "term.json").write_text(json.dumps({"term": "T", "timezone": "Asia/Jerusalem"}), encoding="utf-8")
+    (d / "term.json").write_text(json.dumps({"term": "T", "timezone": "Asia/Jerusalem", "lemida": {"base_url": BASE}}), encoding="utf-8")
     (d / "cohen.json").write_text(json.dumps({"slug": "cohen", "name": "הרמן כהן", "lemida_course_id": 11}), encoding="utf-8")
     (d / "kane.json").write_text(json.dumps({"slug": "kane", "name": "קאנט", "lemida_course_id": 12}), encoding="utf-8")
     for course in extra:
@@ -39,6 +47,7 @@ def clean_payload(**overrides):
             "marked_read": [1, 2, 3],
         },
         "events": {"complete": True, "listed": [501, 502], "handled": [502, 501]},
+        "submissions": {"complete": True, "checked": []},
     }
     payload.update(overrides)
     return payload
@@ -414,3 +423,142 @@ def test_missing_or_incomplete_events_section_is_a_gap(tmp_path):
     assert check(reg) == ["events section missing or not an object"]
     write_coverage(reg, clean_payload(events={"complete": False, "listed": [], "handled": []}))
     assert any("events.complete" in g for g in check(reg))
+
+
+def add_open_assignment(reg, slug="kane", ref="701"):
+    chore = chores.add_chore(reg, course=slug, kind="assignment", ref=ref, title="Essay 1", due_at="2026-11-01T00:00:00+02:00")
+    return chore["id"]
+
+
+def test_submission_section_missing_is_a_gap(tmp_path):
+    reg = make_registry(tmp_path)
+    payload = clean_payload()
+    del payload["submissions"]
+    write_coverage(reg, payload)
+    gaps = check(reg)
+    assert len(gaps) == 1 and "submissions section missing" in gaps[0]
+
+
+def test_submission_incomplete_or_malformed_checked_is_a_gap(tmp_path):
+    reg = make_registry(tmp_path)
+    write_coverage(reg, clean_payload(submissions={"complete": False, "checked": "x"}))
+    gaps = check(reg)
+    assert any("submissions.complete" in g for g in gaps) and any("submissions.checked" in g for g in gaps)
+
+
+def test_submission_unchecked_open_handin_is_a_gap(tmp_path):
+    reg = make_registry(tmp_path)
+    tid = add_open_assignment(reg)
+    write_coverage(reg, clean_payload())
+    gaps = check(reg)
+    assert len(gaps) == 1 and tid in gaps[0] and "kane" in gaps[0] and "not checked" in gaps[0]
+    assert check(reg, only=["cohen"]) == []  # the other course's hand-in is out of scope
+
+
+def test_submission_confirmed_but_still_open_is_a_gap(tmp_path):
+    reg = make_registry(tmp_path)
+    tid = add_open_assignment(reg)
+    row = {"task": tid, "course": "kane", "cmid": "701", "type": "assign", "url": U("701", "assign"), "status": "submitted"}
+    write_coverage(reg, clean_payload(submissions={"complete": True, "checked": [row]}))
+    gaps = check(reg)
+    assert len(gaps) == 1 and "confirmed but not closed: run sync-submissions" in gaps[0]
+
+
+def test_submission_draft_and_error_rows_count_as_checked(tmp_path):
+    reg = make_registry(tmp_path)
+    a = add_open_assignment(reg, ref="701")
+    b = add_open_assignment(reg, ref="702")
+    rows = [{"task": a, "course": "kane", "cmid": "701", "type": "assign", "url": U("701", "assign"), "status": "draft"},
+            {"task": b, "course": "kane", "cmid": "702", "type": "assign", "url": U("702", "assign"), "error": "page did not load", "status": "submitted"}]
+    write_coverage(reg, clean_payload(submissions={"complete": True, "checked": rows}))
+    assert check(reg) == []
+
+
+def test_submission_skipped_task_never_gaps(tmp_path):
+    reg = make_registry(tmp_path)
+    chores.add_chore(reg, course="kane", kind="exam", ref="ev123", title="Exam")
+    write_coverage(reg, clean_payload())
+    assert check(reg) == []
+
+
+def test_submission_task_linking_several_modules_never_gaps(tmp_path):
+    reg = make_registry(tmp_path)
+    a, b = add_open_assignment(reg, ref="701"), add_open_assignment(reg, ref="702")
+    tasks.sync_tasks(reg.directory, "kane")
+    path = reg.directory / "kane.json"
+    course = json.loads(path.read_text(encoding="utf-8"))
+    course["tasks"] = [t for t in course["tasks"] if t["id"] != b]
+    next(t for t in course["tasks"] if t["id"] == a)["chore_ids"] = [a, b]
+    path.write_text(json.dumps(course), encoding="utf-8")
+    assert tasks.open_handins(reg.directory)["handins"] == []
+    write_coverage(reg, clean_payload())
+    assert check(reg) == []
+
+
+def test_submission_row_with_only_a_task_is_a_gap(tmp_path):
+    reg = make_registry(tmp_path)
+    tid = add_open_assignment(reg)
+    write_coverage(reg, clean_payload(submissions={"complete": True, "checked": [{"task": tid}]}))
+    gaps = check(reg)
+    assert gaps and any(tid in g for g in gaps)
+
+
+def test_submission_row_without_evidence_or_with_mismatch_is_a_gap(tmp_path):
+    reg = make_registry(tmp_path)
+    a = add_open_assignment(reg, ref="701")
+    b = add_open_assignment(reg, ref="702")
+    rows = [{"task": a, "course": "kane", "cmid": "701", "type": "assign", "url": U("701", "assign")},
+            {"task": b, "course": "kane", "cmid": "999", "type": "assign", "url": U("999", "assign"), "status": "draft"}]
+    write_coverage(reg, clean_payload(submissions={"complete": True, "checked": rows}))
+    gaps = check(reg)
+    assert any(a in g and "evidence" in g for g in gaps) and any(b in g and "does not match" in g for g in gaps)
+
+
+def test_submission_well_formed_error_row_is_fine_but_empty_error_is_not(tmp_path):
+    reg = make_registry(tmp_path)
+    tid = add_open_assignment(reg)
+    ok = {"task": tid, "course": "kane", "cmid": "701", "type": "assign", "url": U("701", "assign"), "error": "page did not load"}
+    write_coverage(reg, clean_payload(submissions={"complete": True, "checked": [ok]}))
+    assert check(reg) == []
+    write_coverage(reg, clean_payload(submissions={"complete": True, "checked": [{**ok, "error": "", "status": "submitted"}]}))
+    assert any("error is not a non-empty string" in g for g in check(reg))
+
+
+def test_submission_duplicate_rows_are_a_gap_even_when_the_task_is_closed(tmp_path):
+    reg = make_registry(tmp_path)
+    tid = add_open_assignment(reg)
+    tasks.task_submit(reg.directory, "kane", tid)
+    row = {"task": tid, "course": "kane", "cmid": "701", "type": "assign", "url": U("701", "assign"), "status": "submitted"}
+    write_coverage(reg, clean_payload(submissions={"complete": True, "checked": [row, {**row, "status": "", "error": "timeout"}]}))
+    assert any("2 rows for task" in g and tid in g for g in check(reg))
+
+
+def test_submission_evidence_free_row_for_a_closed_or_unknown_task_is_a_gap(tmp_path):
+    reg = make_registry(tmp_path)
+    tid = add_open_assignment(reg)
+    tasks.task_submit(reg.directory, "kane", tid)
+    rows = [{"task": tid, "course": "kane", "cmid": "701", "type": "assign", "url": U("701", "assign")},
+            {"task": "no-such-task", "course": "kane", "cmid": "999", "type": "quiz", "url": U("999", "quiz")}]
+    write_coverage(reg, clean_payload(submissions={"complete": True, "checked": rows}))
+    gaps = check(reg)
+    assert any(tid in g and "evidence" in g for g in gaps) and any("no-such-task" in g and "evidence" in g for g in gaps)
+
+
+def test_submission_malformed_ids_and_negative_quiz_links_are_gaps(tmp_path):
+    reg = make_registry(tmp_path)
+    rows = [{"task": "a", "course": "kane", "cmid": "750", "type": "forum", "url": U("750", "forum"), "my_user_id": "undefined", "author_ids": []},
+            {"task": "b", "course": "kane", "cmid": "750", "type": "forum", "url": U("750", "forum"), "my_user_id": "5", "author_ids": [""]},
+            {"task": "c", "course": "kane", "cmid": "801", "type": "quiz", "url": U("801", "quiz"), "quiz_review_links": -1}]
+    write_coverage(reg, clean_payload(submissions={"complete": True, "checked": rows}))
+    gaps = check(reg)
+    assert any("my_user_id" in g for g in gaps) and any("author_ids" in g for g in gaps) and any("quiz_review_links" in g for g in gaps)
+
+
+def test_lemida_watch_get_helper_rejects_every_redirect():
+    """A doc contract: the snippet cannot run here, so its `get` helper text must hold the redirect guards."""
+    doc = (Path(__file__).resolve().parents[2] / "src" / "skills" / "courses" / "references" / "lemida-watch.md").read_text(encoding="utf-8")
+    start = doc.index("const get = async (u) => {")
+    helper = doc[start:doc.index("const uid", start)]
+    assert "r.redirected" in helper
+    assert "new URL(r.url).href !== new URL(u, location.href).href" in helper
+    assert "pathname !== " not in helper and ".pathname ===" not in helper

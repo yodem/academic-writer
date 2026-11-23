@@ -19,6 +19,7 @@ import fcntl
 import json
 import re
 import shutil
+import urllib.parse
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -246,13 +247,32 @@ def task_link(directory: Path, slug: str, ident: str, *, ref: str | None = None,
         _unlock(handle)
 
 
-def task_submit(directory: Path, slug: str, ident: str) -> dict[str, Any]:
-    """Mark a task submitted and close its linked chores. Idempotent."""
+def task_submit(directory: Path, slug: str, ident: str, expect_ref: str | None = None,
+                expect_type: str | None = None, expect_url: str | None = None) -> dict[str, Any]:
+    """Mark a task submitted and close its linked chores. Idempotent.
+
+    With `expect_ref` (the sync's guard) the close happens only if, under this lock, the task is still open and its linked
+    existing chores name exactly that one canonical ref; otherwise TaskError and nothing is closed. With `expect_type` and
+    `expect_url` the hand-in is re-derived under the lock (eligible kind, module type from the course's current `watch_seen`
+    or the kind fallback, url from the same function `open_handins` uses) and must still equal what the sync matched."""
     handle = _lock(directory)
     try:
         course = load_course(directory, slug)
         tasks, _ = derive_tasks(course.get("tasks", []), _chores(directory, slug), term_timezone(directory))
         task = resolve_task(tasks, ident)
+        if expect_ref is not None:
+            by_id = {c["id"]: c for c in _chores(directory, slug)}
+            now_refs = {chores_mod.canonical_ref(str(by_id[cid].get("ref", ""))) for cid in task.get("chore_ids", []) if cid in by_id}
+            if task.get("status") != "open" or now_refs != {expect_ref}:
+                raise TaskError(f"task {task['id']} changed since it was listed (status {task.get('status')}, "
+                                f"refs {', '.join(sorted(now_refs)) or '(none)'}; expected only {expect_ref}): nothing closed")
+            if expect_type is not None or expect_url is not None:
+                base = str(courses.Registry(directory).term.get("lemida", {}).get("base_url", "")).rstrip("/")
+                now_type = _module_type(course, expect_ref, task.get("kind", ""))
+                now_url = _handin_url(base, course, expect_ref, task.get("kind", ""))
+                if task.get("kind") not in HANDIN_KINDS or now_type != expect_type or now_url != expect_url:
+                    raise TaskError(f"task {task['id']} changed since it was listed (module type {now_type or '(none)'}, "
+                                    f"url {now_url or '(none)'}; expected {expect_type} at {expect_url}): nothing closed")
         closed = []
         registry = courses.Registry(directory)
         for cid in task.get("chore_ids", []):
@@ -439,6 +459,228 @@ def migrate(directory: Path, specs_dir: Path | None = None, *, dry_run: bool = F
     return report
 
 
+# --- Lemida submission check ------------------------------------------------------------------------
+
+HANDIN_KINDS = ("assignment", "forum-post", "exam")
+
+
+def _split_courses(text: str | None) -> list[str] | None:
+    """`--courses a,b c` as a slug list; None when the flag was not given."""
+    return None if text is None else text.replace(",", " ").split()
+
+
+def _module_type(course: dict[str, Any], ref: str, kind: str) -> str:
+    """The Lemida module type of `ref`: the course's current `watch_seen`, else the chore-kind fallback."""
+    seen = ((course.get("watch_seen") or {}).get("modules") or {}).get(ref) or {}
+    return str(seen.get("type") or courses.CHORE_MODULE_TYPE.get(kind, ""))
+
+
+def _handin_url(base: str, course: dict[str, Any], ref: str, kind: str) -> str | None:
+    """The Lemida page of a hand-in: the one function `open_handins` and the guarded close both use."""
+    return courses.lemida_module_url(base, course, ref, kind)
+
+
+def open_handins(directory: Path, only: Any = None) -> dict[str, list[dict[str, Any]]]:
+    """The open tasks the nightly watch must look at in Lemida, and the open ones it cannot.
+
+    A hand-in is an open assignment or forum-post task, or an exam task whose module is a quiz in the course's
+    `watch_seen`; its chore ref must be a numeric cmid and its course active with a `lemida_course_id`. A forum-post
+    ref counts only when `watch_seen` knows it as a forum cmid (it may be a discussion id); an assignment ref whose
+    known module type is neither assign nor quiz is skipped. A task whose linked chores name several refs is skipped
+    (closing it would close them all on one module's evidence), so it is never closed and never a coverage gap.
+    Reads the registry only (derive is not written back) and never contacts Lemida. `only` limits the courses."""
+    registry = courses.Registry(directory)
+    base = str(registry.term.get("lemida", {}).get("base_url", "")).rstrip("/")
+    active = registry.active_courses()
+    wanted = sorted(active) if only is None else sorted(s for s in set(only) if s in active)
+    out: dict[str, list[dict[str, Any]]] = {"handins": [], "skipped": []}
+    for slug in wanted:
+        course = registry.courses[slug]
+        tasks = sync_tasks(directory, slug, write=False)
+        by_id = {c["id"]: c for c in _chores(directory, slug)}
+        for task in tasks:
+            kind = task.get("kind")
+            if task.get("status") != "open" or kind not in HANDIN_KINDS:
+                continue
+            skip = {"task": task["id"], "course": slug}
+            refs = sorted({chores_mod.canonical_ref(str(by_id[cid].get("ref", ""))) for cid in task.get("chore_ids", []) if cid in by_id})
+            if len(refs) > 1:  # task_submit closes every linked chore, so one module's evidence cannot stand for several
+                out["skipped"].append({**skip, "reason": f"links several Lemida modules ({', '.join(r or '(none)' for r in refs)})"})
+                continue
+            ref = refs[0] if refs else ""
+            absent = course.get("lemida_absent")
+            if not course.get("lemida_course_id"):
+                reason = "lemida_absent" if isinstance(absent, str) and absent.strip() else "no lemida_course_id"
+                out["skipped"].append({**skip, "reason": reason})
+                continue
+            if not ref.isdigit():
+                out["skipped"].append({**skip, "reason": f"ref {ref or '(none)'!r} is not a numeric cmid"})
+                continue
+            seen = ((course.get("watch_seen") or {}).get("modules") or {}).get(ref) or {}
+            mod = _module_type(course, ref, kind)
+            if kind == "exam" and mod != "quiz":
+                continue  # an exam that is not a Lemida quiz is not handed in there
+            if kind == "forum-post" and seen.get("type") != "forum":
+                out["skipped"].append({**skip, "reason": "ref is not a known forum cmid (may be a discussion id)"})
+                continue
+            if kind == "assignment" and mod not in ("assign", "quiz"):
+                out["skipped"].append({**skip, "reason": f"module {ref} is a {mod or 'unknown'!r}, not an assign or quiz"})
+                continue
+            url = _handin_url(base, course, ref, kind)
+            if not url:
+                out["skipped"].append({**skip, "reason": "no Lemida base_url in term.json"})
+                continue
+            out["handins"].append({"task": task["id"], "course": slug, "kind": kind, "title": task.get("title", ""),
+                                   "due_at": task.get("due_at"), "cmid": ref, "type": mod, "url": url})
+    return out
+
+
+ROW_TYPES = ("assign", "quiz", "forum")
+
+
+def _is_pos_id(value: Any) -> bool:
+    """A positive integer, or a string of ASCII digits that is one."""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return value > 0
+    return isinstance(value, str) and len(value) <= 20 and value.isascii() and value.isdigit() and int(value) > 0
+
+
+def row_problem(row: Any) -> str | None:
+    """Why this `submissions.checked` row is malformed, or None when it is well formed (types only, no registry)."""
+    if not isinstance(row, dict):
+        return "row is not an object"
+    if not isinstance(row.get("task"), str) or not row["task"]:
+        return "task is not a non-empty string"
+    if not isinstance(row.get("course"), str) or not row["course"]:
+        return "course is not a non-empty string"
+    if not _is_pos_id(row.get("cmid")):
+        return "cmid is not a positive integer or a string of digits"
+    if not isinstance(row.get("url"), str):
+        return "url is not an http or https URL with a host"
+    parts = urllib.parse.urlsplit(row["url"])
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        return "url is not an http or https URL with a host"
+    if row.get("type") not in ROW_TYPES:
+        return f"type {row.get('type')!r} is not one of {', '.join(ROW_TYPES)}"
+    for key in ("status", "team_status"):
+        if key in row and not isinstance(row[key], str):
+            return f"{key} is not a string"
+    if "quiz_review_links" in row and (not isinstance(row["quiz_review_links"], int) or isinstance(row["quiz_review_links"], bool)
+                                        or row["quiz_review_links"] < 0):
+        return "quiz_review_links is not an integer >= 0"
+    if "my_user_id" in row and not _is_pos_id(row["my_user_id"]):
+        return "my_user_id is not a positive integer or a string of digits"
+    if "author_ids" in row and (not isinstance(row["author_ids"], list) or not all(_is_pos_id(a) for a in row["author_ids"])):
+        return "author_ids is not a list of positive integers or strings of digits"
+    if "error" in row and (not isinstance(row["error"], str) or not row["error"]):
+        return "error is not a non-empty string"
+    return None
+
+
+def row_matches(row: dict[str, Any], handin: dict[str, Any]) -> bool:
+    """Does a well-formed row name exactly this hand-in (task id, course, cmid, module type and url)?"""
+    return (row.get("task") == handin["task"] and row.get("course") == handin["course"]
+            and str(row.get("cmid")) == str(handin["cmid"]) and row.get("type") == handin["type"]
+            and row.get("url") == handin["url"])
+
+
+def row_evidence(row: dict[str, Any]) -> bool:
+    """Does the row carry what its type needs to count as checked: an `error`, or the type's evidence field(s)?"""
+    if "error" in row:
+        return True
+    need = {"assign": ("status",), "quiz": ("quiz_review_links",), "forum": ("my_user_id", "author_ids")}[row["type"]]
+    return all(key in row for key in need)
+
+
+def confirmed(row: Any) -> bool:
+    """Does this `submissions.checked` row show Lemida holding the student's hand-in? Python decides, not the watch."""
+    if not isinstance(row, dict) or "error" in row:
+        return False
+    kind = row.get("type")
+    if kind == "assign":
+        return row.get("status") == "submitted" or row.get("team_status") == "submitted"
+    if kind == "quiz":
+        links = row.get("quiz_review_links")
+        return isinstance(links, int) and not isinstance(links, bool) and links >= 1
+    if kind == "forum":
+        me = row.get("my_user_id")
+        authors = row.get("author_ids")
+        if isinstance(me, bool) or not isinstance(me, (str, int)) or not str(me) or not isinstance(authors, list):
+            return False
+        return str(me) in {str(a) for a in authors}
+    return False
+
+
+def sync_submissions(directory: Path, day: str, run_id: str) -> dict[str, Any]:
+    """Close every open hand-in the coverage file's `submissions.checked` rows prove submitted. Idempotent.
+
+    Raises TaskError (nothing closed) when the file is missing, belongs to another run, is dated another day or its
+    `submissions` section or any row is malformed or evidence-free (the gate's `row_evidence` rule: an `error`, or the type's
+    evidence fields; for assign that is `status`, which may be ""; `team_status` alone is not evidence), or two rows name the same task.
+    A row is trusted only when it equals an open hand-in (`open_handins`) in task id, course, cmid and type; a row naming a task
+    already submitted is skipped. Identity errors (a well-formed row naming an unknown or non-hand-in task, or a mismatched
+    course, cmid or type) do not block valid rows: valid confirmed rows still close, the errors are reported and the CLI exits 1."""
+    import lemida_coverage
+    registry = courses.Registry(directory)
+    path, day = lemida_coverage.resolve_coverage_path(registry, day, run_id)
+    if not path.is_file():
+        raise TaskError(f"coverage file missing: {path}")
+    try:
+        data = _read(path)
+    except (OSError, ValueError) as exc:
+        raise TaskError(f"coverage file unreadable: {path}: {exc}")
+    if not isinstance(data, dict):
+        raise TaskError(f"coverage file is not a JSON object: {path}")
+    if data.get("run_id") != run_id:
+        raise TaskError(f"stale report: run_id {data.get('run_id')!r} is not this run ({run_id})")
+    if data.get("date") != day:
+        raise TaskError(f"coverage file dated {data.get('date')!r}, expected {day} (stale report)")
+    section = data.get("submissions")
+    if not isinstance(section, dict) or section.get("complete") is not True or not isinstance(section.get("checked"), list):
+        raise TaskError("submissions must be an object with complete true and checked a list")
+    rows = section["checked"]
+    for index, row in enumerate(rows):
+        problem = row_problem(row)
+        if problem:
+            raise TaskError(f"submissions.checked[{index}]: {problem}")
+        if not row_evidence(row):
+            raise TaskError(f"submissions.checked[{index}] (task {row['task']}): row has neither an error nor the {row['type']} evidence fields")
+    names = [row["task"] for row in rows]
+    dupes = sorted({n for n in names if names.count(n) > 1})
+    if dupes:
+        raise TaskError(f"submissions.checked has more than one row for task {', '.join(dupes)}")
+    handins = {h["task"]: h for h in open_handins(directory)["handins"]}
+    report: dict[str, Any] = {"date": day, "closed": [], "kept_open": [], "errors": []}
+    for row in rows:
+        ident, slug = row["task"], row["course"]
+        handin = handins.get(ident)
+        if handin is None:
+            known = registry.courses.get(slug)
+            already = known is not None and any(
+                t["id"] == ident and t.get("status") != "open" for t in sync_tasks(directory, slug, write=False))
+            if not already:
+                report["errors"].append({"task": ident, "course": slug, "reason": "not an open hand-in"})
+            continue  # already closed: a rerun does nothing
+        if not row_matches(row, handin):
+            report["errors"].append({"task": ident, "course": slug, "reason": (
+                f"row does not match the hand-in (course {handin['course']}, cmid {handin['cmid']}, type {handin['type']}, url {handin['url']})")})
+            continue
+        if confirmed({**row, "type": handin["type"]}):
+            try:
+                task_submit(directory, handin["course"], ident, expect_ref=handin["cmid"],
+                            expect_type=handin["type"], expect_url=handin["url"])
+            except TaskError as exc:
+                report["errors"].append({"task": ident, "course": slug, "reason": str(exc)})
+                continue
+            report["closed"].append({"task": ident, "course": slug, "title": handin.get("title", "")})
+        else:
+            raw = row.get("error") and f"error: {row['error']}" or row.get("status") or row.get("team_status") or ""
+            report["kept_open"].append({"task": ident, "course": slug, "status": raw})
+    return report
+
+
 # --- CLI glue ---------------------------------------------------------------------------------------
 
 def add_task_parser(sub) -> None:
@@ -462,10 +704,46 @@ def add_task_parser(sub) -> None:
     tu = tsub.add_parser("unsubmit", help="undo submit: reopen the task and the chores submit closed")
     tu.add_argument("--course", required=True)
     tu.add_argument("--task", required=True)
+    toh = tsub.add_parser("open-handins", help="open hand-in tasks the nightly watch must check in Lemida (reads the registry only)")
+    toh.add_argument("--courses", help="space or comma separated slugs (default: every active course)")
+    toh.add_argument("--json", action="store_true")
+    tss = tsub.add_parser("sync-submissions", help="close the tasks the coverage file's submissions.checked rows prove submitted")
+    tss.add_argument("--date", help="YYYY-MM-DD of the coverage file (default: today in the term's timezone)")
+    tss.add_argument("--run-id", required=True)
+    tss.add_argument("--json", action="store_true")
 
 
 def run_task_command(directory: Path, args) -> int:
     try:
+        if args.task_command == "open-handins":
+            result = open_handins(directory, _split_courses(args.courses))
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                for r in result["handins"]:
+                    print(f"{r['task']}  {r['course']}  {r['kind']}  {r['type']}  cmid {r['cmid']}  due {r.get('due_at') or '-'}  {r['title']}  {r['url'] or '-'}")
+                for r in result["skipped"]:
+                    print(f"skipped {r['task']}  {r['course']}: {r['reason']}")
+            return 0
+        if args.task_command == "sync-submissions":
+            import lemida_coverage
+            day = args.date or lemida_coverage.today(courses.Registry(directory))
+            try:
+                report = sync_submissions(directory, day, args.run_id)
+            except TaskError as exc:
+                print(f"sync-submissions: {exc}")
+                return 1
+            if args.json:
+                print(json.dumps(report, ensure_ascii=False, indent=2))
+            else:
+                for r in report["closed"]:
+                    print(f"closed {r['task']}  {r['course']}  {r['title']}")
+                for r in report["kept_open"]:
+                    print(f"kept open {r['task']}  {r['course']}  status {r['status'] or '-'}")
+                for r in report["errors"]:
+                    print(f"error {r['task']}: {r['reason']}")
+                print(f"submissions {report['date']}: {len(report['closed'])} closed, {len(report['kept_open'])} kept open, {len(report['errors'])} errors")
+            return 1 if report["errors"] else 0
         if args.task_command == "list":
             print(json.dumps(task_list(directory, args.course), ensure_ascii=False, indent=2))
         elif args.task_command == "show":

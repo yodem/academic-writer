@@ -3,8 +3,8 @@
 `watch-lemida` writes `REG/logs/lemida-coverage-<YYYY-MM-DD>.json` (see `check`'s docstring for the shape) and
 writes into it the `run_id` the nightly script passed to the watch. `courses.py lemida-coverage-check --run-id <id>`
 reads that file and exits 1, printing every gap, when the report belongs to another run (stale), its schema is
-missing or malformed, the watch did not visit an active course, left an assignment unhandled, or did not open
-a listed notification. Python decides; the watch only reports what it did.
+missing or malformed, the watch did not visit an active course, left an assignment unhandled, did not open
+a listed notification, or left an open hand-in unchecked or confirmed-but-open. Python decides; the watch only reports what it did.
 """
 from __future__ import annotations
 
@@ -37,6 +37,16 @@ def _run_id_of(path: Path) -> Any:
     except (OSError, ValueError):
         return None
     return data.get("run_id") if isinstance(data, dict) else None
+
+
+def resolve_coverage_path(registry: courses.Registry, day: str, run_id: str) -> tuple[Path, str]:
+    """The coverage file of this run and its date: `day`'s, or the next day's when the watch ran past midnight."""
+    path = coverage_path(registry, day)
+    rolled = coverage_path(registry, _next_day(day))
+    if rolled.is_file() and _run_id_of(rolled) == run_id and _run_id_of(path) != run_id:
+        # the watch ran past midnight and dated its file by its own clock: this run's report is the next day's file
+        return rolled, _next_day(day)
+    return path, day
 
 
 def today(registry: courses.Registry) -> str:
@@ -124,6 +134,46 @@ def _event_gaps(events: Any) -> list[str]:
     return gaps
 
 
+def _submission_gaps(registry: courses.Registry, section: Any, only: Iterable[str] | None) -> list[str]:
+    """`submissions` is the watch's read of what Lemida shows for each open hand-in (`tasks.open_handins`): every one
+    must have a well-formed row that equals it (task, course, cmid, type); every row, whatever its task, must be
+    well formed and carry an `error` or its type's evidence; two rows for one task are a gap; and a row that proves a hand-in submitted must already have closed its task."""
+    import tasks
+    if not isinstance(section, dict):
+        return ["submissions section missing or not an object"]
+    gaps: list[str] = []
+    if section.get("complete") is not True:
+        gaps.append("submissions.complete is not true: the watch did not check every open hand-in")
+    checked = section.get("checked")
+    if not isinstance(checked, list):
+        gaps.append("submissions.checked is missing or not a list")
+        return gaps
+    good: dict[str, list[dict[str, Any]]] = {}
+    for index, row in enumerate(checked):
+        problem = tasks.row_problem(row)
+        if problem:
+            name = row.get("task") if isinstance(row, dict) else None
+            gaps.append(f"submissions.checked[{index}]{f' (task {name})' if isinstance(name, str) and name else ''}: {problem}")
+        else:
+            good.setdefault(row["task"], []).append(row)
+            if not tasks.row_evidence(row):
+                gaps.append(f"submissions.checked[{index}] (task {row['task']}): row has neither an error nor the {row['type']} evidence fields")
+    gaps.extend(f"submissions.checked has {len(rows)} rows for task {task}" for task, rows in sorted(good.items()) if len(rows) > 1)
+    for handin in tasks.open_handins(registry.directory, only)["handins"]:
+        rows = good.get(handin["task"], [])
+        exact = [r for r in rows if tasks.row_matches(r, handin)]
+        label = f"{handin['course']}: hand-in {handin['task']} ({handin['title']}) not checked in Lemida"
+        if not rows:
+            gaps.append(label)
+        elif not exact:
+            gaps.append(f"{label}: its row does not match course {handin['course']}, cmid {handin['cmid']}, type {handin['type']}, url {handin['url']}")
+        elif not any(tasks.row_evidence(r) for r in exact):
+            gaps.append(f"{label}: its row has neither an error nor the {handin['type']} evidence fields")
+        elif any(tasks.confirmed(r) for r in exact if tasks.row_evidence(r)):
+            gaps.append(f"{handin['course']}: hand-in {handin['task']} confirmed but not closed: run sync-submissions")
+    return gaps
+
+
 def check(registry: courses.Registry, day: str, run_id: str, only: Iterable[str] | None = None) -> list[str]:
     """Return the gaps of the coverage file for `day` and `run_id` (empty = clean).
 
@@ -134,13 +184,12 @@ def check(registry: courses.Registry, day: str, run_id: str, only: Iterable[str]
                   "courses": {slug: {"visited": true, "new_assign_modules": [ids], "assign_handled": [ids]}},
                   "notifications": {"page": NOTIFICATIONS_URL, "complete": true, "listed": [ids], "opened": [ids],
                                     "marked_read": [ids]},
-                  "events": {"complete": true, "listed": [event ids], "handled": [event ids]}}`.
+                  "events": {"complete": true, "listed": [event ids], "handled": [event ids]},
+                  "submissions": {"complete": true,
+                                  "checked": [{"task": id, "course": slug, "cmid": id, "type": "assign|quiz|forum", "url": url,
+                                               "status"?, "team_status"?, "quiz_review_links"?, "my_user_id"?, "author_ids"?, "error"?}]}}`.
     Every section is validated before any set comparison: a missing or malformed one is a gap."""
-    path = coverage_path(registry, day)
-    rolled = coverage_path(registry, _next_day(day))
-    if rolled.is_file() and _run_id_of(rolled) == run_id and _run_id_of(path) != run_id:
-        # the watch ran past midnight and dated its file by its own clock: this run's report is the next day's file
-        path, day = rolled, _next_day(day)
+    path, day = resolve_coverage_path(registry, day, run_id)
     if not path.is_file():
         return [f"coverage file missing: {path}"]
     try:
@@ -196,6 +245,7 @@ def check(registry: courses.Registry, day: str, run_id: str, only: Iterable[str]
     else:
         gaps.extend(_notification_gaps(data["notifications"]))
     gaps.extend(_event_gaps(data.get("events")))
+    gaps.extend(_submission_gaps(registry, data.get("submissions"), only if only is None else slugs))
     return gaps
 
 
