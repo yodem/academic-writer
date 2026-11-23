@@ -83,7 +83,7 @@ After the courses are walked, check which open hand-ins Lemida already shows as 
 
 1. Run `courses.py task open-handins --json` (add the same `--courses` filter as the run, if any). It lists `handins` (`task`, `course`, `kind`, `title`, `due_at`, `cmid`, `type`, `url`) and `skipped` (a hand-in with no Lemida course or no numeric cmid; skipped ones need nothing). Check every listed hand-in and nothing else.
 2. **Read-only.** The watch only reads pages with GET fetches. Never open `startattempt.php` or `attempt.php`, never press a submit, save, attempt or post button, never fill a form. (User rule 2026-11-22: verify only, never do the quizzes or tasks.)
-3. One fetch per page, each with a 20-second timeout (`AbortController`), no retry loop. A page that fails, times out or shows a login page gets the row's `error` field (a short reason) and stays open; it still counts as checked.
+3. One fetch per page, each with a 20-second timeout (`AbortController`), no retry loop. A page that fails, times out, shows a login page or is redirected to another path (a signed-out session gets HTTP 200 and lands on `/enrol/index.php` in guest mode; a missing module gets 404) gets the row's `error` field (a short reason) and stays open; it still counts as checked.
 4. Record per `type`, with no Hebrew text matched (classes, ids and `href` parts only):
    - `assign`: the suffix of the status cell's class in `.submissionstatustable` (`submissionstatussubmitted` gives `status: "submitted"`; draft, new and reopened likewise; no such class gives `status: ""`; a page without `.submissionstatustable` gets `row.error = 'unrecognized page'`), and the second such cell, the team row, as `team_status` when present.
    - `quiz`: `quiz_review_links`, the number of attempt review links on the quiz page (`#region-main a[href*="/mod/quiz/review.php"][href*="attempt="]`; 0 when there is none; a page without `#region-main` gets `row.error = 'unrecognized page'`).
@@ -100,6 +100,7 @@ await (async () => {
       const r = await fetch(u, {credentials: 'include', signal: c.signal});
       if (!r.ok) throw new Error('http ' + r.status);
       if (/\/login\//.test(r.url)) throw new Error('login page');
+      if (new URL(r.url).pathname !== new URL(u, location.href).pathname) throw new Error('redirected to ' + new URL(r.url).pathname);
       return new DOMParser().parseFromString(await r.text(), 'text/html');
     } finally { clearTimeout(t); }
   };

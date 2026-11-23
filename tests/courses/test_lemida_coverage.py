@@ -13,10 +13,17 @@ RUN_ID = "2026-10-24T030000-4242"
 NOTIFICATIONS_URL = "https://lemida.biu.ac.il/message/output/popup/notifications.php"
 
 
+BASE = "https://lemida.example.org"
+
+
+def U(cmid, type_):
+    return f"{BASE}/mod/{type_}/view.php?id={cmid}"
+
+
 def make_registry(tmp_path, extra=()):
     d = tmp_path / "term"
     d.mkdir()
-    (d / "term.json").write_text(json.dumps({"term": "T", "timezone": "Asia/Jerusalem"}), encoding="utf-8")
+    (d / "term.json").write_text(json.dumps({"term": "T", "timezone": "Asia/Jerusalem", "lemida": {"base_url": BASE}}), encoding="utf-8")
     (d / "cohen.json").write_text(json.dumps({"slug": "cohen", "name": "הרמן כהן", "lemida_course_id": 11}), encoding="utf-8")
     (d / "kane.json").write_text(json.dumps({"slug": "kane", "name": "קאנט", "lemida_course_id": 12}), encoding="utf-8")
     for course in extra:
@@ -451,7 +458,7 @@ def test_submission_unchecked_open_handin_is_a_gap(tmp_path):
 def test_submission_confirmed_but_still_open_is_a_gap(tmp_path):
     reg = make_registry(tmp_path)
     tid = add_open_assignment(reg)
-    row = {"task": tid, "course": "kane", "cmid": "701", "type": "assign", "status": "submitted"}
+    row = {"task": tid, "course": "kane", "cmid": "701", "type": "assign", "url": U("701", "assign"), "status": "submitted"}
     write_coverage(reg, clean_payload(submissions={"complete": True, "checked": [row]}))
     gaps = check(reg)
     assert len(gaps) == 1 and "confirmed but not closed: run sync-submissions" in gaps[0]
@@ -461,8 +468,8 @@ def test_submission_draft_and_error_rows_count_as_checked(tmp_path):
     reg = make_registry(tmp_path)
     a = add_open_assignment(reg, ref="701")
     b = add_open_assignment(reg, ref="702")
-    rows = [{"task": a, "course": "kane", "cmid": "701", "type": "assign", "status": "draft"},
-            {"task": b, "course": "kane", "cmid": "702", "type": "assign", "error": "page did not load", "status": "submitted"}]
+    rows = [{"task": a, "course": "kane", "cmid": "701", "type": "assign", "url": U("701", "assign"), "status": "draft"},
+            {"task": b, "course": "kane", "cmid": "702", "type": "assign", "url": U("702", "assign"), "error": "page did not load", "status": "submitted"}]
     write_coverage(reg, clean_payload(submissions={"complete": True, "checked": rows}))
     assert check(reg) == []
 
@@ -500,8 +507,8 @@ def test_submission_row_without_evidence_or_with_mismatch_is_a_gap(tmp_path):
     reg = make_registry(tmp_path)
     a = add_open_assignment(reg, ref="701")
     b = add_open_assignment(reg, ref="702")
-    rows = [{"task": a, "course": "kane", "cmid": "701", "type": "assign"},
-            {"task": b, "course": "kane", "cmid": "999", "type": "assign", "status": "draft"}]
+    rows = [{"task": a, "course": "kane", "cmid": "701", "type": "assign", "url": U("701", "assign")},
+            {"task": b, "course": "kane", "cmid": "999", "type": "assign", "url": U("999", "assign"), "status": "draft"}]
     write_coverage(reg, clean_payload(submissions={"complete": True, "checked": rows}))
     gaps = check(reg)
     assert any(a in g and "evidence" in g for g in gaps) and any(b in g and "does not match" in g for g in gaps)
@@ -510,7 +517,7 @@ def test_submission_row_without_evidence_or_with_mismatch_is_a_gap(tmp_path):
 def test_submission_well_formed_error_row_is_fine_but_empty_error_is_not(tmp_path):
     reg = make_registry(tmp_path)
     tid = add_open_assignment(reg)
-    ok = {"task": tid, "course": "kane", "cmid": "701", "type": "assign", "error": "page did not load"}
+    ok = {"task": tid, "course": "kane", "cmid": "701", "type": "assign", "url": U("701", "assign"), "error": "page did not load"}
     write_coverage(reg, clean_payload(submissions={"complete": True, "checked": [ok]}))
     assert check(reg) == []
     write_coverage(reg, clean_payload(submissions={"complete": True, "checked": [{**ok, "error": "", "status": "submitted"}]}))
@@ -521,7 +528,7 @@ def test_submission_duplicate_rows_are_a_gap_even_when_the_task_is_closed(tmp_pa
     reg = make_registry(tmp_path)
     tid = add_open_assignment(reg)
     tasks.task_submit(reg.directory, "kane", tid)
-    row = {"task": tid, "course": "kane", "cmid": "701", "type": "assign", "status": "submitted"}
+    row = {"task": tid, "course": "kane", "cmid": "701", "type": "assign", "url": U("701", "assign"), "status": "submitted"}
     write_coverage(reg, clean_payload(submissions={"complete": True, "checked": [row, {**row, "status": "", "error": "timeout"}]}))
     assert any("2 rows for task" in g and tid in g for g in check(reg))
 
@@ -530,8 +537,8 @@ def test_submission_evidence_free_row_for_a_closed_or_unknown_task_is_a_gap(tmp_
     reg = make_registry(tmp_path)
     tid = add_open_assignment(reg)
     tasks.task_submit(reg.directory, "kane", tid)
-    rows = [{"task": tid, "course": "kane", "cmid": "701", "type": "assign"},
-            {"task": "no-such-task", "course": "kane", "cmid": "999", "type": "quiz"}]
+    rows = [{"task": tid, "course": "kane", "cmid": "701", "type": "assign", "url": U("701", "assign")},
+            {"task": "no-such-task", "course": "kane", "cmid": "999", "type": "quiz", "url": U("999", "quiz")}]
     write_coverage(reg, clean_payload(submissions={"complete": True, "checked": rows}))
     gaps = check(reg)
     assert any(tid in g and "evidence" in g for g in gaps) and any("no-such-task" in g and "evidence" in g for g in gaps)
@@ -539,9 +546,9 @@ def test_submission_evidence_free_row_for_a_closed_or_unknown_task_is_a_gap(tmp_
 
 def test_submission_malformed_ids_and_negative_quiz_links_are_gaps(tmp_path):
     reg = make_registry(tmp_path)
-    rows = [{"task": "a", "course": "kane", "cmid": "750", "type": "forum", "my_user_id": "undefined", "author_ids": []},
-            {"task": "b", "course": "kane", "cmid": "750", "type": "forum", "my_user_id": "5", "author_ids": [""]},
-            {"task": "c", "course": "kane", "cmid": "801", "type": "quiz", "quiz_review_links": -1}]
+    rows = [{"task": "a", "course": "kane", "cmid": "750", "type": "forum", "url": U("750", "forum"), "my_user_id": "undefined", "author_ids": []},
+            {"task": "b", "course": "kane", "cmid": "750", "type": "forum", "url": U("750", "forum"), "my_user_id": "5", "author_ids": [""]},
+            {"task": "c", "course": "kane", "cmid": "801", "type": "quiz", "url": U("801", "quiz"), "quiz_review_links": -1}]
     write_coverage(reg, clean_payload(submissions={"complete": True, "checked": rows}))
     gaps = check(reg)
     assert any("my_user_id" in g for g in gaps) and any("author_ids" in g for g in gaps) and any("quiz_review_links" in g for g in gaps)

@@ -119,8 +119,13 @@ def test_sync_submissions_row_for_a_multi_module_task_closes_nothing_exit_1(tmp_
     assert tasks.run_task_command(reg.directory, args) == 1
 
 
+def U(cmid, type_):
+    return f"{BASE}/mod/{type_}/view.php?id={cmid}"
+
+
 def row(tid, cmid="701", **kw):
-    return {"task": tid, "course": "kane", "cmid": cmid, "type": "assign", **kw}
+    kind = kw.get("type", "assign")
+    return {"task": tid, "course": "kane", "cmid": cmid, "type": "assign", "url": U(cmid, kind), **kw}
 
 
 def test_sync_submissions_submitted_and_team_submitted_close(tmp_path):
@@ -285,18 +290,18 @@ def test_sync_submissions_duplicate_rows_raise_before_any_close(tmp_path, rows_f
 
 def test_submission_row_ids_must_be_positive_digits(tmp_path):
     base = row("t1", status="submitted")
-    forum = {"task": "t2", "course": "kane", "cmid": "750", "type": "forum", "my_user_id": "55", "author_ids": ["55"]}
+    forum = {"task": "t2", "course": "kane", "cmid": "750", "type": "forum", "url": U("750", "forum"), "my_user_id": "55", "author_ids": ["55"]}
     assert tasks.row_problem(forum) is None
     assert "my_user_id" in tasks.row_problem({**forum, "my_user_id": "undefined"})
     assert "author_ids" in tasks.row_problem({**forum, "author_ids": ["55", ""]})
     assert "author_ids" in tasks.row_problem({**forum, "author_ids": [0]})
     assert "cmid" in tasks.row_problem({**base, "cmid": "abc"})
-    quiz = {"task": "t3", "course": "kane", "cmid": "801", "type": "quiz", "quiz_review_links": 0}
+    quiz = {"task": "t3", "course": "kane", "cmid": "801", "type": "quiz", "url": U("801", "quiz"), "quiz_review_links": 0}
     assert tasks.row_problem(quiz) is None
     assert "quiz_review_links" in tasks.row_problem({**quiz, "quiz_review_links": -1})
     reg = make_reg(tmp_path)
     a = add(reg, "kane", "assignment", "701")
-    write_cov(reg, [{"task": a, "course": "kane", "cmid": "750", "type": "forum", "my_user_id": "undefined", "author_ids": []}])
+    write_cov(reg, [{"task": a, "course": "kane", "cmid": "750", "type": "forum", "url": U("750", "forum"), "my_user_id": "undefined", "author_ids": []}])
     with pytest.raises(tasks.TaskError, match="my_user_id"):
         tasks.sync_submissions(reg.directory, DATE, RUN_ID)
 
@@ -322,3 +327,52 @@ def test_sync_submissions_unknown_task_does_not_block_valid_rows_and_exits_1(tmp
     args = type("A", (), {"task_command": "sync-submissions", "date": DATE, "run_id": RUN_ID, "json": False})()
     assert tasks.run_task_command(reg.directory, args) == 1
     assert "closed" in capsys.readouterr().out
+
+
+def test_open_handins_skips_task_when_term_has_no_base_url(tmp_path):
+    reg = make_reg(tmp_path)
+    (reg.directory / "term.json").write_text(json.dumps({"term": "T", "timezone": "Asia/Jerusalem"}), encoding="utf-8")
+    tid = add(reg, "kane", "assignment", "701")
+    out = tasks.open_handins(reg.directory)
+    assert out["handins"] == [] and {"task": tid, "course": "kane", "reason": "no Lemida base_url in term.json"} in out["skipped"]
+
+
+def test_row_url_is_required_and_must_equal_the_handin_url(tmp_path):
+    reg = make_reg(tmp_path)
+    tid = add(reg, "kane", "assignment", "701")
+    good = row(tid, status="submitted")
+    assert "url" in tasks.row_problem({k: v for k, v in good.items() if k != "url"})
+    assert "url" in tasks.row_problem({**good, "url": "ftp://x"})
+    write_cov(reg, [{**good, "url": "https://other.example.org/mod/assign/view.php?id=701"}])
+    report = tasks.sync_submissions(reg.directory, DATE, RUN_ID)
+    assert report["closed"] == [] and len(report["errors"]) == 1
+
+
+def test_positive_id_rejects_overlong_digit_strings():
+    assert not tasks._is_pos_id("1" * 21) and tasks._is_pos_id("1" * 20)
+
+
+def test_sync_refuses_close_when_linkage_changes_after_listing(tmp_path):
+    reg = make_reg(tmp_path)
+    tid, _ = link_two(reg, "701", "701")
+    write_cov(reg, [row(tid, status="submitted")])
+    real = tasks.open_handins
+
+    def listing_then_relink(directory, only=None):
+        out = real(directory, only)
+        other = add(reg, "kane", "assignment", "702", "Other")
+        data = json.loads((directory / "kane.json").read_text(encoding="utf-8"))
+        for t in data["tasks"]:
+            if t["id"] == tid:
+                t["chore_ids"] = list(t.get("chore_ids", [])) + [other]
+        (directory / "kane.json").write_text(json.dumps(data), encoding="utf-8")
+        return out
+
+    tasks.open_handins = listing_then_relink
+    try:
+        report = tasks.sync_submissions(reg.directory, DATE, RUN_ID)
+    finally:
+        tasks.open_handins = real
+    assert report["closed"] == [] and len(report["errors"]) == 1
+    assert status_of(reg, "kane", tid) == "open"
+    assert all(c["status"] != "done" for c in chores.load(reg))

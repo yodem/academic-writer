@@ -246,13 +246,22 @@ def task_link(directory: Path, slug: str, ident: str, *, ref: str | None = None,
         _unlock(handle)
 
 
-def task_submit(directory: Path, slug: str, ident: str) -> dict[str, Any]:
-    """Mark a task submitted and close its linked chores. Idempotent."""
+def task_submit(directory: Path, slug: str, ident: str, expect_ref: str | None = None) -> dict[str, Any]:
+    """Mark a task submitted and close its linked chores. Idempotent.
+
+    With `expect_ref` (the sync's guard) the close happens only if, under this lock, the task is still open and its linked
+    existing chores name exactly that one canonical ref; otherwise TaskError and nothing is closed."""
     handle = _lock(directory)
     try:
         course = load_course(directory, slug)
         tasks, _ = derive_tasks(course.get("tasks", []), _chores(directory, slug), term_timezone(directory))
         task = resolve_task(tasks, ident)
+        if expect_ref is not None:
+            by_id = {c["id"]: c for c in _chores(directory, slug)}
+            now_refs = {chores_mod.canonical_ref(str(by_id[cid].get("ref", ""))) for cid in task.get("chore_ids", []) if cid in by_id}
+            if task.get("status") != "open" or now_refs != {expect_ref}:
+                raise TaskError(f"task {task['id']} changed since it was listed (status {task.get('status')}, "
+                                f"refs {', '.join(sorted(now_refs)) or '(none)'}; expected only {expect_ref}): nothing closed")
         closed = []
         registry = courses.Registry(directory)
         for cid in task.get("chore_ids", []):
@@ -495,9 +504,12 @@ def open_handins(directory: Path, only: Any = None) -> dict[str, list[dict[str, 
             if kind == "assignment" and mod not in ("assign", "quiz"):
                 out["skipped"].append({**skip, "reason": f"module {ref} is a {mod or 'unknown'!r}, not an assign or quiz"})
                 continue
+            url = courses.lemida_module_url(base, course, ref, kind)
+            if not url:
+                out["skipped"].append({**skip, "reason": "no Lemida base_url in term.json"})
+                continue
             out["handins"].append({"task": task["id"], "course": slug, "kind": kind, "title": task.get("title", ""),
-                                   "due_at": task.get("due_at"), "cmid": ref, "type": mod,
-                                   "url": courses.lemida_module_url(base, course, ref, kind)})
+                                   "due_at": task.get("due_at"), "cmid": ref, "type": mod, "url": url})
     return out
 
 
@@ -510,7 +522,7 @@ def _is_pos_id(value: Any) -> bool:
         return False
     if isinstance(value, int):
         return value > 0
-    return isinstance(value, str) and value.isascii() and value.isdigit() and int(value) > 0
+    return isinstance(value, str) and len(value) <= 20 and value.isascii() and value.isdigit() and int(value) > 0
 
 
 def row_problem(row: Any) -> str | None:
@@ -523,6 +535,8 @@ def row_problem(row: Any) -> str | None:
         return "course is not a string"
     if not _is_pos_id(row.get("cmid")):
         return "cmid is not a positive integer or a string of digits"
+    if not isinstance(row.get("url"), str) or not row["url"].startswith("http"):
+        return "url is not a string starting with http"
     if row.get("type") not in ROW_TYPES:
         return f"type {row.get('type')!r} is not one of {', '.join(ROW_TYPES)}"
     for key in ("status", "team_status"):
@@ -541,9 +555,10 @@ def row_problem(row: Any) -> str | None:
 
 
 def row_matches(row: dict[str, Any], handin: dict[str, Any]) -> bool:
-    """Does a well-formed row name exactly this hand-in (task id, course, cmid and module type)?"""
+    """Does a well-formed row name exactly this hand-in (task id, course, cmid, module type and url)?"""
     return (row.get("task") == handin["task"] and row.get("course") == handin["course"]
-            and str(row.get("cmid")) == str(handin["cmid"]) and row.get("type") == handin["type"])
+            and str(row.get("cmid")) == str(handin["cmid"]) and row.get("type") == handin["type"]
+            and row.get("url") == handin["url"])
 
 
 def row_evidence(row: dict[str, Any]) -> bool:
@@ -625,10 +640,14 @@ def sync_submissions(directory: Path, day: str, run_id: str) -> dict[str, Any]:
             continue  # already closed: a rerun does nothing
         if not row_matches(row, handin):
             report["errors"].append({"task": ident, "course": slug, "reason": (
-                f"row does not match the hand-in (course {handin['course']}, cmid {handin['cmid']}, type {handin['type']})")})
+                f"row does not match the hand-in (course {handin['course']}, cmid {handin['cmid']}, type {handin['type']}, url {handin['url']})")})
             continue
         if confirmed({**row, "type": handin["type"]}):
-            task_submit(directory, handin["course"], ident)
+            try:
+                task_submit(directory, handin["course"], ident, expect_ref=handin["cmid"])
+            except TaskError as exc:
+                report["errors"].append({"task": ident, "course": slug, "reason": str(exc)})
+                continue
             report["closed"].append({"task": ident, "course": slug, "title": handin.get("title", "")})
         else:
             raw = row.get("error") and f"error: {row['error']}" or row.get("status") or row.get("team_status") or ""

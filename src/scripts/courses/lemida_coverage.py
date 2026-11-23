@@ -166,7 +166,7 @@ def _submission_gaps(registry: courses.Registry, section: Any, only: Iterable[st
         if not rows:
             gaps.append(label)
         elif not exact:
-            gaps.append(f"{label}: its row does not match course {handin['course']}, cmid {handin['cmid']}, type {handin['type']}")
+            gaps.append(f"{label}: its row does not match course {handin['course']}, cmid {handin['cmid']}, type {handin['type']}, url {handin['url']}")
         elif not any(tasks.row_evidence(r) for r in exact):
             gaps.append(f"{label}: its row has neither an error nor the {handin['type']} evidence fields")
         elif any(tasks.confirmed(r) for r in exact if tasks.row_evidence(r)):
