@@ -376,3 +376,37 @@ def test_sync_refuses_close_when_linkage_changes_after_listing(tmp_path):
     assert report["closed"] == [] and len(report["errors"]) == 1
     assert status_of(reg, "kane", tid) == "open"
     assert all(c["status"] != "done" for c in chores.load(reg))
+
+
+def test_row_url_must_parse_with_http_scheme_and_host_and_course_must_be_non_empty(tmp_path):
+    reg = make_reg(tmp_path)
+    tid = add(reg, "kane", "assignment", "701")
+    good = row(tid, status="submitted")
+    assert tasks.row_problem(good) is None
+    assert "url" in tasks.row_problem({**good, "url": "http"})
+    assert "url" in tasks.row_problem({**good, "url": "https://"})
+    assert "course" in tasks.row_problem({**good, "course": ""})
+
+
+def test_sync_refuses_close_when_module_type_changes_after_listing(tmp_path, capsys):
+    reg = make_reg(tmp_path)
+    tid = add(reg, "kane", "assignment", "701")
+    write_cov(reg, [row(tid, status="submitted")])
+    real = tasks.open_handins
+
+    def listing_then_retype(directory, only=None):
+        out = real(directory, only)
+        data = json.loads((directory / "kane.json").read_text(encoding="utf-8"))
+        data["watch_seen"]["modules"]["701"]["type"] = "quiz"
+        (directory / "kane.json").write_text(json.dumps(data), encoding="utf-8")
+        return out
+
+    tasks.open_handins = listing_then_retype
+    try:
+        report = tasks.sync_submissions(reg.directory, DATE, RUN_ID)
+    finally:
+        tasks.open_handins = real
+    assert report["closed"] == [] and len(report["errors"]) == 1
+    assert "changed since it was listed" in report["errors"][0]["reason"]
+    assert status_of(reg, "kane", tid) == "open"
+    assert all(c["status"] != "done" for c in chores.load(reg))

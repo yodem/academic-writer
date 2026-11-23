@@ -552,3 +552,13 @@ def test_submission_malformed_ids_and_negative_quiz_links_are_gaps(tmp_path):
     write_coverage(reg, clean_payload(submissions={"complete": True, "checked": rows}))
     gaps = check(reg)
     assert any("my_user_id" in g for g in gaps) and any("author_ids" in g for g in gaps) and any("quiz_review_links" in g for g in gaps)
+
+
+def test_lemida_watch_get_helper_rejects_every_redirect():
+    """A doc contract: the snippet cannot run here, so its `get` helper text must hold the redirect guards."""
+    doc = (Path(__file__).resolve().parents[2] / "src" / "skills" / "courses" / "references" / "lemida-watch.md").read_text(encoding="utf-8")
+    start = doc.index("const get = async (u) => {")
+    helper = doc[start:doc.index("const uid", start)]
+    assert "r.redirected" in helper
+    assert "new URL(r.url).href !== new URL(u, location.href).href" in helper
+    assert "pathname !== " not in helper and ".pathname ===" not in helper

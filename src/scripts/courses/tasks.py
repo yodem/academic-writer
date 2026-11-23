@@ -19,6 +19,7 @@ import fcntl
 import json
 import re
 import shutil
+import urllib.parse
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -246,11 +247,14 @@ def task_link(directory: Path, slug: str, ident: str, *, ref: str | None = None,
         _unlock(handle)
 
 
-def task_submit(directory: Path, slug: str, ident: str, expect_ref: str | None = None) -> dict[str, Any]:
+def task_submit(directory: Path, slug: str, ident: str, expect_ref: str | None = None,
+                expect_type: str | None = None, expect_url: str | None = None) -> dict[str, Any]:
     """Mark a task submitted and close its linked chores. Idempotent.
 
     With `expect_ref` (the sync's guard) the close happens only if, under this lock, the task is still open and its linked
-    existing chores name exactly that one canonical ref; otherwise TaskError and nothing is closed."""
+    existing chores name exactly that one canonical ref; otherwise TaskError and nothing is closed. With `expect_type` and
+    `expect_url` the hand-in is re-derived under the lock (eligible kind, module type from the course's current `watch_seen`
+    or the kind fallback, url from the same function `open_handins` uses) and must still equal what the sync matched."""
     handle = _lock(directory)
     try:
         course = load_course(directory, slug)
@@ -262,6 +266,13 @@ def task_submit(directory: Path, slug: str, ident: str, expect_ref: str | None =
             if task.get("status") != "open" or now_refs != {expect_ref}:
                 raise TaskError(f"task {task['id']} changed since it was listed (status {task.get('status')}, "
                                 f"refs {', '.join(sorted(now_refs)) or '(none)'}; expected only {expect_ref}): nothing closed")
+            if expect_type is not None or expect_url is not None:
+                base = str(courses.Registry(directory).term.get("lemida", {}).get("base_url", "")).rstrip("/")
+                now_type = _module_type(course, expect_ref, task.get("kind", ""))
+                now_url = _handin_url(base, course, expect_ref, task.get("kind", ""))
+                if task.get("kind") not in HANDIN_KINDS or now_type != expect_type or now_url != expect_url:
+                    raise TaskError(f"task {task['id']} changed since it was listed (module type {now_type or '(none)'}, "
+                                    f"url {now_url or '(none)'}; expected {expect_type} at {expect_url}): nothing closed")
         closed = []
         registry = courses.Registry(directory)
         for cid in task.get("chore_ids", []):
@@ -458,6 +469,17 @@ def _split_courses(text: str | None) -> list[str] | None:
     return None if text is None else text.replace(",", " ").split()
 
 
+def _module_type(course: dict[str, Any], ref: str, kind: str) -> str:
+    """The Lemida module type of `ref`: the course's current `watch_seen`, else the chore-kind fallback."""
+    seen = ((course.get("watch_seen") or {}).get("modules") or {}).get(ref) or {}
+    return str(seen.get("type") or courses.CHORE_MODULE_TYPE.get(kind, ""))
+
+
+def _handin_url(base: str, course: dict[str, Any], ref: str, kind: str) -> str | None:
+    """The Lemida page of a hand-in: the one function `open_handins` and the guarded close both use."""
+    return courses.lemida_module_url(base, course, ref, kind)
+
+
 def open_handins(directory: Path, only: Any = None) -> dict[str, list[dict[str, Any]]]:
     """The open tasks the nightly watch must look at in Lemida, and the open ones it cannot.
 
@@ -495,7 +517,7 @@ def open_handins(directory: Path, only: Any = None) -> dict[str, list[dict[str, 
                 out["skipped"].append({**skip, "reason": f"ref {ref or '(none)'!r} is not a numeric cmid"})
                 continue
             seen = ((course.get("watch_seen") or {}).get("modules") or {}).get(ref) or {}
-            mod = str(seen.get("type") or courses.CHORE_MODULE_TYPE.get(kind, ""))
+            mod = _module_type(course, ref, kind)
             if kind == "exam" and mod != "quiz":
                 continue  # an exam that is not a Lemida quiz is not handed in there
             if kind == "forum-post" and seen.get("type") != "forum":
@@ -504,7 +526,7 @@ def open_handins(directory: Path, only: Any = None) -> dict[str, list[dict[str, 
             if kind == "assignment" and mod not in ("assign", "quiz"):
                 out["skipped"].append({**skip, "reason": f"module {ref} is a {mod or 'unknown'!r}, not an assign or quiz"})
                 continue
-            url = courses.lemida_module_url(base, course, ref, kind)
+            url = _handin_url(base, course, ref, kind)
             if not url:
                 out["skipped"].append({**skip, "reason": "no Lemida base_url in term.json"})
                 continue
@@ -531,12 +553,15 @@ def row_problem(row: Any) -> str | None:
         return "row is not an object"
     if not isinstance(row.get("task"), str) or not row["task"]:
         return "task is not a non-empty string"
-    if not isinstance(row.get("course"), str):
-        return "course is not a string"
+    if not isinstance(row.get("course"), str) or not row["course"]:
+        return "course is not a non-empty string"
     if not _is_pos_id(row.get("cmid")):
         return "cmid is not a positive integer or a string of digits"
-    if not isinstance(row.get("url"), str) or not row["url"].startswith("http"):
-        return "url is not a string starting with http"
+    if not isinstance(row.get("url"), str):
+        return "url is not an http or https URL with a host"
+    parts = urllib.parse.urlsplit(row["url"])
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        return "url is not an http or https URL with a host"
     if row.get("type") not in ROW_TYPES:
         return f"type {row.get('type')!r} is not one of {', '.join(ROW_TYPES)}"
     for key in ("status", "team_status"):
@@ -644,7 +669,8 @@ def sync_submissions(directory: Path, day: str, run_id: str) -> dict[str, Any]:
             continue
         if confirmed({**row, "type": handin["type"]}):
             try:
-                task_submit(directory, handin["course"], ident, expect_ref=handin["cmid"])
+                task_submit(directory, handin["course"], ident, expect_ref=handin["cmid"],
+                            expect_type=handin["type"], expect_url=handin["url"])
             except TaskError as exc:
                 report["errors"].append({"task": ident, "course": slug, "reason": str(exc)})
                 continue

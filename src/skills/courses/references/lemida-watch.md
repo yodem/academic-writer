@@ -83,11 +83,11 @@ After the courses are walked, check which open hand-ins Lemida already shows as 
 
 1. Run `courses.py task open-handins --json` (add the same `--courses` filter as the run, if any). It lists `handins` (`task`, `course`, `kind`, `title`, `due_at`, `cmid`, `type`, `url`) and `skipped` (a hand-in with no Lemida course or no numeric cmid; skipped ones need nothing). Check every listed hand-in and nothing else.
 2. **Read-only.** The watch only reads pages with GET fetches. Never open `startattempt.php` or `attempt.php`, never press a submit, save, attempt or post button, never fill a form. (User rule 2026-11-22: verify only, never do the quizzes or tasks.)
-3. One fetch per page, each with a 20-second timeout (`AbortController`), no retry loop. A page that fails, times out, shows a login page or is redirected to another path (a signed-out session gets HTTP 200 and lands on `/enrol/index.php` in guest mode; a missing module gets 404) gets the row's `error` field (a short reason) and stays open; it still counts as checked.
+3. One fetch per page, each with a 20-second timeout (`AbortController`), no retry loop. A page that fails, times out, shows a login page is redirected at all (any redirect is an error, including the guest-mode `/enrol/index.php` page a signed-out session lands on with HTTP 200, and a different module id; a missing module gets 404) gets the row's `error` field (a short reason) and stays open; it still counts as checked.
 4. Record per `type`, with no Hebrew text matched (classes, ids and `href` parts only):
    - `assign`: the suffix of the status cell's class in `.submissionstatustable` (`submissionstatussubmitted` gives `status: "submitted"`; draft, new and reopened likewise; no such class gives `status: ""`; a page without `.submissionstatustable` gets `row.error = 'unrecognized page'`), and the second such cell, the team row, as `team_status` when present.
    - `quiz`: `quiz_review_links`, the number of attempt review links on the quiz page (`#region-main a[href*="/mod/quiz/review.php"][href*="attempt="]`; 0 when there is none; a page without `#region-main` gets `row.error = 'unrecognized page'`).
-   - `forum`: `my_user_id` (`M.cfg.userId`) and `author_ids`. The forum page lists each discussion once as `[data-region="discussion-list-item"][data-discussionid]`; fetch `/mod/forum/discuss.php?d=<id>` for each, and take, for every `[data-region="post"]` on it (a reply counts, so a hand-in made as a reply is found), the `id` of the author link inside that post's first `header` element (`header a[href*="user/view.php"]`; the author comes from the post's header only, never from the message body or a sidebar; a post with no header author link is skipped). A forum view page without `.discussion-list`, or a fetched discussion page with no `[data-region="post"]`, is not a page the check understands: set `row.error = 'unrecognized page'`. If the forum page shows `.pagination` (more than one page of discussions) or lists more than 60 discussions, set `row.error = 'incomplete scan'` instead of a partial `author_ids`.
+   - `forum`: `my_user_id` (`M.cfg.userId`) and `author_ids`. The forum page lists each discussion once as `[data-region="discussion-list-item"][data-discussionid]`; fetch `discuss.php?d=<id>` for each, as a URL relative to the hand-in url so a sub-path installation keeps its prefix, and take, for every `[data-region="post"]` on it (a reply counts, so a hand-in made as a reply is found), the `id` of the author link inside that post's first `header` element (`header a[href*="user/view.php"]`; the author comes from the post's header only, never from the message body or a sidebar; a post with no header author link is skipped). A forum view page without `.discussion-list`, or a fetched discussion page with no `[data-region="post"]`, is not a page the check understands: set `row.error = 'unrecognized page'`. A fetched discussion page that shows `.pagination` (more than one page of posts) sets `row.error = 'incomplete scan'`, drops `author_ids` and stops that forum. If the forum page shows `.pagination` (more than one page of discussions) or lists more than 60 discussions, set `row.error = 'incomplete scan'` instead of a partial `author_ids`.
 
 From a signed-in Lemida tab (`javascript_tool`, keep the leading `await`), paste the `handins` array into `H`. It returns one row per hand-in, without the url (copy `url` from the list into each row when you write the file):
 
@@ -100,7 +100,8 @@ await (async () => {
       const r = await fetch(u, {credentials: 'include', signal: c.signal});
       if (!r.ok) throw new Error('http ' + r.status);
       if (/\/login\//.test(r.url)) throw new Error('login page');
-      if (new URL(r.url).pathname !== new URL(u, location.href).pathname) throw new Error('redirected to ' + new URL(r.url).pathname);
+      if (r.redirected) throw new Error('redirected to ' + new URL(r.url).pathname);
+      if (new URL(r.url).href !== new URL(u, location.href).href) throw new Error('redirected to ' + new URL(r.url).pathname);
       return new DOMParser().parseFromString(await r.text(), 'text/html');
     } finally { clearTimeout(t); }
   };
@@ -126,7 +127,9 @@ await (async () => {
         else {
           row.author_ids = [];
           for (const id of ids) {
-            const posts = (await get(location.origin + '/mod/forum/discuss.php?d=' + id)).querySelectorAll('[data-region="post"]');
+            const dd = await get(new URL('discuss.php?d=' + id, h.url).href);
+            if (dd.querySelector('.pagination')) { row.error = 'incomplete scan'; delete row.author_ids; break; }
+            const posts = dd.querySelectorAll('[data-region="post"]');
             if (!posts.length) { row.error = 'unrecognized page'; delete row.author_ids; break; }
             for (const p of posts) {
               const hd = p.querySelector('header');
