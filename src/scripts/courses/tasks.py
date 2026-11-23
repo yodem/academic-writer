@@ -455,7 +455,8 @@ def open_handins(directory: Path, only: Any = None) -> dict[str, list[dict[str, 
     A hand-in is an open assignment or forum-post task, or an exam task whose module is a quiz in the course's
     `watch_seen`; its chore ref must be a numeric cmid and its course active with a `lemida_course_id`. A forum-post
     ref counts only when `watch_seen` knows it as a forum cmid (it may be a discussion id); an assignment ref whose
-    known module type is neither assign nor quiz is skipped.
+    known module type is neither assign nor quiz is skipped. A task whose linked chores name several refs is skipped
+    (closing it would close them all on one module's evidence), so it is never closed and never a coverage gap.
     Reads the registry only (derive is not written back) and never contacts Lemida. `only` limits the courses."""
     registry = courses.Registry(directory)
     base = str(registry.term.get("lemida", {}).get("base_url", "")).rstrip("/")
@@ -470,9 +471,12 @@ def open_handins(directory: Path, only: Any = None) -> dict[str, list[dict[str, 
             kind = task.get("kind")
             if task.get("status") != "open" or kind not in HANDIN_KINDS:
                 continue
-            chore = next((by_id[cid] for cid in task.get("chore_ids", []) if cid in by_id), {})
-            ref = chores_mod.canonical_ref(str(chore.get("ref", "")))
             skip = {"task": task["id"], "course": slug}
+            refs = sorted({chores_mod.canonical_ref(str(by_id[cid].get("ref", ""))) for cid in task.get("chore_ids", []) if cid in by_id})
+            if len(refs) > 1:  # task_submit closes every linked chore, so one module's evidence cannot stand for several
+                out["skipped"].append({**skip, "reason": f"links several Lemida modules ({', '.join(r or '(none)' for r in refs)})"})
+                continue
+            ref = refs[0] if refs else ""
             absent = course.get("lemida_absent")
             if not course.get("lemida_course_id"):
                 reason = "lemida_absent" if isinstance(absent, str) and absent.strip() else "no lemida_course_id"
@@ -498,10 +502,6 @@ def open_handins(directory: Path, only: Any = None) -> dict[str, list[dict[str, 
 
 
 ROW_TYPES = ("assign", "quiz", "forum")
-
-
-def _is_id(value: Any) -> bool:
-    return isinstance(value, (str, int)) and not isinstance(value, bool)
 
 
 def _is_pos_id(value: Any) -> bool:

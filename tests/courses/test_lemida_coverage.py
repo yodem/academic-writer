@@ -474,6 +474,20 @@ def test_submission_skipped_task_never_gaps(tmp_path):
     assert check(reg) == []
 
 
+def test_submission_task_linking_several_modules_never_gaps(tmp_path):
+    reg = make_registry(tmp_path)
+    a, b = add_open_assignment(reg, ref="701"), add_open_assignment(reg, ref="702")
+    tasks.sync_tasks(reg.directory, "kane")
+    path = reg.directory / "kane.json"
+    course = json.loads(path.read_text(encoding="utf-8"))
+    course["tasks"] = [t for t in course["tasks"] if t["id"] != b]
+    next(t for t in course["tasks"] if t["id"] == a)["chore_ids"] = [a, b]
+    path.write_text(json.dumps(course), encoding="utf-8")
+    assert tasks.open_handins(reg.directory)["handins"] == []
+    write_coverage(reg, clean_payload())
+    assert check(reg) == []
+
+
 def test_submission_row_with_only_a_task_is_a_gap(tmp_path):
     reg = make_registry(tmp_path)
     tid = add_open_assignment(reg)

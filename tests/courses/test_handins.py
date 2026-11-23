@@ -80,6 +80,45 @@ def test_open_handins_respects_only_and_quiz_via_watch_seen(tmp_path):
     assert [r["task"] for r in tasks.open_handins(reg.directory, ["cohen"])["handins"]] == [other]
 
 
+def link_two(reg, ref_a, ref_b):
+    """One open assignment task linking two chores with these refs; returns (task id, both chore ids)."""
+    a, b = add(reg, "kane", "assignment", ref_a), add(reg, "kane", "reading", ref_b)
+    tasks.sync_tasks(reg.directory, "kane")
+    path = reg.directory / "kane.json"
+    course = json.loads(path.read_text(encoding="utf-8"))
+    course["tasks"] = [t for t in course["tasks"] if t["id"] != b]
+    next(t for t in course["tasks"] if t["id"] == a)["chore_ids"] = [a, b]
+    path.write_text(json.dumps(course, ensure_ascii=False), encoding="utf-8")
+    return a, [a, b]
+
+
+def test_open_handins_skips_a_task_linking_chores_of_different_modules(tmp_path):
+    reg = make_reg(tmp_path)
+    tid, _ = link_two(reg, "701", "702")
+    out = tasks.open_handins(reg.directory)
+    assert out["handins"] == []
+    assert out["skipped"] == [{"task": tid, "course": "kane", "reason": "links several Lemida modules (701, 702)"}]
+
+
+def test_open_handins_keeps_a_task_linking_chores_of_the_same_module(tmp_path):
+    reg = make_reg(tmp_path)
+    tid, _ = link_two(reg, "701", "701")
+    out = tasks.open_handins(reg.directory)
+    assert [(h["task"], h["cmid"]) for h in out["handins"]] == [(tid, "701")] and out["skipped"] == []
+
+
+def test_sync_submissions_row_for_a_multi_module_task_closes_nothing_exit_1(tmp_path, capsys):
+    reg = make_reg(tmp_path)
+    tid, cids = link_two(reg, "701", "702")
+    write_cov(reg, [row(tid, "701", status="submitted")])
+    report = tasks.sync_submissions(reg.directory, DATE, RUN_ID)
+    assert report["closed"] == [] and len(report["errors"]) == 1
+    assert status_of(reg, "kane", tid) == "open"
+    assert all(c["status"] != "done" for c in chores.load(reg) if c["id"] in cids)
+    args = type("A", (), {"task_command": "sync-submissions", "date": DATE, "run_id": RUN_ID, "json": False})()
+    assert tasks.run_task_command(reg.directory, args) == 1
+
+
 def row(tid, cmid="701", **kw):
     return {"task": tid, "course": "kane", "cmid": cmid, "type": "assign", **kw}
 
