@@ -1,5 +1,9 @@
 # Academic Helper — Claude Code Conventions
 
+- Read docs/README.md first.
+- Read docs/product.md and docs/architecture.md before any plan.
+- Add an ADR when a decision changes the architecture.
+
 This is a Claude Code plugin for Humanities researchers. The user is a single
 researcher on a local machine; the plugin should never assume team workflows.
 
@@ -81,23 +85,6 @@ Slash commands are auto-generated from skills with `user-invocable: true`. The `
 | `/academic-writer:setup voice` | setup (phase `voice`) | Manage the shared voice store: migrate, pick exemplars, derive writing moves, sync |
 | `/academic-writer:write revise` | write (phase `revise`) | Read Word comments and tracked changes; update the draft and feedback stores |
 | `/academic-writer:write watch` | write (phase `watch`) | Show what Academic Writer is doing right now: current step, progress and anything the checker rejected |
-
-## Agents
-
-| Agent file | Role |
-|---|---|
-| `src/agents/architect.md` | Generates thesis options or structured article outline |
-| `src/agents/auditor.md` | Citation hard gate — verifies claims against sources.json |
-
-## Pipeline pattern
-
-The `write` skill uses a CLI-backed, gated pipeline:
-1. Conversational planning and approval (architect agent, human in the loop), then outline validation.
-2. `aw draft` writes body units in dependency order and intro/conclusion last, applying code gates.
-3. The auditor receives one batch per unit; it remains the citation hard gate, and failed units are redrafted with feedback.
-4. `aw synthesize` applies paragraph-level transition edits, then the skill creates the DOCX and hands it back for Word comments and `/academic-writer:write revise`.
-
-Auditor is the only mandatory hard gate — it must reject paragraphs whose citations don't match `sources.json` or fail external verification.
 
 ## Anti-patterns
 
