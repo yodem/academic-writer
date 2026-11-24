@@ -34,6 +34,7 @@ permissions:
   contents: read
 
 jobs:
+  # One entry point: lint, types, tests and build all live in scripts/verify.sh (phase 1 of the repo factory).
   gates:
     runs-on: ubuntu-latest
 
@@ -50,61 +51,28 @@ jobs:
         with:
           python-version: '3.12'
 
-      # release.yml's typecheck gate runs AFTER its own "npm run build" step, which
-      # (via build-plugins.sh's hooks phase) installs src/hooks/node_modules as a
-      # side effect. There is no build step here, so that install is done explicitly
-      # instead — the gate step itself (`npm run typecheck`) stays identical either way.
-      - name: Install hooks dependencies (for the typecheck gate)
-        run: cd src/hooks && npm ci
+      - name: Verify
+        run: bash scripts/verify.sh
 
-      # The `aw` command-line tool (src/cli) has its own node_modules. The CLI test
-      # gate, the CLI typecheck gate and the pytest gate (tests/_awbuild.py bundles
-      # src/cli into a temporary `aw`, and the end-to-end tests run it) all need it,
-      # and none of them runs a build first. Install it BEFORE the pytest gate.
-      - name: Install CLI dependencies (for the pytest, test:cli and typecheck:cli gates)
-        run: cd src/cli && npm ci
+  # Fails when the change deletes test files or removes test cases or assertions, unless a commit
+  # message (or the PR body) says "tests-removed: <reason>".
+  test-integrity:
+    runs-on: ubuntu-latest
 
-      # `src/hooks/dist/` is gitignored, so the compiled hook bundle does not
-      # exist in the tree as pushed. tests/test_gate_enforce_hook.py drives the
-      # COMPILED bundle through run-hook.mjs — exactly what Claude Code loads —
-      # so without this the pytest gate fails on CI while passing on any machine
-      # that had run a build (measured 2026-09-04: 14 failures, TST-09). The test
-      # also builds on demand as a fallback; this step makes it deterministic and
-      # keeps the build cost out of the gate's own timing.
-      - name: Build hooks (for the pytest gate — dist/ is gitignored)
-        run: npm run build:hooks
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Install Python test dependencies
+      - name: Test integrity against the base
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements-dev.txt
-
-      - name: Gate — version agrees across ALL registered locations
-        run: python3 scripts/version-sync.py --check
-
-      - name: Gate — version consistency (marketplace.json vs plugin.json)
-        run: bash scripts/check-version-consistency.sh
-
-      - name: Gate — no personal identifiers in shipped or published files
-        run: bash scripts/check-no-private-refs.sh
-
-      - name: Gate — brand file, generated tokens and About data are current
-        run: |
-          python3 scripts/check-brand.py --surface all
-          python3 scripts/gen-brand-tokens.py --check
-          python3 scripts/gen-about.py --check
-
-      - name: Gate — deterministic test suite
-        run: python -m pytest tests/ -q
-
-      - name: Gate — strict TypeScript on hooks
-        run: npm run typecheck
-
-      - name: Gate — aw CLI tests
-        run: npm run test:cli
-
-      - name: Gate — strict TypeScript on the aw CLI
-        run: npm run typecheck:cli
+          if [ -z "$BASE_REF" ] || ! git rev-parse --verify -q "$BASE_REF^{commit}" >/dev/null; then
+            echo "no usable base (new branch or force push); skipping"; exit 0
+          fi
+          bash scripts/test-integrity.sh "$BASE_REF"
 
   # The scripts run on Python 3.9 for researchers on older Macs: the courses scripts, the home folder
   # and migration, the activity reader and the setup checks must not use newer syntax or stdlib.
