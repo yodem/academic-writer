@@ -66,11 +66,12 @@ jobs:
 
       - name: Test integrity against the base
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BODY: ${{ github.event.pull_request.body || github.event.head_commit.message }}
           BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
         run: |
-          if [ -z "$BASE_REF" ] || ! git rev-parse --verify -q "$BASE_REF^{commit}" >/dev/null; then
-            echo "no usable base (new branch or force push); skipping"; exit 0
+          # Only a brand-new ref (all-zero "before") has no base to compare with; anything else unresolved fails.
+          if [ -z "${BASE_REF//0/}" ]; then
+            echo "new ref, nothing to compare"; exit 0
           fi
           bash scripts/test-integrity.sh "$BASE_REF"
 
