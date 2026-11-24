@@ -1252,15 +1252,15 @@ jsonschema-specifications==2025.9.1 \
     # via
     #   -c pins-constraints.txt
     #   jsonschema
-litellm==1.105.1 \
-    --hash=sha256:3253da7d4967e367fb7e4e404b598a26037c45ba6d67a79356a81d3f8b9f9f3a \
-    --hash=sha256:633886584ffb6421485349376f2c1666d4854fecc3ab8b1cdb24537817d4e1cc \
-    --hash=sha256:beb5044645144308b39560049c0f68875ad7de07e681ad0b73e2bc6c3705ba61 \
-    --hash=sha256:d0392f5e773ab4bdb15daf2856d89afce74dc8b7e6d802f52060a23778ef650b \
-    --hash=sha256:d422f4fa44b424c541276bf55355b3650e2db01c08922f250baaf61eeaf788cf \
-    --hash=sha256:e2b46bc884b1aa7299a238158f7ff3f3dad49821a0dcfa4a77a54cf38e78bac2 \
-    --hash=sha256:f1a274db0b2bcc78c34ed34c06df2c1dcd0dc038469193684927f6bb2cab2d97 \
-    --hash=sha256:f3d743c2d274c6537f7341213607c927c486676012a9d94412a8a8ccbe2f51f1
+litellm==1.109.0.dev1 \
+    --hash=sha256:32b1d664a25064ca0744bd143e967a1e89ea08d45645e48efb4e4adedad194e7 \
+    --hash=sha256:4eba424424a847c11b3fae909afbcc82a65a66969391800462a53d81930f9749 \
+    --hash=sha256:6474a9bbed906f1a9423b5d989205f380d3ac62e534f4c4b2d003f12748e35dd \
+    --hash=sha256:7f8cb51cd255de80e4fc6ebe6c9dbf43c2984cdf7279719210f0b633f192a98a \
+    --hash=sha256:ad2d435d16e26a470505239afcaf86826d80942975e7e8ff45fe54f9b7ac2064 \
+    --hash=sha256:c494c4522e15bc95641b4dc973c0b76037d2fbad13403018e9b472fb9ca8d019 \
+    --hash=sha256:ea94307d5c2028a14b37024bb7a07a6cc2a8ca68d592c3e1a0e44f1f4bf88cd5 \
+    --hash=sha256:fcdf2bde4125febdc9104e7495e7576592fca9bcd22cb7e0c9ba80e4eed1b807
     # via
     #   -c pins-constraints.txt
     #   -r structure-weasy.in
