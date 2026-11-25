@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-11-24
+last-reviewed: 2026-11-25
 covers:
   - src/skills
   - src/agents
@@ -66,7 +66,7 @@ CLI tests, typechecks, smoke of the built plugin, dashboard e2e (Playwright, bas
 routing has a 10-prompt eval and a listing-size budget (docs/skill-budget.md).
 
 ## Known debt
-- inferred: `src/pi-skills/` and `src/cli/src/pi.ts` (an optional cross-family judge, `piModel` routes in
-  thresholds.json) look like a side path; confirm it is still wanted.
+- `src/pi-skills/`, `src/cli/src/pi.ts` and the `piModel` routes in thresholds.json (an optional cross-family judge)
+  are no longer wanted: remove them (Yotam, 2026-11-25).
 - The mod's live pane is checked by hand (needs Claude Code); the rest has automated tests.
 - docs/proofread-feature.md is a historical record, not current code.
