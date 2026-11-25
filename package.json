@@ -14,7 +14,9 @@
     "version:check": "python3 scripts/version-sync.py --check",
     "version:fix": "python3 scripts/version-sync.py --fix",
     "hooks:install": "git config core.hooksPath .githooks && echo 'core.hooksPath -> .githooks'",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "verify": "bash scripts/verify.sh",
+    "test:integrity": "bash scripts/test-integrity.sh"
   },
   "repository": {
     "type": "git",
