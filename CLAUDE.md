@@ -46,6 +46,13 @@ researcher on a local machine; the plugin should never assume team workflows.
 | `src/guide/index.html` | User guide opened by `/academic-writer:setup intro`; its commands and version blocks are generated |
 | `scripts/gen-guide.py` | Regenerates the guide and help command lists from skill frontmatter (`--check` in tests) |
 
+## Agents
+
+| Agent file | Role |
+|---|---|
+| `src/agents/architect.md` | Generates thesis options or structured article outline |
+| `src/agents/auditor.md` | Citation hard gate — verifies claims against sources.json |
+
 ## Conventions
 
 - **Profile-scoped**: every hook must silently skip in projects without `.academic-helper/profile.md`. The `run-hook.mjs:54` outer guard checks for the `.academic-helper/` directory; individual hooks then verify `profile.md` exists. New hooks should include the `profile.md` check.
