@@ -25,6 +25,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -54,26 +55,94 @@ jobs:
       - name: Verify
         run: bash scripts/verify.sh
 
-  # Fails when the change deletes test files or removes test cases or assertions, unless a commit
-  # message (or the PR body) says "tests-removed: <reason>".
-  test-integrity:
+  # A new push or edit voids the maintainer's exemption label; it must be re-applied after the latest push.
+  # Runs no PR code and checks nothing out.
+  test-integrity-label:
+    name: test-integrity-label
+    if: github.event_name == 'pull_request' && contains(fromJSON('["synchronize","reopened","edited"]'), github.event.action)
     runs-on: ubuntu-latest
-
+    permissions:
+      pull-requests: write
     steps:
+      - name: remove tests-removed label
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X DELETE "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels/tests-removed" || echo "label not present (ok)"
+
+  # Lists the runners' own tests (pytest, node:test, Playwright --list) on the base and on the PR and fails when a
+  # base test is missing or newly skipped. The base's copy of scripts/ judges the PR (BOOTSTRAP: the PR's copy only
+  # while the base has none). Listing needs dependencies, so both trees get theirs installed first.
+  test-integrity:
+    name: test-integrity
+    needs: test-integrity-label
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      - name: fail closed if the label reset did not succeed
+        env:
+          LABEL_JOB_RESULT: ${{ needs.test-integrity-label.result }}
+        run: |
+          if [ "$LABEL_JOB_RESULT" = "failure" ] || [ "$LABEL_JOB_RESULT" = "cancelled" ]; then
+            echo "test-integrity: label reset job failed; refusing to judge with a possibly stale label" >&2
+            exit 2
+          fi
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Test integrity against the base
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: check out the base into its own folder
         env:
-          PR_BODY: ${{ github.event.pull_request.body || github.event.head_commit.message }}
-          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+          BASE_REF: ${{ github.base_ref }}
+        run: git worktree add --detach "$RUNNER_TEMP/base" "origin/$BASE_REF"
+      - name: install dependencies in both trees
         run: |
-          # Only a brand-new ref (all-zero "before") has no base to compare with; anything else unresolved fails.
-          if [ -z "${BASE_REF//0/}" ]; then
-            echo "new ref, nothing to compare"; exit 0
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          # One Python env for both trees: the head's requirements, then the base's (same file unless the PR changes it).
+          python -m pip install -r requirements-dev.txt
+          if [ -f "$RUNNER_TEMP/base/requirements-dev.txt" ]; then python -m pip install -r "$RUNNER_TEMP/base/requirements-dev.txt"; fi
+          for tree in "$GITHUB_WORKSPACE" "$RUNNER_TEMP/base"; do
+            for dir in . src/cli src/hooks; do
+              if [ -f "$tree/$dir/package-lock.json" ]; then (cd "$tree/$dir" && npm ci); fi
+            done
+          done
+      - name: compare test lists (base copy of the core judges the PR)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          GH_TOKEN: ${{ github.token }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Distinguish "absent on base" from other git errors via ls-tree output, not by ||.
+          listing="$(git ls-tree --name-only "origin/$BASE_REF" scripts/test_integrity.py)"
+          if [ -z "$listing" ]; then
+            echo "BOOTSTRAP: base has no scripts/test_integrity.py; using the PR copy of the core"
+            TI_DIR="$GITHUB_WORKSPACE/scripts"
+          else
+            git cat-file -e "origin/$BASE_REF:scripts/test_integrity.py"
+            mkdir -p "$RUNNER_TEMP/ti"
+            git archive "origin/$BASE_REF" scripts | tar -x -C "$RUNNER_TEMP/ti"
+            TI_DIR="$RUNNER_TEMP/ti/scripts"
           fi
-          bash scripts/test-integrity.sh "$BASE_REF"
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.txt"
+          gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '.labels[].name' > "$RUNNER_TEMP/labels.txt"
+          gh api --paginate "repos/$REPO/issues/$PR_NUMBER/events" > "$RUNNER_TEMP/events.json"
+          python3 "$TI_DIR/test_integrity.py" run --config "$TI_DIR/test-integrity.json" \
+            --base-tree "$RUNNER_TEMP/base" --head-tree "$GITHUB_WORKSPACE" --base-ref "origin/$BASE_REF" \
+            --pr-body-file "$RUNNER_TEMP/pr-body.txt" --labels-file "$RUNNER_TEMP/labels.txt" \
+            --label-events-file "$RUNNER_TEMP/events.json"
 
   # The scripts run on Python 3.9 for researchers on older Macs: the courses scripts, the home folder
   # and migration, the activity reader and the setup checks must not use newer syntax or stdlib.
