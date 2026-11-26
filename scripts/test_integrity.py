@@ -37,6 +37,7 @@ DEFAULT_SKIP_MARKERS = [
     r"@unittest\.skip(?:If|Unless)?\b", r"\.skipTest\(", r"raise\s+(?:unittest\.)?SkipTest",
     r"pytest\.mark\.(?:skip|skipif|xfail)\b", r"pytest\.skip\(",
     r"\.(?:skip|skipIf|todo|only|fixme)\(",  # js: it.skip( .todo( test.fixme( it.only( (only hides the others)
+    r"\b(?:it|test|describe|suite|bench)(?:\.\w+)*\.(?:skip|only|todo|fixme|skipIf|runIf)\b",  # modifier chains
     r"\b(?:xit|xdescribe|xtest)\(",
 ]
 

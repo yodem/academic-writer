@@ -186,9 +186,12 @@ jobs:
           set -euo pipefail
           git worktree add --detach "$RUNNER_TEMP/base" "$BASE_SHA"
           # Base dependencies only: the judge never installs or runs head code (BOOTSTRAP excepted).
-          python -m pip install --upgrade pip
-          python -m pip install -r "$RUNNER_TEMP/base/requirements-dev.txt"
+          # Everything runs from inside the base worktree; python -I ignores cwd and PYTHON* paths, so no head file can shadow pip.
+          cd "$RUNNER_TEMP/base"
+          python3 -I -m pip install --upgrade pip
+          python3 -I -m pip install -r requirements-dev.txt
           for dir in . src/cli src/hooks; do (cd "$RUNNER_TEMP/base/$dir" && npm ci); done
+          cd "$GITHUB_WORKSPACE"
           # Distinguish "absent on base" from other git errors via ls-tree output, not by ||.
           listing="$(git ls-tree --name-only "$BASE_SHA" scripts/test_integrity.py)"
           if [ -z "$listing" ]; then

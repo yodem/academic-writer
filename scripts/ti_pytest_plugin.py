@@ -10,6 +10,11 @@ import os
 
 
 def _skipped(item):
+    # unittest.TestCase items: @unittest.skip* sets __unittest_skip__ on the method or the class
+    obj = getattr(item, "obj", None)
+    cls = getattr(item, "cls", None)
+    if getattr(obj, "__unittest_skip__", False) or getattr(cls, "__unittest_skip__", False):
+        return True
     if any(True for _ in item.iter_markers("skip")):
         return True
     for m in item.iter_markers("skipif"):

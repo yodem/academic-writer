@@ -410,6 +410,23 @@ class SkipMarkers(GateCase):
         self.assertEqual(code, 0, out)
 
 
+class ModifierChains(GateCase):
+    def test_vitest_modifier_chains_count_as_markers(self):
+        for line in ("it.skip.each([1])('x', () => {});", "describe.only.each([1])('x', () => {});",
+                     "it.runIf(false)('x', () => {});", "test.concurrent.skip('x', () => {});",
+                     "test.todo.each([1])('x');", "test.skipIf(cond)('x', () => {});"):
+            with self.subTest(line):
+                self.write("a.py", "class T:\n    def one(self):\n        pass\n    def two(self):\n        pass\n")
+                self.git("checkout", "-q", "--", "a.py")
+                self.write("a.py", "class T:\n    def one(self):\n        pass\n    def two(self):\n        pass\n"
+                           + line + "\n")
+                self.commit("head")
+                code, out = self.run_gate()
+                self.assertEqual(code, 1, out)
+                self.assertIn("skip markers added: a.py", out)
+                self.git("reset", "-q", "--hard", self.base_ref)
+
+
 class HeadSha(GateCase):
     def head(self):
         return subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"], check=True, capture_output=True,
