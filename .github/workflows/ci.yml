@@ -27,8 +27,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, edited, labeled, unlabeled]
 
+# The event action is part of the group so a labeled/unlabeled/edited run cannot cancel a push run before its
+# test-integrity-label job has removed a stale tests-removed label; a newer push still cancels an older push.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event.action || 'push' }}
   cancel-in-progress: true
 
 permissions:
