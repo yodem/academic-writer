@@ -1,0 +1,74 @@
+{
+  "maintainers": [
+    "yodem"
+  ],
+  "label": "tests-removed",
+  "suites": [
+    {
+      "name": "pytest",
+      "cwd": ".",
+      "cmd": [
+        "python3",
+        "{core_dir}/ti-list-pytest.py",
+        "tests/"
+      ],
+      "format": "jsonl",
+      "verify": "word"
+    },
+    {
+      "name": "node",
+      "cwd": "src/cli",
+      "cmd": [
+        "node",
+        "{core_dir}/ti-list-node.mjs"
+      ],
+      "format": "jsonl",
+      "verify": "literal"
+    },
+    {
+      "name": "playwright",
+      "cwd": ".",
+      "cmd": [
+        "npx",
+        "playwright",
+        "test",
+        "--list",
+        "--reporter=json"
+      ],
+      "format": "playwright-json"
+    }
+  ],
+  "guarded": [
+    ".github/workflows/**",
+    "scripts/test_integrity.py",
+    "scripts/test-integrity.*",
+    "scripts/verify.sh",
+    "scripts/TEST-INTEGRITY.md",
+    "scripts/ti_*",
+    "scripts/ti-*",
+    "scripts/tests/**",
+    "playwright.config.ts",
+    "tests/**/conftest.py",
+    "conftest.py",
+    "pytest.ini",
+    "pyproject.toml",
+    "setup.cfg",
+    "src/cli/build-tests.mjs"
+  ],
+  "guarded_package_scripts": [
+    "package.json",
+    "src/cli/package.json",
+    "src/hooks/package.json"
+  ],
+  "skip_markers": [
+    "@unittest\\.skip(?:If|Unless)?\\b",
+    "\\.skipTest\\(",
+    "raise\\s+(?:unittest\\.)?SkipTest",
+    "pytest\\.mark\\.(?:skip|skipif|xfail)\\b",
+    "pytest\\.skip\\(",
+    "\\.(?:skip|skipIf|todo|only|fixme)\\(",
+    "\\b(?:xit|xdescribe|xtest)\\(",
+    "pytest\\.importorskip\\(",
+    "\\{\\s*(?:skip|todo)\\s*[:,}]"
+  ]
+}
