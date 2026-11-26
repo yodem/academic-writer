@@ -13,14 +13,15 @@ the blind evaluation. The pinned commit is af92d96 (2026-10-12), 101 commits beh
 
 ## Findings
 - Fit: the local builder fits the plugin's rules. It runs on the researcher's machine, needs no PageIndex key and
-  indexes from Trove's existing hints. Our own measurements say accuracy depends on how good the table-of-contents
-  page ranges are, not on which engine reads them. On the Hebrew Bible, Trove scored 1/5 against 5/5 for PageIndex
-  with hints, because a Trove range ended one page early. On an English book and on Ashkenazi Hebrew sources the two
-  tied.
+  indexes from Trove's existing hints. In our own small samples (the published Trove-vs-PageIndex comparison, not
+  reproducible from this repo), the table-of-contents page ranges mattered more than the engine: on the Hebrew
+  Bible, Trove scored 1/5 against 5/5 for PageIndex with hints, because a Trove range ended one page early. On an
+  English book and on Ashkenazi Hebrew sources the two tied.
 - Gap: the blind evaluation has never been run on a real article, so the route choice rests on small samples.
 - Gap: since our pin, upstream has added a mode that calls Claude through the researcher's own Claude Code
-  subscription (`claude-code/` models, 2026-10-18). With it, summaries could run without Gemini, which matches
-  ADR 0003's own-tools rule.
+  subscription (`claude-code/` models, 2026-10-18). Our summaries do not use upstream's model dispatcher: pilib's
+  summarizer calls `litellm.completion` directly. Subscription summaries, which would match ADR 0003's own-tools
+  rule, therefore need their own integration in pilib (metering, consent, failure handling), apart from any re-pin.
 - Gap: Trove-only ingest skills outside the plugin skip both the dual-write and a check of the page ranges.
 - Not adopted: Cloud, the hosted MCP server and the chat app. They need an API key and keep uploaded documents
   until the researcher deletes them. They publish no Hebrew or right-to-left support and no humanities benchmark:
@@ -29,8 +30,10 @@ the blind evaluation. The pinned commit is af92d96 (2026-10-12), 101 commits beh
 ## Decision
 Keep Trove as the default and PageIndex as the optional local route, and keep the rule against Cloud. Next:
 (1) run `/academic-writer:library library-eval` on one real article before changing any default; (2) at ingest,
-check that each section's page range ends where the next section starts, which helps both routes; (3) re-pin
-PageIndex, then offer `claude-code/` summaries alongside Gemini and `--summaries hints`.
+check each section's range with pilib's own rule: it runs up to the start page of the next entry at the same or
+higher level (a shared boundary page belongs to both), includes its children, and the last one runs to the end of
+the book; this helps both routes; (3) re-pin PageIndex, and separately add Claude-subscription summaries in pilib
+beside Gemini and `--summaries hints`.
 
 ## Consequences
 - No vendor accuracy figure is quoted in the plugin or its docs.
