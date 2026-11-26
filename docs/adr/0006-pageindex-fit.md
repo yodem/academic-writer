@@ -30,8 +30,9 @@ the blind evaluation. The pinned commit is af92d96 (2026-10-12), 101 commits beh
 ## Decision
 Keep Trove as the default and PageIndex as the optional local route, and keep the rule against Cloud. Next:
 (1) run `/academic-writer:library library-eval` on one real article before changing any default; (2) at ingest,
-check each section's range with pilib's own rule: it runs up to the start page of the next entry at the same or
-higher level (a shared boundary page belongs to both), includes its children, and the last one runs to the end of
+check each section's range with pilib's own rule (native.py): it ends on the page before the next entry at the
+same or higher level starts (on that page itself when both start there, never before its own start), includes
+its children, and the last one runs to the end of
 the book; this helps both routes; (3) re-pin PageIndex, and separately add Claude-subscription summaries in pilib
 beside Gemini and `--summaries hints`.
 
