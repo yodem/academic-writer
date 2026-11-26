@@ -12,6 +12,8 @@ LISTER = (
     "import json, os, sys\n"
     "if os.path.exists('crash'):\n    sys.exit(3)\n"
     "if os.path.exists('garbage'):\n    print('not json'); sys.exit(0)\n"
+    "if os.path.exists('rewrite.json'):\n"
+    "    for p, c in json.load(open('rewrite.json')).items():\n        open(p, 'w').write(c)\n"
     "for line in open('tests.jsonl'):\n    sys.stdout.write(line)\n"
 )
 CONFIG = {
@@ -43,6 +45,8 @@ class GateCase(unittest.TestCase):
         self.git("config", "user.name", "t")
         self.write("lister.py", LISTER)
         self.write("tests.jsonl", jl(("a.py::T.one", False), ("a.py::T.two", False)))
+        self.write("a.py", "class T:\n    def one(self):\n        pass\n    def two(self):\n        pass\n")
+        self.write(".github/workflows/ci.yml", "name: x\n")
         self.write("package.json", json.dumps({"scripts": {"test": "node --test"}}))
         self.cfg = os.path.join(self.tmp, "cfg.json")
         self.dump(self.cfg, CONFIG)
@@ -69,17 +73,19 @@ class GateCase(unittest.TestCase):
         self.git("add", "-A")
         self.git("commit", "-q", "-m", msg)
 
-    def run_gate(self, body=None, labels=None, events=None, base_ref=None):
+    def run_gate(self, body=None, labels=None, events=None, base_ref=None, extra=()):
         argv = [sys.executable, str(CORE), "run", "--config", self.cfg, "--base-tree", self.base_tree,
                 "--head-tree", self.repo, "--base-ref", base_ref or self.base_ref]
-        for flag, content, name in (("--pr-body-file", body, "body.txt"), ("--labels-file", labels, "labels.txt"),
+        if isinstance(labels, str):
+            labels = [x for x in labels.split(",") if x]  # fixtures give names; CI writes a JSON array
+        for flag, content, name in (("--pr-body-file", body, "body.txt"), ("--labels-file", labels, "labels.json"),
                                     ("--label-events-file", events, "events.json")):
             if content is not None:
                 path = os.path.join(self.tmp, name)
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(content if isinstance(content, str) else json.dumps(content))
                 argv += [flag, path]
-        proc = subprocess.run(argv, capture_output=True, text=True)
+        proc = subprocess.run(argv + list(extra), capture_output=True, text=True)
         return proc.returncode, proc.stdout + proc.stderr
 
     def head_tests(self, *items):
@@ -158,14 +164,14 @@ class Verdicts(GateCase):
         self.assertNotIn("missing on head: fake::a.py::T.two", out)
 
     def test_guarded_path_without_label_fails(self):
-        self.write(".github/workflows/ci.yml", "name: x\n")
+        self.write(".github/workflows/new.yml", "name: y\n")
         self.commit("head")
         code, out = self.run_gate()
         self.assertEqual(code, 1)
-        self.assertIn(".github/workflows/ci.yml", out)
+        self.assertIn(".github/workflows/new.yml", out)
 
     def test_guarded_path_with_maintainer_label_passes(self):
-        self.write(".github/workflows/ci.yml", "name: x\n")
+        self.write(".github/workflows/new.yml", "name: y\n")
         self.commit("head")
         code, out = self.run_gate("", "tests-removed", [event("boss")])
         self.assertEqual(code, 0, out)
@@ -189,6 +195,312 @@ class Verdicts(GateCase):
         pages = json.dumps([event("boss")]) + json.dumps([event("intruder")])
         code, _ = self.run_gate(body, "tests-removed", pages)
         self.assertEqual(code, 1)
+
+
+class Hardening(GateCase):
+    def test_non_ascii_workflow_name_is_guarded(self):
+        self.write(".github/workflows/d\u00e9ploy.yml", "name: z\n")
+        self.commit("head")
+        code, out = self.run_gate()
+        self.assertEqual(code, 1)
+        self.assertIn("d\u00e9ploy.yml", out)
+
+    def test_moving_guarded_workflow_out_is_guarded(self):
+        os.makedirs(os.path.join(self.repo, "docs"))
+        self.git("mv", ".github/workflows/ci.yml", "docs/ci.yml")
+        self.commit("head")
+        code, out = self.run_gate()
+        self.assertEqual(code, 1)
+        self.assertIn(".github/workflows/ci.yml", out)
+
+    def test_forged_lister_output_is_caught_by_source_check(self):
+        self.write("a.py", "class T:\n    def one(self):\n        pass\n")  # test two deleted, lister still lists it
+        self.commit("head")
+        code, out = self.run_gate()
+        self.assertEqual(code, 1)
+        self.assertIn("missing on head (not found in source): fake::a.py::T.two", out)
+
+    def test_head_lister_cannot_rewrite_judge_inputs(self):
+        self.head_tests(("a.py::T.one", False))
+        paths = {n: os.path.join(self.tmp, n) for n in ("body.txt", "labels.json", "events.json")}
+        self.write("rewrite.json", json.dumps({
+            paths["body.txt"]: "tests-removed: fake::a.py::T.two" + REASON,
+            paths["labels.json"]: json.dumps(["tests-removed"]),
+            paths["events.json"]: json.dumps([event("boss")])}))
+        self.commit("head2")
+        code, out = self.run_gate("", "", "[]")
+        self.assertEqual(code, 1, out)
+        self.assertIn("fake::a.py::T.two", out)
+
+    def test_head_lister_cannot_forge_source_via_working_tree(self):
+        self.write("a.py", "class T:\n    def one(self):\n        pass\n")  # test two deleted, committed
+        self.write("rewrite.json", json.dumps({os.path.join(self.repo, "a.py"):
+                                               "class T:\n    def one(self): pass\n    def two(self): pass\n"}))
+        self.commit("head")
+        code, out = self.run_gate()
+        self.assertEqual(code, 1, out)
+        self.assertIn("missing on head (not found in source): fake::a.py::T.two", out)
+
+    def test_label_name_containing_comma_is_not_the_label(self):
+        self.head_tests(("a.py::T.one", False))
+        body = "tests-removed: fake::a.py::T.two" + REASON
+        code, _ = self.run_gate(body, ["foo,tests-removed"], [event("boss")])
+        self.assertEqual(code, 1)
+
+    def test_exemption_id_with_spaces_and_arrows(self):
+        ti = Parsers.load(self)
+        tid = "vitest::web/x.test.ts::suite > does a thing"
+        got, _ = ti.exemptions("tests-removed: " + tid + " \u2014 replaced by e2e", {tid})
+        self.assertEqual(got, {tid: "replaced by e2e"})
+
+    def test_exemption_for_id_containing_separator_uses_longest_id(self):
+        ti = Parsers.load(self)
+        got, _ = ti.exemptions("tests-removed: s::f::a -- b -- long enough reason", {"s::f::a", "s::f::a -- b"})
+        self.assertEqual(got, {"s::f::a -- b": "long enough reason"})
+
+    def test_forged_head_list_file_is_caught_by_committed_source(self):
+        self.write("a.py", "class T:\n    def one(self):\n        pass\n")
+        self.commit("head")
+        forged = os.path.join(self.tmp, "forged.jsonl")
+        with open(forged, "w", encoding="utf-8") as f:
+            f.write("".join(json.dumps({"suite": "fake", "id": i, "skipped": False}) + "\n"
+                            for i in ("fake::a.py::T.one", "fake::a.py::T.two")))
+        code, out = self.run_gate(extra=["--head-list", forged])
+        self.assertEqual(code, 1, out)
+        self.assertIn("not found in source", out)
+
+    def test_replace_ref_does_not_change_source_check(self):
+        base_blob = subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD:a.py"], capture_output=True,
+                                   text=True, check=True).stdout.strip()
+        self.write("a.py", "class T:\n    def one(self):\n        pass\n")
+        self.commit("head")
+        head_blob = subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD:a.py"], capture_output=True,
+                                   text=True, check=True).stdout.strip()
+        self.git("replace", head_blob, base_blob)  # a plain `git show` would now serve the base content
+        code, out = self.run_gate()
+        self.assertEqual(code, 1, out)
+        self.assertIn("not found in source", out)
+
+    def test_lister_timeout_is_2(self):
+        slow = dict(CONFIG, suites=[dict(CONFIG["suites"][0], cmd=["python3", "-c", "import time; time.sleep(30)"],
+                                         timeout_s=1)])
+        self.dump(self.cfg, slow)
+        code, out = self.run_gate()
+        self.assertEqual(code, 2)
+        self.assertIn("timed out", out)
+
+    def test_absent_discovery_root_lists_zero_and_shows_removed_on_head(self):
+        def tree(name, with_extra):
+            root = os.path.join(self.tmp, name)
+            for d in (["tests", "extra"] if with_extra else ["tests"]):
+                os.makedirs(os.path.join(root, d))
+                with open(os.path.join(root, d, "test_%s.py" % d), "w", encoding="utf-8") as f:
+                    f.write("import unittest\nclass A(unittest.TestCase):\n    def test_a(self):\n        pass\n")
+            return root
+        cfg = dict(CONFIG, suites=[{"name": "u", "cwd": ".", "format": "jsonl",
+                                    "cmd": ["python3", "{core}", "list-unittest", "tests", "extra"]}])
+        path = os.path.join(self.tmp, "roots.json")
+        self.dump(path, cfg)
+        lists = {}
+        for name, with_extra in (("full", True), ("partial", False)):
+            out = os.path.join(self.tmp, name + ".jsonl")
+            proc = subprocess.run([sys.executable, str(CORE), "list", "--config", path, "--tree",
+                                   tree(name, with_extra), "--out", out], capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            lists[name] = out
+        self.cfg = path
+        # base lacks a root: fine (only adds); head lacks a root the base has: its tests are missing
+        code, out = self.run_gate(extra=["--base-list", lists["partial"], "--head-list", lists["full"]])
+        self.assertEqual(code, 0, out)
+        code, out = self.run_gate(extra=["--base-list", lists["full"], "--head-list", lists["partial"]])
+        self.assertEqual(code, 1)
+        self.assertIn("u::extra/test_extra.py::A.test_a", out)
+
+
+class Parsers(GateCase):
+    def load(self):
+        sys.path.insert(0, str(CORE.parent))
+        try:
+            import test_integrity as ti
+        finally:
+            sys.path.pop(0)
+        return ti
+
+    def test_exemption_regex_is_linear_on_dash_runs(self):
+        ti = self.load()
+        import time
+        start = time.time()
+        self.assertEqual(ti.exemptions("tests-removed: x " + "-" * 5000 + "!", {"x"})[0], {})
+        self.assertEqual(ti.exemptions("tests-removed: " + "- " * 5000, {"x"})[0], {})
+        self.assertLess(time.time() - start, 0.5)
+
+    def test_exemption_forms(self):
+        ti = self.load()
+        ids = {"a::b"}
+        self.assertEqual(ti.exemptions("tests-removed: a::b \u2014 a real reason", ids)[0], {"a::b": "a real reason"})
+        self.assertEqual(ti.exemptions("tests-removed: a::b -- a real reason", ids)[0], {"a::b": "a real reason"})
+        self.assertEqual(ti.exemptions("tests-removed: a::b -- short", ids)[0], {})
+        self.assertEqual(ti.exemptions("tests-removed: a::b -- short", ids)[1], ["a::b -- short"])
+
+    def test_oversized_pr_body_is_2(self):
+        code, out = self.run_gate("x" * 70000)
+        self.assertEqual(code, 2, out)
+
+    def test_playwright_describe_titles_keep_ids_distinct(self):
+        ti = self.load()
+
+        def describe(title):
+            return {"title": title, "file": "x.spec.ts", "specs": [{"title": "works", "file": "x.spec.ts", "tests": [
+                {"projectName": "p", "expectedStatus": "passed", "annotations": []}]}]}
+        payload = {"suites": [{"title": "x.spec.ts", "file": "x.spec.ts", "suites": [describe("A"), describe("B")]}]}
+        got = [i for i, _ in ti._parse_playwright(json.dumps(payload), "/r")]
+        self.assertEqual(got, ["x.spec.ts::p::A > works", "x.spec.ts::p::B > works"])
+
+    def test_duplicate_ids_are_2(self):
+        self.write("tests.jsonl", jl(("a.py::T.one", False), ("a.py::T.one", False)))
+        self.commit("head")
+        code, out = self.run_gate()
+        self.assertEqual(code, 2, out)
+        self.assertIn("duplicate test id", out)
+
+    def test_same_named_modules_in_two_roots_are_both_listed(self):
+        tree = os.path.join(self.tmp, "two")
+        for d in ("r1", "r2"):
+            os.makedirs(os.path.join(tree, d))
+            with open(os.path.join(tree, d, "test_a.py"), "w", encoding="utf-8") as f:
+                f.write("import unittest\nclass A(unittest.TestCase):\n    def test_a(self):\n        pass\n")
+        proc = subprocess.run([sys.executable, str(CORE), "list-unittest", "r1", "r2"], cwd=tree,
+                              capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        ids = [json.loads(line)["id"] for line in proc.stdout.splitlines()]
+        self.assertEqual(ids, ["r1/test_a.py::A.test_a", "r2/test_a.py::A.test_a"])
+
+
+SKIP = "@unittest." + "skip"  # built from parts so this file's own marker count does not move
+
+
+class SkipMarkers(GateCase):
+    def add_marker(self):
+        self.write("a.py", "class T:\n    def one(self):\n        pass\n    %s('x')\n    def two(self):\n        pass\n" % SKIP)
+        self.commit("head")
+
+    def test_added_marker_fails_even_when_list_says_not_skipped(self):
+        self.add_marker()
+        code, out = self.run_gate()
+        self.assertEqual(code, 1, out)
+        self.assertIn("skip markers added: a.py (+", out)
+
+    def test_added_marker_passes_with_maintainer_label(self):
+        self.add_marker()
+        code, out = self.run_gate("", "tests-removed", [event("boss")])
+        self.assertEqual(code, 0, out)
+
+    def test_removed_marker_is_fine(self):
+        self.write("a.py", "class T:\n    %s('x')\n    def one(self):\n        pass\n    def two(self):\n        pass\n" % SKIP)
+        self.git("add", "-A")
+        self.git("commit", "-q", "--amend", "-m", "base")  # base now has the marker
+        self.base_ref = subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"], check=True,
+                                       capture_output=True, text=True).stdout.strip()
+        self.git("worktree", "remove", "--force", self.base_tree)
+        self.git("worktree", "add", "-q", "--detach", self.base_tree, self.base_ref)
+        self.write("a.py", "class T:\n    def one(self):\n        pass\n    def two(self):\n        pass\n")
+        self.commit("head")
+        code, out = self.run_gate()
+        self.assertEqual(code, 0, out)
+
+
+class HeadSha(GateCase):
+    def head(self):
+        return subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"], check=True, capture_output=True,
+                              text=True).stdout.strip()
+
+    def make_list(self, sha=None):
+        out = os.path.join(self.tmp, "hl.jsonl")
+        argv = [sys.executable, str(CORE), "list", "--config", self.cfg, "--tree", self.repo, "--out", out]
+        if sha:
+            argv += ["--head-sha", sha]
+        proc = subprocess.run(argv, capture_output=True, text=True)
+        return proc.returncode, out, proc.stderr
+
+    def test_matching_sha_passes(self):
+        self.write("note.txt", "x")
+        self.commit("head")
+        sha = self.head()
+        rc, out, _ = self.make_list(sha)
+        self.assertEqual(rc, 0)
+        code, text = self.run_gate(extra=["--head-list", out, "--head-sha", sha])
+        self.assertEqual(code, 0, text)
+
+    def test_list_for_another_sha_is_2(self):
+        self.write("note.txt", "x")
+        self.commit("head")
+        rc, out, _ = self.make_list(self.head())
+        self.assertEqual(rc, 0)
+        code, text = self.run_gate(extra=["--head-list", out, "--head-sha", "0" * 40])
+        self.assertEqual(code, 2, text)
+
+    def test_list_without_meta_is_2_when_sha_given(self):
+        self.write("note.txt", "x")
+        self.commit("head")
+        rc, out, _ = self.make_list()
+        self.assertEqual(rc, 0)
+        code, text = self.run_gate(extra=["--head-list", out, "--head-sha", self.head()])
+        self.assertEqual(code, 2, text)
+
+    def test_list_refuses_wrong_tree_head(self):
+        rc, _, err = self.make_list("1" * 40)
+        self.assertEqual(rc, 2, err)
+
+
+class ConfigValidation(GateCase):
+    def test_bad_configs_are_2(self):
+        good = CONFIG["suites"][0]
+        bad = {
+            "empty name": dict(CONFIG, suites=[dict(good, name="")]),
+            "duplicate name": dict(CONFIG, suites=[good, dict(good)]),
+            "empty cmd": dict(CONFIG, suites=[dict(good, cmd=[])]),
+            "non-string cmd": dict(CONFIG, suites=[dict(good, cmd=["python3", 5])]),
+            "bad cwd": dict(CONFIG, suites=[dict(good, cwd=3)]),
+            "zero timeout": dict(CONFIG, suites=[dict(good, timeout_s=0)]),
+            "bad verify": dict(CONFIG, suites=[dict(good, verify="fuzzy")]),
+            "maintainers not strings": dict(CONFIG, maintainers=[1]),
+            "guarded not list": dict(CONFIG, guarded="x"),
+            "package scripts not strings": dict(CONFIG, guarded_package_scripts=[2]),
+            "bad regex": dict(CONFIG, skip_markers=["("]),
+            "no suites": dict(CONFIG, suites=[]),
+        }
+        for label, cfg in bad.items():
+            with self.subTest(label):
+                self.dump(self.cfg, cfg)
+                code, out = self.run_gate()
+                self.assertEqual(code, 2, out)
+
+
+class BadRecords(GateCase):
+    def check(self, lines):
+        self.write("tests.jsonl", lines)
+        self.commit("head")
+        code, out = self.run_gate()
+        self.assertEqual(code, 2, out)
+
+    def test_missing_skipped_is_2(self):
+        self.check(json.dumps({"id": "a.py::T.one"}) + "\n")
+
+    def test_non_bool_skipped_is_2(self):
+        self.check(json.dumps({"id": "a.py::T.one", "skipped": "no"}) + "\n")
+
+    def test_empty_id_is_2(self):
+        self.check(json.dumps({"id": "", "skipped": False}) + "\n")
+
+    def test_non_object_record_is_2(self):
+        self.check('["a.py::T.one", false]\n')
+
+    def test_bad_list_file_record_is_2(self):
+        path = os.path.join(self.tmp, "bad.jsonl")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"suite": "fake", "id": 5, "skipped": False}) + "\n")
+        code, out = self.run_gate(extra=["--head-list", path])
+        self.assertEqual(code, 2, out)
 
 
 class Invalid(GateCase):
@@ -243,7 +555,7 @@ class CoreToken(GateCase):
     def test_core_dir_token_points_beside_the_core(self):
         cfg = dict(CONFIG, suites=[{"name": "d", "cwd": ".", "format": "jsonl", "cmd": [
             "python3", "-c",
-            "import json,os,sys;print(json.dumps({'id': str(os.path.exists(sys.argv[1] + '/test_integrity.py'))}))",
+            "import json,os,sys;print(json.dumps({'id': str(os.path.exists(sys.argv[1] + '/test_integrity.py')), 'skipped': False}))",
             "{core_dir}"]}])
         path = os.path.join(self.tmp, "dir-cfg.json")
         self.dump(path, cfg)

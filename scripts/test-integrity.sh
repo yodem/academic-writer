@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # usage: test-integrity.sh <base-ref>
+# LOCAL DEVELOPMENT CONVENIENCE, not the CI gate: it runs the working tree's own core and config (CI runs the
+# base branch's copy in a split list/judge job).
 # Compares the test runner's own test list on <base-ref> and HEAD (core: scripts/test_integrity.py).
 # CI passes PR_BODY_FILE, PR_LABELS_FILE and PR_LABEL_EVENTS_FILE as file paths; PR text never enters a shell string.
 set -euo pipefail
