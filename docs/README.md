@@ -4,7 +4,7 @@ Draft bootstrap, 2026-11-24. Read product.md and architecture.md before any plan
 
 - product.md: what Academic Writer is for, for whom, non-goals, quality bar. last-reviewed: 2026-11-25
 - architecture.md: parts, data flow, constraints, known debt. last-reviewed: 2026-11-25
-- adr/: decisions that changed the architecture, never renumbered. last-reviewed: 2026-11-24
+- adr/: decisions that changed the architecture, never renumbered (0006: PageIndex fit). last-reviewed: 2026-11-26
 - citation-styles-guide.md: researcher-facing APA, Chicago, AMA guide (Hebrew). last-reviewed: 2026-11-24
 - first-time-flow.md: researcher walkthrough from install to a first draft. last-reviewed: 2026-11-24
 - first-time-flow-technical.md: the same flow in code, for debugging a first run. last-reviewed: 2026-11-24
