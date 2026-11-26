@@ -394,12 +394,19 @@ def _has_source(repo, sha, probe, cache):
     return cache[file] is not None and match(cache[file])
 
 
-MAX_UNVERIFIABLE = 0.10
+MAX_LISTED = 20
+
+
+def _blob(repo, sha, file):
+    proc = subprocess.run(_git_argv(repo) + ["rev-parse", "%s:%s" % (sha, file)], capture_output=True, text=True)
+    return proc.stdout.strip() if proc.returncode == 0 else None
 
 
 def source_missing(cfg, repo, base_sha, head_sha, ids):
-    """ids present on both sides; returns (ids whose source vanished on head, {suite: (unverifiable, total)}).
-    More than 10% unverifiable in a suite (verify "none" excepted) means the check is a no-op: exit 2."""
+    """ids present on both sides.  Returns (ids whose source vanished on head, {suite: {verified, warn}}).
+    An id is verified by its name in the committed source, or, when the name cannot be found on base (parametrised,
+    run-time titles), by its file being byte-identical at base and head (unchanged source cannot have lost a test).
+    A suite where nothing could be verified by either method is a no-op check: exit 2."""
     suites = {s["name"]: s for s in cfg["suites"]}
     base_cache, head_cache, gone, stats = {}, {}, [], {}
     for tid in ids:
@@ -407,16 +414,23 @@ def source_missing(cfg, repo, base_sha, head_sha, ids):
         suite = suites.get(name)
         if suite and suite.get("verify") == "none":
             continue
-        bad, total = stats.get(name, (0, 0))
+        st = stats.setdefault(name, {"verified": 0, "warn": []})
         probe = _source_probe(suite, tid) if suite else None
-        if probe is None or not _has_source(repo, base_sha, probe, base_cache):
-            bad += 1
-        elif not _has_source(repo, head_sha, probe, head_cache):
-            gone.append(tid)
-        stats[name] = (bad, total + 1)
-    for name, (bad, total) in sorted(stats.items()):
-        if bad > MAX_UNVERIFIABLE * total:
-            raise Invalid("source check covers too few ids in suite %s (%d of %d unverifiable)" % (name, bad, total))
+        if probe is not None and _has_source(repo, base_sha, probe, base_cache):
+            if _has_source(repo, head_sha, probe, head_cache):
+                st["verified"] += 1
+            else:
+                gone.append(tid)
+            continue
+        file = _file_of(tid)
+        blob = _blob(repo, base_sha, file) if file else None
+        if blob and blob == _blob(repo, head_sha, file):
+            st["verified"] += 1
+        else:
+            st["warn"].append(tid)
+    for name, st in sorted(stats.items()):
+        if st["verified"] == 0 and st["warn"] and not any(g.split("::", 1)[0] == name for g in gone):
+            raise Invalid("source check verified nothing in suite %s" % name)
     return gone, stats
 
 
@@ -467,6 +481,12 @@ def cmd_run(args):
     gone, stats = source_missing(cfg, args.head_tree, base_sha, head_sha, [i for i in base_map if i in head_map])
     forged = set(gone)
     missing |= forged
+    for name, st in sorted(stats.items()):
+        print("test-integrity: source check suite %s: %d verified, %d unverifiable" % (name, st["verified"], len(st["warn"])))
+        for tid in st["warn"][:MAX_LISTED]:
+            print("test-integrity: warning: unverifiable (parametrised, file changed): %s" % tid)
+        if len(st["warn"]) > MAX_LISTED:
+            print("test-integrity: warning: ... and %d more in suite %s" % (len(st["warn"]) - MAX_LISTED, name))
     markers = skip_marker_additions(cfg, args.head_tree, base_sha, head_sha, list(base_map))
     newly_skipped = sorted(i for i in head_map if head_map[i] and i in base_map and not base_map[i])
     excused, unmatched = exemptions(body_text, set(missing) | set(newly_skipped))
@@ -493,8 +513,6 @@ def cmd_run(args):
         print("  An exemption needs the %r label from a maintainer after the latest push, "
               "plus a 'tests-removed: <id> -- <reason>' line in the PR body." % cfg["label"])
         return 1
-    for name, (bad, total) in sorted(stats.items()):
-        print("test-integrity: source check suite %s: %d of %d unverifiable" % (name, bad, total))
     print("test-integrity: OK base=%d head=%d" % (len(base_map), len(head_map)))
     return 0
 

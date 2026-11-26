@@ -7,7 +7,9 @@ list commands, the maintainers, the label and the guarded paths.
 ## What it checks
 - Every test id on the base is still listed on the PR, and no test is newly skipped.
 - Each id the PR still lists is found in the committed source of its file (a forged list cannot hide a deletion).
-  If more than 10% of a suite's ids cannot be checked this way, the gate exits 2 ("source check covers too few ids").
+  An id whose name is not in the source on base (parametrised tests with run-time titles) counts as verified when its
+  file is byte-identical on base and head; otherwise it is listed as a warning (20 per suite, then a count). A suite
+  where nothing could be verified by either method fails with exit 2.
   Playwright file paths are resolved to tree-relative paths from the report's `rootDir` and each project's `testDir`.
 - No file with tests gains skip markers (`skip`, `todo`, `only`, `xfail` and similar, see `skip_markers`).
 - No guarded file changed: the CI workflow, the gate itself, test config and this document.
@@ -34,3 +36,5 @@ approves guarded-path changes and added skip markers.
 - (f) The workflow file is PR-controlled until `test-integrity` is a required check on main.
 - (g) The first PR (bootstrap) judges itself and is reviewed by hand.
 - (h) Fork PRs fail closed.
+- (i) A parametrised test case deleted from a test file the PR also changed is not caught by the source check when
+  the PR's own list still reports it.

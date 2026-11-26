@@ -477,6 +477,56 @@ class ConfigValidation(GateCase):
                 self.assertEqual(code, 2, out)
 
 
+class Parametrised(GateCase):
+    def rebase(self):
+        self.base_ref = subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"], check=True,
+                                       capture_output=True, text=True).stdout.strip()
+        self.git("worktree", "remove", "--force", self.base_tree)
+        self.git("worktree", "add", "-q", "--detach", self.base_tree, self.base_ref)
+
+    def test_parametrised_id_in_unchanged_file_is_verified(self):
+        self.write("tests.jsonl", jl(("a.py::T.one", False), ("a.py::T.two", False), ("a.py::T.dyn_x", False)))
+        self.commit("base2")
+        self.rebase()
+        self.write("note.txt", "x")
+        self.commit("head")
+        code, out = self.run_gate()
+        self.assertEqual(code, 0, out)
+        self.assertIn("suite fake: 3 verified, 0 unverifiable", out)
+
+    def test_parametrised_id_in_changed_file_warns_but_passes(self):
+        self.write("tests.jsonl", jl(("a.py::T.one", False), ("a.py::T.two", False), ("a.py::T.dyn_x", False)))
+        self.commit("base2")
+        self.rebase()
+        self.write("a.py", "class T:\n    def one(self):\n        pass\n    def two(self):\n        pass\n# touched\n")
+        self.commit("head")
+        code, out = self.run_gate()
+        self.assertEqual(code, 0, out)
+        self.assertIn("warning: unverifiable (parametrised, file changed): fake::a.py::T.dyn_x", out)
+
+    def test_suite_with_nothing_verified_is_2(self):
+        self.write("tests.jsonl", jl(("a.py::T.dyn_x", False)))
+        self.commit("base2")
+        self.rebase()
+        self.write("a.py", "class T:\n    pass\n")
+        self.commit("head")
+        code, out = self.run_gate()
+        self.assertEqual(code, 2, out)
+        self.assertIn("source check verified nothing in suite fake", out)
+
+    def test_warning_listing_is_capped_at_20(self):
+        ids = [("a.py::T.one", False)] + [("a.py::T.dyn_%d" % i, False) for i in range(25)]
+        self.write("tests.jsonl", jl(*ids))
+        self.commit("base2")
+        self.rebase()
+        self.write("a.py", "class T:\n    def one(self):\n        pass\n# touched\n")
+        self.commit("head")
+        code, out = self.run_gate()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("unverifiable (parametrised"), 20)
+        self.assertIn("and 5 more in suite fake", out)
+
+
 class Playwright(GateCase):
     def report(self, file="a11y.spec.ts", config=True):
         cfg = {"rootDir": "@TREE@/tests/e2e", "projects": [
@@ -507,7 +557,7 @@ class Playwright(GateCase):
         self.commit("head")
         code, out = self.run_gate()
         self.assertEqual(code, 0, out)
-        self.assertIn("suite pw: 0 of 1 unverifiable", out)
+        self.assertIn("suite pw: 1 verified, 0 unverifiable", out)
         rc = subprocess.run([sys.executable, str(CORE), "list", "--config", self.cfg, "--tree", self.repo],
                             capture_output=True, text=True)
         self.assertIn("pw::tests/e2e/dashboard/a11y.spec.ts::chromium::has no violations", rc.stdout)
@@ -544,7 +594,7 @@ class Playwright(GateCase):
         self.commit("head")
         code, out = self.run_gate()
         self.assertEqual(code, 2, out)
-        self.assertIn("source check covers too few ids", out)
+        self.assertIn("source check verified nothing in suite fake", out)
 
 
 class BadRecords(GateCase):

@@ -29,11 +29,13 @@
       "name": "playwright",
       "cwd": ".",
       "cmd": [
-        "python3",
-        "{core_dir}/ti-list-playwright.py"
+        "npx",
+        "playwright",
+        "test",
+        "--list",
+        "--reporter=json"
       ],
-      "format": "jsonl",
-      "verify": "word"
+      "format": "playwright-json"
     }
   ],
   "guarded": [
