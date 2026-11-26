@@ -7,6 +7,8 @@ list commands, the maintainers, the label and the guarded paths.
 ## What it checks
 - Every test id on the base is still listed on the PR, and no test is newly skipped.
 - Each id the PR still lists is found in the committed source of its file (a forged list cannot hide a deletion).
+  If more than 10% of a suite's ids cannot be checked this way, the gate exits 2 ("source check covers too few ids").
+  Playwright file paths are resolved to tree-relative paths from the report's `rootDir` and each project's `testDir`.
 - No file with tests gains skip markers (`skip`, `todo`, `only`, `xfail` and similar, see `skip_markers`).
 - No guarded file changed: the CI workflow, the gate itself, test config and this document.
 

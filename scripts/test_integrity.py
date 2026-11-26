@@ -112,25 +112,48 @@ def _parse_vitest(out, tree):
     return [("%s::%s" % (_rel(t["file"], tree), t["name"]), False) for t in json.loads(out)]
 
 
-def _walk_playwright(suite, path, tree, acc):
+def _pw_file(file, project, dirs, root, tree):
+    """Playwright reports spec.file relative to the project's testDir (or rootDir): make it tree-relative."""
+    if os.path.isabs(file):
+        absolute = file
+    else:
+        base = dirs.get(project) or root
+        if not base:
+            raise ValueError("cannot resolve %r: report has no testDir for project %r and no rootDir" % (file, project))
+        absolute = os.path.join(base, file)
+    absolute = os.path.normpath(absolute)
+    rel = _rel(absolute, tree)
+    if rel.startswith(".."):  # tolerate a symlinked tree path
+        rel = _rel(os.path.realpath(absolute), os.path.realpath(tree))
+    if rel.startswith(".."):
+        raise ValueError("test file %r resolves outside the tree" % absolute)
+    return rel
+
+
+def _walk_playwright(suite, path, ctx, acc):
     title = suite.get("title")
     # Only the top-level file suite (title == its file) is omitted; every describe title is kept.
     here = path + ([title] if title and title != suite.get("file") else [])
     for spec in suite.get("specs", []):
-        file = _rel(spec.get("file") or suite.get("file") or "", tree)
+        file = spec.get("file") or suite.get("file") or ""
         for t in spec.get("tests", []):
             skipped = t.get("expectedStatus") == "skipped" or any(
                 a.get("type") in ("skip", "fixme") for a in t.get("annotations", []))
             name = " > ".join(here + [spec["title"]])
-            acc.append(("%s::%s::%s" % (file, t.get("projectName", ""), name), skipped))
+            project = t.get("projectName", "")
+            acc.append(("%s::%s::%s" % (_pw_file(file, project, *ctx), project, name), skipped))
     for child in suite.get("suites", []):
-        _walk_playwright(child, here, tree, acc)
+        _walk_playwright(child, here, ctx, acc)
 
 
 def _parse_playwright(out, tree):
+    data = json.loads(out)
+    cfg = data.get("config") or {}
+    dirs = {p.get("name", ""): p.get("testDir") for p in cfg.get("projects", []) if isinstance(p, dict)}
+    ctx = (dirs, cfg.get("rootDir"), tree)
     acc = []
-    for s in json.loads(out).get("suites", []):
-        _walk_playwright(s, [], tree, acc)
+    for s in data.get("suites", []):
+        _walk_playwright(s, [], ctx, acc)
     return acc
 
 
@@ -371,18 +394,30 @@ def _has_source(repo, sha, probe, cache):
     return cache[file] is not None and match(cache[file])
 
 
+MAX_UNVERIFIABLE = 0.10
+
+
 def source_missing(cfg, repo, base_sha, head_sha, ids):
-    """ids present on both sides; returns (ids whose source vanished on head, count unverifiable)."""
+    """ids present on both sides; returns (ids whose source vanished on head, {suite: (unverifiable, total)}).
+    More than 10% unverifiable in a suite (verify "none" excepted) means the check is a no-op: exit 2."""
     suites = {s["name"]: s for s in cfg["suites"]}
-    base_cache, head_cache, gone, unverifiable = {}, {}, [], 0
+    base_cache, head_cache, gone, stats = {}, {}, [], {}
     for tid in ids:
-        suite = suites.get(tid.split("::", 1)[0])
+        name = tid.split("::", 1)[0]
+        suite = suites.get(name)
+        if suite and suite.get("verify") == "none":
+            continue
+        bad, total = stats.get(name, (0, 0))
         probe = _source_probe(suite, tid) if suite else None
         if probe is None or not _has_source(repo, base_sha, probe, base_cache):
-            unverifiable += 1
+            bad += 1
         elif not _has_source(repo, head_sha, probe, head_cache):
             gone.append(tid)
-    return gone, unverifiable
+        stats[name] = (bad, total + 1)
+    for name, (bad, total) in sorted(stats.items()):
+        if bad > MAX_UNVERIFIABLE * total:
+            raise Invalid("source check covers too few ids in suite %s (%d of %d unverifiable)" % (name, bad, total))
+    return gone, stats
 
 
 def _file_of(tid):
@@ -429,7 +464,7 @@ def cmd_run(args):
     base_map = {r["id"]: r["skipped"] for r in base}
     head_map = {r["id"]: r["skipped"] for r in head}
     missing = {i for i in base_map if i not in head_map}
-    gone, unverifiable = source_missing(cfg, args.head_tree, base_sha, head_sha, [i for i in base_map if i in head_map])
+    gone, stats = source_missing(cfg, args.head_tree, base_sha, head_sha, [i for i in base_map if i in head_map])
     forged = set(gone)
     missing |= forged
     markers = skip_marker_additions(cfg, args.head_tree, base_sha, head_sha, list(base_map))
@@ -458,7 +493,8 @@ def cmd_run(args):
         print("  An exemption needs the %r label from a maintainer after the latest push, "
               "plus a 'tests-removed: <id> -- <reason>' line in the PR body." % cfg["label"])
         return 1
-    print("test-integrity: source check: %d unverifiable id(s)" % unverifiable)
+    for name, (bad, total) in sorted(stats.items()):
+        print("test-integrity: source check suite %s: %d of %d unverifiable" % (name, bad, total))
     print("test-integrity: OK base=%d head=%d" % (len(base_map), len(head_map)))
     return 0
 

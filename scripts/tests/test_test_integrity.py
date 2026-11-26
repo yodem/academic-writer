@@ -297,7 +297,7 @@ class Hardening(GateCase):
                 with open(os.path.join(root, d, "test_%s.py" % d), "w", encoding="utf-8") as f:
                     f.write("import unittest\nclass A(unittest.TestCase):\n    def test_a(self):\n        pass\n")
             return root
-        cfg = dict(CONFIG, suites=[{"name": "u", "cwd": ".", "format": "jsonl",
+        cfg = dict(CONFIG, suites=[{"name": "u", "cwd": ".", "format": "jsonl", "verify": "none",
                                     "cmd": ["python3", "{core}", "list-unittest", "tests", "extra"]}])
         path = os.path.join(self.tmp, "roots.json")
         self.dump(path, cfg)
@@ -352,8 +352,9 @@ class Parsers(GateCase):
         def describe(title):
             return {"title": title, "file": "x.spec.ts", "specs": [{"title": "works", "file": "x.spec.ts", "tests": [
                 {"projectName": "p", "expectedStatus": "passed", "annotations": []}]}]}
-        payload = {"suites": [{"title": "x.spec.ts", "file": "x.spec.ts", "suites": [describe("A"), describe("B")]}]}
-        got = [i for i, _ in ti._parse_playwright(json.dumps(payload), "/r")]
+        payload = {"config": {"rootDir": "/repo"},
+                   "suites": [{"title": "x.spec.ts", "file": "x.spec.ts", "suites": [describe("A"), describe("B")]}]}
+        got = [i for i, _ in ti._parse_playwright(json.dumps(payload), "/repo")]
         self.assertEqual(got, ["x.spec.ts::p::A > works", "x.spec.ts::p::B > works"])
 
     def test_duplicate_ids_are_2(self):
@@ -476,6 +477,76 @@ class ConfigValidation(GateCase):
                 self.assertEqual(code, 2, out)
 
 
+class Playwright(GateCase):
+    def report(self, file="a11y.spec.ts", config=True):
+        cfg = {"rootDir": "@TREE@/tests/e2e", "projects": [
+            {"name": "chromium", "testDir": "@TREE@/tests/e2e/dashboard"}]}
+        spec = {"title": "has no violations", "file": file, "tests": [
+            {"projectName": "chromium", "expectedStatus": "passed", "annotations": []}]}
+        out = {"suites": [{"title": file, "file": file, "specs": [spec]}]}
+        if config:
+            out["config"] = cfg
+        return json.dumps(out)
+
+    def lister(self, payload):
+        self.write("pw.json", payload)
+        self.write("lister.py", "import os, sys\nsys.stdout.write(open('pw.json').read().replace('@TREE@', os.getcwd()))\n")
+        cfg = dict(CONFIG, suites=[{"name": "pw", "cwd": ".", "cmd": ["python3", "lister.py"],
+                                    "format": "playwright-json"}])
+        self.dump(self.cfg, cfg)
+
+    def test_ids_are_tree_relative_and_pass_the_source_check(self):
+        self.write("tests/e2e/dashboard/a11y.spec.ts", "test('has no violations', async () => {});\n")
+        self.lister(self.report())
+        self.commit("base2")
+        self.base_ref = subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"], check=True,
+                                       capture_output=True, text=True).stdout.strip()
+        self.git("worktree", "remove", "--force", self.base_tree)
+        self.git("worktree", "add", "-q", "--detach", self.base_tree, self.base_ref)
+        self.write("note.txt", "x")
+        self.commit("head")
+        code, out = self.run_gate()
+        self.assertEqual(code, 0, out)
+        self.assertIn("suite pw: 0 of 1 unverifiable", out)
+        rc = subprocess.run([sys.executable, str(CORE), "list", "--config", self.cfg, "--tree", self.repo],
+                            capture_output=True, text=True)
+        self.assertIn("pw::tests/e2e/dashboard/a11y.spec.ts::chromium::has no violations", rc.stdout)
+
+    def test_deleted_playwright_source_with_forged_list_fails(self):
+        self.write("tests/e2e/dashboard/a11y.spec.ts", "test('has no violations', async () => {});\n")
+        self.lister(self.report())
+        self.commit("base2")
+        self.base_ref = subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"], check=True,
+                                       capture_output=True, text=True).stdout.strip()
+        self.git("worktree", "remove", "--force", self.base_tree)
+        self.git("worktree", "add", "-q", "--detach", self.base_tree, self.base_ref)
+        self.write("tests/e2e/dashboard/a11y.spec.ts", "// emptied\n")
+        self.commit("head")
+        code, out = self.run_gate()
+        self.assertEqual(code, 1, out)
+        self.assertIn("not found in source", out)
+
+    def test_unresolvable_file_is_2(self):
+        self.lister(self.report(config=False))
+        self.commit("head")
+        code, out = self.run_gate()
+        self.assertEqual(code, 2, out)
+
+    def test_mostly_unverifiable_suite_is_2(self):
+        # the lister lists ids whose files are not in the repo: the source check would be a no-op
+        self.write("tests.jsonl", jl(*[("nofile%d.py::T.t" % i, False) for i in range(5)]))
+        self.commit("base2")
+        self.base_ref = subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"], check=True,
+                                       capture_output=True, text=True).stdout.strip()
+        self.git("worktree", "remove", "--force", self.base_tree)
+        self.git("worktree", "add", "-q", "--detach", self.base_tree, self.base_ref)
+        self.write("note.txt", "x")
+        self.commit("head")
+        code, out = self.run_gate()
+        self.assertEqual(code, 2, out)
+        self.assertIn("source check covers too few ids", out)
+
+
 class BadRecords(GateCase):
     def check(self, lines):
         self.write("tests.jsonl", lines)
@@ -580,7 +651,8 @@ class Formats(GateCase):
         self.assertEqual(got, [("web/x.test.ts::a > b", False)])
 
     def test_playwright_ids_include_project_and_skip(self):
-        payload = {"suites": [{"title": "x.spec.ts", "file": "x.spec.ts", "specs": [
+        payload = {"config": {"rootDir": "/repo", "projects": []},
+                   "suites": [{"title": "x.spec.ts", "file": "x.spec.ts", "specs": [
             {"title": "t1", "file": "x.spec.ts", "tests": [
                 {"projectName": "chromium", "expectedStatus": "passed", "annotations": []},
                 {"projectName": "webkit", "expectedStatus": "skipped", "annotations": []}]}]}]}
